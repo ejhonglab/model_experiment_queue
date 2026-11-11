@@ -43,7 +43,8 @@ new hashes: commits cited before then (in notes, reports, chat.md and provenance
 `git -C ../al_analysis show <hash>:scripts/claude_pair_remapping_experiments/<file>`. The model is in
 three checkouts beside this one: al_analysis (mb_model, the model's Python side, and the lab's data
 under al_analysis/data), olfsysm (the model's C++) and hong2p. al_analysis depends heavily on hong2p
-and olfsysm, so a change may need changes in those too. Claude Code does not read al_analysis's
+and olfsysm, so a change may need changes in those too (or in another package the venv has
+installed editable from a checkout under ~/src). Claude Code does not read al_analysis's
 CLAUDE.md from here; what it says that matters for this work:
 - Run pytest with the environment variable QUICK=1, unless extensively testing changes to the
   model code in mb_model (or the matching code in olfsysm), to skip most of the model cases.
