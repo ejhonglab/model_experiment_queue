@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import warnings
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
@@ -39,13 +40,12 @@ from sklearn.isotonic import IsotonicRegression
 # what the scripts put in their provenance.json.
 from al_analysis import mb_model as _mb_model
 _mb_model.STRICT_CLEAN_OLFSYSM = True
-model_provenance = _mb_model.model_provenance
 
 
+# this repository (model_experiment_queue); until 2026-11-11 it was the folder
+# scripts/claude_pair_remapping_experiments of al_analysis
 HERE = Path(__file__).resolve().parent
-REPO = HERE.parents[1]
 APL_PAIR_DIR = HERE / 'apl_pair_analysis'
-CONSENSUS_CSV = REPO / 'al_analysis/data/sent_to_vlad/2024-06-21/consensus_mean.csv'
 
 # the report's odor order (= Yang's original matrix files)
 APL16_ODORS: List[str] = ['2h', 'IaA', 'pa', '2-but', 'eb', 'ep', '6al', 't2h', '1-8ol',
@@ -103,6 +103,60 @@ def olfsysm_dir() -> Path:
     ~/src/olfsysm on Tom's hosts, ~/src/kc_queue/olfsysm on lab members' machines.
     """
     return _mb_model.olfsysm_checkout_path()
+
+
+def al_analysis_dir() -> Path:
+    """Returns the al_analysis checkout the installed al_analysis package comes from.
+
+    ~/src/al_analysis on Tom's hosts, ~/src/kc_queue/al_analysis on lab members' machines (both
+    installed editable in this repository's venv, beside it).
+    """
+    return Path(_mb_model.__file__).resolve().parents[1]
+
+
+def al_analysis_data_dir() -> Path:
+    """Returns al_analysis's data directory (al_analysis/data in its checkout)."""
+    return Path(_mb_model.__file__).resolve().parent / 'data'
+
+
+def _git(path: Path, *args: str) -> Optional[str]:
+    """Output of `git <args>` in `path`, stripped, or None if git fails there."""
+    try:
+        r = subprocess.run(['git', *args], cwd=path, capture_output=True, text=True)
+    except OSError:
+        return None
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
+def code_commits() -> Dict[str, object]:
+    """Returns the commits and dirty states of this repository and of the al_analysis checkout.
+
+    Keys: 'queue_commit' and 'queue_dirty' (this repository, model_experiment_queue: the
+    experiment scripts and this harness), 'al_analysis_commit' and 'al_analysis_dirty' (the model
+    code, from `al_analysis_dir()`). Dirty means uncommitted changes to tracked files. Scripts
+    put these in their provenance.json; before the move to a repository of its own (2026-11-11),
+    'al_analysis_commit' was the commit of both.
+    """
+    out: Dict[str, object] = {}
+    for key, path in (('queue', HERE), ('al_analysis', al_analysis_dir())):
+        status = _git(path, 'status', '--porcelain', '--untracked-files=no')
+        out[f'{key}_commit'] = _git(path, 'rev-parse', 'HEAD')
+        out[f'{key}_dirty'] = None if status is None else bool(status)
+    return out
+
+
+def model_provenance(**inputs) -> Dict[str, object]:
+    """`mb_model.model_provenance` (olfsysm, al_analysis and hong2p) plus this repository.
+
+    Args:
+        **inputs: passed on (inputs to record by content hash).
+
+    Returns its dict with 'queue' added: `mb_model.repo_info` of this repository (git hash,
+    dirty flag, diff of a dirty checkout).
+    """
+    prov = _mb_model.model_provenance(**inputs)
+    prov['queue'] = _mb_model.repo_info(HERE)
+    return prov
 
 
 def shared_dir() -> Path:
@@ -432,9 +486,15 @@ def orn16_consensus_pairs_zero_filled() -> pd.Series:
     ))
 
 
+def consensus_csv() -> Path:
+    """The consensus glomerular mean dF/F of both panels (al_analysis's
+    data/sent_to_vlad/2024-06-21/consensus_mean.csv)."""
+    return al_analysis_data_dir() / 'sent_to_vlad' / '2024-06-21' / 'consensus_mean.csv'
+
+
 def consensus_orn_drive() -> pd.Series:
     """Per-odor mean consensus dF/F across glomeruli (the report's 'ORN drive')."""
-    cons = pd.read_csv(CONSENSUS_CSV)
+    cons = pd.read_csv(consensus_csv())
     cons['abbrev'] = cons['odor1'].str.split(' @ ').str[0].replace({'PAA': 'paa'})
     panel = {**{o: 'megamat' for o in MEGAMAT12}, **{o: 'validation2' for o in VALIDATION2_4}}
     gl = [c for c in cons.columns if c not in ('panel', 'odor1', 'abbrev')]
