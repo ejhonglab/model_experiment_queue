@@ -74,10 +74,10 @@ the write-up's figures (`--part figures`, from those tables, no simulations): E7
 and E76_subsets.png (part D; the latter also scores this experiment's own fits against the six, the two and the eight),
 E76_axes.png (part E).
 The check of E10_joint_fit.py's --apl-data-units (`--part check-e10`) writes outputs/E76_data_side_target/e10_check/.
-Usage (from this folder): ../../venv/bin/python -u E76_data_side_target.py --part D | B | C [--jobs 3] | E-tables | table | figures
-       OMP_NUM_THREADS=12 OMP_THREAD_LIMIT=12 nice -n 10 ../../venv/bin/python -u E76_data_side_target.py --part E --threads 12
+Usage (from this folder): ./venv/bin/python -u E76_data_side_target.py --part D | B | C [--jobs 3] | E-tables | table | figures
+       OMP_NUM_THREADS=12 OMP_THREAD_LIMIT=12 nice -n 10 ./venv/bin/python -u E76_data_side_target.py --part E --threads 12
            [--bases c2 ceiling2] [--base2 EXP:TAG] [--only POINT ...] [--check-only]
-       ../../venv/bin/python -u E76_data_side_target.py --part check-e10 [--check off noise]
+       ./venv/bin/python -u E76_data_side_target.py --part check-e10 [--check off noise]
 """
 from __future__ import annotations
 

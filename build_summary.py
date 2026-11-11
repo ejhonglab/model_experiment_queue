@@ -51,7 +51,7 @@ def main() -> None:
     tipped, _ = F.fill(template, tooltips=True)
     OUT_MD.write_text(plain)
     commit = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE, capture_output=True, text=True).stdout.strip()
-    OUT_MD.with_suffix('.values.json').write_text(json.dumps(dict(template=str(TEMPLATE.relative_to(H.REPO)), template_commit=commit,
+    OUT_MD.with_suffix('.values.json').write_text(json.dumps(dict(template=str(TEMPLATE.relative_to(H.HERE)), template_commit=commit,
         generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), n_values=len(side), lint=probs, values=side),
         indent=1, ensure_ascii=False, default=str) + '\n')
     OUT_HTML.parent.mkdir(parents=True, exist_ok=True)

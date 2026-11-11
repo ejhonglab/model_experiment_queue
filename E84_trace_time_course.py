@@ -59,7 +59,7 @@ and as in the queue's notes (6 / 3 / 2; which side of 2024-07-10 fly 2 is the no
 not known, so both readings; the notes' 2024-08-09 fly 3 side is taken as L, the one its YAML calls not labeled).
 
 Usage (from this folder; one thread, no simulations):
-    OMP_NUM_THREADS=1 OMP_THREAD_LIMIT=1 nice -n 10 ../../venv/bin/python -u E84_trace_time_course.py --part A
+    OMP_NUM_THREADS=1 OMP_THREAD_LIMIT=1 nice -n 10 ./venv/bin/python -u E84_trace_time_course.py --part A
 (then B, C, D, E, export; `--part table` rewrites comparison_table.md and the figures from the CSVs)
 """
 from __future__ import annotations

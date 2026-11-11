@@ -32,6 +32,7 @@ the provenance's row counts are merged with the existing file's.)
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 import platform
@@ -46,7 +47,9 @@ import pandas as pd
 SERVER = 'https://neuprint.janelia.org'
 DATASET = 'hemibrain:v1.2.1'
 HERE = Path(__file__).resolve().parent
-DEFAULT_OUT = HERE.parents[1] / 'al_analysis' / 'data' / 'hemibrain_neuprint'
+# al_analysis's data directory (the installed package's, found without importing it)
+DEFAULT_OUT = next(Path(p) for p in importlib.util.find_spec('al_analysis').submodule_search_locations
+    if Path(p).is_dir()) / 'data' / 'hemibrain_neuprint'
 
 PN_TYPE = r'.*PN.*'
 LHN_TYPE = r'^LH.*'

@@ -27,7 +27,7 @@ import kc_remapping_harness as H
 from E27_glomerulus_gain import ORACLE, TOP_GLOMS
 
 EXPERIMENT = 'E29_oracle_substrate'
-HEMIBRAIN = (H.HERE.parents[1] / 'al_analysis' / 'data' / 'hemibrain_neuprint').resolve()
+HEMIBRAIN = (H.al_analysis_data_dir() / 'hemibrain_neuprint').resolve()
 
 
 def main() -> None:

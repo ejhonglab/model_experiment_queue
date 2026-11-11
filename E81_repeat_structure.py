@@ -73,7 +73,7 @@ Part B, the models against the noise-free effect and the saved trials (`--part B
 the CSVs; `--part A` and `--part B` end with it. `registry_entries()` gives data_targets.py the new entries
 (`repeat_*`, `noise_free_*`). Outputs: <shared>/results/E81_repeat_structure/ (the CSVs above, comparison_table.md,
 E81_*.png, provenance_A.json / provenance_B.json, recorded at the start of each part).
-Usage (light CPU): OMP_NUM_THREADS=2 nice -n 10 ../../venv/bin/python -u E81_repeat_structure.py --part A
+Usage (light CPU): OMP_NUM_THREADS=2 nice -n 10 ./venv/bin/python -u E81_repeat_structure.py --part A
 (or --part A6 for the stimulus order alone; provenance_A6.json).
 """
 from __future__ import annotations

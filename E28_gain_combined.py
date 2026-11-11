@@ -204,7 +204,7 @@ def main() -> None:
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E28_gain_combined.py', apl_drive=args.apl_drive,
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(),
         al_analysis_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE, capture_output=True, text=True).stdout.strip(),
-        olfsysm_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=(H.HERE / '../../../olfsysm').resolve(), capture_output=True, text=True).stdout.strip(),
+        olfsysm_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.olfsysm_dir(), capture_output=True, text=True).stdout.strip(),
         base=base, points={p: POINTS[p] for p in args.points}, gains=args.gains, oracle_glomeruli=ORACLE, tau=TAU, approx_conc_note=H.APPROX_CONC_NOTE)
     (res_dir / 'provenance.json').write_text(json.dumps(prov, indent=1, default=str) + '\n')
     make_figure(pd.DataFrame(rows), fracs, res_dir)

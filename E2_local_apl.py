@@ -37,7 +37,8 @@ import pandas as pd
 
 import kc_remapping_harness as H
 
-sys.path.insert(0, str(H.REPO / 'scripts'))
+# al_analysis/scripts/apl_coupling_sweep.py, in the al_analysis checkout beside this repository
+sys.path.insert(0, str(H.al_analysis_dir() / 'scripts'))
 import apl_coupling_sweep as ACS  # noqa: E402
 
 EXPERIMENT = 'E2_local_apl'

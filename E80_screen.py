@@ -58,7 +58,7 @@ outputs/E80_remaining_candidates/screen/ (tag <base>_<point_id>, base C2 or fit0
 point's per-KC threshold factors (<tag>_kc_thr_factor.parquet) where it has them.
 
 Usage (from this folder):
-    OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ../../venv/bin/python -u E80_screen.py [--only ID ...] [--list]
+    OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ./venv/bin/python -u E80_screen.py [--only ID ...] [--list]
         [--workers N] [--gate]
 """
 from __future__ import annotations

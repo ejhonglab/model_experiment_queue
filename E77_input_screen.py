@@ -31,7 +31,7 @@ screen_provenance.json. Spike counts and responses of every point under outputs/
 (tag C2_<point_id>, conditions on / acute_off).
 
 Usage (from this folder):
-    OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ../../venv/bin/python -u E77_input_screen.py [--only ID ...] [--list]
+    OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ./venv/bin/python -u E77_input_screen.py [--only ID ...] [--list]
 """
 from __future__ import annotations
 

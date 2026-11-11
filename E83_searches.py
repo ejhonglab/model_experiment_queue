@@ -39,8 +39,8 @@ Spike counts and responses of each wiring's final point under outputs/E83_cross_
 <P|I>_half<half>_<wiring>), the checkpoints under outputs/E83_cross_wiring_fit/<B|C>/state_<half>/.
 
 Usage (from this folder; arm P on one 16-thread lane, arm I on four 8-thread workers):
-    OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ../../venv/bin/python -u E83_searches.py --arm P --half A
-    OMP_NUM_THREADS=8 OMP_THREAD_LIMIT=8 nice -n 10 ../../venv/bin/python -u E83_searches.py --arm I --half A
+    OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ./venv/bin/python -u E83_searches.py --arm P --half A
+    OMP_NUM_THREADS=8 OMP_THREAD_LIMIT=8 nice -n 10 ./venv/bin/python -u E83_searches.py --arm I --half A
 """
 from __future__ import annotations
 

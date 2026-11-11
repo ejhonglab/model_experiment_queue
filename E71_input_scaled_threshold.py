@@ -66,10 +66,10 @@ outputs/E71_input_scaled_threshold/<tag>_<on|acute_off>_<spike_counts|responses>
 breadth runs and the pre-passes in outputs/E71_input_scaled_threshold/bases/.
 
 Usage (from this folder; one process at a time, about 9 GB each):
-    ../../venv/bin/python E71_input_scaled_threshold.py --plan
-    OMP_NUM_THREADS=12 OMP_THREAD_LIMIT=12 nice -n 10 ../../venv/bin/python -u E71_input_scaled_threshold.py --stage run
-    ../../venv/bin/python E71_input_scaled_threshold.py --stage summarize
-    ../../venv/bin/python E71_input_scaled_threshold.py --stage partB-commands
+    ./venv/bin/python E71_input_scaled_threshold.py --plan
+    OMP_NUM_THREADS=12 OMP_THREAD_LIMIT=12 nice -n 10 ./venv/bin/python -u E71_input_scaled_threshold.py --stage run
+    ./venv/bin/python E71_input_scaled_threshold.py --stage summarize
+    ./venv/bin/python E71_input_scaled_threshold.py --stage partB-commands
     --local-test DIR: results and outputs under DIR (a smoke test; with --stage setting --tag <tag> one setting)
 """
 from __future__ import annotations
@@ -961,7 +961,7 @@ def partB_commands() -> List[str]:
     df = merged()
     choices = {k: exponent_choice(k, df) for k in BASE_ORDER}
     cmds = []
-    py = '../../venv/bin/python -u'
+    py = './venv/bin/python -u'
     env = 'OMP_NUM_THREADS=12 OMP_THREAD_LIMIT=12 nice -n 10'
     common = (f'-k 2 --experiment {EXPERIMENT} --aplpn-max 3 --rate-target ctrl_frac --loss apl --apl-readout both '
         f'--maxfev {PARTB_MAXFEV}')
@@ -1047,7 +1047,7 @@ def partC_commands() -> List[str]:
     levels, seed 43; each pseudo-recording's pair distances saved): on C2 itself, and on part B's fit 1 if it is
     within PARTC_FIT_MARGIN of C2's loss under either definition (its input-scaled threshold read from fits.csv,
     the jitter multiplying it)."""
-    py = '../../venv/bin/python -u'
+    py = './venv/bin/python -u'
     env = 'OMP_NUM_THREADS=12 OMP_THREAD_LIMIT=12 nice -n 10'
     common = (f'--part B --tune-trials 3 --seed 43 --n-recordings 10 --n-trials 3 --experiment {EXPERIMENT} '
         '--levels match_on match_off --save-recording-distances')

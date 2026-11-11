@@ -56,9 +56,9 @@ are cached by E77_input_screen.handle_breadth under outputs/E77_input_side_commo
 
 Usage (from this folder; one process at a time; a C++ error inside olfsysm's parallel region ends the process without
 a traceback, so run the parts in separate processes, `--part B1`, then B2 to B5: done points are skipped):
-    OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ../../venv/bin/python -u E82_protocol_runs.py [--part B1 ...]
+    OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ./venv/bin/python -u E82_protocol_runs.py [--part B1 ...]
         [--only ID ...] [--list] [--results-dir DIR --outputs-dir DIR]
-    ../../venv/bin/python E82_protocol_runs.py --populations
+    ./venv/bin/python E82_protocol_runs.py --populations
 """
 from __future__ import annotations
 

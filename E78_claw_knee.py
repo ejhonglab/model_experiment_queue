@@ -50,17 +50,17 @@ init_params.json, partD_commands.json, paired.csv, population.csv; release.csv; 
 counts and responses under ./outputs/E78_claw_knee/C/<start>_<point>_<on|acute_off>_<spike_counts|responses>.parquet.
 
 Usage (from this folder; at most two 16-thread processes on hal, under nice, as systemd-run --user units for long runs):
-    ../../venv/bin/python E78_claw_knee.py --part check-C   (the pre-pass run's identity check on C2; before launching)
-    ../../venv/bin/python E78_claw_knee.py --part C-launch  (the pre-pass run as four chained units; `c_launch`), or step by
+    ./venv/bin/python E78_claw_knee.py --part check-C   (the pre-pass run's identity check on C2; before launching)
+    ./venv/bin/python E78_claw_knee.py --part C-launch  (the pre-pass run as four chained units; `c_launch`), or step by
         step:
-    OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ../../venv/bin/python -u E78_claw_knee.py --part C [--only ID ...]
+    OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ./venv/bin/python -u E78_claw_knee.py --part C [--only ID ...]
         (C2; split the points over two processes with --only; run once more without --only for the softplus width and the
         KC-KC-fixed controls at the two best knee points; --breadth held / --kckc fixed for the other settings)
     ... --part C-low --best             (the five best and C2 at the low concentrations)
     ... --part C --start fit1 --best    and    ... --part C --start P1 --best    (the five best repeated)
-    ../../venv/bin/python E78_claw_knee.py --part gate [--breadth held --gate-ref identity_held] | --part summarize
+    ./venv/bin/python E78_claw_knee.py --part gate [--breadth held --gate-ref identity_held] | --part summarize
         [--breadth held] | --part B | --part E
-    ../../venv/bin/python E78_claw_knee.py --part check-e10 [--baseline COMMIT] [--jobs N]   (E10's options checked)
+    ./venv/bin/python E78_claw_knee.py --part check-e10 [--baseline COMMIT] [--jobs N]   (E10's options checked)
 """
 from __future__ import annotations
 
@@ -1262,7 +1262,7 @@ def c_launch(wait_units: Sequence[str] = ()) -> List[str]:
     import time
     logs = H.outputs_dir(EXPERIMENT) / 'logs'
     logs.mkdir(parents=True, exist_ok=True)
-    py = str(Path(__file__).resolve().parents[2] / 'venv' / 'bin' / 'python')
+    py = str(Path(__file__).resolve().parent / 'venv' / 'bin' / 'python')
     me = f'{py} -u E78_claw_knee.py'
     stamp = time.strftime('%H%M%S')
     names = {k: f'e78c2-{k}-{stamp}' for k in 'abcd'}
@@ -1568,7 +1568,7 @@ def d_launch(cmds: Sequence[Sequence[str]], max_jobs: int = 2) -> List[str]:
     logs = H.outputs_dir(EXPERIMENT) / 'logs'
     logs.mkdir(parents=True, exist_ok=True)
     units = []
-    py = str(Path(__file__).resolve().parents[2] / 'venv' / 'bin' / 'python')
+    py = str(Path(__file__).resolve().parent / 'venv' / 'bin' / 'python')
     for i, c in enumerate(cmds):
         unit = f"e78d-{i}-{time.strftime('%H%M%S')}"
         wait = ''

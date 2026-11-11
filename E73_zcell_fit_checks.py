@@ -19,8 +19,8 @@ E10_joint_fit.py runs in its own process with the results folder of the scratch 
 redirected to outputs/E73_per_kc_normalization/partC_checks/ (nothing is written to the shared results); the
 E43 check writes its tables there too. Writes partC_checks/checks.json and prints a summary.
 Usage (from this folder; two E10 processes at a time, 16 threads each):
-    OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ../../venv/bin/python -u E73_zcell_fit_checks.py [--only NAME ...] [--jobs 2]
-    ../../venv/bin/python E73_zcell_fit_checks.py --compare-only   (the comparisons again, from the saved histories)
+    OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ./venv/bin/python -u E73_zcell_fit_checks.py [--only NAME ...] [--jobs 2]
+    ./venv/bin/python E73_zcell_fit_checks.py --compare-only   (the comparisons again, from the saved histories)
 """
 from __future__ import annotations
 

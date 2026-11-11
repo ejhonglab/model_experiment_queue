@@ -245,7 +245,7 @@ def main() -> None:
 
     meta = {
         'generated': datetime.now(timezone.utc).isoformat(timespec='seconds'),
-        'script': str(Path(__file__).relative_to(HERE.parents[2])),
+        'script': str(Path(__file__).relative_to(HERE.parent)),
         'al_analysis_commit': subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=HERE,
             capture_output=True, text=True).stdout.strip(),
         'olfdb': args.olfdb,

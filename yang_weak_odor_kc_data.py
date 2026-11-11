@@ -28,6 +28,7 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -45,9 +46,11 @@ import pandas as pd
 from yang_apl16_kc_data import rdm_long
 
 HERE = Path(__file__).resolve().parent
-REPO = HERE.parents[1]
-RAW_DIR = REPO / 'al_analysis' / 'data' / 'from_yang' / '20260415_YZtransfer'
-ORN_DELTA_DIR = REPO / 'al_analysis' / 'data' / 'internal'
+# the al_analysis checkout the installed package comes from (found without importing it)
+AL_ANALYSIS = next(Path(p) for p in importlib.util.find_spec('al_analysis').submodule_search_locations
+    if Path(p).is_dir()).parent
+RAW_DIR = AL_ANALYSIS / 'al_analysis' / 'data' / 'from_yang' / '20260415_YZtransfer'
+ORN_DELTA_DIR = AL_ANALYSIS / 'al_analysis' / 'data' / 'internal'
 OUT_NAME = 'yang_weak_odor_kc'
 DEFAULT_OLFDB = 'http://hal:8080'
 
@@ -1198,7 +1201,7 @@ def main() -> None:
         + [ORN_DELTA_DIR / x for x in ORN_DELTA_CSVS])
     meta = {
         'generated': datetime.now(timezone.utc).isoformat(timespec='seconds'),
-        'script': str(Path(__file__).resolve().relative_to(HERE.parents[2])),
+        'script': str(Path(__file__).resolve().relative_to(HERE.parent)),
         'al_analysis_commit': git('rev-parse', 'HEAD'),
         'script_uncommitted_changes': bool(git('status', '--porcelain', '--',
             Path(__file__).name)),
@@ -1211,7 +1214,7 @@ def main() -> None:
         'panels': {p: {'odors': {lab: yang2olfdb(lab) for lab in PANEL_ODORS[p]},
             'n_recordings': len(panels[p]), 'n_long_rows': results[p]['n_long_rows']}
             for p in panels},
-        'inputs': {str(p.relative_to(REPO)): sha256(p) for p in inputs},
+        'inputs': {str(p.relative_to(AL_ANALYSIS)): sha256(p) for p in inputs},
         'checks_failed': checks.failed,
     }
     (out_dir / 'provenance.json').write_text(json.dumps(meta, indent=1) + '\n')

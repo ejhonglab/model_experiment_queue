@@ -27,7 +27,7 @@ Analyses (outputs to results/E79_apl_calyx_constraints/ in the shared directory)
 Image axes are as recorded (x left to right, y top to bottom); the anatomical orientation and pixel size are not in the files
 (Yang to confirm), so lengths are given in pixels and in um at an assumed 0.3 um per pixel.
 
-Run from this folder: `nice -n 10 ../../venv/bin/python E79_apl_calyx_constraints.py [--analyses 1,2,3,5]`.
+Run from this folder: `nice -n 10 ./venv/bin/python E79_apl_calyx_constraints.py [--analyses 1,2,3,5]`.
 """
 from __future__ import annotations
 

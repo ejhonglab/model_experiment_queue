@@ -35,7 +35,7 @@ conditions on / acute_off). The breadth pre-passes are cached by E77_input_scree
 outputs/E77_input_side_common_error/breadth/.
 
 Usage (from this folder):
-    OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ../../venv/bin/python -u E80_pulse.py [--check] [--only ID ...] [--list]
+    OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ./venv/bin/python -u E80_pulse.py [--check] [--only ID ...] [--list]
 """
 from __future__ import annotations
 

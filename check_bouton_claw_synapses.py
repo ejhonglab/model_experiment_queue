@@ -31,7 +31,7 @@ import pandas as pd
 
 import kc_remapping_harness as H
 
-SYN_PATH = (H.REPO / 'al_analysis' / 'data' / 'from_pratyush' / '2025-12-05' /
+SYN_PATH = (H.al_analysis_data_dir() / 'from_pratyush' / '2025-12-05' /
     'PNbouton-to-KCclaw_Connectivity_2025-12-09-19-47-36.parquet')
 THRESH = 5   # synapses per (KC, claw, PN), as in connectome_wPNKC
 OUT = H.shared_dir() / 'results' / 'bouton_claw_synapses'

@@ -194,7 +194,7 @@ def main() -> None:
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E27_glomerulus_gain.py',
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(),
         al_analysis_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE, capture_output=True, text=True).stdout.strip(),
-        olfsysm_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=(H.HERE / '../../../olfsysm').resolve(), capture_output=True, text=True).stdout.strip(),
+        olfsysm_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.olfsysm_dir(), capture_output=True, text=True).stdout.strip(),
         base=BOUTON, claw_thr=args.thr, gains=args.gains, oracle_glomeruli=ORACLE, top_glomeruli=TOP_GLOMS, random_sets={str(k): v for k, v in rng_sets.items()},
         synapse_weights=syn_info, approx_conc_note=H.APPROX_CONC_NOTE)
     (res_dir / 'provenance.json').write_text(json.dumps(prov, indent=1, default=str) + '\n')

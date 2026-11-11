@@ -41,7 +41,7 @@ log2_factor, searched_delta, as E77's oracle_factors; inputs/ in E38's layout). 
 outputs/E83_cross_wiring_fit/<part>/ (tag <part>_<change>_<wiring>, conditions on / acute_off).
 
 Usage (from this folder):
-    OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ../../venv/bin/python -u E83_cross_wiring_fit.py --part A1
+    OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ./venv/bin/python -u E83_cross_wiring_fit.py --part A1
 """
 from __future__ import annotations
 

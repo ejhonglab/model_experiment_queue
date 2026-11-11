@@ -59,11 +59,11 @@ partA_variant_stats.csv, parts_A.csv, shares_A.csv, comparison_table.md, figures
 counts and responses in outputs/E69_kc_firing_ceiling/<tag>_<on|acute_off>_<spike_counts|responses>.parquet.
 
 Usage (from this folder; one process at a time):
-    OMP_NUM_THREADS=16 nice -n 10 ../../venv/bin/python E69_kc_firing_ceiling.py --stage run
+    OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python E69_kc_firing_ceiling.py --stage run
     (runs every missing check, the pilot and every missing setting, each in its own process, then
     --stage summarize)
-    ../../venv/bin/python E69_kc_firing_ceiling.py --stage summarize
-    OMP_NUM_THREADS=8 nice -n 10 ../../venv/bin/python E69_kc_firing_ceiling.py --stage partB  (after part B's fits)
+    ./venv/bin/python E69_kc_firing_ceiling.py --stage summarize
+    OMP_NUM_THREADS=8 nice -n 10 ./venv/bin/python E69_kc_firing_ceiling.py --stage partB  (after part B's fits)
 """
 from __future__ import annotations
 

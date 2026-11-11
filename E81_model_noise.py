@@ -111,13 +111,13 @@ shared_state_runs.csv, shared_state.csv, rundown_axes.csv, provenance_E.json (pa
 figures (`--part table`). Part E's counts in outputs/E81_repeat_structure/partE/, part D's check's trials in
 outputs/E81_repeat_structure/partD_presentation/.
 Usage (from this folder):
-       OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 nice -n 10 ../../venv/bin/python -u E81_model_noise.py --part D [--jobs 2]
+       OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 nice -n 10 ./venv/bin/python -u E81_model_noise.py --part D [--jobs 2]
            [--models C2 ...] [--no-rereads]
-       OMP_NUM_THREADS=12 OMP_THREAD_LIMIT=12 nice -n 10 ../../venv/bin/python -u E81_model_noise.py --part E --threads 12
+       OMP_NUM_THREADS=12 OMP_THREAD_LIMIT=12 nice -n 10 ./venv/bin/python -u E81_model_noise.py --part E --threads 12
            [--smoke]
-       OMP_NUM_THREADS=12 OMP_THREAD_LIMIT=12 nice -n 10 ../../venv/bin/python -u E81_model_noise.py --part D-presentation
+       OMP_NUM_THREADS=12 OMP_THREAD_LIMIT=12 nice -n 10 ./venv/bin/python -u E81_model_noise.py --part D-presentation
            [--workers 10] [--models C2 F1] [--search-recordings 2] [--n-recordings 3] [--smoke]
-       ../../venv/bin/python -u E81_model_noise.py --part E-tables | table
+       ./venv/bin/python -u E81_model_noise.py --part E-tables | table
 """
 from __future__ import annotations
 

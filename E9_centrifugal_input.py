@@ -55,7 +55,7 @@ from E26_claw_power import sharing_deficit, deficit_table, WEAK
 from pull_neuprint_connectivity import glomerulus_of
 
 EXPERIMENT = 'E9_centrifugal_input'
-HEMIBRAIN = (H.HERE.parents[1] / 'al_analysis' / 'data' / 'hemibrain_neuprint').resolve()
+HEMIBRAIN = (H.al_analysis_data_dir() / 'hemibrain_neuprint').resolve()
 MIN_SYN = 3
 BOUTON_REL = 0.4   # bouton matrix weight relative to the KC matrix in the 'both' variants
 SCALES = {'kc': [10.0, 30.0, 100.0], 'bouton': [5.0, 15.0, 40.0], 'both': [10.0, 30.0, 100.0]}
@@ -391,7 +391,7 @@ def main() -> None:
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E9_centrifugal_input.py',
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(),
         al_analysis_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE, capture_output=True, text=True).stdout.strip(),
-        olfsysm_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=(H.HERE / '../../../olfsysm').resolve(), capture_output=True, text=True).stdout.strip(),
+        olfsysm_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.olfsysm_dir(), capture_output=True, text=True).stdout.strip(),
         bases={b: BASES[b] for b in args.bases}, scales=SCALES, bouton_rel=BOUTON_REL, min_synapses=MIN_SYN, named_pairs=dict(diverge=DIVERGE, converge=CONVERGE),
         hemibrain=json.loads((HEMIBRAIN / 'provenance.json').read_text()), approx_conc_note=H.APPROX_CONC_NOTE)
     (res_dir / 'provenance.json').write_text(json.dumps(prov, indent=1, default=str) + '\n')

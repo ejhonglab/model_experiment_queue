@@ -65,13 +65,14 @@ E79_connectome_* / E79_coloc_*, provenance_connectome.json, connectome_table.md)
    columns together, the same permutation for every calyx and setting), per setting and for the best setting. The entry's
    gate for outcome (a): 15 % or more removed on left-out odors beyond the null.
 
-Run from this folder: `OMP_NUM_THREADS=6 OMP_THREAD_LIMIT=6 nice -n 10 ../../venv/bin/python E79_connectome_maps.py
+Run from this folder: `OMP_NUM_THREADS=6 OMP_THREAD_LIMIT=6 nice -n 10 ./venv/bin/python E79_connectome_maps.py
 [--analyses 4,6] [--n-perm 1000]`.
 """
 from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import subprocess
 import time
@@ -89,7 +90,9 @@ HERE = Path(__file__).resolve().parent
 SHARED = ACM.SHARED
 OUT = SHARED / 'results' / 'E79_apl_calyx_constraints'
 YANG_APL = Path('/mnt/tensor/Tom/claude_APL_modeling_YZ4TC/Claude_APL_analysis/apl_synapses')
-PRAT_DIR = HERE.parents[1] / 'al_analysis' / 'data' / 'from_pratyush' / '2025-12-05'
+# in al_analysis's data directory (the installed package's, found without importing it)
+PRAT_DIR = next(Path(p) for p in importlib.util.find_spec('al_analysis').submodule_search_locations
+    if Path(p).is_dir()) / 'data' / 'from_pratyush' / '2025-12-05'
 PRAT_PN_SYNAPSES = PRAT_DIR / 'PN_Synapse_Assignments_Hemibrain_2025-12-05-13-39-22.parquet'
 PRAT_PN_KC = PRAT_DIR / 'PNbouton-to-KCclaw_Connectivity_2025-12-09-19-47-36.parquet'
 C2 = ('E67_apl_effect_fits', 'rate0.068_aplboth_k2_cap3')
@@ -1128,8 +1131,9 @@ def _git(repo: Path) -> dict:
 
 
 def write_provenance(extra: dict) -> None:
-    """provenance_connectome.json: script, al_analysis and olfsysm commits and dirty state, inputs with sha256, and
-    `runs`: every run's analyses, settings and commit (kept across runs that redo part of the analyses)."""
+    """provenance_connectome.json: script, this repository's, al_analysis's and olfsysm's commits and dirty state, inputs
+    with sha256, and `runs`: every run's analyses, settings and commit (kept across runs that redo part of the analyses)."""
+    import kc_remapping_harness as H
     inputs = [YANG_APL / f'{ds}_{k}.csv.gz' for ds in DATASETS
               for k in ('PN_boutons_derived', 'KC_claws_derived', 'APL_MB_synapses')]
     inputs += [PRAT_PN_SYNAPSES, PRAT_PN_KC, C2_ON_COUNTS, COMMON_ERROR, ORN_INPUT, ACM.DATA / 'recordings.csv',
@@ -1144,7 +1148,7 @@ def write_provenance(extra: dict) -> None:
     except Exception as ex:
         build = repr(ex)
     prov = dict(generated=time.strftime('%Y-%m-%d %H:%M:%S %z'), script=Path(__file__).name,
-                al_analysis=_git(HERE), olfsysm=_git(HERE.parents[2] / 'olfsysm'), olfsysm_build=build,
+                queue=_git(HERE), al_analysis=_git(H.al_analysis_dir()), olfsysm=_git(H.olfsysm_dir()), olfsysm_build=build,
                 c2=dict(experiment=C2[0], tag=C2[1]),
                 settings=dict(slab_thick_um=SLAB_THICK_UM, slab_step_um=SLAB_STEP_UM, slab_min_share=SLAB_MIN_SHARE,
                               blurs_um=list(BLURS_UM), px_um=PX_UM, outline_blur_um=OUTLINE_BLUR_UM,
@@ -1163,7 +1167,7 @@ def write_provenance(extra: dict) -> None:
             runs = old.get('runs', [])
         except (ValueError, OSError):
             pass
-    runs.append(dict(generated=prov['generated'], al_analysis=prov['al_analysis'], **extra))
+    runs.append(dict(generated=prov['generated'], queue=prov['queue'], al_analysis=prov['al_analysis'], **extra))
     prov['runs'] = runs
     path.write_text(json.dumps(prov, indent=1, default=str) + '\n')
 

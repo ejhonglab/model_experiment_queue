@@ -419,7 +419,7 @@ def main() -> None:
                 '(realism_flag_zcrit)', noise_threshold=H.data_target('noise_threshold'),
             data_rate_ratio=dict(zip(('value', 'ci90'), data_rate_ratio('noise'))),
             zcrit_odors_per_kc_tv_max=dict(on=opk_band('on', 'z'), off=opk_band('off', 'z'))),
-        figures=made, template=str(TEMPLATE.relative_to(H.REPO)), template_sha256=_sha(TEMPLATE)), indent=1, ensure_ascii=False) + '\n')
+        figures=made, template=str(TEMPLATE.relative_to(H.HERE)), template_sha256=_sha(TEMPLATE)), indent=1, ensure_ascii=False) + '\n')
     print(f'-> {OUT} ({len(made)} figures)', flush=True)
 
 

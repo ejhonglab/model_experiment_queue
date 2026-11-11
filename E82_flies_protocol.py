@@ -68,7 +68,7 @@ from E80's runs), E82_partA.png, protocol_provenance_<part>.json; protocol_popul
 reads every saved run again, E80's and part B's, and redoes the late spikes and the traces with them).
 
 Usage (from this folder; no simulations, single-threaded):
-    OMP_NUM_THREADS=2 OMP_THREAD_LIMIT=2 ../../venv/bin/python -u E82_flies_protocol.py --part {A,C,tables}
+    OMP_NUM_THREADS=2 OMP_THREAD_LIMIT=2 ./venv/bin/python -u E82_flies_protocol.py --part {A,C,tables}
 """
 from __future__ import annotations
 
