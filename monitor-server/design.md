@@ -52,7 +52,7 @@ so it writes a heartbeat (`presence/<host>__<session>.watch`, keyed by
 `$CLAUDE_CODE_SESSION_ID`) on each poll and marks it `exited` on exit. A current heartbeat
 means "listening". A stale one, with no hook events, eventually means "gone". Having run
 `chat_watch.sh` (or the queue's session title) is also what marks a session as being on the
-queue: other sessions started in this folder are listed as "not on queue".
+queue: other sessions started in the queue repository are listed as "not on queue".
 
 ## Model and effort level from the transcript
 
@@ -102,7 +102,7 @@ the window.
   usage state), because only it knows when Tom's request is done; the alternative, returning to
   queue work at the end of the turn (the Stop hook), would mis-attribute every request that
   spawns background work. Subagent transcripts take the main session's boundaries. Sessions
-  that never run `chat_watch.sh` (Tom's own sessions in the folder) are flagged apart, and the
+  that never run `chat_watch.sh` (Tom's own sessions in the repository) are flagged apart, and the
   plots leave them out by default.
 
 ## Declared status as front matter

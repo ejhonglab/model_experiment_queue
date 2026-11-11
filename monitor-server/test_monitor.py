@@ -1,7 +1,7 @@
 """Tests for the queue monitor: presence_hook.py, the chat_watch.sh heartbeat and server.py.
 
-Run with `./venv/bin/python -m pytest scripts/claude_pair_remapping_experiments/monitor-server`
-from the al_analysis root (standard library only, besides pytest).
+Run with `./venv/bin/python -m pytest monitor-server` from the repository's root (standard library
+only, besides pytest).
 """
 import json
 import os
@@ -21,9 +21,8 @@ sys.path.insert(0, str(HERE))
 import server  # noqa: E402
 
 HOST = socket.gethostname().split('.')[0]
-QUEUE_DIR = '/home/x/src/al_analysis/scripts/claude_pair_remapping_experiments'
-TRANSCRIPT = ('/home/x/.claude/projects/-home-x-src-al-analysis-scripts-claude-pair-'
-    'remapping-experiments/{}.jsonl')
+QUEUE_DIR = '/home/x/src/model_experiment_queue'
+TRANSCRIPT = '/home/x/.claude/projects/-home-x-src-model-experiment-queue/{}.jsonl'
 
 
 @pytest.fixture
@@ -138,6 +137,18 @@ def test_hook_ignores_other_folders_and_follows_cd(dirs):
     hook(env, 'SessionStart', source='startup')
     hook(env, 'PreToolUse', tool_name='Read', cwd='/home/x/src/olfsysm')
     assert record(shared)['state'] == 'working'
+
+
+def test_hook_records_sessions_in_the_old_folder(dirs):
+    """Sessions started in al_analysis's folder, where the queue was until 2026-11-11, still count, by their cwd or by
+    their transcript's folder."""
+    shared, env = dirs
+    old = '/home/x/src/al_analysis/scripts/claude_pair_remapping_experiments'
+    hook(env, 'SessionStart', sid='s7', source='startup', cwd=old, transcript_path='/x/elsewhere/s7.jsonl')
+    assert record(shared, 's7') is not None
+    hook(env, 'SessionStart', sid='s8', source='startup', cwd='/home/x',
+        transcript_path='/home/x/.claude/projects/-home-x-src-al-analysis-scripts-claude-pair-remapping-experiments/s8.jsonl')
+    assert record(shared, 's8') is not None
 
 
 def test_hook_throttles_shared_writes(dirs):

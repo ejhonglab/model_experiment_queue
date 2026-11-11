@@ -2,14 +2,15 @@
 """Claude Code hook recording what a queue session is doing, for the queue monitor.
 
 Registered (async) for the session lifecycle and tool events in ~/.claude/settings.json
-(~/src/dotfiles/claude_settings.json) on Tom's hosts, and in the experiments folder's
+(~/src/dotfiles/claude_settings.json) on Tom's hosts, and in the queue repository's
 .claude/settings.json, which runs the copy in the session's own checkout (so it also works in
-~/src/kc_queue on lab members' machines); the two commands differ, so in that folder on Tom's
+~/src/kc_queue on lab members' machines); the two commands differ, so in that repository on Tom's
 hosts it runs twice per event, which is harmless. Each call reads the hook
 input JSON from stdin and
 keeps one file per session in the shared directory, `presence/<host>__<session_id>.json`,
-which `server.py` reads. Only sessions whose transcript or cwd is under this folder are
-recorded (a session recorded once stays recorded, wherever it `cd`s). The model and effort
+which `server.py` reads. Only sessions whose transcript or cwd is under the queue repository
+(model_experiment_queue, or the al_analysis folder it was until 2026-11-11,
+claude_pair_remapping_experiments) are recorded (a session recorded once stays recorded, wherever it `cd`s). The model and effort
 level come from the last assistant message in the transcript, since the hook input carries
 the model only on some SessionStart events and never the effort.
 
@@ -67,7 +68,10 @@ SHARED_SUBDIR = 'Tom/claude_kc_remapping'
 CACHE_DIR = os.environ.get('KC_PRESENCE_CACHE') or os.path.join(
     os.environ.get('XDG_CACHE_HOME') or os.path.expanduser('~/.cache'),
     'claude-queue-presence')
-MATCH = os.environ.get('KC_PRESENCE_MATCH', 'claude_pair_remapping_experiments')
+# folder names that mark a queue session: this repository's, and the al_analysis folder's it was until
+# 2026-11-11 (sessions started there still count); comma-separated in $KC_PRESENCE_MATCH
+MATCH = tuple(m for m in os.environ.get('KC_PRESENCE_MATCH',
+    'model_experiment_queue,claude_pair_remapping_experiments').split(',') if m)
 # rewrite the shared file at least this often while events keep coming
 SHARED_REFRESH_S = 60
 CACHE_MAX_AGE_S = 14 * 24 * 3600
@@ -216,11 +220,11 @@ def custom_title(d):
 
 
 def matches(d):
-    """Whether a session not yet recorded belongs to the queue folder."""
+    """Whether a session not yet recorded belongs to the queue repository."""
+    cwd = d.get('cwd') or ''
+    transcript_dir = os.path.dirname(d.get('transcript_path') or '')
     # the transcript's project folder is the launch dir with every non-alphanumeric as '-'
-    transcript_key = re.sub(r'[^A-Za-z0-9]', '-', MATCH)
-    return (MATCH in (d.get('cwd') or '')
-        or transcript_key in os.path.dirname(d.get('transcript_path') or ''))
+    return any(m in cwd or re.sub(r'[^A-Za-z0-9]', '-', m) in transcript_dir for m in MATCH)
 
 
 def next_state(event, d, prev):

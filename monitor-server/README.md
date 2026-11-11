@@ -47,7 +47,7 @@ the bar at the top (the address remembers the view: `#summary`, `#experiments`, 
     the queue sessions (those that ran `chat_watch.sh`) without the turns that a prompt typed
     into a session started (a request of Tom's), until the agent runs
     `presence_hook.py --mark queue`; "queue sessions only" counts everything the queue sessions
-    did; "all work" counts every session started in the experiments folder. A table under the
+    did; "all work" counts every session started in the queue repository. A table under the
     controls gives, per host, what each choice leaves out. The page keeps its scroll position
     across these links;
   - the same for tokens on Fable models only;
@@ -79,7 +79,7 @@ the bar at the top (the address remembers the view: `#summary`, `#experiments`, 
   | gone | no events or heartbeat for 6 h |
   | ended | the session exited |
 
-  Sessions in this folder that never ran `chat_watch.sh` and are not titled
+  Sessions in the queue repository that never ran `chat_watch.sh` and are not titled
   `al_analysis modeling - <host>` are marked "not on queue".
 `http://hal:17486/api/state` returns the same data as JSON, and `http://hal:17486/api/reports`
 the report files' names and save times.
@@ -88,22 +88,22 @@ the report files' names and save times.
 
 **On every host that runs queue sessions**, pull both repositories:
 ```
-git -C ~/src/al_analysis pull
+git -C ~/src/model_experiment_queue pull
 git -C ~/src/dotfiles pull
 ```
 The dotfiles' `claude_settings.json` (linked as `~/.claude/settings.json`) registers
 `presence_hook.py` for the session and tool events. Running sessions reload the settings, so
 no restart is needed. On machines without Tom's dotfiles (lab members' hosts set up with
-`join_queue.sh`, where the checkout is ~/src/kc_queue/al_analysis), `.claude/settings.json` in
-the experiments folder registers the same hooks for sessions started there. Its commands run
+`join_queue.sh`, where the checkout is ~/src/kc_queue/model_experiment_queue), `.claude/settings.json`
+in the queue repository registers the same hooks for sessions started there. Its commands run
 the copy of `presence_hook.py` in the session's own checkout, so they differ from the dotfiles'
-ones, and in that folder on Tom's hosts each hook runs twice; that is harmless (the second run
-rewrites the same session record). Giving the dotfiles the folder's commands would make it run
+ones, and in that repository on Tom's hosts each hook runs twice; that is harmless (the second run
+rewrites the same session record). Giving the dotfiles the repository's commands would make it run
 once again.
 
 **On the host serving the page (hal)**, install the systemd user service and start it:
 ```
-systemctl --user link ~/src/al_analysis/scripts/claude_pair_remapping_experiments/monitor-server/claude-queue-monitor.service
+systemctl --user link ~/src/model_experiment_queue/monitor-server/claude-queue-monitor.service
 systemctl --user enable --now claude-queue-monitor
 ```
 Then, once, allow the user service to run without a login (and start at boot), and open the
@@ -116,8 +116,9 @@ Logs: `journalctl --user -u claude-queue-monitor`.
 
 ## Applying code updates
 
-Everything runs straight from each host's al_analysis checkout (`~/src/kc_queue/al_analysis`
-on lab members' machines), so an update is a pull there, plus a restart for the server only:
+Everything runs straight from each host's model_experiment_queue checkout
+(`~/src/kc_queue/model_experiment_queue` on lab members' machines), so an update is a pull there,
+plus a restart for the server only:
 
 | changed | pull on | then |
 |---|---|---|
@@ -129,7 +130,7 @@ on lab members' machines), so an update is a pull there, plus a restart for the 
 
 On hal, for example:
 ```
-git -C ~/src/al_analysis pull
+git -C ~/src/model_experiment_queue pull
 systemctl --user restart claude-queue-monitor
 systemctl --user status claude-queue-monitor
 ```
@@ -145,8 +146,9 @@ so a session that stays idle shows the old record until it next does something.
   under `/local/tensor` or `/mnt/tensor`, whichever has it), `--port` (17486), `--bind` (0.0.0.0) and `--refresh` (the dashboard's in-place
   update, s; 0 disables it). Edit `ExecStart` in the unit to change them. The thresholds behind the
   session states are constants at the top of `server.py`.
-- Hook: `presence_hook.py` records sessions whose cwd or transcript is under this folder
-  (`$KC_PRESENCE_MATCH`). It writes `presence/<host>__<session>.json` in the shared
+- Hook: `presence_hook.py` records sessions whose cwd or transcript is under the queue repository,
+  or under the al_analysis folder it was until 2026-11-11 (`$KC_PRESENCE_MATCH`, comma-separated
+  folder names). It writes `presence/<host>__<session>.json` in the shared
   directory (found as for the server; nothing is written on a host without it) and keeps a local cache in `~/.cache/claude-queue-presence/`
   (`$KC_PRESENCE_CACHE`). Set `KC_PRESENCE_DEBUG=1` to make it raise instead of failing
   silently.
@@ -169,7 +171,7 @@ so a session that stays idle shows the old record until it next does something.
 - Theme: the page follows the system or browser dark / light setting; the "theme" links at the
   top pin one (kept in the browser).
 - Status line: `../.claude/settings.json` sets `statusLine` to `statusline_capture.py` for
-  sessions started in the experiments folder, refreshed every 300 s. It saves the `rate_limits`
+  sessions started in the queue repository, refreshed every 300 s. It saves the `rate_limits`
   Claude Code passes it to the local cache and prints the plan usage ("5h 23% (to 21:00) · week
   41% (to Mon 09:00)"). A project's `statusLine` replaces the user's own, so if the user has
   one in `~/.claude/settings.json`, the script runs that command and prints its output
@@ -188,7 +190,7 @@ python3 server.py --port 17487
 Why it is built this way (hooks writing to the shared folder rather than to the server, async
 hooks with throttled writes, the chat_watch.sh heartbeat) is in [design.md](design.md).
 
-Tests (from the al_analysis root):
+Tests (from the repository's root):
 ```
-./venv/bin/python -m pytest scripts/claude_pair_remapping_experiments/monitor-server
+./venv/bin/python -m pytest monitor-server
 ```
