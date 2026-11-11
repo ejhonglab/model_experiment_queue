@@ -18,14 +18,15 @@ synapse counts inside the calyx and the lateral horn, ca_pre / ca_post / lh_pre 
 the PNs, LHNs, LHCENT neurons, MB-C1 and APL. Per-ROI synapse counts (weight) are saved unthresholded;
 the experiment chooses its threshold (the model's claw data used >= 4-5 synapses).
 
-Outputs (CSV + provenance.json) go to al_analysis/data/hemibrain_neuprint/, which is
-committed, so the experiment itself needs no neuPrint access.
+Outputs (CSV + provenance.json) go to al_analysis/data/hemibrain_neuprint/ (in the al_analysis
+checkout the installed package comes from), which is committed there, so the experiment itself
+needs no neuPrint access.
 
 Credentials: neuprint-python reads the token from the environment variable
 NEUPRINT_APPLICATION_CREDENTIALS (a token from neuprint.janelia.org, account menu > Auth
 Token; set it in ~/.bash.local). The token is never written or printed by this script.
 
-Usage: ./venv/bin/python scripts/claude_pair_remapping_experiments/pull_neuprint_connectivity.py [--out DIR] [--only NAME ...]
+Usage: ./venv/bin/python pull_neuprint_connectivity.py [--out DIR] [--only NAME ...]
 (--only restricts the pull to the named output files, e.g. --only conn_to_centrifugal_all.csv;
 the provenance's row counts are merged with the existing file's.)
 """

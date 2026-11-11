@@ -116,8 +116,8 @@ def readme(out: Path, checks: list, hal: dict, olf: dict, commit: str) -> None:
     txt = f"""# Yang's APL16 KC responses without normalization (the change in Fc)
 
 The un-normalized counterpart of the baseline-noise-unit files in this folder (README.md), at Yang's request
-(2026-11-10). Written by `al_analysis/scripts/claude_pair_remapping_experiments/yang_apl16_kc_unnormalized.py`
-({datetime.now():%Y-%m-%d %H:%M}, viki, al_analysis {commit}) from Yang's suite2p output on her data drive; re-run it there to
+(2026-11-10). Written by `yang_apl16_kc_unnormalized.py` of ejhonglab/model_experiment_queue
+({datetime.now():%Y-%m-%d %H:%M}, viki, {commit}) from Yang's suite2p output on her data drive; re-run it there to
 regenerate.
 
 ## What a value is
@@ -164,8 +164,8 @@ fluorescence units) instead of Yang's whole-recording z (../README_unnormalized.
 Notes for each (suggested; the dataset number from the table): "Responses of olfdb dataset <19 or 20> without normalization: a
 trial's mean Fc (suite2p F - 0.7 Fneu) 2-8 s after odor onset minus its mean over the 5 s before, in raw fluorescence units,
 from Yang's suite2p output (the same responses as the dataset's, before her whole-recording z-score; value / the KC's
-whole-trace SD of Fc gives the dataset's value). Made by al_analysis scripts/claude_pair_remapping_experiments/
-yang_apl16_kc_unnormalized.py ({commit})." Not checked with olfdb's own loader on viki (/opt/olfdb is on hal); the layout,
+whole-trace SD of Fc gives the dataset's value). Made by yang_apl16_kc_unnormalized.py of
+ejhonglab/model_experiment_queue ({commit})." Not checked with olfdb's own loader on viki (/opt/olfdb is on hal); the layout,
 column names and types are those of the baseline-noise-unit files, which were.
 """
     (out / 'olfdb' / 'README_olfdb_unnormalized.md').write_text(olf_txt)

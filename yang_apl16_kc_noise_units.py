@@ -152,9 +152,9 @@ README = """# Yang's APL16 KC data in baseline-noise units
 
 Every trial of Yang's APL16 KC recordings (olfdb datasets 19, APL output blocked (TNT), and 20, control flies (TNT3c);
 the same trials as data/yang_apl16_kc_olfdb/) with each response in units of the KC's own baseline noise, the KC data's
-side of the realism bands since Tom's decision of 2026-11-10 16:10 (scripts/claude_pair_remapping_experiments/CLAUDE.md,
+side of the realism bands since Tom's decision of 2026-11-10 16:10 (CLAUDE.md of ejhonglab/model_experiment_queue,
 "The main goal for new experiments"; notes/response_criterion_decision.md). Written by
-`al_analysis/scripts/claude_pair_remapping_experiments/yang_apl16_kc_noise_units.py` ({when}, al_analysis {commit});
+`yang_apl16_kc_noise_units.py` of ejhonglab/model_experiment_queue ({when}, {commit});
 re-run it to regenerate.
 
 ## Units
@@ -221,7 +221,7 @@ Notes for each (suggested; the dataset number from the table): "Responses of olf
 (suite2p F - 0.7 Fneu) over the SD of Fc within the 51 pre-odor windows (each window's mean removed), i.e. Yang's
 whole-recording z response times the KC's whole-trace SD over that baseline SD (viki's per-KC scales from Yang's suite2p
 output, 2026-11-10). A trial mean above {thr:.4f} holds the control flies at their response rate by the 1 z criterion.
-Made by al_analysis scripts/claude_pair_remapping_experiments/yang_apl16_kc_noise_units.py ({commit})."
+Made by yang_apl16_kc_noise_units.py of ejhonglab/model_experiment_queue ({commit})."
 """
 
 

@@ -170,14 +170,16 @@ def archive_experiment(name: str, host: str, params_only: bool = False, force_ha
     variants = sorted({v for v, _ in parsed})
     conds = sorted({c for _, c in parsed if c})
     lines = [f'# {name}: model outputs', '',
-        f'Copied {datetime.now():%Y-%m-%d %H:%M} from host {host} (`outputs/{name}/` of the al_analysis checkout). '
+        f'Copied {datetime.now():%Y-%m-%d %H:%M} from host {host} (`outputs/{name}/` of the model_experiment_queue checkout). '
         f'{n_files} files; {len(variants)} variants; conditions: {", ".join(conds) if conds else "(see file names)"}.', '',
         'Files: `<variant>_<condition>_spike_counts.parquet` (KCs x odors, total spikes per KC per odor), '
         '`<variant>_<condition>_responses.parquet` (same shape, 1 = at least 2 spikes); rows indexed by hemibrain '
         'KC body ID (and type), columns the odor at its concentration. `params.csv`: identifying and parameter '
         'columns of the stats tables (tag = variant name used in the file names); `provenance.json`: script, '
         'commit hashes, base kwargs and sweep settings; run logs as written. Regenerate with the script named in '
-        'provenance.json at the recorded commit, with the base kwargs there and the tuned parameters in params.csv.', '']
+        'provenance.json at the recorded commit (`queue_commit`, of ejhonglab/model_experiment_queue; in provenance '
+        'written before 2026-11-11, `al_analysis_commit`, of al_analysis, where the scripts were), with the base kwargs '
+        'there and the tuned parameters in params.csv.', '']
     if variants:
         lines += ['Variants:', ''] + [f'- `{v}`' for v in variants] + ['']
     (dst / 'README.md').write_text('\n'.join(lines))

@@ -852,8 +852,8 @@ def write_readme(out_dir: Path, results: dict, avail: pd.DataFrame,
     a = L.append
     now = datetime.now().strftime('%Y-%m-%d %H:%M')
     a("# Yang's diagnostic-odor mixture and dilute natural-mixture KC data\n")
-    a(f'Made {now} by `al_analysis/scripts/claude_pair_remapping_experiments/'
-        'yang_weak_odor_kc_data.py` from the files Yang sent Tom in April 2026 '
+    a(f'Made {now} by `yang_weak_odor_kc_data.py` (in ejhonglab/model_experiment_queue) '
+        'from the files Yang sent Tom in April 2026 '
         '(`al_analysis/data/from_yang/20260415_YZtransfer/`, committed in al_analysis). '
         'Re-run that script to regenerate everything here (it overwrites this folder). '
         'The layout follows `data/yang_apl16_kc_olfdb/` (Yang\'s APL16 TNT / TNT3c data '
