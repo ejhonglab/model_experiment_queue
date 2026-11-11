@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Claude Code status-line command for queue sessions: keeps the plan usage it receives.
 
-Registered as `statusLine` in the experiments folder's .claude/settings.json. Claude Code runs
+Registered as `statusLine` in the queue repository's .claude/settings.json. Claude Code runs
 it at session start, after each assistant message and every `refreshInterval` seconds, with a
 JSON object on stdin whose `rate_limits` (claude.ai Pro / Max / Ultra subscriptions, after the
 first API response) give the 5-hour and weekly usage of the plan

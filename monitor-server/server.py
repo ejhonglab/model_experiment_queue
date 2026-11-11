@@ -911,8 +911,8 @@ SCOPES = (
         "turns that prompts typed into a session started (Tom's requests), until the agent "
         'marks the session back as queue work'),
     ('queue_sessions', 'queue sessions only', 'everything the queue sessions did, manual work '
-        'included; other sessions started in the experiments folder are left out'),
-    ('all', 'all work', 'every session started in the experiments folder, all of its work'),
+        'included; other sessions started in the queue repository are left out'),
+    ('all', 'all work', 'every session started in the queue repository, all of its work'),
 )
 
 

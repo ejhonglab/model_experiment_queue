@@ -367,7 +367,7 @@ def test_usage_collect_and_render(tmp_path):
     everything = server.render(st, 30, server.parse_opts('tokens=output&scope=all'))
     everything = everything[everything.index('<h2>Usage'):everything.index('<h2>Recent chat')]
     assert '>hal (7k)<' in everything and '>viki (900)<' in everything
-    assert '<b title="every session started in the experiments folder, all of its work">all work</b>' in everything
+    assert '<b title="every session started in the queue repository, all of its work">all work</b>' in everything
     # queue sessions only: hal's manual work counts, viki's session does not
     qs = server.render(st, 30, server.parse_opts('tokens=output&scope=queue_sessions'))
     qs = qs[qs.index('<h2>Usage'):qs.index('<h2>Recent chat')]
