@@ -61,6 +61,7 @@ Usage (from this folder; at most two 16-thread processes on hal, under nice, as 
     ./venv/bin/python E78_claw_knee.py --part gate [--breadth held --gate-ref identity_held] | --part summarize
         [--breadth held] | --part B | --part E
     ./venv/bin/python E78_claw_knee.py --part check-e10 [--baseline COMMIT] [--jobs N]   (E10's options checked)
+        (COMMIT: of this repository, or of al_analysis from before the move, 2026-11-11)
 """
 from __future__ import annotations
 
@@ -212,7 +213,12 @@ def check_e10(only: Optional[Sequence[str]] = None, jobs: int = 1, baseline: Opt
     if baseline:
         old_dir = check_root() / f'_E10_{baseline[:12]}'
         old_dir.mkdir(parents=True, exist_ok=True)
-        src = subprocess.run(['git', 'show', f'{baseline}:./E10_joint_fit.py'], cwd=H.HERE, capture_output=True, text=True, check=True).stdout
+        try:
+            src = subprocess.run(['git', 'show', f'{baseline}:./E10_joint_fit.py'], cwd=H.HERE, capture_output=True, text=True, check=True).stdout
+        except subprocess.CalledProcessError:
+            # a commit from before the scripts moved out of al_analysis (2026-11-11)
+            src = subprocess.run(['git', 'show', f'{baseline}:scripts/claude_pair_remapping_experiments/E10_joint_fit.py'],
+                cwd=H.al_analysis_dir(), capture_output=True, text=True, check=True).stdout
         (old_dir / 'E10_joint_fit.py').write_text(src)
         jobs_list += [('base' + n[3:], *CHECK_RUNS[n], str(old_dir)) for n, *_ in list(jobs_list) if n.startswith('off_')]
 
