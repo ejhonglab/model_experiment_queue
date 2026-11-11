@@ -1,9 +1,11 @@
 #!/bin/bash
 # Adds, lists or removes the write-enabled deploy keys that let a lab member's machine push to the
-# three repositories the KC remapping queue uses (ejhonglab/al_analysis, olfsysm, hong2p). Tom runs
-# it himself, in a terminal, on a host where gh is logged in with admin rights on them; agents run
-# it only when Tom asks for it in the terminal, for a host he names (CLAUDE.md here, "Shared
-# directory on tensor").
+# four repositories the KC remapping queue uses (ejhonglab/model_experiment_queue, al_analysis,
+# olfsysm, hong2p). Tom runs it himself, in a terminal, on a host where gh is logged in with admin
+# rights on them; agents run it only when Tom asks for it in the terminal, for a host he names
+# (CLAUDE.md here, "Shared directory on tensor"). A machine that joined before the queue had a
+# repository of its own has keys for the other three only: after it re-runs join_queue.sh, this
+# adds its model_experiment_queue key and reports the others as already there.
 # The machine's owner first runs join_queue.sh there, which writes its public keys to
 # push_keys/<host>/ in the shared directory and prints their fingerprints. Compare those with the
 # ones this prints before answering y: anyone on the lab network can write to the shared directory.
@@ -17,7 +19,7 @@
 set -uo pipefail
 
 ORG=ejhonglab
-REPOS=(al_analysis olfsysm hong2p)
+REPOS=(model_experiment_queue al_analysis olfsysm hong2p)
 PREFIX=kc-queue
 
 die() { echo "approve_push_keys.sh: $*" >&2; exit 1; }

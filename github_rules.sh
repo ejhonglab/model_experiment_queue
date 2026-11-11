@@ -1,22 +1,24 @@
 #!/bin/bash
 # Applies (or, with --check, only shows) the GitHub settings the KC remapping queue relies on, on
-# ejhonglab/al_analysis, olfsysm and hong2p, so that a write-enabled deploy key (lab members'
-# machines, join_queue.sh) can only add commits to the default branch:
+# ejhonglab/model_experiment_queue, al_analysis, olfsysm and hong2p, so that a write-enabled deploy
+# key (lab members' machines, join_queue.sh) can only add commits to the default branch:
 #   - the default Actions token is read-only, and Actions may not approve pull requests (none of
-#     the three has workflows of its own; Dependabot and Pages set their own permissions);
+#     the four has workflows of its own; Dependabot and Pages set their own permissions);
+#   - ruleset "no deleting or force push": the default branch cannot be deleted or force-pushed,
+#     by anyone (created only where it is missing: al_analysis, olfsysm and hong2p had it before
+#     this script, model_experiment_queue did not);
 #   - ruleset "non-default branches: admins only": creating, updating or deleting any branch but
 #     the default one (and dependabot/*) is refused to everyone but repository and organization
 #     admins;
 #   - ruleset "tags: admins only": the same for tags.
-# The existing "no deleting or force push" ruleset on each default branch (nobody exempt) is left
-# as it is. Tom runs this, with gh logged in with admin rights on the three repositories; re-running
-# it changes nothing that is already in place.
+# An existing ruleset of one of these names is left as it is. Tom runs this, with gh logged in with
+# admin rights on the four repositories; re-running it changes nothing that is already in place.
 #
 # Usage: github_rules.sh [--check]
 set -uo pipefail
 
 ORG=ejhonglab
-REPOS=(al_analysis olfsysm hong2p)
+REPOS=(model_experiment_queue al_analysis olfsysm hong2p)
 check=0
 case ${1:-} in
   --check) check=1 ;;
@@ -31,8 +33,9 @@ RULES='[{"type": "creation"},
   {"type": "update", "parameters": {"update_allows_fetch_and_merge": false}},
   {"type": "deletion"}]'
 
-ruleset() {  # $1 repo, $2 name, $3 target (branch / tag), $4 JSON list of excluded ref patterns
-  local id
+ruleset() {  # $1 repo, $2 name, $3 target (branch / tag), $4 JSON list of excluded ref patterns,
+  # optional: $5 JSON list of included ref patterns (default all), $6 rules, $7 bypass actors
+  local id include=${5:-'["~ALL"]'} rules=${6:-$RULES} bypass=${7:-$BYPASS}
   id=$(gh api "repos/$ORG/$1/rulesets" --jq ".[] | select(.name == \"$2\") | .id") || return 1
   if [ -n "$id" ]; then
     gh api "repos/$ORG/$1/rulesets/$id" --jq \
@@ -42,8 +45,8 @@ ruleset() {  # $1 repo, $2 name, $3 target (branch / tag), $4 JSON list of exclu
   else
     gh api -X POST "repos/$ORG/$1/rulesets" --input - --jq \
       '"  \(.name): created (\(.enforcement)), you can bypass: \(.current_user_can_bypass)"' <<EOF
-{"name": "$2", "target": "$3", "enforcement": "active", "bypass_actors": $BYPASS,
- "conditions": {"ref_name": {"include": ["~ALL"], "exclude": $4}}, "rules": $RULES}
+{"name": "$2", "target": "$3", "enforcement": "active", "bypass_actors": $bypass,
+ "conditions": {"ref_name": {"include": $include, "exclude": $4}}, "rules": $rules}
 EOF
   fi
 }
@@ -58,6 +61,9 @@ for r in "${REPOS[@]}"; do
   gh api "repos/$ORG/$r/actions/permissions/workflow" --jq \
     '"  Actions token: \(.default_workflow_permissions), may approve pull requests: \(.can_approve_pull_request_reviews)"'
   gh api "repos/$ORG/$r/rulesets" --jq '.[] | "  ruleset: \(.name) (\(.target))"'
+  # nobody bypasses this one, as on the three repositories that had it already
+  ruleset "$r" "no deleting or force push" branch '[]' '["~DEFAULT_BRANCH"]' \
+    '[{"type": "deletion"}, {"type": "non_fast_forward"}]' '[]'
   ruleset "$r" "non-default branches: admins only" branch '["~DEFAULT_BRANCH", "refs/heads/dependabot/**"]'
   ruleset "$r" "tags: admins only" tag '[]'
 done
