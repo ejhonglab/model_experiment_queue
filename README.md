@@ -3,8 +3,9 @@
 Claude Code sessions on several lab machines work through a shared queue of experiments with the
 mushroom body model (olfsysm), aimed at reproducing how odor representations change from ORNs to
 KCs, with APL on and off. They coordinate through a folder on the lab NAS (tensor) and push their
-code to the lab's GitHub repositories. This folder holds the experiment scripts, the queue's rules
-(CLAUDE.md) and the tools for adding a machine.
+code to the lab's GitHub repositories. This repository holds the experiment scripts, the queue's
+rules (CLAUDE.md) and the tools for adding a machine; the model itself is in al_analysis, olfsysm
+and hong2p.
 
 ## Joining the queue from your machine
 
@@ -13,10 +14,10 @@ mounted at /mnt/tensor or /local/tensor and writable by your account, sudo right
 can install packages for you), and a Claude account with Claude Code access. No GitHub account is
 needed.
 
-1. Clone the code into its own folder, go to this folder and run the setup script:
+1. Clone this repository into its own folder, go there and run the setup script:
    ```
-   git clone https://github.com/ejhonglab/al_analysis ~/src/kc_queue/al_analysis
-   cd ~/src/kc_queue/al_analysis/scripts/claude_pair_remapping_experiments
+   git clone https://github.com/ejhonglab/model_experiment_queue ~/src/kc_queue/model_experiment_queue
+   cd ~/src/kc_queue/model_experiment_queue
    ./join_queue.sh
    ```
    It takes several minutes, and asks before installing anything:
@@ -38,7 +39,7 @@ needed.
 3. Start Claude Code in this folder, accept its workspace-trust prompt, and ask it to work the
    experiment queue (the first time, it also asks you to log in):
    ```
-   cd ~/src/kc_queue/al_analysis/scripts/claude_pair_remapping_experiments && claude
+   cd ~/src/kc_queue/model_experiment_queue && claude
    ```
    Run the session on Opus 5.5 or newer at xhigh effort (set with `/model` and `/effort`), never
    on Fable. At that level it writes code and write-ups as well as running experiments; a smaller
@@ -50,8 +51,9 @@ needed.
    experiments, and other machines do the planning.
 4. Ask it to "join the work queue".
 
-Everything the queue uses lives in ~/src/kc_queue: its own copies of al_analysis, olfsysm and
-hong2p, and a new Python environment, ~/src/kc_queue/al_analysis/venv. Your other checkouts in
+Everything the queue uses lives in ~/src/kc_queue: its own copies of this repository,
+al_analysis, olfsysm and hong2p, and a new Python environment,
+~/src/kc_queue/model_experiment_queue/venv. Your other checkouts in
 ~/src and your other Python environments are never used or changed; hooks remind each session of
 this and refuse edits there. Outside ~/src/kc_queue the setup only installs what it asked about
 above, adds SSH keys (~/.ssh/kc_queue_*), and writes your machine's public keys and a short
@@ -59,6 +61,20 @@ description of it (host, user, cores, memory, OS) to push_keys/<host>/ in the sh
 
 On a distribution without apt, install Python 3.14 (with its headers and venv module), a C++
 compiler, git, ssh and curl with its package manager first; the script then finds them.
+
+### If your machine joined before November 11, 2026
+
+Until then the queue lived in a folder of al_analysis
+(~/src/kc_queue/al_analysis/scripts/claude_pair_remapping_experiments). To move to the new layout:
+1. Let the session's model runs finish, then quit the session (`/exit`).
+2. Clone this repository and run its setup script, as in step 1 above. It moves the old folder's
+   outputs/, from_yang/ and .fable_consent.local into the new checkout (it refuses while anything
+   still runs in the old folder), builds the new Python environment, and makes one new key, for
+   this repository: send Tom its fingerprint as in step 2 above.
+3. Start sessions in ~/src/kc_queue/model_experiment_queue from now on (step 3 above), and accept
+   the workspace-trust prompt there.
+4. Once a session there works, delete the old environment, ~/src/kc_queue/al_analysis/venv; it is
+   no longer used.
 
 ### Options
 
@@ -111,8 +127,9 @@ or kept attached in a terminal.
 
 ## For Tom: approving a machine and other upkeep
 
-- **Approve its keys.** On one of your hosts, with gh logged in with admin rights on the three
-  repositories, run `./approve_push_keys.sh <host>` from this folder in a terminal. Compare the
+- **Approve its keys.** On one of your hosts, with gh logged in with admin rights on the four
+  repositories (model_experiment_queue, al_analysis, olfsysm, hong2p), run
+  `./approve_push_keys.sh <host>` from this repository in a terminal. Compare the
   fingerprints it prints (each on a line of its own, as join_queue.sh prints them) with the ones
   the machine's owner sent you, since anyone on the lab
   network can write to the shared folder, and answer y. It adds them as write-enabled deploy
@@ -124,10 +141,10 @@ or kept attached in a terminal.
   branch (see the GitHub settings below), but those commits every queue host pulls and runs, so
   sessions on your hosts read pulled changes to the hooks, the setup scripts and the build files
   before running anything (CLAUDE.md, "Lab members' machines").
-- **GitHub settings.** `./github_rules.sh` sets what the keys rely on, on all three repositories:
-  the default Actions token is read-only, and rulesets refuse creating, updating or deleting any
-  branch but the default one (Dependabot's excepted) or any tag to everyone but admins, next to
-  the existing ruleset refusing force pushes and deletions of the default branch to everyone.
+- **GitHub settings.** `./github_rules.sh` sets what the keys rely on, on all four repositories:
+  the default Actions token is read-only, and rulesets refuse force pushes and deletions of the
+  default branch to everyone (created where missing), and creating, updating or deleting any
+  branch but the default one (Dependabot's excepted) or any tag to everyone but admins.
   Re-running it changes nothing already in place; `./github_rules.sh --check` only shows the
   current settings.
 - **Testing on someone else's machine under your own account first.** Don't approve the keys
@@ -140,7 +157,7 @@ or kept attached in a terminal.
   report) in chat.md, and a session on one of your hosts does it.
 - **Duplicate hooks on your hosts.** The hooks in .claude/settings.json here run the scripts in
   the session's own checkout, so their commands differ from the copies in your dotfiles'
-  claude_settings.json. In this folder on hal and atlas each one therefore runs twice, which is
+  claude_settings.json. In this repository on hal and atlas each one therefore runs twice, which is
   harmless; giving the dotfiles the same commands would make it run once again.
 
 ## Queue monitor
@@ -149,7 +166,7 @@ http://hal:17486 shows, on the lab network, which machines take part, what their
 are doing, and what is claimed or running. It reads only the shared folder, which the hooks keep
 current. The server runs on hal as a systemd user service:
 ```
-systemctl --user link ~/src/al_analysis/scripts/claude_pair_remapping_experiments/monitor-server/claude-queue-monitor.service
+systemctl --user link ~/src/model_experiment_queue/monitor-server/claude-queue-monitor.service
 systemctl --user enable --now claude-queue-monitor
 ```
 Restart it after changing server.py with `systemctl --user restart claude-queue-monitor`, and read
@@ -159,12 +176,26 @@ state are in [monitor-server/README.md](monitor-server/README.md).
 
 ## Development
 
-The queue's rules (claims, status files, chat, permissions by model and effort, how experiments
-are written up) are in [CLAUDE.md](CLAUDE.md). The model code itself is tested through al_analysis
-(test/test_mb_model.py, with QUICK=1; see the al_analysis CLAUDE.md).
-
-Tests for the monitor and the provenance checks, from the al_analysis root:
+On Tom's hosts the checkouts are side by side in ~/src (model_experiment_queue, al_analysis,
+olfsysm, hong2p), and this repository has its own venv with the other three installed editable
+(al_analysis first, since it pins the other two to their GitHub versions):
 ```
-./venv/bin/python -m pytest scripts/claude_pair_remapping_experiments/monitor-server
-QUICK=1 ./venv/bin/python -m pytest test/test_model_provenance.py
+cd ~/src/model_experiment_queue
+python3.14 -m venv venv
+./venv/bin/pip install -e ../al_analysis[dev]
+./venv/bin/pip install -e ../hong2p[all]
+./venv/bin/pip install -e ../olfsysm
+```
+Until 2026-11-11 this repository was the folder scripts/claude_pair_remapping_experiments of
+al_analysis; commits cited before then are al_analysis's.
+
+The queue's rules (claims, status files, chat, permissions by model and effort, how experiments
+are written up) are in [CLAUDE.md](CLAUDE.md), and why the monitor is built the way it is in
+[monitor-server/design.md](monitor-server/design.md).
+
+Tests, from this repository's root (the model code itself is tested through al_analysis, its
+test/test_mb_model.py with QUICK=1, and the provenance checks in its test/test_model_provenance.py):
+```
+QUICK=1 ./venv/bin/python -m pytest
+./venv/bin/python -m pytest monitor-server
 ```
