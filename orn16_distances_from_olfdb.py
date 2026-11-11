@@ -25,7 +25,7 @@ orn_deltas_apl16*.csv files there are not touched):
   orn16_corrdist_olfdb_36glom.csv        16 x 16, the matrix described above (diagonal 0)
   orn16_corrdist_olfdb_36glom_pairs.csv  120 pairs: both versions, the method per pair, the old value
   orn16_corrdist_olfdb_36glom.json       provenance (olfdb dataset ids and sha256, glomeruli, odors,
-                                         al_analysis commit)
+                                         this repository's and al_analysis's commits)
 Usage: ./venv/bin/python orn16_distances_from_olfdb.py
 """
 from __future__ import annotations
@@ -119,7 +119,7 @@ def main() -> None:
     sq.to_csv(OUT / f'{STEM}.csv')
     pairs.to_csv(OUT / f'{STEM}_pairs.csv', index=False)
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='orn16_distances_from_olfdb.py',
-        al_analysis_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE, capture_output=True, text=True).stdout.strip(),
+        **H.code_commits(),
         olfdb=OLFDB, datasets={p: dict(id=DATASETS[p], title=metas[p].get('title'), data_sha256=metas[p].get('data_sha256'), n_flies=int(n_flies[p]))
             for p in DATASETS},
         glomeruli=gloms, odors={o: f'{o} @ {H.ORN_INPUT_CONC[o]:g}' for o in H.APL16_ODORS},

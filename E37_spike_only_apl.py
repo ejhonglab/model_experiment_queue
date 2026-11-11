@@ -346,7 +346,8 @@ def merge(res_dir: Path, data_rates: dict) -> Tuple[pd.DataFrame, pd.DataFrame, 
         # the first run's model provenance; every run's is under runs
         model=parts[0]['run']['model'],
         model_same_for_all_runs=len({json.dumps([p['run']['model']['al_analysis'].get('git_hash'),
-            p['run']['model']['al_analysis'].get('diff_sha256'), p['run']['model']['olfsysm'].get('build')],
+            p['run']['model']['al_analysis'].get('diff_sha256'), p['run']['model']['olfsysm'].get('build'),
+            (p['run']['model'].get('queue') or {}).get('git_hash')],
             default=str, sort_keys=True) for p in parts}) == 1,
         runs={p['tag']: dict(params=p['params'], **p['run']) for p in parts},
     )

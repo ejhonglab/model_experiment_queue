@@ -1827,12 +1827,12 @@ def figures(out: Path) -> None:
 
 # ---------------------------------------------------------------------------
 def _provenance(out: Path, part: str, extra: dict) -> None:
-    commit = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE, capture_output=True, text=True).stdout.strip()
+    commits = H.code_commits()
     dirty = bool(subprocess.run(['git', 'status', '--porcelain', '--', Path(__file__).name, 'kc_remapping_harness.py',
         'E43_model_trial_noise.py', 'E69_kc_firing_ceiling.py', 'E76_data_side_target.py'], cwd=H.HERE, capture_output=True,
         text=True).stdout.strip())
     prov = dict(script=f'{Path(__file__).name} --part {part}', generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),
-        host=subprocess.run(['hostname', '-s'], capture_output=True, text=True).stdout.strip(), al_analysis_commit=commit,
+        host=subprocess.run(['hostname', '-s'], capture_output=True, text=True).stdout.strip(), **commits,
         dirty=dirty, registry=str(H.data_targets_path()), **extra)
     (out / f'provenance_{part}.json').write_text(json.dumps(prov, indent=1, ensure_ascii=False, default=str) + '\n')
 

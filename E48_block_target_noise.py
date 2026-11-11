@@ -174,7 +174,7 @@ def main() -> None:
     (out / 'comparison_table.md').write_text('\n'.join(lines) + '\n')
     make_figures(df, excess, out, data_block_corr)
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E48_block_target_noise.py',
-        al_analysis_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE, capture_output=True, text=True).stdout.strip(),
+        **H.code_commits(),
         inputs_sha256=inputs, models=[dict(label=m[0], experiment=m[1], tag=m[2], pipeline_model=m[3]) for m in MODELS],
         pending=pend)
     (out / 'provenance.json').write_text(json.dumps(prov, indent=1) + '\n')

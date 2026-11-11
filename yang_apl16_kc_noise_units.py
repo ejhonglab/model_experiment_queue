@@ -272,7 +272,7 @@ def main() -> None:
     rows = '\n'.join(f"| `{c['file']}` | {c['source_dataset']} | APL16: MB247dbLexA > GCaMP6s (KCs) [{g}], baseline-noise "
         f"units | {c['rows']} | {c['kcs']} |" for g, c in checks['olfdb'].items() if isinstance(c, dict) and 'file' in c)
     (out / 'olfdb' / 'README_olfdb.md').write_text(README_OLFDB.format(rows=rows, thr=thr, commit=commit))
-    prov = {'script': Path(__file__).name, 'generated': when, 'al_analysis_commit': commit, 'dirty': dirty,
+    prov = {'script': Path(__file__).name, 'generated': when, **H.code_commits(),
         'inputs': {str(p): sha256(p) for p in inputs}, 'noise_threshold': thr, 'checks': checks}
     (out / 'provenance.json').write_text(json.dumps(prov, indent=1, default=str) + '\n')
     print(json.dumps(checks, indent=1, default=str))

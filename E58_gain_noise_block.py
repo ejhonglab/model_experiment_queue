@@ -155,7 +155,7 @@ def main() -> None:
     for f in hist_files:
         inputs[str(f)] = hashlib.sha256(f.read_bytes()).hexdigest()
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E58_gain_noise_block.py',
-        al_analysis_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE, capture_output=True, text=True).stdout.strip(),
+        **H.code_commits(),
         inputs_sha256=inputs, partb_folders=[str(d) for d in folders],
         pipeline_source={m: pipeline_source.get(m) for m in sorted(df['pipeline_model'])},
         models=[dict(label=r['model'], key=r['key'], experiment=r['experiment'], tag=r['tag'], pipeline_model=r['pipeline_model'], gain=r['gain']) for _, r in df.iterrows()],

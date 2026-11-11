@@ -499,7 +499,7 @@ def protocol_readings(out: Path) -> pd.DataFrame:
     res.to_csv(out / 'protocol_readings.csv', index=False)
     pd.concat(pairs, ignore_index=True).to_csv(out / 'protocol_pairs.csv', index=False)
     rec = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E82_flies_protocol.py',
-               al_analysis_commit=_git('rev-parse', 'HEAD'), seconds=time.time() - t0, runs=checks,
+               **H.code_commits(), seconds=time.time() - t0, runs=checks,
                all_ok=True)
     (out / 'protocol_checks.json').write_text(json.dumps(rec, indent=1, default=str) + '\n')
     return res
@@ -847,7 +847,7 @@ def tables(out: Path) -> str:
     U = data()['units']
     z, nz = U['z'], U['noise']
     lines = ["# E82 part A: the flies' recording protocol read from E80's saved runs", '',
-             f"Generated {datetime.now().strftime('%Y-%m-%d %H:%M')} by E82_flies_protocol.py (al_analysis "
+             f"Generated {datetime.now().strftime('%Y-%m-%d %H:%M')} by E82_flies_protocol.py (model_experiment_queue "
              f"{_git('rev-parse', '--short', 'HEAD')}). KC data: Yang's z, all eight recordings with APL output blocked "
              "(TNT), unless a column says otherwise. C2: the breadth-2 APL-effect fit (E67); the firing-ceiling fit: fit 0 "
              "of the data side of the main target (E76). The 2 s points are E80's re-held ones (both response rates "
@@ -1076,8 +1076,7 @@ def write_provenance(out: Path, part: str) -> None:
             if k.endswith('spike_times'):
                 files[f'{r.source}:{r.point_id}:{k}'] = _sha_file(p)
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E82_flies_protocol.py',
-                part=part, al_analysis_commit=_git('rev-parse', 'HEAD'),
-                al_analysis_dirty=_git('status', '--porcelain', '--untracked-files=no'),
+                part=part, **H.code_commits(),
                 model=H.model_provenance(orn_deltas=H.apl16_orn_deltas()), kernels=[list(k) for k in KERNELS],
                 primary=list(PRIMARY), window=list(WINDOW), late=LATE, bin=BIN, six_pairs=[list(p) for p in SIX],
                 claw_groups=[list(g) for g in CLAW_GROUPS], wiring=str(WIRING), wiring_sha256=_sha_file(WIRING),

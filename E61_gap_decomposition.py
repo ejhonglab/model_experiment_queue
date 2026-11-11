@@ -229,10 +229,9 @@ def main() -> None:
     rhos.to_csv(out / 'rhos.csv', index=False)
     write_table(out, rhos, odors, classes, apl, corr, worst)
     make_figures(out, pairs, odors, apl, resid_vectors)
-    commit = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE, capture_output=True, text=True).stdout.strip()
     (out / 'provenance.json').write_text(json.dumps(dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),
         script='E61_gap_decomposition.py', host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(),
-        al_analysis_commit=commit, models={l: dict(folder=m['folder'], tag=m['tag']) for l, m in models.items()},
+        **H.code_commits(), models={l: dict(folder=m['folder'], tag=m['tag']) for l, m in models.items()},
         data=dict(on=DATA_OF['on'], off=DATA_OF['off'], measure='cosine, mean over recordings (H.yang_mean_rdm)'),
         orn='H.orn16_consensus_pairs (1 - Pearson across the 40 responding glomeruli)', weak_input_odors=list(WEAK),
         big_miss='|rank residual| >= 30 of 120', inputs=inputs, approx_conc_note=H.APPROX_CONC_NOTE), indent=1) + '\n')

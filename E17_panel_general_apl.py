@@ -281,8 +281,7 @@ def main() -> None:
         make_figure(res_dir, tab)
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),
         script='E17_panel_general_apl.py', host=os.uname().nodename,
-        al_analysis_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE,
-            capture_output=True, text=True).stdout.strip(),
+        **H.code_commits(),
         olfsysm_commit=subprocess.run(['git', 'rev-parse', 'HEAD'],
             cwd=H.olfsysm_dir(), capture_output=True, text=True).stdout.strip(),
         variants=VARIANTS, approx_conc_note=H.APPROX_CONC_NOTE)

@@ -603,8 +603,7 @@ def write_provenance(out: Path, specs: Sequence[dict]) -> None:
     import E77_input_screen as S
     P = S.c2_parts()
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E82_protocol_runs.py',
-                al_analysis_commit=_git('rev-parse', 'HEAD'),
-                al_analysis_dirty=bool(_git('status', '--porcelain', '--untracked-files=no')),
+                **H.code_commits(),
                 model=H.model_provenance(orn_deltas=P['orn'], _wPNKC=P['W']), apl_taum_supported=apl_taum_supported(),
                 c2=dict(experiment=S.C2[0], tag=S.C2[1]), fit0=dict(experiment=E80P.FIT0_FOLDER),
                 fit1=dict(experiment=FIT1[0], tag=FIT1[1]), d1=dict(experiment=D1[0], tag=D1[1]),

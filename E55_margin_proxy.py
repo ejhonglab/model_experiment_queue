@@ -540,7 +540,7 @@ def main() -> None:
     loc = H.outputs_dir(EXPERIMENT)
     loc.mkdir(parents=True, exist_ok=True)
     orn = H.apl16_orn_deltas()
-    commit = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE, capture_output=True, text=True).stdout.strip()
+    commits = H.code_commits()
     infos = pipeline_models()
     names = args.models or list(infos)
     missing = [n for n in names if n not in infos]
@@ -644,7 +644,7 @@ def main() -> None:
     write_table(per_model, out, agree)
     make_figures(per_model, per_pair, out)
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E55_margin_proxy.py',
-        host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(), al_analysis_commit=commit,
+        host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(), **commits,
         model=H.model_provenance(orn_deltas=orn), approx_conc_note=H.APPROX_CONC_NOTE, models=names,
         pipeline_info={n: {k: (str(v) if isinstance(v, Path) else v) for k, v in infos[n].items()} for n in names},
         margin_note=E51C.MARGIN_NOTE, replay_note=('replay model: each KC\'s reconstructed drive (the other KCs\' spikes, APL and the '

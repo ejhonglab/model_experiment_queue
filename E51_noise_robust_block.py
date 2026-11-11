@@ -355,7 +355,7 @@ def main() -> None:
     for f in hist_files:
         inputs[str(f)] = hashlib.sha256(f.read_bytes()).hexdigest()
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E51_noise_robust_block.py',
-        al_analysis_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE, capture_output=True, text=True).stdout.strip(),
+        **H.code_commits(),
         inputs_sha256=inputs, partb=str(partb), partb_fallback=(None if fallback is None else str(fallback)),
         pipeline_source={m: pipeline_source.get(m) for m in sorted({mm[4] for mm in models if mm[4] is not None})},
         models=[dict(label=m[0], key=m[1], experiment=m[2], tag=m[3], pipeline_model=m[4], counterpart=m[5], eval=m[6]) for m in models],

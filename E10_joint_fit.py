@@ -1780,8 +1780,7 @@ def main() -> None:
         make_figure(res_dir, data)
         return
     # code provenance at the start: the checkout can move (a pull) while the fits run
-    start_prov = dict(al_analysis_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE,
-            capture_output=True, text=True).stdout.strip(),
+    start_prov = dict(**H.code_commits(),
         olfsysm_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.olfsysm_dir(),
             capture_output=True, text=True).stdout.strip(),
         model=H.model_provenance(orn_deltas=orn))

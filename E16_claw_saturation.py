@@ -364,8 +364,7 @@ def main() -> None:
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),
         script='E16_claw_saturation.py', host=subprocess.run(['hostname'],
             capture_output=True, text=True).stdout.strip(),
-        al_analysis_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE,
-            capture_output=True, text=True).stdout.strip(),
+        **H.code_commits(),
         bases=BASE_KWS, caps=args.caps, forms=args.forms, thr=args.thr, breadth=args.breadth,
         approx_conc_note=H.APPROX_CONC_NOTE,
     )

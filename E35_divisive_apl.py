@@ -255,7 +255,7 @@ def main() -> None:
         from al_analysis.mb_model import model_provenance
         prov.update(model_provenance(orn_deltas=orn))
     except Exception as e:  # keep the commit hashes at least
-        prov.update(al_analysis_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE, capture_output=True, text=True).stdout.strip(),
+        prov.update(**H.code_commits(),
             olfsysm_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.olfsysm_dir(), capture_output=True, text=True).stdout.strip(),
             model_provenance_error=repr(e)[:200])
     (res_dir / f'provenance_{tt}.json').write_text(json.dumps(prov, indent=1, default=str) + '\n')

@@ -1352,7 +1352,7 @@ def write_provenance(out: Path, extra: dict) -> None:
     inputs = {str(p): sha(p) for p in (RESULTS / 'apl_effect' / 'by_variant.csv', RESULTS / 'E73_per_kc_normalization' / 'by_variant.csv',
         H.yang_data_dir() / 'computed' / 'trialmean_responses_long.parquet', H.data_targets_path(), CLAW_WIRING)}
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script=Path(__file__).name, part='A',
-        host=socket.gethostname(), al_analysis_commit=_git('rev-parse', 'HEAD'), al_analysis_dirty=bool(_git('status', '--porcelain', '--', '.')),
+        host=socket.gethostname(), **H.code_commits(),
         inputs=inputs, archive=str(ARCHIVE), classes=list(CLASSES), criteria_z=list(CRITERIA_Z), spike_criteria=list(SPIKE_CRITERIA),
         pseudo_recordings=dict(n_recordings=N_RECORDINGS, n_trials=N_TRIALS, seed=SEED, note='numpy default_rng(seed): the APL-on '
             'draws (n_recordings, n_trials, KCs, odors) first, then the APL-off draws; a trial mean\'s noise is the KC\'s trial sd under '

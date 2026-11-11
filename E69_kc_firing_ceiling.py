@@ -144,14 +144,11 @@ def now() -> str:
 
 
 def code_state() -> dict:
-    """The al_analysis commit and whether its tracked files are modified, and the olfsysm build's
-    commit and clean flag, for each process's record."""
+    """This repository's and al_analysis's commits and whether their tracked files are modified
+    (`H.code_commits`), and the olfsysm build's commit and clean flag, for each process's record."""
     import olfsysm
-    git = lambda *a: subprocess.run(['git', *a], cwd=H.HERE, capture_output=True, text=True).stdout.strip()
     bi = olfsysm.build_info() if hasattr(olfsysm, 'build_info') else {}
-    return dict(al_analysis_commit=git('rev-parse', 'HEAD'),
-        al_analysis_dirty=bool(git('status', '--porcelain', '--untracked-files=no')),
-        olfsysm_commit=bi.get('git_hash'), olfsysm_dirty=bi.get('git_dirty'))
+    return dict(**H.code_commits(), olfsysm_commit=bi.get('git_hash'), olfsysm_dirty=bi.get('git_dirty'))
 
 
 # ---------------------------------------------------------------------------

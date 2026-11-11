@@ -513,20 +513,14 @@ def a_figures(out: Path, per_rec, bt, mt, synth, s_mt, kcs) -> None:
     fig.tight_layout(); fig.savefig(out / 'E73_breadth.png', dpi=120); plt.close(fig)
 
 
-def _git(*args, cwd=None) -> str:
-    import subprocess
-    return subprocess.run(['git', *args], cwd=cwd or H.HERE, capture_output=True, text=True).stdout.strip()
-
-
 def write_provenance(out: Path, part: str, extra: dict, models: bool = False, orn_deltas=None) -> None:
     """provenance_<part>.json: script, commit and dirty state, host, inputs, settings; with `models`, also
-    `H.model_provenance()` (olfsysm build, al_analysis / hong2p commits, package versions)."""
+    `H.model_provenance()` (olfsysm build, al_analysis / hong2p / this repository's commits, package versions)."""
     import json
     import socket
     from datetime import datetime, timezone
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script=Path(__file__).name, part=part,
-        host=socket.gethostname(), al_analysis_commit=_git('rev-parse', 'HEAD'),
-        al_analysis_dirty=bool(_git('status', '--porcelain', '--', '.')), **extra)
+        host=socket.gethostname(), **H.code_commits(), **extra)
     if models:
         prov['model_provenance'] = H.model_provenance(orn_deltas=orn_deltas)
     (out / f'provenance_{part}.json').write_text(json.dumps(prov, indent=1, default=str, ensure_ascii=False) + '\n')

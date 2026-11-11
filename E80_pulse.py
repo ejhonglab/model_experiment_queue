@@ -83,10 +83,6 @@ def _sha(a) -> str:
     return hashlib.sha256(np.ascontiguousarray(np.asarray(a, dtype=float), dtype='<f8').tobytes()).hexdigest()
 
 
-def _git_head() -> str:
-    return subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE, capture_output=True, text=True).stdout.strip()
-
-
 # ---------------------------------------------------------------------------
 # the two models
 
@@ -239,9 +235,7 @@ def last_digit_checks(out: Path) -> dict:
 
     import olfsysm
     rec = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E80_pulse.py --check',
-               al_analysis_commit=_git_head(), al_analysis_dirty=bool(subprocess.run(
-                   ['git', 'status', '--porcelain', '--untracked-files=no'], cwd=H.HERE, capture_output=True,
-                   text=True).stdout.strip()),
+               **H.code_commits(),
                olfsysm=olfsysm.build_info(), checks=res, seconds=time.time() - t0,
                all_exact=all(v['exact'] for v in res.values()))
     (out / 'pulse_checks.json').write_text(json.dumps(rec, indent=1, default=str) + '\n')
@@ -388,7 +382,7 @@ def write_provenance(out: Path, points: Sequence[dict]) -> None:
     P = S.c2_parts()
     F = fit0_parts()
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E80_pulse.py',
-                al_analysis_commit=_git_head(), model=H.model_provenance(orn_deltas=P['orn'], _wPNKC=P['W']),
+                **H.code_commits(), model=H.model_provenance(orn_deltas=P['orn'], _wPNKC=P['W']),
                 c2=dict(experiment=S.C2[0], tag=S.C2[1], params=P['p'], target_on=P['target_on'],
                         target_off=P['target_off']),
                 fit0=dict(experiment=FIT0_FOLDER, tag=F['tag'], params=F['p'], kc_spiking=F['kc'],

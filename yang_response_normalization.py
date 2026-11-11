@@ -248,7 +248,7 @@ def main() -> None:
     amp = pd.DataFrame(amp)
     amp.to_csv(args.out / 'amplitude_by_breadth.csv', index=False)
     summ = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='yang_response_normalization.py',
-                al_analysis_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE, capture_output=True, text=True).stdout.strip(),
+                **H.code_commits(),
                 baseline_threshold=thr_b, control_rate_z=float(ctrl_rate_z),
                 rate_ratio={name: float(nr[(nr.normalization == name) & (nr.genotype == 'TNT')].response_rate.iloc[0]
                                         / nr[(nr.normalization == name) & (nr.genotype == 'TNT3c')].response_rate.iloc[0])

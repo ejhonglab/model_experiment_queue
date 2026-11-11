@@ -408,10 +408,9 @@ def main() -> None:
               f'{int((old & ~new).sum())} cleared); {int(df.rate_on.isna().sum())} without response rates', flush=True)
         print(best.head(12).to_string(index=False, max_colwidth=45), flush=True)
     made = [] if args.no_figures else make_figures(df, data_on, data_off)
-    commit = subprocess.run(['git', 'rev-parse', '--short', 'HEAD'], capture_output=True, text=True, cwd=H.HERE).stdout.strip()
     (OUT / 'provenance.json').write_text(json.dumps(dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),
         script='apl_effect_scores.py', host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(),
-        al_analysis_commit=commit, statistic='kc_remapping_harness.apl_effect_stats (spike-count cosine; APL on minus acute APL off)',
+        **H.code_commits(), statistic='kc_remapping_harness.apl_effect_stats (spike-count cosine; APL on minus acute APL off)',
         data='control flies (TNT3c) minus APL output blocked (TNT), cosine, mean over recordings (harness.yang_mean_rdm)',
         realism_bands=dict(rate_on=RATE_ON_BAND, rate_ratio_off_over_on=RATE_RATIO_BAND, rate_rho_min=RATE_RHO_MIN,
             odors_per_kc_tv_max=dict(on=opk_band('on', 'noise'), off=opk_band('off', 'noise')),

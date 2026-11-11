@@ -725,7 +725,7 @@ def main() -> None:
     t0 = datetime.now()
     # the code state at the start of the run (the working tree may change while it runs)
     git = lambda *a: subprocess.run(['git', *a], cwd=H.HERE, capture_output=True, text=True).stdout.strip()
-    git_state = dict(al_analysis_commit=git('rev-parse', 'HEAD'), al_analysis_dirty=bool(git('status', '--porcelain', '--untracked-files=no')),
+    git_state = dict(**H.code_commits(),
         script_and_harness_dirty=bool(git('status', '--porcelain', '--', 'E68_readout_low_end.py', 'kc_remapping_harness.py', 'data_targets.py')))
     # A1
     a1 = part_a1(args.boot)
@@ -1566,10 +1566,8 @@ def b_score(args) -> None:
     figure_b(res, hist_df, df)
     sims = json.loads((b_dir() / 'sims_log.json').read_text()) if (b_dir() / 'sims_log.json').exists() else []
     vm_infos = {k: load_vm(k)['info'] for k, *_ in models}
-    git = lambda *a: subprocess.run(['git', *a], cwd=H.HERE, capture_output=True, text=True).stdout.strip()
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E68_readout_low_end.py --part B',
-        host=subprocess.run(['hostname', '-s'], capture_output=True, text=True).stdout.strip(), al_analysis_commit=git('rev-parse', 'HEAD'),
-        al_analysis_dirty=bool(git('status', '--porcelain', '--untracked-files=no')),
+        host=subprocess.run(['hostname', '-s'], capture_output=True, text=True).stdout.strip(), **H.code_commits(),
         model_provenance=H.model_provenance(orn_deltas=H.apl16_orn_deltas()), models=vm_infos, sims_log=sims,
         trials=json.loads(str(np.load(tp)['info'])) if tp.exists() else None, vm_configs=[list(map(str, c)) for c in VM_CONFIGS],
         baseline_window_s=[-VM_PRE_S, 0.0], response_window='mp.time_stim_start to mp.time_stim_end (as the trial-noise experiment, E43)',

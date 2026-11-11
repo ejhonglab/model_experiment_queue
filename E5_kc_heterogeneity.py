@@ -466,8 +466,7 @@ def main() -> None:
         make_figures(res_dir, tab, out_dir)
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),
         script='E5_kc_heterogeneity.py', host=os.uname().nodename,
-        al_analysis_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE,
-            capture_output=True, text=True).stdout.strip(),
+        **H.code_commits(),
         omp_threads=os.environ.get('OMP_NUM_THREADS'), plan=plan,
         apl_type_factors=APL_TYPE_FACTORS, approx_conc_note=H.APPROX_CONC_NOTE)
     (res_dir / 'provenance.json').write_text(json.dumps(prov, indent=1, default=str))

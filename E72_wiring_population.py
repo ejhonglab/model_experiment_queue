@@ -300,7 +300,7 @@ def score(out: Path) -> None:
     pd.DataFrame(spread).to_csv(out / 'spread.csv', index=False)
     write_table(st, pd.DataFrame(pops), out)
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E72_wiring_population.py --part score',
-        al_analysis_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE, capture_output=True, text=True).stdout.strip(),
+        **H.code_commits(),
         members=members)
     (out / 'provenance_score.json').write_text(json.dumps(prov, indent=1) + '\n')
     print(st[['wiring_label', 'raw_loss', 'raw_pattern', 'cal_loss', 'cal_mean', 'cal_pattern', 'cal_block', 'rate_on', 'ratio', 'rate_rho_on',
@@ -732,7 +732,7 @@ def population_fit(wirings: Sequence[str], held_out: Sequence[str], maxfev: int 
         fitted_population={k: v for k, v in population_row(outs_fit, dist_f).items()},
         held_out_population={k: v for k, v in population_row(outs_held, dist_h).items()},
         held_out_loss=loss(outs_held), check_loss=got, ratios={k: list(v) for k, v in ratios.items()},
-        al_analysis_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE, capture_output=True, text=True).stdout.strip(),
+        **H.code_commits(),
         model=H.model_provenance(orn_deltas=orn))
     (res_dir / 'population_fit.json').write_text(json.dumps(result, indent=1, default=float) + '\n')
     print(json.dumps({k: result[k] for k in ('theta', 'loss', 'n_evals')}, indent=1, default=float))

@@ -104,8 +104,7 @@ def main() -> None:
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),
         script='E13_bouton_coincidence.py', host=subprocess.run(['hostname'],
             capture_output=True, text=True).stdout.strip(),
-        al_analysis_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE,
-            capture_output=True, text=True).stdout.strip(),
+        **H.code_commits(),
         base=BOUTON, n_claws=args.n_claws, approx_conc_note=H.APPROX_CONC_NOTE,
     )
     (res_dir / 'provenance.json').write_text(json.dumps(prov, indent=1, default=str) + '\n')

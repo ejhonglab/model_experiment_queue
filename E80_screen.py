@@ -703,7 +703,7 @@ def write_provenance(out: Path, specs: Sequence[dict], bases: Dict[str, Base]) -
     N = noise_data()
     reg = H.data_targets_path()
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E80_screen.py',
-                al_analysis_commit=S77._git_head(), model=H.model_provenance(orn_deltas=P['orn'], _wPNKC=P['W']),
+                **H.code_commits(), model=H.model_provenance(orn_deltas=P['orn'], _wPNKC=P['W']),
                 bases={k: dict(experiment=b.experiment, tag=b.tag, label=b.label, params=b.p, kws=b.kws,
                                targets=dict(on=b.target_on, off=b.target_off, size=b.size), build_seconds=b.build_seconds,
                                info={kk: v for kk, v in b.info.items() if kk == 'fit_info'})

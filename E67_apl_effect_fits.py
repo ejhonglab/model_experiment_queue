@@ -199,7 +199,7 @@ def main() -> None:
     write_table(df, res_dir)
     make_figures(df, res_dir)
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E67_apl_effect_fits.py',
-        al_analysis_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE, capture_output=True, text=True).stdout.strip(),
+        **H.code_commits(),
         n_fits=int((df.kind == 'fit').sum()) if len(df) else 0, calibration_target=refs()['cal_target'],
         data_effect_means={v: float(refs()[v].mean()) for v in ('graded', 'thresholded', 'noise_corrected', 'binary')})
     (res_dir / 'provenance_comparison.json').write_text(json.dumps(prov, indent=1) + '\n')

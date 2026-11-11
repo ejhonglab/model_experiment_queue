@@ -1142,10 +1142,6 @@ def _sha(p: Path) -> str:
     return hashlib.sha256(p.read_bytes()).hexdigest()
 
 
-def git_commit() -> str:
-    return subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE, capture_output=True, text=True).stdout.strip()
-
-
 def part_a(res_dir: Path, jobs: int, only_key: bool = False) -> None:
     t0 = time.time()
     variants = archive_variants()
@@ -1170,8 +1166,7 @@ def part_a(res_dir: Path, jobs: int, only_key: bool = False) -> None:
     prov_path = res_dir / 'provenance.json'
     prov = json.loads(prov_path.read_text()) if prov_path.exists() else {}
     prov['part_A'] = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E70_high_firing_kcs.py --part A',
-        host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(), al_analysis_commit=git_commit(),
-        al_analysis_dirty=bool(subprocess.run(['git', 'status', '--porcelain', '--', '.'], cwd=H.HERE, capture_output=True, text=True).stdout.strip()),
+        host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(), **H.code_commits(),
         n_variants=len(per), definitions=dict(high_firing=f'>= {HIGH_SPIKES:g} spikes to some odor with APL off (acute)',
         survivors=f'high-firing and >= {HIGH_SPIKES:g} spikes to some odor with APL on', check=f'the same at {CHECK_SPIKES:g} spikes',
         responder=f'>= {RESP_MIN:g} spikes'), leave_out_k=list(K_LEAVE_OUT),

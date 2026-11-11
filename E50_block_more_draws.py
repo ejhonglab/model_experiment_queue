@@ -245,8 +245,7 @@ def main() -> None:
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E50_block_more_draws.py',
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(), model=MODEL,
         real_fit=[REAL_EXP, REAL_TAG], classes=list(CLASSES), sources=sources,
-        al_analysis_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True,
-            cwd=Path(__file__).parent).stdout.strip(),
+        **H.code_commits(),
         note='summary only; the fits are E10_joint_fit.py runs with their own provenance_<tag>.json in this folder')
     (res_dir / 'provenance.json').write_text(json.dumps(prov, indent=1) + '\n')
     pd.set_option('display.width', 250)

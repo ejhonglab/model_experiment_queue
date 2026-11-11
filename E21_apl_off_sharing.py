@@ -174,7 +174,7 @@ def main() -> None:
     make_figure(pairs, grp, per_odor, co, res_dir)
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E21_apl_off_sharing.py',
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(),
-        al_analysis_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE, capture_output=True, text=True).stdout.strip(),
+        **H.code_commits(),
         models=models, data_table='results/E7_confound_controls/B_pairs_graded.csv (graded recipe)', approx_conc_note=H.APPROX_CONC_NOTE)
     (res_dir / 'provenance.json').write_text(json.dumps(prov, indent=1, default=str) + '\n')
     print('done ->', res_dir)

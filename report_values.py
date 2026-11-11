@@ -22,8 +22,10 @@ separates table cells). Keys:
   completion time in the experiment index of experiment_priorities.md), as YYYY-MM-DD HH:MM.
 
 Every resolution returns the value and a source record (file, row, column, sha256 of the
-file, the al_analysis commit recorded in the folder's provenance if any), which
-fill_report.py writes to the page's sidecar.
+file, the commit of the experiment's scripts recorded in the folder's provenance if any), which
+fill_report.py writes to the page's sidecar. That commit is `queue_commit` (this repository) in
+provenance written since the scripts moved out of al_analysis (2026-11-11), and
+`al_analysis_commit` (an al_analysis commit, where they lived) in older provenance.
 """
 from __future__ import annotations
 
@@ -79,14 +81,17 @@ def _commit(folder: str) -> Optional[str]:
             d = json.loads(p.read_text())
         except Exception:
             continue
-        for k in ('al_analysis_commit', 'commit'):
-            if isinstance(d.get(k), str):
+        # queue_commit first: newer provenance also has al_analysis_commit, the model code's commit
+        for k in ('queue_commit', 'al_analysis_commit', 'commit'):
+            if isinstance(d.get(k), str) and d[k]:
                 return d[k]
         mp = d.get('model_provenance') or {}
         if isinstance(mp, dict):
-            c = (mp.get('al_analysis') or {}).get('commit') if isinstance(mp.get('al_analysis'), dict) else None
-            if c:
-                return c
+            for repo in ('queue', 'al_analysis'):
+                info = mp.get(repo) if isinstance(mp.get(repo), dict) else {}
+                c = info.get('git_hash') or info.get('commit')
+                if c:
+                    return c
     return None
 
 

@@ -707,11 +707,6 @@ def gate(readings: pd.DataFrame, arm: str, runs: Optional[pd.DataFrame] = None,
 # ---------------------------------------------------------------------------
 # parts
 
-def _git_head() -> str:
-    import subprocess
-    return subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE, capture_output=True, text=True).stdout.strip()
-
-
 def _append_row(path: Path, row: dict) -> None:
     """Appends a row; when its columns differ from the file's (A2's check row against its points), the file is
     rewritten with the union of the columns, so it always reads back."""
@@ -745,7 +740,7 @@ def _run_row(part: str, change: str, w: str, tag: str, res: dict, o: Dict[str, t
                target_on=res['target_on'], target_off=res['target_off'], at_bound_thr=res['at_bound_thr'],
                at_bound_apl=res['at_bound_apl'], n_sims=res['n_sims'], seconds=res.get('seconds'),
                **{k: res['params'][k] for k in PARAM_KEYS}, K_fit=P['K'], K_run=readout_K(o),
-               breadth_sha256=res.get('breadth_sha256'), al_analysis_commit=_git_head())
+               breadth_sha256=res.get('breadth_sha256'), **H.code_commits())
     row.update(realism(o))
     return row
 
@@ -774,7 +769,7 @@ def identity(out: Path, wirings: Sequence[str] = ALL_WIRINGS) -> dict:
     archived E75 points on the real wiring reproduced exactly; the population objective at identity. Writes
     identity.json."""
     import json
-    res = dict(al_analysis_commit=_git_head(), wirings={}, e75_points={}, objective={})
+    res = dict(**H.code_commits(), wirings={}, e75_points={}, objective={})
     for h in ('A', 'B'):
         v = PopulationObjective(half_target(h))({})
         res['objective'][h] = dict(rms=v['rms'], probe=IDENTITY_OBJECTIVE[h], ok=round(v['rms'], 4) == IDENTITY_OBJECTIVE[h])

@@ -1193,7 +1193,7 @@ def main() -> None:
         + '\n'.join(checks.lines) + '\n')
     write_readme(out_dir, results, avail, mix_avail, checks, binary_only, dilute_rules)
 
-    git = lambda *a: subprocess.run(['git', *a], cwd=HERE, capture_output=True,
+    git = lambda *a, cwd=HERE: subprocess.run(['git', *a], cwd=cwd, capture_output=True,
         text=True).stdout.strip()
     inputs = sorted([RAW_DIR / DIAG_CSV, RAW_DIR / DIAG_RESPRATE_CSV]
         + list(RAW_DIR.glob(f'*{DIAG_BINARY_SUFFIX}'))
@@ -1202,7 +1202,8 @@ def main() -> None:
     meta = {
         'generated': datetime.now(timezone.utc).isoformat(timespec='seconds'),
         'script': str(Path(__file__).resolve().relative_to(HERE.parent)),
-        'al_analysis_commit': git('rev-parse', 'HEAD'),
+        'queue_commit': git('rev-parse', 'HEAD'),
+        'al_analysis_commit': git('rev-parse', 'HEAD', cwd=AL_ANALYSIS),
         'script_uncommitted_changes': bool(git('status', '--porcelain', '--',
             Path(__file__).name)),
         'olfdb': args.olfdb,

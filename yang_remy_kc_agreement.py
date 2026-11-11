@@ -213,7 +213,7 @@ def main() -> None:
     make_figure(ref, per_rec, st, res_dir / f'{OUT_NAME}.png')
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='yang_remy_kc_agreement.py',
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(),
-        al_analysis_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE, capture_output=True, text=True).stdout.strip(),
+        **H.code_commits(),
         inputs=dict(shared12_pairs=str(H.APL_PAIR_DIR / 'shared12_pairs.csv')),
         remy_columns=REMY, n_recordings={g: int(len(r)) for g, r in recs.items()},
         measures=dict(yang='1 - cosine similarity between trial-mean KC population responses, per recording, mean over recordings',

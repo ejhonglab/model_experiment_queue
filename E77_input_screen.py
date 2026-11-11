@@ -750,10 +750,6 @@ def _write_rows(path: Path, rows: pd.DataFrame, new: dict) -> pd.DataFrame:
     return rows
 
 
-def _git_head() -> str:
-    return subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE, capture_output=True, text=True).stdout.strip()
-
-
 def write_provenance(out: Path, specs: Sequence[dict]) -> None:
     """screen_provenance.json: the model's provenance (`H.model_provenance`, on the lab's input and C2's wiring), C2's
     parameters, the bouton base's, the targets, the points, the brackets, the hashes of E38's inputs."""
@@ -765,7 +761,7 @@ def write_provenance(out: Path, specs: Sequence[dict]) -> None:
     f = H.shared_dir() / SEARCHED_INPUT
     inputs['searched_weak'] = hashlib.sha256(f.read_bytes()).hexdigest() if f.exists() else None
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E77_input_screen.py',
-                al_analysis_commit=_git_head(), model=H.model_provenance(orn_deltas=P['orn'], _wPNKC=P['W']),
+                **H.code_commits(), model=H.model_provenance(orn_deltas=P['orn'], _wPNKC=P['W']),
                 c2=dict(experiment=C2[0], tag=C2[1], params=P['p']), bouton_base_params=P['init'], breadth_k=BREADTH_K,
                 targets=dict(on=P['target_on'], off=P['target_off'], size=P['size']), tied_on=TIED_ON,
                 thr_bracket=THR_BRACKET, thr_step=THR_STEP, apl_bracket=APL_BRACKET, apl_step=APL_STEP, pn_window=PN_WINDOW,

@@ -401,9 +401,8 @@ def main() -> None:
     for _, a in agree.iterrows():
         lines.append(f"| {a['statistic']} | {int(a['pass'])} | {int(a['n'])} | {E55.fmt(a.get('spearman'), '.2f')} | {E55.fmt(a.get('bias'), '+.4f')} | {E55.fmt(a.get('mae'), '.4f')} |")
     (out / 'comparison_table.md').write_text('\n'.join(lines) + '\n')
-    commit = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE, capture_output=True, text=True).stdout.strip()
     E43.write_json(out / 'provenance.json', dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='noise_proxy.py',
-        host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(), al_analysis_commit=commit,
+        host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(), **H.code_commits(),
         model=H.model_provenance(orn_deltas=orn), models=names, passes=args.passes, relax=args.relax, checks=checks_all))
     print(f'-> {out}', flush=True)
 

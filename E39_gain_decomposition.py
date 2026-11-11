@@ -200,8 +200,7 @@ def main() -> None:
     try:
         model_prov = H.model_provenance(orn_deltas=orn)
     except Exception as e:  # keep the commit hash at least
-        model_prov = dict(al_analysis_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE, capture_output=True,
-            text=True).stdout.strip(), model_provenance_error=repr(e)[:200])
+        model_prov = dict(**H.code_commits(), model_provenance_error=repr(e)[:200])
     pairs = {}; deficits = []
     for b in args.bases:
         fit_tag = BASES[b]

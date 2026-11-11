@@ -207,8 +207,7 @@ def main() -> None:
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),
         script='E12_breadth_apl.py', host=subprocess.run(['hostname'], capture_output=True,
             text=True).stdout.strip(),
-        al_analysis_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE,
-            capture_output=True, text=True).stdout.strip(),
+        **H.code_commits(),
         base=BOUTON, initial_params=initial, exponents=args.exponents, breadth=args.breadth,
         approx_conc_note=H.APPROX_CONC_NOTE,
     )

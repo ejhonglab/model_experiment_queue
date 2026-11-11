@@ -367,9 +367,7 @@ def part_a(args) -> None:
     write_table_a(out, key, orc, floors, shares, correl, summ, wp)
     figures_a(out, df, key, shares, floors, pd.concat(key_shares, ignore_index=True))
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E66_per_odor_apl_profile.py --part A',
-        al_analysis_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE, capture_output=True, text=True).stdout.strip(),
-        al_analysis_dirty=bool(subprocess.run(['git', 'status', '--porcelain', '--untracked-files=no'], cwd=H.HERE,
-            capture_output=True, text=True).stdout.strip()),
+        **H.code_commits(),
         inputs_sha256={str(p): sha256(p) for p in (BY_VARIANT, E65_TABLE)}, n_variants=len(have), readouts=[r[0] for r in READOUTS],
         calibrated_readout=CAL_READOUT, response_threshold_spikes=RESP_MIN, n_boot=args.boot, boot_seed=0,
         oracles={lab: dict(folder=f, base=b, arms=a) for lab, f, b, a in ORACLES})

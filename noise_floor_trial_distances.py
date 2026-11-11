@@ -157,7 +157,7 @@ def main() -> None:
     print(fl[fl['transform'] == 'graded'].groupby(['genotype', 'odor']).single_trial_floor.mean().unstack(0).reindex(H.APL16_ODORS).round(3).to_string())
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='noise_floor_trial_distances.py',
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(),
-        al_analysis_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE, capture_output=True, text=True).stdout.strip(),
+        **H.code_commits(),
         inputs={g: str(H.yang_data_dir() / g / f'dataset_{i}_long.csv') for g, i in DATASETS.items()}, threshold=THRESH,
         method='signal power |xbar|^2 - s^2/n per odor; corrected cosine = xbar_a.xbar_b / sqrt(signal_a signal_b); floors from single-trial pairs and from the same algebra')
     (res_dir / 'provenance.json').write_text(json.dumps(prov, indent=1) + '\n')

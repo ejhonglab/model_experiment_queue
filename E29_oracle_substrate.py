@@ -84,7 +84,7 @@ def main() -> None:
     fig.tight_layout(); fig.savefig(res_dir / 'E29_oracle_substrate.png', dpi=130); plt.close(fig)
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E29_oracle_substrate.py',
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(),
-        al_analysis_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE, capture_output=True, text=True).stdout.strip(),
+        **H.code_commits(),
         hemibrain=json.loads((HEMIBRAIN / 'provenance.json').read_text()), oracle=ORACLE, top_glomeruli=TOP_GLOMS, permutations=20000)
     (res_dir / 'provenance.json').write_text(json.dumps(prov, indent=1, default=str) + '\n')
     pd.set_option('display.width', 220)

@@ -349,7 +349,7 @@ def main() -> None:
     make_figures(df, key, data_df, data_summ, model_conc, targets, out)
     inputs = {str(RESULTS / 'apl_effect' / 'by_variant.csv'): hashlib.sha256((RESULTS / 'apl_effect' / 'by_variant.csv').read_bytes()).hexdigest()}
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E65_spike_count_readout.py',
-        al_analysis_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE, capture_output=True, text=True).stdout.strip(),
+        **H.code_commits(),
         inputs_sha256=inputs, n_variants=len(have), readouts_fixed=[f[0] for f in FIXED], readouts_calibrated=[c[0] for c in CALIBRATED],
         calibration_targets=targets, data_effect_mean=float(H.yang_apl_effect().mean()),
         data_effect_binary_mean=float(H.yang_apl_effect(binarize=1.0).mean()))

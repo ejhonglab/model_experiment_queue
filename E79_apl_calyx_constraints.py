@@ -966,7 +966,8 @@ def _sha(p: Path) -> Optional[str]:
 
 
 def write_provenance(out: Path, extra: dict) -> None:
-    """provenance.json: script, al_analysis commit and dirty state, inputs with sha256."""
+    """provenance.json: script, this repository's and al_analysis's commits and dirty states, inputs with sha256."""
+    import kc_remapping_harness as H
     inputs = sorted(DATA.glob('*')) + [HERE / 'apl_calyx_maps.py'] + sorted(E2_RESULTS.glob('unit_potentials_*.csv'))
     try:
         from al_analysis.mb_model import apl_synapses_path
@@ -974,10 +975,10 @@ def write_provenance(out: Path, extra: dict) -> None:
     except Exception:
         pass
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script=Path(__file__).name,
-        host=socket.gethostname(), al_analysis_commit=_git('rev-parse', 'HEAD'),
-        al_analysis_dirty=bool(_git('status', '--porcelain', '--', Path(__file__).name, 'apl_calyx_maps.py')),
-        al_analysis_diff=_git('diff', 'HEAD', '--', Path(__file__).name, 'apl_calyx_maps.py'),
-        al_analysis_dirty_files_this_folder=_git('status', '--porcelain', '--', '.'),
+        host=socket.gethostname(), **H.code_commits(),
+        scripts_dirty=bool(_git('status', '--porcelain', '--', Path(__file__).name, 'apl_calyx_maps.py')),
+        scripts_diff=_git('diff', 'HEAD', '--', Path(__file__).name, 'apl_calyx_maps.py'),
+        queue_dirty_files=_git('status', '--porcelain', '--', '.'),
         inputs={str(p): _sha(p) for p in inputs if p.is_file()},
         settings=dict(blurs_px=BLURS_PX, corr_blur_px=CORR_BLUR_PX, n_profile_bins=N_PROFILE_BINS,
             assumed_um_per_px=ASSUMED_UM_PER_PX, n_boot=N_BOOT, seed=SEED, baselines=BASELINES, main_baseline=MAIN_BASELINE,

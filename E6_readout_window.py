@@ -395,8 +395,7 @@ def main() -> None:
     make_figures(res, curves, rc, pw, wins, sw if sweep_rows else None)
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),
         script='E6_readout_window.py', host=os.uname().nodename,
-        al_analysis_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE,
-            capture_output=True, text=True).stdout.strip(),
+        **H.code_commits(),
         olfsysm_commit=subprocess.run(['git', 'rev-parse', 'HEAD'],
             cwd=H.olfsysm_dir(), capture_output=True, text=True).stdout.strip(),
         windows=WINDOWS, gcamp_kernel=dict(rise_s=GCAMP_RISE_S, decay_s=GCAMP_DECAY_S),

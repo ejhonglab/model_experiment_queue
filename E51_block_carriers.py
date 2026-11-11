@@ -644,7 +644,7 @@ def make_figures(out: Path, per_rec: pd.DataFrame, summ: pd.DataFrame, kc_all: d
 
 README = """# E51 part A: where the fitted fruity × small-ester block lives
 
-Made by `E51_block_carriers.py` (al_analysis {commit}), {generated}. Models: {models}, rebuilt at their fitted
+Made by `E51_block_carriers.py` (model_experiment_queue {commit}), {generated}. Models: {models}, rebuilt at their fitted
 parameters (E43_model_trial_noise.py's `fit_model`), the deterministic runs checked against the fits' saved outputs
 (0 mismatching entries; provenance.json, "checks"). The nine pairs: {{2h, IaA, pa}} × {{2-but, eb, ep}}. A pair's
 excess: its APL-on distance's residual from the isotonic fit on the APL-off distance over the 120 pairs (the block is
@@ -704,7 +704,7 @@ def main() -> None:
     orn = H.apl16_orn_deltas()
     commit = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE, capture_output=True, text=True).stdout.strip()
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E51_block_carriers.py',
-        host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(), al_analysis_commit=commit,
+        host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(), **H.code_commits(),
         model=H.model_provenance(orn_deltas=orn), approx_conc_note=H.APPROX_CONC_NOTE)
     inputs = {}
     levels = json.loads((E48_RES / 'noise_levels.json').read_text())

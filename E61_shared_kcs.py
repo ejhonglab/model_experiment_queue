@@ -205,10 +205,9 @@ def main() -> None:
 
     write_table(out, overlap, triple, enrich, driven, shared, orn_top)
     make_figure(out, overlap, enrich)
-    commit = subprocess.run(['git', 'rev-parse', '--short', 'HEAD'], capture_output=True, text=True, cwd=Path(__file__).parent).stdout.strip()
     (out / 'provenance.json').write_text(json.dumps(dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),
         script='E61_shared_kcs.py', host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(),
-        al_analysis_commit=commit, models=[dict(label=l, folder=f, tag=t, knee_hz=k, gain=g) for l, _, f, t, k, g in MODELS],
+        **H.code_commits(), models=[dict(label=l, folder=f, tag=t, knee_hz=k, gain=g) for l, _, f, t, k, g in MODELS],
         gain_glomeruli=GAIN_GLOMS, focus_odors=FOCUS, driven='PN rate (E21 glomerulus_rates_per_odor.csv, base model, 0-0.5 s) x gain > knee',
         data_overlap='E23 overlap_profiles.csv (per-recording z > 1 responders; observed / expected n_a n_b / N)', inputs=inputs,
         approx_conc_note=H.APPROX_CONC_NOTE), indent=1) + '\n')

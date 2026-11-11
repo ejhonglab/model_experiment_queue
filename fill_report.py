@@ -199,7 +199,7 @@ def main() -> None:
     args.out.write_text(filled)
     sidecar = args.out.with_suffix('.values.json')
     sidecar.write_text(json.dumps(dict(template=str(args.template), generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),
-        al_analysis_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE, capture_output=True, text=True).stdout.strip(),
+        **H.code_commits(),
         n_values=len(side), lint=probs, values=side), indent=1, ensure_ascii=False, default=str) + '\n')
     print(f'filled {len(side)} placeholders -> {args.out} (sidecar {sidecar.name}); lint: {len(probs)} bare numbers')
     if args.html:

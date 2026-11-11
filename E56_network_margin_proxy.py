@@ -271,7 +271,7 @@ def main() -> None:
     loc = H.outputs_dir(EXPERIMENT)
     loc.mkdir(parents=True, exist_ok=True)
     orn = H.apl16_orn_deltas()
-    commit = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE, capture_output=True, text=True).stdout.strip()
+    commits = H.code_commits()
     infos = E55.pipeline_models()
     names = args.models or list(infos)
     missing = [n for n in names if n not in infos]
@@ -353,7 +353,7 @@ def main() -> None:
     write_table(pm, agree, conv, out, n_pass)
     make_figures(pm, out, n_pass)
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E56_network_margin_proxy.py',
-        host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(), al_analysis_commit=commit,
+        host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(), **commits,
         model=H.model_provenance(orn_deltas=orn), approx_conc_note=H.APPROX_CONC_NOTE, models=names, n_passes=n_pass,
         pipeline_info={n: {k: (str(v) if isinstance(v, Path) else v) for k, v in infos[n].items()} for n in names},
         note=('pass 1: E55\'s replay model (each KC\'s drive without KC-KC inhibition minus W applied to the filtered spike trains of the '

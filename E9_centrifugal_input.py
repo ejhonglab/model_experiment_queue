@@ -390,7 +390,7 @@ def main() -> None:
         pd.concat(deficits).to_csv(res_dir / 'pair_deficits_long.csv', index=False, mode='a', header=not (res_dir / 'pair_deficits_long.csv').exists())
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E9_centrifugal_input.py',
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(),
-        al_analysis_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE, capture_output=True, text=True).stdout.strip(),
+        **H.code_commits(),
         olfsysm_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.olfsysm_dir(), capture_output=True, text=True).stdout.strip(),
         bases={b: BASES[b] for b in args.bases}, scales=SCALES, bouton_rel=BOUTON_REL, min_synapses=MIN_SYN, named_pairs=dict(diverge=DIVERGE, converge=CONVERGE),
         hemibrain=json.loads((HEMIBRAIN / 'provenance.json').read_text()), approx_conc_note=H.APPROX_CONC_NOTE)

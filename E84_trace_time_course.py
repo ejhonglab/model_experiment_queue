@@ -169,8 +169,7 @@ def _sha(p: Path) -> str:
 
 def write_provenance(part: str, settings: dict) -> None:
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E84_trace_time_course.py',
-                part=part, al_analysis_commit=_git('rev-parse', 'HEAD'),
-                al_analysis_dirty=_git('status', '--porcelain', '--untracked-files=no'),
+                part=part, **H.code_commits(),
                 recordings=[f'{g}:{r}' for g, r in YRN.RECORDINGS], neucoeff=NEUCOEFF, excerpt_s=list(EXCERPT_S),
                 approx_conc_note=H.APPROX_CONC_NOTE, **settings)
     (out_dir() / f'provenance_{part}.json').write_text(json.dumps(prov, indent=1, default=str) + '\n')
@@ -493,7 +492,7 @@ def part_a(drive_root: Path, rebuild: bool = False) -> dict:
                    registry=dict(ours=reg_vals, registry=reg, abs_diff=d_reg, max_abs_diff=max(d_reg.values())))
     ok = (summary['olfdb_max_abs'] <= 1e-5 and summary['noise_units_max_rel'] <= 1e-5 and summary['sd_base_max_rel'] <= 1e-9
           and max(d_mean.values()) <= 1e-6 and summary['rdm_max_abs'] <= 1e-6 and summary['registry']['max_abs_diff'] <= 1e-6)
-    rec_out = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), al_analysis_commit=_git('rev-parse', 'HEAD'),
+    rec_out = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), **H.code_commits(),
                    tolerances=dict(olfdb_max_abs=1e-5, noise_units_max_rel=1e-5, sd_base_max_rel=1e-9, rdm_max_abs=1e-6,
                                    mean_rdm_max_abs=1e-6, registry=1e-6),
                    all_ok=bool(ok), summary=summary, recordings=checks)
@@ -1583,7 +1582,7 @@ def part_d(n_boot: int = N_BOOT) -> None:
         print(f'D readings {r.source}:{r.point_id}: {time.time() - t0:.0f} s', flush=True)
     n_bad = sum(1 for v in checks.values() if v['columns_differing'] or v['columns_missing'] or not v['pairs_identical'])
     worst_ratio = max(v.get('predicted_ratio_max_abs', 0.0) for v in checks.values())
-    summ = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), al_analysis_commit=_git('rev-parse', 'HEAD'),
+    summ = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), **H.code_commits(),
                 e82_protocol_readings_sha256=_sha(e82 / 'protocol_readings.csv'), n_runs=len(runs),
                 primary_identical_runs=len(runs) - n_bad, primary_worst_abs_diff=worst,
                 predicted_ratio_worst_abs_diff=worst_ratio, kernels=kernels, runs=checks)
@@ -1973,7 +1972,7 @@ def export_traces() -> None:
     pd.DataFrame(vt).to_csv(d / 'volume_times.csv', index=False)
     rec0 = load_cache(*YRN.RECORDINGS[0])['meta']
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E84_trace_time_course.py --part export',
-                al_analysis_commit=_git('rev-parse', 'HEAD'), neucoeff=NEUCOEFF, volume_rate=rec0['volume_rate'],
+                **H.code_commits(), neucoeff=NEUCOEFF, volume_rate=rec0['volume_rate'],
                 frame_rate=rec0['yaml']['frame_rate'], frame_per_volume=rec0['yaml']['frame_per_volume'], files=checks,
                 total_bytes=int(sum(v['bytes'] for v in checks.values())),
                 olfdb_max_abs=max(v['olfdb_max_abs'] for v in checks.values()))
@@ -1989,8 +1988,8 @@ The per-trial signal of every KC of the 19 APL16 recordings of olfdb datasets 19
 and 20 (control flies, TNT3c, 11 recordings), around each of the 51 presentations (16 odors and the solvent, pfo, three
 repeats). Yang allowed sharing these traces on 2026-11-11 (in viki's terminal, about 10:55), for these 19 recordings
 only; the 12 APL16 recordings on her drives that are not in olfdb are on hold and are not here. Written by
-`al_analysis/scripts/claude_pair_remapping_experiments/E84_trace_time_course.py --part export` ({prov['generated']},
-al_analysis {prov['al_analysis_commit'][:7]}) from the suite2p output on Yang's drive, read by
+`E84_trace_time_course.py --part export` of model_experiment_queue ({prov['generated']},
+{prov['queue_commit'][:7]}) from the suite2p output on Yang's drive, read by
 `yang_response_normalization.read_suite2p`; re-run it on viki to regenerate.
 
 ## Files
@@ -2052,7 +2051,7 @@ def tables() -> str:
     """comparison_table.md from the parts' CSVs (the sections whose CSVs exist)."""
     o = out_dir()
     lines = [f'# E84: the time course of the APL effect in the flies\' traces',
-             '', f"Generated {datetime.now().strftime('%Y-%m-%d %H:%M')} by E84_trace_time_course.py (al_analysis "
+             '', f"Generated {datetime.now().strftime('%Y-%m-%d %H:%M')} by E84_trace_time_course.py (model_experiment_queue "
              f"{_git('rev-parse', '--short', 'HEAD')}). Cosine distances between trial-mean response vectors over all KCs of a "
              'recording (\'as measured\'), or noise-free from products of different repeats (E81), means over recordings; '
              'intervals 90 % over 1000 resamples of recordings (of flies in the effect table\'s last column). KC data in '

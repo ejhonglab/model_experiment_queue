@@ -33,7 +33,7 @@ involving paa, euc or -aPine depend on ORN input at a substituted concentration 
 
 Outputs (in results/E45_gain_at_ctrl_frac/, or --out): comparison.csv (one row per fit found),
 comparison_table.md (one table per threshold, with the KC data from the data-target registry),
-E45_gain_at_ctrl_frac.png, provenance.json (al_analysis commit at the start, the input files'
+E45_gain_at_ctrl_frac.png, provenance.json (this repository's and al_analysis's commits at the start, the input files'
 paths and sha256, the fits found and missing).
 
 Usage: ./venv/bin/python E45_gain_at_ctrl_frac.py [--out DIR]
@@ -169,11 +169,11 @@ def sha256(path: Path) -> str:
 
 
 def git_state() -> dict:
-    """al_analysis commit and whether its tracked files differ from it."""
+    """This repository's and al_analysis's commits and dirty states (`H.code_commits`), this repository's
+    modified tracked files, and the script's sha256."""
     run = lambda *a: subprocess.run(['git', *a], cwd=H.HERE, capture_output=True, text=True).stdout.strip()
     dirty = run('status', '--porcelain', '--untracked-files=no')
-    return dict(al_analysis_commit=run('rev-parse', 'HEAD'), al_analysis_dirty=bool(dirty),
-        al_analysis_dirty_files=dirty.splitlines(), script_sha256=sha256(Path(__file__)))
+    return dict(**H.code_commits(), queue_dirty_files=dirty.splitlines(), script_sha256=sha256(Path(__file__)))
 
 
 def outputs_paths(exp: str, tag: str) -> Tuple[Optional[Dict[str, Path]], str]:

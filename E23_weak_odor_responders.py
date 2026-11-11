@@ -113,7 +113,7 @@ def main() -> None:
     make_figure(agg, pred, pop, res_dir)
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E23_weak_odor_responders.py',
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(),
-        al_analysis_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE, capture_output=True, text=True).stdout.strip(),
+        **H.code_commits(),
         threshold='trial-mean z > 1', top_gloms=TOP_GLOMS, approx_conc_note=H.APPROX_CONC_NOTE)
     (res_dir / 'provenance.json').write_text(json.dumps(prov, indent=1, default=str) + '\n')
     print('done ->', res_dir)

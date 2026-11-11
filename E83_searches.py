@@ -106,10 +106,6 @@ def _n(responses: pd.DataFrame) -> int:
     return int((responses.to_numpy(dtype=float) > 0.5).sum())
 
 
-def _git_head(path: Path = H.HERE) -> str:
-    return subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=path, capture_output=True, text=True).stdout.strip()
-
-
 def _sha(obj) -> str:
     return hashlib.sha256(json.dumps(obj, sort_keys=True, default=str).encode()).hexdigest()
 
@@ -269,7 +265,7 @@ def provenance(out: Path, arm: str, half: str, extra: dict) -> None:
     real = parts['real']
     hv = E77.recording_halves()
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E83_searches.py', arm=arm,
-                half=half, al_analysis_commit=_git_head(),
+                half=half, **H.code_commits(),
                 model=H.model_provenance(orn_deltas=real['orn'], _wPNKC=real['W']),
                 wirings={w: dict(folder=p['folder'], tag=p['tag'], params=p['p'], K=p['K'], target_on=p['target_on'],
                                  target_off=p['target_off']) for w, p in parts.items()},

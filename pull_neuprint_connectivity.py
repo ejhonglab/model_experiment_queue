@@ -164,7 +164,7 @@ def main() -> None:
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), host=platform.node(),
         server=SERVER, dataset=DATASET, server_version=server_version,
         neuprint_python=getattr(neuprint, '__version__', None), script='pull_neuprint_connectivity.py',
-        al_analysis_commit=git(['rev-parse', 'HEAD'], HERE),
+        queue_commit=git(['rev-parse', 'HEAD'], HERE),
         queries=dict(pn_types=PN_TYPE, lhn_types=LHN_TYPE, lhcent_types=LHCENT_TYPE, mbc1_type=MBC1_TYPE,
             calyx_targets=CALYX_TARGET_TYPE, rois=dict(pn_to_lhn=ROI_LH, centrifugal_to_calyx=ROI_CA,
                 inputs_to_centrifugal='all ROIs'),

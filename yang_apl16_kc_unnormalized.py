@@ -203,7 +203,7 @@ def main() -> None:
     commit = subprocess.run(['git', 'rev-parse', '--short', 'HEAD'], cwd=H.HERE, capture_output=True, text=True).stdout.strip()
     readme(args.out, checks, hal, olf, commit)
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='yang_apl16_kc_unnormalized.py',
-                al_analysis_commit=commit, drive_root=str(args.drive_root), checks=checks, against_hal_dfc=hal, olfdb=olf,
+                **H.code_commits(), drive_root=str(args.drive_root), checks=checks, against_hal_dfc=hal, olfdb=olf,
                 files={p.name: sha256(p) for p in (args.out / 'per_trial_long_unnormalized.parquet',
                                                    args.out / 'trialmean_long_unnormalized.parquet',
                                                    args.out / 'trialmean_long_unnormalized.csv.gz')})
