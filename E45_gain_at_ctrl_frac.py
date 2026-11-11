@@ -460,7 +460,7 @@ def main() -> None:
     yang = H.yang_data_dir() / 'computed'
     for p in (H.data_targets_path(), yang / 'rdm_per_recording_long.csv', yang / 'response_fraction_per_recording.csv',
             H.shared_dir() / 'data' / 'model_outputs' / 'inputs' / 'orn16_corrdist_olfdb_36glom.csv',
-            H.consensus_csv(), H.APL_PAIR_DIR / 'shared12_pairs.csv'):
+            H.consensus_csv(), H.apl_pair_dir() / 'shared12_pairs.csv'):
         inputs[str(p)] = sha256(p)
     data = {'raw': {g: H.yang_mean_rdm(g, 'cosine') for g in ('TNT3c', 'TNT')}}
     data_rates = {g: H.yang_response_fractions(g)[H.APL16_ODORS].mean() for g in ('TNT3c', 'TNT')}

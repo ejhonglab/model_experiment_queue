@@ -45,7 +45,6 @@ _mb_model.STRICT_CLEAN_OLFSYSM = True
 # this repository (model_experiment_queue); until 2026-11-11 it was the folder
 # scripts/claude_pair_remapping_experiments of al_analysis
 HERE = Path(__file__).resolve().parent
-APL_PAIR_DIR = HERE / 'apl_pair_analysis'
 
 # the report's odor order (= Yang's original matrix files)
 APL16_ODORS: List[str] = ['2h', 'IaA', 'pa', '2-but', 'eb', 'ep', '6al', 't2h', '1-8ol',
@@ -171,6 +170,12 @@ def shared_dir() -> Path:
         if c and Path(c).is_dir():
             return Path(c)
     raise FileNotFoundError('shared directory not found; set KC_REMAPPING_SHARED')
+
+
+def apl_pair_dir() -> Path:
+    """<shared>/apl_pair_analysis/: the original report's analysis and the matrices it used
+    (kept in the shared directory, not in this repository)."""
+    return shared_dir() / 'apl_pair_analysis'
 
 
 def results_dir(experiment: str) -> Path:
@@ -457,7 +462,7 @@ def yang_trialmeans() -> pd.DataFrame:
 
 def report_matrices() -> Dict[str, pd.Series]:
     """The two matrices the report analyzed, as pair Series: {'TNT3c': ..., 'TNT': ...}."""
-    return {g: pairs_from_square(pd.read_csv(APL_PAIR_DIR / f'{g}_dist_apl16.csv',
+    return {g: pairs_from_square(pd.read_csv(apl_pair_dir() / f'{g}_dist_apl16.csv',
         index_col=0)) for g in ('TNT3c', 'TNT')
     }
 
@@ -481,7 +486,7 @@ def orn16_consensus_pairs() -> pd.Series:
 def orn16_consensus_pairs_zero_filled() -> pd.Series:
     """The original report's 16-odor ORN matrix (1 - r of consensus glomerular mean dF/F over
     the union of both panels' glomeruli, unimaged glomeruli as 0). Kept for comparison only."""
-    return pairs_from_square(pd.read_csv(APL_PAIR_DIR / 'orn16_consensus_corrdist.csv',
+    return pairs_from_square(pd.read_csv(apl_pair_dir() / 'orn16_consensus_corrdist.csv',
         index_col=0
     ))
 
@@ -513,7 +518,7 @@ def reference_pairs() -> pd.DataFrame:
     KC somata), kc_soma_new, model_uniform, model_hemibrain, model_hemibrain_wd20,
     vcf_raw, vcf_hyp (hyperbolic VCF embedding, mean of 10 seeds), kc_ctrl, kc_tnt.
     """
-    df = pd.read_csv(APL_PAIR_DIR / 'shared12_pairs.csv', index_col=[0, 1])
+    df = pd.read_csv(apl_pair_dir() / 'shared12_pairs.csv', index_col=[0, 1])
     df.index.names = ['odor_a', 'odor_b']
     keyed = {p: df.loc[p] for p in df.index}
     canon = canonical_pairs(pd.Series({p: 0.0 for p in keyed}))

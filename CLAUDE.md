@@ -1,8 +1,9 @@
 We are following up on a report you made, in the markdown:
 "apl_orn_to_kc_remapping_report.md"
 
-The report may reference the analysis and outputs in apl_pair_analysis/, which you used
-in construction of the report (and provided alongside for download). The two 16x16 KC
+The report may reference the analysis and outputs in apl_pair_analysis/ (in the shared
+directory, below; not in this repository), which you used in construction of the report
+(and provided alongside for download). The two 16x16 KC
 distance matrices the report analyzed (TNT3c_dist_apl16.csv [control] and
 TNT_dist_apl16.csv [APL output blocked], both from Yang) are regenerated there from
 Yang's per-recording data (see below). Note they are 1 - cosine similarity over all KCs
@@ -359,7 +360,8 @@ directory"). On hal, tensor is automounted at /local/tensor, so the shared direc
 /local/tensor/Tom/claude_kc_remapping (`ls` it to trigger the mount). On other hosts,
 find the mount with `mount | grep tensor`, or try the automount approach (also assuming
 it's at /local/tensor, if that fails). The shared directory already contains copies
-of the report, apl_pair_analysis/, from_remy/ and from_yang/.
+of the report, apl_pair_analysis/, from_remy/ and from_yang/ (apl_pair_analysis/ and from_remy/
+are there only, not in this repository; the code reads the former with `H.apl_pair_dir()`).
 
 In the shared directory, create/maintain/read at least the following:
 - experiment_priorities.md
@@ -1303,7 +1305,8 @@ in the al_analysis checkout, under al_analysis/data/from_remy and
 al_analysis/data/from_yang/20260415_YZtransfer.
 
 I asked Remy for her current analysis (on the same paper, one version of which was
-presented in chapter 2 of my thesis), and she sent me all the contents of from_remy/.
+presented in chapter 2 of my thesis), and she sent me all the contents of the shared directory's
+from_remy/.
 On first run, make a markdown file in the shared NAS folder (as notes/remy-summary.md)
 that summarizes what Remy sent me, in particular as relevant to these computational
 experiments.

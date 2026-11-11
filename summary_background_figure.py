@@ -6,7 +6,7 @@ whose residual defines the fruity x small-ester block. Drawn twice:
 
 - summary_background.png: the KC matrices as cosine distance (the program's primary measure).
   The ORN matrix is the report's, one minus the Pearson correlation across the 40 glomeruli
-  that respond to at least one of the 16 odors (apl_pair_analysis/apl_analysis.py), and is
+  that respond to at least one of the 16 odors (apl_analysis.py in the shared directory's apl_pair_analysis/), and is
   labelled as such.
 - summary_background_pearson.png: everything as Pearson correlation (r, not distance), the
   matrices in olfdb's blue-white-red Oklab colormap (white at r = 0, symmetric -1..1, diagonal

@@ -137,7 +137,7 @@ directory's notes/ and are linked from here.
 
 ### The 16-odor ORN reference matrix counts unimaged glomeruli as zero responses (found 2026-11-06)
 
-- **What.** `kc_remapping_harness.orn16_consensus_pairs()` reads `apl_pair_analysis/
+- **What.** `kc_remapping_harness.orn16_consensus_pairs()` reads the shared directory's `apl_pair_analysis/
   orn16_consensus_corrdist.csv`, which the original report's analysis (`apl_pair_analysis/
   apl_analysis.py`, section C) computed as 1 - Pearson r across glomeruli from
   `al_analysis/data/sent_to_vlad/2024-06-21/consensus_mean.csv`. It took the union of the megamat

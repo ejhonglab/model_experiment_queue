@@ -11,7 +11,7 @@ recording (date, fly, hemisphere):
 
 and their means over recordings and over flies, and compares the recording-mean 16-odor
 RDMs against the two matrices the report analyzed (the `ctrl` / `tnt` columns of
-apl_pair_analysis/all120_pairs.csv), to find which recipe reproduces them.
+<shared>/apl_pair_analysis/all120_pairs.csv), to find which recipe reproduces them.
 
 Everything is written under <shared>/data/yang_apl16_kc_olfdb/ (README.md there
 describes each output). Nothing is re-downloaded if the long CSVs are already present.
@@ -123,9 +123,10 @@ def square(long_df: pd.DataFrame, col: str, odors: list) -> pd.DataFrame:
     return m
 
 
-def report_matrices() -> dict:
-    """The 16-odor control / TNT corr-distance matrices the report analyzed, as pair tables."""
-    p = HERE / 'apl_pair_analysis' / 'all120_pairs.csv'
+def report_matrices(shared: Path) -> dict:
+    """The 16-odor control / TNT corr-distance matrices the report analyzed, as pair tables
+    (from <shared>/apl_pair_analysis/all120_pairs.csv)."""
+    p = shared / 'apl_pair_analysis' / 'all120_pairs.csv'
     df = pd.read_csv(p, index_col=[0, 1])
     df.index.names = ['odor_a', 'odor_b']
     return {'TNT3c': df['ctrl'], 'TNT': df['tnt']}
@@ -229,7 +230,7 @@ def main() -> None:
         .mean().round(4).to_string())
 
     # which recipe reproduces the report's matrices?
-    ref = report_matrices()
+    ref = report_matrices(args.shared_dir)
     lines = ['Comparison of recipes to the matrices in the report (all120_pairs.csv ctrl/tnt),'
         ' 16 odors (pfo excluded), 120 pairs:']
     for how, m in means.items():

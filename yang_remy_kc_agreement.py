@@ -214,7 +214,7 @@ def main() -> None:
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='yang_remy_kc_agreement.py',
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(),
         **H.code_commits(),
-        inputs=dict(shared12_pairs=str(H.APL_PAIR_DIR / 'shared12_pairs.csv')),
+        inputs=dict(shared12_pairs=str(H.apl_pair_dir() / 'shared12_pairs.csv')),
         remy_columns=REMY, n_recordings={g: int(len(r)) for g, r in recs.items()},
         measures=dict(yang='1 - cosine similarity between trial-mean KC population responses, per recording, mean over recordings',
             remy='1 - Pearson correlation between trial-mean responses across KC somata (kc_remy_combo) or claws'))
