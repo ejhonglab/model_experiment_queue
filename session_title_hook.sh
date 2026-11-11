@@ -6,10 +6,10 @@
 # blocked: Claude Code (2.1.319) ignores sessionTitle from a hook that blocks. The title is what
 # the Remote Control session list (claude.ai, the phone app) shows and the name other sessions
 # address with SendMessage. Every other prompt passes through untouched.
-# Registered in ~/.claude/settings.json on Tom's hosts and in .claude/settings.json in this folder,
+# Registered in ~/.claude/settings.json on Tom's hosts and in .claude/settings.json in this repository,
 # which runs the copy in the session's own checkout (so it also works in ~/src/kc_queue); the two
-# commands differ, so in this folder on Tom's hosts it runs twice, harmlessly, setting the same
-# title (see CLAUDE.md in this folder, "Session names"). Settings are reloaded live, so running
+# commands differ, so in this repository on Tom's hosts it runs twice, harmlessly, setting the same
+# title (see CLAUDE.md in this repository, "Session names"). Settings are reloaded live, so running
 # sessions pick it up without a restart.
 input=$(cat)
 case $input in *__set_session_title__*) ;; *) exit 0 ;; esac

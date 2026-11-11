@@ -1,4 +1,4 @@
-"""PreToolUse hook (.claude/settings.json in this folder) for lab members' machines.
+"""PreToolUse hook (.claude/settings.json in this repository) for lab members' machines.
 
 There the queue has a tree of its own, ~/src/kc_queue (set up by join_queue.sh), and nothing else
 under ~/src (the owner's own checkouts and environments) may be changed. This refuses Edit / Write /
@@ -19,8 +19,8 @@ EDIT_TOOLS = ('Edit', 'Write', 'MultiEdit', 'NotebookEdit')
 
 def tree_and_src():
     """Returns (tree, src): the queue's tree and the folder holding it, or (None, None)."""
-    here = os.path.dirname(os.path.realpath(__file__))
-    tree = os.path.realpath(os.path.join(here, '..', '..', '..'))
+    here = os.path.dirname(os.path.realpath(__file__))  # ~/src/kc_queue/model_experiment_queue
+    tree = os.path.realpath(os.path.join(here, '..'))
     if os.path.basename(tree) != 'kc_queue':
         return None, None
     return tree, os.path.dirname(tree)
@@ -78,8 +78,8 @@ def main():
     if bad is None:
         return
     reason = (f'{bad} is in {src} outside the queue\'s tree, {tree}. On this machine queue '
-        'sessions work only in that tree (its al_analysis, olfsysm and hong2p, and '
-        'al_analysis/venv); everything else in ~/src belongs to the machine\'s owner and must not '
+        'sessions work only in that tree (its model_experiment_queue, al_analysis, olfsysm and '
+        'hong2p, and model_experiment_queue/venv); everything else in ~/src belongs to the machine\'s owner and must not '
         'be changed, built, installed from or run. Use the copy in the tree instead (reading files '
         'with the Read tool is fine).')
     print(json.dumps({'hookSpecificOutput': {'hookEventName': 'PreToolUse',

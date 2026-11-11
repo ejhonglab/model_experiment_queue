@@ -9,7 +9,7 @@
 # (presence/<host>__<session_id>.watch next to chat.md; see monitor-server/), which is how the
 # monitor tells a session idling on the queue from one that is gone, and lets presence_hook.py
 # write the session's usage sample when one is due (every 15 min), as no hook fires while idle.
-# Usage: scripts/claude_pair_remapping_experiments/chat_watch.sh [CHAT_MD] [INTERVAL_S]
+# Usage: ./chat_watch.sh [CHAT_MD] [INTERVAL_S]   (from this repository's root)
 #        (CHAT_MD default: $KC_CHAT_MD, else chat.md under /local/tensor or /mnt/tensor, whichever exists)
 default_chat() {  # $KC_CHAT_MD, else the first existing of the hosts' tensor mount points
   [ -n "${KC_CHAT_MD:-}" ] && { echo "$KC_CHAT_MD"; return; }
