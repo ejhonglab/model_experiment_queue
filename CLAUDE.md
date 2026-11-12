@@ -1,5 +1,5 @@
 We are following up on a report you made, in the markdown:
-"apl_orn_to_kc_remapping_report.md"
+"reports/apl_orn_to_kc_remapping_report.md"
 
 The report may reference the analysis and outputs in apl_pair_analysis/ (in the shared
 directory, below; not in this repository), which you used in construction of the report
@@ -17,7 +17,7 @@ design.md, e.g. `/api/datasets`, `/api/download?ids=<id>&format=long`). It also 
 Remy's kiwi/control-mixture KC data and my megamat and validation2 ORN glomerulus data.
 Copies of Yang's two datasets, plus per-recording RDMs (Pearson and cosine) and per-odor
 response fractions computed from them, are in the shared directory under
-data/yang_apl16_kc_olfdb/ (made by yang_apl16_kc_data.py in this repository; re-run it to
+data/yang_apl16_kc_olfdb/ (made by data_prep/yang_apl16_kc_data.py in this repository; re-run it to
 regenerate).
 
 Yang had her own Claude develop an independent static MB (KC+APL) model. That work (Oct
@@ -37,7 +37,7 @@ easier to search than the PDF.
 ## This repository, al_analysis, olfsysm and hong2p
 
 This repository (ejhonglab/model_experiment_queue) holds the experiment scripts, their harness
-(kc_remapping_harness.py), the queue's tools and these instructions. Until 2026-11-11 it was the
+(kcq/harness.py), the queue's tools and these instructions. Until 2026-11-11 it was the
 folder scripts/claude_pair_remapping_experiments of al_analysis, and its history came along under
 new hashes: commits cited before then (in notes, reports, chat.md and provenance, as
 `al_analysis_commit`) are al_analysis commits, where the old files are at
@@ -45,8 +45,26 @@ new hashes: commits cited before then (in notes, reports, chat.md and provenance
 three checkouts beside this one: al_analysis (mb_model, the model's Python side, and the lab's data
 under al_analysis/data), olfsysm (the model's C++) and hong2p. al_analysis depends heavily on hong2p
 and olfsysm, so a change may need changes in those too (or in another package the venv has
-installed editable from a checkout under ~/src). Claude Code does not read al_analysis's
-CLAUDE.md from here; what it says that matters for this work:
+installed editable from a checkout under ~/src).
+
+Since 2026-11-12 the files are in folders by role, each a package of this repository, installed
+editable in ./venv (`./venv/bin/pip install -e .` from the root; pyproject.toml): experiments/ (the
+E<n>_*.py scripts and their helpers), kcq/ (the library they import: harness.py, apl_effect.py,
+noise_floor.py, noise_proxy.py, data_targets.py), data_prep/ (the scripts that build the shared data
+sets the experiments read), analyses/ (one-off analyses), reports/ (the summary and report pages and
+their tools, beside summary_template.md and the report markdown), archive_tools/ (the model-output
+archive) and coordination/ (chat, hooks, the setup and key scripts, and the queue monitor in
+coordination/monitor/). Scripts import each other absolutely (`from kcq import harness as H`, `from
+experiments import E10_joint_fit as J`) and run from the root, by path or with -m
+(`./venv/bin/python experiments/E83_searches.py ...` or `./venv/bin/python -m experiments.E83_searches
+...`); their large outputs still go to the root's outputs/. A checkout that pulls this change runs
+`./venv/bin/pip install -e .` once (join_queue.sh does it on lab members' machines); until then the
+scripts do not import. Before it every file was at the root: kc_remapping_harness.py,
+apl_effect_scores.py and noise_floor_trial_distances.py are now kcq/harness.py, kcq/apl_effect.py and
+kcq/noise_floor.py, the other files kept their names, and kcq/layout.py maps old module names to new
+ones (notes, provenance and commits from before name the old files).
+
+Claude Code does not read al_analysis's CLAUDE.md from here; what it says that matters for this work:
 - Run pytest with the environment variable QUICK=1, unless extensively testing changes to the
   model code in mb_model (or the matching code in olfsysm), to skip most of the model cases.
 - Tests for olfsysm's C++ code are written in Python in al_analysis, test/test_mb_model.py. Any
@@ -75,15 +93,17 @@ venv (./venv) has them installed editable from those checkouts. Check with
 `./venv/bin/pip show <pkg>` (an editable install reports "Editable project location") and, if
 needed, after `git pull`-ing the checkout (the venv copy may be newer than a stale checkout),
 run from this repository's root (al_analysis first: it pins hong2p and olfsysm to their GitHub
-versions, which the next two replace):
+versions, which the next two replace; the last line is this repository's own packages, needed once
+per venv):
 ```
 ./venv/bin/pip install -e ../al_analysis[dev]
 ./venv/bin/pip install -e ../hong2p[all]
 ./venv/bin/pip install -e ../olfsysm
+./venv/bin/pip install -e .
 ```
 olfsysm is a C++ extension, so re-run its `pip install -e` after any C++ change. Run the tests,
 with QUICK=1, before committing: this repository's (test/; `QUICK=1 ./venv/bin/python -m pytest`
-from its root, and `./venv/bin/python -m pytest monitor-server` for the monitor) for changes here,
+from its root, and `./venv/bin/python -m pytest coordination/monitor` for the monitor) for changes here,
 and al_analysis's test/test_mb_model.py for model changes (from al_analysis's root, with this
 venv: `QUICK=1 ../model_experiment_queue/venv/bin/python -m pytest test/test_mb_model.py`).
 
@@ -120,7 +140,7 @@ olfsysm bakes its commit hash, a clean / dirty flag and a hash of its compiled s
 the extension at build time (`olfsysm.build_info()`), and every `pip install -e` recompiles
 everything, so there are no stale objects. `fit_mb_model` refuses to run unless the
 installed olfsysm is a clean build matching its checkout (`mb_model.olfsysm_is_clean()`);
-importing `kc_remapping_harness` makes that strict (`AL_ANALYSIS_ALLOW_DIRTY_OLFSYSM` is
+importing `kcq.harness` makes that strict (`AL_ANALYSIS_ALLOW_DIRTY_OLFSYSM` is
 ignored), so for the experiments here: commit the olfsysm change, `./venv/bin/pip install -e
 ../olfsysm` (from this repository's root), run the tests, then run the experiment. Every experiment's provenance.json
 includes `H.model_provenance(orn_deltas=...)` (olfsysm build, al_analysis / hong2p / this repository's
@@ -189,7 +209,7 @@ Each of these cost real time to diagnose; check them before blaming a script.
   `du -sh ~/src/*` was refused outright). In commands and in text written through them, write
   paths inside the tree in full (`/home/<user>/src/kc_queue/...`) and refer to the rest as "the
   owner's checkouts"; survey the owner's data with the Read tool, not with shell commands.
-- After `archive_model_outputs.py E<n>_...`, run `migrate_model_output_params.py` for that
+- After `archive_tools/archive_model_outputs.py E<n>_...`, run `archive_tools/migrate_model_output_params.py` for that
   experiment: it fills params.csv from exact sources and adds the base_kwargs columns (Tom imports
   data/model_outputs into a viewer, so params.csv must be complete).
 - Don't rebase or stash while a subagent works in the same checkout. Commit your own files by path
@@ -252,7 +272,7 @@ Lab members can run queue sessions on their own machines, with their own Claude 
 the machine up; the work is done by their Claude sessions, which follow these instructions as
 sessions on Tom's hosts do. Once per machine:
 1. `git clone https://github.com/ejhonglab/model_experiment_queue ~/src/kc_queue/model_experiment_queue`,
-   then run `~/src/kc_queue/model_experiment_queue/join_queue.sh`. The queue
+   then run `~/src/kc_queue/model_experiment_queue/coordination/join_queue.sh`. The queue
    gets a tree of its own, ~/src/kc_queue, so that nothing already on the machine (the owner's
    checkouts in ~/src, their Python environments) is used or changed. The script restarts itself
    in a clean environment (so an active conda environment or venv changes nothing), installs the
@@ -273,10 +293,10 @@ sessions on Tom's hosts do. Once per machine:
    moves that folder's outputs/, from_yang/ and .fable_consent.local into the new checkout and makes
    one new key, for model_experiment_queue, which Tom approves as below.
 2. The owner sends Tom the fingerprints (by Slack, email or in person, not through the shared
-   directory) and Tom runs `approve_push_keys.sh <host>` on one of his hosts, which adds them as
+   directory) and Tom runs `coordination/approve_push_keys.sh <host>` on one of his hosts, which adds them as
    write-enabled deploy keys once he confirms (it prints the fingerprints the same way, to match
-   by eye); join_queue.sh offers to wait for this, checking every minute, and `join_queue.sh
-   --check` on the machine shows whether each checkout can push. `approve_push_keys.sh --list` lists the keys added so far and
+   by eye); join_queue.sh offers to wait for this, checking every minute, and `coordination/join_queue.sh
+   --check` on the machine shows whether each checkout can push. `coordination/approve_push_keys.sh --list` lists the keys added so far and
    the hosts waiting, and `--revoke <host>` removes a host's keys.
 3. Queue sessions start in this repository (`cd ~/src/kc_queue/model_experiment_queue && claude`),
    since Claude Code reads `.claude/settings.json` (the session-title,
@@ -300,12 +320,12 @@ On those machines:
   default branch: the default branches refuse force pushes and deletions from everyone, creating,
   updating or deleting any other branch or any tag is refused to everyone but the repositories'
   admins, and Actions runs get a read-only token (github_rules.sh, which Tom runs, sets and
-  checks this). If a push fails, run `join_queue.sh --check`; a revoked key is for Tom to sort
+  checks this). If a push fails, run `coordination/join_queue.sh --check`; a revoked key is for Tom to sort
   out.
 - Sessions on these machines publish no artifacts at all (a publish from them lands in the machine
   owner's claude.ai account, not Tom's). They build every page they are responsible for (an
   experiment's page, a note's page) with md_to_artifact.py as usual, save it with
-  `save_report_copy.py <index.html> <name> pending` (the README row's URL column reads "pending"
+  `reports/save_report_copy.py <index.html> <name> pending` (the README row's URL column reads "pending"
   until a session on one of Tom's hosts fills it), write "pending (to be published from one of
   Tom's hosts)" wherever the scheme records the artifact URL, and post "For one of Tom's hosts:
   publish reports/<name>.html (markdown <path>)" in chat.md. A session on one of Tom's hosts then
@@ -323,9 +343,9 @@ On Tom's hosts: whatever a lab member's machine pushes, every host pulls and run
 included, and hooks run on every tool call. So after each pull, a session on one of Tom's hosts
 lists what the pulled commits touched (`git log --stat origin/main@{1}..origin/main` in this
 repository and al_analysis, `origin/master` in olfsysm and hong2p) and, before running anything,
-reads any change to the hooks and the scripts they run (.claude/settings.json, session_title_hook.sh,
-queue_session_hook.sh, queue_guard.py, monitor-server/presence_hook.py,
-monitor-server/statusline_capture.py, chat_watch.sh, chat_post.sh), to join_queue.sh,
+reads any change to the hooks and the scripts they run (.claude/settings.json, and in coordination/
+session_title_hook.sh, queue_session_hook.sh, queue_guard.py, monitor/presence_hook.py,
+monitor/statusline_capture.py, chat_watch.sh, chat_post.sh), to coordination/'s join_queue.sh,
 approve_push_keys.sh or github_rules.sh, to what pytest runs before any test (pytest.ini,
 test/conftest.py, and al_analysis's conftest), or to the build files (pyproject.toml, setup.py, the
 requirements files). If such a change does more than its commit
@@ -376,7 +396,7 @@ In the shared directory, create/maintain/read at least the following:
   probes and status" below)
 
 - presence/ and usage/: written only by hooks and chat_watch.sh for the queue monitor (see
-  monitor-server/ in this repository; usage/ holds each session's token and plan-usage samples);
+  coordination/monitor/ in this repository; usage/ holds each session's token and plan-usage samples);
   never edit them by hand.
 
 - push_keys/<host>/: public deploy keys and an info.txt, written by join_queue.sh on lab
@@ -497,7 +517,7 @@ Run-only sessions may claim and run an experiment, or some of its variants, whos
 already written, committed and pushed, with the parameters its entry or the script's author
 gives; pull the repositories and reinstall the packages those scripts need (`pip install -e` of
 a clean checkout); copy the outputs to the shared directory (its results/ folder, and the
-model-output archive with `archive_model_outputs.py`) and list anything left local in the host's
+model-output archive with `archive_tools/archive_model_outputs.py`) and list anything left local in the host's
 local_data file; take unblocking work only when it needs no new code (copying data that already
 exists); and keep claims, Status lines, the status file and chat. They do not create or edit
 scripts or code, not even a one-line fix, and do not write up results. When a run finishes or
@@ -593,7 +613,7 @@ experiment's variants were done twice. So, in addition:
   blocked on whom. Overwrite it at every change of activity, and at least every ~30
   minutes during long runs. Claims say what is reserved; this file says what is
   actually happening. Start it with this header, which the queue monitor
-  (http://hal:17486, monitor-server/) reads; free text goes below it:
+  (http://hal:17486, coordination/monitor/) reads; free text goes below it:
   ```
   ---
   state: running
@@ -615,12 +635,12 @@ experiment's variants were done twice. So, in addition:
   (not only before experiments), and again when one finishes.
 
 File-change notifications (inotify) do not work over NFS, so monitor chat.md by polling:
-run `./chat_watch.sh` (from this repository's root) as a background command (give the
+run `coordination/chat_watch.sh` (from this repository's root) as a background command (give the
 chat.md path as its argument if the shared directory is not mounted at /local/tensor). Only queue
 workers run it. It polls every 60 s and exits, printing the new entries, when chat.md gains an entry
 this session did not write: from another host or from another session on the same host (e.g. one Tom
 is using interactively). Queue workers therefore post with
-`./chat_post.sh <<'EOF' ... EOF` (it adds the `## <date> <time>
+`coordination/chat_post.sh <<'EOF' ... EOF` (it adds the `## <date> <time>
 <host>` header and records the entry's fingerprint in the session's ledger, so the poster's own watcher
 ignores it); never append with `cat >>` from a session that runs the watcher. Other sessions may
 append directly. Restart the watcher after each exit. Keep such a process running whenever you are not
@@ -632,7 +652,7 @@ listening, so keep chat_watch.sh running while waiting on simulations too.
 Token accounting. The monitor counts a queue session's tokens as queue work except for the
 turns that a prompt Tom types into the session starts (a question, a request), which count as
 manual work from that prompt on. When you have finished such a request and go back to queue
-work, run `monitor-server/presence_hook.py --mark queue` (from this repository's root; it takes the session
+work, run `coordination/monitor/presence_hook.py --mark queue` (from this repository's root; it takes the session
 ID from the environment) so the accounting follows; the join command, the session-title tick and
 a bare "ok" count as queue work by themselves. Only sessions that run chat_watch.sh count as
 queue sessions.
@@ -645,7 +665,7 @@ ListAgents: if its first line already gives this session the name `al_analysis m
 if another live session in the listing already has that name, and CronCreate a one-shot job
 (recurring false) about two minutes ahead (`date -d '+2 min' '+%-M %-H %-d %-m *'` gives all five
 cron fields; CronCreate refuses an expression without the trailing day-of-week `*`) with the
-prompt `__set_session_title__ <label>`. When it fires, `session_title_hook.sh` (a
+prompt `__set_session_title__ <label>`. When it fires, `coordination/session_title_hook.sh` (a
 UserPromptSubmit hook, registered in this repository's `.claude/settings.json` and in Tom's
 ~/.claude/settings.json, which is `~/src/dotfiles/claude_settings.json`; the repository's copy runs the
 script in the session's own checkout, so it also works in ~/src/kc_queue, and the two commands
@@ -748,9 +768,9 @@ host:"). When you complete an experiment and its interpretation:
    whether it reached the data; its numbers as placeholders on its results table; the passage's
    text comes from a planning subagent, which is given the note, the section and the "Summary
    reports" rules, and the session applies it and builds), move it out
-   of the pending list, update the experiment key, run `./venv/bin/python build_summary.py`
+   of the pending list, update the experiment key, run `./venv/bin/python reports/build_summary.py`
    (progress plot, fill, the generated markdown in `add_to_reports/`, the page), run
-   `save_report_copy.py outputs/_artifacts/summary/index.html summary_all_experiments` (the page is
+   `reports/save_report_copy.py outputs/_artifacts/summary/index.html summary_all_experiments` (the page is
    not published as an artifact; "Report copies"), commit the template and say so in chat.md. Every completed experiment appears in the
    summary before the host moves on.
 
@@ -873,19 +893,19 @@ bare ID ("the per-glomerulus drive normalization sweep (E20)", not "E20").
   hand-typed version is in the shared directory's notes/summary_backups/). A number that has a
   source is a placeholder `{{key ~ spec}}` (spec a Python format spec, e.g. `.2f`, `+.3f`; `|`
   is not allowed inside, it separates table cells): `data:<name>` (or `.lo` / `.hi` of its 90 %
-  interval) for KC / ORN data values, computed in `data_targets.py` (add new data values there,
+  interval) for KC / ORN data values, computed in `kcq/data_targets.py` (add new data values there,
   with a definition, never as literals); `<EXP>[/<table.csv>]:<tag or col=value;...>:<column>`
   for one cell of an experiment's results table (comma-separated column alternatives allowed);
   `lit:<text> # <source>` only for values with no computed source, with the source stated.
   Never round a printed value by hand (the hand-typed summary had ±0.01 errors from rounding
   3-decimal printouts again). "KC data" rows and the best-models table must be all placeholders
   (the build lints them); new tables should be too. Build with `./venv/bin/python
-  build_summary.py` (`--data-targets` first rebuilds the registry, needed when a data input
+  reports/build_summary.py` (`--data-targets` first rebuilds the registry, needed when a data input
   changes): it regenerates the progress plot, fills the template (failing on unknown keys),
   writes the plain markdown to add_to_reports/ with a sidecar
   (`summary_all_experiments.values.json`: every value's file, row, column, sha256 and
   commit) and builds `outputs/_artifacts/summary/index.html` with a source tooltip on every
-  filled value. `./venv/bin/python fill_report.py --check <sidecar>` lists values whose sources
+  filled value. `./venv/bin/python reports/fill_report.py --check <sidecar>` lists values whose sources
   changed since the build.
 - **Pages are generated, not hand-converted.** Write the summary as markdown, convert it with
   `md_to_artifact.py` (handles `###`, list items and paragraphs wrapped over several lines,
@@ -913,7 +933,7 @@ bare ID ("the per-glomerulus drive normalization sweep (E20)", not "E20").
   statistic, against experiment completion time (points = each experiment's best variant per
   statistic, hover for experiment and variant; a staircase per statistic; the KC target as a
   dotted line at 100 %, in the legend and not hideable; legend entries toggle lines). It is
-  generated, not drawn by hand: run `./venv/bin/python summary_progress_plot.py` (reads every
+  generated, not drawn by hand: run `./venv/bin/python reports/summary_progress_plot.py` (reads every
   `results/E*/` table and the experiment index; writes `results/summary_progress/progress_plot.html`
   and two CSVs) before every rebuild of the summary page, and keep the `%%% html
   results/summary_progress/progress_plot.html` line in the markdown (md_to_artifact.py inserts the
@@ -965,7 +985,7 @@ bare ID ("the per-glomerulus drive normalization sweep (E20)", not "E20").
   `!button[matrices](results/apl_effect/matrices/<results folder>__<tag>.png)` (the KC data column:
   `.../matrices/data.png`). A button opens, full screen like a figure, the column's distance matrices:
   the KC data's APL on (control flies), APL off (APL output blocked (TNT)) and their difference in the
-  top row, the model's same three in the bottom row. `apl_effect_scores.py` draws every figure a button in
+  top row, the model's same three in the bottom row. `kcq/apl_effect.py` draws every figure a button in
   the template names, so a new column needs only its button cell. The progress plot has the APL-effect
   loss and ρ on the per-pair APL effect as series.
 - **Natural-source alignment is three numbers (Tom, 2026-11-08).** Every table, comparison
@@ -995,11 +1015,11 @@ bare ID ("the per-glomerulus drive normalization sweep (E20)", not "E20").
   Long subplot titles are split over two lines, the statistic in parentheses on the second.
 - **The background figure has a Pearson twin.** Every report that shows the six-panel
   background figure (the three matrices and the three pair-by-pair comparisons; made by
-  `summary_background_figure.py`) puts right under it a collapsed `??? ` block holding the same
+  `reports/summary_background_figure.py`) puts right under it a collapsed `??? ` block holding the same
   six panels with Pearson correlation instead of cosine distance (`summary_background_pearson.png`,
   written by the same script). Matrices of correlations (signed values centered on 0) use olfdb's
   blue-white-red Oklab colormap, lightness linear in |value|, white at 0
-  (`kc_remapping_harness.oklab_diverging_cmap()`, a port of hong-data's default), on a symmetric
+  (`kcq.harness.oklab_diverging_cmap()`, a port of hong-data's default), on a symmetric
   scale. Note the ORN matrix the program uses everywhere is one minus the Pearson correlation
   across the 40 responding glomeruli (`orn16_consensus_pairs()`), so in the cosine figure the
   ORN panel is labelled "Pearson correlation distance".
@@ -1116,7 +1136,7 @@ the stats tables, plus `tuned_params.json` or equivalent where the run wrote one
 `provenance.json` from results/ (script, commit hashes, base kwargs, sweep settings), the run
 logs, and any wiring or gain matrices the run saved; `data/model_outputs/inputs/` holds what
 all experiments share (the ORN input matrix, the standard PN->KC wiring matrices). Run
-`./venv/bin/python archive_model_outputs.py E<n>_<desc>` from this repository's root when an
+`./venv/bin/python archive_tools/archive_model_outputs.py E<n>_<desc>` from this repository's root when an
 experiment completes (and again if more variants are added); it also upserts the row in
 `data/model_outputs/README.md`. Record in every new script the parameters needed to
 regenerate each variant (tuned threshold and APL scales as absolute values, not only factors,
@@ -1131,16 +1151,16 @@ the contents of notes keep normal typography.
 
 ## Report artifact (the report page)
 
-The report markdown in this repository ("APL and the ORN→KC remapping of odor–odor
-correlations.md") doubles as the running list of in silico experiments. Whenever new
+The report markdown in this repository (reports/apl_orn_to_kc_remapping_report.md, "APL and the ORN→KC remapping of odor–odor
+correlations") doubles as the running list of in silico experiments. Whenever new
 experiments are added to experiment_priorities.md (E11 onwards; by me, or by an otherwise
 idle host under the exception above), also:
 1. append them to the report's "In silico experiments" numbered list, in the same style as
    E1–E10 (bold `E<n>, title (mechanism)` then goal / design / readout / prediction in one
    paragraph), after the `*Added ...*` note (extend that note with when and from what the
    new ones were conceived; keep E1–E10 unchanged);
-2. commit and push the markdown, rebuild the page with `./venv/bin/python build_report_artifact.py`
-   and save it with `./venv/bin/python save_report_copy.py outputs/report_artifact/report.html
+2. commit and push the markdown, rebuild the page with `./venv/bin/python reports/build_report_artifact.py`
+   and save it with `./venv/bin/python reports/save_report_copy.py outputs/report_artifact/report.html
    report_apl_remapping` (not published as an artifact since 2026-11-10; the old artifact URL at the
    top of experiment_priorities.md shows the last published version only);
 3. mention it in chat.md.
@@ -1151,10 +1171,10 @@ files, not in the report.
 
 Pages that several hosts rewrite, the all-experiments summary and the report page, are not published
 as artifacts (Tom, 2026-11-10): the same HTML is built as before and saved to reports/ only, with
-`save_report_copy.py <index.html> <name>` and no URL (the README row says "local"); the queue monitor
+`reports/save_report_copy.py <index.html> <name>` and no URL (the README row says "local"); the queue monitor
 (http://hal:17486, Report tab) serves them from `current-summary.html` and `current-report.html`. Before
 saving, pull, and build from a template (or report markdown) at origin/main or ahead of it with your own
-change only, so that no other host's content is dropped; `publish_check.py <old copy> <new build>` lists
+change only, so that no other host's content is dropped; `reports/publish_check.py <old copy> <new build>` lists
 what the previous copy has that a new build lacks. Per-experiment pages and add_to_reports pages are
 still published.
 
@@ -1168,7 +1188,7 @@ artifact server serves the HTML we upload unchanged, so:
    alongside `index.html` only when the page needs them (then the export is a .zip of the
    folder), and never upload a figure that is also embedded;
 2. after every publish or republish, run (from this repository's root)
-   `./venv/bin/python save_report_copy.py <index.html or directory> <name> <artifact url>`,
+   `./venv/bin/python reports/save_report_copy.py <index.html or directory> <name> <artifact url>`,
    which copies the file to `<shared>/reports/<name>.html`, or, when the artifact has files
    alongside `index.html`, pass the directory holding exactly the published files and it
    writes `<name>.zip` (index.html plus those files, as the export does); it upserts the
@@ -1203,8 +1223,8 @@ the distance with APL on minus the distance with APL off. In the KC data that is
 distance minus the distance with APL output blocked (TNT), each the mean over recordings of the cosine
 distance (Yang's APL16 recordings, the same matrices as everywhere else); in a model, its APL-on distance
 minus its acute APL-off distance (cosine distance on spike counts). The statistics, computed by
-`kc_remapping_harness.apl_effect_stats` (`spike_counts_cosine__apl_effect_*` columns in every stats
-table; `apl_effect_scores.py` scores every saved variant of every experiment from its
+`kcq.harness.apl_effect_stats` (`spike_counts_cosine__apl_effect_*` columns in every stats
+table; `kcq/apl_effect.py` scores every saved variant of every experiment from its
 model_pair_distances_long.csv into results/apl_effect/, and build_summary.py runs it):
 - "the APL-effect loss" (`apl_effect_rmse`): the root mean squared difference between the model's and the
   data's per-pair APL effect over the 120 pairs, lower is better; the quantity to improve;
@@ -1237,7 +1257,7 @@ So:
   recorded fly is from the other flies' (total variation distance; with APL on against the control
   flies, band 0.17, and with APL off against APL output blocked (TNT), band 0.20; registry
   ctrl_ / tnt_odors_per_kc_tv_max; read from the model-output archive's response matrices, so a variant
-  is scored on it once archived). `apl_effect_scores.py` writes the flags (`realism_flag` in results/apl_effect/
+  is scored on it once archived). `kcq/apl_effect.py` writes the flags (`realism_flag` in results/apl_effect/
   by_variant.csv). Tom asked to be told when experiments start to diverge from biological realism: a
   host whose result is flagged (or whose experiment's best variant on the APL-effect loss is) says so in
   chat.md, starting "Realism flag:", and in its next reply to Tom, with the numbers beside the data's;

@@ -9,6 +9,11 @@ in the order a, c, b, d, e, f. The host step (c) comes before al_analysis's remo
 the queue monitor and the hooks never point at deleted files.
 `migration/cutover_hal.sh` does what can be scripted; run its phases from this repository on hal.
 
+The paths below are those of the cutover: on 2026-11-12 the root's files moved into folders by role
+(README.md, "Development"), so e.g. monitor-server/ is now coordination/monitor/ and the root's
+`./chat_watch.sh` is `coordination/chat_watch.sh`. This checklist and migration/ keep the old paths
+as a record.
+
 ## Before the pause
 
 - Every host commits and pushes its changes to the old folder in al_analysis, including hal's two

@@ -18,7 +18,7 @@ needed.
    ```
    git clone https://github.com/ejhonglab/model_experiment_queue ~/src/kc_queue/model_experiment_queue
    cd ~/src/kc_queue/model_experiment_queue
-   ./join_queue.sh
+   coordination/join_queue.sh
    ```
    It takes several minutes, and asks before installing anything:
    - the system packages it needs and lacks (Python 3.14 with its headers and venv module, a C++
@@ -34,9 +34,9 @@ needed.
    If it stops with a message, fix what it says and run it again; it skips what is already done.
 2. At the end it prints the fingerprints of the keys it made, each on a line of its own. Send
    them to Tom by Slack, email or in person (not through the shared folder). It then offers to
-   wait until he has added them, checking every minute; if you stop it, `./join_queue.sh
+   wait until he has added them, checking every minute; if you stop it, `coordination/join_queue.sh
    --check` checks later.
-3. Start Claude Code in this folder, accept its workspace-trust prompt, and ask it to work the
+3. Start Claude Code in this repository's folder (not in coordination/), accept its workspace-trust prompt, and ask it to work the
    experiment queue (the first time, it also asks you to log in):
    ```
    cd ~/src/kc_queue/model_experiment_queue && claude
@@ -76,6 +76,13 @@ Until then the queue lived in a folder of al_analysis
 4. Once a session there works, delete the old environment, ~/src/kc_queue/al_analysis/venv; it is
    no longer used.
 
+### If your machine joined before November 12, 2026
+
+On November 12 the scripts moved into folders (the setup script is now
+`coordination/join_queue.sh`), and the Python environment needs this repository installed into it
+once. After pulling, run `coordination/join_queue.sh` again (it skips what is already done), or ask
+a queue session to run `./venv/bin/pip install -e .` in this folder.
+
 ### Options
 
 `join_queue.sh` options:
@@ -84,7 +91,7 @@ Until then the queue lived in a folder of al_analysis
 - `--no-tests`: skip the model check at the end. `--full-tests` also runs the whole QUICK=1 test
   suite (2.5 h on hal).
 - `--check`: only test whether each checkout can push.
-- `PYTHON=<interpreter> ./join_queue.sh`: build the environment from another Python than
+- `PYTHON=<interpreter> coordination/join_queue.sh`: build the environment from another Python than
   python3.14 (3.8 or newer, not one inside a venv; a conda Python works but gets a warning). The
   script then does not install Python 3.14.
 
@@ -129,23 +136,23 @@ or kept attached in a terminal.
 
 - **Approve its keys.** On one of your hosts, with gh logged in with admin rights on the four
   repositories (model_experiment_queue, al_analysis, olfsysm, hong2p), run
-  `./approve_push_keys.sh <host>` from this repository in a terminal. Compare the
+  `coordination/approve_push_keys.sh <host>` from this repository in a terminal. Compare the
   fingerprints it prints (each on a line of its own, as join_queue.sh prints them) with the ones
   the machine's owner sent you, since anyone on the lab
   network can write to the shared folder, and answer y. It adds them as write-enabled deploy
   keys, one per repository; join_queue.sh, if the owner left it waiting, then
-  reports that each checkout can push (otherwise the owner runs `./join_queue.sh --check`).
-- **List and revoke.** `./approve_push_keys.sh --list` shows the keys added so far and the
-  machines waiting. Deploy keys do not expire, so run `./approve_push_keys.sh --revoke <host>`
+  reports that each checkout can push (otherwise the owner runs `coordination/join_queue.sh --check`).
+- **List and revoke.** `coordination/approve_push_keys.sh --list` shows the keys added so far and the
+  machines waiting. Deploy keys do not expire, so run `coordination/approve_push_keys.sh --revoke <host>`
   when a machine stops working the queue. A key can only add ordinary commits to the default
   branch (see the GitHub settings below), but those commits every queue host pulls and runs, so
   sessions on your hosts read pulled changes to the hooks, the setup scripts and the build files
   before running anything (CLAUDE.md, "Lab members' machines").
-- **GitHub settings.** `./github_rules.sh` sets what the keys rely on, on all four repositories:
+- **GitHub settings.** `coordination/github_rules.sh` sets what the keys rely on, on all four repositories:
   the default Actions token is read-only, and rulesets refuse force pushes and deletions of the
   default branch to everyone (created where missing), and creating, updating or deleting any
   branch but the default one (Dependabot's excepted) or any tag to everyone but admins.
-  Re-running it changes nothing already in place; `./github_rules.sh --check` only shows the
+  Re-running it changes nothing already in place; `coordination/github_rules.sh --check` only shows the
   current settings.
 - **Testing on someone else's machine under your own account first.** Don't approve the keys
   from that run, and before they run it under their account, remove push_keys/<host>/ in the
@@ -166,36 +173,47 @@ http://hal:17486 shows, on the lab network, which machines take part, what their
 are doing, and what is claimed or running. It reads only the shared folder, which the hooks keep
 current. The server runs on hal as a systemd user service:
 ```
-systemctl --user link ~/src/model_experiment_queue/monitor-server/claude-queue-monitor.service
+systemctl --user link ~/src/model_experiment_queue/coordination/monitor/claude-queue-monitor.service
 systemctl --user enable --now claude-queue-monitor
 ```
 Restart it after changing server.py with `systemctl --user restart claude-queue-monitor`, and read
 its logs with `journalctl --user -u claude-queue-monitor`. The one-time steps (letting the service
 run without a login, opening the port), the server's options and the meaning of each session
-state are in [monitor-server/README.md](monitor-server/README.md).
+state are in [coordination/monitor/README.md](coordination/monitor/README.md).
 
 ## Development
 
 On Tom's hosts the checkouts are side by side in ~/src (model_experiment_queue, al_analysis,
 olfsysm, hong2p), and this repository has its own venv with the other three installed editable
-(al_analysis first, since it pins the other two to their GitHub versions):
+(al_analysis first, since it pins the other two to their GitHub versions), then this repository's
+own packages:
 ```
 cd ~/src/model_experiment_queue
 python3.14 -m venv venv
 ./venv/bin/pip install -e ../al_analysis[dev]
 ./venv/bin/pip install -e ../hong2p[all]
 ./venv/bin/pip install -e ../olfsysm
+./venv/bin/pip install -e .
 ```
+The files are in folders by role, each a package (pyproject.toml): experiments/ (the E<n>_*.py
+scripts), kcq/ (the library they import, with the harness in kcq/harness.py), data_prep/ (scripts
+that build the shared data sets), analyses/ (one-off analyses), reports/ (the summary and report
+pages and their tools), archive_tools/ (the model-output archive) and coordination/ (chat, hooks,
+setup and key scripts, and the queue monitor in coordination/monitor/). Scripts import each other
+absolutely (`from kcq import harness as H`) and run from the root, by path
+(`./venv/bin/python experiments/E83_searches.py`) or with -m (`./venv/bin/python -m
+experiments.E83_searches`); large outputs go to outputs/ at the root. Until 2026-11-12 every file
+was at the root (CLAUDE.md, "This repository, al_analysis, olfsysm and hong2p").
 Until 2026-11-11 this repository was the folder scripts/claude_pair_remapping_experiments of
 al_analysis; commits cited before then are al_analysis's.
 
 The queue's rules (claims, status files, chat, permissions by model and effort, how experiments
 are written up) are in [CLAUDE.md](CLAUDE.md), and why the monitor is built the way it is in
-[monitor-server/design.md](monitor-server/design.md).
+[coordination/monitor/design.md](coordination/monitor/design.md).
 
 Tests, from this repository's root (the model code itself is tested through al_analysis, its
 test/test_mb_model.py with QUICK=1, and the provenance checks in its test/test_model_provenance.py):
 ```
 QUICK=1 ./venv/bin/python -m pytest
-./venv/bin/python -m pytest monitor-server
+./venv/bin/python -m pytest coordination/monitor
 ```
