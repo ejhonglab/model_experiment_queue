@@ -24,6 +24,9 @@
 #   check                      what is in place and what is not.
 #
 # Usage: migration/cutover_hal.sh <phase> [args]
+# CUTOVER_IGNORE_PIDS='<pid> ...' leaves those processes out of the check for processes in the old
+# folder (a person's idle shell whose working directory is there, or the queue monitor, which `host`
+# restarts from here itself); everything else there still stops the phase.
 set -uo pipefail
 
 here=$(cd "$(dirname "$0")/.." && pwd -P)
@@ -49,7 +52,7 @@ ancestors() {  # pids of this shell and its ancestors
 
 procs_in() {  # $1 folder: pids (not ours) whose cwd is in it or whose command line names it
   local mine p pid c
-  mine=" $(ancestors | paste -sd' ') "
+  mine=" $(ancestors | paste -sd' ') ${CUTOVER_IGNORE_PIDS//,/ } "
   for p in /proc/[0-9]*; do
     pid=${p#/proc/}
     [[ $mine == *" $pid "* ]] && continue
