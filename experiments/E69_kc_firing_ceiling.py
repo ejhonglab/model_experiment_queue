@@ -82,6 +82,7 @@ import numpy as np
 import pandas as pd
 
 from kcq import harness as H
+from pyolfsysm import tuning as _tuning
 
 EXPERIMENT = 'E69_kc_firing_ceiling'
 RESULTS = H.shared_dir() / 'results'
@@ -250,8 +251,8 @@ def rate(responses: pd.DataFrame) -> float:
     return float(responses.to_numpy(dtype=float).mean())
 
 
-def n_responses(responses: pd.DataFrame) -> int:
-    return int(responses.to_numpy(dtype=float).sum())
+# the number of responses of a binarized response matrix (pyolfsysm.tuning)
+n_responses = _tuning.n_responses
 
 
 # ---------------------------------------------------------------------------
@@ -555,58 +556,9 @@ def bisect_factor(run: Callable[[float], Tuple[pd.DataFrame, pd.DataFrame]], tar
     responses with the Illinois modification (each new point kept within the middle 90 % of the
     bracket), until the count is hit or the bracket is narrower than 1e-9 (log units) or
     BISECT_ITERS evaluations. Returns (factor, outputs, history, at_bound), the evaluated point
-    nearest the target if it cannot be hit exactly; at_bound when `bracket` does not contain it."""
-    hist, best = [], None
-
-    def ev(x: float) -> int:
-        nonlocal best
-        f = float(np.exp(x))
-        out = run(f)
-        n = n_responses(out[0])
-        hist.append(dict(stage=label, factor=f, n_responses=n, rate=n / size, target_n=target_n))
-        print(f'  {label}: factor {f:.6g} -> {n} responses (rate {n / size:.5f}; target {target_n})', flush=True)
-        if best is None or abs(n - target_n) < abs(best[1] - target_n):
-            best = (f, n, out)
-        return n - target_n
-
-    lo_end, hi_end = np.log(bracket[0]), np.log(bracket[1])
-    y0 = ev(0.0)
-    if y0 != 0:
-        # too many responses (y > 0): a larger factor
-        direction = 1.0 if y0 > 0 else -1.0
-        x_prev, y_prev, step = 0.0, y0, np.log(step0)
-        while True:
-            x = float(np.clip(x_prev + direction * step, lo_end, hi_end))
-            y = ev(x)
-            if y == 0 or np.sign(y) != np.sign(y0):
-                break
-            if x in (lo_end, hi_end):
-                return best[0], best[2], hist, True
-            x_prev, y_prev, step = x, y, 2 * step
-        if y != 0:
-            # a: y > 0 (smaller factor), b: y < 0
-            (xa, ya), (xb, yb) = sorted([(x_prev, y_prev), (x, y)])
-            last = 0
-            for _ in range(BISECT_ITERS):
-                if xb - xa < 1e-9:
-                    break
-                xm = xa - ya * (xb - xa) / (yb - ya)
-                xm = float(np.clip(xm, xa + 0.05 * (xb - xa), xb - 0.05 * (xb - xa)))
-                ym = ev(xm)
-                if ym == 0:
-                    break
-                if ym > 0:
-                    xa, ya = xm, ym
-                    if last == 1:
-                        yb /= 2
-                    last = 1
-                else:
-                    xb, yb = xm, ym
-                    if last == -1:
-                        ya /= 2
-                    last = -1
-    f, n, out = best
-    return f, out, hist, False
+    nearest the target if it cannot be hit exactly; at_bound when `bracket` does not contain it.
+    `pyolfsysm.tuning.bisect_factor` since 2026-11-12, with this module's BISECT_ITERS."""
+    return _tuning.bisect_factor(run, target_n, size, bracket, step0, label, BISECT_ITERS)
 
 
 def stage_setting(tag: str) -> None:

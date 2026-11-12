@@ -297,6 +297,7 @@ def hold_rates(build: Callable[[], Union[Callable, Tuple[Callable, dict]]], *, t
     scales 0) to `target_off` responses, then the APL->KC scale with KC->APL and bouton->APL tied (TIED_ON, as E75's
     ProfileModel.run_on) to `target_on` responses at that threshold; KC-KC and APL->bouton scales stay at `params`'.
     Both bisections are E69's `bisect_factor` (log scale, from factor 1; the number of responses falls with the factor).
+    The two stages are `pyolfsysm.tuning.hold_rates` since 2026-11-12; this adds C2's defaults and the breadth handling.
 
     Args:
         build: builds the simulator (called once; the simulator is freed on return).
@@ -318,6 +319,7 @@ def hold_rates(build: Callable[[], Union[Callable, Tuple[Callable, dict]]], *, t
     """
     from experiments import E69_kc_firing_ceiling as E69
     from experiments import E10_joint_fit as J
+    from pyolfsysm import tuning
     if breadth_from not in ('base', 'held'):
         raise ValueError(f'{breadth_from=}')
     P = c2_parts()
@@ -327,32 +329,29 @@ def hold_rates(build: Callable[[], Union[Callable, Tuple[Callable, dict]]], *, t
     target_on = P['target_on'] if target_on is None else int(target_on)
     built = build()
     sim, info = built if isinstance(built, tuple) else (built, None)
-    size = P['size']
-    off_q = dict(wAPLKC_scale=0.0, wAPLPN_scale=0.0)
-    g, (r_off, s_off), h_off, b_off = E69.bisect_factor(lambda f: sim(dict(p, fixed_thr=p['fixed_thr'] * f, **off_q)),
-                                                         target_off, size, thr_bracket, THR_STEP, f'{label} threshold')
-    thr = p['fixed_thr'] * g
-    breadth = None
-    if breadth_from == 'held':
-        if info is None:
-            raise ValueError("breadth_from='held' needs build() to return build_c2_simulator's (simulate, info)")
-        breadth = pd.Series(s_off.astype(float).sum(axis='columns').to_numpy(), index=s_off.index.get_level_values(H.KC_ID_LEVEL))
-        w = J.breadth_weights(P['wnorm']['wAPLKC'], breadth, BREADTH_K)
-        cell = info['cells']['wAPLKC_unscaled'].cell_contents
-        cell[...] = w.to_numpy().reshape(cell.shape)
-    x, (r_on, s_on), h_on, b_on = E69.bisect_factor(
-        lambda f: sim(dict(p, fixed_thr=thr, **{k: p[k] * f for k in TIED_ON})), target_on, size, apl_bracket, APL_STEP,
-        f'{label} APL scale')
-    on_params = dict(p, fixed_thr=thr, **{k: p[k] * x for k in TIED_ON})
+    if breadth_from == 'held' and info is None:
+        raise ValueError("breadth_from='held' needs build() to return build_c2_simulator's (simulate, info)")
+    held = {}
+
+    def after_off(r_off, s_off):
+        if breadth_from == 'held':
+            breadth = pd.Series(s_off.astype(float).sum(axis='columns').to_numpy(),
+                index=s_off.index.get_level_values(H.KC_ID_LEVEL))
+            w = J.breadth_weights(P['wnorm']['wAPLKC'], breadth, BREADTH_K)
+            cell = info['cells']['wAPLKC_unscaled'].cell_contents
+            cell[...] = w.to_numpy().reshape(cell.shape)
+            held['breadth'] = breadth
+
+    res = tuning.hold_rates(sim, p, target_off=target_off, target_on=target_on, size=P['size'],
+        off_params=dict(wAPLKC_scale=0.0, wAPLPN_scale=0.0), tied_on=TIED_ON, thr_bracket=thr_bracket,
+        thr_step=THR_STEP, apl_bracket=apl_bracket, apl_step=APL_STEP, label=label, after_off=after_off,
+        max_iters=E69.BISECT_ITERS)
+    breadth = held.get('breadth')
     bsha = None
     if info is not None:
         b = breadth if breadth is not None else info['breadth']
         bsha = hashlib.sha256(np.ascontiguousarray(b.to_numpy(dtype=float), dtype='<f8').tobytes()).hexdigest()
-    res = dict(params=on_params, params_off=dict(p, fixed_thr=thr, **off_q), thr_factor=float(g), apl_factor=float(x),
-               n_on=_n(r_on), n_off=_n(r_off), target_on=target_on, target_off=target_off, at_bound_thr=bool(b_off),
-               at_bound_apl=bool(b_on), n_sims=len(h_off) + len(h_on), history=h_off + h_on, on=(r_on, s_on),
-               off=(r_off, s_off), breadth=breadth, kws=None if info is None else info['kws'], breadth_sha256=bsha,
-               seconds=time.time() - t0)
+    res.update(breadth=breadth, kws=None if info is None else info['kws'], breadth_sha256=bsha, seconds=time.time() - t0)
     del sim, info, built
     gc.collect()
     return res

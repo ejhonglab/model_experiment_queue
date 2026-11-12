@@ -98,7 +98,9 @@ def distances(o: Dict[str, tuple], readout: str) -> Dict[str, pd.Series]:
 
 
 def mean_distances(ds: Sequence[Dict[str, pd.Series]]) -> Dict[str, pd.Series]:
-    return {c: pd.concat([d[c] for d in ds], axis=1).mean(axis=1) for c in ('on', 'off')}
+    """{'on', 'off'}: the mean over a population's members of their pair distances (`pyolfsysm.tuning.mean_distances`)."""
+    from pyolfsysm import tuning
+    return tuning.mean_distances(ds, ('on', 'off'))
 
 
 def data_for(readout: str) -> pd.Series:
@@ -660,13 +662,11 @@ class PopulationLoss:
 
 def simulate_population(sims: Dict[str, object], ratios: Dict[str, tuple], theta: Dict[str, float]) -> List[Dict[str, tuple]]:
     """Every wiring at the shared parameters `theta` (FREE), its KC->APL and bouton->APL scales tied to APL->KC by that
-    wiring's own fitted ratios; APL off: APL->KC and APL->bouton at 0."""
-    outs = []
-    for lab, sim in sims.items():
-        r_kc, r_pn = ratios[lab]
-        p = dict(theta, wKCAPL_scale=theta['wAPLKC_scale'] * r_kc, wPNAPL_scale=theta['wAPLKC_scale'] * r_pn)
-        outs.append({'on': sim(p), 'off': sim(dict(p, wAPLKC_scale=0.0, wAPLPN_scale=0.0))})
-    return outs
+    wiring's own fitted ratios; APL off: APL->KC and APL->bouton at 0 (`pyolfsysm.tuning.simulate_population`)."""
+    from pyolfsysm import tuning
+    params = {lab: dict(theta, wKCAPL_scale=theta['wAPLKC_scale'] * ratios[lab][0],
+        wPNAPL_scale=theta['wAPLKC_scale'] * ratios[lab][1]) for lab in sims}
+    return tuning.simulate_population(sims, params, dict(wAPLKC_scale=0.0, wAPLPN_scale=0.0))
 
 
 def population_fit(wirings: Sequence[str], held_out: Sequence[str], maxfev: int = 150, check_only: bool = False) -> Dict[str, float]:

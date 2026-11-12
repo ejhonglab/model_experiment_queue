@@ -17,6 +17,12 @@ Conventions (see experiment_priorities.md in the shared directory):
   Yang's (`APPROX_CONC_ODORS`, `APPROX_CONC_NOTE`): say so wherever results involving
   those odors are reported.
 
+Since 2026-11-12 the generally useful functions are in hong2p (hong2p.rdm, hong2p.stats,
+hong2p.imaging, hong2p.viz, hong2p.util) and pyolfsysm (pyolfsysm.readout, kc_stats, effects);
+their names here are re-exports, or thin wrappers with this harness's defaults (APL16 odor
+order, abbreviated odor labels, Yang's 1 z criterion, `yang_apl_effect()` as the data's effect).
+test/test_frozen_step3.py checks they give the outputs the code here gave before.
+
 Run `python kcq/harness.py` to reproduce the report's data-vs-data statistics
 (and print bootstrap CIs over recordings) as a self-test.
 """
@@ -26,7 +32,6 @@ import importlib.util
 import json
 import os
 import subprocess
-import warnings
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
 
@@ -43,6 +48,20 @@ from sklearn.isotonic import IsotonicRegression
 # there).
 from pyolfsysm import mb_model as _mb_model
 _mb_model.STRICT_CLEAN_OLFSYSM = True
+
+# The generally useful functions of this harness moved to hong2p (the odor-pair matrices, their statistics,
+# the imaging time course and noise, the colormap, the checkouts' git state) and pyolfsysm (the model read
+# as imaging sees it, KC population statistics, the APL effect as the effect of a manipulation), 2026-11-12:
+# the names below stay, as re-exports or as thin wrappers with this harness's defaults (the APL16 odor
+# order, odor labels abbreviated, Yang's response criterion of 1 z, the KC data's APL effect).
+from hong2p import imaging as _imaging
+from hong2p import rdm as _rdm
+from hong2p import stats as _stats
+from hong2p.util import git_commits as _git_commits
+from hong2p.viz import oklab_diverging_cmap as _oklab_diverging_cmap
+from pyolfsysm import effects as _effects
+from pyolfsysm import kc_stats as _kc_stats
+from pyolfsysm import readout as _readout
 
 
 # this repository's root (model_experiment_queue; this file is kcq/harness.py); until 2026-11-11 the repository was
@@ -148,15 +167,6 @@ def al_analysis_data_dir() -> Path:
     return al_analysis_dir() / 'al_analysis' / 'data'
 
 
-def _git(path: Path, *args: str) -> Optional[str]:
-    """Output of `git <args>` in `path`, stripped, or None if git fails there."""
-    try:
-        r = subprocess.run(['git', *args], cwd=path, capture_output=True, text=True)
-    except OSError:
-        return None
-    return r.stdout.strip() if r.returncode == 0 else None
-
-
 def script_path(file: Union[str, Path]) -> str:
     """The path of a file of this repository relative to its root (`script_path(__file__)` in
     experiments/E10_joint_fit.py gives 'experiments/E10_joint_fit.py'), for provenance and for git
@@ -164,24 +174,29 @@ def script_path(file: Union[str, Path]) -> str:
     return Path(file).resolve().relative_to(HERE).as_posix()
 
 
+def hong2p_dir() -> Path:
+    """Returns the hong2p checkout the installed hong2p is imported from (~/src/hong2p on Tom's hosts,
+    ~/src/kc_queue/hong2p on lab members' machines, installed editable in this repository's venv)."""
+    import hong2p
+    return Path(hong2p.__file__).resolve().parents[1]
+
+
 def code_commits() -> Dict[str, object]:
-    """Returns the commits and dirty states of this repository, pyolfsysm's and al_analysis's.
+    """Returns the commits and dirty states of this repository, pyolfsysm's, al_analysis's and hong2p's.
 
     Keys: 'queue_commit' and 'queue_dirty' (this repository, model_experiment_queue: the
     experiment scripts and this harness), 'pyolfsysm_commit' and 'pyolfsysm_dirty' (the model's
     Python code, the olfsysm checkout `pyolfsysm_dir()`), 'al_analysis_commit' and
-    'al_analysis_dirty' (al_analysis, whose AL data some scripts read). Dirty means uncommitted
-    changes to tracked files. Scripts put these in their provenance.json. Until 2026-11-12 the
-    model's Python code was al_analysis's (no 'pyolfsysm_commit'), and before the move to a
-    repository of its own (2026-11-11), 'al_analysis_commit' was the commit of the scripts too.
+    'al_analysis_dirty' (al_analysis, whose AL data some scripts read), 'hong2p_commit' and
+    'hong2p_dirty' (hong2p, `hong2p_dir()`, where the odor-pair, statistics and imaging functions
+    of this harness are since 2026-11-12). Dirty means uncommitted changes to tracked files
+    (`hong2p.util.git_commits`). Scripts put these in their provenance.json. Until 2026-11-12 the
+    model's Python code was al_analysis's (no 'pyolfsysm_commit') and there was no 'hong2p_commit',
+    and before the move to a repository of its own (2026-11-11), 'al_analysis_commit' was the commit
+    of the scripts too.
     """
-    out: Dict[str, object] = {}
-    for key, path in (('queue', HERE), ('pyolfsysm', pyolfsysm_dir()),
-            ('al_analysis', al_analysis_dir())):
-        status = _git(path, 'status', '--porcelain', '--untracked-files=no')
-        out[f'{key}_commit'] = _git(path, 'rev-parse', 'HEAD')
-        out[f'{key}_dirty'] = None if status is None else bool(status)
-    return out
+    return _git_commits({'queue': HERE, 'pyolfsysm': pyolfsysm_dir(), 'al_analysis': al_analysis_dir(),
+        'hong2p': hong2p_dir()})
 
 
 def model_provenance(**inputs) -> Dict[str, object]:
@@ -292,63 +307,39 @@ def abbrev_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def odor_order(odors: Sequence[str]) -> List[str]:
-    """Orders odors as in APL16_ODORS, then others alphabetically."""
-    rank = {o: i for i, o in enumerate(APL16_ODORS)}
-    return sorted(odors, key=lambda o: (rank.get(o, len(rank)), o))
+    """Orders odors as in APL16_ODORS, then others alphabetically (`hong2p.rdm.order_items`)."""
+    return _rdm.order_items(odors, APL16_ODORS)
 
 
 def pair_list(odors: Sequence[str]) -> List[Tuple[str, str]]:
-    """Unordered pairs of odors, each (a, b) with a before b in `odor_order`."""
-    odors = odor_order(odors)
-    return [(a, b) for i, a in enumerate(odors) for b in odors[i + 1:]]
+    """Unordered pairs of odors, each (a, b) with a before b in `odor_order` (`hong2p.rdm.pair_list`)."""
+    return _rdm.pair_list(odors, APL16_ODORS)
 
 
 def pairs_from_square(sq: pd.DataFrame) -> pd.Series:
-    """Upper triangle of a symmetric odor x odor DataFrame, as a pair Series."""
+    """Upper triangle of a symmetric odor x odor DataFrame, as a pair Series (its rows taken in the
+    order of its columns; `hong2p.rdm.pairs_from_square`)."""
     sq = abbrev_columns(sq)
     sq.index = sq.columns
-    pairs = pair_list(sq.columns)
-    return pd.Series([sq.loc[a, b] for a, b in pairs],
-        index=pd.MultiIndex.from_tuples(pairs, names=['odor_a', 'odor_b'])
-    )
+    return _rdm.pairs_from_square(sq, APL16_ODORS)
 
 
 def square_from_pairs(pairs: pd.Series) -> pd.DataFrame:
-    """Symmetric odor x odor DataFrame (zero diagonal) from a pair Series."""
-    odors = odor_order(set(pairs.index.get_level_values(0)) |
-        set(pairs.index.get_level_values(1))
-    )
-    sq = pd.DataFrame(0.0, index=odors, columns=odors)
-    for (a, b), v in pairs.items():
-        sq.loc[a, b] = sq.loc[b, a] = v
-    return sq
+    """Symmetric odor x odor DataFrame (zero diagonal) from a pair Series (`hong2p.rdm.square_from_pairs`)."""
+    return _rdm.square_from_pairs(pairs, APL16_ODORS)
 
 
 def canonical_pairs(pairs: pd.Series) -> pd.Series:
-    """Reindexes a pair Series (keys (a, b) in any order) to `pair_list` order."""
-    d = {}
-    for (a, b), v in pairs.items():
-        key = (a, b) if (a, b) in set(pair_list([a, b])) else (b, a)
-        d[key] = v
-    odors = odor_order(set(k for p in d for k in p))
-    pl = pair_list(odors)
-    return pd.Series([d[p] for p in pl],
-        index=pd.MultiIndex.from_tuples(pl, names=['odor_a', 'odor_b'])
-    )
+    """Reindexes a pair Series (keys (a, b) in any order) to `pair_list` order (`hong2p.rdm.canonical_pairs`)."""
+    return _rdm.canonical_pairs(pairs, APL16_ODORS)
 
 
-def align_pairs(a: pd.Series, b: pd.Series) -> Tuple[pd.Series, pd.Series]:
-    """Subsets two canonical pair Series to their common pairs (same order), dropping NaN."""
-    common = a.index.intersection(b.index)
-    a2, b2 = a.loc[common], b.loc[common]
-    ok = a2.notna() & b2.notna()
-    return a2[ok], b2[ok]
+# subsets two canonical pair Series to their common pairs (same order), dropping NaN
+align_pairs = _rdm.align_pairs
 
 
-def subset_pairs(pairs: pd.Series, odors: Sequence[str]) -> pd.Series:
-    """Pairs with both odors in `odors`."""
-    keep = [p for p in pairs.index if p[0] in odors and p[1] in odors]
-    return pairs.loc[keep]
+# pairs with both odors in `odors`
+subset_pairs = _rdm.subset_pairs
 
 
 # ---------------------------------------------------------------------------
@@ -576,7 +567,7 @@ def reference_pairs() -> pd.DataFrame:
 # model outputs -> pair distances
 def pair_distances(mat: pd.DataFrame, measure: str = 'cosine', drop_silent: bool = False
     ) -> pd.Series:
-    """Odor x odor distances from a (units x odors) matrix, across units.
+    """Odor x odor distances from a (units x odors) matrix, across units (`hong2p.rdm.pair_distances`).
 
     Args:
         mat: rows units (KCs, glomeruli, ...), columns odors (any strings `odor_abbrev`
@@ -587,145 +578,61 @@ def pair_distances(mat: pd.DataFrame, measure: str = 'cosine', drop_silent: bool
 
     Returns pair Series (NaN where an odor has no response at all).
     """
-    m = abbrev_columns(mat).astype(float)
-    if drop_silent:
-        m = m.loc[(m != 0).any(axis='columns')]
-    odors = odor_order(m.columns)
-    X = m[odors].to_numpy().T
-    with np.errstate(invalid='ignore', divide='ignore'):
-        if measure == 'cosine':
-            norms = np.linalg.norm(X, axis=1)
-            S = (X @ X.T) / np.outer(norms, norms)
-        elif measure == 'pearson':
-            S = np.corrcoef(X)
-        else:
-            raise ValueError(measure)
-    pl = pair_list(odors)
-    idx = {o: i for i, o in enumerate(odors)}
-    return pd.Series([1 - S[idx[a], idx[b]] for a, b in pl],
-        index=pd.MultiIndex.from_tuples(pl, names=['odor_a', 'odor_b'])
-    )
+    return _rdm.pair_distances(abbrev_columns(mat), measure, drop_silent, APL16_ODORS)
 
 
-MODEL_RDM_VARIANTS: Dict[str, Tuple[str, str, bool]] = {
-    # name -> (source, measure, drop_silent)
-    'spike_counts_cosine': ('spike_counts', 'cosine', False),
-    'spike_counts_pearson': ('spike_counts', 'pearson', False),
-    'spike_counts_pearson_nosilent': ('spike_counts', 'pearson', True),
-    'responses_cosine': ('responses', 'cosine', False),
-    'responses_pearson': ('responses', 'pearson', False),
-    'responses_pearson_nosilent': ('responses', 'pearson', True),
-}
-PRIMARY_MODEL_RDM = 'spike_counts_cosine'
+# name -> (source, measure, drop_silent) (pyolfsysm.readout's)
+MODEL_RDM_VARIANTS: Dict[str, Tuple[str, str, bool]] = _readout.MODEL_RDM_VARIANTS
+PRIMARY_MODEL_RDM = _readout.PRIMARY_MODEL_RDM
 
 
 def model_rdms(responses: pd.DataFrame, spike_counts: pd.DataFrame) -> Dict[str, pd.Series]:
-    """All `MODEL_RDM_VARIANTS` pair Series for one model output."""
-    src = {'responses': responses.astype(float), 'spike_counts': spike_counts.astype(float)}
-    return {name: pair_distances(src[s], measure=meas, drop_silent=ds)
-        for name, (s, meas, ds) in MODEL_RDM_VARIANTS.items()
-    }
+    """All `MODEL_RDM_VARIANTS` pair Series for one model output (`pyolfsysm.readout.model_rdms`)."""
+    return _readout.model_rdms(abbrev_columns(responses), abbrev_columns(spike_counts), APL16_ODORS)
 
 
 def response_fractions(responses: pd.DataFrame) -> pd.Series:
-    """Fraction of model KCs responding to each odor (columns -> abbreviations)."""
-    return abbrev_columns(responses.astype(float)).mean(axis='index')
+    """Fraction of model KCs responding to each odor (columns -> abbreviations;
+    `pyolfsysm.readout.response_fractions`)."""
+    return _readout.response_fractions(abbrev_columns(responses))
 
 
 # ---------------------------------------------------------------------------
 # plotting
-def oklab_diverging_cmap(n: int = 256, l_end: float = 0.36, c_end: float = 0.15,
-    hue_neg: float = 262.0, hue_pos: float = 27.0):
-    """olfdb's (hong-data's) default blue-white-red colormap, as a matplotlib colormap.
-
-    Built in Oklab so that lightness is linear in |value|: white at the center, darkening
-    at the same rate towards a blue (negative) and a red (positive) pole of equal lightness
-    (port of `oklabDiverging` in /opt/olfdb/app/static/colormaps.js, same constants; chroma
-    shrunk into the sRGB gamut the same way). Use with a symmetric norm (white at 0).
-    """
-    from matplotlib.colors import ListedColormap
-
-    def oklab_to_linear_srgb(L, a, b):
-        l_ = L + 0.3963377774 * a + 0.2158037573 * b
-        m_ = L - 0.1055613458 * a - 0.0638541728 * b
-        s_ = L - 0.0894841775 * a - 1.2914855480 * b
-        l, m, s_cubed = l_ ** 3, m_ ** 3, s_ ** 3
-        return (4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s_cubed,
-            -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s_cubed,
-            -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s_cubed)
-
-    def to_srgb8(c):
-        c = min(1.0, max(0.0, c))
-        v = 12.92 * c if c <= 0.0031308 else 1.055 * c ** (1 / 2.4) - 0.055
-        return round(v * 255)
-
-    def oklch_to_rgb8(L, C, hue):
-        h = np.deg2rad(hue)
-        for _ in range(24):
-            rgb = oklab_to_linear_srgb(L, C * np.cos(h), C * np.sin(h))
-            if all(-1e-4 <= x <= 1.0001 for x in rgb):
-                return [to_srgb8(x) for x in rgb]
-            C *= 0.92
-        return [to_srgb8(x) for x in oklab_to_linear_srgb(L, 0.0, 0.0)]
-
-    half = (n - 1) / 2
-    colors = []
-    for i in range(n):
-        x = (i - half) / half
-        t = abs(x)
-        rgb = oklch_to_rgb8(1 - t * (1 - l_end), c_end * t, hue_neg if x < 0 else hue_pos)
-        colors.append([v / 255 for v in rgb])
-    return ListedColormap(colors, name='oklab_div')
+# olfdb's (hong-data's) default blue-white-red colormap (in hong2p.viz since 2026-11-12)
+oklab_diverging_cmap = _oklab_diverging_cmap
 
 
 # ---------------------------------------------------------------------------
 # statistics
-def linear_resid(y: pd.Series, x: pd.Series) -> Tuple[pd.Series, Dict[str, float]]:
-    """Residual of y around its OLS fit on x, plus fit summary (slope, intercept, r2)."""
-    y, x = align_pairs(y, x)
-    slope, intercept, r, _, _ = stats.linregress(x.to_numpy(), y.to_numpy())
-    resid = y - (intercept + slope * x)
-    return resid, dict(slope=float(slope), intercept=float(intercept), r2=float(r**2),
-        resid_sd=float(resid.std())
-    )
+# residual of y around its OLS fit on x, plus fit summary (slope, intercept, r2, resid_sd)
+linear_resid = _stats.linear_resid
 
 
-def isotonic_resid(y: pd.Series, x: pd.Series) -> Tuple[pd.Series, Dict[str, float]]:
-    """Residual of y around the best increasing (isotonic) fit on x, plus r2."""
-    y, x = align_pairs(y, x)
-    iso = IsotonicRegression(increasing=True, out_of_bounds='clip')
-    pred = iso.fit(x.to_numpy(), y.to_numpy()).predict(x.to_numpy())
-    resid = y - pred
-    return resid, dict(r2=float(1 - resid.var() / y.var()), resid_sd=float(resid.std()))
+# residual of y around the best increasing (isotonic) fit on x, plus r2 and resid_sd
+isotonic_resid = _stats.isotonic_resid
 
 
-def spearman(a: pd.Series, b: pd.Series) -> float:
-    a, b = align_pairs(a, b)
-    return float(stats.spearmanr(a, b)[0]) if len(a) > 2 else np.nan
+spearman = _stats.spearman
 
 
-def pearson(a: pd.Series, b: pd.Series) -> float:
-    a, b = align_pairs(a, b)
-    return float(stats.pearsonr(a, b)[0]) if len(a) > 2 else np.nan
+pearson = _stats.pearson
 
 
 def block_label(a: str, b: str) -> str:
-    g1, g2 = ODOR_GROUPS.get(a, a), ODOR_GROUPS.get(b, b)
-    return 'within' if g1 == g2 else '-'.join(sorted([g1, g2]))
+    """The pair's block under `ODOR_GROUPS` (`hong2p.rdm.block_label`)."""
+    return _rdm.block_label(a, b, ODOR_GROUPS)
 
 
 def block_means(pairs: pd.Series) -> pd.Series:
-    """Mean of a pair Series within each between-group block ('within' = same group)."""
-    labels = pd.Series([block_label(a, b) for a, b in pairs.index], index=pairs.index)
-    return pairs.groupby(labels).mean()
+    """Mean of a pair Series within each between-group block ('within' = same group;
+    `hong2p.rdm.block_means` with `ODOR_GROUPS`)."""
+    return _rdm.block_means(pairs, ODOR_GROUPS)
 
 
 def per_odor_means(pairs: pd.Series) -> pd.Series:
-    """Mean over the pairs containing each odor."""
-    odors = odor_order(set(pairs.index.get_level_values(0)) |
-        set(pairs.index.get_level_values(1))
-    )
-    return pd.Series({o: pairs[[o in p for p in pairs.index]].mean() for o in odors})
+    """Mean over the pairs containing each odor (`hong2p.rdm.per_odor_means`)."""
+    return _rdm.per_odor_means(pairs, APL16_ODORS)
 
 
 def compare_on_off(on: pd.Series, off: pd.Series, *, orn: Optional[pd.Series] = None,
@@ -870,9 +777,9 @@ def compare_model_to_data(model: pd.Series, data: pd.Series, *,
 
 def apl_effect(on: pd.Series, off: pd.Series) -> pd.Series:
     """Per-pair APL effect on odor-odor distances: the APL-on distance minus the APL-off
-    distance of each pair (canonical pair order; pairs missing from either side dropped)."""
-    a, b = align_pairs(canonical_pairs(on), canonical_pairs(off))
-    return (a - b).rename('apl_effect')
+    distance of each pair (canonical pair order; pairs missing from either side dropped;
+    `pyolfsysm.effects.pair_effect`)."""
+    return _effects.pair_effect(on, off, APL16_ODORS, name='apl_effect')
 
 
 _YANG_APL_EFFECT: Dict[tuple, pd.Series] = {}
@@ -935,7 +842,8 @@ def yang_apl_effect(measure: str = 'cosine', binarize: Optional[float] = None,
 def apl_effect_stats(on: pd.Series, off: pd.Series, data: Optional[pd.Series] = None
     ) -> Dict[str, float]:
     """How well a model's per-pair APL effect (APL-on minus APL-off distance) matches the
-    KC data's, over the pairs both have (the 120 pairs of the APL16 panel).
+    KC data's, over the pairs both have (the 120 pairs of the APL16 panel;
+    `pyolfsysm.effects.effect_stats`).
 
     Args:
         on, off: the model's pair distances with APL on and with APL off (acute), cosine
@@ -950,40 +858,15 @@ def apl_effect_stats(on: pd.Series, off: pd.Series, data: Optional[pd.Series] = 
     `spearman` and `pearson` (the per-pair pattern), `n_pairs`.
     """
     data = yang_apl_effect() if data is None else data
-    m, d = align_pairs(apl_effect(on, off), data)
-    err = m - d
-    mean_error = float(err.mean())
-    return dict(apl_effect_rmse=float(np.sqrt(np.mean(err ** 2))),
-        apl_effect_rmse_centered=float(np.sqrt(np.mean((err - mean_error) ** 2))),
-        apl_effect_mean=float(m.mean()), apl_effect_mean_error=mean_error,
-        apl_effect_spearman=spearman(m, d), apl_effect_pearson=pearson(m, d),
-        apl_effect_n_pairs=int(len(m)))
+    return _effects.effect_stats(on, off, data, APL16_ODORS, prefix='apl_effect_')
 
 
-def pair_design(pairs: pd.Index, odors: Optional[List[str]] = None) -> Tuple[np.ndarray, List[str]]:
-    """The additive design over odors of a set of odor pairs: one row per pair, one column per odor,
-    1 for the pair's two odors (so a pair's value is modelled as the sum of its odors' shares).
-    Returns (matrix, odor order); `odors` defaults to the odors in `pairs`, in order of appearance."""
-    if odors is None:
-        odors = list(dict.fromkeys([o for p in pairs for o in p]))
-    col = {o: i for i, o in enumerate(odors)}
-    X = np.zeros((len(pairs), len(odors)))
-    for r, (a, b) in enumerate(pairs):
-        X[r, col[a]] = 1.0
-        X[r, col[b]] = 1.0
-    return X, odors
+# the additive design over odors of a set of odor pairs (one row per pair, 1 for its two odors)
+pair_design = _rdm.pair_design
 
 
-def odor_shares(effect: pd.Series) -> Tuple[pd.Series, float]:
-    """Each odor's share of a per-pair quantity under the additive model `value(a, b) = s_a + s_b`
-    (least squares over the pairs), and the fraction of the quantity's variance over pairs the
-    additive model explains."""
-    X, odors = pair_design(effect.index)
-    y = effect.to_numpy(dtype=float)
-    s, *_ = np.linalg.lstsq(X, y, rcond=None)
-    fit = X @ s
-    var = float(np.var(y))
-    return pd.Series(s, index=pd.Index(odors, name='odor'), name='share'), (float(1 - np.var(y - fit) / var) if var > 0 else np.nan)
+# each odor's share of a per-pair quantity under value(a, b) = s_a + s_b, and the variance explained
+odor_shares = _rdm.odor_shares
 
 
 def apl_effect_pair_parts(on: pd.Series, off: pd.Series, data: Optional[pd.Series] = None) -> pd.DataFrame:
@@ -991,15 +874,9 @@ def apl_effect_pair_parts(on: pd.Series, off: pd.Series, data: Optional[pd.Serie
     `data` (each side's per-pair effect), `error` (model minus data, each with its mean removed: the
     pattern part's error), `per_odor` (its projection onto the additive space over odors) and
     `pair_specific` (the residual; `error = per_odor + pair_specific`). Index the pairs both sides
-    have; `data` defaults to `yang_apl_effect()`."""
+    have; `data` defaults to `yang_apl_effect()` (`pyolfsysm.effects.effect_pair_parts`)."""
     data = yang_apl_effect() if data is None else data
-    m, d = align_pairs(apl_effect(on, off), data)
-    err = (m - m.mean()) - (d - d.mean())
-    X, _ = pair_design(m.index)
-    coef, *_ = np.linalg.lstsq(X, err.to_numpy(dtype=float), rcond=None)
-    proj = X @ coef
-    return pd.DataFrame({'model': m, 'data': d, 'error': err, 'per_odor': proj,
-        'pair_specific': err.to_numpy(dtype=float) - proj}, index=m.index)
+    return _effects.effect_pair_parts(on, off, data, APL16_ODORS)
 
 
 CURVE_EPS = 1e-6
@@ -1085,10 +962,10 @@ def inherited_shares(split: pd.DataFrame, mask=None) -> Dict[str, float]:
 def apl_effect_decomposition(on: pd.Series, off: pd.Series, data: Optional[pd.Series] = None
     ) -> Tuple[Dict[str, float], pd.DataFrame]:
     """The APL-effect loss (`apl_effect_stats`) split into three parts whose squares add:
-    `rmse**2 = mean_error**2 + per_odor**2 + pair_specific**2`. The pattern part's error (model
-    minus data, each with its mean removed) is projected onto the additive space over odors (a
-    pair's value the sum of its two odors' shares, `odor_shares`): the projection's root mean
-    square is the per-odor part, the residual's the pair-specific part.
+    `rmse**2 = mean_error**2 + per_odor**2 + pair_specific**2` (`pyolfsysm.effects.effect_decomposition`).
+    The pattern part's error (model minus data, each with its mean removed) is projected onto the
+    additive space over odors (a pair's value the sum of its two odors' shares, `odor_shares`): the
+    projection's root mean square is the per-odor part, the residual's the pair-specific part.
 
     Args:
         on, off: the model's pair distances with APL on and APL off (any readout, e.g.
@@ -1102,17 +979,7 @@ def apl_effect_decomposition(on: pd.Series, off: pd.Series, data: Optional[pd.Se
     shares and their difference).
     """
     data = yang_apl_effect() if data is None else data
-    stats = apl_effect_stats(on, off, data)
-    parts = apl_effect_pair_parts(on, off, data)
-    sm, r2m = odor_shares(parts['model'])
-    sd, r2d = odor_shares(parts['data'])
-    shares = pd.DataFrame({'model_share': sm, 'data_share': sd.reindex(sm.index)})
-    shares['share_error'] = shares.model_share - shares.data_share
-    stats.update(apl_effect_per_odor=float(np.sqrt(np.mean(parts['per_odor'] ** 2))),
-        apl_effect_pair_specific=float(np.sqrt(np.mean(parts['pair_specific'] ** 2))),
-        apl_effect_share_pearson=float(np.corrcoef(shares.model_share, shares.data_share)[0, 1]),
-        apl_effect_model_additive_r2=r2m, apl_effect_data_additive_r2=r2d)
-    return stats, shares
+    return _effects.effect_decomposition(on, off, data, APL16_ODORS, prefix='apl_effect_')
 
 
 # ---------------------------------------------------------------------------
@@ -1120,62 +987,19 @@ def apl_effect_decomposition(on: pd.Series, off: pd.Series, data: Optional[pd.Se
 # cosine distance on raw spike counts, the data's on z-scored GCaMP fluorescence, which
 # compresses large responses; these map a (KCs x odors) spike-count matrix onto a compressed
 # signal before the distances are taken
-READOUT_KINDS = ('raw', 'sqrt', 'power', 'saturating', 'log1p', 'binary', 'rank_match')
+READOUT_KINDS = _readout.READOUT_KINDS
 
 
-def readout(counts: pd.DataFrame, kind: str = 'raw', param=None, floor: float = 0.0) -> pd.DataFrame:
-    """A readout of a model's spike counts (rows KCs, columns odors), elementwise.
-
-    Args:
-        counts: spike counts, e.g. the archived `<tag>_<condition>_spike_counts.parquet`.
-        kind: 'raw' (the counts; the target as defined); 'sqrt' (n ** 0.5); 'power'
-            (n ** param, 0 < param <= 1); 'saturating' (n / (n + param), half-saturation at
-            `param` spikes); 'log1p' (log(1 + n / param)); 'binary' (1 where n >= param,
-            default 2, i.e. the model's `responses`); 'rank_match' (each count mapped through
-            the lookup `param` from `rank_match_map`, a monotone count -> amplitude map).
-        param: the readout's parameter (see `kind`); None for 'raw' and 'sqrt'.
-        floor: 'saturating' only: the one-spike floor b of the readout with a low end (E68),
-            (n + b) / (n + b + param) for n >= 1 and 0 for n = 0, so b raises the weight of the
-            weakest responses (b = -1 reads one spike as 0). The default 0 is the plain
-            saturating readout, computed exactly as before.
-
-    Every readout keeps 0 at 0 and is monotone in the count, so which KCs respond, and the
-    response rates, are the same under every readout.
-    """
-    x = counts.astype(float)
-    if floor and kind != 'saturating':
-        raise ValueError(f'floor is defined for the saturating readout only, not {kind!r}')
-    if kind == 'raw':
-        return x
-    if kind == 'sqrt':
-        return x ** 0.5
-    if kind == 'power':
-        return x ** float(param)
-    if kind == 'saturating':
-        if not floor:
-            return x / (x + float(param))
-        b = float(floor)
-        if b < -1:
-            raise ValueError(f'floor must be >= -1 (one spike reads (1 + b) / (1 + b + K)), not {b}')
-        with np.errstate(invalid='ignore', divide='ignore'):
-            return ((x + b) / (x + b + float(param))).where(x > 0, 0.0)
-    if kind == 'log1p':
-        return np.log1p(x / float(param))
-    if kind == 'binary':
-        return (x >= (2.0 if param is None else float(param))).astype(float)
-    if kind == 'rank_match':
-        lut = param
-        vals = np.interp(x.to_numpy(), lut.index.to_numpy(dtype=float), lut.to_numpy(dtype=float))
-        return pd.DataFrame(np.where(x.to_numpy() > 0, vals, 0.0), index=x.index, columns=x.columns)
-    raise ValueError(f'unknown readout {kind!r} (one of {READOUT_KINDS})')
+# a readout of a model's spike counts (rows KCs, columns odors), elementwise (pyolfsysm.readout)
+readout = _readout.readout
 
 
 def readout_pair_distances(counts: pd.DataFrame, kind: str = 'raw', param=None, floor: float = 0.0
     ) -> pd.Series:
     """Cosine odor-odor distances across KCs after `readout` (`floor` as there): the model's
     side of the per-pair APL effect under that readout ('raw' gives the `spike_counts_cosine`
-    distances)."""
-    return pair_distances(readout(counts, kind, param, floor=floor), measure='cosine')
+    distances; `pyolfsysm.readout.readout_pair_distances`)."""
+    return _readout.readout_pair_distances(abbrev_columns(counts), kind, param, floor, APL16_ODORS)
 
 
 def apl_effect_stats_readout(on_counts: pd.DataFrame, off_counts: pd.DataFrame, kind: str = 'raw',
@@ -1194,89 +1018,21 @@ def apl_effect_stats_readout(on_counts: pd.DataFrame, off_counts: pd.DataFrame, 
     return out
 
 
-def amplitude_stats(mat: pd.DataFrame) -> pd.DataFrame:
-    """How concentrated each odor's response vector is across units (rows units, columns odors;
-    a model's counts or readout, or a recording's z-scored trial means), per odor:
-    `top1_share` / `top5_share`, the share of the odor's squared response vector (the quantity a
-    cosine distance weighs) carried by the top 1 % / 5 % of units; `participation_ratio`,
-    (sum x^2)^2 / (n sum x^4), the effective share of units carrying it (1 when all units carry
-    equal squared amplitude, 1 / n when one unit carries all); `n_units`."""
-    x = mat.astype(float).to_numpy()
-    n = x.shape[0]
-    sq = x ** 2
-    tot = sq.sum(axis=0)
-    srt = -np.sort(-sq, axis=0)
-    k1, k5 = max(1, int(np.ceil(0.01 * n))), max(1, int(np.ceil(0.05 * n)))
-    with np.errstate(invalid='ignore', divide='ignore'):
-        out = pd.DataFrame(dict(top1_share=srt[:k1].sum(axis=0) / tot, top5_share=srt[:k5].sum(axis=0) / tot,
-            participation_ratio=tot ** 2 / (n * (sq ** 2).sum(axis=0)), n_units=n), index=mat.columns)
-    return out
+# how concentrated each odor's response vector is across units (pyolfsysm.kc_stats)
+amplitude_stats = _kc_stats.amplitude_stats
 
 
-def responder_cv(values: np.ndarray) -> float:
-    """Coefficient of variation (sd / mean) of the responders' amplitudes, pooled over odors."""
-    v = np.asarray(values, dtype=float)
-    v = v[np.isfinite(v)]
-    return float(v.std() / v.mean()) if len(v) and v.mean() > 0 else np.nan
+responder_cv = _kc_stats.responder_cv
 
 
-def readout_stat(on_counts: pd.DataFrame, kind: str, param, stat: str = 'participation_ratio',
-    responders_min: Optional[float] = None, floor: float = 0.0) -> float:
-    """A concentration statistic of the readout of `on_counts`: an `amplitude_stats` column
-    (mean over odors) or 'responder_cv' (`responder_cv` of the readout among responders).
-    `responders_min` (e.g. 2, the model's response threshold) zeroes the readout of the
-    non-responding entries first, like-for-like with the data's statistics on responders only
-    (trial means <= 1 set to 0); 'responder_cv' always uses responders (default 2 spikes).
-    `floor`: the saturating readout's one-spike floor (`readout`; default 0, none)."""
-    r = readout(on_counts, kind, param, floor=floor)
-    if stat == 'responder_cv':
-        thr = 2.0 if responders_min is None else responders_min
-        return responder_cv(r.to_numpy()[on_counts.to_numpy() >= thr])
-    if responders_min is not None:
-        r = r.where(on_counts >= responders_min, 0.0)
-    return float(amplitude_stats(r)[stat].mean())
+readout_stat = _readout.readout_stat
 
 
-def calibrate_readout(on_counts: pd.DataFrame, kind: str, target: float, stat: str = 'participation_ratio',
-    bounds: Tuple[float, float] = (1e-3, 1e3), iters: int = 60, responders_min: Optional[float] = None,
-    floor: float = 0.0) -> float:
-    """The parameter of a one-parameter readout ('power', 'saturating' or 'log1p') at which the
-    APL-on `readout_stat` (`stat`, `responders_min`) equals `target`, e.g. the control flies'
-    participation ratio: bisection on a log scale. The parameter is fixed on the APL-on counts
-    alone and then used unchanged for APL off, so the APL effect is not fitted. Returns the bound
-    nearest to the target when it is not bracketed (for 'power' the upper bound is 1, raw counts).
-    `floor`: the saturating readout's one-spike floor, held fixed (`readout`; default 0, none);
-    `calibrate_low_end` calibrates it jointly with the half-saturation."""
-    if kind == 'power':
-        bounds = (max(bounds[0], 1e-3), 1.0)
-    f = lambda p: readout_stat(on_counts, kind, p, stat, responders_min, floor)
-    lo, hi = np.log(bounds[0]), np.log(bounds[1])
-    flo, fhi = f(np.exp(lo)) - target, f(np.exp(hi)) - target
-    if flo * fhi > 0:
-        return float(np.exp(lo) if abs(flo) < abs(fhi) else np.exp(hi))
-    for _ in range(iters):
-        mid = 0.5 * (lo + hi)
-        fm = f(np.exp(mid)) - target
-        if fm * flo <= 0:
-            hi, fhi = mid, fm
-        else:
-            lo, flo = mid, fm
-    return float(np.exp(0.5 * (lo + hi)))
+# the parameter of a one-parameter readout at which the APL-on readout_stat equals a target
+calibrate_readout = _readout.calibrate_readout
 
 
-def rank_match_map(on_counts: pd.DataFrame, reference: np.ndarray) -> pd.Series:
-    """A monotone count -> amplitude lookup for `readout(..., 'rank_match', lut)`: each positive
-    count of the APL-on matrix is placed at its mid-rank quantile among the positive counts and
-    given the amplitude at that quantile of `reference` (e.g. the control flies' trial-mean
-    amplitudes among responders); counts above the APL-on maximum keep the top amplitude (np.interp
-    clamps), 0 stays 0. Fixed on APL on, used unchanged for APL off."""
-    c = on_counts.astype(float).to_numpy().ravel()
-    c = c[c > 0]
-    vals, cnt = np.unique(c, return_counts=True)
-    q = (np.cumsum(cnt) - 0.5 * cnt) / cnt.sum()
-    ref = np.sort(np.asarray(reference, dtype=float))
-    amp = np.quantile(ref, q)
-    return pd.Series(amp, index=vals, name='amplitude')
+rank_match_map = _readout.rank_match_map
 
 
 # ---------------------------------------------------------------------------
@@ -1285,93 +1041,11 @@ def rank_match_map(on_counts: pd.DataFrame, reference: np.ndarray) -> pd.Series:
 # at time s counts by the area inside that window of the indicator kernel it starts,
 # (1 - exp(-(t - s) / rise)) exp(-(t - s) / decay) for t > s.
 
-def kernel_window_weights(times, rise: float, decay: float, window: Tuple[float, float] = (2.0, 8.1),
-    ref_time: Optional[float] = None) -> np.ndarray:
-    """Each spike's weight under the flies' protocol: the area inside `window` of the kernel
-    (1 - exp(-u / rise)) exp(-u / decay) (u the time since the spike), divided by the area of
-    a spike at `ref_time`.
-
-    Args:
-        times: spike times in seconds from the odor's onset (array-like).
-        rise, decay: the kernel's time constants in seconds; rise 0 (an instant rise) and decay
-            np.inf (no decay) are the limits, so rise 0 with decay inf is a step and every spike
-            before the window has weight exactly 1 (with `ref_time` before the window too).
-        window: the response window (start, end) in seconds from onset; the flies' is 2.0 to 8.1.
-        ref_time: the spike time of weight 1; default the window's start, which for the flies' 2 s
-            pulse is the pulse's end (so the weights are in units of a spike at the end of the
-            flies' pulse, whatever the model's pulse). Must be before the window's end.
-
-    A spike inside the window counts by the part of its kernel after it, one after the window by
-    0. The baseline (the 5 s before onset) holds no kernel of a spike after onset, so it is not
-    subtracted; spikes before onset get the same window area with no baseline correction. With a
-    finite rise a spike shortly before the window's start can weigh a little more than one at it
-    (whose kernel is still rising when the window opens): at most 1.8 % for rise 1 s, decay 5 s.
-    Returns float weights, one per spike.
-    """
-    t = np.asarray(times, dtype=float)
-    w0, w1 = float(window[0]), float(window[1])
-    rise, decay = float(rise), float(decay)
-    if not w1 > w0:
-        raise ValueError(f'window must have end > start, not {window}')
-    if rise < 0 or not decay > 0:
-        raise ValueError(f'rise must be >= 0 and decay > 0, not {rise}, {decay}')
-    ref = w0 if ref_time is None else float(ref_time)
-    if not ref < w1:
-        raise ValueError(f'ref_time ({ref}) must be before the window end ({w1})')
-
-    def area(s: np.ndarray) -> np.ndarray:
-        # u from lo to hi: the window in time since the spike, clipped at the spike
-        lo, hi = np.maximum(w0 - s, 0.0), np.maximum(w1 - s, 0.0)
-        if np.isinf(decay):
-            # (the window's length after the spike, computed so that it is the same float for every spike before
-            # the window: w1 - w0 exactly)
-            first = np.maximum(w1, s) - np.maximum(w0, s)
-            tau = rise
-        else:
-            # decay * (exp(-lo / decay) - exp(-hi / decay)), accurate for long decays
-            first = -decay * np.exp(-lo / decay) * np.expm1(-(hi - lo) / decay)
-            tau = rise * decay / (rise + decay)
-        if tau == 0:
-            return first
-        return first - tau * (np.exp(-lo / tau) - np.exp(-hi / tau))
-
-    a_ref = float(area(np.array([ref]))[0])
-    if not a_ref > 0:
-        raise ValueError(f'a spike at ref_time {ref} has no kernel area inside the window {window}')
-    return area(t) / a_ref
+# each spike's weight under the flies' protocol, and a model's counts read through it (E82; pyolfsysm.readout)
+kernel_window_weights = _readout.kernel_window_weights
 
 
-def kernel_weighted_counts(spike_times: pd.DataFrame, index: pd.Index, columns: pd.Index, rise: float, decay: float,
-    window: Tuple[float, float] = (2.0, 8.1), ref_time: Optional[float] = None, stim_onset: float = 0.0
-    ) -> pd.DataFrame:
-    """A model's spike counts read through the flies' protocol (E82): KCs x odors sums of each
-    spike's `kernel_window_weights`.
-
-    Args:
-        spike_times: one row per spike, as mb_model's `simulate(..., spike_times=True)` returns
-            and E80_pulse.py saves (`<tag>_<condition>_spike_times.parquet`): `kc` and `odor` (the
-            positions of the spike's KC and odor in the spike-count matrix), `time_s` (seconds in
-            olfsysm's time, where the odor's onset is 0); other columns are ignored.
-        index, columns: the spike-count matrix's KC index and odor columns (the rows of `kc` and
-            `odor` refer to them by position).
-        rise, decay, window, ref_time: the kernel and the window (`kernel_window_weights`).
-        stim_onset: the odor's onset in `time_s` units (the window and `ref_time` are relative to
-            it).
-
-    Returns a float DataFrame (`index` x `columns`); with every weight 1 (e.g. rise 0 and decay
-    inf with every spike before the window) it equals the spike counts exactly. The responses (two
-    or more spikes over the whole simulation) are not affected: only the amplitudes are.
-    """
-    n_kc, n_odor = len(index), len(columns)
-    kc = spike_times['kc'].to_numpy(dtype=np.int64)
-    od = spike_times['odor'].to_numpy(dtype=np.int64)
-    if len(kc) and (kc.min() < 0 or kc.max() >= n_kc or od.min() < 0 or od.max() >= n_odor):
-        raise ValueError(f'spike positions outside a {n_kc} x {n_odor} matrix')
-    w = kernel_window_weights(spike_times['time_s'].to_numpy(dtype=float) - float(stim_onset), rise, decay,
-        window=window, ref_time=ref_time)
-    a = np.zeros((n_kc, n_odor), dtype=float)
-    np.add.at(a, (kc, od), w)
-    return pd.DataFrame(a, index=index, columns=columns)
+kernel_weighted_counts = _readout.kernel_weighted_counts
 
 
 # ---------------------------------------------------------------------------
@@ -1381,183 +1055,31 @@ def kernel_weighted_counts(spike_times: pd.DataFrame, index: pd.Index, columns: 
 # indicator kernel (1 - exp(-u / rise)) exp(-u / decay) fitted to mean traces under a drive (an onset
 # burst, a steady drive over the pulse, or a histogram of firing).
 
-def window_volumes(window: Tuple[float, float], volume_rate: float) -> Tuple[int, int]:
-    """A window (start, end) in seconds from the odor's onset as volumes after the onset volume: (round(start
-    * volume_rate), round(end * volume_rate)), the end exclusive, as Yang's pipeline makes its 2-8 s window
-    (at the APL16 recordings' 2.964 volumes / s: (2, 8) and (2.0, 8.1) are both volumes 6 to 23)."""
-    a, b = int(round(float(window[0]) * volume_rate)), int(round(float(window[1]) * volume_rate))
-    if not b > a:
-        raise ValueError(f'window {window} has no volume at {volume_rate} volumes / s')
-    return a, b
+window_volumes = _imaging.window_volumes
 
 
-def trace_excerpts(traces: np.ndarray, onsets: Sequence[int], n_before: int, n_after: int) -> np.ndarray:
-    """Per-onset excerpts of traces with each excerpt's pre-onset mean subtracted.
-
-    Args:
-        traces: (units, volumes).
-        onsets: the onset volume of each trial.
-        n_before: volumes before the onset (the baseline: its mean is subtracted).
-        n_after: volumes from the onset volume on (the onset volume is the first of them).
-
-    Returns (trials, units, n_before + n_after) float64; sample j is volume onset - n_before + j.
-    """
-    X = np.asarray(traces, dtype=np.float64)
-    on = np.asarray(onsets, dtype=np.int64)
-    n_before, n_after = int(n_before), int(n_after)
-    if n_before < 1 or n_after < 1:
-        raise ValueError('n_before and n_after must be at least 1')
-    if len(on) and (on.min() - n_before < 0 or on.max() + n_after > X.shape[1]):
-        raise ValueError(f'excerpts of {n_before} + {n_after} volumes run off a trace of {X.shape[1]} volumes')
-    out = np.empty((len(on), X.shape[0], n_before + n_after))
-    for i, n in enumerate(on):
-        seg = X[:, n - n_before:n + n_after]
-        out[i] = seg - seg[:, :n_before].mean(axis=1, keepdims=True)
-    return out
+trace_excerpts = _imaging.trace_excerpts
 
 
-def windowed_responses(excerpts: np.ndarray, windows: Sequence[Tuple[float, float]], *, first_volume: int,
-    volume_rate: Optional[float] = None) -> np.ndarray:
-    """Mean of baseline-subtracted excerpts (`trace_excerpts`) over each window.
-
-    Args:
-        excerpts: (..., samples), sample j being volume `first_volume` + j relative to the onset volume.
-        windows: (start, end) pairs, in volumes after the onset volume (end exclusive), or in seconds when
-            `volume_rate` is given (`window_volumes`).
-        first_volume: the volume of sample 0 relative to the onset volume (-n_before).
-
-    Returns (..., len(windows)). With the window (round(2 v), round(8 v)) on excerpts of a z-scored trace this is
-    Yang's per-trial response.
-    """
-    E = np.asarray(excerpts)
-    n = E.shape[-1]
-    out = []
-    for w in windows:
-        a, b = window_volumes(w, volume_rate) if volume_rate is not None else (int(w[0]), int(w[1]))
-        i, j = a - int(first_volume), b - int(first_volume)
-        if i < 0 or j > n or not j > i:
-            raise ValueError(f'window {w} (volumes {a} to {b - 1}) is outside the excerpts '
-                f'(volumes {first_volume} to {first_volume + n - 1})')
-        out.append(E[..., i:j].mean(axis=-1, dtype=np.float64))
-    return np.stack(out, axis=-1)
+windowed_responses = _imaging.windowed_responses
 
 
-def indicator_kernel(u, rise: float, decay: float) -> np.ndarray:
-    """The indicator kernel (1 - exp(-u / rise)) exp(-u / decay) at times u since a spike (0 for u <= 0; rise 0
-    is an instant rise, decay np.inf no decay)."""
-    u = np.asarray(u, dtype=float)
-    pos = u > 0
-    up = np.where(pos, u, 0.0)
-    k = np.ones_like(up) if rise == 0 else -np.expm1(-up / rise)
-    if not np.isinf(decay):
-        k = k * np.exp(-up / decay)
-    return np.where(pos, k, 0.0)
+indicator_kernel = _imaging.indicator_kernel
 
 
-def indicator_kernel_integral(u, rise: float, decay: float) -> np.ndarray:
-    """The kernel's integral from 0 to u (0 for u <= 0)."""
-    u = np.maximum(np.asarray(u, dtype=float), 0.0)
-    first = u if np.isinf(decay) else -decay * np.expm1(-u / decay)
-    tau = rise if np.isinf(decay) else (rise * decay / (rise + decay) if rise > 0 else 0.0)
-    return first if tau == 0 else first + tau * np.expm1(-u / tau)
+indicator_kernel_integral = _imaging.indicator_kernel_integral
 
 
-DRIVES: Tuple[str, ...] = ('onset', 'steady', 'histogram')
+DRIVES = _imaging.DRIVES
 
 
-def _drive_bins(drive: str, pulse: float, edges, weights) -> Optional[Tuple[np.ndarray, np.ndarray]]:
-    """(edges, weights summing to 1) of a drive, None for the onset impulse."""
-    if drive == 'onset':
-        return None
-    if drive == 'steady':
-        if not pulse > 0:
-            raise ValueError(f'pulse must be > 0, not {pulse}')
-        return np.array([0.0, float(pulse)]), np.array([1.0])
-    if drive == 'histogram':
-        e = np.asarray(edges, dtype=float)
-        w = np.asarray(weights, dtype=float)
-        if e.ndim != 1 or len(e) != len(w) + 1 or np.any(np.diff(e) <= 0):
-            raise ValueError('a histogram drive needs increasing edges, one more than its weights')
-        if np.any(w < 0) or not w.sum() > 0:
-            raise ValueError('a histogram drive needs non-negative weights with a positive sum')
-        return e, w / w.sum()
-    raise ValueError(f'drive must be one of {DRIVES}, not {drive!r}')
+_drive_bins = _imaging._drive_bins
 
 
-def kernel_signal(t, rise: float, decay: float, drive: str = 'onset', *, pulse: float = 2.0,
-    edges: Optional[Sequence[float]] = None, weights: Optional[Sequence[float]] = None) -> np.ndarray:
-    """The kernel convolved with a drive of total weight 1, at times `t` (s from the odor's onset).
-
-    Args:
-        drive: 'onset' (all firing at the onset, an impulse at 0), 'steady' (uniform firing over 0 to `pulse`)
-            or 'histogram' (firing uniform within each bin [edges[i], edges[i + 1]) with total weight
-            weights[i]; the weights are divided by their sum).
-
-    Returns float array shaped like `t`.
-    """
-    t = np.asarray(t, dtype=float)
-    bins = _drive_bins(drive, pulse, edges, weights)
-    if bins is None:
-        return indicator_kernel(t, rise, decay)
-    e, w = bins
-    keep = w > 0
-    lo, hi, w = e[:-1][keep], e[1:][keep], w[keep]
-    tt = t.reshape(-1, 1)
-    K = (indicator_kernel_integral(tt - lo, rise, decay) - indicator_kernel_integral(tt - hi, rise, decay)) / (hi - lo)
-    return (K @ w).reshape(t.shape)
+kernel_signal = _imaging.kernel_signal
 
 
-def fit_indicator_kernel(t, y, drive: str = 'onset', *, pulse: float = 2.0, edges=None, weights=None,
-    rise_bounds: Tuple[float, float] = (0.05, 10.0), decay_bounds: Tuple[float, float] = (0.5, 200.0),
-    fixed: Optional[Tuple[float, float]] = None) -> Dict[str, float]:
-    """Least-squares fit of amplitude * `kernel_signal(t, rise, decay, drive, ...)` to a mean trace `y`.
-
-    The amplitude is solved linearly for each (rise, decay) (and kept >= 0); rise and decay are fitted on a log
-    scale within their bounds from several starts. With `fixed` = (rise, decay) only the amplitude is fitted
-    (a kernel fitted on one trace tested on another).
-
-    Returns dict: rise, decay, amplitude, rms (root mean squared residual, in y's units), n, rise_at_bound,
-    decay_at_bound (within 1 % of a bound), drive.
-    """
-    from scipy.optimize import least_squares
-    t = np.asarray(t, dtype=float)
-    y = np.asarray(y, dtype=float)
-    ok = np.isfinite(t) & np.isfinite(y)
-    t, y = t[ok], y[ok]
-    if len(t) < 4:
-        raise ValueError('need at least 4 finite points')
-
-    def amp_res(rise, decay):
-        s = kernel_signal(t, rise, decay, drive, pulse=pulse, edges=edges, weights=weights)
-        ss = float(s @ s)
-        a = max(float(s @ y) / ss, 0.0) if ss > 0 else 0.0
-        return a, y - a * s
-
-    if fixed is not None:
-        r, d = float(fixed[0]), float(fixed[1])
-        a, res = amp_res(r, d)
-        return dict(rise=r, decay=d, amplitude=a, rms=float(np.sqrt(np.mean(res ** 2))), n=int(len(t)),
-            rise_at_bound=False, decay_at_bound=False, drive=drive)
-    lb = np.log([rise_bounds[0], decay_bounds[0]])
-    ub = np.log([rise_bounds[1], decay_bounds[1]])
-
-    def fun(p):
-        return amp_res(np.exp(p[0]), np.exp(p[1]))[1]
-
-    best = None
-    for r0 in (0.2, 0.7, 2.0):
-        for d0 in (2.0, 8.0, 30.0):
-            x0 = np.clip(np.log([r0, d0]), lb + 1e-9, ub - 1e-9)
-            sol = least_squares(fun, x0, bounds=(lb, ub), x_scale=1.0, xtol=1e-10, ftol=1e-12, gtol=1e-12)
-            if best is None or sol.cost < best.cost:
-                best = sol
-    r, d = float(np.exp(best.x[0])), float(np.exp(best.x[1]))
-    a, res = amp_res(r, d)
-
-    def at(v, b):
-        return bool(v <= b[0] * 1.01 or v >= b[1] / 1.01)
-    return dict(rise=r, decay=d, amplitude=a, rms=float(np.sqrt(np.mean(res ** 2))), n=int(len(t)),
-        rise_at_bound=at(r, rise_bounds), decay_at_bound=at(d, decay_bounds), drive=drive)
+fit_indicator_kernel = _imaging.fit_indicator_kernel
 
 
 # ---------------------------------------------------------------------------
@@ -1572,85 +1094,31 @@ LOW_END_BAND = (0.5, 1.0)
 
 def expected_pair_distances_noisy(mat: pd.DataFrame, noise_sd: float, n_trials: int = 1) -> pd.Series:
     """Cosine distances of a (units x odors) matrix, in expectation over independent zero-mean
-    measurement noise of sd `noise_sd` per entry and trial, after averaging `n_trials` trials.
-
-    Closed form: independent noise adds N s^2 / n_trials to each odor's squared length (N units,
-    s = `noise_sd`) and nothing, in expectation, to the products between different odors, so the
-    distance is 1 - a.b / sqrt((|a|^2 + N s^2 / n)(|b|^2 + N s^2 / n)) (the ratio of the
-    expectations, which the sampled mean approaches for many units). `noise_sd` 0 gives
+    measurement noise of sd `noise_sd` per entry and trial, after averaging `n_trials` trials
+    (`pyolfsysm.readout.expected_pair_distances_noisy`). `noise_sd` 0 gives
     `pair_distances(mat, 'cosine')`.
     """
-    m = abbrev_columns(mat).astype(float)
-    odors = odor_order(m.columns)
-    X = m[odors].to_numpy().T
-    n_units = X.shape[1]
-    sq = (X ** 2).sum(axis=1) + n_units * float(noise_sd) ** 2 / n_trials
-    with np.errstate(invalid='ignore', divide='ignore'):
-        S = (X @ X.T) / np.sqrt(np.outer(sq, sq))
-    pl = pair_list(odors)
-    idx = {o: i for i, o in enumerate(odors)}
-    return pd.Series([1 - S[idx[a], idx[b]] for a, b in pl],
-        index=pd.MultiIndex.from_tuples(pl, names=['odor_a', 'odor_b']))
+    return _readout.expected_pair_distances_noisy(abbrev_columns(mat), noise_sd, n_trials, APL16_ODORS)
 
 
-def sample_pseudo_recordings(signal, noise_sd: float, *, n_recordings: int = 10, n_trials: int = 3,
-    seed: int = 0, return_trials: bool = False) -> np.ndarray:
-    """Pseudo-recordings of a model's readout through measurement noise: independent Gaussian noise
-    of sd `noise_sd` added to every entry of every trial (seeded), as the data's trial-to-trial
-    noise of the non-responding entries.
-
-    Args:
-        signal: the noise-free signal, in z units: a (units x odors) DataFrame or array (the same
-            signal on every trial), or an array (n_recordings, n_trials, units, odors) of per-trial
-            signals (e.g. jittered trials read out per trial), whose first two dimensions then set
-            `n_recordings` and `n_trials`.
-        noise_sd: noise sd per entry and trial (z).
-        return_trials: return the noisy trials instead of their means.
-
-    Returns (n_recordings, units, odors) noisy trial means, or (n_recordings, n_trials, units,
-    odors) noisy trials with `return_trials`.
-    """
-    sig = signal.to_numpy(dtype=float) if isinstance(signal, pd.DataFrame) else np.asarray(signal, dtype=float)
-    if sig.ndim == 2:
-        sig = np.broadcast_to(sig, (n_recordings, n_trials) + sig.shape)
-    elif sig.ndim != 4:
-        raise ValueError(f'signal must be (units, odors) or (recordings, trials, units, odors), not {sig.shape}')
-    rng = np.random.default_rng(seed)
-    trials = sig + rng.normal(0.0, float(noise_sd), size=sig.shape)
-    return trials if return_trials else trials.mean(axis=1)
+# pseudo-recordings of a model's readout through measurement noise (pyolfsysm.readout)
+sample_pseudo_recordings = _readout.sample_pseudo_recordings
 
 
 def noise_corrected_pair_distances(trials: np.ndarray, odors: Sequence[str],
     min_reliability: Optional[float] = None) -> pd.Series:
     """The noise-corrected cosine distances of one recording from its trials (n_trials, units,
-    odors), as `kcq.noise_floor.analyse(..., 'graded')` computes them for the data:
-    each odor's signal power is the squared length of its trial mean minus the trial-to-trial
-    variance summed over units divided by the number of trials (floored at 1e-12), and the
-    corrected distance is 1 - (dot product of the trial means) / sqrt(signal power a x signal
-    power b). Returns a canonical pair Series.
+    odors), as `kcq.noise_floor.analyse(..., 'graded')` computes them for the data
+    (`hong2p.imaging.noise_corrected_pair_distances`): each odor's signal power is the squared length
+    of its trial mean minus the trial-to-trial variance summed over units divided by the number of
+    trials (floored at 1e-12), and the corrected distance is 1 - (dot product of the trial means) /
+    sqrt(signal power a x signal power b). Returns a canonical pair Series.
 
     `min_reliability`: pairs with an odor whose signal power is less than this share of its trial
     mean's squared length are NaN (the correction divides by a near-zero signal there; a model odor
     with almost no responders). The KC data's shares are all above 0.5, so 0.1 leaves them intact.
     """
-    X = np.asarray(trials, dtype=float)
-    n = X.shape[0]
-    xbar = X.mean(axis=0)                                   # units x odors
-    s2 = X.var(axis=0, ddof=1).sum(axis=0)                  # per odor, summed over units
-    norm2 = (xbar ** 2).sum(axis=0)
-    sig = np.maximum(norm2 - s2 / n, 1e-12)
-    dots = xbar.T @ xbar
-    D = 1 - dots / np.sqrt(np.outer(sig, sig))
-    if min_reliability is not None:
-        with np.errstate(invalid='ignore', divide='ignore'):
-            bad = ~(sig / norm2 >= min_reliability)
-        D[bad, :] = np.nan
-        D[:, bad] = np.nan
-    odors = list(odors)
-    pl = pair_list(odors)
-    idx = {o: i for i, o in enumerate(odors)}
-    return pd.Series([D[idx[a], idx[b]] for a, b in pl],
-        index=pd.MultiIndex.from_tuples(pl, names=['odor_a', 'odor_b']))
+    return _imaging.noise_corrected_pair_distances(trials, odors, min_reliability, APL16_ODORS)
 
 
 def low_end_stats(trial_signal: np.ndarray, noise_sd: float, *, band: Tuple[float, float] = LOW_END_BAND,
@@ -1880,25 +1348,8 @@ def cosine_terms(mat: pd.DataFrame, thresh: float = KC_RESPONSE_Z) -> pd.DataFra
     entries responders (above `thresh`), one a responder and the other sub-threshold, both
     sub-threshold; each term is that part of the dot product divided by the product of the two
     odors' lengths, so the three add up to the cosine. Columns 'both', 'one', 'neither', 'cosine';
-    index canonical pairs."""
-    m = abbrev_columns(mat).astype(float)
-    odors = odor_order(m.columns)
-    X = m[odors].to_numpy()
-    R = (X > thresh).astype(float)
-    S = 1.0 - R
-    norms = np.linalg.norm(X, axis=0)
-    with np.errstate(invalid='ignore', divide='ignore'):
-        den = np.outer(norms, norms)
-        both = ((X * R).T @ (X * R)) / den
-        one = ((X * R).T @ (X * S) + (X * S).T @ (X * R)) / den
-        neither = ((X * S).T @ (X * S)) / den
-    pl = pair_list(odors)
-    idx = {o: i for i, o in enumerate(odors)}
-    rows = [(both[idx[a], idx[b]], one[idx[a], idx[b]], neither[idx[a], idx[b]]) for a, b in pl]
-    out = pd.DataFrame(rows, columns=['both', 'one', 'neither'],
-        index=pd.MultiIndex.from_tuples(pl, names=['odor_a', 'odor_b']))
-    out['cosine'] = out.sum(axis=1)
-    return out
+    index canonical pairs (`pyolfsysm.kc_stats.cosine_terms`)."""
+    return _kc_stats.cosine_terms(abbrev_columns(mat), thresh, APL16_ODORS)
 
 
 _KC_NOISE_SD: Dict[str, float] = {}
@@ -1908,15 +1359,12 @@ def kc_trial_noise_sd(genotype: str = 'TNT3c') -> float:
     """The KC data's measurement noise: the trial-to-trial sd of the non-responding entries
     (trial mean <= 1 z), the root of the mean over those entries of their variance across the
     three trials (ddof 1), pooled over a genotype's recordings (Yang's per-trial values,
-    `kcq.noise_floor.load_trials`). Cached."""
+    `kcq.noise_floor.load_trials`; `hong2p.imaging.nonresponder_trial_sd`). Cached."""
     if genotype not in _KC_NOISE_SD:
         from kcq.noise_floor import load_trials, recording_arrays
-        var = []
-        for by_odor in recording_arrays(load_trials(genotype)).values():
-            X = np.stack([by_odor[o] for o in APL16_ODORS if o in by_odor], axis=-1)   # trials x KCs x odors
-            v = X.var(axis=0, ddof=1)
-            var.append(v[X.mean(axis=0) <= KC_RESPONSE_Z])
-        _KC_NOISE_SD[genotype] = float(np.sqrt(np.concatenate(var).mean()))
+        recs = (np.stack([by_odor[o] for o in APL16_ODORS if o in by_odor], axis=-1)   # trials x KCs x odors
+            for by_odor in recording_arrays(load_trials(genotype)).values())
+        _KC_NOISE_SD[genotype] = _imaging.nonresponder_trial_sd(recs, KC_RESPONSE_Z)
     return _KC_NOISE_SD[genotype]
 
 
@@ -1932,119 +1380,24 @@ def kc_noise_floor(n_sd: float = 2.0) -> float:
 # the recordings' per-KC normalization on the model's side (E73): Yang's values appear to be each
 # KC's fluorescence divided by its sd over the whole recording (a z-score over the session), so a
 # KC's response is relative to its own session; these read a model's spike counts the same way
-ZCELL_MAPS = ('linear', 'saturating')
-ZCELL_READINGS = ('graded', 'thresholded', 'binary')
-OPK_EDGES = ((0, 0), (1, 1), (2, 3), (4, 7), (8, None))
+ZCELL_MAPS = _readout.ZCELL_MAPS
+ZCELL_READINGS = _readout.ZCELL_READINGS
+OPK_EDGES = _kc_stats.OPK_EDGES
 
 
-def _zcell_amplitude(x: np.ndarray, amp: str, K: Optional[float]) -> np.ndarray:
-    if amp == 'linear':
-        return x
-    if amp == 'saturating':
-        if K is None or not K > 0:
-            raise ValueError(f'the saturating map needs K > 0, not {K}')
-        return x / (x + float(K))
-    raise ValueError(f'unknown amplitude map {amp!r} (one of {ZCELL_MAPS})')
+_zcell_amplitude = _readout._zcell_amplitude
 
 
-def session_zscore(counts, *, q: float, noise, amp: str = 'linear', K: Optional[float] = None,
-    noise_ratio: float = 0.385, n_trials: int = 3, n_blank: int = 1, divisor: Optional[float] = None,
-    center: bool = False, drift: float = 0.0) -> Dict[str, object]:
-    """A model's KC responses read as the recordings appear to be: each KC's session (the panel's odors
-    and `n_blank` blank stimuli, `n_trials` trials each) assembled from its spike counts and divided by the
-    KC's sd over the whole session (E73).
-
-    Each trial's response window holds the share `q` of the session's frames; inside it the KC's signal is
-    its amplitude a (`amp`: 'linear', a = n; 'saturating', a = n / (n + K)), outside it 0; every frame
-    carries independent noise of sd `noise` (amplitude units: the baseline-noise SD) and the trace a slow
-    drift of sd drift x noise, which the pre-odor baseline removes from every response but which adds to the
-    session's variance. The KC's session sd is S = sqrt(q mean(a^2) - (q mean(a))^2 + noise^2 (1 + drift^2))
-    (means over the session's trials), and a trial reads
-    a / S (the window relative to the pre-odor baseline, both in the KC's session z units), or with
-    `center` (a - q mean(a)) / S (the window mean of the plain session z-score, no baseline subtracted),
-    plus measurement noise of sd noise_ratio x noise / S (a silent KC's trial sd is `noise_ratio`). The
-    per-KC mean of squared trial values cannot exceed about 1 / q (the edge of part A of E73). Yang's APL16
-    responses are made this way (each KC's Fc z-scored over the whole recording, a trial's response the mean
-    z 2-8 s after onset minus the mean over the 5 s before: add_to_reports/yang_response_definition.md), with
-    the response windows covering a share 51 x 18 / 7194 = 0.128 of the recording. drift changes no reading
-    when the noise is calibrated (noise sqrt(1 + drift^2) and noise_ratio / sqrt(1 + drift^2) at drift 0
-    read identically); it sets the units, so that S / noise is the whole-trace SD over the baseline-noise SD.
-
-    Args:
-        counts: spike counts, (units x odors) DataFrame or array (the same counts on every trial), or
-            (recordings, trials, units, odors) per-trial counts (jittered trials; each recording a session).
-        q: share of the session's frames inside the response windows.
-        noise: frame-noise sd in amplitude units, one value for all units (or an array over units).
-        amp, K: the amplitude map (`ZCELL_MAPS`); K the saturating map's half-saturation.
-        noise_ratio: sd of a response's measurement noise relative to the frame-noise sd.
-        n_trials: trials per odor when `counts` is 2-D.
-        n_blank: blank (solvent) stimuli in the session, amplitude 0.
-        divisor: the control: every unit's amplitude divided by this one value, nothing subtracted (no
-            per-KC normalization), measurement noise sd noise_ratio x noise / divisor.
-        center: subtract the session mean (see above); ignored with `divisor`.
-        drift: the slow drift's sd relative to `noise`.
-
-    Returns dict: trials ((recordings, trials, units, odors) noise-free trial values in z; trials is 1
-    for 2-D counts, whose trials are identical), center (their mean over trials, (recordings, units,
-    odors)), trial_sd ((recordings, units) sd of one trial's measurement noise in z), n_trials, blank
-    ((recordings, units) the blank's value in z), mean_sq ((recordings, units) expected per-unit mean of
-    squared trial values over the session, the blank's included), scale_ratio ((recordings, units) S / noise,
-    the whole-trace SD over the baseline-noise SD), odors (column labels or None), and the parameters.
-    """
-    odors = list(counts.columns) if isinstance(counts, pd.DataFrame) else None
-    x = counts.to_numpy(dtype=float) if isinstance(counts, pd.DataFrame) else np.asarray(counts, dtype=float)
-    if x.ndim == 2:
-        x = x[None, None]
-        T = int(n_trials)
-    elif x.ndim == 4:
-        T = x.shape[1]
-    else:
-        raise ValueError(f'counts must be (units, odors) or (recordings, trials, units, odors), not {x.shape}')
-    a = _zcell_amplitude(x, amp, K)
-    n_stim = a.shape[3] + int(n_blank)
-    # session means over the trials: the blank trials add zeros
-    mean_a = a.mean(axis=1).sum(axis=-1) / n_stim                      # recordings x units
-    mean_a2 = (a ** 2).mean(axis=1).sum(axis=-1) / n_stim
-    sig = np.broadcast_to(np.asarray(noise, dtype=float), mean_a.shape[-1:])[None, :]
-    if divisor is not None:
-        S = np.full(mean_a.shape, float(divisor))
-        mu = np.zeros_like(mean_a)
-    else:
-        mu = q * mean_a
-        S = np.sqrt(np.maximum(q * mean_a2 - mu ** 2, 0.0) + sig ** 2 * (1 + float(drift) ** 2))
-        if not center:
-            mu = np.zeros_like(mu)
-    with np.errstate(invalid='ignore', divide='ignore'):
-        vals = (a - mu[:, None, :, None]) / S[:, None, :, None]
-        blank = -mu / S
-        trial_sd = noise_ratio * sig / S
-    vals = np.nan_to_num(vals)
-    blank, trial_sd = np.nan_to_num(blank), np.nan_to_num(trial_sd)
-    mean_sq = ((vals ** 2).mean(axis=1).sum(axis=-1) + n_blank * blank ** 2) / n_stim + trial_sd ** 2
-    with np.errstate(invalid='ignore', divide='ignore'):
-        scale_ratio = S / sig
-    return dict(trials=vals, center=vals.mean(axis=1), trial_sd=trial_sd, n_trials=T, blank=blank, mean_sq=mean_sq,
-        scale_ratio=scale_ratio, odors=odors, q=float(q), noise=noise, amp=amp, K=K, noise_ratio=float(noise_ratio),
-        n_blank=int(n_blank), divisor=divisor, center_mean=bool(center), drift=float(drift))
+# a model's KC responses read as each KC z-scored over its session (E73; pyolfsysm.readout)
+session_zscore = _readout.session_zscore
 
 
-def _tail_moments(m: np.ndarray, sd: np.ndarray, thresh: float) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """P(x > thresh), E[x 1{x > thresh}] and E[x^2 1{x > thresh}] for x ~ N(m, sd^2), elementwise
-    (sd broadcast against m; sd 0 is the noise-free indicator)."""
-    from scipy.special import ndtr
-    m = np.asarray(m, dtype=float)
-    sd = np.broadcast_to(np.asarray(sd, dtype=float), m.shape)
-    pos = sd > 0
-    with np.errstate(invalid='ignore', divide='ignore'):
-        a = np.where(pos, (thresh - m) / np.where(pos, sd, 1.0), 0.0)
-        P = np.where(pos, ndtr(-a), (m > thresh).astype(float))
-        phi = np.exp(-0.5 * a ** 2) / np.sqrt(2 * np.pi)
-        E1 = np.where(pos, m * P + sd * phi, m * P)
-        E2 = np.where(pos, (m ** 2 + sd ** 2) * P + sd * phi * (m + thresh), m ** 2 * P)
-    return P, E1, E2
+_tail_moments = _readout.tail_moments
 
 
 def _zcell_odors(z: Dict[str, object], n_odors: int) -> List[str]:
+    """The odor labels of a `session_zscore` reading: its columns, abbreviated, or the APL16 odors for an
+    unlabeled array (which must then have 16 columns)."""
     odors = z.get('odors')
     if odors is None:
         if n_odors != len(APL16_ODORS):
@@ -2058,203 +1411,28 @@ def zcell_pair_distances(z: Dict[str, object], reading: str = 'graded', thresh: 
     (closed form, the ratio of the expectations as `expected_pair_distances_noisy`: independent noise adds
     to each odor's squared length and nothing to the products of different odors), mean over its
     recordings: 'graded' (all values, negative ones included: the data's cosine), 'thresholded' (trial
-    means <= `thresh` set to 0) or 'binary' (trial mean > `thresh`). Canonical pair Series."""
-    C = z['center']
-    s = z['trial_sd'] / np.sqrt(z['n_trials'])
-    odors = _zcell_odors(z, C.shape[2])
-    order = odor_order(odors)
-    idx = [odors.index(o) for o in order]
-    D = []
-    for r in range(C.shape[0]):
-        m = C[r][:, idx]
-        sd = s[r][:, None]
-        if reading == 'graded':
-            E1, E2 = m, m ** 2 + sd ** 2
-        elif reading in ('thresholded', 'binary'):
-            P, E1, E2 = _tail_moments(m, sd, thresh)
-            if reading == 'binary':
-                E1 = E2 = P
-        else:
-            raise ValueError(f'unknown reading {reading!r} (one of {ZCELL_READINGS})')
-        n2 = E2.sum(axis=0)
-        with np.errstate(invalid='ignore', divide='ignore'):
-            D.append(1 - (E1.T @ E1) / np.sqrt(np.outer(n2, n2)))
-    D = np.nanmean(np.stack(D), axis=0) if len(D) > 1 else D[0]
-    pl = pair_list(order)
-    pos = {o: i for i, o in enumerate(order)}
-    return pd.Series([D[pos[a], pos[b]] for a, b in pl], index=pd.MultiIndex.from_tuples(pl, names=['odor_a', 'odor_b']))
+    means <= `thresh` set to 0) or 'binary' (trial mean > `thresh`). Canonical pair Series
+    (`pyolfsysm.readout.zcell_pair_distances`)."""
+    return _readout.zcell_pair_distances(z, reading, thresh, odors=_zcell_odors(z, z['center'].shape[2]),
+        order=APL16_ODORS)
 
 
-def poisson_binomial_bins(P: np.ndarray, edges=OPK_EDGES) -> np.ndarray:
-    """Mean over units of the distribution of the number of odors a unit responds to, each odor
-    independently with its probability (P: units x odors), summed into `edges` bins ((lo, hi) inclusive,
-    hi None for no upper limit): the expected odors-per-KC distribution."""
-    P = np.asarray(P, dtype=float)
-    n_u, n_o = P.shape
-    dist = np.zeros((n_u, n_o + 1))
-    dist[:, 0] = 1.0
-    for j in range(n_o):
-        p = P[:, j:j + 1]
-        dist[:, 1:] = dist[:, 1:] * (1 - p) + dist[:, :-1] * p
-        dist[:, 0] = dist[:, 0] * (1 - p[:, 0])
-    mean = dist.mean(axis=0)
-    return np.array([mean[lo:(n_o + 1 if hi is None else hi + 1)].sum() for lo, hi in edges])
+poisson_binomial_bins = _kc_stats.poisson_binomial_bins
 
 
 def zcell_stats(z: Dict[str, object], thresh: float = KC_RESPONSE_Z) -> Dict[str, object]:
     """Statistics of a `session_zscore` reading under the data's criterion (trial mean > `thresh`), in
-    expectation over the measurement noise, pooled over its recordings: `rate` (share of entries
-    responding) and `rate_per_odor` (Series), `resp_amp_mean` and `resp_amp_cv` (the responders' trial
-    means), `share_above_4` and `share_05_15` (entries with a trial mean above 4 z, and in (0.5, 1.5] z),
-    `opk` (the odors-per-KC distribution over 0, 1, 2-3, 4-7, 8 or more odors), `silent_share` and
-    `opk_8plus`, `nonresp_trial_sd` (root mean trial-to-trial variance of the non-responding entries, as
-    `kc_trial_noise_sd` measures the data: measurement noise plus the trials' own variation), and the
-    per-unit mean square's upper edge (`mean_sq_max`, `_p999`, `_p99`, `_median`, `edge_gap` = max - 99.9th
-    percentile), `max_trial_mean` and `max_trial` (noise-free); by breadth (each unit at its expected number
-    of odors responded to, rounded, 11 or more pooled), `scale_ratio_by_breadth` (the median whole-trace SD
-    over the baseline-noise SD) and `amp_base_by_breadth` (the responders' mean amplitude in baseline-noise
-    units, z x that ratio), the checks against the KC data's (notes/yang_response_normalization/)."""
-    from scipy.special import ndtr
-    C = z['center']
-    T = z['n_trials']
-    t = z['trial_sd']
-    sd = t / np.sqrt(T)
-    sdb = sd[:, :, None]
-    P, E1, E2 = _tail_moments(C, sdb, thresh)
-    odors = _zcell_odors(z, C.shape[2])
-    with np.errstate(invalid='ignore', divide='ignore'):
-        amp_mean = float(E1.sum() / P.sum())
-        amp_var = float(E2.sum() / P.sum()) - amp_mean ** 2
-        P4 = _tail_moments(C, sdb, 4.0)[0]
-        band = ndtr((1.5 - C) / np.where(sdb > 0, sdb, np.inf)) - ndtr((0.5 - C) / np.where(sdb > 0, sdb, np.inf))
-    if not (sd > 0).all():
-        band = np.where(sdb > 0, band, ((C > 0.5) & (C <= 1.5)).astype(float))
-    # the trials' own variation (jittered trials) adds to the measurement noise
-    tr = z['trials']
-    var_tr = tr.var(axis=1, ddof=1) if tr.shape[1] > 1 else np.zeros_like(C)
-    w = 1 - P
-    nonresp_var = float((w * (t[:, :, None] ** 2 + var_tr)).sum() / w.sum())
-    opk = np.mean([poisson_binomial_bins(P[r]) for r in range(P.shape[0])], axis=0)
-    ms = z['mean_sq'].ravel()
-    breadth = np.minimum(np.rint(P.sum(axis=2)), 11).ravel()
-    sr = np.asarray(z['scale_ratio'], dtype=float).ravel()
-    e1b = (E1 * z['scale_ratio'][:, :, None]).sum(axis=2).ravel()
-    pb = P.sum(axis=2).ravel()
-    sr_b, amp_b = {}, {}
-    for b in range(12):
-        m = breadth == b
-        if m.any():
-            sr_b[b] = float(np.median(sr[m]))
-            if b > 0 and pb[m].sum() > 0:
-                amp_b[b] = float(e1b[m].sum() / pb[m].sum())
-    return dict(rate=float(P.mean()), rate_per_odor=pd.Series(P.mean(axis=(0, 1)), index=odors),
-        resp_amp_mean=amp_mean, resp_amp_cv=float(np.sqrt(max(amp_var, 0.0)) / amp_mean) if amp_mean > 0 else np.nan,
-        share_above_4=float(P4.mean()), share_05_15=float(band.mean()), opk=opk, silent_share=float(opk[0]),
-        opk_8plus=float(opk[-1]), nonresp_trial_sd=float(np.sqrt(nonresp_var)), mean_sq_max=float(ms.max()),
-        mean_sq_p999=float(np.quantile(ms, 0.999)), mean_sq_p99=float(np.quantile(ms, 0.99)),
-        mean_sq_median=float(np.median(ms)), edge_gap=float(ms.max() - np.quantile(ms, 0.999)),
-        max_trial_mean=float(C.max()), max_trial=float(tr.max()), scale_ratio_by_breadth=sr_b, amp_base_by_breadth=amp_b)
+    expectation over the measurement noise, pooled over its recordings (`pyolfsysm.readout.zcell_stats`, whose
+    docstring lists the keys; `rate_per_odor` is indexed by the abbreviated odors, or the APL16 odors for an
+    unlabeled array): the checks against the KC data's (notes/yang_response_normalization/)."""
+    return _readout.zcell_stats(z, thresh, odors=_zcell_odors(z, z['center'].shape[2]))
 
 
-def _zcell_rate(on_counts, q, noise, amp, K, noise_ratio, n_trials, n_blank, center, drift=0.0, thresh=KC_RESPONSE_Z
-    ) -> Tuple[float, Dict]:
-    z = session_zscore(on_counts, q=q, noise=noise, amp=amp, K=K, noise_ratio=noise_ratio, n_trials=n_trials,
-        n_blank=n_blank, center=center, drift=drift)
-    P = _tail_moments(z['center'], (z['trial_sd'] / np.sqrt(z['n_trials']))[:, :, None], thresh)[0]
-    return float(P.mean()), z
+_zcell_rate = _readout._zcell_rate
 
 
-def calibrate_session_zscore(on_counts, *, q: float, amp: str = 'linear', target_rate: float,
-    target_amp: Optional[float] = None, target_silent_sd: Optional[float] = None, K: Optional[float] = None,
-    noise_ratio: float = 0.385, n_trials: int = 3, n_blank: int = 1, center: bool = False, drift: float = 0.0,
-    noise_bounds: Tuple[float, float] = (1e-4, 1e4), K_bounds: Tuple[float, float] = (1e-2, 1e3), n_K_grid: int = 25,
-    tol: float = 1e-4, max_iter: int = 20) -> Dict[str, object]:
-    """The parameters of `session_zscore` set on the APL-on counts alone (then used unchanged for APL off,
-    so the APL effect stays a prediction): the frame noise so that the APL-on response rate under the
-    data's criterion (expected trial mean > 1 z) is `target_rate`; for the saturating map with
-    `target_amp`, also K, so that the responders' mean amplitude (z) is `target_amp`; with
-    `target_silent_sd`, the noise ratio so that the trial-to-trial sd of the non-responding entries
-    (`zcell_stats`' `nonresp_trial_sd`) is that value (iterated to a fixed point; it barely moves the other
-    two). The linear map has the noise as its only free parameter, so its responders' amplitude is a
-    prediction. The rate falls monotonically with the noise (root in log noise, Brent); K is the root of the
-    amplitude error nearest the grid point with the smallest error among the sign changes on a log grid
-    over `K_bounds` (the amplitude, with the noise re-solved at every K, need not be monotone in K), or the
-    grid point with the smallest error when there is no sign change (`K_at_bound`).
-
-    Args:
-        on_counts: APL-on spike counts, (units x odors) or (recordings, trials, units, odors).
-        K: the saturating map's K when it is not calibrated (no `target_amp`).
-
-    Returns dict: noise, K, noise_ratio, rate, resp_amp_mean, nonresp_trial_sd (achieved), noise_at_bound,
-    K_at_bound, converged, iterations, q, amp, center.
-    """
-    from scipy.optimize import brentq
-    lo_n, hi_n = np.log(noise_bounds[0]), np.log(noise_bounds[1])
-
-    def solve_noise(Kv, nr):
-        f = lambda ln: _zcell_rate(on_counts, q, np.exp(ln), amp, Kv, nr, n_trials, n_blank, center, drift)[0] - target_rate
-        flo, fhi = f(lo_n), f(hi_n)
-        if flo * fhi > 0:
-            return float(np.exp(lo_n if abs(flo) < abs(fhi) else hi_n)), True
-        return float(np.exp(brentq(f, lo_n, hi_n, xtol=1e-10, rtol=1e-10))), False
-
-    def stats_at(Kv, nr):
-        noise, nb = solve_noise(Kv, nr)
-        z = session_zscore(on_counts, q=q, noise=noise, amp=amp, K=Kv, noise_ratio=nr, n_trials=n_trials,
-            n_blank=n_blank, center=center, drift=drift)
-        return noise, nb, z
-
-    def amp_of(z):
-        C = z['center']
-        sd = (z['trial_sd'] / np.sqrt(z['n_trials']))[:, :, None]
-        P, E1, _ = _tail_moments(C, sd, KC_RESPONSE_Z)
-        return float(E1.sum() / P.sum()) if P.sum() > 0 else np.nan
-
-    fit_K = amp == 'saturating' and target_amp is not None
-    if amp == 'saturating' and not fit_K and K is None:
-        raise ValueError('the saturating map needs K, or target_amp to calibrate it')
-    nr = float(noise_ratio)
-    Kv = K
-    K_at_bound = False
-    converged = False
-    it = 0
-    for it in range(1, max_iter + 1):
-        fk = lambda lk: amp_of(stats_at(np.exp(lk), nr)[2]) - target_amp
-        if fit_K and it > 1 and not K_at_bound:
-            # later rounds (the noise ratio moved a little): the root near the previous K
-            lo_k, hi_k = np.log(Kv) - 0.7, np.log(Kv) + 0.7
-            if fk(lo_k) * fk(hi_k) <= 0:
-                Kv = float(np.exp(brentq(fk, lo_k, hi_k, xtol=1e-8, rtol=1e-8)))
-            else:
-                K_at_bound = True
-        if fit_K and (it == 1 or K_at_bound):
-            grid = np.linspace(np.log(K_bounds[0]), np.log(K_bounds[1]), n_K_grid)
-            err = np.array([amp_of(stats_at(np.exp(g), nr)[2]) - target_amp for g in grid])
-            ok = np.isfinite(err)
-            best = int(np.nanargmin(np.where(ok, np.abs(err), np.nan)))
-            brackets = [i for i in range(len(grid) - 1) if ok[i] and ok[i + 1] and err[i] * err[i + 1] <= 0]
-            if brackets:
-                i = min(brackets, key=lambda i: abs(i + 0.5 - best))
-                Kv = float(np.exp(brentq(fk, grid[i], grid[i + 1], xtol=1e-8, rtol=1e-8)))
-                K_at_bound = False
-            else:
-                Kv, K_at_bound = float(np.exp(grid[best])), True
-        noise, noise_at_bound, z = stats_at(Kv, nr)
-        if target_silent_sd is None:
-            converged = True
-            break
-        st = zcell_stats(z)
-        new_nr = nr * float(target_silent_sd) / st['nonresp_trial_sd']
-        if abs(new_nr - nr) < tol * nr:
-            nr = new_nr
-            noise, noise_at_bound, z = stats_at(Kv, nr)
-            converged = True
-            break
-        nr = new_nr
-    st = zcell_stats(z)
-    return dict(noise=noise, K=Kv, noise_ratio=nr, rate=st['rate'], resp_amp_mean=st['resp_amp_mean'],
-        nonresp_trial_sd=st['nonresp_trial_sd'], noise_at_bound=bool(noise_at_bound), K_at_bound=bool(K_at_bound),
-        converged=converged, iterations=it, q=float(q), amp=amp, center=bool(center), drift=float(drift))
+# the parameters of session_zscore set on the APL-on counts alone (E73; pyolfsysm.readout, criterion 1 z)
+calibrate_session_zscore = _readout.calibrate_session_zscore
 
 
 # ---------------------------------------------------------------------------
@@ -2262,92 +1440,55 @@ def calibrate_session_zscore(on_counts, *, q: float, amp: str = 'linear', target
 # similarity is a sum over units, so each condition's similarity splits into the contributions of the
 # units in each odors-per-KC class (classes set per condition), and the APL effect (APL-on distance minus
 # APL-off distance = APL-off similarity minus APL-on similarity) into per-class effects
-OPK_CLASSES = ('0', '1', '2_3', '4_7', '8plus')
-CLASS_TERMS = ('both', 'one', 'neither', 'total')
+OPK_CLASSES = _kc_stats.OPK_CLASSES
+CLASS_TERMS = _kc_stats.CLASS_TERMS
 
 
-def opk_class_labels(edges=OPK_EDGES) -> List[str]:
-    """Labels of odors-per-KC classes ((lo, hi) inclusive, hi None for no upper limit): '0', '2_3',
-    '8plus', ...; `OPK_CLASSES` for `OPK_EDGES`."""
-    return [f'{lo}' if hi == lo else (f'{lo}plus' if hi is None else f'{lo}_{hi}') for lo, hi in edges]
+opk_class_labels = _kc_stats.opk_class_labels
+
+
+def _abbrev_matrix(mat, odors: Optional[Sequence[str]] = None):
+    """(a DataFrame with its odor columns abbreviated, None) or (an array, its abbreviated odors: `odors`,
+    default `APL16_ODORS`), for pyolfsysm.kc_stats."""
+    if isinstance(mat, pd.DataFrame):
+        return mat.set_axis([odor_abbrev(c) for c in mat.columns], axis=1), None
+    return mat, [odor_abbrev(o) for o in (APL16_ODORS if odors is None else odors)]
 
 
 def _ordered_matrix(mat, odors: Optional[Sequence[str]] = None) -> Tuple[np.ndarray, List[str], List[int]]:
     """(units x odors float array with its columns in `odor_order`, that order, the column positions taken)
-    of a DataFrame (odor labels abbreviated) or an array whose columns are `odors` (default `APL16_ODORS`)."""
-    if isinstance(mat, pd.DataFrame):
-        labels = [odor_abbrev(c) for c in mat.columns]
-        X = mat.to_numpy(dtype=float)
-    else:
-        X = np.asarray(mat, dtype=float)
-        labels = [odor_abbrev(o) for o in (APL16_ODORS if odors is None else odors)]
-    if X.ndim != 2 or X.shape[1] != len(labels) or len(set(labels)) != len(labels):
-        raise ValueError(f'a (units x odors) matrix with {len(labels)} distinct odor columns, not {X.shape}')
-    order = odor_order(labels)
-    idx = [labels.index(o) for o in order]
-    return X[:, idx], order, idx
+    of a DataFrame (odor labels abbreviated) or an array whose columns are `odors` (default `APL16_ODORS`;
+    `pyolfsysm.kc_stats.ordered_matrix`)."""
+    m, o = _abbrev_matrix(mat, odors)
+    return _kc_stats.ordered_matrix(m, o, APL16_ODORS)
 
 
-def class_cosine_terms_array(X: np.ndarray, R: np.ndarray, edges=OPK_EDGES) -> np.ndarray:
-    """The core of `class_cosine_terms` on arrays: X (units x odors) values, R (units x odors) bool
-    responders, columns in the order the pairs are wanted in (pairs (i, j), i < j, row-major). Returns
-    (pairs, classes + 1, 4): per pair, each class's contribution to the cosine similarity (the last class
-    all units), split into the terms `CLASS_TERMS`."""
-    X = np.asarray(X, dtype=float)
-    R = np.asarray(R, dtype=bool)
-    n_kc = R.sum(axis=1)
-    XR = np.where(R, X, 0.0)
-    XS = X - XR
-    norms = np.sqrt((X ** 2).sum(axis=0))
-    iu = np.triu_indices(X.shape[1], 1)
-    with np.errstate(invalid='ignore', divide='ignore'):
-        den = np.outer(norms, norms)[iu]
-    masks = [(n_kc >= lo) & (n_kc <= (X.shape[1] if hi is None else hi)) for lo, hi in edges]
-    masks.append(np.ones(X.shape[0], dtype=bool))
-    out = np.empty((len(iu[0]), len(masks), len(CLASS_TERMS)))
-    for c, m in enumerate(masks):
-        r, s = XR[m], XS[m]
-        rs = r.T @ s
-        with np.errstate(invalid='ignore', divide='ignore'):
-            out[:, c, 0] = (r.T @ r)[iu] / den
-            out[:, c, 1] = (rs + rs.T)[iu] / den
-            out[:, c, 2] = (s.T @ s)[iu] / den
-    out[:, :, 3] = out[:, :, :3].sum(axis=2)
-    return out
+class_cosine_terms_array = _kc_stats.class_cosine_terms_array
 
 
-def opk_class_shares(resp, edges=OPK_EDGES) -> np.ndarray:
-    """Share of units in each odors-per-KC class of a (units x odors) bool responder matrix."""
-    R = np.asarray(resp.to_numpy() if isinstance(resp, pd.DataFrame) else resp, dtype=bool)
-    n_kc = R.sum(axis=1)
-    return np.array([np.mean((n_kc >= lo) & (n_kc <= (R.shape[1] if hi is None else hi))) for lo, hi in edges])
+opk_class_shares = _kc_stats.opk_class_shares
 
 
-def _class_columns(edges) -> pd.MultiIndex:
-    return pd.MultiIndex.from_product([opk_class_labels(edges) + ['all'], list(CLASS_TERMS)], names=['class', 'term'])
+_class_columns = _kc_stats.class_columns
+
+
+def _abbrev_resp(resp):
+    return abbrev_columns(resp) if isinstance(resp, pd.DataFrame) else resp
 
 
 def _responders(X: np.ndarray, resp, idx: List[int], order: List[str], thresh: float) -> np.ndarray:
     """The responders of an `_ordered_matrix` X: X > thresh, or `resp` in X's column order (a DataFrame by its
     odor labels, an array by the positions `idx` of the matrix it belongs to)."""
-    if resp is None:
-        return X > thresh
-    if isinstance(resp, pd.DataFrame):
-        R = abbrev_columns(resp)[order].to_numpy(dtype=bool)
-    else:
-        R = np.asarray(resp, dtype=bool)[:, idx]
-    if R.shape != X.shape:
-        raise ValueError(f'responders {R.shape} for a matrix {X.shape}')
-    return R
+    return _kc_stats.responders(X, _abbrev_resp(resp), idx, order, thresh)
 
 
 def class_cosine_terms(mat, resp=None, *, thresh: float = KC_RESPONSE_Z, edges=OPK_EDGES,
     odors: Optional[Sequence[str]] = None) -> pd.DataFrame:
     """Each odor pair's cosine similarity across units split by the units' odors-per-KC class and, within a
     class, into `cosine_terms`' three terms: both entries responders ('both'), one a responder and the other
-    sub-threshold ('one'), both sub-threshold ('neither'), with their sum ('total'). Each part is that part
-    of the dot product over the product of the two odors' lengths over all units, so the classes' totals add
-    up to the cosine (class 'all', computed over all units).
+    sub-threshold ('one'), both sub-threshold ('neither'), with their sum ('total') (`pyolfsysm.kc_stats.
+    class_cosine_terms`). Each part is that part of the dot product over the product of the two odors'
+    lengths over all units, so the classes' totals add up to the cosine (class 'all', computed over all units).
 
     Args:
         mat: (units x odors) values: a DataFrame (odor labels, abbreviated) or an array whose columns are
@@ -2361,21 +1502,18 @@ def class_cosine_terms(mat, resp=None, *, thresh: float = KC_RESPONSE_Z, edges=O
     Returns DataFrame indexed by canonical pairs, columns (class, term) (`opk_class_labels(edges)` + 'all'
     x `CLASS_TERMS`); NaN for pairs with an odor of zero length.
     """
-    X, order, idx = _ordered_matrix(mat, odors)
-    R = _responders(X, resp, idx, order, thresh)
-    arr = class_cosine_terms_array(X, R, edges)
-    pl = pair_list(order)
-    return pd.DataFrame(arr.reshape(len(pl), -1), index=pd.MultiIndex.from_tuples(pl, names=['odor_a', 'odor_b']),
-        columns=_class_columns(edges))
+    m, o = _abbrev_matrix(mat, odors)
+    return _kc_stats.class_cosine_terms(m, _abbrev_resp(resp), thresh=thresh, edges=edges, odors=o,
+        order=APL16_ODORS)
 
 
 def apl_effect_by_class(on, off, *, resp_on=None, resp_off=None, thresh_on: float = KC_RESPONSE_Z,
     thresh_off: float = KC_RESPONSE_Z, edges=OPK_EDGES, odors: Optional[Sequence[str]] = None) -> pd.DataFrame:
-    """The per-pair APL effect split by odors-per-KC class (E74): each condition's `class_cosine_terms`
-    (classes set by that condition's responses), averaged over its recordings, and the effect, APL-off
-    similarity minus APL-on similarity (= APL-on distance minus APL-off distance, as `apl_effect`), per class
-    and term. Class 'all' term 'total' of the effect is `apl_effect` of the two conditions' cosine distances
-    (mean over recordings).
+    """The per-pair APL effect split by odors-per-KC class (E74; `pyolfsysm.effects.effect_by_class`): each
+    condition's `class_cosine_terms` (classes set by that condition's responses), averaged over its
+    recordings, and the effect, APL-off similarity minus APL-on similarity (= APL-on distance minus APL-off
+    distance, as `apl_effect`), per class and term. Class 'all' term 'total' of the effect is `apl_effect` of
+    the two conditions' cosine distances (mean over recordings).
 
     Args:
         on, off: each condition's (units x odors) values, or a list of them (recordings; averaged with
@@ -2388,41 +1526,32 @@ def apl_effect_by_class(on, off, *, resp_on=None, resp_off=None, thresh_on: floa
     similarity contributions) and 'effect' (off minus on); attrs['class_shares'] {'on', 'off'}: the share of
     units in each class (mean over recordings).
     """
-    blocks, shares = {}, {}
-    for cond, mats, resps, thresh in (('on', on, resp_on, thresh_on), ('off', off, resp_off, thresh_off)):
+    ab_odors = [odor_abbrev(o) for o in (APL16_ODORS if odors is None else odors)]
+
+    def prep(mats, resps):
         if isinstance(mats, (list, tuple)):
-            resps = [None] * len(mats) if resps is None else list(resps)
-            if len(resps) != len(mats):
-                raise ValueError(f'{cond}: {len(mats)} matrices but {len(resps)} responder matrices')
-        else:
-            mats, resps = [mats], [resps]
-        arrs, sh, order = [], [], None
-        for m, r in zip(mats, resps):
-            X, o, idx = _ordered_matrix(m, odors)
-            if order is not None and o != order:
-                raise ValueError('the matrices have different odors')
-            order = o
-            R = _responders(X, r, idx, o, thresh)
-            arrs.append(class_cosine_terms_array(X, R, edges))
-            sh.append(opk_class_shares(R, edges))
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore', RuntimeWarning)
-            a = np.nanmean(np.stack(arrs), axis=0) if len(arrs) > 1 else arrs[0]
-        pl = pair_list(order)
-        blocks[cond] = pd.DataFrame(a.reshape(len(pl), -1), index=pd.MultiIndex.from_tuples(pl, names=['odor_a', 'odor_b']),
-            columns=_class_columns(edges))
-        shares[cond] = pd.Series(np.mean(sh, axis=0), index=opk_class_labels(edges))
-    if not blocks['on'].index.equals(blocks['off'].index):
-        raise ValueError('the two conditions have different odors')
-    blocks['effect'] = blocks['off'] - blocks['on']
-    out = pd.concat(blocks, axis=1, names=['block'])
-    out.attrs['class_shares'] = shares
-    return out
+            return ([_abbrev_matrix(m)[0] for m in mats],
+                None if resps is None else [_abbrev_resp(r) for r in resps])
+        return _abbrev_matrix(mats)[0], _abbrev_resp(resps)
+
+    on, resp_on = prep(on, resp_on)
+    off, resp_off = prep(off, resp_off)
+    return _effects.effect_by_class(on, off, resp_intact=resp_on, resp_manipulated=resp_off,
+        thresh_intact=thresh_on, thresh_manipulated=thresh_off, edges=edges, odors=ab_odors,
+        order=APL16_ODORS)
+
+
+def _unit_cluster(unit: str) -> Optional[Tuple[str, ...]]:
+    if unit == 'recording':
+        return None
+    if unit == 'fly':
+        return ('date', 'fly_num')
+    raise ValueError(unit)
 
 
 def resample_recording_means(rec_rdms: Dict[str, pd.DataFrame], rng: np.random.Generator,
     *, unit: str = 'recording') -> Dict[str, pd.Series]:
-    """One bootstrap replicate of {genotype: mean pair Series}.
+    """One bootstrap replicate of {genotype: mean pair Series} (`hong2p.stats.resample_group_means`).
 
     Args:
         rec_rdms: {genotype: per-recording pair DataFrame} (rows (date, fly_num,
@@ -2433,25 +1562,13 @@ def resample_recording_means(rec_rdms: Dict[str, pd.DataFrame], rng: np.random.G
 
     Recordings are then averaged with equal weight, as in the report's recipe.
     """
-    means = {}
-    for g, df in rec_rdms.items():
-        if unit == 'recording':
-            idx = rng.integers(0, len(df), len(df))
-            means[g] = df.iloc[idx].mean()
-        elif unit == 'fly':
-            flies = df.index.droplevel('hemibrain').unique()
-            drawn = flies[rng.integers(0, len(flies), len(flies))]
-            parts = [df.xs(f, level=('date', 'fly_num'), drop_level=False) for f in drawn]
-            means[g] = pd.concat(parts).mean()
-        else:
-            raise ValueError(unit)
-    return means
+    return _stats.resample_group_means(rec_rdms, rng, cluster=_unit_cluster(unit))
 
 
 def bootstrap_recordings(fn: Callable[[Dict[str, pd.Series]], Dict[str, float]],
     rec_rdms: Dict[str, pd.DataFrame], *, n_boot: int = 1000, seed: int = 0,
     ci: Tuple[float, float] = (5, 95), unit: str = 'recording') -> pd.DataFrame:
-    """Bootstraps statistics over recordings (or flies).
+    """Bootstraps statistics over recordings (or flies; `hong2p.stats.bootstrap_groups`).
 
     Args:
         fn: maps {genotype: mean pair Series} -> {stat: value}
@@ -2461,47 +1578,11 @@ def bootstrap_recordings(fn: Callable[[Dict[str, pd.Series]], Dict[str, float]],
 
     Returns DataFrame indexed by stat: observed, boot_mean, boot_sd, lo, hi.
     """
-    rng = np.random.default_rng(seed)
-    observed = fn({g: df.mean() for g, df in rec_rdms.items()})
-    draws = {k: [] for k in observed}
-    for _ in range(n_boot):
-        means = resample_recording_means(rec_rdms, rng, unit=unit)
-        for k, v in fn(means).items():
-            draws[k].append(v)
-    rows = {}
-    for k, v in observed.items():
-        arr = np.asarray(draws[k], dtype=float)
-        rows[k] = dict(observed=v, boot_mean=np.nanmean(arr), boot_sd=np.nanstd(arr),
-            lo=np.nanpercentile(arr, ci[0]), hi=np.nanpercentile(arr, ci[1])
-        )
-    return pd.DataFrame(rows).T
+    return _stats.bootstrap_groups(fn, rec_rdms, n_boot=n_boot, seed=seed, ci=ci, cluster=_unit_cluster(unit))
 
 
-def split_half_reliability(rec_rdms: pd.DataFrame, *, n_splits: int = 200, seed: int = 0,
-    method: str = 'spearman') -> Dict[str, float]:
-    """Reliability of a mean pair-distance matrix, from random split halves of recordings.
-
-    Returns split-half correlation (mean over splits, 5th / 95th percentiles), the
-    Spearman-Brown estimate for the full set of recordings (2r / (1 + r)), and
-    `ceiling`: sqrt of that, the expected correlation of a noise-free model that matched
-    the true mean matrix perfectly with the observed mean.
-    """
-    rng = np.random.default_rng(seed)
-    n = len(rec_rdms)
-    corr = stats.spearmanr if method == 'spearman' else stats.pearsonr
-    vals = []
-    for _ in range(n_splits):
-        idx = rng.permutation(n)
-        a = rec_rdms.iloc[idx[:n // 2]].mean()
-        b = rec_rdms.iloc[idx[n // 2:]].mean()
-        vals.append(corr(a, b)[0])
-    vals = np.asarray(vals)
-    r = float(np.nanmean(vals))
-    full = 2 * r / (1 + r)
-    return dict(n_recordings=n, split_half=r, split_half_lo=float(np.nanpercentile(vals, 5)),
-        split_half_hi=float(np.nanpercentile(vals, 95)), spearman_brown_full=full,
-        ceiling=float(np.sqrt(full)),
-    )
+# reliability of a mean pair-distance matrix, from random split halves of recordings (hong2p.stats)
+split_half_reliability = _stats.split_half_reliability
 
 
 # ---------------------------------------------------------------------------
@@ -2529,7 +1610,7 @@ def yang_recording_matrices(genotype: str, with_pfo: bool = False
 
 def transform_matrix(mat: pd.DataFrame, *, values: str = 'graded', cells: str = 'all',
     thresh: float = 1.0) -> pd.DataFrame:
-    """One RDM pipeline variant applied to a KCs x odors matrix.
+    """One RDM pipeline variant applied to a KCs x odors matrix (`hong2p.rdm.transform_matrix`).
 
     Args:
         values: 'graded' (as is), 'binary' (response > thresh -> 1.0 else 0.0), or
@@ -2538,18 +1619,7 @@ def transform_matrix(mat: pd.DataFrame, *, values: str = 'graded', cells: str = 
             odor column of `mat`)
         thresh: response threshold (Yang's data are z-scores; she has used 0.75 and 1)
     """
-    m = mat.astype(float)
-    if cells == 'responsive':
-        m = m.loc[(m > thresh).any(axis='columns')]
-    elif cells != 'all':
-        raise ValueError(cells)
-    if values == 'binary':
-        m = (m > thresh).astype(float)
-    elif values == 'thresholded':
-        m = m.where(m > thresh, 0.0)
-    elif values != 'graded':
-        raise ValueError(values)
-    return m
+    return _rdm.transform_matrix(mat, values=values, cells=cells, thresh=thresh)
 
 
 def _stack_recordings(rows: Dict[tuple, pd.Series]) -> pd.DataFrame:
@@ -2596,25 +1666,10 @@ def match_threshold(mats: Dict[tuple, pd.DataFrame], target_frac: float, *,
 def density_null_similarity(mat: pd.DataFrame) -> pd.Series:
     """Expected cosine similarity between odor columns of a KCs x odors matrix if KC
     identities were shuffled independently within each odor (per-odor response
-    distributions, hence response counts, kept).
-
-    Exact permutation expectation: E[a . b] = N mean(a) mean(b), so
-    E[cos] = N mean(a) mean(b) / (|a| |b|); for binary columns this is sqrt(p_a p_b).
+    distributions, hence response counts, kept; `hong2p.rdm.density_null_similarity`).
     Returned as a canonical pair Series of similarities (not distances).
     """
-    m = abbrev_columns(mat).astype(float)
-    odors = odor_order(m.columns)
-    X = m[odors].to_numpy().T
-    n = X.shape[1]
-    means = X.mean(axis=1)
-    norms = np.linalg.norm(X, axis=1)
-    with np.errstate(invalid='ignore', divide='ignore'):
-        S = n * np.outer(means, means) / np.outer(norms, norms)
-    pl = pair_list(odors)
-    idx = {o: i for i, o in enumerate(odors)}
-    return pd.Series([S[idx[a], idx[b]] for a, b in pl],
-        index=pd.MultiIndex.from_tuples(pl, names=['odor_a', 'odor_b'])
-    )
+    return _rdm.density_null_similarity(abbrev_columns(mat), APL16_ODORS)
 
 
 def recording_density_null_rdms(mats: Dict[tuple, pd.DataFrame], **transform_kws
@@ -2628,12 +1683,10 @@ def recording_density_null_rdms(mats: Dict[tuple, pd.DataFrame], **transform_kws
 def shuffled_pair_distances(mat: pd.DataFrame, rng: np.random.Generator, *,
     measure: str = 'cosine', **transform_kws) -> pd.Series:
     """Pair distances after independently permuting KC identities within each odor
-    column (one draw from the density null; `density_null_similarity` is its mean)."""
-    m = transform_matrix(mat, **transform_kws)
-    X = m.to_numpy().copy()
-    for j in range(X.shape[1]):
-        X[:, j] = X[rng.permutation(X.shape[0]), j]
-    return pair_distances(pd.DataFrame(X, index=m.index, columns=m.columns), measure=measure)
+    column (one draw from the density null; `density_null_similarity` is its mean;
+    `hong2p.rdm.shuffled_pair_distances`, `transform_kws` as `transform_matrix`'s)."""
+    return _rdm.shuffled_pair_distances(abbrev_columns(mat), rng, measure=measure, order=APL16_ODORS,
+        **dict(dict(thresh=1.0), **transform_kws))
 
 
 # ---------------------------------------------------------------------------
@@ -2642,8 +1695,8 @@ def shuffled_pair_distances(mat: pd.DataFrame, rng: np.random.Generator, *,
 # of different repeats, and the parts of a response's variability across repeats. A recording (or a
 # model's pseudo-recording) is an array (n_repeats, units, odors) of single-trial values; in the model,
 # whose trials are exchangeable, the trial index stands in for the repeat.
-REPEAT_KINDS: Tuple[str, ...] = ('same_repeat', 'different_repeat', 'adjacent', 'first_third')
-TRIAL_VALUES: Tuple[str, ...] = ('graded', 'thresholded', 'binary')
+REPEAT_KINDS: Tuple[str, ...] = _imaging.REPEAT_PAIRS
+TRIAL_VALUES: Tuple[str, ...] = _imaging.TRIAL_VALUES
 YANG_DATASETS: Dict[str, int] = {'TNT': 19, 'TNT3c': 20}
 _YANG_TRIALS: Dict[tuple, Dict[tuple, Tuple[np.ndarray, List[str]]]] = {}
 
@@ -2701,52 +1754,18 @@ def yang_recording_trials(genotype: str, units: str = 'z', odors: Optional[Seque
 def trial_values(trials: np.ndarray, values: str = 'graded', thresh: float = KC_RESPONSE_Z) -> np.ndarray:
     """Single trials read as `values`: 'graded' (unchanged), 'thresholded' (values at or below `thresh`
     set to 0, trial by trial, as a non-responding model KC contributes 0) or 'binary' (1 above `thresh`,
-    else 0). Works on any array shape."""
-    X = np.asarray(trials, dtype=float)
-    if values == 'graded':
-        return X
-    if values == 'thresholded':
-        return np.where(X > thresh, X, 0.0)
-    if values == 'binary':
-        return (X > thresh).astype(float)
-    raise ValueError(f'values must be one of {TRIAL_VALUES}, not {values!r}')
+    else 0). Works on any array shape (`hong2p.imaging.trial_values`)."""
+    return _imaging.trial_values(trials, values, thresh)
 
 
-def trial_cosines(trials: np.ndarray) -> np.ndarray:
-    """Cosine similarities between every pair of single-trial response vectors of one recording.
-
-    Args:
-        trials: (n_repeats, units, odors).
-
-    Returns (n_repeats, odors, n_repeats, odors): [i, a, j, b] is the cosine between the units' responses
-    to odor a in repeat i and to odor b in repeat j; NaN where either vector is all zero.
-    """
-    X = np.asarray(trials, dtype=float)
-    R, U, O = X.shape
-    Y = X.transpose(0, 2, 1).reshape(R * O, U)
-    G = Y @ Y.T
-    n = np.sqrt(np.diag(G))
-    with np.errstate(invalid='ignore', divide='ignore'):
-        C = G / np.outer(n, n)
-    C[(n == 0)[:, None] | (n == 0)[None, :]] = np.nan
-    return C.reshape(R, O, R, O)
+# cosine similarities between every pair of single-trial response vectors of one recording
+trial_cosines = _imaging.trial_cosines
 
 
-def _repeat_masks(n_rep: int) -> Dict[str, np.ndarray]:
-    """{kind: (n_rep, n_rep) bool} of the repeat pairs (i, j) of each kind (ordered pairs)."""
-    i, j = np.meshgrid(np.arange(n_rep), np.arange(n_rep), indexing='ij')
-    return {'same_repeat': i == j, 'different_repeat': i != j, 'adjacent': np.abs(i - j) == 1,
-        'first_third': np.abs(i - j) == 2}
+_repeat_masks = _imaging.repeat_pair_masks
 
 
-def _kind_means(C: np.ndarray, mask: np.ndarray) -> np.ndarray:
-    """(odors, odors) mean of C[i, a, j, b] over the repeat pairs in `mask` (NaN skipped; NaN if none)."""
-    if not mask.any():
-        return np.full(C.shape[1:4:2], np.nan)
-    sel = C.transpose(0, 2, 1, 3)[mask]                      # (n_selected, odors, odors)
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore', RuntimeWarning)
-        return np.nanmean(sel, axis=0)
+_kind_means = _imaging.mean_over_trial_pairs
 
 
 def distances_by_kind(trials: np.ndarray, odors: Sequence[str], *, values: str = 'graded',
@@ -2796,27 +1815,19 @@ def same_repeat_gap(by_kind: pd.DataFrame, pairs: Optional[Sequence[Tuple[str, s
     return float(g.mean())
 
 
-def _noise_free_matrix(C: np.ndarray, mask: np.ndarray) -> np.ndarray:
-    """(odors, odors) noise-free distances 1 - C_ab / sqrt(C_aa C_bb) from single-trial cosines `C`
-    (`trial_cosines`) over the repeat pairs in `mask` (which must exclude i == j)."""
-    M = _kind_means(C, mask)
-    d = np.diag(M).copy()
-    d[~(d > 0)] = np.nan
-    with np.errstate(invalid='ignore', divide='ignore'):
-        return 1 - M / np.sqrt(np.outer(d, d))
+_noise_free_matrix = _imaging.noise_free_matrix
 
 
 def noise_free_pair_distances(trials: np.ndarray, odors: Sequence[str], *, repeats: str = 'different',
     values: str = 'graded', thresh: float = KC_RESPONSE_Z) -> pd.Series:
-    """Noise-free cosine distances of one recording from products of different repeats.
+    """Noise-free cosine distances of one recording from products of different repeats
+    (`hong2p.imaging.noise_free_pair_distances`).
 
     For each pair (a, b): 1 - C_ab / sqrt(C_aa C_bb), C_ab the mean single-trial cosine between odor a in
     repeat i and odor b in repeat j over the repeat pairs i != j selected by `repeats`, C_aa the same for
     odor a with itself. Noise independent between repeats adds nothing, in expectation, to a product of
     two different repeats, whether or not it is shared by the odors of a repeat; a drift common to an
-    odor's repeats acts on C_ab and C_aa alike and cancels in the ratio. Not clipped: a near-identical pair
-    can come out slightly below 0. (Cosines rather than dot products, so a gain of a whole presentation,
-    which a cosine does not see, does not weigh a trial in.)
+    odor's repeats acts on C_ab and C_aa alike and cancels in the ratio. Not clipped.
 
     Args:
         trials: (n_repeats, units, odors).
@@ -2825,16 +1836,8 @@ def noise_free_pair_distances(trials: np.ndarray, odors: Sequence[str], *, repea
 
     Returns a canonical pair Series (index (odor_a, odor_b)).
     """
-    kind = {'different': 'different_repeat', 'adjacent': 'adjacent', 'first_third': 'first_third'}.get(repeats)
-    if kind is None:
-        raise ValueError(f"repeats must be 'different', 'adjacent' or 'first_third', not {repeats!r}")
-    odors = list(odors)
-    X = trial_values(trials, values, thresh)
-    D = _noise_free_matrix(trial_cosines(X), _repeat_masks(X.shape[0])[kind])
-    pl = pair_list(odors)
-    idx = {o: i for i, o in enumerate(odors)}
-    return pd.Series([D[idx[a], idx[b]] for a, b in pl],
-        index=pd.MultiIndex.from_tuples(pl, names=['odor_a', 'odor_b']))
+    return _imaging.noise_free_pair_distances(trials, odors, repeats=repeats, values=values, thresh=thresh,
+        order=APL16_ODORS)
 
 
 def repeat_pair_table(trials: np.ndarray, odors: Sequence[str], *, values: str = 'graded',

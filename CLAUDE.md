@@ -71,6 +71,22 @@ apl_effect_scores.py and noise_floor_trial_distances.py are now kcq/harness.py, 
 kcq/noise_floor.py, the other files kept their names, and kcq/layout.py maps old module names to new
 ones (notes, provenance and commits from before name the old files).
 
+Since 2026-11-12 the harness's generally useful functions live in hong2p and pyolfsysm, and kcq keeps
+every name as a re-export or a thin wrapper with the queue's defaults (the APL16 odor order, odor labels
+abbreviated, Yang's response criterion of 1 z, the KC data's APL effect, C2's parameters), so scripts
+call them as before: in hong2p, the odor-pair matrices and distances (hong2p.rdm), their statistics and
+the bootstrap and split halves over recordings (hong2p.stats), the response windows, the indicator kernel
+and the noise-corrected and noise-free distances (hong2p.imaging), `oklab_diverging_cmap` (hong2p.viz)
+and the checkouts' git state (hong2p.util: `repo_info`, `git_commits`); in pyolfsysm, the model read as
+imaging sees it (pyolfsysm.readout: readouts, kernel-weighted counts, measurement noise, the session
+z-score), KC population statistics (pyolfsysm.kc_stats), the APL effect as the effect of a manipulation
+(pyolfsysm.effects) and E69's `bisect_factor`, E77's `hold_rates` and E72's population runs
+(pyolfsysm.tuning). The data loaders, the data-target registry, the report's statistics
+(`compare_on_off`, ...), and everything tied to one experiment (E68's low end, E77's curves, E81's repeat
+statistics, ...) stay here. A change to a moved function is made in hong2p or olfsysm (with their tests,
+including the frozen outputs of test_frozen_from_queue.py there) and, if the queue's numbers may change,
+checked here with test/test_frozen_step3.py (outputs frozen from the code before the move).
+
 Claude Code does not read olfsysm's or al_analysis's CLAUDE.md from here; what they say that matters
 for this work:
 - Run pytest with the environment variable QUICK=1, unless extensively testing changes to the
@@ -161,8 +177,9 @@ recorded at run time: every experiment's provenance.json includes
 repository's commit and dirty state with diff, CPU, package versions, input hashes) or at least
 `H.code_commits()` (`queue_commit` and `queue_dirty` for this repository, `pyolfsysm_commit` and
 `pyolfsysm_dirty` for the model's Python code, `al_analysis_commit` and `al_analysis_dirty` for
-al_analysis; until 2026-11-12 `al_analysis_commit` was the model's Python code too, and before
-2026-11-11 the scripts' as well), and `fit_and_plot_mb_model` outputs carry
+al_analysis, `hong2p_commit` and `hong2p_dirty` for hong2p, since 2026-11-12, when the harness's
+general functions moved there and to pyolfsysm; until 2026-11-12 `al_analysis_commit` was the model's
+Python code too, and before 2026-11-11 the scripts' as well), and `fit_and_plot_mb_model` outputs carry
 `model_provenance.json`. The CPU is recorded for information only; nothing compares it.
 
 ## Model and usage caps

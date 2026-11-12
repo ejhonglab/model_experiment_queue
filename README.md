@@ -203,7 +203,10 @@ setup and key scripts, and the queue monitor in coordination/monitor/). Scripts 
 absolutely (`from kcq import harness as H`) and run from the root, by path
 (`./venv/bin/python experiments/E83_searches.py`) or with -m (`./venv/bin/python -m
 experiments.E83_searches`); large outputs go to outputs/ at the root. Until 2026-11-12 every file
-was at the root (CLAUDE.md, "This repository, al_analysis, olfsysm and hong2p").
+was at the root (CLAUDE.md, "This repository, al_analysis, olfsysm and hong2p"). The harness's
+generally useful functions are in hong2p (hong2p.rdm, hong2p.stats, hong2p.imaging) and pyolfsysm
+(pyolfsysm.readout, kc_stats, effects, tuning) since 2026-11-12; kcq.harness keeps their names, with
+the queue's defaults, and test/test_frozen_step3.py checks that their outputs are those from before.
 Until 2026-11-11 this repository was the folder scripts/claude_pair_remapping_experiments of
 al_analysis; commits cited before then are al_analysis's.
 
