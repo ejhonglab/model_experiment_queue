@@ -1,7 +1,7 @@
 # Model experiments monitor
 
 A web page on the lab network, titled "Model experiments", showing which hosts take part in the
-KC-remapping work queue (see `../CLAUDE.md`), what is claimed or running, how many tokens each
+KC-remapping work queue (see `../../CLAUDE.md`), what is claimed or running, how many tokens each
 host's Claude sessions use and how close each claude.ai account is to its plan's limits, and
 what the sessions are doing. It reads only the shared directory on tensor. Claude Code hooks,
 the queue sessions' status line and `chat_watch.sh` keep the session records there current,
@@ -32,7 +32,7 @@ the bar at the top (the address remembers the view: `#summary`, `#experiments`, 
 - **Hosts**: one row per host. It shows the most urgent state of its sessions, the model and
   effort level of each of its live sessions (e.g. "Opus 5.5" over "xhigh"; together they set
   what the session may do on the queue, see "Permissions by model and effort" in
-  `../CLAUDE.md`; greyed if the session is not on the queue, hover for the session names), the
+  `../../CLAUDE.md`; greyed if the session is not on the queue, hover for the session names), the
   status the host's agent last declared (with what it is doing, ETA, and what it is blocked
   on), any experiments it runs and work it has claimed, and when its status file was updated,
   it last posted to chat.md ("last chat") and it joined, each with how long ago below. Click
@@ -103,7 +103,7 @@ once again.
 
 **On the host serving the page (hal)**, install the systemd user service and start it:
 ```
-systemctl --user link ~/src/model_experiment_queue/monitor-server/claude-queue-monitor.service
+systemctl --user link ~/src/model_experiment_queue/coordination/monitor/claude-queue-monitor.service
 systemctl --user enable --now claude-queue-monitor
 ```
 Then, once, allow the user service to run without a login (and start at boot), and open the
@@ -126,7 +126,7 @@ plus a restart for the server only:
 | `presence_hook.py` | every host running queue sessions | nothing: every hook call runs the file afresh, so running sessions use the new version from their next event |
 | `statusline_capture.py` | every host running queue sessions | nothing: each status-line update runs the file afresh |
 | `../chat_watch.sh` | every host running queue sessions | nothing: a running watcher finishes on the old version and the next one it is restarted as uses the new one |
-| hook registration (dotfiles `claude_settings.json`, `../.claude/settings.json`) | every host (also `git -C ~/src/dotfiles pull` on Tom's) | nothing: running sessions reload their settings |
+| hook registration (dotfiles `claude_settings.json`, `../../.claude/settings.json`) | every host (also `git -C ~/src/dotfiles pull` on Tom's) | nothing: running sessions reload their settings |
 
 On hal, for example:
 ```
@@ -170,14 +170,14 @@ so a session that stays idle shows the old record until it next does something.
   session ID from `$CLAUDE_CODE_SESSION_ID`) ends a manual segment, `--mark manual` starts one.
 - Theme: the page follows the system or browser dark / light setting; the "theme" links at the
   top pin one (kept in the browser).
-- Status line: `../.claude/settings.json` sets `statusLine` to `statusline_capture.py` for
+- Status line: `../../.claude/settings.json` sets `statusLine` to `statusline_capture.py` for
   sessions started in the queue repository, refreshed every 300 s. It saves the `rate_limits`
   Claude Code passes it to the local cache and prints the plan usage ("5h 23% (to 21:00) · week
   41% (to Mon 09:00)"). A project's `statusLine` replaces the user's own, so if the user has
   one in `~/.claude/settings.json`, the script runs that command and prints its output
   instead.
 - Declared status: the header block at the top of each `<host>_status.md` (format in
-  `../CLAUDE.md`, "Heartbeat"). A status file without one is shown as "unknown", with the
+  `../../CLAUDE.md`, "Heartbeat"). A status file without one is shown as "unknown", with the
   first line of its "Now" section.
 
 ## Development
@@ -192,5 +192,5 @@ hooks with throttled writes, the chat_watch.sh heartbeat) is in [design.md](desi
 
 Tests (from the repository's root):
 ```
-./venv/bin/python -m pytest monitor-server
+./venv/bin/python -m pytest coordination/monitor
 ```

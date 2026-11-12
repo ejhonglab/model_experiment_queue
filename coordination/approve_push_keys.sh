@@ -13,9 +13,10 @@
 # under the key's title in the audit log, commits under their git author). It does not expire, so
 # revoke it when the machine stops working the queue.
 #
-# Usage: approve_push_keys.sh <host>           # add that host's keys (asks first)
-#        approve_push_keys.sh --list           # the keys added so far, and hosts still waiting
-#        approve_push_keys.sh --revoke <host>  # remove that host's keys (asks first)
+# Usage (from this repository's root):
+#        coordination/approve_push_keys.sh <host>           # add that host's keys (asks first)
+#        coordination/approve_push_keys.sh --list           # the keys added so far, and hosts still waiting
+#        coordination/approve_push_keys.sh --revoke <host>  # remove that host's keys (asks first)
 set -uo pipefail
 
 ORG=ejhonglab

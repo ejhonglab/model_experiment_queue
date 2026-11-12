@@ -6,10 +6,10 @@
 # while entries from other hosts and from other sessions on this host do wake it. inotify does not
 # work over NFS, hence polling (every 60 s by default). Only queue workers run this.
 # Each poll also refreshes this session's heartbeat for the queue monitor
-# (presence/<host>__<session_id>.watch next to chat.md; see monitor-server/), which is how the
+# (presence/<host>__<session_id>.watch next to chat.md; see monitor/), which is how the
 # monitor tells a session idling on the queue from one that is gone, and lets presence_hook.py
 # write the session's usage sample when one is due (every 15 min), as no hook fires while idle.
-# Usage: ./chat_watch.sh [CHAT_MD] [INTERVAL_S]   (from this repository's root)
+# Usage: coordination/chat_watch.sh [CHAT_MD] [INTERVAL_S]   (from this repository's root)
 #        (CHAT_MD default: $KC_CHAT_MD, else chat.md under /local/tensor or /mnt/tensor, whichever exists)
 default_chat() {  # $KC_CHAT_MD, else the first existing of the hosts' tensor mount points
   [ -n "${KC_CHAT_MD:-}" ] && { echo "$KC_CHAT_MD"; return; }
@@ -39,7 +39,7 @@ trap 'heartbeat exited' EXIT
 trap 'exit 143' TERM INT HUP
 
 n0=$(python3 -I "$here/chat_entries.py" count "$f")
-sample=$here/monitor-server/presence_hook.py
+sample=$here/monitor/presence_hook.py
 while true; do
   heartbeat listening
   # a usage sample for the queue monitor when one is due (every 15 min; presence_hook.py)

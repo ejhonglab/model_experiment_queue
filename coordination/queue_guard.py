@@ -19,8 +19,9 @@ EDIT_TOOLS = ('Edit', 'Write', 'MultiEdit', 'NotebookEdit')
 
 def tree_and_src():
     """Returns (tree, src): the queue's tree and the folder holding it, or (None, None)."""
-    here = os.path.dirname(os.path.realpath(__file__))  # ~/src/kc_queue/model_experiment_queue
-    tree = os.path.realpath(os.path.join(here, '..'))
+    # this file is coordination/queue_guard.py in ~/src/kc_queue/model_experiment_queue
+    repo = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    tree = os.path.realpath(os.path.join(repo, '..'))
     if os.path.basename(tree) != 'kc_queue':
         return None, None
     return tree, os.path.dirname(tree)

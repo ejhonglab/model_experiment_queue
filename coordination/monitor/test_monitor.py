@@ -1,6 +1,6 @@
 """Tests for the queue monitor: presence_hook.py, the chat_watch.sh heartbeat and server.py.
 
-Run with `./venv/bin/python -m pytest monitor-server` from the repository's root (standard library
+Run with `./venv/bin/python -m pytest coordination/monitor` from the repository's root (standard library
 only, besides pytest).
 """
 import json

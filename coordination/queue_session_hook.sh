@@ -7,7 +7,7 @@
 # and Python are the queue's and that nothing else in ~/src may be changed. On Tom's hosts
 # (everything directly in ~/src) the hook command does not run it, and it would do nothing.
 input=$(cat)
-here=$(cd "$(dirname "$0")" && pwd -P)
+here=$(cd "$(dirname "$0")/.." && pwd -P)  # the repository (this is coordination/queue_session_hook.sh)
 tree=$(cd "$here/.." && pwd -P)  # model_experiment_queue -> tree
 [ "$(basename "$tree")" = kc_queue ] || exit 0
 venv=$here/venv

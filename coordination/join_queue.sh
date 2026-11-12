@@ -34,7 +34,9 @@
 #   5. if git has no name or email to commit with, explains why they are needed, asks for them and
 #      saves them with git config --global (it exits if you decline: queue sessions commit);
 #   6. makes a new venv, model_experiment_queue/venv, from a system Python and installs
-#      al_analysis, hong2p and olfsysm editable from their checkouts (skipped with --no-install). It never uses or changes a venv it did not make (it marks its
+#      al_analysis, hong2p and olfsysm editable from their checkouts, then this repository's own
+#      packages (kcq, experiments, ...; pyproject.toml), also editable (skipped with --no-install).
+#      It never uses or changes a venv it did not make (it marks its
 #      own with kc_queue_venv.txt), and checks that the packages import from the tree;
 #   7. for each repository this machine cannot already push to, makes an SSH deploy key
 #      (~/.ssh/kc_queue_<repo>) and sets up that checkout to fetch over HTTPS and push over SSH
@@ -49,7 +51,7 @@
 #      --full-tests also runs this repository's tests and al_analysis's whole QUICK=1 test suite
 #      (2.5 h on hal).
 #
-# Usage: ~/src/kc_queue/model_experiment_queue/join_queue.sh [--no-install] [--no-tests | --full-tests]
+# Usage: ~/src/kc_queue/model_experiment_queue/coordination/join_queue.sh [--no-install] [--no-tests | --full-tests]
 #        .../join_queue.sh --check    # once Tom has added the keys: can each checkout push?
 # PYTHON=<interpreter> picks the Python the venv is made from (default: python3.14 found on the
 # system PATH, installed as above if missing; not one inside a venv).
@@ -508,19 +510,22 @@ assert sys.prefix != sys.base_prefix and os.path.realpath(sys.prefix) == os.path
   "$V/python" -m pip install -e "$al[dev]" || die "installing al_analysis failed"
   "$V/python" -m pip install -e "$src/hong2p[all]" || die "installing hong2p failed"
   "$V/python" -m pip install -e "$src/olfsysm" || die "building / installing olfsysm failed"
+  # this repository's packages (no dependencies of their own), so the scripts import each other
+  "$V/python" -m pip install -e "$q" || die "installing this repository's packages failed"
   (cd / && "$V/python" -I - "$src" <<'EOF') || die "the venv does not import from the queue's tree"
 import os, sys
 tree = os.path.realpath(sys.argv[1])
-import al_analysis, hong2p, olfsysm
+import al_analysis, hong2p, olfsysm, kcq
 bad = []
-for name, mod in (('al_analysis', al_analysis), ('hong2p', hong2p), ('olfsysm', olfsysm)):
+for name, mod, checkout in (('al_analysis', al_analysis, 'al_analysis'), ('hong2p', hong2p, 'hong2p'),
+        ('olfsysm', olfsysm, 'olfsysm'), ('kcq', kcq, 'model_experiment_queue')):
     # al_analysis is a namespace package (no __init__.py): its directories instead of a file
     locs = [mod.__file__] if getattr(mod, '__file__', None) else [
         p for p in getattr(mod, '__path__', []) if os.path.isdir(p)]
     for loc in locs or ['(nowhere)']:
         path = os.path.realpath(loc)
         print(f'{name}: imports from {path}')
-        if not path.startswith(os.path.join(tree, name) + os.sep):
+        if not path.startswith(os.path.join(tree, checkout) + os.sep):
             bad.append(name)
 if bad:
     raise SystemExit(f'{", ".join(bad)} should import from {tree}')
@@ -581,8 +586,8 @@ os=$( (. /etc/os-release 2>/dev/null && echo "$PRETTY_NAME") || uname -sr)
 if [ $tests -gt 0 ]; then
   step "model and experiment inputs"
   [ -x "$V/python" ] || die "no venv at $q/venv; re-run without --no-install"
-  (cd "$here" && "$V/python" - <<'EOF') || die "the model or the experiment inputs do not load (above)"
-import kc_remapping_harness as H
+  (cd "$q" && "$V/python" - <<'EOF') || die "the model or the experiment inputs do not load (above)"
+from kcq import harness as H
 from al_analysis import mb_model
 problems = mb_model.olfsysm_clean_problems()
 if problems:
@@ -616,7 +621,7 @@ EOF
   step "provenance and monitor tests"
   (cd "$al" && QUICK=1 "$V/python" -m pytest -q -p no:cacheprovider test/test_model_provenance.py) ||
     die "tests failed (above)"
-  (cd "$q" && "$V/python" -m pytest -q monitor-server) || die "tests failed (above)"
+  (cd "$q" && "$V/python" -m pytest -q coordination/monitor) || die "tests failed (above)"
   if [ $tests = 2 ]; then
     step "this repository's tests (QUICK=1)"
     (cd "$q" && QUICK=1 nice -n 10 "$V/python" -m pytest -q) || die "tests failed (above)"
@@ -671,8 +676,8 @@ EOF
 fi
 cat <<EOF
 
-To work the queue, start Claude Code in this folder and accept its workspace-trust prompt (that
-enables the hooks in .claude/settings.json here):
+To work the queue, start Claude Code in $q and accept its workspace-trust prompt (that
+enables the hooks in its .claude/settings.json):
     cd $q && claude
 and ask it to work the experiment queue. Queue sessions here work only in $src: its checkouts and
 model_experiment_queue/venv. The hooks tell each session so, and refuse edits elsewhere in ~/src.

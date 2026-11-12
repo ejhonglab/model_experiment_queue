@@ -14,7 +14,7 @@
 # An existing ruleset of one of these names is left as it is. Tom runs this, with gh logged in with
 # admin rights on the four repositories; re-running it changes nothing that is already in place.
 #
-# Usage: github_rules.sh [--check]
+# Usage: coordination/github_rules.sh [--check]   (from this repository's root)
 set -uo pipefail
 
 ORG=ejhonglab

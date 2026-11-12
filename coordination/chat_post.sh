@@ -2,7 +2,7 @@
 # Append an entry to chat.md as this host, and record its fingerprint in this session's ledger so
 # this session's chat_watch.sh does not wake on its own post (it still wakes on entries from other
 # hosts and from other sessions on this host). Queue workers post with this, not with `cat >>`.
-# Usage: ./chat_post.sh [CHAT_MD] <<'EOF'   (from this repository's root)
+# Usage: coordination/chat_post.sh [CHAT_MD] <<'EOF'   (from this repository's root)
 #        <entry text, without the "## <date> <time> <host>" header, which this adds>
 #        EOF
 here=$(cd "$(dirname "$0")" && pwd)
