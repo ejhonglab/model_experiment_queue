@@ -77,7 +77,7 @@ def filtered(S: np.ndarray, tau: float, decay: float) -> np.ndarray:
 def simulate_passes(name: str, info: dict, orn: pd.DataFrame, loc: Path, n_pass: int) -> tuple:
     """Builds the model, reconstructs the drives (E55 / E51 part A) and runs the replay passes.
     Returns ({pass: {rep: trial arrays}}, convergence rows, checks)."""
-    from al_analysis.mb_model import get_time_index
+    from pyolfsysm.mb_model import get_time_index
     t0 = time.time()
     m = E43.ExcitabilityModel(name, orn, loc)
     checks = dict(model=name, label=E55.label_of(name), build_seconds=time.time() - t0, **m.info)

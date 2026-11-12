@@ -180,7 +180,7 @@ def main() -> None:
             continue
         if src not in tuned:
             print(f'{tag}: {src} not tuned yet', flush=True); continue
-        from al_analysis.mb_model import fit_mb_model, make_fixed_param_kc_simulator
+        from pyolfsysm.mb_model import fit_mb_model, make_fixed_param_kc_simulator
         initial = {k: tuned[src][k] for k in PARAM_KEYS}
         thr_kws = dict(BOUTON, claw_thr=args.thr, make_plots=False, silent=True)
         if w > 0:

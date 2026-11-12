@@ -712,7 +712,7 @@ def plot_profiles(fly_df: pd.DataFrame, boot_df: pd.DataFrame, out: Path,
 # analysis 5: the local APL-unit model's maps
 def calyx_apl_nodes() -> pd.DataFrame:
     """`load_apl_points()` restricted to nodes whose synapses are mostly in CA(R), the hemibrain calyx."""
-    from al_analysis.mb_model import apl_synapses_path, load_apl_points
+    from pyolfsysm.mb_model import apl_synapses_path, load_apl_points
     pts = load_apl_points()
     syns = pd.read_parquet(apl_synapses_path, columns=['node_id', 'roi'])
     n = syns.dropna(subset=['roi']).groupby(['node_id', 'roi']).size().rename('n').reset_index()
@@ -727,7 +727,7 @@ def axes_check() -> pd.DataFrame:
     expects (PLP lateral and ventral of the calyx, PED anterior and ventral, SLP anterior and dorsal; for the right
     hemisphere lateral is +right), and Yang's Claude's hemibrain posterior view (view_right_um, view_dorsal_um) against
     (-x, -z) of the native voxels."""
-    from al_analysis.mb_model import apl_point_coord_cols, apl_synapses_path, hemibrain_voxel_um
+    from pyolfsysm.mb_model import apl_point_coord_cols, apl_synapses_path, hemibrain_voxel_um
     s = pd.read_parquet(apl_synapses_path)
     c = s[['x', 'y', 'z']].to_numpy() * hemibrain_voxel_um * np.array([-1, 1, -1])
     d = pd.DataFrame(c, columns=apl_point_coord_cols)
@@ -783,7 +783,7 @@ def model_maps(potentials: pd.DataFrame, odors: Sequence[str], pixel_um: float =
     potential, and each pixel is the Gaussian-weighted mean over nodes (normalized convolution, sigma `render_um`),
     optionally only nodes within `slab` (anterior um). Returns odor -> map and the mask of the calyx outline (pixels with
     nodes nearby, holes filled)."""
-    from al_analysis.mb_model import APL_UNIT
+    from pyolfsysm.mb_model import APL_UNIT
     nodes = calyx_apl_nodes() if nodes is None else nodes
     extent = (nodes.right_um.min() - 3, nodes.right_um.max() + 3, nodes.dorsal_um.min() - 3, nodes.dorsal_um.max() + 3)
     if slab is not None:
@@ -970,7 +970,7 @@ def write_provenance(out: Path, extra: dict) -> None:
     from kcq import harness as H
     inputs = sorted(DATA.glob('*')) + [HERE / 'data_prep' / 'apl_calyx_maps.py'] + sorted(E2_RESULTS.glob('unit_potentials_*.csv'))
     try:
-        from al_analysis.mb_model import apl_synapses_path
+        from pyolfsysm.mb_model import apl_synapses_path
         inputs.append(Path(apl_synapses_path))
     except Exception:
         pass

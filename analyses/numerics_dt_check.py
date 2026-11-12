@@ -68,7 +68,7 @@ class ParamsWithDt:
 
 
 def run(orn, kws, params, dt, cond, osm, mb_model):
-    from al_analysis.mb_model import fit_mb_model, get_sim_var
+    from pyolfsysm.mb_model import fit_mb_model, get_sim_var
     orig = osm.ModelParams
     osm.ModelParams = ParamsWithDt(orig, dt)
     try:
@@ -93,7 +93,7 @@ def main() -> None:
         help='folder under <shared>/results for the outputs (default: %(default)s)')
     args = ap.parse_args()
     import olfsysm as osm
-    import al_analysis.mb_model as mb_model
+    import pyolfsysm.mb_model as mb_model
     res_dir = H.shared_dir() / 'results' / args.out_name; res_dir.mkdir(exist_ok=True)
     orn = H.apl16_orn_deltas()
     # recorded before the runs, so a pull during them cannot change it

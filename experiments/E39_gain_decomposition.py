@@ -195,7 +195,7 @@ def main() -> None:
     fits = pd.read_csv(H.results_dir('E34_gain_bounded') / 'fits.csv').set_index('tag')
     e34_out = H.outputs_dir('E34_gain_bounded')
     tuned = json.loads((out_dir / 'tuned_params.json').read_text()) if (out_dir / 'tuned_params.json').exists() else {}
-    from al_analysis.mb_model import fit_mb_model, make_fixed_param_kc_simulator
+    from pyolfsysm.mb_model import fit_mb_model, make_fixed_param_kc_simulator
     # code provenance at the start: the checkout can move (a pull) while the run goes on
     try:
         model_prov = H.model_provenance(orn_deltas=orn)

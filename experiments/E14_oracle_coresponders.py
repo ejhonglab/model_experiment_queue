@@ -87,7 +87,7 @@ def coresponders(responses: pd.DataFrame, group_a, group_b) -> List[int]:
 
 def per_kc_apl_weights(kws: dict, kc_ids: List[int], factor: float
     ) -> Tuple[pd.Series, pd.Series]:
-    from al_analysis.mb_model import (connectome_wPNKC, connectome_APL_weights,
+    from pyolfsysm.mb_model import (connectome_wPNKC, connectome_APL_weights,
         get_connectome_wPNKC_params)
 
     params = get_connectome_wPNKC_params(kws)
@@ -99,7 +99,7 @@ def per_kc_apl_weights(kws: dict, kc_ids: List[int], factor: float
 
 
 def fit_on_off(orn, kws: dict, common: dict):
-    from al_analysis.mb_model import fit_mb_model, get_thr_and_APL_weights
+    from pyolfsysm.mb_model import fit_mb_model, get_thr_and_APL_weights
 
     resp_on, spk_on, _, pdict = fit_mb_model(orn, **kws, target_sparsity=TARGET, **common)
     fixed = get_thr_and_APL_weights(pdict, kws)

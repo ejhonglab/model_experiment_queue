@@ -211,7 +211,7 @@ def handle_breadth(extra_kws: Optional[dict] = None, *, orn: Optional[pd.DataFra
     Runs are cached under outputs/E77_input_side_common_error/breadth/ by a hash of their inputs, the base's parameters
     and the olfsysm build's source hash."""
     from experiments import E10_joint_fit as J
-    from al_analysis.mb_model import fit_mb_model, olfsysm_build_info
+    from pyolfsysm.mb_model import fit_mb_model, olfsysm_build_info
     P = c2_parts()
     if not extra_kws and orn is None and wPNKC is None:
         return P['breadth']
@@ -266,7 +266,7 @@ def build_c2_simulator(extra_kws: Optional[dict] = None, *, orn: Optional[pd.Dat
         does, 'mp', 'rv', 'odor_order').
     """
     from experiments import E10_joint_fit as J
-    from al_analysis.mb_model import make_fixed_param_kc_simulator
+    from pyolfsysm.mb_model import make_fixed_param_kc_simulator
     P = c2_parts()
     p = dict(P['p'] if params is None else params)
     if breadth is None:
@@ -406,7 +406,7 @@ class PerOdorRunner:
     def pn_rates(self) -> pd.DataFrame:
         """Glomerulus x odor PN rates of C2's input (window PN_WINDOW mean of olfsysm's pn_sims; rows in the wiring's
         glomerulus order, columns the outputs' odors by position)."""
-        from al_analysis.mb_model import get_sim_var, get_time_index
+        from pyolfsysm.mb_model import get_sim_var, get_time_index
         t = np.asarray(get_time_index(self.mp, self.rv))
         win = (t >= PN_WINDOW[0]) & (t <= PN_WINDOW[1])
         pn = get_sim_var(self.rv.pn, 'pn_sims')

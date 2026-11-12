@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Export Yang's diagnostic-odor mixture and dilute natural-mixture KC data, as APL16's.
 
-Reads Yang's two other KC datasets from al_analysis/data/from_yang/20260415_YZtransfer/
-(committed in this repository):
+Reads Yang's two other KC datasets from pyolfsysm/data/from_yang/20260415_YZtransfer/ in
+the olfsysm repository (al_analysis/data/... until 2026-11-12):
 - `diag_mix`: the diagnostic-odor binary mixtures (2h, ma, farn and their pairs; WT,
   TNTin and TNT flies, 2025-01-29 to 03-26), per-trial z-scored responses in
   `20250129_0326_KC_odormix_resp_good.csv`
@@ -46,11 +46,12 @@ import pandas as pd
 from data_prep.yang_apl16_kc_data import rdm_long
 
 HERE = Path(__file__).resolve().parents[1]  # the repository root
-# the al_analysis checkout the installed package comes from (found without importing it)
-AL_ANALYSIS = next(Path(p) for p in importlib.util.find_spec('al_analysis').submodule_search_locations
+# the olfsysm checkout the installed pyolfsysm (the model, with the data it reads) comes from
+# (found without importing it); this data was in al_analysis's data directory until 2026-11-12
+PYOLFSYSM = next(Path(p) for p in importlib.util.find_spec('pyolfsysm').submodule_search_locations
     if Path(p).is_dir()).parent
-RAW_DIR = AL_ANALYSIS / 'al_analysis' / 'data' / 'from_yang' / '20260415_YZtransfer'
-ORN_DELTA_DIR = AL_ANALYSIS / 'al_analysis' / 'data' / 'internal'
+RAW_DIR = PYOLFSYSM / 'pyolfsysm' / 'data' / 'from_yang' / '20260415_YZtransfer'
+ORN_DELTA_DIR = PYOLFSYSM / 'pyolfsysm' / 'data' / 'internal'
 OUT_NAME = 'yang_weak_odor_kc'
 DEFAULT_OLFDB = 'http://hal:8080'
 
@@ -854,7 +855,8 @@ def write_readme(out_dir: Path, results: dict, avail: pd.DataFrame,
     a("# Yang's diagnostic-odor mixture and dilute natural-mixture KC data\n")
     a(f'Made {now} by `data_prep/yang_weak_odor_kc_data.py` (in ejhonglab/model_experiment_queue) '
         'from the files Yang sent Tom in April 2026 '
-        '(`al_analysis/data/from_yang/20260415_YZtransfer/`, committed in al_analysis). '
+        '(`pyolfsysm/data/from_yang/20260415_YZtransfer/`, committed in olfsysm; in '
+        'al_analysis/data until 2026-11-12). '
         'Re-run that script to regenerate everything here (it overwrites this folder). '
         'The layout follows `data/yang_apl16_kc_olfdb/` (Yang\'s APL16 TNT / TNT3c data '
         'from olfdb), so the same code can read both; these two datasets are not in olfdb.'
@@ -1066,8 +1068,8 @@ def write_readme(out_dir: Path, results: dict, avail: pd.DataFrame,
 
     a('## ORN input availability\n')
     a('The model\'s input is ORN spike deltas. Two kinds of ORN data could supply them: '
-        'the estimated spike deltas already committed in al_analysis '
-        '(`al_analysis/data/internal/{kiwi-control,megamat,validation2}_mean_est_spike_'
+        'the estimated spike deltas already committed in olfsysm '
+        '(`pyolfsysm/data/internal/{kiwi-control,megamat,validation2}_mean_est_spike_'
         'deltas.csv`, Tom\'s pebbled dF/F converted by the dF/F-to-spike-rate fit; '
         '`mb_model.natmix_orn_deltas()` loads the first), and olfdb\'s pebbled glomerulus '
         'dF/F datasets 1, 4, 5 (Tom; the same flies as those three files), 6 (George) and '
@@ -1203,7 +1205,8 @@ def main() -> None:
         'generated': datetime.now(timezone.utc).isoformat(timespec='seconds'),
         'script': str(Path(__file__).resolve().relative_to(HERE.parent)),
         'queue_commit': git('rev-parse', 'HEAD'),
-        'al_analysis_commit': git('rev-parse', 'HEAD', cwd=AL_ANALYSIS),
+        # (al_analysis_commit before 2026-11-12, when the inputs were in al_analysis)
+        'pyolfsysm_commit': git('rev-parse', 'HEAD', cwd=PYOLFSYSM),
         'script_uncommitted_changes': bool(git('status', '--porcelain', '--',
             str(Path(__file__).resolve().relative_to(HERE)))),
         'olfdb': args.olfdb,
@@ -1215,7 +1218,7 @@ def main() -> None:
         'panels': {p: {'odors': {lab: yang2olfdb(lab) for lab in PANEL_ODORS[p]},
             'n_recordings': len(panels[p]), 'n_long_rows': results[p]['n_long_rows']}
             for p in panels},
-        'inputs': {str(p.relative_to(AL_ANALYSIS)): sha256(p) for p in inputs},
+        'inputs': {str(p.relative_to(PYOLFSYSM)): sha256(p) for p in inputs},
         'checks_failed': checks.failed,
     }
     (out_dir / 'provenance.json').write_text(json.dumps(meta, indent=1) + '\n')

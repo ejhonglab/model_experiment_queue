@@ -172,7 +172,7 @@ def main() -> None:
                 finish(tag, meta, on_out, off_out, wPNKC)
 
     if 'B' in args.parts:
-        from al_analysis.mb_model import fit_mb_model, make_fixed_param_kc_simulator
+        from pyolfsysm.mb_model import fit_mb_model, make_fixed_param_kc_simulator
         fits = pd.read_csv(H.results_dir('E34_gain_bounded') / 'fits.csv').set_index('tag')
         e34_out = H.outputs_dir('E34_gain_bounded')
         for b in args.fits:

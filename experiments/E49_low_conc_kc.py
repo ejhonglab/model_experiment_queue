@@ -159,7 +159,7 @@ def extended_orn(orn16: pd.DataFrame) -> Tuple[pd.DataFrame, dict]:
     """The APL16 input with the extra odors' columns appended (panel PANEL), on the APL16 input's
     36 glomeruli: the natural-mixture / diagnostics spike deltas restricted to those glomeruli
     (the ones they lack are filled with 0, recorded in the returned info)."""
-    from al_analysis.mb_model import natmix_orn_deltas
+    from pyolfsysm.mb_model import natmix_orn_deltas
     nm = natmix_orn_deltas(drop_diags=False)
     gl = list(orn16.index)
     missing = sorted(set(gl) - set(nm.index)); dropped = sorted(set(nm.index) - set(gl))
@@ -182,7 +182,7 @@ def extended_orn(orn16: pd.DataFrame) -> Tuple[pd.DataFrame, dict]:
 def build_model(name: str, orn16: pd.DataFrame, orn_ext: pd.DataFrame, out_dir: Path) -> dict:
     """The model at its fitted / tuned parameters (kws built on the APL16 input, as the fit was),
     simulated on the extended input; returns sim, params, mp / rv, saved-output paths, info."""
-    from al_analysis.mb_model import make_fixed_param_kc_simulator
+    from pyolfsysm.mb_model import make_fixed_param_kc_simulator
     if name == 'base70':
         r = e19_row(70.0, 0.0, 0.0)
         p_on = {k: float(r[k]) for k in PARAM_KEYS}

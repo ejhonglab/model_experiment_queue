@@ -735,7 +735,7 @@ def wiring_simulator(label: str, orn: pd.DataFrame, input_tag: Optional[str] = N
     `--orn-input` and the wiring options builds it). Returns (simulate, params, (folder, tag) of the wiring's fit)."""
     from experiments import E10_joint_fit as J
     from experiments import E72_wiring_population as E72
-    from al_analysis.mb_model import make_fixed_param_kc_simulator
+    from pyolfsysm.mb_model import make_fixed_param_kc_simulator
     mem = {lab: (f, tg) for lab, f, tg in members()}
     folder, tag = mem[label]
     p = E72.fitted_params(folder, tag)

@@ -10,8 +10,9 @@ build-backend = "setuptools.build_meta"
 name = "model_experiment_queue"
 version = "0.0.0"
 description = "The KC-remapping experiment queue: experiment scripts, their harness and the queue's tools"
-# none listed: the model (al_analysis, hong2p, olfsysm) is installed editable from the checkouts
-# beside this one, and brings the rest (CLAUDE.md, "Code changes")
+# none listed: the model (olfsysm, with its Python side pyolfsysm), al_analysis and hong2p are
+# installed editable from the checkouts beside this one, and bring the rest (CLAUDE.md, "Code
+# changes")
 dependencies = []
 
 [tool.setuptools]

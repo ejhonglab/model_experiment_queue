@@ -115,7 +115,7 @@ def make_split_lesions(W: pd.DataFrame, plan: pd.DataFrame, seeds: List[int], ou
     kinds: Tuple[str, ...] = SPLIT_LESIONS) -> Dict[Tuple[str, int], pd.DataFrame]:
     """The four split lesions per seed: each subset's pairs brought to their targets with the other
     over-shared pairs (and, for a control, every over-shared pair) protected."""
-    from al_analysis.wpnkc_shuffles import lesion_coinput, coinput_counts, wPNKC_shuffle_summary
+    from pyolfsysm.wpnkc_shuffles import lesion_coinput, coinput_counts, wPNKC_shuffle_summary
     plan52 = pd.read_csv(e52_results() / 'lesion_pairs.csv')
     over_all = [(a, b) for a, b in zip(plan52[plan52.kind == 'lesion_targeted'].glom_a, plan52[plan52.kind == 'lesion_targeted'].glom_b)]
     obs = coinput_counts(W)
@@ -173,7 +173,7 @@ def run_variants(jobs: List[dict], res_dir: Path, out_dir: Path) -> None:
     of per-KC multipliers, indexed by KC id, applied to the APL->KC weights on top of the breadth
     weights; E70's oracle), retune (default True: the somatic threshold re-tuned to 6.8 % by bisection;
     False keeps the fitted threshold, variant 'fit')."""
-    from al_analysis.mb_model import make_fixed_param_kc_simulator
+    from pyolfsysm.mb_model import make_fixed_param_kc_simulator
     from experiments.E1_apl_knockout import bisect_threshold
     from experiments.E3_drive_dependent_gain import per_odor_extras, rate
     from experiments.E4_substrate import score, kc_by_glomerulus

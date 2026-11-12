@@ -110,7 +110,7 @@ def rate(responses: pd.DataFrame) -> float:
 
 def n_claws_per_kc(kws: dict, kc_ids: pd.Index) -> pd.Series:
     """Number of claws (input PN-KC connections) of each KC id, from the connectome."""
-    from al_analysis.mb_model import connectome_wPNKC, get_connectome_wPNKC_params
+    from pyolfsysm.mb_model import connectome_wPNKC, get_connectome_wPNKC_params
 
     wPNKC = connectome_wPNKC(**get_connectome_wPNKC_params(kws))
     if 'claw_id' in wPNKC.index.names:
@@ -124,7 +124,7 @@ def n_claws_per_kc(kws: dict, kc_ids: pd.Index) -> pd.Series:
 
 def type_scaled_apl_weights(kws: dict) -> Tuple[pd.Series, pd.Series]:
     """Connectome per-claw APL<->KC weights multiplied by `APL_TYPE_FACTORS` per KC type."""
-    from al_analysis.mb_model import (connectome_wPNKC, connectome_APL_weights,
+    from pyolfsysm.mb_model import (connectome_wPNKC, connectome_APL_weights,
         get_connectome_wPNKC_params)
 
     params = get_connectome_wPNKC_params(kws)
@@ -165,7 +165,7 @@ def bisect_scale(sim: Callable, thr_vec: np.ndarray, target: float, *, extra: di
 
 def run_variant(base: str, variant: str, target: float, out_dir: Path) -> dict:
     """Simulates one variant (APL on, then acute APL off) and writes its outputs."""
-    from al_analysis.mb_model import (fit_mb_model, make_fixed_param_kc_simulator,
+    from pyolfsysm.mb_model import (fit_mb_model, make_fixed_param_kc_simulator,
         get_thr_and_APL_weights)
 
     t0 = time.time()

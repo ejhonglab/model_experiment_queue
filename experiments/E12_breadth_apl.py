@@ -68,7 +68,7 @@ def main() -> None:
     ap.add_argument('-k', '--exponents', nargs='+', type=float, default=[0.0, 0.5, 1.0, 2.0, -1.0])
     ap.add_argument('--breadth', nargs='+', choices=['n_odors', 'spikes'], default=['n_odors', 'spikes'])
     args = ap.parse_args()
-    from al_analysis.mb_model import make_fixed_param_kc_simulator
+    from pyolfsysm.mb_model import make_fixed_param_kc_simulator
 
     res_dir = H.results_dir(EXPERIMENT)
     out_dir = H.outputs_dir(EXPERIMENT)
@@ -92,7 +92,7 @@ def main() -> None:
     # weight Series, divided by the tuned scales to get the normalized weights that
     # hardcoded `_w*` overrides must be given (they are used unnormalized; passing these
     # back reproduces the base exactly)
-    from al_analysis.mb_model import fit_mb_model
+    from pyolfsysm.mb_model import fit_mb_model
     _, _, wPNKC, pd0 = fit_mb_model(orn, fixed_thr=initial['fixed_thr'],
         wAPLKC=initial['wAPLKC_scale'], wKCAPL=initial['wKCAPL_scale'],
         wAPLPN=initial['wAPLPN_scale'], wPNAPL=initial['wPNAPL_scale'], **BOUTON,

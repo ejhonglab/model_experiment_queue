@@ -55,7 +55,7 @@ def apl_trace_stats(inh) -> pd.DataFrame:
 
 
 def main() -> None:
-    from al_analysis.mb_model import fit_mb_model
+    from pyolfsysm.mb_model import fit_mb_model
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('--thr', default='70')
     ap.add_argument('--forms', nargs='+', default=list(FORMS), choices=list(FORMS))

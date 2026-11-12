@@ -7,7 +7,7 @@ their removal from the real wiring (E54) loses part of it. What carries the rest
 of the pairwise matrix (the under-shared pairs, the weakly over-shared tail) or the higher-order
 arrangement (which KCs hold the pairs, what else they sample). Here a draw's whole 54 x 54 matrix of
 shared-KC counts is matched to the real wiring's by annealed claw swaps
-(`al_analysis.wpnkc_shuffles.match_coinput`), re-assigning which KCs hold the pairs:
+(`pyolfsysm.wpnkc_shuffles.match_coinput`), re-assigning which KCs hold the pairs:
 (A) E47's within-type Curveball draws (seeds 1-3), matched within KC type with the type layer (per-type
     KCs per glomerulus) held: the real wiring's pairwise structure on re-assigned KCs;
 (B) E47's plain Curveball draws (seeds 1-3), matched across types with the type layer left as drawn:
@@ -69,7 +69,7 @@ REFIT_TAG = 'thr40_gain1.5_rate0.068_k2_cap3'
 
 def triplet_counts(wPNKC: pd.DataFrame) -> np.ndarray:
     """(glomeruli x glomeruli x glomeruli) number of KCs with claws from all three glomeruli."""
-    from al_analysis.wpnkc_shuffles import _kc_counts, _column_groups
+    from pyolfsysm.wpnkc_shuffles import _kc_counts, _column_groups
     counts = _kc_counts(wPNKC)
     codes, groups = _column_groups(wPNKC.columns, 'glomerulus')
     onehot = np.zeros((len(codes), len(groups)))
@@ -88,8 +88,8 @@ def triplet_corr(T_real: np.ndarray, T_other: np.ndarray) -> float:
 
 def type_layer(wPNKC: pd.DataFrame) -> pd.DataFrame:
     """(KC type x glomerulus) number of KCs of the type with any claw from the glomerulus."""
-    from al_analysis.mb_model import KC_ID, KC_TYPE
-    from al_analysis.wpnkc_shuffles import coinput_counts
+    from pyolfsysm.mb_model import KC_ID, KC_TYPE
+    from pyolfsysm.wpnkc_shuffles import coinput_counts
     kc = wPNKC.T.groupby(level='glomerulus').sum().T  # claw x glomerulus
     kc = kc.groupby(level=[KC_ID, KC_TYPE]).sum() > 0
     return kc.groupby(level=KC_TYPE).sum()
@@ -98,7 +98,7 @@ def type_layer(wPNKC: pd.DataFrame) -> pd.DataFrame:
 def _match_one(args: Tuple[str, int, str]) -> dict:
     """One draw's matching (a worker): shuffles, matches, saves the wiring and returns its outcome row."""
     cls, seed, out_dir = args
-    from al_analysis.wpnkc_shuffles import NAMED_SHUFFLES, shuffle_wPNKC, match_coinput, wPNKC_shuffle_summary
+    from pyolfsysm.wpnkc_shuffles import NAMED_SHUFFLES, shuffle_wPNKC, match_coinput, wPNKC_shuffle_summary
     W = base_wiring()
     method, within = NAMED_SHUFFLES[cls]
     S = shuffle_wPNKC(W, method, within_kc_type=within, seed=seed)
@@ -155,7 +155,7 @@ def jobs_for(wirings: Dict[Tuple[str, int], pd.DataFrame]) -> List[dict]:
 
 def glom_coinput_corr(W: pd.DataFrame, X: pd.DataFrame) -> float:
     """Pearson correlation over glomerulus pairs of the shared-KC counts of X with those of W."""
-    from al_analysis.wpnkc_shuffles import coinput_counts
+    from pyolfsysm.wpnkc_shuffles import coinput_counts
     a = coinput_counts(W).to_numpy(); b = coinput_counts(X).reindex_like(coinput_counts(W)).to_numpy()
     iu = np.triu_indices(len(a), k=1)
     return float(np.corrcoef(a[iu].astype(float), b[iu].astype(float))[0, 1])
@@ -165,7 +165,7 @@ def matched_wiring_stats(oc: pd.DataFrame, out_dir: Path, e57_out: Path) -> Dict
     """Per draw: the glomerulus-level co-input correlation with the real wiring of the untreated draw (re-drawn
     from its seed) and, where E57's transplanted wiring of the same draw is on this host, its pairwise and
     three-way co-input correlations."""
-    from al_analysis.wpnkc_shuffles import NAMED_SHUFFLES, shuffle_wPNKC
+    from pyolfsysm.wpnkc_shuffles import NAMED_SHUFFLES, shuffle_wPNKC
     W = base_wiring()
     T_real = None
     out: Dict[Tuple[str, int], dict] = {}
@@ -189,7 +189,7 @@ def wiring_structure(oc: pd.DataFrame, out_dir: Path, e57_out: Path) -> pd.DataF
     matrix, against the real wiring: the type-resolved pairwise correlation (each KC type's shared-KC counts,
     concatenated), the three-way correlation among the over-shared pairs' glomeruli, and how many KCs carry
     three or more (four or more) of those glomeruli."""
-    from al_analysis.wpnkc_shuffles import NAMED_SHUFFLES, shuffle_wPNKC, _kc_counts, _column_groups, _kc_codes, _kc_groups
+    from pyolfsysm.wpnkc_shuffles import NAMED_SHUFFLES, shuffle_wPNKC, _kc_counts, _column_groups, _kc_codes, _kc_groups
     W = base_wiring()
     codes, groups = _column_groups(W.columns, 'glomerulus')
     onehot = np.zeros((len(codes), len(groups))); onehot[np.arange(len(codes)), codes] = 1

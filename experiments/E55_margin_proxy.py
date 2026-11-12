@@ -223,7 +223,7 @@ def simulate(name: str, info: dict, orn: pd.DataFrame, loc: Path) -> tuple:
     factor, and replays the drive at the pipeline's own jittered thresholds. Returns (per-KC x odor x
     condition table, {rep: trial arrays}, checks)."""
     from scipy.signal import lfilter
-    from al_analysis.mb_model import get_time_index
+    from pyolfsysm.mb_model import get_time_index
     t0 = time.time()
     m = E43.ExcitabilityModel(name, orn, loc)
     checks = dict(model=name, label=label_of(name), build_seconds=time.time() - t0, **m.info)

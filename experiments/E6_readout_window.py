@@ -74,7 +74,7 @@ class SpikeSimulator:
     """Re-runs the KC layer of a tuned model and returns spike trains (odor x KC x time)."""
 
     def __init__(self, base: str, target: float):
-        from al_analysis.mb_model import fit_mb_model
+        from pyolfsysm.mb_model import fit_mb_model
         import olfsysm as osm
 
         self.osm = osm
@@ -103,7 +103,7 @@ class SpikeSimulator:
     def run(self, apl_on: bool, **mp_kc) -> Tuple[np.ndarray, np.ndarray]:
         """Returns (spikes[odor, kc, time] as int8, times_s) for APL on/off and optional
         `mp.kc` overrides (e.g. claw_tau=0.1); overrides persist until reset."""
-        from al_analysis.mb_model import get_sim_var, get_time_index
+        from pyolfsysm.mb_model import get_sim_var, get_time_index
 
         for k, v in mp_kc.items():
             setattr(self.mp.kc, k, v)

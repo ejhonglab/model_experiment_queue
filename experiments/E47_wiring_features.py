@@ -3,7 +3,7 @@
 
 Every re-drawn wiring loses most of the block the real hemibrain claw wiring makes (the
 within-KC-type claw permutations of E30, E33, E42 and E46), so the block depends on
-something a claw permutation destroys. The four shuffles in `al_analysis.wpnkc_shuffles`
+something a claw permutation destroys. The four shuffles in `pyolfsysm.wpnkc_shuffles`
 keep different things: `claw_permutation` keeps each KC's number of claws and each
 glomerulus' number of claws; `curveball` keeps each KC's number of distinct glomeruli and
 each glomerulus' number of KCs (the degree structure of the binary KC x glomerulus
@@ -106,7 +106,7 @@ def fitted_params(exp: str, tag: str) -> Tuple[Dict[str, float], pd.Series]:
 def wiring_summary(real_W: pd.DataFrame, shuffle: str, seed: int) -> Dict[str, float]:
     """`wPNKC_shuffle_summary` of the shuffle (the same draw `bouton_base` makes, before any
     gain) against the real wiring."""
-    from al_analysis.wpnkc_shuffles import NAMED_SHUFFLES, shuffle_wPNKC, wPNKC_shuffle_summary
+    from pyolfsysm.wpnkc_shuffles import NAMED_SHUFFLES, shuffle_wPNKC, wPNKC_shuffle_summary
     method, within = NAMED_SHUFFLES[shuffle]
     shuf = shuffle_wPNKC(real_W, method, within_kc_type=within, seed=int(seed))
     s = wPNKC_shuffle_summary(real_W, shuf)
@@ -283,7 +283,7 @@ def main() -> None:
         pd.set_option('display.width', 250)
         print(per_class.round(3).to_string(index=False))
         return
-    from al_analysis.mb_model import make_fixed_param_kc_simulator
+    from pyolfsysm.mb_model import make_fixed_param_kc_simulator
     stats_path = res_dir / 'stats_variants.csv'; fracs_path = res_dir / 'per_odor_response_fractions.csv'
     shuf_path = res_dir / 'shuffle_summary.csv'
     orn = H.apl16_orn_deltas()

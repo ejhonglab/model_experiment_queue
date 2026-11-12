@@ -47,7 +47,7 @@ PARAM_KEYS = ('fixed_thr', 'wAPLKC_scale', 'wKCAPL_scale', 'wAPLPN_scale', 'wPNA
 
 def glomerulus_pn_rates(orn, kws, params) -> pd.DataFrame:
     """Glomerulus x odor PN rates (0-0.5 s mean) of the tuned model."""
-    from al_analysis.mb_model import fit_mb_model, get_time_index, get_sim_var
+    from pyolfsysm.mb_model import fit_mb_model, get_time_index, get_sim_var
     _, _, wPNKC, pd0 = fit_mb_model(orn, fixed_thr=params['fixed_thr'], wAPLKC=params['wAPLKC_scale'], wKCAPL=params['wKCAPL_scale'],
         wAPLPN=params['wAPLPN_scale'], wPNAPL=params['wPNAPL_scale'], **kws, return_olfsysm_vars=True)
     mp, rv = pd0['mp'], pd0['rv']

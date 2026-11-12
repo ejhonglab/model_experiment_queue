@@ -64,7 +64,7 @@ def per_odor_fractions(responses: pd.DataFrame) -> pd.Series:
 
 
 def run_all(models: List[str], iters: int, res_dir: Path, out_dir: Path) -> None:
-    from al_analysis.mb_model import make_fixed_param_kc_simulator
+    from pyolfsysm.mb_model import make_fixed_param_kc_simulator
     from experiments.E3_drive_dependent_gain import per_odor_extras, rate
     from experiments.E4_substrate import score, kc_by_glomerulus
     from experiments.E10_joint_fit import TAU, base_kws, bouton_base, breadth_weights, make_loss

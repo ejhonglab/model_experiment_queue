@@ -115,7 +115,7 @@ def main() -> None:
     }
     data_rates = {g: H.yang_response_fractions(g).mean() for g in ('TNT3c', 'TNT')}
     tuned = json.loads((E16_OUT / 'tuned_params.json').read_text())
-    from al_analysis.mb_model import fit_mb_model, make_fixed_param_kc_simulator
+    from pyolfsysm.mb_model import fit_mb_model, make_fixed_param_kc_simulator
     pairs = {}
 
     for thr in args.thr:

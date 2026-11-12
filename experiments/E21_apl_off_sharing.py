@@ -120,7 +120,7 @@ def main() -> None:
     per_odor.to_csv(res_dir / 'per_odor.csv', index=False)
 
     # 3. glomerulus co-drive: per-glomerulus PN rate per odor (base model), above-threshold counts per pair
-    from al_analysis.mb_model import fit_mb_model, get_time_index, get_sim_var
+    from pyolfsysm.mb_model import fit_mb_model, get_time_index, get_sim_var
     init = e3_bouton_params()
     _, _, wPNKC, pd0 = fit_mb_model(orn, fixed_thr=init['fixed_thr'], wAPLKC=init['wAPLKC_scale'],
         wKCAPL=init['wKCAPL_scale'], wAPLPN=init['wAPLPN_scale'], wPNAPL=init['wPNAPL_scale'], **BOUTON,

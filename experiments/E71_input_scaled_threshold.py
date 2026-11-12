@@ -264,7 +264,7 @@ class Model:
 
     def __init__(self, key: str, a: float = 0.0, breadth: str = 'recomputed'):
         from experiments import E43_model_trial_noise as E43
-        from al_analysis.mb_model import make_fixed_param_kc_simulator
+        from pyolfsysm.mb_model import make_fixed_param_kc_simulator
         from experiments.E10_joint_fit import bouton_base, breadth_weights, kc_input_thr_factor, kc_input_weight
         if breadth not in ('recomputed', 'kept'):
             raise ValueError(f'{breadth=}')

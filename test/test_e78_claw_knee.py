@@ -57,7 +57,7 @@ def _fake_base(n=12):
 
 @pytest.mark.parametrize('transfer', [None, {'claw_thr_subgain': 0.25}, {'claw_thr_subgain': 0.1, 'claw_thr_width': 15.0}])
 def test_fit_one_passes_the_transfer(monkeypatch, transfer):
-    import al_analysis.mb_model as mb
+    import pyolfsysm.mb_model as mb
     seen = {}
 
     def fake(orn, **kw):
@@ -89,7 +89,7 @@ def test_fit_one_refuses_transfer_with_proxy():
 def test_bouton_base_uses_the_transfer_prepass(monkeypatch, tmp_path):
     """bouton_base passes the transfer and the transfer-free run to `transfer_prepass` and takes the breadth from what
     it returns; without a transfer it is not called."""
-    import al_analysis.mb_model as mb
+    import pyolfsysm.mb_model as mb
     n = 8
     kcs = pd.MultiIndex.from_tuples([(f'kc{i}', 'g') for i in range(n)], names=[H.KC_ID_LEVEL, H.KC_TYPE_LEVEL])
     W = pd.DataFrame(np.ones((n, 2)), index=kcs, columns=pd.MultiIndex.from_tuples([('DM1', 1, 1), ('DM2', 2, 1)],

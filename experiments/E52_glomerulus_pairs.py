@@ -9,7 +9,7 @@ what the margins imply, so the alignment rides on glomerulus co-input structure.
 which pairs carry it.
 Part A (no simulation): for each pair of the 54 glomeruli of the bouton base's claw wiring
 (1732 KCs, 9867 claws), the number of KCs with claws from both, against `--draws` draws of
-each shuffle class (`al_analysis.wpnkc_shuffles.shuffle_wPNKC`, the draws the fits used):
+each shuffle class (`pyolfsysm.wpnkc_shuffles.shuffle_wPNKC`, the draws the fits used):
 excess over the null mean, z, empirical p; "over-shared" = z >= 2 against every class,
 "under-shared" = z <= -2 against every class; the same per KC type against the within-type
 classes.
@@ -24,7 +24,7 @@ real-wiring models' APL-off / APL-on residual minus the mean of E47's shuffle dr
 the real wiring contributes in the model), with odor-permutation p-values; the alignment
 (rho of the data's residual with vcf_hyp) before and after partialling out the score; the
 score on the fruity x small-ester pairs against the other between-group pairs.
-Part C (simulation): `al_analysis.wpnkc_shuffles.lesion_coinput` removes only the
+Part C (simulation): `pyolfsysm.wpnkc_shuffles.lesion_coinput` removes only the
 over-shared pairs' excess (claw swaps within KC type that keep every margin; each pair
 brought to its null mean under the within-type Curveball) and, as the control, the same
 excess from count-matched pairs that are neither over- nor under-shared, with the
@@ -99,7 +99,7 @@ def square(values: np.ndarray, gloms: pd.Index, diag: float = 0.0) -> pd.DataFra
 # ---------------------------------------------------------------------------
 # part A
 def part_a(res_dir: Path, n_draws: int) -> pd.DataFrame:
-    from al_analysis.wpnkc_shuffles import NAMED_SHUFFLES, shuffle_wPNKC, coinput_counts
+    from pyolfsysm.wpnkc_shuffles import NAMED_SHUFFLES, shuffle_wPNKC, coinput_counts
     W = base_wiring()
     types = W.index.get_level_values('kc_type')
     type_names = [t for t in pd.unique(types)]
@@ -604,7 +604,7 @@ def lesion_plan(df: pd.DataFrame, res_dir: Path) -> pd.DataFrame:
 
 
 def make_lesions(W: pd.DataFrame, plan: pd.DataFrame, seeds: List[int], out_dir: Path, res_dir: Path) -> Dict[Tuple[str, int], pd.DataFrame]:
-    from al_analysis.wpnkc_shuffles import lesion_coinput, coinput_counts, wPNKC_shuffle_summary
+    from pyolfsysm.wpnkc_shuffles import lesion_coinput, coinput_counts, wPNKC_shuffle_summary
     obs = coinput_counts(W)
     out: Dict[Tuple[str, int], pd.DataFrame] = {}
     outcome_path = res_dir / 'lesion_outcome.csv'
@@ -646,7 +646,7 @@ def make_lesions(W: pd.DataFrame, plan: pd.DataFrame, seeds: List[int], out_dir:
 
 
 def part_c(args, res_dir: Path, out_dir: Path) -> None:
-    from al_analysis.mb_model import make_fixed_param_kc_simulator
+    from pyolfsysm.mb_model import make_fixed_param_kc_simulator
     from experiments.E1_apl_knockout import bisect_threshold
     from experiments.E3_drive_dependent_gain import per_odor_extras, rate
     from experiments.E4_substrate import score, kc_by_glomerulus

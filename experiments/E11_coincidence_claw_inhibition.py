@@ -92,7 +92,7 @@ def shared_drive_glomeruli(orn: pd.DataFrame, n: int = N_SHARED_GLOMS) -> pd.Ser
 def coinput_apl_weights(kws: dict, factor: float, gloms: List[str]
     ) -> Tuple[pd.Series, pd.Series, pd.Series]:
     """Connectome per-claw APL<->KC weights x `factor` for claws from `gloms`."""
-    from al_analysis.mb_model import (connectome_wPNKC, connectome_APL_weights,
+    from pyolfsysm.mb_model import (connectome_wPNKC, connectome_APL_weights,
         get_connectome_wPNKC_params)
 
     params = get_connectome_wPNKC_params(kws)
@@ -107,7 +107,7 @@ def coinput_apl_weights(kws: dict, factor: float, gloms: List[str]
 
 
 def run_variant(variant: str, out_dir: Path) -> dict:
-    from al_analysis.mb_model import fit_mb_model, get_thr_and_APL_weights
+    from pyolfsysm.mb_model import fit_mb_model, get_thr_and_APL_weights
 
     t0 = time.time()
     n_coinc, coupling, factor = VARIANTS[variant]

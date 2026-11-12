@@ -379,7 +379,7 @@ def spearman_odors(a: pd.Series, b: pd.Series) -> float:
 def captured_olfsysm_vars(store: dict):
     """Within the block, `fit_mb_model(..., return_olfsysm_vars=True)` also puts its mp / rv in
     `store` (make_fixed_param_kc_simulator keeps them only in its closure)."""
-    import al_analysis.mb_model as mbm
+    import pyolfsysm.mb_model as mbm
     orig = mbm.fit_mb_model
 
     def wrapper(*args, **kwargs):
@@ -755,7 +755,7 @@ class NoisyModel:
     """
 
     def __init__(self, name: str, orn: pd.DataFrame, out_dir: Path):
-        from al_analysis.mb_model import get_time_index, make_fixed_param_kc_simulator
+        from pyolfsysm.mb_model import get_time_index, make_fixed_param_kc_simulator
         self.name = name
         self.info: dict = {}
         # (models from fits.csv rows: the row's rate_on / rate_off, checked against the deterministic run)
@@ -804,7 +804,7 @@ class NoisyModel:
     def trial(self, sd: float) -> dict:
         """One trial at noise sd: PN layer with noise, then the KC layer with APL on and APL off."""
         import olfsysm as osm
-        from al_analysis.mb_model import get_sim_var
+        from pyolfsysm.mb_model import get_sim_var
         self.mp.pn.noise.sd = float(sd)
         try:
             if float(self.mp.pn.noise.sd) != float(sd):
@@ -1535,7 +1535,7 @@ def kc_threshold_override(thr: np.ndarray):
     rv.kc.thr = `thr` (simulate sets thr from fixed_thr just before `osm.run_KC_sims`, which is
     looked up in mb_model's namespace, so a proxy there sets `thr` last; the APL / KC-KC weights
     are still set by simulate)."""
-    import al_analysis.mb_model as mbm
+    import pyolfsysm.mb_model as mbm
     real = mbm.osm
 
     class _Osm:
@@ -1597,7 +1597,7 @@ class ExcitabilityModel(NoisyModel):
 
     def _pn_now(self) -> dict:
         """Odor-window mean and pre-odor temporal SD of the PN rates now in rv (odors x glomeruli)."""
-        from al_analysis.mb_model import get_sim_var
+        from pyolfsysm.mb_model import get_sim_var
         pn = np.asarray(get_sim_var(self.rv.pn, 'pn_sims'), dtype=float)[self.pn_idx]
         return dict(pn_win=pn[:, :, self.win].mean(axis=2).astype(np.float32),
             pn_pre_sd=pn[:, :, self.pre].std(axis=2).astype(np.float32))

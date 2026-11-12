@@ -22,6 +22,7 @@ Run `python kcq/harness.py` to reproduce the report's data-vs-data statistics
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import subprocess
@@ -34,11 +35,13 @@ import pandas as pd
 from scipy import stats
 from sklearn.isotonic import IsotonicRegression
 
-# Every model run from these experiments must use a clean olfsysm build of a known commit
-# (CLAUDE.md, "Model provenance"): importing the harness makes `fit_mb_model` refuse
-# anything else, regardless of AL_ANALYSIS_ALLOW_DIRTY_OLFSYSM. `model_provenance()` is
-# what the scripts put in their provenance.json.
-from al_analysis import mb_model as _mb_model
+# Every model run from these experiments must use a clean olfsysm build of its checkout's
+# C++ sources (CLAUDE.md, "Model provenance"): importing the harness makes `fit_mb_model`
+# refuse anything else, regardless of AL_ANALYSIS_ALLOW_DIRTY_OLFSYSM. `model_provenance()`
+# is what the scripts put in their provenance.json. The model's Python code is pyolfsysm
+# (in the olfsysm repository; al_analysis.mb_model until 2026-11-12, which still forwards
+# there).
+from pyolfsysm import mb_model as _mb_model
 _mb_model.STRICT_CLEAN_OLFSYSM = True
 
 
@@ -104,18 +107,45 @@ def olfsysm_dir() -> Path:
     return _mb_model.olfsysm_checkout_path()
 
 
-def al_analysis_dir() -> Path:
-    """Returns the al_analysis checkout the installed al_analysis package comes from.
+def pyolfsysm_dir() -> Path:
+    """Returns the checkout pyolfsysm, the model's Python code, is imported from.
 
-    ~/src/al_analysis on Tom's hosts, ~/src/kc_queue/al_analysis on lab members' machines (both
-    installed editable in this repository's venv, beside it).
+    The olfsysm repository (the same checkout as `olfsysm_dir()`, both installed editable in
+    this repository's venv): ~/src/olfsysm on Tom's hosts, ~/src/kc_queue/olfsysm on lab members'
+    machines. Until 2026-11-12 the model's Python code was in al_analysis (`al_analysis_dir()`).
     """
     return Path(_mb_model.__file__).resolve().parents[1]
 
 
+def pyolfsysm_data_dir() -> Path:
+    """Returns the model's data directory (pyolfsysm/data in the olfsysm checkout).
+
+    Yang's and Remy's KC data, Pratyush's connectome tables, the ORN spike deltas and the rest
+    of the data the model reads, in al_analysis's data directory until 2026-11-12.
+    """
+    from pyolfsysm.util import data_root
+    return Path(data_root)
+
+
+def al_analysis_dir() -> Path:
+    """Returns the al_analysis checkout the installed al_analysis package comes from.
+
+    ~/src/al_analysis on Tom's hosts, ~/src/kc_queue/al_analysis on lab members' machines (both
+    installed editable in this repository's venv, beside it). Found without importing it.
+    """
+    spec = importlib.util.find_spec('al_analysis')
+    if spec is None or not spec.submodule_search_locations:
+        raise ModuleNotFoundError('al_analysis is not installed in this venv', name='al_analysis')
+    # al_analysis is a namespace package (no __init__.py): its directories instead of a file
+    return next(Path(p) for p in spec.submodule_search_locations if Path(p).is_dir()
+        ).resolve().parent
+
+
 def al_analysis_data_dir() -> Path:
-    """Returns al_analysis's data directory (al_analysis/data in its checkout)."""
-    return Path(_mb_model.__file__).resolve().parent / 'data'
+    """Returns al_analysis's data directory (al_analysis/data in its checkout): the AL data
+    (the consensus ORN means, hemibrain_neuprint, ...); the model's data is in
+    `pyolfsysm_data_dir()`."""
+    return al_analysis_dir() / 'al_analysis' / 'data'
 
 
 def _git(path: Path, *args: str) -> Optional[str]:
@@ -135,16 +165,19 @@ def script_path(file: Union[str, Path]) -> str:
 
 
 def code_commits() -> Dict[str, object]:
-    """Returns the commits and dirty states of this repository and of the al_analysis checkout.
+    """Returns the commits and dirty states of this repository, pyolfsysm's and al_analysis's.
 
     Keys: 'queue_commit' and 'queue_dirty' (this repository, model_experiment_queue: the
-    experiment scripts and this harness), 'al_analysis_commit' and 'al_analysis_dirty' (the model
-    code, from `al_analysis_dir()`). Dirty means uncommitted changes to tracked files. Scripts
-    put these in their provenance.json; before the move to a repository of its own (2026-11-11),
-    'al_analysis_commit' was the commit of both.
+    experiment scripts and this harness), 'pyolfsysm_commit' and 'pyolfsysm_dirty' (the model's
+    Python code, the olfsysm checkout `pyolfsysm_dir()`), 'al_analysis_commit' and
+    'al_analysis_dirty' (al_analysis, whose AL data some scripts read). Dirty means uncommitted
+    changes to tracked files. Scripts put these in their provenance.json. Until 2026-11-12 the
+    model's Python code was al_analysis's (no 'pyolfsysm_commit'), and before the move to a
+    repository of its own (2026-11-11), 'al_analysis_commit' was the commit of the scripts too.
     """
     out: Dict[str, object] = {}
-    for key, path in (('queue', HERE), ('al_analysis', al_analysis_dir())):
+    for key, path in (('queue', HERE), ('pyolfsysm', pyolfsysm_dir()),
+            ('al_analysis', al_analysis_dir())):
         status = _git(path, 'status', '--porcelain', '--untracked-files=no')
         out[f'{key}_commit'] = _git(path, 'rev-parse', 'HEAD')
         out[f'{key}_dirty'] = None if status is None else bool(status)
@@ -152,16 +185,20 @@ def code_commits() -> Dict[str, object]:
 
 
 def model_provenance(**inputs) -> Dict[str, object]:
-    """`mb_model.model_provenance` (olfsysm, al_analysis and hong2p) plus this repository.
+    """`mb_model.model_provenance` (olfsysm, pyolfsysm and hong2p) plus this repository and
+    al_analysis.
 
     Args:
         **inputs: passed on (inputs to record by content hash).
 
     Returns its dict with 'queue' added: `mb_model.repo_info` of this repository (git hash,
-    dirty flag, diff of a dirty checkout).
+    dirty flag, diff of a dirty checkout), and 'al_analysis' (the same, of the al_analysis
+    checkout, whose AL data some scripts read) if pyolfsysm did not already record it.
     """
     prov = _mb_model.model_provenance(**inputs)
     prov['queue'] = _mb_model.repo_info(HERE)
+    if 'al_analysis' not in prov:
+        prov['al_analysis'] = _mb_model.repo_info(al_analysis_dir())
     return prov
 
 
@@ -324,7 +361,7 @@ def apl16_orn_deltas() -> pd.DataFrame:
     has VA4 and VL1 too; validation2 alone has DL4 and VM4). Concentrations are the lab's
     (see APPROX_CONC_ODORS for the three that differ from Yang's).
     """
-    from al_analysis.mb_model import megamat_orn_deltas, validation2_orn_deltas
+    from pyolfsysm.mb_model import megamat_orn_deltas, validation2_orn_deltas
 
     m = megamat_orn_deltas()
     v = validation2_orn_deltas()

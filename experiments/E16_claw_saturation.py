@@ -300,7 +300,7 @@ def main() -> None:
         if src not in tuned:
             print(f'{tag}: run the sweep first ({src} not tuned)', flush=True)
             continue
-        from al_analysis.mb_model import fit_mb_model, make_fixed_param_kc_simulator
+        from pyolfsysm.mb_model import fit_mb_model, make_fixed_param_kc_simulator
         refs = reference_pairs('bouton')
         t0 = time.time()
         try:

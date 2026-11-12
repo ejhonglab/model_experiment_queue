@@ -272,7 +272,7 @@ def main() -> None:
                 finish(tag, meta, on_out, off_out, wPNKC)
 
     if 'C' in args.parts:
-        from al_analysis.mb_model import make_fixed_param_kc_simulator
+        from pyolfsysm.mb_model import make_fixed_param_kc_simulator
         fits = pd.read_csv(H.shared_dir() / 'results' / REF_EXPERIMENT / 'fits.csv')
         for ftag, (thr, k, gain) in REF_FITS.items():
             fr = fits[fits.tag == ftag]

@@ -190,7 +190,7 @@ def build_simulator(label: str, orn: Optional[pd.DataFrame] = None, breadth: Opt
         in-place profile changes, 'mp', 'rv', 'odor_order').
     """
     from experiments import E10_joint_fit as J
-    from al_analysis.mb_model import make_fixed_param_kc_simulator
+    from pyolfsysm.mb_model import make_fixed_param_kc_simulator
     from experiments.E77_input_screen import _scalar_kws
     P = wiring_parts(label)
     p = dict(P['p'] if params is None else params)

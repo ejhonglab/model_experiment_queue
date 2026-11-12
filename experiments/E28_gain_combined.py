@@ -110,7 +110,7 @@ def main() -> None:
     fracs = pd.read_csv(fracs_path, index_col=0) if fracs_path.exists() else pd.DataFrame({'data_TNT3c': data_rates['TNT3c'], 'data_TNT': data_rates['TNT']})
     tuned16 = json.loads((E16_OUT / 'tuned_params.json').read_text())
     tuned = json.loads((out_dir / 'tuned_params.json').read_text()) if (out_dir / 'tuned_params.json').exists() else {}
-    from al_analysis.mb_model import fit_mb_model, make_fixed_param_kc_simulator
+    from pyolfsysm.mb_model import fit_mb_model, make_fixed_param_kc_simulator
     pairs = {}; deficits = []
     for point in args.points:
         thr, k, s = POINTS[point]

@@ -368,7 +368,7 @@ def main() -> None:
             finish(tag, meta, on_out, off_out, wPNKC, {})
 
     if 'B' in args.parts:
-        from al_analysis.mb_model import make_fixed_param_kc_simulator
+        from pyolfsysm.mb_model import make_fixed_param_kc_simulator
         for ftag in args.ref_fits:
             exp, thr, k, gain = REF_FITS[ftag]
             fits = pd.read_csv(H.shared_dir() / 'results' / exp / 'fits.csv')

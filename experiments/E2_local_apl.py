@@ -37,8 +37,9 @@ import pandas as pd
 
 from kcq import harness as H
 
-# al_analysis/scripts/apl_coupling_sweep.py, in the al_analysis checkout beside this repository
-sys.path.insert(0, str(H.al_analysis_dir() / 'scripts'))
+# scripts/apl_coupling_sweep.py of the olfsysm checkout beside this repository (al_analysis's
+# scripts/ until 2026-11-12)
+sys.path.insert(0, str(H.pyolfsysm_dir() / 'scripts'))
 import apl_coupling_sweep as ACS  # noqa: E402
 
 EXPERIMENT = 'E2_local_apl'
@@ -58,7 +59,7 @@ DEFAULT_COUPLINGS = [0.0, 0.1, 0.3, 1.0, 3.0, 10.0, 15.0]
 
 def yang_loss_fn():
     """`make_kc_data_loss` on Yang's control (TNT3c) per-odor rates and mean correlations."""
-    from al_analysis.mb_model import make_kc_data_loss
+    from pyolfsysm.mb_model import make_kc_data_loss
     rates = H.yang_response_fractions('TNT3c').mean()
     rates = rates[[o for o in H.APL16_ODORS]]
     corr = 1 - H.square_from_pairs(H.yang_mean_rdm('TNT3c', 'cosine'))
@@ -118,7 +119,7 @@ def load_run(out_root: Path, base: str, mode: str, coupling=None, cond: str = 'o
 def score_base(base: str, orn: pd.DataFrame, couplings, out_root: Path, res_dir: Path,
     data: dict, orn_pairs: pd.Series, drive: pd.Series, ref: pd.DataFrame) -> pd.DataFrame:
     """Scores the saved runs of one base; returns one row per (mode, coupling)."""
-    from al_analysis.mb_model import make_fixed_param_kc_simulator
+    from pyolfsysm.mb_model import make_fixed_param_kc_simulator
     kws, _ = BASES[base]
     regularize_layout(out_root, base)
     sweep = pd.read_csv(out_root / f'{base}_sweep.csv')

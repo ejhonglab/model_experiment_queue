@@ -64,7 +64,7 @@ def rate(responses: pd.DataFrame) -> float:
 
 def pn_contrast(mp, rv, orn: pd.DataFrame) -> Dict[str, float]:
     """Mean PN rate during the odor per odor: max/min ratio and Spearman with ORN drive."""
-    from al_analysis.mb_model import get_time_index, get_sim_var
+    from pyolfsysm.mb_model import get_time_index, get_sim_var
     t = np.asarray(get_time_index(mp, rv))
     win = (t >= 0.0) & (t <= 0.5)
     odors = [H.odor_abbrev(c) for c in orn.columns]
@@ -103,7 +103,7 @@ def per_odor_extras(on_resp: pd.DataFrame, off_resp: pd.DataFrame, on_pairs: pd.
 def tune_and_knockout(orn, kws, out_dir, tag, *, with_pn_contrast: bool = True,
     target: float = TARGET):
     """fit_mb_model tuned with APL on to `target` (+ PN contrast from run vars), then APL off."""
-    from al_analysis.mb_model import fit_mb_model
+    from pyolfsysm.mb_model import fit_mb_model
     common = dict(kws, make_plots=False, silent=True)
     ret = fit_mb_model(orn, target_sparsity=target, return_olfsysm_vars=with_pn_contrast,
         **common
@@ -162,7 +162,7 @@ def main() -> None:
     ap.add_argument('--parts', nargs='+', choices=['A', 'B', 'C'], default=['A', 'B', 'C'])
     ap.add_argument('--inhadd', nargs='+', type=float, default=DEFAULT_INHADD)
     args = ap.parse_args()
-    from al_analysis.mb_model import fit_mb_model, make_fixed_param_kc_simulator
+    from pyolfsysm.mb_model import fit_mb_model, make_fixed_param_kc_simulator
 
     res_dir = H.results_dir(EXPERIMENT)
     out_dir = H.outputs_dir(EXPERIMENT)

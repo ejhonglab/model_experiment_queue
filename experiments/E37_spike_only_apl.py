@@ -131,7 +131,7 @@ def apl_activity(orn: pd.DataFrame, params: Dict[str, float], kws: dict,
     response counts equal them.
     """
     import olfsysm as osm
-    from al_analysis.mb_model import fit_mb_model, _fixed_param_model_kws, get_sim_var, get_time_index
+    from pyolfsysm.mb_model import fit_mb_model, _fixed_param_model_kws, get_sim_var, get_time_index
     _, _, _, pdict = fit_mb_model(orn, return_olfsysm_vars=True, **_fixed_param_model_kws(kws, params))
     mp = pdict.pop('mp')
     rv = pdict.pop('rv')
@@ -192,7 +192,7 @@ def _jsonable(x):
 def run_fit(fit: str, variants, *, orn, orn_pairs, drive, ref, data, data_rates, loss_fn,
     res_dir: Path, out_dir: Path, redo: bool) -> None:
     """Runs the requested variants at one E36 optimum, writing one part per variant."""
-    from al_analysis.mb_model import make_fixed_param_kc_simulator
+    from pyolfsysm.mb_model import make_fixed_param_kc_simulator
     parts = res_dir / 'parts'
     parts.mkdir(exist_ok=True)
     todo = [v for v in variants if redo or not (parts / f'{fit}_{v}.json').exists()]
@@ -345,8 +345,11 @@ def merge(res_dir: Path, data_rates: dict) -> Tuple[pd.DataFrame, pd.DataFrame, 
         approx_conc_note=H.APPROX_CONC_NOTE,
         # the first run's model provenance; every run's is under runs
         model=parts[0]['run']['model'],
-        model_same_for_all_runs=len({json.dumps([p['run']['model']['al_analysis'].get('git_hash'),
-            p['run']['model']['al_analysis'].get('diff_sha256'), p['run']['model']['olfsysm'].get('build'),
+        # (the model's Python code: pyolfsysm since 2026-11-12, al_analysis before)
+        model_same_for_all_runs=len({json.dumps([(p['run']['model'].get('pyolfsysm') or
+                p['run']['model']['al_analysis']).get('git_hash'),
+            (p['run']['model'].get('pyolfsysm') or p['run']['model']['al_analysis']).get('diff_sha256'),
+            p['run']['model']['olfsysm'].get('build'),
             (p['run']['model'].get('queue') or {}).get('git_hash')],
             default=str, sort_keys=True) for p in parts}) == 1,
         runs={p['tag']: dict(params=p['params'], **p['run']) for p in parts},

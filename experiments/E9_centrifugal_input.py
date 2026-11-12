@@ -73,7 +73,7 @@ def read(name: str) -> pd.DataFrame:
 def glomerulus_pn_rates(orn: pd.DataFrame, res_dir, rebuild: bool = False) -> Tuple[pd.DataFrame, pd.Series, pd.DataFrame]:
     """(evoked: glomerulus x odor PN rate, 0-0.5 s mean; spont: glomerulus pre-odor PN rate;
     wPNKC) from the bouton base model at E3's tuned parameters (cached in res_dir)."""
-    from al_analysis.mb_model import fit_mb_model, get_time_index, get_sim_var
+    from pyolfsysm.mb_model import fit_mb_model, get_time_index, get_sim_var
     ev_path, sp_path = res_dir / 'glomerulus_rates_evoked.csv', res_dir / 'glomerulus_rates_spont.csv'
     init = e3_bouton_params()
     _, _, wPNKC, pd0 = fit_mb_model(orn, fixed_thr=init['fixed_thr'], wAPLKC=init['wAPLKC_scale'],

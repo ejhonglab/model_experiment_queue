@@ -64,7 +64,7 @@ def reconstruct(name: str, info: dict, orn: pd.DataFrame, loc: Path) -> Reconstr
     """E56's reconstruction without the passes: the model, its checks, the drives without KC-KC
     inhibition and the deterministic spike trains per condition and odor, the pipeline's jittered
     thresholds for its trials."""
-    from al_analysis.mb_model import get_time_index
+    from pyolfsysm.mb_model import get_time_index
     t0 = time.time()
     m = E43.ExcitabilityModel(name, orn, loc)
     checks = dict(model=name, label=E55.label_of(name), build_seconds=time.time() - t0, **m.info)
@@ -241,7 +241,7 @@ def make_block_proxy_hook(store: dict, orn: pd.DataFrame, sigma: float, thr_rati
     x KCs x odors spike counts} of the last pass, for `pipeline_pairs`. `store` is
     E43.captured_olfsysm_vars' dict (the simulator's mp / rv once built); `condition_overrides` the
     fit's {'on': {}, 'off': {...}}. The hook leaves mp.kc.save_vm_sims False."""
-    from al_analysis.mb_model import get_time_index
+    from pyolfsysm.mb_model import get_time_index
     state: dict = {}
 
     def hook(simulate, params):

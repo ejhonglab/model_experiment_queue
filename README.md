@@ -4,8 +4,8 @@ Claude Code sessions on several lab machines work through a shared queue of expe
 mushroom body model (olfsysm), aimed at reproducing how odor representations change from ORNs to
 KCs, with APL on and off. They coordinate through a folder on the lab NAS (tensor) and push their
 code to the lab's GitHub repositories. This repository holds the experiment scripts, the queue's
-rules (CLAUDE.md) and the tools for adding a machine; the model itself is in al_analysis, olfsysm
-and hong2p.
+rules (CLAUDE.md) and the tools for adding a machine; the model itself is in olfsysm (its C++
+and, since 2026-11-12, its Python side, pyolfsysm), with al_analysis and hong2p beside it.
 
 ## Joining the queue from your machine
 
@@ -185,12 +185,12 @@ state are in [coordination/monitor/README.md](coordination/monitor/README.md).
 
 On Tom's hosts the checkouts are side by side in ~/src (model_experiment_queue, al_analysis,
 olfsysm, hong2p), and this repository has its own venv with the other three installed editable
-(al_analysis first, since it pins the other two to their GitHub versions), then this repository's
-own packages:
+(al_analysis first, with its `model` extra, since it pins the other two to their GitHub versions),
+then this repository's own packages:
 ```
 cd ~/src/model_experiment_queue
 python3.14 -m venv venv
-./venv/bin/pip install -e ../al_analysis[dev]
+./venv/bin/pip install -e ../al_analysis[dev,model]
 ./venv/bin/pip install -e ../hong2p[all]
 ./venv/bin/pip install -e ../olfsysm
 ./venv/bin/pip install -e .
@@ -211,8 +211,9 @@ The queue's rules (claims, status files, chat, permissions by model and effort, 
 are written up) are in [CLAUDE.md](CLAUDE.md), and why the monitor is built the way it is in
 [coordination/monitor/design.md](coordination/monitor/design.md).
 
-Tests, from this repository's root (the model code itself is tested through al_analysis, its
-test/test_mb_model.py with QUICK=1, and the provenance checks in its test/test_model_provenance.py):
+Tests, from this repository's root (the model itself is tested in olfsysm, its
+test/test_mb_model.py with QUICK=1, and the provenance checks in its test/test_model_provenance.py;
+in al_analysis until 2026-11-12):
 ```
 QUICK=1 ./venv/bin/python -m pytest
 ./venv/bin/python -m pytest coordination/monitor

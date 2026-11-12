@@ -7,7 +7,7 @@ and without claw dynamics and with distance weighting; FAFB left / right), the m
 tuned with APL on to the target response rate, then re-run with the same thresholds and
 APL output removed (acute knockout). Shuffled hemibrain matrices (degree-preserving,
 KC-type-preserving, glomerulus-frequency-preserving) are added through `--shuffles` once
-`al_analysis.wpnkc_shuffles` exists (atlas is writing it).
+`pyolfsysm.wpnkc_shuffles` exists (atlas is writing it).
 
 Readouts (kcq.harness): for APL on vs Yang's control and APL off vs TNT, the
 Spearman between model and measured deviations from the linear ORN prediction
@@ -100,7 +100,7 @@ def claw_input_pairs(wPNKC: pd.DataFrame, orn: pd.DataFrame) -> pd.Series:
 def run_variant(name: str, kws: dict, seed: Optional[int], target: float, orn: pd.DataFrame,
     out_dir: Path, wPNKC_override: Optional[pd.DataFrame] = None):
     """Tunes APL on, then acute APL off with the same thresholds. Saves outputs; returns them."""
-    from al_analysis.mb_model import fit_mb_model
+    from pyolfsysm.mb_model import fit_mb_model
     common = dict(kws, make_plots=False, silent=True)
     if seed is not None:
         common['seed'] = seed
@@ -213,7 +213,7 @@ def main() -> None:
     ap.add_argument('--seeds', type=int, default=3, help='seeds for random variants')
     ap.add_argument('--rates', nargs='+', type=float, default=[0.05])
     ap.add_argument('--shuffles', nargs='*', default=[],
-        help='shuffle names from al_analysis.wpnkc_shuffles (applied to hemibrain-claws)'
+        help='shuffle names from pyolfsysm.wpnkc_shuffles (applied to hemibrain-claws)'
     )
     args = ap.parse_args()
 
@@ -243,7 +243,7 @@ def main() -> None:
             for seed in seeds:
                 jobs.append((name, kws, seed, target, None))
     for shuf in args.shuffles:
-        import al_analysis.wpnkc_shuffles as WS  # provided by atlas
+        import pyolfsysm.wpnkc_shuffles as WS  # provided by atlas
         base_kws, _ = VARIANTS['hemibrain-claws']
         for target in args.rates:
             for seed in range(args.seeds):

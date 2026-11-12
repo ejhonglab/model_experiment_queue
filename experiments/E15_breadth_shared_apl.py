@@ -68,7 +68,7 @@ def tag_of(variant: str) -> str:
 
 def kc_features(resp_off: pd.DataFrame, spk_off: pd.DataFrame, kws: dict) -> pd.DataFrame:
     """Per-KC APL-off breadth, total spikes, claws from shared-drive glomeruli."""
-    from al_analysis.mb_model import connectome_wPNKC, get_connectome_wPNKC_params
+    from pyolfsysm.mb_model import connectome_wPNKC, get_connectome_wPNKC_params
 
     orn = H.apl16_orn_deltas()
     gl = list(shared_drive_glomeruli(orn).index)
@@ -97,7 +97,7 @@ def rule_weights(feat: pd.DataFrame, kind: str, a: float, b: float) -> pd.Series
 
 
 def per_claw_weights(kws: dict, w_kc: pd.Series) -> Tuple[pd.Series, pd.Series]:
-    from al_analysis.mb_model import (connectome_wPNKC, connectome_APL_weights,
+    from pyolfsysm.mb_model import (connectome_wPNKC, connectome_APL_weights,
         get_connectome_wPNKC_params)
 
     params = get_connectome_wPNKC_params(kws)

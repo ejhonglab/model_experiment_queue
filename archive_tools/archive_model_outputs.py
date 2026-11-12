@@ -189,7 +189,7 @@ def archive_experiment(name: str, host: str, params_only: bool = False, force_ha
 def save_inputs() -> None:
     from experiments.E3_drive_dependent_gain import BOUTON, BASES
     from experiments.E4_substrate import CLAWS
-    from al_analysis.mb_model import fit_mb_model
+    from pyolfsysm.mb_model import fit_mb_model
     dst = ARCHIVE / 'inputs'; dst.mkdir(parents=True, exist_ok=True)
     orn = H.apl16_orn_deltas()
     orn.to_csv(dst / 'orn_deltas_apl16.csv')

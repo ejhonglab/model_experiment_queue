@@ -212,7 +212,7 @@ class Base:
             self.label = 'C2, the breadth-2 APL-effect fit (E67)'
         else:
             from experiments import E43_model_trial_noise as E43
-            from al_analysis.mb_model import make_fixed_param_kc_simulator
+            from pyolfsysm.mb_model import make_fixed_param_kc_simulator
             self.experiment, self.tag = FIT0
             name43 = E43.model_from(f'{FIT0[0]}:{FIT0[1]}')
             d = H.outputs_dir(EXPERIMENT) / 'bases'

@@ -42,10 +42,17 @@ folder scripts/claude_pair_remapping_experiments of al_analysis, and its history
 new hashes: commits cited before then (in notes, reports, chat.md and provenance, as
 `al_analysis_commit`) are al_analysis commits, where the old files are at
 `git -C ../al_analysis show <hash>:scripts/claude_pair_remapping_experiments/<file>`. The model is in
-three checkouts beside this one: al_analysis (mb_model, the model's Python side, and the lab's data
-under al_analysis/data), olfsysm (the model's C++) and hong2p. al_analysis depends heavily on hong2p
-and olfsysm, so a change may need changes in those too (or in another package the venv has
-installed editable from a checkout under ~/src).
+the olfsysm checkout beside this one: its C++ (the compiled `olfsysm` module) and, since 2026-11-12,
+its Python side, the package pyolfsysm (`pyolfsysm.mb_model`, `pyolfsysm.wpnkc_shuffles`,
+`pyolfsysm.util`), with the data the model reads (olfsysm's pyolfsysm/data: Remy's and Yang's KC
+data, Pratyush's connectome tables, the ORN spike deltas, ...), the model's scripts (scripts/) and
+its tests (test/). Until then the Python side was al_analysis's mb_model.py, wpnkc_shuffles.py and
+part of al_util.py, with that data under al_analysis/data (provenance from before records
+`al_analysis_commit` for it); `al_analysis.mb_model` and `al_analysis.wpnkc_shuffles` still exist,
+forwarding to pyolfsysm, so old code and old E10 versions still run. al_analysis (the AL analysis,
+and the AL data some scripts read: the consensus ORN means in data/sent_to_vlad, data/hemibrain_neuprint)
+and hong2p are the other checkouts beside this one; a change may need changes in those too (or in
+another package the venv has installed editable from a checkout under ~/src).
 
 Since 2026-11-12 the files are in folders by role, each a package of this repository, installed
 editable in ./venv (`./venv/bin/pip install -e .` from the root; pyproject.toml): experiments/ (the
@@ -64,15 +71,17 @@ apl_effect_scores.py and noise_floor_trial_distances.py are now kcq/harness.py, 
 kcq/noise_floor.py, the other files kept their names, and kcq/layout.py maps old module names to new
 ones (notes, provenance and commits from before name the old files).
 
-Claude Code does not read al_analysis's CLAUDE.md from here; what it says that matters for this work:
+Claude Code does not read olfsysm's or al_analysis's CLAUDE.md from here; what they say that matters
+for this work:
 - Run pytest with the environment variable QUICK=1, unless extensively testing changes to the
-  model code in mb_model (or the matching code in olfsysm), to skip most of the model cases.
-- Tests for olfsysm's C++ code are written in Python in al_analysis, test/test_mb_model.py. Any
-  change to the model should preserve existing behavior, with additional tests that verify this,
-  unless there seems to be a bug or misunderstanding in the current implementation; bring such
-  cases to Tom's attention when evaluating current tests or writing new ones.
-- al_analysis supports Python 3.8 (with the last pandas, 1.5) as well as the venv's Python (3.14
-  with pandas 3). Keep both working in al_analysis's code, by asking forgiveness rather than
+  model (pyolfsysm, or the C++ code in olfsysm), to skip most of the model cases.
+- Tests for olfsysm's C++ code and for pyolfsysm are in olfsysm's test/ (test/test_mb_model.py and
+  the other model tests; in al_analysis until 2026-11-12). Any change to the model should preserve
+  existing behavior, with additional tests that verify this, unless there seems to be a bug or
+  misunderstanding in the current implementation; bring such cases to Tom's attention when
+  evaluating current tests or writing new ones.
+- olfsysm (pyolfsysm) and al_analysis support Python 3.8 (with the last pandas, 1.5) as well as the
+  venv's Python (3.14 with pandas 3). Keep both working in their code, by asking forgiveness rather than
   permission (try/except) or by explicit version checks where necessary, and say in a comment which
   old thing (pandas 1.5, Python 3.8) a piece of code is there for. The scripts in this repository
   only need the venv's Python.
@@ -83,8 +92,8 @@ Only Opus >=5.5 at xhigh or max writes or edits code and scripts: the session it
 that model and effort, otherwise an Opus subagent it spawns for the change (see "Permissions by
 model and effort" below; Fable never writes code); others only run scripts already committed.
 
-When implementing experiments, modify olfsysm (the model) or the library code in al_analysis or
-hong2p, and then make scripts in this repository as needed. The al_analysis, olfsysm and hong2p
+When implementing experiments, modify olfsysm (the model: its C++, or pyolfsysm) or the library code
+in hong2p (or al_analysis, for the AL analysis), and then make scripts in this repository as needed. The al_analysis, olfsysm and hong2p
 checkouts are the ones next to this repository (../al_analysis, ../olfsysm and ../hong2p from its
 root): ~/src/al_analysis, ~/src/olfsysm and ~/src/hong2p on Tom's hosts, the same names in
 ~/src/kc_queue on lab members' machines (see "Lab members' machines" below). If one is missing,
@@ -92,20 +101,21 @@ clone it there from the ejhonglab GitHub. Changes to them only take effect if th
 venv (./venv) has them installed editable from those checkouts. Check with
 `./venv/bin/pip show <pkg>` (an editable install reports "Editable project location") and, if
 needed, after `git pull`-ing the checkout (the venv copy may be newer than a stale checkout),
-run from this repository's root (al_analysis first: it pins hong2p and olfsysm to their GitHub
-versions, which the next two replace; the last line is this repository's own packages, needed once
-per venv):
+run from this repository's root (al_analysis first, with its `model` extra: it pins hong2p and
+olfsysm to their GitHub versions, which the next two replace; the last line is this repository's own
+packages, needed once per venv):
 ```
-./venv/bin/pip install -e ../al_analysis[dev]
+./venv/bin/pip install -e ../al_analysis[dev,model]
 ./venv/bin/pip install -e ../hong2p[all]
 ./venv/bin/pip install -e ../olfsysm
 ./venv/bin/pip install -e .
 ```
-olfsysm is a C++ extension, so re-run its `pip install -e` after any C++ change. Run the tests,
-with QUICK=1, before committing: this repository's (test/; `QUICK=1 ./venv/bin/python -m pytest`
-from its root, and `./venv/bin/python -m pytest coordination/monitor` for the monitor) for changes here,
-and al_analysis's test/test_mb_model.py for model changes (from al_analysis's root, with this
-venv: `QUICK=1 ../model_experiment_queue/venv/bin/python -m pytest test/test_mb_model.py`).
+olfsysm is a C++ extension, so re-run its `pip install -e` after any C++ change (a change to
+pyolfsysm alone needs no reinstall). Run the tests, with QUICK=1, before committing: this
+repository's (test/; `QUICK=1 ./venv/bin/python -m pytest` from its root, and `./venv/bin/python -m
+pytest coordination/monitor` for the monitor) for changes here, and olfsysm's tests for model changes
+(test/test_mb_model.py first; from olfsysm's root, with this venv: `QUICK=1
+../model_experiment_queue/venv/bin/python -m pytest test/test_mb_model.py`).
 
 If multiple experiments would benefit from an overlapping set of changes to any library
 code, start with some of those code changes, regardless of which experiments you are
@@ -116,7 +126,7 @@ experiments with higher priority), so they can work in parallel with ongoing exp
 (which may take a non-negligible amount of simulation time). Commit and push as code
 changes are done,
 so another instance of claude working on another computer may benefit from the changes
-too. If the remote has commits you do not (for this repository, al_analysis, olfsysm or hong2p), rebase
+too. If the remote has commits you do not (for this repository, olfsysm, al_analysis or hong2p), rebase
 your commits on top of them (`git pull --rebase`), make sure nothing broke, and then
 push. Never force push.
 
@@ -136,19 +146,24 @@ commit once every affected output is regenerated or annotated.
 ## Model provenance
 
 Model outputs must be fully explained by the model parameters plus the commits of our code.
-olfsysm bakes its commit hash, a clean / dirty flag and a hash of its compiled sources into
-the extension at build time (`olfsysm.build_info()`), and every `pip install -e` recompiles
-everything, so there are no stale objects. `fit_mb_model` refuses to run unless the
-installed olfsysm is a clean build matching its checkout (`mb_model.olfsysm_is_clean()`);
-importing `kcq.harness` makes that strict (`AL_ANALYSIS_ALLOW_DIRTY_OLFSYSM` is
-ignored), so for the experiments here: commit the olfsysm change, `./venv/bin/pip install -e
-../olfsysm` (from this repository's root), run the tests, then run the experiment. Every experiment's provenance.json
-includes `H.model_provenance(orn_deltas=...)` (olfsysm build, al_analysis / hong2p / this repository's
-commit and dirty state with diff, CPU, package versions, input hashes) or at least `H.code_commits()`
-(`queue_commit` and `queue_dirty` for this repository, `al_analysis_commit` and `al_analysis_dirty`
-for al_analysis; before 2026-11-11 `al_analysis_commit` was the commit of the scripts too), and
-`fit_and_plot_mb_model` outputs carry `model_provenance.json`. The CPU is recorded for
-information only; nothing compares it.
+olfsysm bakes its commit hash, a clean / dirty flag (of the whole checkout, and `cpp_dirty` of its
+compiled C++ sources) and a hash of its compiled sources into the extension at build time
+(`olfsysm.build_info()`), and every `pip install -e` recompiles everything, so there are no stale
+objects. `fit_mb_model` refuses to run unless the installed olfsysm is a clean build of its
+checkout's C++ sources (`pyolfsysm.mb_model.olfsysm_is_clean()`: built without uncommitted C++
+changes, and the checkout's C++ sources now are the ones compiled, with no uncommitted changes;
+the checkout may be at a later commit, so commits that change only pyolfsysm need no rebuild);
+importing `kcq.harness` makes that strict (`AL_ANALYSIS_ALLOW_DIRTY_OLFSYSM` is ignored), so for
+the experiments here: commit the olfsysm C++ change, `./venv/bin/pip install -e ../olfsysm` (from
+this repository's root), run the tests, then run the experiment. The Python code's commits are
+recorded at run time: every experiment's provenance.json includes
+`H.model_provenance(orn_deltas=...)` (olfsysm build, pyolfsysm / hong2p / al_analysis / this
+repository's commit and dirty state with diff, CPU, package versions, input hashes) or at least
+`H.code_commits()` (`queue_commit` and `queue_dirty` for this repository, `pyolfsysm_commit` and
+`pyolfsysm_dirty` for the model's Python code, `al_analysis_commit` and `al_analysis_dirty` for
+al_analysis; until 2026-11-12 `al_analysis_commit` was the model's Python code too, and before
+2026-11-11 the scripts' as well), and `fit_and_plot_mb_model` outputs carry
+`model_provenance.json`. The CPU is recorded for information only; nothing compares it.
 
 ## Model and usage caps
 
@@ -234,13 +249,14 @@ Each of these cost real time to diagnose; check them before blaming a script.
     stop` it when the test is over (do not rely on `--rm` plus a timeout inside).
   - Anything else that can grow without bound (a buffered pipe, a log held in memory) runs in a
     shell with `ulimit -v` set, and never in the background without a `timeout`.
-- Thread count: importing `al_analysis.mb_model` imports rastermap, which resets OpenMP to all of the machine's cores, so
+- Thread count: importing `pyolfsysm.mb_model` (`al_analysis.mb_model` before 2026-11-12) imports rastermap, which resets OpenMP to all of the machine's cores, so
   olfsysm runs on 48 threads on hal however OMP_NUM_THREADS is set (found by E69's code subagent, 2026-11-10). Set
   OMP_THREAD_LIMIT as well (e.g. `OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16`); the limit holds.
 - Logs: Python 3.14 buffers stdout to a file in 128 KB blocks (io.DEFAULT_BUFFER_SIZE), so a fit's `eval ...` lines in a
   redirected log appear only when it ends (E69 part B, 2026-11-10). Run long jobs with `python -u` or `PYTHONUNBUFFERED=1`.
-- Tests: al_analysis's whole QUICK=1 suite took 2.5 h on hal (2026-11-06); for model changes,
-  its test/test_mb_model.py is the part that matters. Known failures, all filed as issues on
+- Tests: al_analysis's whole QUICK=1 suite took 2.5 h on hal (2026-11-06), most of it the model's
+  tests, which are olfsysm's since 2026-11-12; for model changes, olfsysm's test/test_mb_model.py
+  is the part that matters. Known failures (in the model's tests), all filed as issues on
   ejhonglab/al_analysis: test_equalize_kc_type_sparsity (a leftover `breakpoint()`, #2),
   test_remy_megamat_kc_targets (Remy's per-fly files are not in the repository, #3) and
   test_fixed_inh_params_fitandplot[prat-claws_True] (#4); test_model_mb_responses can run for
@@ -253,9 +269,9 @@ Each of these cost real time to diagnose; check them before blaming a script.
   its own `--basetemp` (in the job's tmp folder).
 - On Tom's hosts:
   - hal's shell sets HONG2P_DATA and HONG2P_FAST_DATA to /mnt/d1/2p_data, which does not exist
-    there, so a full `pytest` in al_analysis stops while collecting test/test_al_analysis.py
-    (importing al_analysis.al_analysis creates directories under it); test/test_mb_model.py and
-    this repository's tests are unaffected.
+    there, so a full `pytest` in al_analysis once stopped while collecting test/test_al_analysis.py
+    (importing al_analysis.al_analysis creates directories under it; its test/conftest.py now
+    points them at a temporary directory); olfsysm's and this repository's tests are unaffected.
   - `git push` in ~/src/olfsysm fails with "multiple upstream branches" (its .git/config lists
     branch.master.remote twice); push with `git push origin HEAD:master`.
   - SSH to GitHub can stop working mid-session. Pull and push over HTTPS with the gh credential
@@ -286,8 +302,8 @@ sessions on Tom's hosts do. Once per machine:
    machine cannot already push to (only pushes use it: fetches stay anonymous HTTPS, and the
    machine's own GitHub logins and other repositories are untouched), puts the public keys in push_keys/<host>/ in the shared directory, checks that the
    experiment inputs load and a model fit runs, and prints the keys' fingerprints, each hash on a
-   line of its own (`--full-tests` also runs this repository's tests and al_analysis's whole
-   QUICK=1 suite, which took 2.5 h on hal). A machine that joined before the queue had a
+   line of its own (`--full-tests` also runs this repository's tests and the QUICK=1 suites of
+   olfsysm and al_analysis, which took about 2.5 h on hal). A machine that joined before the queue had a
    repository of its own (2026-11-11; its folder was ~/src/kc_queue/al_analysis/scripts/
    claude_pair_remapping_experiments) does the same, with its sessions stopped first: the script
    moves that folder's outputs/, from_yang/ and .fable_consent.local into the new checkout and makes
@@ -1323,10 +1339,10 @@ important first):
 If they are useful, there should be copies of Remy's KC data and some of Yang's KC data
 (the latter to lower concentrations of odors, expected to produce more distinct spatial
 activity patterns in the APL). Remy's megamat KC data is loaded by
-`load_remy_megamat_kc_responses` in al_analysis/mb_model.py and Yang's by
+`load_remy_megamat_kc_responses` in pyolfsysm.mb_model (olfsysm) and Yang's by
 `load_yang_kc_data` in al_analysis's scripts/model_yang_mixtures.py. The data itself is mostly
-in the al_analysis checkout, under al_analysis/data/from_remy and
-al_analysis/data/from_yang/20260415_YZtransfer.
+in the olfsysm checkout, under pyolfsysm/data/from_remy and
+pyolfsysm/data/from_yang/20260415_YZtransfer (al_analysis/data/... until 2026-11-12).
 
 I asked Remy for her current analysis (on the same paper, one version of which was
 presented in chapter 2 of my thesis), and she sent me all the contents of the shared directory's

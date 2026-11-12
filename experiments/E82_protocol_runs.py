@@ -116,7 +116,7 @@ def _git(*args: str) -> str:
 
 def apl_taum_supported() -> bool:
     """Whether mb_model's fit_mb_model takes `apl_taum` (B5 needs it)."""
-    from al_analysis.mb_model import fit_mb_model
+    from pyolfsysm.mb_model import fit_mb_model
     return 'apl_taum' in inspect.signature(fit_mb_model).parameters
 
 
@@ -462,7 +462,7 @@ def build_simulator(extra_kws: Optional[dict], *, wPNKC: Optional[pd.DataFrame],
     build_c2_simulator does; info['kws'] has kc_kc_tau."""
     from experiments import E10_joint_fit as J
     from experiments import E77_input_screen as S
-    from al_analysis.mb_model import make_fixed_param_kc_simulator
+    from pyolfsysm.mb_model import make_fixed_param_kc_simulator
     if {'kc_kc_tau', 'kc_kc_inh'} & set(extra_kws or {}):
         raise ValueError("pass kc_kc_tau as its own argument (the scale is the parameters' wKCKC_scale)")
     P = S.c2_parts()

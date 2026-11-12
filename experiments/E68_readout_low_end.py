@@ -1122,7 +1122,7 @@ def make_vm_model_class():
     membrane potential of a run and reduce it per KC and odor (imported lazily: E43 imports the model
     code)."""
     from experiments import E43_model_trial_noise as E43
-    from al_analysis.mb_model import get_time_index
+    from pyolfsysm.mb_model import get_time_index
 
     class VmModel(E43.ExcitabilityModel):
         def __init__(self, name, orn, out_dir):

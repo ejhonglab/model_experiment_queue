@@ -90,8 +90,9 @@ HERE = Path(__file__).resolve().parents[1]  # the repository root
 SHARED = ACM.SHARED
 OUT = SHARED / 'results' / 'E79_apl_calyx_constraints'
 YANG_APL = Path('/mnt/tensor/Tom/claude_APL_modeling_YZ4TC/Claude_APL_analysis/apl_synapses')
-# in al_analysis's data directory (the installed package's, found without importing it)
-PRAT_DIR = next(Path(p) for p in importlib.util.find_spec('al_analysis').submodule_search_locations
+# in the model's data directory (the installed pyolfsysm's, found without importing it; in
+# al_analysis's data directory until 2026-11-12)
+PRAT_DIR = next(Path(p) for p in importlib.util.find_spec('pyolfsysm').submodule_search_locations
     if Path(p).is_dir()) / 'data' / 'from_pratyush' / '2025-12-05'
 PRAT_PN_SYNAPSES = PRAT_DIR / 'PN_Synapse_Assignments_Hemibrain_2025-12-05-13-39-22.parquet'
 PRAT_PN_KC = PRAT_DIR / 'PNbouton-to-KCclaw_Connectivity_2025-12-09-19-47-36.parquet'
@@ -296,7 +297,7 @@ def model_pn_rates(rebuild: bool = False) -> pd.DataFrame:
         return pd.read_csv(path, index_col=0)
     from kcq import harness as H
     from experiments import E77_input_screen as S
-    from al_analysis.mb_model import get_sim_var, get_time_index
+    from pyolfsysm.mb_model import get_sim_var, get_time_index
     sim, info = S.build_c2_simulator()
     r, _ = sim(dict(info['params'], wAPLKC_scale=0.0, wAPLPN_scale=0.0))
     runner = S.PerOdorRunner(sim, info)

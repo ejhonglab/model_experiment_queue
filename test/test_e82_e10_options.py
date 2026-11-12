@@ -190,7 +190,7 @@ def _fake_base(n=12):
 @pytest.mark.parametrize('protocol, spike_times', [(None, False), ({}, False), (dict(time_stim_end=2.0, time_end=2.25), False),
     (dict(apl_taum=0.25), False), (None, True), (dict(time_stim_end=2.0, time_end=2.25, apl_taum=0.01), True)])
 def test_fit_one_passes_the_protocol(monkeypatch, protocol, spike_times):
-    import al_analysis.mb_model as mb
+    import pyolfsysm.mb_model as mb
     seen = {}
 
     def fake(orn, **kw):
@@ -221,7 +221,7 @@ def test_fit_one_passes_the_protocol(monkeypatch, protocol, spike_times):
 
 
 def test_fit_one_protocol_checks(monkeypatch):
-    import al_analysis.mb_model as mb
+    import pyolfsysm.mb_model as mb
     monkeypatch.setattr(mb, 'optimize_mb_model_params', lambda orn, **kw: dict(history=pd.DataFrame(), params={}, loss=0.0))
     initial, wnorm, breadth = _fake_base()
     kw = dict(kckc0=60.0, maxfev=1, method='Nelder-Mead', thr0_factor=0.7)
@@ -237,7 +237,7 @@ def test_fit_one_protocol_checks(monkeypatch):
 def test_bouton_base_timing(monkeypatch, tmp_path, timing):
     """The breadth run (APL off) gets the timing and a cache name with its label; the base's own call does not; without a
     timing, the calls are as before (hal's saved breadth, no breadth run)."""
-    import al_analysis.mb_model as mb
+    import pyolfsysm.mb_model as mb
     calls = []
     n = 6
     idx = pd.MultiIndex.from_arrays([[f'kc{i}' for i in range(n)]], names=[H.KC_ID_LEVEL])

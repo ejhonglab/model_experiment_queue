@@ -191,7 +191,7 @@ class ProfileModel:
     def __init__(self, out_dir: Path):
         from experiments import E10_joint_fit as J
         from experiments import E72_wiring_population as E72
-        from al_analysis.mb_model import make_fixed_param_kc_simulator
+        from pyolfsysm.mb_model import make_fixed_param_kc_simulator
         self.orn = H.apl16_orn_deltas()
         self.p = E72.fitted_params(*C2)
         _, wnorm, W, breadth = J.bouton_base(self.orn, out_dir, None)

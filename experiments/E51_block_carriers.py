@@ -166,7 +166,7 @@ def simulate_model(label: str, experiment: str, tag: str, orn: pd.DataFrame, out
     KC's drive per odor and condition, and finds its critical threshold factor. Returns (per-KC x
     odor x condition table, checks dict)."""
     from scipy.signal import lfilter
-    from al_analysis.mb_model import get_time_index
+    from pyolfsysm.mb_model import get_time_index
     name = E43.model_from(f'{experiment}:{tag}')
     t0 = time.time()
     m = E43.NoisyModel(name, orn, out_dir)

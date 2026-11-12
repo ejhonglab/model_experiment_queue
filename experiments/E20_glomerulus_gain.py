@@ -46,7 +46,7 @@ def glomerulus_peaks(orn: pd.DataFrame, out_dir: Path) -> tuple[pd.DataFrame, pd
     peak bouton output over the panel (odor-window mean per odor, max over odors, median
     over the glomerulus's boutons). Cached in out_dir."""
     cache = out_dir / 'glomerulus_peaks.csv'
-    from al_analysis.mb_model import fit_mb_model, get_time_index, get_sim_var
+    from pyolfsysm.mb_model import fit_mb_model, get_time_index, get_sim_var
     init = e3_bouton_params()
     _, _, wPNKC, pd0 = fit_mb_model(orn, fixed_thr=init['fixed_thr'], wAPLKC=init['wAPLKC_scale'],
         wKCAPL=init['wKCAPL_scale'], wAPLPN=init['wAPLPN_scale'], wPNAPL=init['wPNAPL_scale'],
@@ -192,7 +192,7 @@ def main() -> None:
             continue
         if src not in tuned:
             print(f'{tag}: {src} not tuned yet', flush=True); continue
-        from al_analysis.mb_model import fit_mb_model, make_fixed_param_kc_simulator
+        from pyolfsysm.mb_model import fit_mb_model, make_fixed_param_kc_simulator
         W, g = gained_wPNKC(wPNKC0, peaks, alpha, orn.index)
         initial = {k: tuned[src][k] for k in PARAM_KEYS}
         thr_kws = dict(BOUTON, _wPNKC=W, claw_thr=40.0, make_plots=False, silent=True)

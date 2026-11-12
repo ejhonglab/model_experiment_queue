@@ -5,7 +5,7 @@ E52 and E54 found the fitted models' natural-source alignment to have two wiring
 KC-type organization of the glomerular input (kept by the within-type shuffles) and the
 food-glomerulus convergence (the 32 over-shared pairs with ORN data, which have to be removed as a
 whole, and carry the alignment only through the gain), both shown by removal. Here the convergence
-is put back: `al_analysis.wpnkc_shuffles.lesion_coinput` with targets above the current counts
+is put back: `pyolfsysm.wpnkc_shuffles.lesion_coinput` with targets above the current counts
 raises each of the 32 pairs' shared-KC counts to the real wiring's by margin-preserving claw swaps
 (a KC with one glomerulus of the pair takes a claw of the other from a same-type KC that has the
 other and not the first, giving a claw of a third glomerulus in exchange).
@@ -70,7 +70,7 @@ def pairs_and_controls() -> pd.DataFrame:
 
 
 def make_wirings(seeds: List[int], out_dir: Path, res_dir: Path) -> Dict[Tuple[str, str, int], pd.DataFrame]:
-    from al_analysis.wpnkc_shuffles import NAMED_SHUFFLES, shuffle_wPNKC, lesion_coinput, coinput_counts, wPNKC_shuffle_summary
+    from pyolfsysm.wpnkc_shuffles import NAMED_SHUFFLES, shuffle_wPNKC, lesion_coinput, coinput_counts, wPNKC_shuffle_summary
     W = base_wiring()
     pairs = pairs_and_controls()
     pairs.to_csv(res_dir / 'transplant_pairs.csv', index=False)

@@ -99,7 +99,7 @@ def main() -> None:
     ap.add_argument('--quick', action='store_true', help='one base, one rate')
     args = ap.parse_args()
 
-    from al_analysis.mb_model import make_fixed_param_kc_simulator
+    from pyolfsysm.mb_model import make_fixed_param_kc_simulator
 
     res_dir = H.results_dir(EXPERIMENT)
     out_dir = H.outputs_dir(EXPERIMENT)

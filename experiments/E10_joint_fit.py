@@ -39,7 +39,7 @@ PN->claw weights of the E27 oracle glomeruli (default set) in the wiring passed 
 tags get a `gain<G>_` prefix after the threshold prefix, and fits.csv / provenance record the
 gain and glomeruli.
 Second wiring draw (E30): `--wiring claw_permutation --wiring-seed N` replaces the base's claw x bouton
-matrix by that shuffle (al_analysis.wpnkc_shuffles) before any gain; tag prefix wiring-<name>-seed<N>_.
+matrix by that shuffle (pyolfsysm.wpnkc_shuffles) before any gain; tag prefix wiring-<name>-seed<N>_.
 --wiring-file PARQUET --wiring-tag TAG replaces it with a saved matrix instead (a lesioned wiring, E54); tag
 prefix wiring-<TAG>_.
 Bound controls (E31): `--aplpn-max F`, `--aplpn-fixed F`, `--aplkc-min F` bound or fix the APL->bouton /
@@ -268,7 +268,7 @@ def protocol_kws(stim_end: Optional[float] = None, sim_end: Optional[float] = No
     apl_taum: Optional[float] = None) -> dict:
     """fit_mb_model kwargs of the flies' recording protocol (E82), as --stim-end / --sim-end / --apl-taum set them:
     time_stim_end, time_end and apl_taum, only those given, each checked as fit_mb_model checks it (ValueError)."""
-    from al_analysis.mb_model import time_param_dict, apl_dynamics_param_dict
+    from pyolfsysm.mb_model import time_param_dict, apl_dynamics_param_dict
     kws = dict(time_param_dict(time_stim_end=stim_end, time_end=sim_end))
     kws.update(apl_dynamics_param_dict(apl_taum=apl_taum))
     return kws
@@ -379,7 +379,7 @@ def tune_spike_only_base(orn: pd.DataFrame, claw_thr, spike_base: Dict[str, floa
         the factor applied to the tied scales, the APL-on response rate reached, and the
         number of simulations.
     """
-    from al_analysis.mb_model import make_fixed_param_kc_simulator
+    from pyolfsysm.mb_model import make_fixed_param_kc_simulator
     if not spike_base['wPNAPL_scale'] > 0:
         raise ValueError('spike_base must be a spike-driven base with wPNAPL_scale > 0 (the '
             'spike-only base is re-tuned from it)')
@@ -471,7 +471,7 @@ def input_scaled_prepass(orn: pd.DataFrame, kws: dict, initial: Dict[str, float]
         rec = json.loads(rec_path.read_text())
         print(f'input-scaled pre-pass (a {a:g}) from {spk_path.name}: fixed_thr x{rec["thr_factor"]:.5g}', flush=True)
     else:
-        from al_analysis.mb_model import make_fixed_param_kc_simulator
+        from pyolfsysm.mb_model import make_fixed_param_kc_simulator
         from experiments.E69_kc_firing_ceiling import bisect_factor
         t0 = time.time()
         sim, _ = make_fixed_param_kc_simulator(orn, initial_params={k: float(initial[k]) for k in PARAM_KEYS}, **kws)
@@ -535,7 +535,7 @@ def transfer_prepass(orn: pd.DataFrame, kws: dict, initial: Dict[str, float], of
         rec = json.loads(rec_path.read_text())
         print(f'claw-transfer pre-pass ({label}) from {spk_path.name}: fixed_thr x{rec["thr_factor"]:.5g}', flush=True)
     else:
-        from al_analysis.mb_model import make_fixed_param_kc_simulator
+        from pyolfsysm.mb_model import make_fixed_param_kc_simulator
         from experiments.E69_kc_firing_ceiling import bisect_factor
         t0 = time.time()
         p0 = {k: float(initial[k]) for k in PARAM_KEYS}
@@ -595,7 +595,7 @@ def bouton_base(orn: pd.DataFrame, out_dir: Path, claw_thr=None, gain: Optional[
     tuned base parameters themselves are not re-tuned at the gain: the joint fit fits the
     threshold and the APL / KC-KC scales, and `--init-from` sets the start.
 
-    With `wiring` (a name from `al_analysis.wpnkc_shuffles.NAMED_SHUFFLES`, e.g.
+    With `wiring` (a name from `pyolfsysm.wpnkc_shuffles.NAMED_SHUFFLES`, e.g.
     'claw_permutation' or 'curveball_within_type'), the base's claw x bouton matrix is
     replaced by that shuffle of it at `wiring_seed` (E4's substrate nulls: claw counts per
     KC and per bouton kept, the assignment re-drawn), before any gain; the breadth is
@@ -632,7 +632,7 @@ def bouton_base(orn: pd.DataFrame, out_dir: Path, claw_thr=None, gain: Optional[
     the flies' pulse, as E77_input_screen.handle_breadth computes it for E80's re-held points (cached with
     a `timing_label` prefix; hal's saved runs are at olfsysm's pulse, so they do not apply). The returned
     parameters, weights and wiring are the base's (the timing is a model kwarg of the fit too)."""
-    from al_analysis.mb_model import fit_mb_model
+    from pyolfsysm.mb_model import fit_mb_model
     hal_out = H.shared_dir() / 'data' / 'hal_outputs'
     if claw_thr is None:
         initial = e3_bouton_params()
@@ -675,7 +675,7 @@ def bouton_base(orn: pd.DataFrame, out_dir: Path, claw_thr=None, gain: Optional[
         hal_path = out_dir / 'no_such_file'
         off_path = out_dir / (f'input-{input_tag}_' + off_path.name)
     if wiring is not None:
-        from al_analysis.wpnkc_shuffles import NAMED_SHUFFLES, shuffle_wPNKC
+        from pyolfsysm.wpnkc_shuffles import NAMED_SHUFFLES, shuffle_wPNKC
         if wiring not in NAMED_SHUFFLES:
             raise ValueError(f'{wiring=} not in {list(NAMED_SHUFFLES)}')
         method, within = NAMED_SHUFFLES[wiring]
@@ -1388,7 +1388,7 @@ def fit_one(k: float, orn, initial, wnorm, breadth, loss_fn, *, kckc0: float, ma
     and 'off' conditions with their spike times in every evaluation (optimize_mb_model_params'
     condition_spike_times: the loss gets them, e.g. for --count-kernel, and the result has the best
     evaluation's as 'condition_spike_times')."""
-    from al_analysis.mb_model import optimize_mb_model_params
+    from pyolfsysm.mb_model import optimize_mb_model_params
     wAPLKC = breadth_weights(wnorm['wAPLKC'], breadth, k)
     r19 = None if (claw_thr is None or apl_drive != 'claws') else e19_row(claw_thr, k, kckc0)
     if init_params is not None:
@@ -1664,7 +1664,7 @@ def main() -> None:
     ap.add_argument('--gain-glomeruli', nargs='+', default=None, metavar='GLOM',
         help='glomeruli the gain applies to (default: the E27 oracle set: DC2 DL1 DM1 DM5 D DP1m VA7m VC1)')
     ap.add_argument('--wiring', default=None, metavar='SHUFFLE',
-        help="re-draw the base's claw x bouton wiring with this al_analysis.wpnkc_shuffles "
+        help="re-draw the base's claw x bouton wiring with this pyolfsysm.wpnkc_shuffles "
         "shuffle (claw_permutation, claw_permutation_within_type, curveball, "
         "curveball_within_type; E30's second draw); tag prefix wiring-<SHUFFLE>-seed<N>_")
     ap.add_argument('--wiring-seed', type=int, default=0, help='seed of the --wiring draw')
@@ -2002,7 +2002,7 @@ def main() -> None:
     print(f'bouton base ready ({time.time() - t0:.0f}s; claw_thr {args.claw_thr}; gain {gain}; '
         f'wiring {args.wiring}); tuned params {initial}', flush=True)
     kckc_tag = '' if args.kckc_fixed is None else f'kckc{args.kckc_fixed:g}_'
-    from al_analysis.mb_model import kc_spiking_param_dict
+    from pyolfsysm.mb_model import kc_spiking_param_dict
     try:
         kc_spiking = kc_spiking_param_dict(kc_refractory_period=args.kc_refractory_period, kc_adapt_inc=args.kc_adapt_inc,
             kc_adapt_tau=args.kc_adapt_tau)

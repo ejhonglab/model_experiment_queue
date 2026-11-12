@@ -488,7 +488,7 @@ def who_selects(out: Path, models: Optional[Sequence[str]] = None) -> pd.DataFra
     import gc
     from experiments import E43_model_trial_noise as E43
     from experiments import E10_joint_fit as J
-    from al_analysis.mb_model import make_fixed_param_kc_simulator, get_time_index, get_sim_var
+    from pyolfsysm.mb_model import make_fixed_param_kc_simulator, get_time_index, get_sim_var
     res = H.results_dir(EXPERIMENT)
     specs = [('C2', C2[0], C2[1])]
     fp = res / 'fits.csv'
@@ -660,7 +660,7 @@ def largest_bouton_rates_for(orn: pd.DataFrame) -> pd.Series:
     `glomerulus_pn_rates` computes them (0-0.5 s mean), the largest over the wiring's glomeruli."""
     from experiments import E10_joint_fit as J
     from experiments import E49_low_conc_kc as E49
-    from al_analysis.mb_model import fit_mb_model, get_time_index, get_sim_var
+    from pyolfsysm.mb_model import fit_mb_model, get_time_index, get_sim_var
     from experiments.E12_breadth_apl import e3_bouton_params
     key = ('pn_rates', tuple(map(str, orn.columns)))
     if key not in _CACHE:
@@ -831,7 +831,7 @@ class KneeModel:
         checked against the breadth."""
         if getattr(self, '_base_off', None) is None:
             from experiments import E10_joint_fit as J
-            from al_analysis.mb_model import make_fixed_param_kc_simulator
+            from pyolfsysm.mb_model import make_fixed_param_kc_simulator
             p0 = {k: float(self.initial[k]) for k in J.PARAM_KEYS}
             sim, _ = make_fixed_param_kc_simulator(self.orn, initial_params=p0, **self.plain_kws)
             _, s0 = sim(self.off(p0))
@@ -1322,7 +1322,7 @@ def low_conc(out: Path, point_ids: Sequence[str], start: str = 'C2', breadth: st
     tag: low_<odor key>_frac_<on|off>) and low_conc/data_fractions.csv."""
     import json
     from experiments import E49_low_conc_kc as E49
-    from al_analysis.mb_model import make_fixed_param_kc_simulator
+    from pyolfsysm.mb_model import make_fixed_param_kc_simulator
     ldir = out / 'low_conc'
     ldir.mkdir(parents=True, exist_ok=True)
     sw = aggregate(out, breadth)
@@ -1658,7 +1658,7 @@ def d_heldout(out: Path, point_id: str) -> pd.DataFrame:
     B fit) and as their population (E72's population_row). Writes heldout_<point_id>.csv and appends the population to
     population.csv as point 'heldout_<point_id>'."""
     from experiments import E72_wiring_population as E72
-    from al_analysis.mb_model import make_fixed_param_kc_simulator
+    from pyolfsysm.mb_model import make_fixed_param_kc_simulator
     f = pd.read_csv(out / 'fits.csv')
     f = f[f.tag.astype(str).str.endswith(f'_from_{point_id}')]
     if len(f) < 4:

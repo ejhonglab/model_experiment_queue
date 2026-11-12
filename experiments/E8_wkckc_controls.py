@@ -35,7 +35,7 @@ POINTS = [(40.0, 2.0, 30.0), (70.0, 2.0, 100.0)]
 
 
 def main() -> None:
-    from al_analysis.mb_model import fit_mb_model, make_fixed_param_kc_simulator, connectome_KCKC_weights
+    from pyolfsysm.mb_model import fit_mb_model, make_fixed_param_kc_simulator, connectome_KCKC_weights
     res_dir = H.results_dir('E8_kc_kc_inhibition')
     out_dir = H.outputs_dir('E8_kc_kc_inhibition') / 'controls'
     out_dir.mkdir(exist_ok=True)

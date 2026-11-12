@@ -39,7 +39,7 @@ results/apl_effect/by_variant.csv with archived APL-on and acute APL-off spike c
 Part B (fixed-scale simulations, E54's `run_variants` on E57's pattern): at E44's 40 Hz and 70 Hz optima
 (APL and KC-KC scales fixed, somatic threshold re-tuned to 6.8 % by bisection), with the sets defined on
 the real wiring at the fitted scales (A_<model>_real_fit of E47 = E44's fit): (i) the survivors' claws
-re-drawn (`al_analysis.wpnkc_shuffles.redraw_kc_subset`, within type); (ii) the whole high-firing set's;
+re-drawn (`pyolfsysm.wpnkc_shuffles.redraw_kc_subset`, within type); (ii) the whole high-firing set's;
 (iii) controls: as many high-firing non-survivors, and as many KCs from outside the high-firing set, both
 matched to the survivors in KC type and number of claws (the survivors, resp. the high-firing set,
 protected), and for (ii) as many KCs from outside the set matched in type; (iv) on E47's within-type claw
@@ -438,7 +438,7 @@ def shuffled_wiring(shuffle: str, seed: int) -> pd.DataFrame:
     """E47's draw (`bouton_base(wiring=shuffle, wiring_seed=seed)` shuffles the same matrix)."""
     key = (shuffle, int(seed))
     if key not in _W:
-        from al_analysis.wpnkc_shuffles import NAMED_SHUFFLES, shuffle_wPNKC
+        from pyolfsysm.wpnkc_shuffles import NAMED_SHUFFLES, shuffle_wPNKC
         method, within = NAMED_SHUFFLES[shuffle]
         _W[key] = shuffle_wPNKC(real_wiring(), method, within_kc_type=within, seed=int(seed))
     return _W[key]
@@ -457,7 +457,7 @@ def static_kc_weights() -> Tuple[pd.Series, pd.DataFrame]:
     property of the claws, unchanged by a claw shuffle) and the normalized hemibrain KC->KC weights
     (post x pre, mean incoming weight 1), as the model uses them."""
     if not _STATIC:
-        from al_analysis.mb_model import connectome_APL_weights, connectome_KCKC_weights
+        from pyolfsysm.mb_model import connectome_APL_weights, connectome_KCKC_weights
         W = real_wiring()
         wA, *_ = connectome_APL_weights(prat_claws=True, prat_boutons=True, wPNKC=W)
         per_kc = wA.groupby(level=H.KC_ID_LEVEL, sort=False).sum()
@@ -1220,7 +1220,7 @@ def matched_control(target: pd.Index, pool: pd.Index, feat: pd.DataFrame, rng: n
 def build_arm_wirings(mkey: str, sets: Dict[str, pd.Index], seeds: Sequence[int], out_dir: Path, arms: Sequence[str]) -> List[dict]:
     """The re-drawn / restored wirings of one model's arms (cached in out_dir as parquet with their swaps
     and KC sets), with each draw's statistics."""
-    from al_analysis.wpnkc_shuffles import redraw_kc_subset, restore_kc_subset, wPNKC_shuffle_summary
+    from pyolfsysm.wpnkc_shuffles import redraw_kc_subset, restore_kc_subset, wPNKC_shuffle_summary
     W = real_wiring()
     feat = wiring_features(W)
     surv, hf = sets['survivors'], sets['high_firing']

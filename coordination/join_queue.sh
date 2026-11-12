@@ -34,7 +34,8 @@
 #   5. if git has no name or email to commit with, explains why they are needed, asks for them and
 #      saves them with git config --global (it exits if you decline: queue sessions commit);
 #   6. makes a new venv, model_experiment_queue/venv, from a system Python and installs
-#      al_analysis, hong2p and olfsysm editable from their checkouts, then this repository's own
+#      al_analysis (with its `model` extra), hong2p and olfsysm (with the model's Python side,
+#      pyolfsysm) editable from their checkouts, then this repository's own
 #      packages (kcq, experiments, ...; pyproject.toml), also editable (skipped with --no-install).
 #      It never uses or changes a venv it did not make (it marks its
 #      own with kc_queue_venv.txt), and checks that the packages import from the tree;
@@ -46,10 +47,10 @@
 #      fingerprints, to send to Tom (by Slack, email or in person, not through the shared
 #      directory) so he can add them with approve_push_keys.sh <host>, and offers to wait until he
 #      has (it checks every minute whether each checkout can push);
-#   9. checks that the experiment inputs load and a model fit runs, and runs al_analysis's
+#   9. checks that the experiment inputs load and a model fit runs, and runs olfsysm's
 #      provenance tests and the queue monitor's tests (seconds; skipped with --no-tests).
-#      --full-tests also runs this repository's tests and al_analysis's whole QUICK=1 test suite
-#      (2.5 h on hal).
+#      --full-tests also runs this repository's tests and olfsysm's and al_analysis's whole
+#      QUICK=1 test suites (about 2.5 h on hal).
 #
 # Usage: ~/src/kc_queue/model_experiment_queue/coordination/join_queue.sh [--no-install] [--no-tests | --full-tests]
 #        .../join_queue.sh --check    # once Tom has added the keys: can each checkout push?
@@ -505,9 +506,10 @@ sys.exit(not os.path.exists(os.path.join(sysconfig.get_paths()["include"], "Pyth
 assert sys.prefix != sys.base_prefix and os.path.realpath(sys.prefix) == os.path.realpath(sys.argv[1])
 ' "$q/venv" || die "$V/python is not the venv's own Python"
   "$V/python" -m pip install -q -U pip || die "upgrading pip failed"
-  # al_analysis pins hong2p and olfsysm to their GitHub versions (exact-requirements.txt), so the
-  # editable installs from the checkouts go last, replacing those
-  "$V/python" -m pip install -e "$al[dev]" || die "installing al_analysis failed"
+  # al_analysis pins hong2p and olfsysm to their GitHub versions (exact-requirements.txt, and its
+  # `model` extra, which installs olfsysm with the model's Python side, pyolfsysm), so the editable
+  # installs from the checkouts go last, replacing those
+  "$V/python" -m pip install -e "$al[dev,model]" || die "installing al_analysis failed"
   "$V/python" -m pip install -e "$src/hong2p[all]" || die "installing hong2p failed"
   "$V/python" -m pip install -e "$src/olfsysm" || die "building / installing olfsysm failed"
   # this repository's packages (no dependencies of their own), so the scripts import each other
@@ -515,10 +517,11 @@ assert sys.prefix != sys.base_prefix and os.path.realpath(sys.prefix) == os.path
   (cd / && "$V/python" -I - "$src" <<'EOF') || die "the venv does not import from the queue's tree"
 import os, sys
 tree = os.path.realpath(sys.argv[1])
-import al_analysis, hong2p, olfsysm, kcq
+import al_analysis, hong2p, olfsysm, pyolfsysm, kcq
 bad = []
 for name, mod, checkout in (('al_analysis', al_analysis, 'al_analysis'), ('hong2p', hong2p, 'hong2p'),
-        ('olfsysm', olfsysm, 'olfsysm'), ('kcq', kcq, 'model_experiment_queue')):
+        ('olfsysm', olfsysm, 'olfsysm'), ('pyolfsysm', pyolfsysm, 'olfsysm'),
+        ('kcq', kcq, 'model_experiment_queue')):
     # al_analysis is a namespace package (no __init__.py): its directories instead of a file
     locs = [mod.__file__] if getattr(mod, '__file__', None) else [
         p for p in getattr(mod, '__path__', []) if os.path.isdir(p)]
@@ -588,7 +591,7 @@ if [ $tests -gt 0 ]; then
   [ -x "$V/python" ] || die "no venv at $q/venv; re-run without --no-install"
   (cd "$q" && "$V/python" - <<'EOF') || die "the model or the experiment inputs do not load (above)"
 from kcq import harness as H
-from al_analysis import mb_model
+from pyolfsysm import mb_model
 problems = mb_model.olfsysm_clean_problems()
 if problems:
     raise SystemExit('olfsysm is not a clean build of its checkout (re-run without --no-install): '
@@ -619,13 +622,15 @@ if err:
 print(f'model fit runs ({resp.shape[0]} KCs x {resp.shape[1]} odors; output in {log_path})')
 EOF
   step "provenance and monitor tests"
-  (cd "$al" && QUICK=1 "$V/python" -m pytest -q -p no:cacheprovider test/test_model_provenance.py) ||
-    die "tests failed (above)"
+  (cd "$src/olfsysm" && QUICK=1 "$V/python" -m pytest -q -p no:cacheprovider \
+    test/test_model_provenance.py) || die "tests failed (above)"
   (cd "$q" && "$V/python" -m pytest -q coordination/monitor) || die "tests failed (above)"
   if [ $tests = 2 ]; then
     step "this repository's tests (QUICK=1)"
     (cd "$q" && QUICK=1 nice -n 10 "$V/python" -m pytest -q) || die "tests failed (above)"
-    step "al_analysis's QUICK=1 test suite (2.5 h on hal)"
+    step "olfsysm's (the model's) and al_analysis's QUICK=1 test suites (about 2.5 h on hal)"
+    (cd "$src/olfsysm" && QUICK=1 nice -n 10 "$V/python" -m pytest -q -p no:cacheprovider) ||
+      die "tests failed (above)"
     (cd "$al" && QUICK=1 nice -n 10 "$V/python" -m pytest -q -p no:cacheprovider) ||
       die "tests failed (above)"
   fi

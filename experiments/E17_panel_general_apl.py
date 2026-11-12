@@ -85,7 +85,7 @@ def glomerulus_scores(orn: pd.DataFrame, seed: int = 0) -> pd.DataFrame:
 
 def claw_table(kws: dict) -> Tuple[pd.DataFrame, pd.Series, pd.Series, pd.Series]:
     """Per-claw glomerulus plus hemibrain APL<->claw synapse counts (index = wPNKC rows)."""
-    from al_analysis.mb_model import (connectome_wPNKC, connectome_APL_weights,
+    from pyolfsysm.mb_model import (connectome_wPNKC, connectome_APL_weights,
         get_connectome_wPNKC_params)
 
     params = get_connectome_wPNKC_params(kws)

@@ -59,7 +59,7 @@ def synapse_weighted_wPNKC(orn: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     """The bouton base's wiring with each claw weighted by its PN->KC synapse count
     (claw_weight='synapses', which connectome_wPNKC normalizes to mean 1 over the nonzero
     weights since al_analysis 07f9919), plus the raw counts' statistics (claw_weight='synapses_raw')."""
-    from al_analysis.mb_model import fit_mb_model
+    from pyolfsysm.mb_model import fit_mb_model
     init = e3_bouton_params()
     fixed = dict(fixed_thr=init['fixed_thr'], wAPLKC=init['wAPLKC_scale'], wKCAPL=init['wKCAPL_scale'],
         wAPLPN=init['wAPLPN_scale'], wPNAPL=init['wPNAPL_scale'], make_plots=False, silent=True)

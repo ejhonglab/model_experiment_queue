@@ -252,7 +252,7 @@ def main() -> None:
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(), base=BOUTON, claw_thr=thr, apl_drive=args.apl_drive, forms={f: FORMS[f] for f in args.forms},
         approx_conc_note=H.APPROX_CONC_NOTE)
     try:
-        from al_analysis.mb_model import model_provenance
+        from pyolfsysm.mb_model import model_provenance
         prov.update(model_provenance(orn_deltas=orn))
     except Exception as e:  # keep the commit hashes at least
         prov.update(**H.code_commits(),

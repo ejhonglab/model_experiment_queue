@@ -31,7 +31,7 @@ import pandas as pd
 
 from kcq import harness as H
 
-SYN_PATH = (H.al_analysis_data_dir() / 'from_pratyush' / '2025-12-05' /
+SYN_PATH = (H.pyolfsysm_data_dir() / 'from_pratyush' / '2025-12-05' /
     'PNbouton-to-KCclaw_Connectivity_2025-12-09-19-47-36.parquet')
 THRESH = 5   # synapses per (KC, claw, PN), as in connectome_wPNKC
 OUT = H.shared_dir() / 'results' / 'bouton_claw_synapses'
@@ -191,7 +191,7 @@ def run_model_comparison(variants=None) -> None:
     (KC, odor) responses that differ from the default's."""
     from experiments.E3_drive_dependent_gain import BOUTON, TARGET, rate
     from experiments.E4_substrate import score, kc_by_glomerulus
-    from al_analysis.mb_model import fit_mb_model
+    from pyolfsysm.mb_model import fit_mb_model
     orn = H.apl16_orn_deltas(); orn_pairs = H.orn16_consensus_pairs(); drive = H.consensus_orn_drive()
     ref = H.reference_pairs()
     data = {'raw': {g: H.yang_mean_rdm(g, 'cosine') for g in ('TNT3c', 'TNT')},

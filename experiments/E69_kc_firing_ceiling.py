@@ -210,7 +210,7 @@ class Model:
         whose fits.csv row carries its KC refractory / adaptation parameters, which E43.fit_model passes on;
         `kc` must then be empty); `self.base` stays the base's."""
         from experiments import E43_model_trial_noise as E43
-        from al_analysis.mb_model import make_fixed_param_kc_simulator
+        from pyolfsysm.mb_model import make_fixed_param_kc_simulator
         from experiments.E10_joint_fit import bouton_base
         b = bases()[key]
         if ref is not None and kc:

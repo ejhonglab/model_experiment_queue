@@ -572,7 +572,7 @@ def wiring_simulator(label: str, p_fit: Dict[str, float], orn: pd.DataFrame, out
     """A fixed-parameter simulator of C2's family (breadth exponent 2, no gain, no per-claw threshold) on one wiring,
     built as E10_joint_fit.py builds the fit's model (bouton_base of that wiring, its own breadth pre-pass, the connectome
     APL weights, KC-KC inhibition with tau TAU), started at `p_fit` (that wiring's fitted absolute parameters)."""
-    from al_analysis.mb_model import make_fixed_param_kc_simulator
+    from pyolfsysm.mb_model import make_fixed_param_kc_simulator
     from experiments import E10_joint_fit as J
     if label == REAL:
         _, wnorm, W, breadth = J.bouton_base(orn, out_dir, None)
