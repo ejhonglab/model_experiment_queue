@@ -84,13 +84,13 @@ GENERATOR_SEEDS = {'C1_A': 10, 'C1_B': 11, 'C2_C': 20, 'C2_D': 21}
 CHECK = dict(half='A', seed=0, split_seed=0, odors=('eb',), gens=1)
 CHECK_COLUMNS = ('half', 'odor', 'generation', 'best_obj', 'parent_obj', 'success', 'sigma', 'pattern_rms_half',
                  'pattern_rms_other', 'frac_on', 'frac_off', 'c2_frac_on', 'c2_frac_off')
-# the columns computed from the pattern error (floating-point sums over the 120 pairs), and the ulps they may differ by
-# from E77's when everything else (the generator's path, every count) is exact: the readout's distances changed in their
-# last digits with the move of the harness's functions to hong2p and pyolfsysm (2026-11-12; C2's own pattern part on the
-# real wiring against half A is 0.0609269329706763 in E83's readings.csv of 2026-11-11 and 0.06092693297067637 now, on
-# hal, with the same numpy and pandas)
+# the columns computed from the pattern error (floating-point sums over the 120 pairs), and the relative difference they
+# may have from E77's when everything else (the generator's path, every count-derived column) is exact: the readout's
+# distances changed in their last digits with the move of the harness's functions to hong2p and pyolfsysm (2026-11-12;
+# C2's own pattern part on the real wiring against half A is 0.0609269329706763 in E83's readings.csv of 2026-11-11 and
+# 0.06092693297067637 now, on hal, with the same numpy and pandas); on hal the check's differ by 4 to 8 ulps (1e-15)
 CHECK_FLOAT_COLUMNS = ('best_obj', 'parent_obj', 'pattern_rms_half', 'pattern_rms_other')
-CHECK_MAX_ULPS = 4
+CHECK_REL_TOL = 1e-12
 # the four fitted inputs of part A: name -> (results folder, factor table, E83's change prefix, half searched, label)
 FITTED = {'E77_A': ('E77_input_side_common_error', 'oracle_factors_A.csv', 'A2_halfA', 'A', "E77's, half A"),
           'E77_B': ('E77_input_side_common_error', 'oracle_factors_B.csv', 'A2_halfB', 'B', "E77's, half B"),
@@ -232,6 +232,14 @@ def load_run(part: str, tag: str) -> Optional[Dict[str, tuple]]:
         if o is not None:
             return o
     return None
+
+
+def _rel(path: Path) -> str:
+    """A path relative to the shared directory when it is inside it."""
+    try:
+        return str(Path(path).relative_to(H.shared_dir()))
+    except ValueError:
+        return str(path)
 
 
 def _provenance_add(path: Path, part: str, tag: str, prov: dict) -> None:
@@ -468,7 +476,8 @@ def identity(out: Path, wirings: Sequence[str] = T_WIRINGS) -> dict:
     """The identity checks: every wiring of `wirings` reproduces its saved fit with the lab's input (E83's
     `build_simulator` and `_check_saved`); E83's part A2 point A2_halfA_s0.6_P3 (half A's input at 0.6 on P3) is
     reproduced exactly by this experiment's reading (`held_reading`, its own breadth cache): the input to the last digit
-    (E83's inputs/A2_halfA_s0.6.csv), the breadth (sha256), both factors, every spike count and response. Writes
+    (E83's inputs/A2_halfA_s0.6.csv, read with round-trip float parsing), the breadth (sha256), both factors, every spike
+    count and response. Writes
     identity.json; raises on a mismatch."""
     res = dict(script=SCRIPT, generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), **H.code_commits(),
                wirings={}, a2_point={})
@@ -483,9 +492,12 @@ def identity(out: Path, wirings: Sequence[str] = T_WIRINGS) -> dict:
         print(f'{w}: the lab input reproduces {res["wirings"][w]["fit"]} exactly', flush=True)
     e83 = H.results_dir(E83.EXPERIMENT)
     orn_in = E83.input_at(candidate_factors('A'), SIZE)
-    saved_in = E10_read_input(e83 / 'inputs' / 'A2_halfA_s0.6.csv')
-    if not np.array_equal(orn_in.to_numpy(dtype=float), saved_in.to_numpy(dtype=float)):
+    lay = H.abbrev_columns(orn_in)
+    saved_in = pd.read_csv(e83 / 'inputs' / 'A2_halfA_s0.6.csv', index_col=0, float_precision='round_trip')
+    if not (list(saved_in.index) == list(lay.index) and list(saved_in.columns) == list(lay.columns)
+            and np.array_equal(saved_in.to_numpy(dtype=float), lay.to_numpy(dtype=float))):
         raise RuntimeError("half A's input at 0.6 differs from E83's inputs/A2_halfA_s0.6.csv")
+    res['a2_input_equal'] = True
     q = pd.read_csv(e83 / 'runs_A2.csv', float_precision='round_trip').set_index('tag').loc['A2_halfA_s0.6_P3']
     t0 = time.time()
     r = held_reading('P3', orn_in, E83.input_tag_for(orn_in, 'E86_identity_A2_halfA_s0.6'))
@@ -503,12 +515,6 @@ def identity(out: Path, wirings: Sequence[str] = T_WIRINGS) -> dict:
     if not a2['reproduced']:
         raise RuntimeError(f"E83's point A2_halfA_s0.6_P3 not reproduced: {a2}")
     return res
-
-
-def E10_read_input(path: Path) -> pd.DataFrame:
-    """An input in E38's layout read as the lab's (`E10_joint_fit.read_orn_input`, values to the last digit)."""
-    from experiments.E10_joint_fit import read_orn_input
-    return read_orn_input(str(path), H.apl16_orn_deltas())
 
 
 # ---------------------------------------------------------------------------
@@ -576,8 +582,7 @@ def run_points(out: Path, part: str, plan: Sequence[dict]) -> pd.DataFrame:
             save_run(part, pt['tag'], o)
             E83._append_row(rp, E83._run_row(part, pt['change'], w, pt['tag'], res, o, group=pt['group'], kind=pt['kind'],
                                              control_seed=pt['seed'], half=pt['half'], unseen=pt['unseen'],
-                                             size=pt['size'], input_tag=res['input_tag'],
-                                             orn_input=str(path.relative_to(H.shared_dir()))))
+                                             size=pt['size'], input_tag=res['input_tag'], orn_input=_rel(path)))
             _provenance_add(pp, part, pt['tag'], H.model_provenance(orn_deltas=orn_in))
             t = targets()[f"half{pt['unseen']}"]
             d0, d1 = E83.pair_distances(E83.saved_fit(w)['saved'], 'cal'), E83.pair_distances(o, 'cal')
@@ -601,36 +606,43 @@ def _ulps(a: float, b: float) -> float:
     return float(abs(a - b) / np.spacing(max(abs(a), abs(b)))) if a != b else 0.0
 
 
-def check_search(out: Path) -> dict:
+def check_search(out: Path, simulate: bool = True) -> dict:
     """Part C's check: E77's `input_oracle` with its defaults' split and generator seed (first split, seed 0, half A),
     one generation of eb, written under outputs/E86_reduced_input_candidate/C/check/ (tag check_A), against the first
     row of E77's oracle_history_A.csv in every column but the time (both read with round-trip float parsing). 'exact':
     every column equal to the last digit; 'reproduced': the generator's path and the count-derived columns (success,
-    sigma, the response fractions) equal to the last digit and the pattern-error columns (CHECK_FLOAT_COLUMNS) within
-    CHECK_MAX_ULPS units in the last place. Writes check_search.json; raises unless reproduced."""
+    sigma, the response fractions) equal to the last digit and the pattern-error columns (CHECK_FLOAT_COLUMNS) within a
+    relative CHECK_REL_TOL (their units in the last place are reported). Writes check_search.json; raises unless
+    reproduced. `simulate=False` compares the history the last run wrote, without running it again."""
     d = _search_dir() / 'check'
     d.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
-    E77.input_oracle(d, CHECK['half'], odors=CHECK['odors'], gens=CHECK['gens'], seed=CHECK['seed'],
-                     split_seed=CHECK['split_seed'], tag='check_A')
-    got = pd.read_csv(E77.oracle_paths(d, 'A', 'check_A')['history'], float_precision='round_trip').iloc[0]
+    if simulate:
+        E77.input_oracle(d, CHECK['half'], odors=CHECK['odors'], gens=CHECK['gens'], seed=CHECK['seed'],
+                         split_seed=CHECK['split_seed'], tag='check_A')
+    hpath = E77.oracle_paths(d, 'A', 'check_A')['history']
+    got = pd.read_csv(hpath, float_precision='round_trip').iloc[0]
     ref = pd.read_csv(H.results_dir(E77.EXPERIMENT) / 'oracle_history_A.csv', float_precision='round_trip').iloc[0]
     cols = {c: dict(e86=got[c], e77=ref[c], equal=bool(got[c] == ref[c])) for c in CHECK_COLUMNS}
     for c in CHECK_FLOAT_COLUMNS:
-        cols[c]['ulps'] = _ulps(float(got[c]), float(ref[c]))
+        a, b = float(got[c]), float(ref[c])
+        cols[c].update(ulps=_ulps(a, b), rel_diff=abs(a - b) / max(abs(a), abs(b)))
     exact = all(v['equal'] for v in cols.values())
     within = all(v['equal'] for c, v in cols.items() if c not in CHECK_FLOAT_COLUMNS) and \
-        all(cols[c]['ulps'] <= CHECK_MAX_ULPS for c in CHECK_FLOAT_COLUMNS)
+        all(cols[c]['rel_diff'] <= CHECK_REL_TOL for c in CHECK_FLOAT_COLUMNS)
     res = dict(script=SCRIPT, generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), **H.code_commits(),
-               check=dict(CHECK, odors=list(CHECK['odors'])), seconds=time.time() - t0, columns=cols, exact=exact,
-               max_ulps=max(cols[c]['ulps'] for c in CHECK_FLOAT_COLUMNS), max_ulps_allowed=CHECK_MAX_ULPS,
+               check=dict(CHECK, odors=list(CHECK['odors'])), history=str(hpath), simulated=simulate,
+               seconds=time.time() - t0, columns=cols, exact=exact,
+               max_ulps=max(cols[c]['ulps'] for c in CHECK_FLOAT_COLUMNS),
+               max_rel_diff=max(cols[c]['rel_diff'] for c in CHECK_FLOAT_COLUMNS), rel_tol=CHECK_REL_TOL,
                reproduced=bool(exact or within))
     (out / 'check_search.json').write_text(json.dumps(res, indent=1, default=str) + '\n')
     print(json.dumps(res, indent=1, default=str), flush=True)
     if not res['reproduced']:
         raise RuntimeError(f"the first generation of eb differs from E77's: {[c for c, v in cols.items() if not v['equal']]}")
-    print(f"the first generation of eb reproduces E77's {'exactly' if exact else 'to ' + format(res['max_ulps'], 'g') + ' ulps in the pattern-error columns, every other column exactly'}",
-          flush=True)
+    print("the first generation of eb reproduces E77's " + ('exactly' if exact else
+          f"every column but the pattern-error ones exactly, those to {res['max_ulps']:g} ulps (relative "
+          f"{res['max_rel_diff']:.1g})"), flush=True)
     return res
 
 
@@ -1033,6 +1045,7 @@ def main() -> None:
                                                       'score', 'D', 'E', 'F'])
     ap.add_argument('--search', choices=list(SEARCHES), help='part C: the search to run')
     ap.add_argument('--no-resume', action='store_true', help='part C: start the search over (ignore its checkpoint)')
+    ap.add_argument('--no-simulate', action='store_true', help="part C-check: compare the last run's history only")
     args = ap.parse_args()
     out = H.results_dir(EXPERIMENT)
     if args.part == 'A':
@@ -1052,7 +1065,7 @@ def main() -> None:
         else:
             print('no B1 input has g above 0: B3 does not run', flush=True)
     elif args.part == 'C-check':
-        check_search(out)
+        check_search(out, simulate=not args.no_simulate)
     elif args.part == 'C':
         if args.search is None:
             ap.error('--part C needs --search ' + '|'.join(SEARCHES))
