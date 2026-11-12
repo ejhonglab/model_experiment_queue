@@ -17,7 +17,7 @@ minus expected cosine distance under within-odor KC-identity shuffles) for the b
 vs other between-group pairs, with APL on and off, isotonic R2, deviations vs control.
 
 Outputs: <shared>/results/E12_breadth_apl/ and ./outputs/E12_breadth_apl/.
-Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python E12_breadth_apl.py [-k 0 0.5 1 2 -1]
+Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python experiments/E12_breadth_apl.py [-k 0 0.5 1 2 -1]
 """
 from __future__ import annotations
 
@@ -32,9 +32,9 @@ from typing import Dict, Tuple
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
-from E3_drive_dependent_gain import BOUTON, match_kc_apl_scale, per_odor_extras, rate
-from E4_substrate import score, kc_by_glomerulus
+from kcq import harness as H
+from experiments.E3_drive_dependent_gain import BOUTON, match_kc_apl_scale, per_odor_extras, rate
+from experiments.E4_substrate import score, kc_by_glomerulus
 
 EXPERIMENT = 'E12_breadth_apl'
 E3_DIR = H.HERE / 'outputs' / 'E3_drive_dependent_gain'
@@ -205,7 +205,7 @@ def main() -> None:
             mode='a', header=not (res_dir / 'model_pair_distances_long.csv').exists()
         )
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),
-        script='E12_breadth_apl.py', host=subprocess.run(['hostname'], capture_output=True,
+        script='experiments/E12_breadth_apl.py', host=subprocess.run(['hostname'], capture_output=True,
             text=True).stdout.strip(),
         **H.code_commits(),
         base=BOUTON, initial_params=initial, exponents=args.exponents, breadth=args.breadth,

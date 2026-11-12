@@ -16,7 +16,7 @@ base. Optionally (--breadth) the best caps are combined with E12's breadth-weigh
 (k = 3; the capped model's tuned thresholds, KC<->APL scales re-matched to its count).
 
 Outputs: <shared>/results/E16_claw_saturation/ and ./outputs/E16_claw_saturation/.
-Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python E16_claw_saturation.py
+Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python experiments/E16_claw_saturation.py
     [--bases bouton claw-dynamics] [--caps 30 50 70 100 150 250] [--forms tanh hard]
     [--breadth CAP ...]   (bouton base only; run after the sweep)
 """
@@ -34,11 +34,11 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-import kc_remapping_harness as H
-from E3_drive_dependent_gain import BASES, BOUTON, TARGET, per_odor_extras, rate, tune_and_knockout
-from E4_substrate import score, kc_by_glomerulus
-from E12_breadth_apl import density_excess
-from E3_drive_dependent_gain import match_kc_apl_scale
+from kcq import harness as H
+from experiments.E3_drive_dependent_gain import BASES, BOUTON, TARGET, per_odor_extras, rate, tune_and_knockout
+from experiments.E4_substrate import score, kc_by_glomerulus
+from experiments.E12_breadth_apl import density_excess
+from experiments.E3_drive_dependent_gain import match_kc_apl_scale
 
 EXPERIMENT = 'E16_claw_saturation'
 E3_DIR = H.HERE / 'outputs' / 'E3_drive_dependent_gain'
@@ -362,7 +362,7 @@ def main() -> None:
         pairs.clear()
 
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),
-        script='E16_claw_saturation.py', host=subprocess.run(['hostname'],
+        script='experiments/E16_claw_saturation.py', host=subprocess.run(['hostname'],
             capture_output=True, text=True).stdout.strip(),
         **H.code_commits(),
         bases=BASE_KWS, caps=args.caps, forms=args.forms, thr=args.thr, breadth=args.breadth,

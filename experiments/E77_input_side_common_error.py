@@ -10,7 +10,7 @@ wirings is E72's (E75's `common_error`). Parts:
   both against C2 on the same wiring.
 - B: no simulations, the anatomy of the common error: the kinds of ester pairs, the per-odor and pair-specific split
   with recording-bootstrap intervals, the split into what a model inherits from its APL-off distances, its on-against-off
-  curve and a pair-specific part for every archived variant (`kc_remapping_harness.apl_effect_inherited_split`), the
+  curve and a pair-specific part for every archived variant (`kcq.harness.apl_effect_inherited_split`), the
   archive's input-side variants under their right names, the model's PN-level distances.
 - C: the screen at fixed scales on C2 with both response rates held, and the APL-on-only emulations
   (`E77_input_screen.py`); `--part gate` reads it.
@@ -19,7 +19,7 @@ wirings is E72's (E75's `common_error`). Parts:
 Outputs under results/E77_input_side_common_error/ (see the entry); large outputs under
 outputs/E77_input_side_common_error/.
 
-    python E77_input_side_common_error.py --part {A-input,A-score,B,C,gate,D,E,F}
+    python experiments/E77_input_side_common_error.py --part {A-input,A-score,B,C,gate,D,E,F}
 """
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 EXPERIMENT = 'E77_input_side_common_error'
 C2 = ('E67_apl_effect_fits', 'rate0.068_aplboth_k2_cap3')
@@ -94,7 +94,7 @@ def data_distances(target: str) -> Dict[str, pd.Series]:
 
 def members() -> List[tuple]:
     """E72's eight wirings of the best family: [(label, folder, tag)], the real wiring's first."""
-    import E72_wiring_population as E72
+    from experiments import E72_wiring_population as E72
     m = E72.new_fit_members()
     if len(m) != 8:
         raise RuntimeError(f'expected E72\'s eight wirings, found {len(m)}')
@@ -104,7 +104,7 @@ def members() -> List[tuple]:
 def member_distances(readout: str) -> Dict[str, Dict[str, pd.Series]]:
     """{label: {'on', 'off'}} pair distances (canonical order) of the eight wirings under `readout`, and 'mean8' (their
     mean, the population whose error is the common error)."""
-    import E72_wiring_population as E72
+    from experiments import E72_wiring_population as E72
     out = {}
     for lab, folder, tag in members():
         d = E72.distances(E72.load_fit(folder, tag), readout)
@@ -123,7 +123,7 @@ def pattern_error(m: Dict[str, pd.Series], d: Dict[str, pd.Series]) -> pd.Series
 
 def _check_common(md: Dict[str, pd.Series], readout: str) -> None:
     """The population's pattern error against the z-based target must be E72's common error (to rounding)."""
-    import E75_glomerulus_apl_profile as E75
+    from experiments import E75_glomerulus_apl_profile as E75
     c = _cs(E75.common_error(readout))
     e = pattern_error(md, data_distances('z8')).reindex(c.index)
     if float(np.max(np.abs(e.to_numpy() - c.to_numpy()))) > 1e-9:
@@ -162,7 +162,7 @@ def score_fits(out: Path) -> pd.DataFrame:
     under the calibrated readout, the ms pairs, the 1-8ol pairs, the group errors, the per-odor part, the bands under
     both rules). Writes partA_fits.csv (one row per fit and readout; C2's rows first) and partA_pairs.csv (each fit's
     per-pair pattern error against 'z8')."""
-    import E72_wiring_population as E72
+    from experiments import E72_wiring_population as E72
     fl = [('C2', C2[0], C2[1])] + [(k, EXPERIMENT, v) for k, v in FITS.items()]
     rows, prs = [], []
     for label, folder, tag in fl:
@@ -203,7 +203,7 @@ def realism_of(o: Dict[str, tuple]) -> dict:
     """A fit's response rates, their ratio, the response rate ρ and the odors-per-KC distances under both rules (the
     model's two spikes against the KC data in baseline-noise units, the bands since 2026-11-10 16:10, and against
     Yang's z), and the flags (as E75's save_points computes them)."""
-    import apl_effect_scores as A
+    from kcq import apl_effect as A
     rate_on = float(o['on'][0].to_numpy(dtype=float).mean())
     rate_off = float(o['off'][0].to_numpy(dtype=float).mean())
     row = dict(rate_on=rate_on, rate_off=rate_off, ratio=rate_off / rate_on)
@@ -256,7 +256,7 @@ def per_odor_parts(out: Path, n_boot: int = 1000, seed: int = 0) -> pd.DataFrame
     of its response fraction when APL is blocked. Writes per_odor_parts.csv (per odor) and group_parts.csv (the ester
     and alcohol groups: error, per-odor and pair-specific means), for the population (mean8) under both readouts against
     'z8' and 'z6', with 90 % intervals over `n_boot` resamples of the recordings (each genotype with replacement)."""
-    import E72_wiring_population as E72
+    from experiments import E72_wiring_population as E72
     ctrl = H.yang_recording_rdms_values('TNT3c', 'graded')
     tnt8 = H.yang_recording_rdms_values('TNT', 'graded')
     tnts = {'z8': tnt8, 'z6': tnt8.loc[_tnt_keep(tnt8)]}
@@ -320,7 +320,7 @@ def inherited_parts(out: Path) -> pd.DataFrame:
     per variant, readout, target and data-curve fit; the eight wirings and their mean under folder 'E72 members') and
     inherited_halves.csv (the population's shares with the data's curve fitted on one half of the recordings, 100
     splits)."""
-    import E72_wiring_population as E72
+    from experiments import E72_wiring_population as E72
     dds = {t: data_distances(t) for t in ('z8', 'z6')}
     # the data's curve in sample and leaving each odor out (a pair gets the mean of its two odors' left-out curves)
     curves = {}
@@ -468,7 +468,7 @@ def pn_level(out: Path) -> pd.DataFrame:
     Remy's bouton and claw distances (1 - Pearson across ROIs, data/remy_rdm_timeseries/windows/, the 0.5-3 s and
     0.5-1 s windows), per fly and the fly mean; the megamat odors the APL16 panel shares)."""
     import json
-    import E77_input_screen as S
+    from experiments import E77_input_screen as S
     sim, info = S.build_c2_simulator()
     runner = S.PerOdorRunner(sim, info)
     r, _ = sim(dict(info['params'], wAPLKC_scale=0.0, wAPLPN_scale=0.0))
@@ -622,8 +622,8 @@ def half_effect(half: Dict[str, list]) -> pd.Series:
 
 def c2_readout_K() -> float:
     """The calibrated readout's K of C2 (set on its APL-on counts as E72's `distances` sets it), held fixed in part E."""
-    import E72_wiring_population as E72
-    from E67_apl_effect_fits import refs
+    from experiments import E72_wiring_population as E72
+    from experiments.E67_apl_effect_fits import refs
     o = E72.load_fit(*C2)
     return float(H.calibrate_readout(o['on'][1], 'saturating', refs()['cal_target'], stat='participation_ratio', responders_min=2.0))
 
@@ -646,8 +646,8 @@ def input_oracle(out: Path, half_name: str, odors: Sequence[str] = E_ODORS, pop:
     squared pattern error of the per-pair APL effect under the readout (K held at C2's) against `half_name`'s effect,
     with a penalty when the odor's response fraction leaves +-15 % of C2's in either condition. Writes
     oracle_history_<half>.csv, oracle_factors_<half>.csv and inputs/oracle_half<half>.csv (E38's layout)."""
-    import E77_input_screen as S
-    from E64_input_oracle import candidate_orn, out_col
+    from experiments import E77_input_screen as S
+    from experiments.E64_input_oracle import candidate_orn, out_col
     rng = np.random.default_rng(seed + (0 if half_name == 'A' else 1))
     halves = recording_halves()
     target = half_effect(halves[half_name])
@@ -733,8 +733,8 @@ def wiring_simulator(label: str, orn: pd.DataFrame, input_tag: Optional[str] = N
     """C2's family on one of E72's wirings ('real' or a draw label) at that wiring's own fitted parameters (E72's
     part-B optimum), with the ORN input `orn` and its breadth recomputed for it (E10_joint_fit.bouton_base, as a fit with
     `--orn-input` and the wiring options builds it). Returns (simulate, params, (folder, tag) of the wiring's fit)."""
-    import E10_joint_fit as J
-    import E72_wiring_population as E72
+    from experiments import E10_joint_fit as J
+    from experiments import E72_wiring_population as E72
     from al_analysis.mb_model import make_fixed_param_kc_simulator
     mem = {lab: (f, tg) for lab, f, tg in members()}
     folder, tag = mem[label]
@@ -765,9 +765,9 @@ def score_oracle(out: Path, wirings: Sequence[str] = E_WIRINGS) -> pd.DataFrame:
     it never saw, all eight recordings and the six typical ones. Writes oracle_scores.csv, oracle_runs.csv (parameters,
     factors, realism), model_pair_distances_long.csv rows (tags oracle_half<X>_<wiring>) and the runs' outputs under
     outputs/E77_input_side_common_error/oracle/."""
-    import E72_wiring_population as E72
-    import E77_input_screen as S
-    from E10_joint_fit import read_orn_input
+    from experiments import E72_wiring_population as E72
+    from experiments import E77_input_screen as S
+    from experiments.E10_joint_fit import read_orn_input
     halves = recording_halves()
     targets = {'halfA': half_effect(halves['A']), 'halfB': half_effect(halves['B'])}
     for t in ('z8', 'z6'):
@@ -852,7 +852,7 @@ def archive_prep(out: Path) -> pd.DataFrame:
     """Before archive_model_outputs.py: variants.csv with every saved screen point (tag C2_<point_id>, outputs under
     outputs/E77_input_side_common_error/screen/) and part E run (tag oracle_half<X>_<wiring>, outputs under .../oracle/)
     and its absolute parameters, and their pair distances (raw spike counts, the harness's primary model RDM) added to
-    model_pair_distances_long.csv, for the archive's params.csv and apl_effect_scores.py."""
+    model_pair_distances_long.csv, for the archive's params.csv and kcq/apl_effect.py."""
     odir = H.outputs_dir(EXPERIMENT)
     rows, parts = [], []
     s = pd.read_csv(out / 'screen.csv').drop_duplicates('point_id', keep='last')
@@ -945,7 +945,7 @@ def main() -> None:
         for f in (pair_kinds, per_odor_parts, inherited_parts, archive_input_variants, pn_level):
             f(out)
     elif args.part == 'C':
-        import E77_input_screen as S
+        from experiments import E77_input_screen as S
         S.screen(out)
     elif args.part == 'gate':
         gate(out)

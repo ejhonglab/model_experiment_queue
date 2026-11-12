@@ -24,7 +24,7 @@ them: E58's own, then E48's, E51's and E53's), and writes to results/E58_gain_no
   per-odor response rates with APL on and off against the KC data's.
 Models whose fit or pipeline result is not in yet are listed as pending and left out of the figures.
 Nothing is simulated.
-Usage: ./venv/bin/python E58_gain_noise_block.py [--out DIR] [--per-odor]
+Usage: ./venv/bin/python experiments/E58_gain_noise_block.py [--out DIR] [--per-odor]
 """
 from __future__ import annotations
 
@@ -38,9 +38,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
-import E51_noise_robust_block as E51
-import E53_kckc_held_block as E53
+from kcq import harness as H
+from experiments import E51_noise_robust_block as E51
+from experiments import E53_kckc_held_block as E53
 
 EXPERIMENT = 'E58_gain_noise_block'
 V = 'spike_counts_cosine__'
@@ -154,7 +154,7 @@ def main() -> None:
     hist_files = make_history_figure(df, res_dir, out)
     for f in hist_files:
         inputs[str(f)] = hashlib.sha256(f.read_bytes()).hexdigest()
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E58_gain_noise_block.py',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E58_gain_noise_block.py',
         **H.code_commits(),
         inputs_sha256=inputs, partb_folders=[str(d) for d in folders],
         pipeline_source={m: pipeline_source.get(m) for m in sorted(df['pipeline_model'])},

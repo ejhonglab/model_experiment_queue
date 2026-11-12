@@ -40,8 +40,8 @@ profile_scores_<half>.csv: glomerulus, score; input_factors_<half>.csv: odor, gl
 log2_factor, searched_delta, as E77's oracle_factors; inputs/ in E38's layout). Spike counts and responses under
 outputs/E83_cross_wiring_fit/<part>/ (tag <part>_<change>_<wiring>, conditions on / acute_off).
 
-Usage (from this folder):
-    OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ./venv/bin/python -u E83_cross_wiring_fit.py --part A1
+Usage (from the repository root):
+    OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ./venv/bin/python -u experiments/E83_cross_wiring_fit.py --part A1
 """
 from __future__ import annotations
 
@@ -52,7 +52,7 @@ from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 EXPERIMENT = 'E83_cross_wiring_fit'
 C2 = ('E67_apl_effect_fits', 'rate0.068_aplboth_k2_cap3')
@@ -115,7 +115,7 @@ def _rms(x) -> float:
 def members() -> Dict[str, Tuple[str, str]]:
     """{label: (folder, tag)} of E72's eight wirings of C2's family at their own fits (E77's `members`, E72's
     `new_fit_members`: the lower of a draw's two starts), in ALL_WIRINGS order."""
-    import E77_input_side_common_error as E77
+    from experiments import E77_input_side_common_error as E77
     m = {lab: (f, t) for lab, f, t in E77.members()}
     if set(m) != set(ALL_WIRINGS):
         raise RuntimeError(f'expected the wirings {ALL_WIRINGS}, found {sorted(m)}')
@@ -126,7 +126,7 @@ def wiring_kws(label: str) -> dict:
     """The `E10_joint_fit.bouton_base` wiring kwargs of a wiring label, as E77's `wiring_simulator` passes them: {} for
     'real', `wiring='claw_permutation_within_type', wiring_seed=n` for Pn, and E59's matched curveball matrix with its
     `wiring_tag` for Mn."""
-    import E72_wiring_population as E72
+    from experiments import E72_wiring_population as E72
     if label == 'real':
         return {}
     prefix = dict(E72.DRAWS)[label]
@@ -143,7 +143,7 @@ def saved_fit(label: str) -> dict:
     `fitted_params`), 'saved' ({'on', 'off'}: (responses, spike counts)), 'target_on' / 'target_off' (response counts,
     two or more spikes), 'size' (KCs x odors), 'K' (the calibrated readout's K on the fit's APL-on counts)."""
     if label not in _FITS:
-        import E72_wiring_population as E72
+        from experiments import E72_wiring_population as E72
         folder, tag = members()[label]
         saved = E72.load_fit(folder, tag)
         if saved is None:
@@ -160,7 +160,7 @@ def wiring_parts(label: str) -> dict:
     (normalized APL weights), 'W' (claw x bouton wiring), 'breadth' (E10_joint_fit.bouton_base), 'orn' (the lab's
     input)."""
     if label not in _PARTS:
-        import E10_joint_fit as J
+        from experiments import E10_joint_fit as J
         orn = H.apl16_orn_deltas()
         _, wnorm, W, breadth = J.bouton_base(orn, H.outputs_dir(EXPERIMENT), None, **wiring_kws(label))
         _PARTS[label] = dict(saved_fit(label), wnorm=wnorm, W=W, breadth=breadth, orn=orn)
@@ -189,9 +189,9 @@ def build_simulator(label: str, orn: Optional[pd.DataFrame] = None, breadth: Opt
         'wAPLPN', 'W', 'orn', 'cells' (the simulator's closure cells: 'wAPLKC_unscaled' / 'wAPLPN_unscaled' for
         in-place profile changes, 'mp', 'rv', 'odor_order').
     """
-    import E10_joint_fit as J
+    from experiments import E10_joint_fit as J
     from al_analysis.mb_model import make_fixed_param_kc_simulator
-    from E77_input_screen import _scalar_kws
+    from experiments.E77_input_screen import _scalar_kws
     P = wiring_parts(label)
     p = dict(P['p'] if params is None else params)
     wnorm, W = P['wnorm'], P['W']
@@ -220,7 +220,7 @@ def build_simulator(label: str, orn: Optional[pd.DataFrame] = None, breadth: Opt
 
 def input_tag_for(orn: pd.DataFrame, prefix: str = 'E83') -> str:
     """A cache tag naming one ORN input: `prefix` and the first 12 hex digits of its `E77_input_screen.frame_sha256`."""
-    from E77_input_screen import frame_sha256
+    from experiments.E77_input_screen import frame_sha256
     return f'{prefix}_{frame_sha256(orn)[:12]}'
 
 
@@ -263,7 +263,7 @@ class WiringModel:
         """Set the APL weights to the fit's times a profile (E75's `profile_factors` at `site`, 'cell' / 'claw' /
         'bouton', or several joined by '+' with scores keyed 'site:glomerulus'; each wiring's own claws); None or no
         scores restores the fit's weights exactly."""
-        import E75_glomerulus_apl_profile as E75
+        from experiments import E75_glomerulus_apl_profile as E75
         self._kc[...] = self._kc0
         self._pn[...] = self._pn0
         self.site, self.scores = site, dict(scores)
@@ -300,7 +300,7 @@ def e75_profile(name: str) -> Dict[str, float]:
     """Part A1's profile `name` (A1_POINTS) as scores {glomerulus: score}: E75's profiles.csv scores times the
     multiplier, permuted over the glomeruli as E75's D2 stage 1 permutes them (seed), or C2's four glomeruli at ln 2."""
     import json
-    import E75_glomerulus_apl_profile as E75
+    from experiments import E75_glomerulus_apl_profile as E75
     src, mult, seed = A1_POINTS[name]
     if src is None:
         return {g: float(np.log(2)) for g in E75.C2_FOUR}
@@ -357,7 +357,7 @@ def profile_reading(model: 'WiringModel', scores: Mapping[str, float], site: str
         'target_on', 'target_off', 'at_bound_apl', 'n_sims', 'params' (absolute, APL on), 'history', 'wAPLKC' (the
         profiled APL->KC weights, unscaled), 'seconds'."""
     import time
-    import E69_kc_firing_ceiling as E69
+    from experiments import E69_kc_firing_ceiling as E69
     t0 = time.time()
     model.set_profile(site, scores)
     try:
@@ -381,7 +381,7 @@ def input_reading(label: str, orn: pd.DataFrame, input_tag: Optional[str] = None
     Returns:
         hold_rates' dict ('on', 'off', 'params', 'params_off', 'thr_factor', 'apl_factor', 'n_on', 'n_off',
         'at_bound_thr', 'at_bound_apl', 'n_sims', 'history', 'breadth_sha256', ...) plus 'input_tag'."""
-    import E77_input_screen as S
+    from experiments import E77_input_screen as S
     P = saved_fit(label)
     tag = input_tag or input_tag_for(orn)
     res = S.hold_rates(lambda: build_simulator(label, orn, input_tag=tag), target_off=P['target_off'],
@@ -399,7 +399,7 @@ def targets() -> Dict[str, pd.Series]:
     recordings), 'noise_free' (E81's noise_free_pairs.csv, units z, effect_noise_free), 'noise8' (E76's
     effect_by_unit_pairs.csv in baseline-noise units)."""
     if not _TARGETS:
-        import E77_input_side_common_error as E77
+        from experiments import E77_input_side_common_error as E77
         halves = E77.recording_halves()
         t = {f'half{h}': _cs(E77.half_effect(halves[h])) for h in ('A', 'B')}
         for k in ('z8', 'z6', 'noise8'):
@@ -422,7 +422,7 @@ def half_target(half: str) -> pd.Series:
 
 def readout_K(o: Dict[str, tuple]) -> float:
     """The calibrated readout's K on a run's APL-on spike counts (as E72's `distances` sets it)."""
-    from E67_apl_effect_fits import refs
+    from experiments.E67_apl_effect_fits import refs
     return float(H.calibrate_readout(o['on'][1], 'saturating', refs()['cal_target'], stat='participation_ratio',
                                      responders_min=2.0))
 
@@ -461,7 +461,7 @@ def effect_scores(d: Dict[str, pd.Series], tg: Optional[Dict[str, pd.Series]] = 
     """The scores of a run's or a population's distances against every target: per target '<t>_loss' (rms of model
     minus data per-pair effect), '<t>_pattern' (the same with both means removed), '<t>_rho' (ρ on the per-pair APL
     effect), '<t>_err_ester' / '<t>_err_alcohol' (mean pattern error over E75's groups' pairs), and 'mean_effect'."""
-    import E77_input_side_common_error as E77
+    from experiments import E77_input_side_common_error as E77
     tg = targets() if tg is None else tg
     me = _cs(H.apl_effect(d['on'], d['off']))
     masks = E77.kind_masks(me.index)
@@ -519,7 +519,7 @@ class PopulationObjective:
 def realism(o: Dict[str, tuple]) -> dict:
     """A run's response rates, their ratio, the response rate ρ and the odors-per-KC distances under both rules, the
     largest spike counts and the flags (E77's `realism_of`)."""
-    import E77_input_side_common_error as E77
+    from experiments import E77_input_side_common_error as E77
     return E77.realism_of(o)
 
 
@@ -725,7 +725,7 @@ def _read_rows(path: Path) -> pd.DataFrame:
 
 def _provenance_add(path: Path, part: str, tag: str, prov: dict) -> None:
     import json
-    d = json.loads(path.read_text()) if path.exists() else dict(part=part, script='E83_cross_wiring_fit.py', points={})
+    d = json.loads(path.read_text()) if path.exists() else dict(part=part, script='experiments/E83_cross_wiring_fit.py', points={})
     d['points'][tag] = prov
     path.write_text(json.dumps(d, indent=1, default=str) + '\n')
 
@@ -746,7 +746,7 @@ def _run_row(part: str, change: str, w: str, tag: str, res: dict, o: Dict[str, t
 
 
 def _e75_archived(tag: str) -> Dict[str, tuple]:
-    import E72_wiring_population as E72
+    from experiments import E72_wiring_population as E72
     o = E72.load_fit('E75_glomerulus_apl_profile', tag)
     if o is None:
         raise RuntimeError(f"E75's archived point {tag} not found")
@@ -798,7 +798,7 @@ def part_a1(out: Path, wirings: Sequence[str] = ALL_WIRINGS, points: Sequence[st
     import gc
     import hashlib
     import json
-    import E75_glomerulus_apl_profile as E75
+    from experiments import E75_glomerulus_apl_profile as E75
     rp, pp = out / 'runs_A1.csv', out / 'provenance_A1.json'
     done = set(_read_rows(rp).get('tag', pd.Series(dtype=str)))
     m75 = pd.read_csv(H.results_dir(E75.EXPERIMENT) / 'sensitivity_map.csv').drop_duplicates('point_id', keep='last').set_index('point_id')
@@ -853,7 +853,7 @@ def _write_input(out: Path, name: str, orn: pd.DataFrame) -> Path:
 def a2_input(half: str, size: float) -> pd.DataFrame:
     """E77's half-`half` searched input at `size` of its log factors; at full size exactly E77's reading of it
     (`read_orn_input` of inputs/oracle_half<X>.csv, checked against the factors to 1e-9)."""
-    from E10_joint_fit import read_orn_input
+    from experiments.E10_joint_fit import read_orn_input
     e77 = H.shared_dir() / 'results' / 'E77_input_side_common_error'
     F = read_factors(e77 / f'oracle_factors_{half}.csv')
     orn_in = input_at(F, size)
@@ -978,7 +978,7 @@ def _replace_rows(path: Path, new: pd.DataFrame, key: str, values) -> None:
 
 def _write_archive_tables(out: Path, rt: pd.DataFrame) -> None:
     """model_pair_distances_long.csv rows (raw spike counts, the harness's primary model RDM) and variants.csv rows
-    (absolute parameters) for this experiment's own runs, for apl_effect_scores.py and the model-output archive."""
+    (absolute parameters) for this experiment's own runs, for kcq/apl_effect.py and the model-output archive."""
     own = rt[rt.get('source', pd.Series(index=rt.index, dtype=object)).isna()] if 'source' in rt.columns else rt
     parts, vrows = [], []
     for _, r in own.iterrows():
@@ -1445,7 +1445,7 @@ def main() -> None:
     elif args.part == 'A-score':
         score_part_a(out)
     elif args.part in ('B', 'C'):
-        import E83_searches as SR
+        from experiments import E83_searches as SR
         if args.half is None:
             ap.error(f'--part {args.part} needs --half A or B')
         (SR.part_b if args.part == 'B' else SR.part_c)(out, args.half)

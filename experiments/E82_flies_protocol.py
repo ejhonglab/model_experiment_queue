@@ -6,7 +6,7 @@ Fable subagent, claude-fable-5-2, spawned from viki 2026-11-11 02:48).
   indicator kernel (1 - exp(-t/rise)) exp(-t/decay) over the flies' window (2.0 to 8.1 s after onset), rise 0.2 / 0.5 / 1
   s by decay 1 / 3 / 5 s (primary: rise 0.5, decay 3), with and without E65's saturation; the late spikes by condition,
   250 ms bin, odor, KC type and claw count; the loss with the APL-off spikes after 0.5 s left out; the model's predicted
-  traces. `kc_remapping_harness.kernel_weighted_counts`.
+  traces. `kcq.harness.kernel_weighted_counts`.
 - (B) the runs at the flies' pulse: E82_protocol_runs.py.
 - (C) the protocol gate and E77's gate.
 - (D) fits at the flies' pulse (E10_joint_fit.py --stim-end / --sim-end / --count-kernel).
@@ -67,8 +67,8 @@ late_spikes.csv, late_leave_out.csv, predicted_traces.csv, predicted_ratios.csv,
 from E80's runs), E82_partA.png, protocol_provenance_<part>.json; protocol_populations.csv and gate.csv (part C, which
 reads every saved run again, E80's and part B's, and redoes the late spikes and the traces with them).
 
-Usage (from this folder; no simulations, single-threaded):
-    OMP_NUM_THREADS=2 OMP_THREAD_LIMIT=2 ./venv/bin/python -u E82_flies_protocol.py --part {A,C,tables}
+Usage (from the repository root; no simulations, single-threaded):
+    OMP_NUM_THREADS=2 OMP_THREAD_LIMIT=2 ./venv/bin/python -u experiments/E82_flies_protocol.py --part {A,C,tables}
 """
 from __future__ import annotations
 
@@ -85,7 +85,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 EXPERIMENT = 'E82_flies_protocol'
 E80 = 'E80_remaining_candidates'
@@ -160,7 +160,7 @@ def _canon(s: pd.Series) -> pd.Series:
 
 def _steps(t: float) -> int:
     """olfsysm's step of time `t` (s from onset), as E80_pulse._steps."""
-    import E80_pulse as P
+    from experiments import E80_pulse as P
     return P._steps(t)
 
 
@@ -290,9 +290,9 @@ def data() -> dict:
     and its calibration target), 'cal_target', 'common' / 'c6' (per readout, the common error and its version against
     the six typical recordings, canonical pairs), 'units' (E76's data_units.csv rows for z and noise, graded)."""
     if not _DATA:
-        import E72_wiring_population as E72
-        import E75_glomerulus_apl_profile as E75
-        import E80_screen as S80
+        from experiments import E72_wiring_population as E72
+        from experiments import E75_glomerulus_apl_profile as E75
+        from experiments import E80_screen as S80
         R = E72.refs()
         ctrl = H.yang_recording_rdms_values('TNT3c', 'graded')
         tnt = H.yang_recording_rdms_values('TNT', 'graded')
@@ -333,9 +333,9 @@ def _decomp(d: Dict[str, pd.Series], target: pd.Series, pre: str) -> dict:
 def score_distances(dist: Dict[str, Dict[str, pd.Series]], full: bool = True) -> dict:
     """The statistics of one reading's pair distances (see the module docstring): `dist` has 'raw' and 'cal' (and
     'cal_noise' when `full`), each {'on', 'off'} pair distances in any pair order."""
-    import E72_wiring_population as E72
-    import E75_glomerulus_apl_profile as E75
-    import E77_input_screen as S
+    from experiments import E72_wiring_population as E72
+    from experiments import E75_glomerulus_apl_profile as E75
+    from experiments import E77_input_screen as S
     D = data()
     row = {}
     six = [tuple(sorted(p)) for p in SIX]
@@ -400,7 +400,7 @@ def band_row(o: Dict[str, tuple]) -> dict:
     """The response statistics of a run, as E77's Scorer computes them (the same under every reading): the response
     rates and their ratio, odors per KC against the flies (both rules), the response rate ρ, the four bands, the
     largest spike counts."""
-    import apl_effect_scores as A
+    from kcq import apl_effect as A
     rate_on = float(o['on'][0].to_numpy(dtype=float).mean())
     rate_off = float(o['off'][0].to_numpy(dtype=float).mean())
     row = dict(rate_on=rate_on, rate_off=rate_off, ratio=rate_off / rate_on)
@@ -498,7 +498,7 @@ def protocol_readings(out: Path) -> pd.DataFrame:
     res = pd.DataFrame(rows)
     res.to_csv(out / 'protocol_readings.csv', index=False)
     pd.concat(pairs, ignore_index=True).to_csv(out / 'protocol_pairs.csv', index=False)
-    rec = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E82_flies_protocol.py',
+    rec = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E82_flies_protocol.py',
                **H.code_commits(), seconds=time.time() - t0, runs=checks,
                all_ok=True)
     (out / 'protocol_checks.json').write_text(json.dumps(rec, indent=1, default=str) + '\n')
@@ -752,8 +752,8 @@ def reference_point(pt, runs: pd.DataFrame) -> Optional[Tuple[str, str]]:
 def gate_rows(rd: pd.DataFrame, pairs: pd.DataFrame, runs: pd.DataFrame) -> pd.DataFrame:
     """Both gates on every non-identity point of B2 to B5 (see the module docstring): one row per point with each
     condition, the numbers it was judged on and the references'."""
-    import E77_input_side_common_error as G
-    import E75_glomerulus_apl_profile as E75
+    from experiments import E77_input_side_common_error as G
+    from experiments import E75_glomerulus_apl_profile as E75
     D = data()
     P = klabel(PRIMARY)
     f05 = _reading(rd, *FIT0_PULSE05, COUNTS)
@@ -847,7 +847,7 @@ def tables(out: Path) -> str:
     U = data()['units']
     z, nz = U['z'], U['noise']
     lines = ["# E82 part A: the flies' recording protocol read from E80's saved runs", '',
-             f"Generated {datetime.now().strftime('%Y-%m-%d %H:%M')} by E82_flies_protocol.py (model_experiment_queue "
+             f"Generated {datetime.now().strftime('%Y-%m-%d %H:%M')} by experiments/E82_flies_protocol.py (model_experiment_queue "
              f"{_git('rev-parse', '--short', 'HEAD')}). KC data: Yang's z, all eight recordings with APL output blocked "
              "(TNT), unless a column says otherwise. C2: the breadth-2 APL-effect fit (E67); the firing-ceiling fit: fit 0 "
              "of the data side of the main target (E76). The 2 s points are E80's re-held ones (both response rates "
@@ -1075,7 +1075,7 @@ def write_provenance(out: Path, part: str) -> None:
         for k, p in _files(Path(r.dir), r.point_id).items():
             if k.endswith('spike_times'):
                 files[f'{r.source}:{r.point_id}:{k}'] = _sha_file(p)
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E82_flies_protocol.py',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E82_flies_protocol.py',
                 part=part, **H.code_commits(),
                 model=H.model_provenance(orn_deltas=H.apl16_orn_deltas()), kernels=[list(k) for k in KERNELS],
                 primary=list(PRIMARY), window=list(WINDOW), late=LATE, bin=BIN, six_pairs=[list(p) for p in SIX],
@@ -1084,7 +1084,7 @@ def write_provenance(out: Path, part: str) -> None:
                 data_units=dict(path=E76_DATA_UNITS, sha256=D['units_sha256']),
                 runs=runs.to_dict(orient='records'), spike_times_sha256=files, approx_conc_note=H.APPROX_CONC_NOTE,
                 weights=('each spike weighted by its kernel area inside the window over the area of a spike at the '
-                         "window's start (kc_remapping_harness.kernel_window_weights)"),
+                         "window's start (kcq.harness.kernel_window_weights)"),
                 readout=("K calibrated on the weighted APL-on values of the APL-on responders (the two-spike "
                          "responses) to E67.refs()['cal_target'] (cal) or E80_screen.noise_data()['cal_target'] "
                          '(cal_noise), used unchanged for APL off'))
@@ -1096,7 +1096,7 @@ def archive_prep(out: Path) -> pd.DataFrame:
     outputs/E82_flies_protocol/runs/, tag = point_id) and its absolute parameters and options, and their pair distances
     (raw spike counts, the harness's primary model RDM) added to model_pair_distances_long.csv (part D's fits write their
     own rows and fits.csv)."""
-    import kc_remapping_harness as H
+    from kcq import harness as H
     odir = H.outputs_dir(EXPERIMENT) / 'runs'
     keep = ['model', 'wiring', 'option', 'value', 'time_stim_end', 'time_end', 'fixed_thr', 'fixed_thr_off', 'wAPLKC_scale',
             'wKCAPL_scale', 'wAPLPN_scale', 'wPNAPL_scale', 'wKCKC_scale', 'kc_kc_tau', 'thr_factor', 'apl_factor', 'rate_on',

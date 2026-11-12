@@ -5,17 +5,13 @@ and the position-matched blank, the three baselines of the stimulus maps, the fi
 autocorrelation length, the profile shares, the matched pair and the fly bootstrap. Needs no shared directory."""
 
 import struct
-import sys
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
 from scipy.ndimage import gaussian_filter
 
-EXP_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(EXP_DIR))
-E79 = pytest.importorskip('E79_apl_calyx_constraints')
+E79 = pytest.importorskip('experiments.E79_apl_calyx_constraints')
 ACM = E79.ACM
 
 

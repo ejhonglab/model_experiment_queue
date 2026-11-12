@@ -13,7 +13,7 @@ E12) x kc_kc_inh in {0, 30, 100} at tau 50 ms (APL-on rate re-matched by thresho
 re-tuning, as E8); acute APL off = APL output weights zero. Scored as E8.
 
 Outputs: <shared>/results/E19_thr_breadth_kckc/ and ./outputs/E19_thr_breadth_kckc/.
-Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python E19_thr_breadth_kckc.py
+Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python experiments/E19_thr_breadth_kckc.py
     [--thr 40 70] [--exponents 0 1 2 3] [--scales 0 30 100] [--figure-only]
 """
 from __future__ import annotations
@@ -28,11 +28,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
-from E1_apl_knockout import bisect_threshold
-from E3_drive_dependent_gain import BOUTON, match_kc_apl_scale, per_odor_extras, rate
-from E4_substrate import score, kc_by_glomerulus
-from E12_breadth_apl import density_excess
+from kcq import harness as H
+from experiments.E1_apl_knockout import bisect_threshold
+from experiments.E3_drive_dependent_gain import BOUTON, match_kc_apl_scale, per_odor_extras, rate
+from experiments.E4_substrate import score, kc_by_glomerulus
+from experiments.E12_breadth_apl import density_excess
 
 EXPERIMENT = 'E19_thr_breadth_kckc'
 E16_OUT = H.HERE / 'outputs' / 'E16_claw_saturation'
@@ -220,7 +220,7 @@ def main() -> None:
             del sim
 
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),
-        script='E19_thr_breadth_kckc.py', host=subprocess.run(['hostname'], capture_output=True,
+        script='experiments/E19_thr_breadth_kckc.py', host=subprocess.run(['hostname'], capture_output=True,
             text=True).stdout.strip(),
         **H.code_commits(),
         olfsysm_commit=subprocess.run(['git', 'rev-parse', 'HEAD'],

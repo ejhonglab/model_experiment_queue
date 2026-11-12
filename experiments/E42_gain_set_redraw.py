@@ -17,7 +17,7 @@ for the weak-input odors from its saved responses (E42's from ./outputs/, the ot
 model-output archive in the shared directory), and writes
 results/E42_gain_set_redraw/{comparison.csv, E42_gain_set_redraw.png}.
 
-Usage: ./venv/bin/python E42_gain_set_redraw.py
+Usage: ./venv/bin/python experiments/E42_gain_set_redraw.py
 """
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ from typing import Dict, Optional
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 EXPERIMENT = 'E42_gain_set_redraw'
 WEAK = ['ms', 'paa', 'B-myr', '1-8ol', 'euc']

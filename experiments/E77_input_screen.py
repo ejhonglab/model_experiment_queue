@@ -30,8 +30,8 @@ screen_params.json (each point's absolute parameters and inputs), screen_errors.
 screen_provenance.json. Spike counts and responses of every point under outputs/E77_input_side_common_error/screen/
 (tag C2_<point_id>, conditions on / acute_off).
 
-Usage (from this folder):
-    OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ./venv/bin/python -u E77_input_screen.py [--only ID ...] [--list]
+Usage (from the repository root):
+    OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ./venv/bin/python -u experiments/E77_input_screen.py [--only ID ...] [--list]
 """
 from __future__ import annotations
 
@@ -48,7 +48,7 @@ from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 EXPERIMENT = 'E77_input_side_common_error'
 C2 = ('E67_apl_effect_fits', 'rate0.068_aplboth_k2_cap3')
@@ -176,9 +176,9 @@ def c2_parts() -> dict:
     per-claw threshold), 'saved' (C2's saved {'on', 'off'} responses and spike counts), 'target_on' / 'target_off' (its
     response counts, two or more spikes), 'size' (KCs x odors), 'driven' (glomeruli with ORN input, in wiring order)."""
     if not _PARTS:
-        import E10_joint_fit as J
-        import E72_wiring_population as E72
-        from E12_breadth_apl import e3_bouton_params
+        from experiments import E10_joint_fit as J
+        from experiments import E72_wiring_population as E72
+        from experiments.E12_breadth_apl import e3_bouton_params
         orn = H.apl16_orn_deltas()
         _, wnorm, W, breadth = J.bouton_base(orn, H.outputs_dir(EXPERIMENT), None)
         saved = E72.load_fit(*C2)
@@ -210,7 +210,7 @@ def handle_breadth(extra_kws: Optional[dict] = None, *, orn: Optional[pd.DataFra
     no KC-KC inhibition), APL off, with the handle's kwargs, ORN input and wiring. With no handle it is C2's own breadth.
     Runs are cached under outputs/E77_input_side_common_error/breadth/ by a hash of their inputs, the base's parameters
     and the olfsysm build's source hash."""
-    import E10_joint_fit as J
+    from experiments import E10_joint_fit as J
     from al_analysis.mb_model import fit_mb_model, olfsysm_build_info
     P = c2_parts()
     if not extra_kws and orn is None and wPNKC is None:
@@ -265,7 +265,7 @@ def build_c2_simulator(extra_kws: Optional[dict] = None, *, orn: Optional[pd.Dat
         simulator's closure cells by name: 'wAPLKC_unscaled' / 'wAPLPN_unscaled' for in-place weight changes as E75
         does, 'mp', 'rv', 'odor_order').
     """
-    import E10_joint_fit as J
+    from experiments import E10_joint_fit as J
     from al_analysis.mb_model import make_fixed_param_kc_simulator
     P = c2_parts()
     p = dict(P['p'] if params is None else params)
@@ -316,8 +316,8 @@ def hold_rates(build: Callable[[], Union[Callable, Tuple[Callable, dict]]], *, t
         'on' / 'off' ((responses, spike counts)), 'breadth' (the held run's, for 'held', else None), 'kws' (the
         simulator's scalar kwargs, if build returned info), 'breadth_sha256', 'seconds'.
     """
-    import E69_kc_firing_ceiling as E69
-    import E10_joint_fit as J
+    from experiments import E69_kc_firing_ceiling as E69
+    from experiments import E10_joint_fit as J
     if breadth_from not in ('base', 'held'):
         raise ValueError(f'{breadth_from=}')
     P = c2_parts()
@@ -544,7 +544,7 @@ def default_workers() -> int:
 
 def inhsc_for(inhadd: float) -> float:
     """pn_inhsc raised with pn_inhadd as E3's part A and E32 did (the PN gain at a typical inhibition kept)."""
-    from E3_drive_dependent_gain import PN_INHADD_DEFAULT, PN_INHSC_DEFAULT, TYPICAL_INH
+    from experiments.E3_drive_dependent_gain import PN_INHADD_DEFAULT, PN_INHSC_DEFAULT, TYPICAL_INH
     return PN_INHSC_DEFAULT * (float(inhadd) + TYPICAL_INH) / (PN_INHADD_DEFAULT + TYPICAL_INH)
 
 
@@ -563,7 +563,7 @@ def point_specs() -> List[dict]:
     dict(kind='e20', exponent)), site / power / permute_seed (emulations), candidates (the points whose better value,
     by the APL-effect loss under the calibrated readout, a control takes: value 'better'), optional (skipped while its
     input file is absent). S6 is last: a C++ error inside olfsysm's parallel region would end the process."""
-    from E3_drive_dependent_gain import PN_INHADD_DEFAULT, PN_INHSC_DEFAULT
+    from experiments.E3_drive_dependent_gain import PN_INHADD_DEFAULT, PN_INHSC_DEFAULT
     pts: List[dict] = []
 
     def add(pid, handle, setting, value, kind, **kw):
@@ -602,7 +602,7 @@ def point_specs() -> List[dict]:
 
 def orn_for(spec) -> Optional[pd.DataFrame]:
     """A point's ORN input (None: C2's own, the lab's)."""
-    import E10_joint_fit as J
+    from experiments import E10_joint_fit as J
     if spec is None:
         return None
     kind, v = spec
@@ -624,7 +624,7 @@ def wiring_for(spec: Optional[dict]) -> Tuple[Optional[pd.DataFrame], Optional[d
     if spec['kind'] == 'claws':
         f = claw_count_factors(P['W'], P['driven'], float(spec['exponent']), spec.get('permute_seed'))
     elif spec['kind'] == 'e20':
-        from E20_glomerulus_gain import gained_wPNKC, glomerulus_peaks
+        from experiments.E20_glomerulus_gain import gained_wPNKC, glomerulus_peaks
         if 'peaks' not in _E20_PEAKS:
             d = H.outputs_dir(EXPERIMENT) / 'e20'
             d.mkdir(exist_ok=True)
@@ -641,7 +641,7 @@ def wiring_for(spec: Optional[dict]) -> Tuple[Optional[pd.DataFrame], Optional[d
 # scoring
 
 def _canon_series(s: pd.Series) -> pd.Series:
-    import E75_glomerulus_apl_profile as E75
+    from experiments import E75_glomerulus_apl_profile as E75
     s = s.copy()
     s.index = E75._canon(s.index)
     return s.sort_index()
@@ -656,9 +656,9 @@ class Scorer:
     `save_points`) and the class at 4-7 odors per KC."""
 
     def __init__(self, base: Dict[str, tuple]):
-        import E72_wiring_population as E72
-        import E74_apl_effect_by_odors_per_kc as E74
-        import E75_glomerulus_apl_profile as E75
+        from experiments import E72_wiring_population as E72
+        from experiments import E74_apl_effect_by_odors_per_kc as E74
+        from experiments import E75_glomerulus_apl_profile as E75
         self.base = base
         self.base_eff = {ro: H.apl_effect(*[E72.distances(base, ro)[c] for c in ('on', 'off')]) for ro in ('raw', 'cal')}
         self.base_eff_c = {ro: _canon_series(v) for ro, v in self.base_eff.items()}
@@ -671,10 +671,10 @@ class Scorer:
         self.class_data = E74.data_effect_array()
 
     def score(self, o: Dict[str, tuple]) -> Tuple[dict, pd.DataFrame]:
-        import apl_effect_scores as A
-        import E72_wiring_population as E72
-        import E74_apl_effect_by_odors_per_kc as E74
-        import E75_glomerulus_apl_profile as E75
+        from kcq import apl_effect as A
+        from experiments import E72_wiring_population as E72
+        from experiments import E74_apl_effect_by_odors_per_kc as E74
+        from experiments import E75_glomerulus_apl_profile as E75
         row, _ = E75.score_point(o, self.base_eff)
         # E67's full_row's realism keys are against the KC data in Yang's z: replaced below by both rules' (E75's save_points)
         for k in ('rate_rho_on', 'rate_rho_off', 'opk_on_dist', 'opk_off_dist', 'realism_flag', 'opk_off_0', 'opk_off_8plus'):
@@ -760,7 +760,7 @@ def write_provenance(out: Path, specs: Sequence[dict]) -> None:
         inputs[name] = hashlib.sha256(f.read_bytes()).hexdigest() if f.exists() else None
     f = H.shared_dir() / SEARCHED_INPUT
     inputs['searched_weak'] = hashlib.sha256(f.read_bytes()).hexdigest() if f.exists() else None
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E77_input_screen.py',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E77_input_screen.py',
                 **H.code_commits(), model=H.model_provenance(orn_deltas=P['orn'], _wPNKC=P['W']),
                 c2=dict(experiment=C2[0], tag=C2[1], params=P['p']), bouton_base_params=P['init'], breadth_k=BREADTH_K,
                 targets=dict(on=P['target_on'], off=P['target_off'], size=P['size']), tied_on=TIED_ON,
@@ -857,7 +857,7 @@ class _Screen:
         return {'on': res['on'], 'off': res['off']}, res, extra
 
     def run_emulation(self, pt: dict) -> Tuple[Dict[str, tuple], dict, dict]:
-        import E69_kc_firing_ceiling as E69
+        from experiments import E69_kc_firing_ceiling as E69
         P = self.P
         if self.pool is None:
             pool = EmulationPool(default_workers() if self.workers is None else int(self.workers), self.sim0, self.info0)

@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import E82_protocol_runs as R
+from experiments import E82_protocol_runs as R
 
 
 def _by_id():
@@ -173,7 +173,7 @@ def test_spikes_equal():
 
 def _shared():
     try:
-        import kc_remapping_harness as H
+        from kcq import harness as H
         return (H.shared_dir() / 'results' / 'E72_wiring_population' / 'fits.csv').exists()
     except Exception:
         return False
@@ -210,17 +210,17 @@ def test_d1_parts():
 def test_population_rows_match_e72(tmp_path):
     """The populations at 0.5 s, from the four saved fits written as identity points, equal E72 part G's (the
     breadth-2 family 'none', the firing ceiling '40'; the same wirings in another order)."""
-    import kc_remapping_harness as H
+    from kcq import harness as H
     outputs = tmp_path / 'runs'
     outputs.mkdir()
     pids = []
     for m in R.POPULATIONS['b2'][1:] + R.POPULATIONS['fc']:
         folder, tag, _ = R.model_source(m)
-        import E72_wiring_population as E72
+        from experiments import E72_wiring_population as E72
         saved = E72.load_fit(folder, tag)
         R._save_outputs(outputs, f'I_B1_{m}', saved, {'on': pd.DataFrame(), 'off': pd.DataFrame()})
         pids.append(f'I_B1_{m}')
-    import E77_input_screen as S
+    from experiments import E77_input_screen as S
     c2 = E72.load_fit(*S.C2)
     R._save_outputs(outputs, 'I_B1_C2', c2, {'on': pd.DataFrame(), 'off': pd.DataFrame()})
     pd.DataFrame(dict(point_id=pids + ['I_B1_C2'])).to_csv(tmp_path / 'runs.csv', index=False)

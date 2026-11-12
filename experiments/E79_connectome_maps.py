@@ -65,7 +65,7 @@ E79_connectome_* / E79_coloc_*, provenance_connectome.json, connectome_table.md)
    columns together, the same permutation for every calyx and setting), per setting and for the best setting. The entry's
    gate for outcome (a): 15 % or more removed on left-out odors beyond the null.
 
-Run from this folder: `OMP_NUM_THREADS=6 OMP_THREAD_LIMIT=6 nice -n 10 ./venv/bin/python E79_connectome_maps.py
+Run from the repository root: `OMP_NUM_THREADS=6 OMP_THREAD_LIMIT=6 nice -n 10 ./venv/bin/python experiments/E79_connectome_maps.py
 [--analyses 4,6] [--n-perm 1000]`.
 """
 from __future__ import annotations
@@ -84,9 +84,9 @@ import pandas as pd
 from scipy import sparse
 from scipy.ndimage import binary_fill_holes, gaussian_filter, label
 
-import apl_calyx_maps as ACM
+from data_prep import apl_calyx_maps as ACM
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parents[1]  # the repository root
 SHARED = ACM.SHARED
 OUT = SHARED / 'results' / 'E79_apl_calyx_constraints'
 YANG_APL = Path('/mnt/tensor/Tom/claude_APL_modeling_YZ4TC/Claude_APL_analysis/apl_synapses')
@@ -98,7 +98,7 @@ PRAT_PN_KC = PRAT_DIR / 'PNbouton-to-KCclaw_Connectivity_2025-12-09-19-47-36.par
 C2 = ('E67_apl_effect_fits', 'rate0.068_aplboth_k2_cap3')
 C2_ON_COUNTS = SHARED / 'data' / 'model_outputs' / C2[0] / f'{C2[1]}_on_spike_counts.parquet'
 COMMON_ERROR = SHARED / 'results' / 'E72_wiring_population' / 'common_error_pairs.csv'
-# the model's ORN input (kc_remapping_harness.apl16_orn_deltas() as archived); its glomeruli are the driven ones
+# the model's ORN input (kcq.harness.apl16_orn_deltas() as archived); its glomeruli are the driven ones
 ORN_INPUT = SHARED / 'data' / 'model_outputs' / 'inputs' / 'orn_deltas_apl16.csv'
 DATASETS: Tuple[str, ...] = ('hemibrain', 'flywire', 'malecns', 'banc')
 MAP_ODORS: Tuple[str, ...] = ('pa', 'paa', 'ms')
@@ -294,8 +294,8 @@ def model_pn_rates(rebuild: bool = False) -> pd.DataFrame:
     path = OUT / 'connectome_pn_rates.csv'
     if path.exists() and not rebuild:
         return pd.read_csv(path, index_col=0)
-    import kc_remapping_harness as H
-    import E77_input_screen as S
+    from kcq import harness as H
+    from experiments import E77_input_screen as S
     from al_analysis.mb_model import get_sim_var, get_time_index
     sim, info = S.build_c2_simulator()
     r, _ = sim(dict(info['params'], wAPLKC_scale=0.0, wAPLPN_scale=0.0))
@@ -437,7 +437,7 @@ def measured_maps(baseline: str = 'all_pfo') -> Dict[str, dict]:
         if baseline == 'all_pfo':
             maps = ACM.stimulus_maps(stack, frames)
         else:
-            import E79_apl_calyx_constraints as DS
+            from experiments import E79_apl_calyx_constraints as DS
             maps = DS.stimulus_maps(stack, DS.add_positions(frames), baseline)
         M, inside = cell_matrix(mask)
         means = {k: float(v[0][mask].mean()) for k, v in maps.items()}
@@ -1133,7 +1133,7 @@ def _git(repo: Path) -> dict:
 def write_provenance(extra: dict) -> None:
     """provenance_connectome.json: script, this repository's, al_analysis's and olfsysm's commits and dirty state, inputs
     with sha256, and `runs`: every run's analyses, settings and commit (kept across runs that redo part of the analyses)."""
-    import kc_remapping_harness as H
+    from kcq import harness as H
     inputs = [YANG_APL / f'{ds}_{k}.csv.gz' for ds in DATASETS
               for k in ('PN_boutons_derived', 'KC_claws_derived', 'APL_MB_synapses')]
     inputs += [PRAT_PN_SYNAPSES, PRAT_PN_KC, C2_ON_COUNTS, COMMON_ERROR, ORN_INPUT, ACM.DATA / 'recordings.csv',
@@ -1147,7 +1147,7 @@ def write_provenance(extra: dict) -> None:
         build = olfsysm.build_info()
     except Exception as ex:
         build = repr(ex)
-    prov = dict(generated=time.strftime('%Y-%m-%d %H:%M:%S %z'), script=Path(__file__).name,
+    prov = dict(generated=time.strftime('%Y-%m-%d %H:%M:%S %z'), script=H.script_path(__file__),
                 queue=_git(HERE), al_analysis=_git(H.al_analysis_dir()), olfsysm=_git(H.olfsysm_dir()), olfsysm_build=build,
                 c2=dict(experiment=C2[0], tag=C2[1]),
                 settings=dict(slab_thick_um=SLAB_THICK_UM, slab_step_um=SLAB_STEP_UM, slab_min_share=SLAB_MIN_SHARE,
@@ -1201,7 +1201,7 @@ def write_table(tables: Dict[str, pd.DataFrame]) -> None:
         if k not in tables and (OUT / f).exists():
             tables[k] = pd.read_csv(OUT / f)
     lines = ['# E79 connectome analyses (4 and 6): key tables', '',
-             f'Written by E79_connectome_maps.py, {time.strftime("%Y-%m-%d %H:%M")}. Details in the CSVs named in each '
+             f'Written by experiments/E79_connectome_maps.py, {time.strftime("%Y-%m-%d %H:%M")}. Details in the CSVs named in each '
              'section; the axis checks in connectome_axis_checks.csv.', '',
              'Axes: native nm to (fly\'s right R, dorsal D, anterior A) in um: hemibrain (-x, -z, +y), FlyWire (x, -y, -z; '
              'sides from FlyWire\'s labels), male CNS (-x, -y, -z), BANC (-x, +z, -y). R and D are exactly Yang\'s Claude\'s '

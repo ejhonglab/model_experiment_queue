@@ -6,7 +6,7 @@ Definitions (fixed before any simulation; part A repeats its tables at 10 spikes
 high-firing set is the KCs with 20 or more spikes to some odor with APL off (acute); the survivors are
 those of them that also reach 20 spikes to some odor with APL on; "left out" removes KCs from both
 conditions' spike-count matrices after the fact, with no simulation. Scores: the APL-effect loss
-(`kc_remapping_harness.apl_effect_decomposition`: loss, mean, per-odor and pair-specific parts, ρ on the
+(`kcq.harness.apl_effect_decomposition`: loss, mean, per-odor and pair-specific parts, ρ on the
 per-pair APL effect) on raw spike counts and under E65's calibrated saturating readout (n / (n + K), K set
 on the APL-on counts of the KCs kept so that the responders-only participation ratio equals the control
 flies'; `calibrate_readout`).
@@ -55,11 +55,11 @@ provenance.json; parts B / C: wirings.csv, stats_variants.csv with the harness s
 per_odor_response_fractions.csv, model_pair_distances_long.csv, partB_scores.csv) and
 ./outputs/E70_high_firing_kcs/ (the re-drawn wirings and swaps, per-variant responses / spike counts,
 partC/ caches of the bases' APL-off runs).
-Usage: OMP_NUM_THREADS=2 nice -n 10 ./venv/bin/python E70_high_firing_kcs.py --part A [--jobs 2]
-       ./venv/bin/python E70_high_firing_kcs.py --part B --plan          (the wirings and jobs only)
-       OMP_NUM_THREADS=12 nice -n 10 ./venv/bin/python E70_high_firing_kcs.py --part B --models thr40_gain1.5
-       ./venv/bin/python E70_high_firing_kcs.py --part B --summary       (part B's tables only)
-       OMP_NUM_THREADS=12 nice -n 10 ./venv/bin/python E70_high_firing_kcs.py --part C --fit-tags <E67 tag> ...
+Usage: OMP_NUM_THREADS=2 nice -n 10 ./venv/bin/python experiments/E70_high_firing_kcs.py --part A [--jobs 2]
+       ./venv/bin/python experiments/E70_high_firing_kcs.py --part B --plan          (the wirings and jobs only)
+       OMP_NUM_THREADS=12 nice -n 10 ./venv/bin/python experiments/E70_high_firing_kcs.py --part B --models thr40_gain1.5
+       ./venv/bin/python experiments/E70_high_firing_kcs.py --part B --summary       (part B's tables only)
+       OMP_NUM_THREADS=12 nice -n 10 ./venv/bin/python experiments/E70_high_firing_kcs.py --part C --fit-tags <E67 tag> ...
 """
 from __future__ import annotations
 
@@ -77,7 +77,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 EXPERIMENT = 'E70_high_firing_kcs'
 ARCHIVE = H.shared_dir() / 'data' / 'model_outputs'
@@ -445,7 +445,7 @@ def shuffled_wiring(shuffle: str, seed: int) -> pd.DataFrame:
 
 
 def gained_glomeruli() -> List[str]:
-    from E27_glomerulus_gain import ORACLE
+    from experiments.E27_glomerulus_gain import ORACLE
     return list(ORACLE)
 
 
@@ -1165,7 +1165,7 @@ def part_a(res_dir: Path, jobs: int, only_key: bool = False) -> None:
     e60 = [f for f in E60_FOLDERS if (ARCHIVE / f).exists()]
     prov_path = res_dir / 'provenance.json'
     prov = json.loads(prov_path.read_text()) if prov_path.exists() else {}
-    prov['part_A'] = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E70_high_firing_kcs.py --part A',
+    prov['part_A'] = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E70_high_firing_kcs.py --part A',
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(), **H.code_commits(),
         n_variants=len(per), definitions=dict(high_firing=f'>= {HIGH_SPIKES:g} spikes to some odor with APL off (acute)',
         survivors=f'high-firing and >= {HIGH_SPIKES:g} spikes to some odor with APL on', check=f'the same at {CHECK_SPIKES:g} spikes',
@@ -1297,7 +1297,7 @@ APL_FACTORS = (2.0, 4.0)
 def part_b_jobs(models: Sequence[str], seeds: Sequence[int], out_dir: Path, res_dir: Path) -> List[dict]:
     """The arms of part B as `E54_gain_and_lesion.run_variants` jobs (the real wiring at the fitted
     threshold first, then the oracle, then the wirings), and wirings.csv."""
-    from E47_wiring_features import MODELS
+    from experiments.E47_wiring_features import MODELS
     jobs, wrows = [], []
     for mkey in models:
         spec = MODELS[mkey]
@@ -1381,7 +1381,7 @@ def score_run(on: pd.DataFrame, off: pd.DataFrame) -> dict:
     counts and under the calibrated readout, the new wiring's own high-firing set and survivors and the
     loss with them left out, the largest counts, odors per KC against the bands, the block and the
     natural-source alignment under the readout."""
-    from apl_effect_scores import opk_data, opk_band
+    from kcq.apl_effect import opk_data, opk_band
     row = {}
     c = classify_kcs(on, off, HIGH_SPIKES)
     keep = (c != 'survivor').to_numpy()
@@ -1410,7 +1410,7 @@ B_GROUP_LABEL = {'real_fit': 'real wiring, fitted threshold', 'surv_redraw': '(i
 def summary_b(res_dir: Path, out_dir: Path) -> None:
     """partB_scores.csv (one row per run: stats_variants' harness columns plus `score_run`'s), the check of the
     real-wiring run against the archive, and part B's tables in comparison_table_B.md."""
-    from apl_effect_scores import realism_flag
+    from kcq.apl_effect import realism_flag
     sp = res_dir / 'stats_variants.csv'
     if not sp.exists():
         print('no part B / C rows yet'); return
@@ -1535,7 +1535,7 @@ def main() -> None:
         print(pd.read_csv(w).drop(columns=['set_kcs'], errors='ignore').to_string(index=False))
     if args.plan:
         return
-    from E54_gain_and_lesion import run_variants
+    from experiments.E54_gain_and_lesion import run_variants
     run_variants(jobs, res_dir, out_dir)
     # run_variants records its provenance under 'runs'; keep each invocation's under its own key
     prov_path = res_dir / 'provenance.json'

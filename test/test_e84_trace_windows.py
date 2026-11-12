@@ -1,19 +1,16 @@
 #!/usr/bin/env python3
 """Tests for the trace windows and the indicator kernel of the KC-remapping harness (the time course of the APL
-effect in the flies' traces, E84: kc_remapping_harness.py), on synthetic
+effect in the flies' traces, E84: kcq/harness.py), on synthetic
 traces only: the target's window reproduces Yang's per-trial responses, the noise-free distances of windowed trials
 are those of the per-trial values, and a known kernel and drive are recovered from a noisy mean trace."""
 
-import sys
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
 
-EXP_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(EXP_DIR))
-H = pytest.importorskip('kc_remapping_harness')
+H = pytest.importorskip('kcq.harness')
 
 # the APL16 recordings' volume rate (59.273 frames / s, 20 frames per volume) and Yang's volume counts at it
 RATE = 59.273 / 20
@@ -158,7 +155,7 @@ def test_fit_tells_the_drives_apart_without_noise():
 
 def test_e84_label_parsing():
     """E84's records: the label of a recording's hemisphere and the construct, as written in the YAML files."""
-    E84 = pytest.importorskip('E84_trace_time_course')
+    E84 = pytest.importorskip('experiments.E84_trace_time_course')
     cases = [('APL labeled, immediate response.', 'L', 'label'), ('APL not labeled, immediate response.', 'L', 'nolabel'),
              ('both labeled.', 'R', 'label'), ('Both labeled.', 'L', 'label'), ('R labeled.', 'R', 'label'),
              ('R labeled.', 'L', 'nolabel'), ('L labeled. Manual dissection.', 'L', 'label'),
@@ -174,7 +171,7 @@ def test_e84_label_parsing():
     assert E84.notes_group('TNT3c', ('2024-08-30', 3, 'R'), 'L') == 'TNT-nolabel'
     assert E84.notes_group('TNT', ('2024-07-17', 3, 'L'), 'L') == 'TNT-label'
     # the reader refuses any recording outside the 19 (without touching a drive)
-    YRN = pytest.importorskip('yang_response_normalization')
+    YRN = pytest.importorskip('data_prep.yang_response_normalization')
     with pytest.raises(ValueError):
         YRN.read_suite2p('TNT', '20240101_1FLfun1', Path('/nonexistent'))
     with pytest.raises(ValueError):

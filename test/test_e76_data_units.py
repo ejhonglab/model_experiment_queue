@@ -5,25 +5,20 @@ matrices in fixed units against them and against the registry, its resampling ag
 entries, its half-splits against E75's, and E10_joint_fit.make_loss's `apl_data_units`. Needs the shared directory (the
 data-target registry, the KC data and data/yang_apl16_kc_noise_units/); skipped without it."""
 
-import sys
-from pathlib import Path
-
 import numpy as np
 import pandas as pd
 import pytest
 
-EXP_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(EXP_DIR))
-H = pytest.importorskip('kc_remapping_harness')
+H = pytest.importorskip('kcq.harness')
 try:
     H.data_targets_path().read_bytes()
     H.data_target('noise_threshold')
 except (FileNotFoundError, OSError):
     pytest.skip('the shared directory (data-target registry) is not available', allow_module_level=True)
 except KeyError:
-    pytest.skip('the registry has no noise_* entries yet (data_targets.py --add-new)', allow_module_level=True)
-D = pytest.importorskip('data_targets')
-E76 = pytest.importorskip('E76_data_side_target')
+    pytest.skip('the registry has no noise_* entries yet (kcq/data_targets.py --add-new)', allow_module_level=True)
+D = pytest.importorskip('kcq.data_targets')
+E76 = pytest.importorskip('experiments.E76_data_side_target')
 if not (E76.NOISE_DIR / 'trialmean_long.parquet').exists():
     pytest.skip('data/yang_apl16_kc_noise_units/ is not available', allow_module_level=True)
 
@@ -126,11 +121,11 @@ def test_unit_thresholds_keep_the_control_rate():
 def test_e10_apl_data_units():
     """make_loss's `apl_data_units`: 'z' (the default) keeps the floor, the calibration target and the data as before;
     'noise' takes them in baseline-noise units; 'noise' needs variant 'apl' and is refused with the zcell readout."""
-    E10 = pytest.importorskip('E10_joint_fit')
+    E10 = pytest.importorskip('experiments.E10_joint_fit')
     try:
         H.data_target('noise_apl_effect_rmse_floor')
     except KeyError:
-        pytest.skip('the registry has no noise_apl_effect_* entries yet (data_targets.py --add-new)')
+        pytest.skip('the registry has no noise_apl_effect_* entries yet (kcq/data_targets.py --add-new)')
     data = {'raw': {g: H.yang_mean_rdm(g, 'cosine') for g in ('TNT3c', 'TNT')}}
     rates = {g: H.yang_response_fractions(g).mean() for g in ('TNT3c', 'TNT')}
     kw = dict(orn_pairs=H.orn16_consensus_pairs(), drive=H.consensus_orn_drive(), ref=H.reference_pairs(), structure=True,

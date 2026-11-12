@@ -33,7 +33,7 @@ responded to, mean squared response), normalization_rates.csv, summary.json, two
 The reader (`read_suite2p`, which accepts only the 19 recordings of `RECORDINGS`) is shared with
 E84_trace_time_course.py.
 
-Usage: ./venv/bin/python yang_response_normalization.py [--drive-root /media/yang] [--out DIR]
+Usage: ./venv/bin/python data_prep/yang_response_normalization.py [--drive-root /media/yang] [--out DIR]
 """
 from __future__ import annotations
 
@@ -48,7 +48,7 @@ import pandas as pd
 import yaml
 from scipy.stats import zscore
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 RECORDINGS = (
     [('TNT', r) for r in ('20240717_2FLfun1', '20240717_3FLfun1', '20240725_1FLfun1', '20240801_4FRfun1', '20240802_5FLfun1',
@@ -247,7 +247,7 @@ def main() -> None:
                             amp_base=float(tb[k][sel][m].mean())))
     amp = pd.DataFrame(amp)
     amp.to_csv(args.out / 'amplitude_by_breadth.csv', index=False)
-    summ = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='yang_response_normalization.py',
+    summ = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='data_prep/yang_response_normalization.py',
                 **H.code_commits(),
                 baseline_threshold=thr_b, control_rate_z=float(ctrl_rate_z),
                 rate_ratio={name: float(nr[(nr.normalization == name) & (nr.genotype == 'TNT')].response_rate.iloc[0]

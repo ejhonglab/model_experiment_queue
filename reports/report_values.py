@@ -40,7 +40,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 RESULTS = H.shared_dir() / 'results'
 DATA_TARGETS = RESULTS / 'data_targets' / 'data_targets.json'
@@ -236,5 +236,5 @@ def tooltip(res: Resolved) -> str:
         return f"difference: ({s['a']['tooltip']}) minus ({s['b']['tooltip']})"
     if s.get('kind') == 'data':
         part = f" ({'lower' if s['part'] == 'lo' else 'upper'} end of the 90 % interval)" if s.get('part') else ''
-        return f"KC / ORN data: {s['name']}{part}: {s.get('definition') or ''} [data_targets.py {str(s.get('commit') or '')[:7]}]"
+        return f"KC / ORN data: {s['name']}{part}: {s.get('definition') or ''} [kcq/data_targets.py {str(s.get('commit') or '')[:7]}]"
     return f"{s['file']}, row {s['row']}, column {s['column']}" + (f" [commit {s['commit'][:7]}]" if s.get('commit') else '')

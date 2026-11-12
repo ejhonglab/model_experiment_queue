@@ -1,22 +1,17 @@
 #!/usr/bin/env python3
 """Tests for the per-pair APL effect split by the number of odors each KC responds to (E74:
-kc_remapping_harness.py `class_cosine_terms`, `apl_effect_by_class`;
+kcq/harness.py `class_cosine_terms`, `apl_effect_by_class`;
 E74_apl_effect_by_odors_per_kc.py's class-resolved loss, pattern-error shares, readings and the class term of the joint
 fit): the classes add up to the cosine and to the APL effect per pair, one class gives `apl_effect` / `apl_effect_stats`,
 a naive per-unit sum and a synthetic population with a known split are recovered, the per-condition table reads the
 levels and the claw-count groups' shares of the added responses add up. The tests of E74's module need the shared
 directory (the KC data and the data-target registry) and are skipped without it; the joint fit's options (`--apl-class-term`, `--apl-class-form`) are tested in test_e10_zcell.py."""
 
-import sys
-from pathlib import Path
-
 import numpy as np
 import pandas as pd
 import pytest
 
-EXP_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(EXP_DIR))
-H = pytest.importorskip('kc_remapping_harness')
+H = pytest.importorskip('kcq.harness')
 
 ODORS = list(H.APL16_ODORS)
 CLASSES = list(H.OPK_CLASSES)
@@ -172,7 +167,7 @@ def _shared():
         H.yang_recording_matrices('TNT3c')
     except (FileNotFoundError, OSError):
         pytest.skip('the shared directory (KC data, data-target registry) is not available')
-    return pytest.importorskip('E74_apl_effect_by_odors_per_kc')
+    return pytest.importorskip('experiments.E74_apl_effect_by_odors_per_kc')
 
 
 def _need_class_floor():

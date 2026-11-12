@@ -65,11 +65,11 @@ comparison_table.md, figures, provenance.json); per-variant counts and responses
 outputs/E71_input_scaled_threshold/<tag>_<on|acute_off>_<spike_counts|responses>.parquet, the bases'
 breadth runs and the pre-passes in outputs/E71_input_scaled_threshold/bases/.
 
-Usage (from this folder; one process at a time, about 9 GB each):
-    ./venv/bin/python E71_input_scaled_threshold.py --plan
-    OMP_NUM_THREADS=12 OMP_THREAD_LIMIT=12 nice -n 10 ./venv/bin/python -u E71_input_scaled_threshold.py --stage run
-    ./venv/bin/python E71_input_scaled_threshold.py --stage summarize
-    ./venv/bin/python E71_input_scaled_threshold.py --stage partB-commands
+Usage (from the repository root; one process at a time, about 9 GB each):
+    ./venv/bin/python experiments/E71_input_scaled_threshold.py --plan
+    OMP_NUM_THREADS=12 OMP_THREAD_LIMIT=12 nice -n 10 ./venv/bin/python -u experiments/E71_input_scaled_threshold.py --stage run
+    ./venv/bin/python experiments/E71_input_scaled_threshold.py --stage summarize
+    ./venv/bin/python experiments/E71_input_scaled_threshold.py --stage partB-commands
     --local-test DIR: results and outputs under DIR (a smoke test; with --stage setting --tag <tag> one setting)
 """
 from __future__ import annotations
@@ -88,8 +88,8 @@ import numpy as np
 import pandas as pd
 from scipy import stats as sstats
 
-import kc_remapping_harness as H
-import E69_kc_firing_ceiling as E69
+from kcq import harness as H
+from experiments import E69_kc_firing_ceiling as E69
 
 EXPERIMENT = 'E71_input_scaled_threshold'
 RESULTS = H.shared_dir() / 'results'
@@ -263,9 +263,9 @@ class Model:
     with columns in ODORS order."""
 
     def __init__(self, key: str, a: float = 0.0, breadth: str = 'recomputed'):
-        import E43_model_trial_noise as E43
+        from experiments import E43_model_trial_noise as E43
         from al_analysis.mb_model import make_fixed_param_kc_simulator
-        from E10_joint_fit import bouton_base, breadth_weights, kc_input_thr_factor, kc_input_weight
+        from experiments.E10_joint_fit import bouton_base, breadth_weights, kc_input_thr_factor, kc_input_weight
         if breadth not in ('recomputed', 'kept'):
             raise ValueError(f'{breadth=}')
         b = base(key)
@@ -390,7 +390,7 @@ def release_stats(tag: str, model: Model, r_on: pd.DataFrame, r_off: pd.DataFram
 
 def survivor_stats(model: Model, on: pd.DataFrame, off: pd.DataFrame) -> dict:
     """E70's high-firing set and survivors of this variant, and how many of the base's survivors remain."""
-    import E70_high_firing_kcs as E70
+    from experiments import E70_high_firing_kcs as E70
     cls = E70.classify_kcs(on, off, HIGH_SPIKES)
     ids = pd.Index(on.index.get_level_values(H.KC_ID_LEVEL))
     base_surv = survivors_of(model.base['survivors_model'])
@@ -420,9 +420,9 @@ def score(tag: str, meta: dict, model: Model, on_out, off_out) -> dict:
     """Every readout of one variant: E66's `score_variant` (the harness stats columns, the loss decomposition
     under each readout, the counts saved), E69's readouts and this experiment's; appended to
     input_readouts.csv and released_by_group.csv."""
-    import E66_per_odor_apl_profile as E66
-    from E10_joint_fit import apl_effect_terms
-    from apl_effect_scores import realism_flag
+    from experiments import E66_per_odor_apl_profile as E66
+    from experiments.E10_joint_fit import apl_effect_terms
+    from kcq.apl_effect import realism_flag
     c = E69.ctx()
     on_s, off_s = on_out[1].astype(float), off_out[1].astype(float)
     K = H.calibrate_readout(on_s, 'saturating', c['pr_target'], stat='participation_ratio', responders_min=RESP_MIN)
@@ -672,7 +672,7 @@ def settings_static() -> List[dict]:
 def admissible(r) -> Tuple[bool, str]:
     """Whether a row may be chosen: both response rates held, the APL-on odors-per-KC distance inside its band,
     the APL-on response rate ρ at or above the band's floor; with the reason when not."""
-    from apl_effect_scores import opk_band, RATE_RHO_MIN
+    from kcq.apl_effect import opk_band, RATE_RHO_MIN
     why = []
     if bool(r.get('thr_at_bound')) or bool(r.get('apl_at_bound')):
         why.append('a bisection at its bound')
@@ -727,11 +727,11 @@ def setting_label(r) -> str:
 
 
 def write_table(df: pd.DataFrame, choices: Dict[str, dict]) -> None:
-    from apl_effect_scores import opk_band
+    from kcq.apl_effect import opk_band
     dt, dr = H.data_target, data_refs()
     bs = bases()
     L = ['# E71: the input-scaled KC threshold, part A (fixed scales, both response rates held)', '',
-        f'Generated {datetime.now():%Y-%m-%d %H:%M} by E71_input_scaled_threshold.py. Each KC\'s threshold (fixed_thr + 2 x its '
+        f'Generated {datetime.now():%Y-%m-%d %H:%M} by experiments/E71_input_scaled_threshold.py. Each KC\'s threshold (fixed_thr + 2 x its '
         'spontaneous input) x (W / mean W)^a, W its summed PN->claw weight (gain included). Each setting re-tuned: the threshold factor '
         'on the base\'s APL-off response count, then one factor on the APL->KC and APL->bouton scales on its APL-on count; the breadth '
         'behind the APL->KC weights recomputed with the same factor (pre-pass threshold re-tuned to its own APL-off count) unless '
@@ -819,7 +819,7 @@ def figures(df: pd.DataFrame, choices: Dict[str, dict]) -> None:
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
-    from apl_effect_scores import opk_band
+    from kcq.apl_effect import opk_band
     dt, dr = H.data_target, data_refs()
     colors = {'c2': '#1baf7a', 'c2ceil': '#6250d6', 'ref40': '#2a78d6'}
     bs = bases()
@@ -907,7 +907,7 @@ def write_tuned_params(df: pd.DataFrame) -> None:
 def write_provenance(df: pd.DataFrame, choices: Dict[str, dict]) -> None:
     import olfsysm
     checks = read_json(res_dir() / 'base_checks.json', {})
-    prov = dict(generated=now(), host=socket.gethostname(), script='E71_input_scaled_threshold.py', experiment=EXPERIMENT,
+    prov = dict(generated=now(), host=socket.gethostname(), script='experiments/E71_input_scaled_threshold.py', experiment=EXPERIMENT,
         bases={k: v.get('kws_scalar', {}) for k, v in checks.items()}, base_selection=bases(), base_checks=checks,
         settings=settings(), exponents=EXPONENTS, kept_breadth=KEPT_BREADTH, c2ceil_exponents=c2ceil_exponents()[0],
         exponent_choices=choices, thr_bracket=THR_BRACKET, apl_bracket=APL_BRACKET, bisect_iters=E69.BISECT_ITERS,
@@ -957,7 +957,7 @@ def partB_commands() -> List[str]:
     (the firing-ceiling base at its exponent) only if hal's E69 part B leaves a ceiling fit within 0.005 of 0.058
     under both definitions (checked here on results/E69_kc_firing_ceiling/fits.csv); fit 3 (the reference set at
     its exponent) only if part A brings it inside the APL-off odors-per-KC band."""
-    from apl_effect_scores import opk_band
+    from kcq.apl_effect import opk_band
     df = merged()
     choices = {k: exponent_choice(k, df) for k in BASE_ORDER}
     cmds = []
@@ -974,7 +974,7 @@ def partB_commands() -> List[str]:
         a = c['exponent']
         cmds.append(f"# fit 1: C2's family at a = {a:g} (APL-off odors-per-KC distance {row('c2_base').opk_off_tv:.3f} -> "
             f"{row(c['tag']).opk_off_tv:.3f})")
-        cmds.append(f"{env} {py} E10_joint_fit.py {common} --kc-thr-input-exp {a:g} --init-params "
+        cmds.append(f"{env} {py} experiments/E10_joint_fit.py {common} --kc-thr-input-exp {a:g} --init-params "
             f"results/{EXPERIMENT}/tuned_params.json:{c['tag']}")
     else:
         cmds.append(f"# fit 1 not run: c2 {c['status']}" + (f", best APL-off distance {c.get('best_opk_off_tv', np.nan):.3f} against "
@@ -998,14 +998,14 @@ def partB_commands() -> List[str]:
         kc = (f"--kc-refractory-period {tp['kc_refractory_period']!r} --kc-adapt-inc {tp['kc_adapt_inc']!r} --kc-adapt-tau "
             f"{tp['kc_adapt_tau']!r}")
         cmds.append(f"# fit 2: the firing-ceiling base at a = {c['exponent']:g}")
-        cmds.append(f"{env} {py} E10_joint_fit.py {common} {kc} --kc-thr-input-exp {c['exponent']:g} --init-params "
+        cmds.append(f"{env} {py} experiments/E10_joint_fit.py {common} {kc} --kc-thr-input-exp {c['exponent']:g} --init-params "
             f"results/{EXPERIMENT}/tuned_params.json:{c['tag']}")
     else:
         cmds.append(f"# fit 2 not run: E69 ceiling fit within 0.005 of 0.058 under both definitions: {ok2}; c2ceil {c['status']}")
     c = choices['ref40']
     if c['status'] == 'chosen' and c['exponent'] != 0 and float(row(c['tag']).opk_off_tv) <= opk_band('off'):
         cmds.append(f"# fit 3: the reference set at a = {c['exponent']:g}")
-        cmds.append(f"{env} {py} E10_joint_fit.py {common} --claw-thr 40 --glom-gain 1.5 --kc-thr-input-exp {c['exponent']:g} "
+        cmds.append(f"{env} {py} experiments/E10_joint_fit.py {common} --claw-thr 40 --glom-gain 1.5 --kc-thr-input-exp {c['exponent']:g} "
             f"--init-params results/{EXPERIMENT}/tuned_params.json:{c['tag']}")
     else:
         cmds.append(f"# fit 3 not run: ref40 {c['status']}" + (f", APL-off distance {row(c['tag']).opk_off_tv:.3f} against the band "
@@ -1053,7 +1053,7 @@ def partC_commands() -> List[str]:
         '--levels match_on match_off --save-recording-distances')
     c2 = base('c2')
     cmds = ['# C2 itself (calibrated anew: E67 did not run C2 through the pipeline)',
-        f"{env} {py} E43_model_trial_noise.py {common} --model-from {c2['exp']}:{c2['tag']}"]
+        f"{env} {py} experiments/E43_model_trial_noise.py {common} --model-from {c2['exp']}:{c2['tag']}"]
     fits = res_dir() / 'fits.csv'
     if not fits.exists():
         cmds.append('# fit 1: no part-B fits.csv yet')
@@ -1067,7 +1067,7 @@ def partC_commands() -> List[str]:
         if ok:
             cmds.append(f'# fit 1 ({r.tag}): loss raw {r.fit_apl_raw_rmse:.4f}, calibrated {r.fit_apl_cal_rmse:.4f} (C2 '
                 f"{C2_LOSSES['raw']:.4f} / {C2_LOSSES['cal']:.4f})")
-            cmds.append(f'{env} {py} E43_model_trial_noise.py {common} --model-from {EXPERIMENT}:{r.tag}')
+            cmds.append(f'{env} {py} experiments/E43_model_trial_noise.py {common} --model-from {EXPERIMENT}:{r.tag}')
         else:
             cmds.append(f'# fit 1 ({r.tag}) not run: loss raw {r.fit_apl_raw_rmse:.4f}, calibrated {r.fit_apl_cal_rmse:.4f}, more '
                 f'than {PARTC_FIT_MARGIN} above C2 under both')

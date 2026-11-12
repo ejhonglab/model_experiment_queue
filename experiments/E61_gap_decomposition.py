@@ -27,7 +27,7 @@ matrix the fits are scored against as structure beyond the input).
 Outputs: <shared>/results/E61_gap_decomposition/ (pair_residuals.csv, odor_summary.csv, class_summary.csv,
 apl_effect.csv, residual_correlations.csv, worst_pairs.csv, comparison_table.md, E61_rank_residuals.png,
 E61_per_odor.png, E61_apl_effect.png, provenance.json).
-Usage: ./venv/bin/python E61_gap_decomposition.py [--out DIR]
+Usage: ./venv/bin/python experiments/E61_gap_decomposition.py [--out DIR]
 """
 from __future__ import annotations
 
@@ -42,8 +42,8 @@ import numpy as np
 import pandas as pd
 from scipy import stats as sstats
 
-import kc_remapping_harness as H
-import noise_floor_trial_distances as NF
+from kcq import harness as H
+from kcq import noise_floor as NF
 
 EXPERIMENT = 'E61_gap_decomposition'
 RES = H.shared_dir() / 'results'
@@ -230,7 +230,7 @@ def main() -> None:
     write_table(out, rhos, odors, classes, apl, corr, worst)
     make_figures(out, pairs, odors, apl, resid_vectors)
     (out / 'provenance.json').write_text(json.dumps(dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),
-        script='E61_gap_decomposition.py', host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(),
+        script='experiments/E61_gap_decomposition.py', host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(),
         **H.code_commits(), models={l: dict(folder=m['folder'], tag=m['tag']) for l, m in models.items()},
         data=dict(on=DATA_OF['on'], off=DATA_OF['off'], measure='cosine, mean over recordings (H.yang_mean_rdm)'),
         orn='H.orn16_consensus_pairs (1 - Pearson across the 40 responding glomeruli)', weak_input_odors=list(WEAK),

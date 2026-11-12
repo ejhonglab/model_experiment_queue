@@ -1,20 +1,15 @@
 #!/usr/bin/env python3
 """Tests for the low end of the readout in the KC-remapping harness (E68:
-kc_remapping_harness.py): the saturating readout's one-spike
+kcq/harness.py): the saturating readout's one-spike
 floor, the expected cosine under measurement noise, the pseudo-recordings, the closed-form low-end
 statistics, the conversion of readout units to z, the joint calibration, the three-term split of a cosine
 and the added readings of the KC data."""
-
-import sys
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
 
-EXP_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(EXP_DIR))
-H = pytest.importorskip('kc_remapping_harness')
+H = pytest.importorskip('kcq.harness')
 
 ODORS = ['2h', 'IaA', 'pa', '2-but', 'eb', 'ep']
 
@@ -116,7 +111,7 @@ def test_sample_pseudo_recordings_shapes_and_seed():
 
 
 def test_noise_corrected_matches_analyse():
-    NF = pytest.importorskip('noise_floor_trial_distances')
+    NF = pytest.importorskip('kcq.noise_floor')
     rng = np.random.default_rng(4)
     base = _counts(4).to_numpy()
     trials = base[None] + rng.normal(0, 0.5, (3,) + base.shape)

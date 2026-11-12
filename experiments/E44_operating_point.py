@@ -25,8 +25,8 @@ response fractions (APL on vs control flies, acute APL off vs APL output blocked
 Outputs: <shared>/results/E44_operating_point/ (stats_variants.csv,
 per_odor_response_fractions.csv, comparison.csv, provenance.json, E44_operating_point.png) and
 ./outputs/E44_operating_point/ (responses / spike counts per variant, tuned_params.json).
-Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python E44_operating_point.py [--parts A C]
-       ./venv/bin/python E44_operating_point.py --summary   (comparison table and figure only)
+Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python experiments/E44_operating_point.py [--parts A C]
+       ./venv/bin/python experiments/E44_operating_point.py --summary   (comparison table and figure only)
 """
 from __future__ import annotations
 
@@ -40,16 +40,16 @@ from typing import Dict, Tuple
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
-from E1_apl_knockout import bisect_threshold
-from E3_drive_dependent_gain import BOUTON, per_odor_extras, rate, tune_and_knockout
-from E4_substrate import score, kc_by_glomerulus
-from E10_joint_fit import TAU, base_kws, bouton_base, breadth_weights, make_loss
-from E12_breadth_apl import density_excess
-from E16_claw_saturation import spearman_with_refs
-from E18_bouton_depletion import all_refs
-from E26_claw_power import WEAK, sharing_deficit
-from E35_divisive_apl import suppression_stats
+from kcq import harness as H
+from experiments.E1_apl_knockout import bisect_threshold
+from experiments.E3_drive_dependent_gain import BOUTON, per_odor_extras, rate, tune_and_knockout
+from experiments.E4_substrate import score, kc_by_glomerulus
+from experiments.E10_joint_fit import TAU, base_kws, bouton_base, breadth_weights, make_loss
+from experiments.E12_breadth_apl import density_excess
+from experiments.E16_claw_saturation import spearman_with_refs
+from experiments.E18_bouton_depletion import all_refs
+from experiments.E26_claw_power import WEAK, sharing_deficit
+from experiments.E35_divisive_apl import suppression_stats
 
 EXPERIMENT = 'E44_operating_point'
 PARAM_KEYS = ('fixed_thr', 'wAPLKC_scale', 'wKCAPL_scale', 'wAPLPN_scale', 'wPNAPL_scale')
@@ -318,7 +318,7 @@ def main() -> None:
                 finish(tag, meta, (r_on, s_on), (r_off, s_off), W)
             del sim
 
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E44_operating_point.py',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E44_operating_point.py',
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(), parts=args.parts,
         base=BOUTON, part_a_thresholds=THRS_A, part_a_targets=TARGETS_A, ctrl_frac=CTRL_FRAC,
         ref_experiment=REF_EXPERIMENT, ref_fits=REF_FITS, kc_kc_tau=TAU, loss_rate_targets=[0.05, CTRL_FRAC],

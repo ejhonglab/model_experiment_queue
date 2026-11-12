@@ -3,14 +3,14 @@
 olfdb, over the 36 glomeruli the model's ORN input uses.
 
 The matrix the program has used as its 16-odor ORN reference (the shared directory's apl_pair_analysis/
-orn16_consensus_corrdist.csv, now `kc_remapping_harness.orn16_consensus_pairs_zero_filled()`) was computed by
+orn16_consensus_corrdist.csv, now `kcq.harness.orn16_consensus_pairs_zero_filled()`) was computed by
 the original report's analysis from al_analysis/data/sent_to_vlad/2024-06-21/consensus_mean.csv
 over the union of the megamat and validation2 panels' glomeruli, with 0 in place of glomeruli a
 panel did not image (DL4 and VM4 for the megamat odors; VA4 and VL1 for the validation2 odors),
 so unmeasured glomeruli counted as zero responses (unresolved_issues.md). This script recomputes
 it from Tom's ORN data in olfdb (dataset 1, megamat panel, 9 flies; dataset 4, validation2 panel,
 6 flies; http://hal:8080) over the 36 glomeruli both panels imaged, the same set as the model's
-input (`kc_remapping_harness.apl16_orn_deltas()`):
+input (`kcq.harness.apl16_orn_deltas()`):
 
 - pairs within a panel (66 megamat x megamat, 6 validation2 x validation2): the mean over flies of
   each fly's 1 - r, with al_analysis's `al_util.mean_of_fly_corrs` (trial means, one correlation per
@@ -26,7 +26,7 @@ orn_deltas_apl16*.csv files there are not touched):
   orn16_corrdist_olfdb_36glom_pairs.csv  120 pairs: both versions, the method per pair, the old value
   orn16_corrdist_olfdb_36glom.json       provenance (olfdb dataset ids and sha256, glomeruli, odors,
                                          this repository's and al_analysis's commits)
-Usage: ./venv/bin/python orn16_distances_from_olfdb.py
+Usage: ./venv/bin/python data_prep/orn16_distances_from_olfdb.py
 """
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ from urllib.request import urlopen
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 OLFDB = 'http://hal:8080'
 DATASETS = {'megamat': 1, 'validation2': 4}
@@ -118,7 +118,7 @@ def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     sq.to_csv(OUT / f'{STEM}.csv')
     pairs.to_csv(OUT / f'{STEM}_pairs.csv', index=False)
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='orn16_distances_from_olfdb.py',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='data_prep/orn16_distances_from_olfdb.py',
         **H.code_commits(),
         olfdb=OLFDB, datasets={p: dict(id=DATASETS[p], title=metas[p].get('title'), data_sha256=metas[p].get('data_sha256'), n_flies=int(n_flies[p]))
             for p in DATASETS},

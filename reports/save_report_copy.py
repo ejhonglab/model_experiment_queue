@@ -6,7 +6,7 @@ Our artifact pages are single HTML files with figures embedded as data URIs, pub
 the same document the artifact's share > export download gives. Run this after every publish
 or republish (CLAUDE.md, "Report copies"):
 
-    ./venv/bin/python save_report_copy.py <index.html or directory> <name> [<artifact url>]
+    ./venv/bin/python reports/save_report_copy.py <index.html or directory> <name> [<artifact url>]
 
 The pages that several hosts rewrite (the all-experiments summary and the report page) are not
 published as artifacts since 2026-11-10 (Tom): they are built as before and saved here only, without
@@ -35,13 +35,13 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 README_HEADER = """# Report copies
 
 Self-contained copies of every artifact page published for this project (the same HTML the
-artifact serves, i.e. what share > export downloads), written by `save_report_copy.py` in
-the repo folder after each publish. One file per page, latest version only; multi-file
+artifact serves, i.e. what share > export downloads), written by `reports/save_report_copy.py`
+of model_experiment_queue after each publish. One file per page, latest version only; multi-file
 artifacts are zipped (index.html plus the other files).
 
 `current-summary.html` is a symlink to the latest summary page (updated by the script).

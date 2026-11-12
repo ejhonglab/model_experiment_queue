@@ -21,7 +21,7 @@ Scored as E26 (E13 statistics, E7 excess by block, per-odor response fractions, 
 ranks, E21's APL-off sharing deficit by pair type incl. the terpene x fruity-ester subset).
 
 Outputs: <shared>/results/E27_glomerulus_gain/ and ./outputs/E27_glomerulus_gain/.
-Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python E27_glomerulus_gain.py [--gains 1.5 2 3] [--thr 70]
+Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python experiments/E27_glomerulus_gain.py [--gains 1.5 2 3] [--thr 70]
 """
 from __future__ import annotations
 
@@ -34,13 +34,13 @@ from datetime import datetime, timezone
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
-from E3_drive_dependent_gain import BOUTON, TARGET, per_odor_extras, rate, tune_and_knockout
-from E4_substrate import score, kc_by_glomerulus
-from E12_breadth_apl import density_excess, e3_bouton_params
-from E16_claw_saturation import spearman_with_refs
-from E18_bouton_depletion import all_refs
-from E26_claw_power import sharing_deficit, deficit_table, WEAK
+from kcq import harness as H
+from experiments.E3_drive_dependent_gain import BOUTON, TARGET, per_odor_extras, rate, tune_and_knockout
+from experiments.E4_substrate import score, kc_by_glomerulus
+from experiments.E12_breadth_apl import density_excess, e3_bouton_params
+from experiments.E16_claw_saturation import spearman_with_refs
+from experiments.E18_bouton_depletion import all_refs
+from experiments.E26_claw_power import sharing_deficit, deficit_table, WEAK
 
 EXPERIMENT = 'E27_glomerulus_gain'
 TOP_GLOMS = {'ms': ['VA7m', 'DL1', 'D'], 'paa': ['DM1'], 'B-myr': ['DM1'], 'euc': ['DP1m', 'VC1'], '-aPine': ['VC1'], '1-8ol': ['DC2', 'DM5']}
@@ -191,7 +191,7 @@ def main() -> None:
         done.add(tag)
     if deficits:
         pd.concat(deficits).to_csv(res_dir / 'pair_deficits_long.csv', index=False, mode='a', header=not (res_dir / 'pair_deficits_long.csv').exists())
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E27_glomerulus_gain.py',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E27_glomerulus_gain.py',
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(),
         **H.code_commits(),
         olfsysm_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.olfsysm_dir(), capture_output=True, text=True).stdout.strip(),

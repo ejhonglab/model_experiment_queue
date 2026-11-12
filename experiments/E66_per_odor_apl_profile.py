@@ -4,13 +4,13 @@ per-odor and a pair-specific part, and a per-odor APL oracle.
 
 The main target is the per-pair APL effect on odor-odor distances (each pair's APL-on minus APL-off
 cosine distance) against the KC data's (control flies minus APL output blocked (TNT)), scored by the
-APL-effect loss (`kc_remapping_harness.apl_effect_stats`). Its pattern part (the loss with both means
+APL-effect loss (`kcq.harness.apl_effect_stats`). Its pattern part (the loss with both means
 removed) splits exactly into a per-odor part (the error's projection onto the additive space, a pair's
 value the sum of its two odors' shares) and a pair-specific part (the residual)
-(`kc_remapping_harness.apl_effect_decomposition`, `apl_effect_pair_parts`).
+(`kcq.harness.apl_effect_decomposition`, `apl_effect_pair_parts`).
 
 Part A (no simulations): every archived variant with APL-on and acute APL-off spike counts in
-data/model_outputs/, scored under four readouts of its counts (`kc_remapping_harness.readout`): raw
+data/model_outputs/, scored under four readouts of its counts (`kcq.harness.readout`): raw
 counts (the target as defined), the square root, the compressive readout experiment's (E65) saturating
 readout n / (n + k) with k calibrated per variant on its APL-on counts to the control flies' responder
 participation ratio (as saved in results/E65_spike_count_readout/by_variant_readout.csv), and binarized
@@ -43,9 +43,9 @@ data_share_correlates.csv, by_variant_parts.csv, shares_long.csv, parts_summary.
 worst_pairs.csv, worst_pair_kcs.csv, oracles.csv, comparison_table.md, figures; parts B / C:
 part<B|C>_variant_stats.csv, model_pair_distances_long_<B|C>.csv, parts_<B|C>.csv, shares_<B|C>.csv,
 multipliers.csv, multiplier_history.csv; provenance.json. Counts in ./outputs/E66_per_odor_apl_profile/.
-Usage: ./venv/bin/python E66_per_odor_apl_profile.py --part A [--jobs N] [--boot 1000]
-       OMP_NUM_THREADS=1 nice -n 10 ./venv/bin/python E66_per_odor_apl_profile.py --part B --jobs 8 [--bases ...]
-       OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python E66_per_odor_apl_profile.py --part C [--c-bases ...]
+Usage: ./venv/bin/python experiments/E66_per_odor_apl_profile.py --part A [--jobs N] [--boot 1000]
+       OMP_NUM_THREADS=1 nice -n 10 ./venv/bin/python experiments/E66_per_odor_apl_profile.py --part B --jobs 8 [--bases ...]
+       OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python experiments/E66_per_odor_apl_profile.py --part C [--c-bases ...]
 """
 from __future__ import annotations
 
@@ -62,8 +62,8 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
-from E65_spike_count_readout import KEY_MODELS
+from kcq import harness as H
+from experiments.E65_spike_count_readout import KEY_MODELS
 
 EXPERIMENT = 'E66_per_odor_apl_profile'
 ARCHIVE = H.shared_dir() / 'data' / 'model_outputs'
@@ -366,7 +366,7 @@ def part_a(args) -> None:
 
     write_table_a(out, key, orc, floors, shares, correl, summ, wp)
     figures_a(out, df, key, shares, floors, pd.concat(key_shares, ignore_index=True))
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E66_per_odor_apl_profile.py --part A',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E66_per_odor_apl_profile.py --part A',
         **H.code_commits(),
         inputs_sha256={str(p): sha256(p) for p in (BY_VARIANT, E65_TABLE)}, n_variants=len(have), readouts=[r[0] for r in READOUTS],
         calibrated_readout=CAL_READOUT, response_threshold_spikes=RESP_MIN, n_boot=args.boot, boot_seed=0,
@@ -528,8 +528,8 @@ def load_base(key: str, base_dir: Path) -> dict:
     """A base's fitted parameters, wiring, normalized APL weights, breadth (the bouton base's APL-off
     spike totals, `E10_joint_fit.bouton_base`, from the lab's input as in every experiment), the
     simulator kwargs and its ORN input."""
-    from E10_joint_fit import TAU, base_kws, bouton_base, breadth_weights
-    from E47_wiring_features import fitted_params
+    from experiments.E10_joint_fit import TAU, base_kws, bouton_base, breadth_weights
+    from experiments.E47_wiring_features import fitted_params
     b = dict(BASES[key])
     lab = H.apl16_orn_deltas()
     p_fit, fr = fitted_params(b['exp'], b['tag'])
@@ -573,7 +573,7 @@ def odor_job(job: dict) -> dict:
     and responses at the multiplier, at multiplier 1 and with APL off, the history and the PN rates of
     the odor's input."""
     from al_analysis.mb_model import make_fixed_param_kc_simulator
-    from E32_pn_stage import glomerulus_pn_rates
+    from experiments.E32_pn_stage import glomerulus_pn_rates
     w = _WORKER
     p = dict(w['p_fit'])
     col = w['orn'].iloc[:, [job['j']]].astype(float)
@@ -642,9 +642,9 @@ def odor_job(job: dict) -> dict:
 
 def stats_context() -> dict:
     """What the stats tables' scoring needs (as the rate oracle's, E62)."""
-    from E10_joint_fit import make_loss
-    from E18_bouton_depletion import all_refs
-    from E44_operating_point import CTRL_FRAC
+    from experiments.E10_joint_fit import make_loss
+    from experiments.E18_bouton_depletion import all_refs
+    from experiments.E44_operating_point import CTRL_FRAC
     data_mats = {'raw': {g: H.yang_mean_rdm(g, 'cosine') for g in ('TNT3c', 'TNT')},
         'binarized': {g: H.yang_mean_rdm(g, 'cosine', binarize=1.0) for g in ('TNT3c', 'TNT')},
         'pearson': {g: H.yang_mean_rdm(g, 'pearson') for g in ('TNT3c', 'TNT')}}
@@ -662,13 +662,13 @@ def score_variant(ctx: dict, tag: str, meta: dict, on_out, off_out, W, orn, cal:
     loss decomposition under each readout (the base's calibrated parameter); appends to the part's
     tables (part<suffix>_variant_stats.csv, model_pair_distances_long_<suffix>.csv, parts_<suffix>.csv,
     shares_<suffix>.csv) and saves the counts and responses."""
-    from E3_drive_dependent_gain import per_odor_extras
-    from E4_substrate import score as e4_score
-    from E12_breadth_apl import density_excess
-    from E16_claw_saturation import spearman_with_refs
-    from E26_claw_power import sharing_deficit
-    from E35_divisive_apl import suppression_stats
-    from E44_operating_point import fraction_stats, losses
+    from experiments.E3_drive_dependent_gain import per_odor_extras
+    from experiments.E4_substrate import score as e4_score
+    from experiments.E12_breadth_apl import density_excess
+    from experiments.E16_claw_saturation import spearman_with_refs
+    from experiments.E26_claw_power import sharing_deficit
+    from experiments.E35_divisive_apl import suppression_stats
+    from experiments.E44_operating_point import fraction_stats, losses
     V = H.PRIMARY_MODEL_RDM
     row, on, off = e4_score(meta, on_out, off_out, W, orn, ctx['orn_pairs'], ctx['drive'], ctx['data_mats'], ctx['ref'])
     on_p, off_p = on[V], off[V]
@@ -740,8 +740,8 @@ def odor_properties(b: dict, off_counts: pd.DataFrame, pn: pd.DataFrame) -> pd.D
 
 def part_b(args) -> None:
     import time
-    from E3_drive_dependent_gain import rate
-    from E4_substrate import kc_by_glomerulus
+    from experiments.E3_drive_dependent_gain import rate
+    from experiments.E4_substrate import kc_by_glomerulus
     res_dir = H.results_dir(EXPERIMENT)
     out_dir = H.HERE / 'outputs' / EXPERIMENT
     base_dir = out_dir / 'bases'
@@ -835,9 +835,9 @@ def part_c(args) -> None:
     rate; APL off is the same for every exponent."""
     import time
     from al_analysis.mb_model import make_fixed_param_kc_simulator
-    from E3_drive_dependent_gain import rate
-    from E4_substrate import kc_by_glomerulus
-    from E10_joint_fit import breadth_weights
+    from experiments.E3_drive_dependent_gain import rate
+    from experiments.E4_substrate import kc_by_glomerulus
+    from experiments.E10_joint_fit import breadth_weights
     res_dir = H.results_dir(EXPERIMENT)
     out_dir = H.HERE / 'outputs' / EXPERIMENT
     base_dir = out_dir / 'bases'
@@ -909,7 +909,7 @@ def realism_extras(tag: str) -> Dict[str, float]:
     reports for the data): per condition, the responders-only participation ratio and top-1 % share
     (mean over odors), the peak spike count, and the share of KCs responding to no odor and to 8 or
     more odors."""
-    from E65_spike_count_readout import odors_per_unit
+    from experiments.E65_spike_count_readout import odors_per_unit
     out_dir = H.HERE / 'outputs' / EXPERIMENT
     out = {}
     for cond, short in (('on', 'on'), ('acute_off', 'off')):
@@ -926,13 +926,13 @@ def realism_extras(tag: str) -> Dict[str, float]:
 
 def part_s(args) -> None:
     """Merges parts B and C into the experiment's stats_variants.csv and model_pair_distances_long.csv
-    (read by apl_effect_scores.py and the progress plot) and writes the parts' tables: the loss and its
+    (read by kcq/apl_effect.py and the progress plot) and writes the parts' tables: the loss and its
     parts under raw counts and the calibrated readout per variant, beside its base; the per-odor
     multipliers; their Spearman correlations with the odor properties."""
     res_dir = H.results_dir(EXPERIMENT)
     st = pd.concat([pd.read_csv(res_dir / f'part{s}_variant_stats.csv') for s in ('B', 'C') if (res_dir / f'part{s}_variant_stats.csv').exists()],
         ignore_index=True)
-    # merged under the name apl_effect_scores.py and archive_model_outputs.py read; the per-part tables are
+    # merged under the name kcq/apl_effect.py and archive_model_outputs.py read; the per-part tables are
     # named so that the archive's 'stats*.csv' glob does not list their rows twice
     st.to_csv(res_dir / 'stats_variants.csv', index=False)
     pd.concat([pd.read_csv(res_dir / f'model_pair_distances_long_{s}.csv') for s in ('B', 'C')
@@ -946,7 +946,7 @@ def part_s(args) -> None:
         'apl_effect_per_odor', 'apl_effect_pair_specific', 'apl_effect_spearman', 'apl_effect_share_pearson'])
     wide.columns = [f'{r}__{k}' for k, r in wide.columns]
     table = st[[c for c in keep if c in st.columns]].set_index('tag').join(wide)
-    from apl_effect_scores import realism_flag
+    from kcq.apl_effect import realism_flag
     table['realism_flag'] = [realism_flag(r.rate_on, r.rate_off, r.spearman_rate_on_vs_data) for r in table.itertuples()]
     if 'spearman_rate_off_vs_data' in st.columns:
         table['spearman_rate_off_vs_data'] = st.set_index('tag')['spearman_rate_off_vs_data']
@@ -1059,7 +1059,7 @@ def write_provenance(res_dir: Path, part: str, args, extra: dict) -> None:
     p = res_dir / 'provenance.json'
     prov = json.loads(p.read_text()) if p.exists() else {}
     prov[f'part{part}'] = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),
-        script=f'E66_per_odor_apl_profile.py --part {part}', argv=vars(args),
+        script=f'experiments/E66_per_odor_apl_profile.py --part {part}', argv=vars(args),
         model_provenance=H.model_provenance(orn_deltas=H.apl16_orn_deltas()), **extra)
     p.write_text(json.dumps(prov, indent=1, default=str) + '\n')
 

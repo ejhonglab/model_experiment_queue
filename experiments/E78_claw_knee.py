@@ -49,18 +49,18 @@ archive_knee_variants.csv, noise_six_pairs.csv, who_selects.csv, pn_rates.csv; l
 init_params.json, partD_commands.json, paired.csv, population.csv; release.csv; comparison_table[_held].md, E78_*.png); spike
 counts and responses under ./outputs/E78_claw_knee/C/<start>_<point>_<on|acute_off>_<spike_counts|responses>.parquet.
 
-Usage (from this folder; at most two 16-thread processes on hal, under nice, as systemd-run --user units for long runs):
-    ./venv/bin/python E78_claw_knee.py --part check-C   (the pre-pass run's identity check on C2; before launching)
-    ./venv/bin/python E78_claw_knee.py --part C-launch  (the pre-pass run as four chained units; `c_launch`), or step by
+Usage (from the repository root; at most two 16-thread processes on hal, under nice, as systemd-run --user units for long runs):
+    ./venv/bin/python experiments/E78_claw_knee.py --part check-C   (the pre-pass run's identity check on C2; before launching)
+    ./venv/bin/python experiments/E78_claw_knee.py --part C-launch  (the pre-pass run as four chained units; `c_launch`), or step by
         step:
-    OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ./venv/bin/python -u E78_claw_knee.py --part C [--only ID ...]
+    OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ./venv/bin/python -u experiments/E78_claw_knee.py --part C [--only ID ...]
         (C2; split the points over two processes with --only; run once more without --only for the softplus width and the
         KC-KC-fixed controls at the two best knee points; --breadth held / --kckc fixed for the other settings)
     ... --part C-low --best             (the five best and C2 at the low concentrations)
     ... --part C --start fit1 --best    and    ... --part C --start P1 --best    (the five best repeated)
-    ./venv/bin/python E78_claw_knee.py --part gate [--breadth held --gate-ref identity_held] | --part summarize
+    ./venv/bin/python experiments/E78_claw_knee.py --part gate [--breadth held --gate-ref identity_held] | --part summarize
         [--breadth held] | --part B | --part E
-    ./venv/bin/python E78_claw_knee.py --part check-e10 [--baseline COMMIT] [--jobs N]   (E10's options checked)
+    ./venv/bin/python experiments/E78_claw_knee.py --part check-e10 [--baseline COMMIT] [--jobs N]   (E10's options checked)
         (COMMIT: of this repository, or of al_analysis from before the move, 2026-11-11)
 """
 from __future__ import annotations
@@ -72,7 +72,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 EXPERIMENT = 'E78_claw_knee'
 C2 = ('E67_apl_effect_fits', 'rate0.068_aplboth_k2_cap3')
@@ -143,7 +143,8 @@ def check_root() -> Path:
 def _run_e10_redirected(root: Path, e10_args: Sequence[str]) -> None:
     """E10_joint_fit.main() with the scratch experiment's results and outputs folders under `root` (nothing is written to
     the shared results). With the environment variable E78_E10_DIR, E10_joint_fit.py is imported from that folder (a
-    baseline of an earlier commit)."""
+    baseline of an earlier commit, its imports made absolute by `check_e10`), as experiments.E10_joint_fit, so every
+    module of this process that imports E10_joint_fit gets the baseline."""
     import os
     import sys
     orig_r, orig_o = H.results_dir, H.outputs_dir
@@ -161,8 +162,14 @@ def _run_e10_redirected(root: Path, e10_args: Sequence[str]) -> None:
     old = os.environ.get('E78_E10_DIR')
     if old:
         # a baseline run: E10_joint_fit.py as of an earlier commit, from that folder
-        sys.path.insert(0, old)
-    import E10_joint_fit
+        import importlib.util
+        import experiments
+        spec = importlib.util.spec_from_file_location('experiments.E10_joint_fit', Path(old) / 'E10_joint_fit.py')
+        E10_joint_fit = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = experiments.E10_joint_fit = E10_joint_fit
+        spec.loader.exec_module(E10_joint_fit)
+    else:
+        from experiments import E10_joint_fit
     print(f'E10_joint_fit from {E10_joint_fit.__file__}', flush=True)
     sys.argv = ['E10_joint_fit.py', *e10_args]
     E10_joint_fit.main()
@@ -197,6 +204,21 @@ def compare_runs(a: Path, b: Path) -> dict:
     return dict(n_columns=len(cols), identical=not d, differing=d)
 
 
+def baseline_e10_source(baseline: str) -> str:
+    """E10_joint_fit.py as of commit `baseline`, ready to run against the current packages: from experiments/ in this
+    repository (since the move into folders, 2026-11-12), from its root (before), or from al_analysis's
+    scripts/claude_pair_remapping_experiments (before 2026-11-11), with the flat imports of a version from before the
+    move made absolute (`kcq.layout.package_imports`; a later version is returned as it is)."""
+    import subprocess
+    from kcq.layout import package_imports
+    for repo, path in ((H.HERE, 'experiments/E10_joint_fit.py'), (H.HERE, 'E10_joint_fit.py'),
+            (H.al_analysis_dir(), 'scripts/claude_pair_remapping_experiments/E10_joint_fit.py')):
+        r = subprocess.run(['git', 'show', f'{baseline}:{path}'], cwd=repo, capture_output=True, text=True)
+        if r.returncode == 0:
+            return package_imports(r.stdout)
+    raise ValueError(f'no E10_joint_fit.py at {baseline} in this repository or in al_analysis')
+
+
 def check_e10(only: Optional[Sequence[str]] = None, jobs: int = 1, baseline: Optional[str] = None) -> dict:
     """Runs CHECK_RUNS (one process each, `jobs` at a time) and compares each with its fit's history; with `baseline` (a
     commit), the 'off_*' runs again with E10_joint_fit.py as of that commit (names base_*), each compared with its run on
@@ -213,13 +235,7 @@ def check_e10(only: Optional[Sequence[str]] = None, jobs: int = 1, baseline: Opt
     if baseline:
         old_dir = check_root() / f'_E10_{baseline[:12]}'
         old_dir.mkdir(parents=True, exist_ok=True)
-        try:
-            src = subprocess.run(['git', 'show', f'{baseline}:./E10_joint_fit.py'], cwd=H.HERE, capture_output=True, text=True, check=True).stdout
-        except subprocess.CalledProcessError:
-            # a commit from before the scripts moved out of al_analysis (2026-11-11)
-            src = subprocess.run(['git', 'show', f'{baseline}:scripts/claude_pair_remapping_experiments/E10_joint_fit.py'],
-                cwd=H.al_analysis_dir(), capture_output=True, text=True, check=True).stdout
-        (old_dir / 'E10_joint_fit.py').write_text(src)
+        (old_dir / 'E10_joint_fit.py').write_text(baseline_e10_source(baseline))
         jobs_list += [('base' + n[3:], *CHECK_RUNS[n], str(old_dir)) for n, *_ in list(jobs_list) if n.startswith('off_')]
 
     def one(job):
@@ -340,8 +356,8 @@ def pair_stats(on: pd.Series, off: pd.Series, ro: str) -> Dict[str, float]:
     """One model's per-pair APL effect statistics under readout `ro` ('raw' or 'cal' distances given): the loss with
     its parts and ρ (E72), the group errors and the projection on the common error (E75), and per kind of pair
     (KINDS) the mean distances with APL on and off, the APL effect and the pattern error."""
-    import E72_wiring_population as E72
-    import E75_glomerulus_apl_profile as E75
+    from experiments import E72_wiring_population as E72
+    from experiments import E75_glomerulus_apl_profile as E75
     d = {'on': on, 'off': off}
     row = {f'{ro}_{k}': v for k, v in E72.effect_stats(d, ro).items()}
     row[f'{ro}_n_pairs'] = int(H.apl_effect(on, off).notna().sum())
@@ -358,7 +374,7 @@ def pair_stats(on: pd.Series, off: pd.Series, ro: str) -> Dict[str, float]:
 
 
 def _variant_stats(folder: str, tag: str) -> Optional[dict]:
-    import E72_wiring_population as E72
+    from experiments import E72_wiring_population as E72
     p = H.shared_dir() / 'results' / folder / 'model_pair_distances_long.csv'
     d = pd.read_csv(p)
     d = d[d['tag'].astype(str) == tag].drop_duplicates(['condition', 'odor_a', 'odor_b'], keep='last')
@@ -470,8 +486,8 @@ def who_selects(out: Path, models: Optional[Sequence[str]] = None) -> pd.DataFra
     claws, and over the odor's largest bouton rate. This follows the per-claw transfer, not the KC's integration, so the
     threshold ratio is approximate. Writes who_selects.csv."""
     import gc
-    import E43_model_trial_noise as E43
-    import E10_joint_fit as J
+    from experiments import E43_model_trial_noise as E43
+    from experiments import E10_joint_fit as J
     from al_analysis.mb_model import make_fixed_param_kc_simulator, get_time_index, get_sim_var
     res = H.results_dir(EXPERIMENT)
     specs = [('C2', C2[0], C2[1])]
@@ -622,9 +638,9 @@ def largest_bouton_rates(start: str = 'C2') -> pd.Series:
     """Each odor's largest bouton rate in the start's model (the PN rate of the most driven glomerulus in the wiring, mean
     over the odor window, Hz), by odor abbreviation."""
     if 'pn_rates' not in _CACHE:
-        import E10_joint_fit as J
-        import E32_pn_stage as E32
-        from E12_breadth_apl import e3_bouton_params
+        from experiments import E10_joint_fit as J
+        from experiments import E32_pn_stage as E32
+        from experiments.E12_breadth_apl import e3_bouton_params
         p = H.results_dir(EXPERIMENT) / 'pn_rates.csv'
         if p.exists():
             r = pd.read_csv(p, index_col=0, float_precision='round_trip')
@@ -642,10 +658,10 @@ def largest_bouton_rates_for(orn: pd.DataFrame) -> pd.Series:
     """`largest_bouton_rates` for another ORN input (E49's extended input with the low-concentration odors), by E49's
     odor labels (abbreviations for the APL16 odors, Yang's labels for the extra ones): the PN rates as E32's
     `glomerulus_pn_rates` computes them (0-0.5 s mean), the largest over the wiring's glomeruli."""
-    import E10_joint_fit as J
-    import E49_low_conc_kc as E49
+    from experiments import E10_joint_fit as J
+    from experiments import E49_low_conc_kc as E49
     from al_analysis.mb_model import fit_mb_model, get_time_index, get_sim_var
-    from E12_breadth_apl import e3_bouton_params
+    from experiments.E12_breadth_apl import e3_bouton_params
     key = ('pn_rates', tuple(map(str, orn.columns)))
     if key not in _CACHE:
         p0 = e3_bouton_params()
@@ -666,7 +682,7 @@ def odor_relative_inhibition(W: pd.DataFrame, orn: pd.DataFrame, top: pd.Series,
     wiring's bouton columns, the ORN input's odor columns) whose every row is `level` times the odor's largest bouton
     rate `top` (`largest_bouton_rates`)."""
     try:
-        import E49_low_conc_kc as E49
+        from experiments import E49_low_conc_kc as E49
         labels = E49.odor_labels(orn)
     except Exception:
         labels = [H.odor_abbrev(c) for c in orn.columns]
@@ -741,9 +757,9 @@ class KneeModel:
     'identity_held' point is the start with only the held breadth (no transfer), the control for that choice."""
 
     def __init__(self, start: str, out_dir: Path):
-        import E10_joint_fit as J
-        import E43_model_trial_noise as E43
-        import E77_input_screen as S
+        from experiments import E10_joint_fit as J
+        from experiments import E43_model_trial_noise as E43
+        from experiments import E77_input_screen as S
         exp, tag, wiring = STARTS[start]
         self.start, self.exp, self.tag, self.wiring = start, exp, tag, dict(wiring)
         self.out_dir = out_dir
@@ -814,7 +830,7 @@ class KneeModel:
         """The plain base's APL-off run at its tuned parameters (the run the start's breadth comes from), simulated and
         checked against the breadth."""
         if getattr(self, '_base_off', None) is None:
-            import E10_joint_fit as J
+            from experiments import E10_joint_fit as J
             from al_analysis.mb_model import make_fixed_param_kc_simulator
             p0 = {k: float(self.initial[k]) for k in J.PARAM_KEYS}
             sim, _ = make_fixed_param_kc_simulator(self.orn, initial_params=p0, **self.plain_kws)
@@ -831,7 +847,7 @@ class KneeModel:
         transfer (claw_thr, claw_thr_subgain, claw_thr_width, or the odor-relative ext_inh_bouton), its threshold re-tuned to
         the transfer-free run's APL-off response count (bracket PREPASS_BRACKET); cached by point id. Without a transfer
         the start's own breadth, unless `force` (the identity check: the pre-pass itself with an empty transfer)."""
-        import E10_joint_fit as J
+        from experiments import E10_joint_fit as J
         transfer = self.transfer_kws(pt)
         if not transfer and not force:
             return self.breadth0, None
@@ -850,7 +866,7 @@ class KneeModel:
         """The simulator kwargs of a held point (`hold` must have run; for E49's extended input in `low_conc`): the start's
         kwargs with the point's breadth (saved by `hold` under `tag`; the start's own for 'identity') and its transfer on
         `orn`."""
-        import E10_joint_fit as J
+        from experiments import E10_joint_fit as J
         if pt['point_id'] == 'identity':
             breadth = self.breadth0
         else:
@@ -869,8 +885,8 @@ class KneeModel:
         bouton->APL tied to it; APL->bouton the start's) to the start's APL-on count at those values (E69's
         `bisect_factor`). breadth 'held': E77's `hold_rates` with breadth_from='held' and the KC-KC scale fixed (the first
         run)."""
-        import E69_kc_firing_ceiling as E69
-        import E77_input_screen as S
+        from experiments import E69_kc_firing_ceiling as E69
+        from experiments import E77_input_screen as S
         import time
         tag = point_tag(self.start, pt, breadth)
         label = tag
@@ -955,7 +971,7 @@ def six_typical_effect() -> pd.Series:
     """The KC data's per-pair APL effect against the six typical recordings with APL output blocked (TNT) (the eight
     without the two strongest, E75's STRONG_TNT) and all eleven control recordings (graded, cosine)."""
     if 'six' not in _CACHE:
-        import E75_glomerulus_apl_profile as E75
+        from experiments import E75_glomerulus_apl_profile as E75
         ctrl = H.yang_recording_rdms_values('TNT3c', 'graded')
         tnt = H.yang_recording_rdms_values('TNT', 'graded')
         keep = [r for r in tnt.index if (str(r[0]), int(r[1]), str(r[2])) not in E75.STRONG_TNT]
@@ -983,10 +999,10 @@ def score_point(o: Dict[str, tuple], ref: Dict[str, tuple]) -> Tuple[dict, List[
     units; E77's kinds of pairs and the six pairs; the 16 odors' response fractions in both conditions with the response
     rate ρ against the KC data in Yang's z and in baseline-noise units; odors per KC; the largest spike counts; the
     realism bands under both rules. Returns (row, per-pair rows)."""
-    import E72_wiring_population as E72
-    import E75_glomerulus_apl_profile as E75
-    import E76_data_side_target as E76
-    import apl_effect_scores as S
+    from experiments import E72_wiring_population as E72
+    from experiments import E75_glomerulus_apl_profile as E75
+    from experiments import E76_data_side_target as E76
+    from kcq import apl_effect as S
     base_eff = {ro: H.apl_effect(*[E72.distances(ref, ro)[c] for c in ('on', 'off')]) for ro in ('raw', 'cal')}
     row, eff_rows = E75.score_point(o, base_eff)
     # (E75's per-pair APL effects as condition 'effect'; the model's distances follow as 'on' / 'acute_off')
@@ -1082,12 +1098,12 @@ def sweep(out: Path, start: str = 'C2', only: Optional[Sequence[str]] = None, br
         return aggregate(out, breadth)
     model = KneeModel(start, H.outputs_dir(EXPERIMENT) / 'C' / 'bases')
     prov = H.model_provenance(orn_deltas=model.orn)
-    import E69_kc_firing_ceiling as E69
+    from experiments import E69_kc_firing_ceiling as E69
     code = E69.code_state()
     ppath = pdir / f"provenance_{time.strftime('%Y%m%d-%H%M%S')}.json"
     ppath.write_text(json.dumps(dict(model=prov, start=dict(experiment=model.exp, tag=model.tag, wiring=model.wiring,
         info=model.info, check=model.check), breadth=breadth, kckc=kckc, prepass_bracket=PREPASS_BRACKET,
-        script='E78_claw_knee.py'), indent=1, default=str) + '\n')
+        script='experiments/E78_claw_knee.py'), indent=1, default=str) + '\n')
     while todo:
         for pt in todo:
             t0 = time.time()
@@ -1142,7 +1158,7 @@ def check_c(out: Path, start: str = 'C2') -> dict:
     """The pre-pass run's identity check on `start` (`KneeModel.check_prepass_identity`), written to
     check_prepass_identity.json (one entry per start)."""
     import json
-    import E69_kc_firing_ceiling as E69
+    from experiments import E69_kc_firing_ceiling as E69
     model = KneeModel(start, H.outputs_dir(EXPERIMENT) / 'C' / 'bases')
     res = dict(model.check_prepass_identity(), start_check=model.check, **E69.code_state())
     path = out / 'check_prepass_identity.json'
@@ -1268,8 +1284,8 @@ def c_launch(wait_units: Sequence[str] = ()) -> List[str]:
     import time
     logs = H.outputs_dir(EXPERIMENT) / 'logs'
     logs.mkdir(parents=True, exist_ok=True)
-    py = str(Path(__file__).resolve().parent / 'venv' / 'bin' / 'python')
-    me = f'{py} -u E78_claw_knee.py'
+    py = str(H.HERE / 'venv' / 'bin' / 'python')
+    me = f'{py} -u experiments/E78_claw_knee.py'
     stamp = time.strftime('%H%M%S')
     names = {k: f'e78c2-{k}-{stamp}' for k in 'abcd'}
     log = lambda name: f'{logs}/partC_{name}_{stamp}.log'
@@ -1305,7 +1321,7 @@ def low_conc(out: Path, point_ids: Sequence[str], start: str = 'C2', breadth: st
     data_fractions). Writes low_conc/fractions.csv (tag x odor x condition), low_conc/points_low_conc.csv (one row per
     tag: low_<odor key>_frac_<on|off>) and low_conc/data_fractions.csv."""
     import json
-    import E49_low_conc_kc as E49
+    from experiments import E49_low_conc_kc as E49
     from al_analysis.mb_model import make_fixed_param_kc_simulator
     ldir = out / 'low_conc'
     ldir.mkdir(parents=True, exist_ok=True)
@@ -1574,14 +1590,14 @@ def d_launch(cmds: Sequence[Sequence[str]], max_jobs: int = 2) -> List[str]:
     logs = H.outputs_dir(EXPERIMENT) / 'logs'
     logs.mkdir(parents=True, exist_ok=True)
     units = []
-    py = str(Path(__file__).resolve().parent / 'venv' / 'bin' / 'python')
+    py = str(H.HERE / 'venv' / 'bin' / 'python')
     for i, c in enumerate(cmds):
         unit = f"e78d-{i}-{time.strftime('%H%M%S')}"
         wait = ''
         if i >= max_jobs:
             prev = units[i - max_jobs]
             wait = f'while systemctl --user is-active --quiet {prev}; do sleep 30; done; '
-        cmd = ' '.join(['exec', py, '-u', 'E10_joint_fit.py', *map(str, c)])
+        cmd = ' '.join(['exec', py, '-u', 'experiments/E10_joint_fit.py', *map(str, c)])
         subprocess.run(['systemd-run', '--user', f'--unit={unit}', '--collect', '-p', 'Nice=10', f'--working-directory={H.HERE}',
             '--setenv=OMP_NUM_THREADS=16', '--setenv=OMP_THREAD_LIMIT=16', '--setenv=PYTHONUNBUFFERED=1',
             '/bin/bash', '-c', f'{wait}{cmd} > {logs}/{unit}.log 2>&1'], check=True)
@@ -1606,7 +1622,7 @@ def d_tables(out: Path) -> pd.DataFrame:
     """The part D fits (fits.csv rows with a --tag _from_<point>) paired with C2 and E72's part B fits per wiring, and the
     population of four (the mean over the wirings of the pair distances per condition, E72's population_row). Writes
     paired.csv and population.csv."""
-    import E72_wiring_population as E72
+    from experiments import E72_wiring_population as E72
     f = pd.read_csv(out / 'fits.csv')
     f = f[f.tag.astype(str).str.contains('_from_')]
     rows, pops = [], {}
@@ -1641,7 +1657,7 @@ def d_heldout(out: Path, point_id: str) -> pd.DataFrame:
     breadth), nothing re-fitted or re-bisected; scored as part C's points (`score_point`, against the wiring's own part
     B fit) and as their population (E72's population_row). Writes heldout_<point_id>.csv and appends the population to
     population.csv as point 'heldout_<point_id>'."""
-    import E72_wiring_population as E72
+    from experiments import E72_wiring_population as E72
     from al_analysis.mb_model import make_fixed_param_kc_simulator
     f = pd.read_csv(out / 'fits.csv')
     f = f[f.tag.astype(str).str.endswith(f'_from_{point_id}')]
@@ -1651,7 +1667,7 @@ def d_heldout(out: Path, point_id: str) -> pd.DataFrame:
     pm = {k: float(f[k].mean()) for k in keys}
     pm['wKCKC_scale'] = float(f['kc_kc_inh'].mean())
     spec = {p['point_id']: p for p in point_specs(aggregate(out))}[point_id]
-    import E10_joint_fit as J
+    from experiments import E10_joint_fit as J
     T = float(spec['claw_thr'])
     transfer = J.claw_transfer_kws(spec['claw_thr_subgain'] or None, spec['claw_thr_width'] or None)
     rows, fits = [], []
@@ -1689,7 +1705,7 @@ def a_score(out: Path) -> pd.DataFrame:
     under each readout, the six pairs and E77's kinds of pairs, the group errors, the 16 odors' response fractions, the
     response rate ρ and odors per KC under both rules, the largest spike counts, the bands), with the fits' absolute
     parameters and the knee over the model's largest PN rate (pn_rates.csv). Writes partA_scored.csv."""
-    import E72_wiring_population as E72
+    from experiments import E72_wiring_population as E72
     ref = E72.load_fit(*C2)
     items = [('C2', C2[0], C2[1], dict(fixed_thr=np.nan))]
     fp = out / 'fits.csv'
@@ -1723,9 +1739,9 @@ def release_rows(out: Path) -> pd.DataFrame:
     A / D fit of this experiment and every part C point, the share of the responses blocking APL adds that comes from
     each claw-count group and the squared CV of the number of odors per KC with APL on and off, beside the KC data's.
     Writes release.csv."""
-    import E10_joint_fit as J
-    import E71_input_scaled_threshold as E71
-    import E72_wiring_population as E72
+    from experiments import E10_joint_fit as J
+    from experiments import E71_input_scaled_threshold as E71
+    from experiments import E72_wiring_population as E72
     _, _, W, _ = J.bouton_base(H.apl16_orn_deltas(), H.outputs_dir(EXPERIMENT) / 'C' / 'bases', None)
     claws = E71.n_claws_per_kc(W)
     items = [('C2', C2[0], C2[1], None)]
@@ -1771,13 +1787,13 @@ def e_score(out: Path) -> pd.DataFrame:
     rel = release_rows(out)
     arch = H.shared_dir() / 'data' / 'model_outputs' / EXPERIMENT
     if arch.exists():
-        subprocess.run([sys.executable, '-u', 'E73_per_kc_normalization.py', '--part', 'B', '--folders', EXPERIMENT], cwd=H.HERE,
+        subprocess.run([sys.executable, '-u', 'experiments/E73_per_kc_normalization.py', '--part', 'B', '--folders', EXPERIMENT], cwd=H.HERE,
             check=False)
     else:
-        print(f'{arch} does not exist yet: archive the outputs first (archive_model_outputs.py {EXPERIMENT}), then run --part E '
+        print(f'{arch} does not exist yet: archive the outputs first (archive_tools/archive_model_outputs.py {EXPERIMENT}), then run --part E '
             'again for the per-KC reading', flush=True)
     if hasattr(H, 'apl_effect_inherited_split'):
-        import E75_glomerulus_apl_profile as E75
+        from experiments import E75_glomerulus_apl_profile as E75
         df = aggregate(out)
         d_on, d_off = H.yang_mean_rdm('TNT3c'), H.yang_mean_rdm('TNT')
         rows = []
@@ -1830,7 +1846,7 @@ def summarize(out: Path, breadth: str = 'prepass') -> None:
         print('no points yet', flush=True)
         return
     data_six = kind_mean(H.yang_apl_effect(), SIX)
-    import apl_effect_scores as S
+    from kcq import apl_effect as S
     fr_on, fr_off = S.frac_data('on', 'noise'), S.frac_data('off', 'noise')
     lines = [f'# E78: the high per-claw knee without a dead zone, part C (fixed scales, both response rates held)', '',
         'Rows: each start (C2, the breadth-2 APL-effect fit; fit1, the same with the firing ceiling at strength 1; P1, ..., '
@@ -1931,7 +1947,7 @@ def _figures(df: pd.DataFrame, out: Path, sfx: str = '') -> None:
     weak = ['ms', 'B-myr', 'euc', '-aPine', 'paa', '1-8ol']
     d = df[df.start == 'C2']
     if len(d):
-        import apl_effect_scores as S
+        from kcq import apl_effect as S
         fig, axes = plt.subplots(1, 2, figsize=(14, 4.2), sharey=False)
         x = np.arange(len(d))
         for ax, c in zip(axes, ('on', 'off')):

@@ -17,16 +17,15 @@ import numpy as np
 import pandas as pd
 import pytest
 
-EXP_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(EXP_DIR))
-H = pytest.importorskip('kc_remapping_harness')
+REPO = Path(__file__).resolve().parents[1]  # the repository root
+H = pytest.importorskip('kcq.harness')
 try:
     H.data_targets_path().read_bytes()
 except (FileNotFoundError, OSError):
     pytest.skip('the shared directory (data-target registry) is not available', allow_module_level=True)
-E10 = pytest.importorskip('E10_joint_fit')
+E10 = pytest.importorskip('experiments.E10_joint_fit')
 if not hasattr(H, 'kernel_weighted_counts'):
-    pytest.skip('kc_remapping_harness has no kernel_weighted_counts', allow_module_level=True)
+    pytest.skip('kcq.harness has no kernel_weighted_counts', allow_module_level=True)
 
 ODORS = list(H.APL16_ODORS)
 LABELS = [f'{o} @ -3' for o in ODORS]
@@ -316,11 +315,11 @@ IDENTITY = ['--stim-end', '0.5', '--sim-end', '0.75', '--apl-taum', '0.05', '--c
 def _e10_exact(root: Path, fit: str, extra) -> Tuple[pd.Series, Dict[str, pd.DataFrame], Path]:
     """One exact-start evaluation of `fit` (E78_claw_knee's runner: results and outputs under `root`); (its first history
     row, its saved counts and spike times by file stem, its history path)."""
-    import E78_claw_knee as E78
+    from experiments import E78_claw_knee as E78
     exp, tag, opts = EXACT_FITS[fit]
     args = COMMON + ['--experiment', E78.CHECK_SCRATCH, '--init-from', tag, '--init-from-experiment', exp] + opts + list(extra)
-    p = subprocess.run([sys.executable, '-u', str(EXP_DIR / 'E78_claw_knee.py'), '--run-e10', str(root), '--', *args],
-        cwd=EXP_DIR, capture_output=True, text=True)
+    p = subprocess.run([sys.executable, '-u', str(REPO / 'experiments' / 'E78_claw_knee.py'), '--run-e10', str(root), '--', *args],
+        cwd=REPO, capture_output=True, text=True)
     assert p.returncode == 0, p.stdout[-3000:] + p.stderr[-3000:]
     hist = sorted((root / 'results').glob('history_*.csv'))
     assert len(hist) == 1
@@ -336,8 +335,8 @@ def test_exact_start(tmp_path, fit):
     history (exactly when the history was saved on this host; within 1e-12 relative otherwise: fit 0's was saved on
     atlas, and E10 at the commit before these options gives the same last-digit differences on viki), and the two runs'
     first evaluations are identical to the last digit."""
-    E78 = pytest.importorskip('E78_claw_knee')
-    import E72_wiring_population as E72
+    E78 = pytest.importorskip('experiments.E78_claw_knee')
+    from experiments import E72_wiring_population as E72
     exp, tag, _ = EXACT_FITS[fit]
     hist0 = H.results_dir(exp) / f'history_{tag}.csv'
     saved = E72.load_fit(exp, tag)

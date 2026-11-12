@@ -19,7 +19,7 @@ trial spike counts in the pipeline's layout and the convergence between passes; 
 is E55's processing (the pipeline's statistics). As a script it runs the three on E56's models and
 compares each pass with the pipeline and with E56's per-trial numbers, timing every pass:
 results/<out>/ (per_model_pass.csv, agreement_pass.csv, timing.csv, comparison_table.md).
-Usage: OMP_NUM_THREADS=12 nice -n 10 ./venv/bin/python noise_proxy.py [--models NAME ...] [--passes 3]
+Usage: OMP_NUM_THREADS=12 nice -n 10 ./venv/bin/python kcq/noise_proxy.py [--models NAME ...] [--passes 3]
   [--relax] [--out DIR]
 """
 from __future__ import annotations
@@ -34,10 +34,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
-import E43_model_trial_noise as E43
-import E51_block_carriers as E51C
-import E55_margin_proxy as E55
+from kcq import harness as H
+from experiments import E43_model_trial_noise as E43
+from experiments import E51_block_carriers as E51C
+from experiments import E55_margin_proxy as E55
 
 EXPERIMENT_DEFAULT = 'noise_proxy_batched'
 ODORS, CONDS = E55.ODORS, E55.CONDS
@@ -217,7 +217,7 @@ def pipeline_pairs(spk_by_cond: dict, n_rec: int, n_tr: int, n_resp: int) -> dic
     pipeline's raw pair distances per condition (the mean over the pseudo-recordings of the three-trial-mean
     cosine distances; Series indexed by (odor_a, odor_b)), its grand-mean pair distances, the single-trial
     floors and the per-trial response rates: {cond: dict(raw=Series, grand=Series, floor1=float, rate=float)}."""
-    import noise_floor_trial_distances as NF
+    from kcq import noise_floor as NF
     arrs = [a for _, a in sorted(as_trials(spk_by_cond, n_rec, n_tr, n_resp).items())]
     out = {}
     for cond in CONDS:
@@ -401,7 +401,7 @@ def main() -> None:
     for _, a in agree.iterrows():
         lines.append(f"| {a['statistic']} | {int(a['pass'])} | {int(a['n'])} | {E55.fmt(a.get('spearman'), '.2f')} | {E55.fmt(a.get('bias'), '+.4f')} | {E55.fmt(a.get('mae'), '.4f')} |")
     (out / 'comparison_table.md').write_text('\n'.join(lines) + '\n')
-    E43.write_json(out / 'provenance.json', dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='noise_proxy.py',
+    E43.write_json(out / 'provenance.json', dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='kcq/noise_proxy.py',
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(), **H.code_commits(),
         model=H.model_provenance(orn_deltas=orn), models=names, passes=args.passes, relax=args.relax, checks=checks_all))
     print(f'-> {out}', flush=True)

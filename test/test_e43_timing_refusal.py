@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import E43_model_trial_noise as E43
+from experiments import E43_model_trial_noise as E43
 
 
 class _Stop(Exception):

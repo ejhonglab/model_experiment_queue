@@ -1,20 +1,15 @@
 #!/usr/bin/env python3
 """Tests for the per-KC session z-score reading in the KC-remapping harness (E73:
-kc_remapping_harness.py `session_zscore`, `zcell_pair_distances`,
+kcq/harness.py `session_zscore`, `zcell_pair_distances`,
 `zcell_stats`, `calibrate_session_zscore`) and for the edge statistics of E73_per_kc_normalization.py:
 synthetic cells z-scored over their session sit under an edge at 1 / q and the estimators recover q; a
 fixed divisor for all KCs reproduces the present readings; the calibration reaches its targets."""
-
-import sys
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
 
-EXP_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(EXP_DIR))
-H = pytest.importorskip('kc_remapping_harness')
+H = pytest.importorskip('kcq.harness')
 
 ODORS = list(H.APL16_ODORS)
 
@@ -137,7 +132,7 @@ def test_trials_input():
 def test_synthetic_cells_edge_and_q():
     """Synthetic cells z-scored over the whole recording sit under the edge 1 / q and the three estimators
     recover q; against a pre-odor baseline there is no edge and the estimators give about 0."""
-    E = pytest.importorskip('E73_per_kc_normalization')
+    E = pytest.importorskip('experiments.E73_per_kc_normalization')
     stim = np.repeat(ODORS + ['pfo @ 0'], 3)
     rng = np.random.default_rng(0)
     breadth = rng.choice([0, 1, 2, 3, 5, 8, 12], size=1500, p=[0.4, 0.2, 0.15, 0.1, 0.08, 0.05, 0.02])
@@ -171,7 +166,7 @@ def test_drift_sets_units_only():
 def test_trace_simulation_matches_closed_form():
     """A KC trace with Yang's trial structure (baseline, response window, inter-trial time), z-scored over the
     whole trace, with the response the window mean minus the baseline mean, reads as the closed form does."""
-    E = pytest.importorskip('E73_per_kc_normalization')
+    E = pytest.importorskip('experiments.E73_per_kc_normalization')
     c = _counts(7, n_units=3000, p_resp=0.08)
     noise, drift = 0.6, 1.0
     X, stim, T = E.trace_reading(c, noise=noise, drift=drift, amp='linear', K=None, seed=3)

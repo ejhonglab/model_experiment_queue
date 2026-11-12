@@ -34,8 +34,8 @@ Responses, spike counts and spike times of every point under outputs/E80_remaini
 conditions on / acute_off). The breadth pre-passes are cached by E77_input_screen.handle_breadth under
 outputs/E77_input_side_common_error/breadth/.
 
-Usage (from this folder):
-    OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ./venv/bin/python -u E80_pulse.py [--check] [--only ID ...] [--list]
+Usage (from the repository root):
+    OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ./venv/bin/python -u experiments/E80_pulse.py [--check] [--only ID ...] [--list]
 """
 from __future__ import annotations
 
@@ -52,7 +52,7 @@ from typing import Callable, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 EXPERIMENT = 'E80_remaining_candidates'
 PULSES = (0.5, 1.0, 2.0)
@@ -96,9 +96,9 @@ def fit0_parts() -> dict:
     base, no per-claw threshold, glomerulus gain, re-drawn wiring, other ORN input or input-scaled threshold, APL driven
     by the claws, breadth exponent 2, E10's KC-KC tau."""
     if not _FIT0:
-        import E10_joint_fit as J
-        import E72_wiring_population as E72
-        import E77_input_screen as S
+        from experiments import E10_joint_fit as J
+        from experiments import E72_wiring_population as E72
+        from experiments import E77_input_screen as S
         f = pd.read_csv(H.results_dir(FIT0_FOLDER) / 'fits.csv')
         r = f.iloc[0]
         tag = str(r['tag'])
@@ -121,7 +121,7 @@ def fit0_parts() -> dict:
 def model_parts(model: str) -> dict:
     """'C2' or 'fit0': 'p' (the starting absolute parameters), 'extra' (kwargs beside the bouton base's: fit 0's
     refractory period and adaptation), 'saved', 'target_on', 'target_off', 'source' (experiment, tag)."""
-    import E77_input_screen as S
+    from experiments import E77_input_screen as S
     if model == 'C2':
         P = S.c2_parts()
         return dict(p=dict(P['p']), extra={}, saved=P['saved'], target_on=P['target_on'], target_off=P['target_off'],
@@ -137,7 +137,7 @@ def breadth_for(pulse: Optional[float], breadth: str) -> pd.Series:
     """The breadth behind the APL->KC weights: 'own', C2's (the bouton base's pre-pass at olfsysm's defaults, which fit
     0 shares); 'pulse', the pre-pass with the timing kwargs of `pulse` (`handle_breadth`; no refractory period or
     adaptation in it, as for fit 0's own)."""
-    import E77_input_screen as S
+    from experiments import E77_input_screen as S
     if breadth == 'own' or pulse is None:
         return S.c2_parts()['breadth']
     if breadth == 'pulse':
@@ -148,7 +148,7 @@ def breadth_for(pulse: Optional[float], breadth: str) -> pd.Series:
 def build(model: str, pulse: Optional[float], breadth: str) -> Tuple[Callable, dict, pd.Series]:
     """(simulate, info, breadth) of `model` with the pulse `pulse` (None: no timing kwargs passed), as
     E77_input_screen.build_c2_simulator builds C2 (with fit 0's kwargs and parameters for 'fit0')."""
-    import E77_input_screen as S
+    from experiments import E77_input_screen as S
     m = model_parts(model)
     b = breadth_for(pulse, breadth)
     extra = dict(m['extra'], **({} if pulse is None else timing_kws(pulse)))
@@ -178,9 +178,9 @@ def last_digit_checks(out: Path) -> dict:
     lab check) and E76's fit 0 must reproduce their saved spike counts and responses exactly; so must C2 with the
     options passed at olfsysm's defaults and its breadth from a pre-pass with them (which must equal C2's breadth
     exactly), and C2's runs with `spike_times=True`. Writes pulse_checks.json; raises RuntimeError if any differs."""
-    import E72_wiring_population as E72
-    import E77_input_screen as S
-    import E77_input_side_common_error as E77
+    from experiments import E72_wiring_population as E72
+    from experiments import E77_input_screen as S
+    from experiments import E77_input_side_common_error as E77
     P = S.c2_parts()
     res: Dict[str, dict] = {}
     t0 = time.time()
@@ -234,7 +234,7 @@ def last_digit_checks(out: Path) -> dict:
     print(f"fit 0 ({F['tag']}), timing options not passed: {d} ({time.time() - t1:.0f} s)", flush=True)
 
     import olfsysm
-    rec = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E80_pulse.py --check',
+    rec = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E80_pulse.py --check',
                **H.code_commits(),
                olfsysm=olfsysm.build_info(), checks=res, seconds=time.time() - t0,
                all_exact=all(v['exact'] for v in res.values()))
@@ -272,7 +272,7 @@ def run_point(pt: dict, sim: Callable, info: dict, m: dict) -> Tuple[Dict[str, t
     """A point's outputs ({'on', 'off'}: (responses, spike counts)), its run record (as hold_rates', or the fixed
     parameters') and its spikes ({'on', 'off'}: `simulate(..., spike_times=True)`'s third output). For a re-held point
     the final parameters are run again with spike times, which must give hold_rates' outputs exactly."""
-    import E77_input_screen as S
+    from experiments import E77_input_screen as S
     t0 = time.time()
     if not pt['held']:
         p = dict(m['p'])
@@ -312,7 +312,7 @@ def window_rows(pid: str, pt: dict, o: Dict[str, tuple], spikes: Dict[str, pd.Da
     distances on the window's counts, against the KC data's effect; E72.effect_stats). The 'all' window must give the
     point's spike counts exactly."""
     import olfsysm as osm
-    import E72_wiring_population as E72
+    from experiments import E72_wiring_population as E72
     mp = osm.ModelParams()
     t_start, t_end = float(mp.time_start), float(pt['time_end'])
     tot = {c: float(o[c][1].to_numpy(dtype=float).sum()) for c in ('on', 'off')}
@@ -378,10 +378,10 @@ def _save_outputs(pid: str, o: Dict[str, tuple], spikes: Dict[str, pd.DataFrame]
 def write_provenance(out: Path, points: Sequence[dict]) -> None:
     """pulse_provenance.json: the model's provenance (`H.model_provenance`, on the lab's input and C2's wiring), the two
     models' parameters and sources, the points, the windows, the brackets of hold_rates."""
-    import E77_input_screen as S
+    from experiments import E77_input_screen as S
     P = S.c2_parts()
     F = fit0_parts()
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E80_pulse.py',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E80_pulse.py',
                 **H.code_commits(), model=H.model_provenance(orn_deltas=P['orn'], _wPNKC=P['W']),
                 c2=dict(experiment=S.C2[0], tag=S.C2[1], params=P['p'], target_on=P['target_on'],
                         target_off=P['target_off']),
@@ -416,7 +416,7 @@ def run_pulse(out: Path, only: Optional[Sequence[str]] = None) -> pd.DataFrame:
     Returns pulse.csv's rows. An identity point that does not reproduce its model's saved outputs exactly stops the run
     (RuntimeError).
     """
-    import E77_input_screen as S
+    from experiments import E77_input_screen as S
     out.mkdir(parents=True, exist_ok=True)
     pts = pulse_points()
     ids = [p['point_id'] for p in pts]

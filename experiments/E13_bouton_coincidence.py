@@ -10,7 +10,7 @@ APL output weights zero), scored as E12 (E4 statistics, per-odor drive / density
 E7's density-null excess by pair block).
 
 Outputs: <shared>/results/E13_bouton_coincidence/ and ./outputs/E13_bouton_coincidence/.
-Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python E13_bouton_coincidence.py [-n 2 3]
+Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python experiments/E13_bouton_coincidence.py [-n 2 3]
 """
 from __future__ import annotations
 
@@ -24,10 +24,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
-from E3_drive_dependent_gain import BOUTON, TARGET, per_odor_extras, rate, tune_and_knockout
-from E4_substrate import score, kc_by_glomerulus
-from E12_breadth_apl import density_excess
+from kcq import harness as H
+from experiments.E3_drive_dependent_gain import BOUTON, TARGET, per_odor_extras, rate, tune_and_knockout
+from experiments.E4_substrate import score, kc_by_glomerulus
+from experiments.E12_breadth_apl import density_excess
 
 EXPERIMENT = 'E13_bouton_coincidence'
 
@@ -102,7 +102,7 @@ def main() -> None:
             mode='a', header=not (res_dir / 'model_pair_distances_long.csv').exists()
         )
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),
-        script='E13_bouton_coincidence.py', host=subprocess.run(['hostname'],
+        script='experiments/E13_bouton_coincidence.py', host=subprocess.run(['hostname'],
             capture_output=True, text=True).stdout.strip(),
         **H.code_commits(),
         base=BOUTON, n_claws=args.n_claws, approx_conc_note=H.APPROX_CONC_NOTE,

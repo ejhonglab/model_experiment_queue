@@ -26,7 +26,7 @@ unchanged by that. The first results (before it) are in results/numerics_dt_chec
 a folder named with --out-name.
 
 Outputs: <shared>/results/<out-name>/{per_dt_stats.csv, flip_fractions.csv, provenance.json}.
-Usage: OMP_NUM_THREADS=16 ./venv/bin/python numerics_dt_check.py [--out-name NAME]
+Usage: OMP_NUM_THREADS=16 ./venv/bin/python analyses/numerics_dt_check.py [--out-name NAME]
 """
 from __future__ import annotations
 
@@ -40,8 +40,8 @@ import numpy as np
 import pandas as pd
 from scipy import stats as sstats
 
-import kc_remapping_harness as H
-from E3_drive_dependent_gain import BOUTON
+from kcq import harness as H
+from experiments.E3_drive_dependent_gain import BOUTON
 
 DTS = [0.5e-3, 0.25e-3, 0.125e-3]
 BASES = {
@@ -142,7 +142,7 @@ def main() -> None:
                 pd.DataFrame(flips).to_csv(res_dir / 'flip_fractions.csv', index=False)
     pd.set_option('display.width', 250)
     print(pd.DataFrame(rows).round(4).to_string(index=False)); print(pd.DataFrame(flips).round(4).to_string(index=False))
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='numerics_dt_check.py',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='analyses/numerics_dt_check.py',
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(), dts_ms=[d * 1e3 for d in DTS],
         apl_spike_ref_dt=apl_spike_ref_dt, bases={k: dict(kws=v[0], params=v[1]) for k, v in BASES.items()},
         model=model_prov)

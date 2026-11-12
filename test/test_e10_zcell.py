@@ -6,22 +6,17 @@ the reading's criterion only when asked, the options off leave every term and st
 calibration is held; E74 part C's class term (`apl_class_term`) is off by default and adds only its own term, in
 either form (`apl_class_form`). Needs the shared directory (the data-target registry and the KC data); skipped without it."""
 
-import sys
-from pathlib import Path
-
 import numpy as np
 import pandas as pd
 import pytest
 
-EXP_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(EXP_DIR))
-H = pytest.importorskip('kc_remapping_harness')
+H = pytest.importorskip('kcq.harness')
 try:
     H.data_targets_path().read_bytes()
 except (FileNotFoundError, OSError):
     pytest.skip('the shared directory (data-target registry) is not available', allow_module_level=True)
-E10 = pytest.importorskip('E10_joint_fit')
-E73 = pytest.importorskip('E73_per_kc_normalization')
+E10 = pytest.importorskip('experiments.E10_joint_fit')
+E73 = pytest.importorskip('experiments.E73_per_kc_normalization')
 
 ODORS = list(H.APL16_ODORS)
 # the simulator's odor labels, as the fit's spike counts carry them

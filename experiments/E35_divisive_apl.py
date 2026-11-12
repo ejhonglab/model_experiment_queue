@@ -18,9 +18,9 @@ Outputs: <shared>/results/E35_divisive_apl/ and ./outputs/E35_divisive_apl/. Eac
 stats_variants_<thrtag>.csv / per_odor_response_fractions_<thrtag>.csv so that runs with
 different --thr can go in parallel; --figure-only merges them into stats_variants.csv and
 per_odor_response_fractions.csv and draws the figure.
-Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python E35_divisive_apl.py --thr none [--forms sub kcdiv boutondiv bothdiv]
-       OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python E35_divisive_apl.py --thr 70
-       ./venv/bin/python E35_divisive_apl.py --figure-only
+Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python experiments/E35_divisive_apl.py --thr none [--forms sub kcdiv boutondiv bothdiv]
+       OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python experiments/E35_divisive_apl.py --thr 70
+       ./venv/bin/python experiments/E35_divisive_apl.py --figure-only
 """
 from __future__ import annotations
 
@@ -35,12 +35,12 @@ import numpy as np
 import pandas as pd
 from scipy import stats as sstats
 
-import kc_remapping_harness as H
-from E3_drive_dependent_gain import BOUTON, TARGET, per_odor_extras, rate, tune_and_knockout
-from E4_substrate import score, kc_by_glomerulus
-from E12_breadth_apl import density_excess
-from E16_claw_saturation import spearman_with_refs
-from E18_bouton_depletion import all_refs
+from kcq import harness as H
+from experiments.E3_drive_dependent_gain import BOUTON, TARGET, per_odor_extras, rate, tune_and_knockout
+from experiments.E4_substrate import score, kc_by_glomerulus
+from experiments.E12_breadth_apl import density_excess
+from experiments.E16_claw_saturation import spearman_with_refs
+from experiments.E18_bouton_depletion import all_refs
 
 EXPERIMENT = 'E35_divisive_apl'
 FORMS = {'sub': (False, False), 'kcdiv': (True, False), 'boutondiv': (False, True), 'bothdiv': (True, True)}
@@ -248,7 +248,7 @@ def main() -> None:
         pd.concat(pairs, names=['tag', 'condition', 'odor_a', 'odor_b']).rename('distance').reset_index().to_csv(
             res_dir / 'model_pair_distances_long.csv', index=False, mode='a', header=not (res_dir / 'model_pair_distances_long.csv').exists()); pairs.clear()
         done.add(tag)
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E35_divisive_apl.py',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E35_divisive_apl.py',
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(), base=BOUTON, claw_thr=thr, apl_drive=args.apl_drive, forms={f: FORMS[f] for f in args.forms},
         approx_conc_note=H.APPROX_CONC_NOTE)
     try:

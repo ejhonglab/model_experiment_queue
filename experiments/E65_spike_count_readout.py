@@ -4,10 +4,10 @@ the comparison of raw spike counts with a saturating calcium signal (no simulati
 
 The main target since 2026-11-09 17:55 is the per-pair APL effect on odor-odor distances (each pair's
 APL-on minus APL-off distance) against the KC data's, scored by the APL-effect loss
-(`kc_remapping_harness.apl_effect_stats`). The model's side is a cosine distance on raw spike counts,
+(`kcq.harness.apl_effect_stats`). The model's side is a cosine distance on raw spike counts,
 the data's on z-scored nuclear GCaMP6s fluorescence (trial means), which compresses large responses.
 This script re-scores the archived spike counts of every saved variant under readouts
-(`kc_remapping_harness.readout`) and compares the response amplitudes' concentration in the model and
+(`kcq.harness.readout`) and compares the response amplitudes' concentration in the model and
 the data:
 
 Part A, the data (Yang's APL16 recordings, `yang_trialmeans`): per recording and genotype, over the
@@ -39,9 +39,9 @@ under each readout), and the figures E65_readout_params.png (loss and mean APL e
 readout parameter for the key models), E65_loss_raw_vs_calibrated.png (every variant), E65_concentration.png
 (the data's and the models' concentration statistics), E65_odors_per_kc.png; provenance.json.
 
-Realism (`apl_effect_scores.realism_flag`, CLAUDE.md) is a property of the model's response rates, which
-no readout changes, so each variant keeps the flag apl_effect_scores.py gave it. Nothing is simulated.
-Usage: ./venv/bin/python E65_spike_count_readout.py [--jobs N] [--only-key]
+Realism (`kcq.apl_effect.realism_flag`, CLAUDE.md) is a property of the model's response rates, which
+no readout changes, so each variant keeps the flag kcq/apl_effect.py gave it. Nothing is simulated.
+Usage: ./venv/bin/python experiments/E65_spike_count_readout.py [--jobs N] [--only-key]
 """
 from __future__ import annotations
 
@@ -58,7 +58,7 @@ from typing import Dict, List, Optional
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 EXPERIMENT = 'E65_spike_count_readout'
 ARCHIVE = H.shared_dir() / 'data' / 'model_outputs'
@@ -348,7 +348,7 @@ def main() -> None:
     write_table(key, df, data_summ, out, noise)
     make_figures(df, key, data_df, data_summ, model_conc, targets, out)
     inputs = {str(RESULTS / 'apl_effect' / 'by_variant.csv'): hashlib.sha256((RESULTS / 'apl_effect' / 'by_variant.csv').read_bytes()).hexdigest()}
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E65_spike_count_readout.py',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E65_spike_count_readout.py',
         **H.code_commits(),
         inputs_sha256=inputs, n_variants=len(have), readouts_fixed=[f[0] for f in FIXED], readouts_calibrated=[c[0] for c in CALIBRATED],
         calibration_targets=targets, data_effect_mean=float(H.yang_apl_effect().mean()),

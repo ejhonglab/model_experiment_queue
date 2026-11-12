@@ -26,7 +26,7 @@ Credentials: neuprint-python reads the token from the environment variable
 NEUPRINT_APPLICATION_CREDENTIALS (a token from neuprint.janelia.org, account menu > Auth
 Token; set it in ~/.bash.local). The token is never written or printed by this script.
 
-Usage: ./venv/bin/python pull_neuprint_connectivity.py [--out DIR] [--only NAME ...]
+Usage: ./venv/bin/python data_prep/pull_neuprint_connectivity.py [--out DIR] [--only NAME ...]
 (--only restricts the pull to the named output files, e.g. --only conn_to_centrifugal_all.csv;
 the provenance's row counts are merged with the existing file's.)
 """
@@ -47,7 +47,7 @@ import pandas as pd
 
 SERVER = 'https://neuprint.janelia.org'
 DATASET = 'hemibrain:v1.2.1'
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parents[1]  # the repository root
 # al_analysis's data directory (the installed package's, found without importing it)
 DEFAULT_OUT = next(Path(p) for p in importlib.util.find_spec('al_analysis').submodule_search_locations
     if Path(p).is_dir()) / 'data' / 'hemibrain_neuprint'
@@ -164,7 +164,7 @@ def main() -> None:
             return None
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), host=platform.node(),
         server=SERVER, dataset=DATASET, server_version=server_version,
-        neuprint_python=getattr(neuprint, '__version__', None), script='pull_neuprint_connectivity.py',
+        neuprint_python=getattr(neuprint, '__version__', None), script='data_prep/pull_neuprint_connectivity.py',
         queue_commit=git(['rev-parse', 'HEAD'], HERE),
         queries=dict(pn_types=PN_TYPE, lhn_types=LHN_TYPE, lhcent_types=LHCENT_TYPE, mbc1_type=MBC1_TYPE,
             calyx_targets=CALYX_TARGET_TYPE, rois=dict(pn_to_lhn=ROI_LH, centrifugal_to_calyx=ROI_CA,

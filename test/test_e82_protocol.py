@@ -1,4 +1,4 @@
-"""Tests of E82's protocol reading: the kernel weights of kc_remapping_harness (`kernel_window_weights`,
+"""Tests of E82's protocol reading: the kernel weights of kcq.harness (`kernel_window_weights`,
 `kernel_weighted_counts`) against their limits, a brute-force integral and the planner's numbers; E82_flies_protocol's
 kernel helpers and readings list; the gates on synthetic readings. The last tests read E80's saved runs and pulse.csv
 (skipped when they are not on this machine): the counts reading equals E77's Scorer numbers in pulse.csv, and the step
@@ -9,8 +9,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import kc_remapping_harness as H
-import E82_flies_protocol as E
+from kcq import harness as H
+from experiments import E82_flies_protocol as E
 
 WINDOW = (2.0, 8.1)
 

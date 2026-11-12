@@ -5,17 +5,15 @@ functions; the interpolation of the jitter to a target gap on synthetic curves; 
 part on synthetic counts (it returns the target same-odor distance and gap); the search step of part D's check
 (`pres_next`). Synthetic data only, except the flies' side test, which needs the shared directory's KC data."""
 
-import sys
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
 
-EXP_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(EXP_DIR))
-H = pytest.importorskip('kc_remapping_harness')
-M = pytest.importorskip('E81_model_noise')
+REPO = Path(__file__).resolve().parents[1]  # the repository root
+H = pytest.importorskip('kcq.harness')
+M = pytest.importorskip('experiments.E81_model_noise')
 
 ODORS = M.ODORS
 
@@ -55,8 +53,8 @@ def test_kind_arrays_brute_force():
     assert np.isclose(k['noise_free'][r, a], 1 - diff / np.sqrt(caa * cbb))
     xb = Y[r].mean(axis=0)
     assert np.isclose(k['trial_mean'][r, a], 1 - _cos(xb[:, ia], xb[:, ib]))
-    # the noise correction in use, as noise_floor_trial_distances.analyse computes it for the data
-    NF = pytest.importorskip('noise_floor_trial_distances')
+    # the noise correction in use, as kcq.noise_floor.analyse computes it for the data
+    NF = pytest.importorskip('kcq.noise_floor')
     _, pr = NF.analyse({o: Y[r, :, :, j] for j, o in enumerate(ODORS)}, 'graded')
     cor = H.canonical_pairs(pr['corrected'])
     got = pd.Series(k['corrected'][r], index=M.PAIR_INDEX)
@@ -193,7 +191,7 @@ def test_joint_calibration_matches_gap_and_same_odor():
 
 
 def test_six_pairs_as_e78():
-    src = (EXP_DIR / 'E78_claw_knee.py').read_text()
+    src = (REPO / 'experiments' / 'E78_claw_knee.py').read_text()
     assert f"SIX = {M.SIX!r}" in src
 
 

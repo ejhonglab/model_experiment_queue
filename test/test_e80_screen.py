@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import E80_screen as S
+from experiments import E80_screen as S
 
 
 def _orn(n_glom=36, n_odors=16, seed=0):

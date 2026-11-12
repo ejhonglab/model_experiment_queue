@@ -28,7 +28,7 @@ Outputs: <shared>/results/E56_network_margin_proxy/ (per_model_pass.csv, per_pai
 convergence.csv, agreement_pass.csv, comparison_table.md, E56_passes.png, E56_network_share.png,
 provenance.json); ./outputs/E56_network_margin_proxy/ (per model: <model>_passes.npz with every pass's
 trial spike counts, <model>_checks.json). With the cached files present a model is not rebuilt (--resim).
-Usage: OMP_NUM_THREADS=12 nice -n 10 ./venv/bin/python E56_network_margin_proxy.py [--models NAME ...]
+Usage: OMP_NUM_THREADS=12 nice -n 10 ./venv/bin/python experiments/E56_network_margin_proxy.py [--models NAME ...]
   [--passes 3] [--resim] [--out DIR]
 """
 from __future__ import annotations
@@ -43,10 +43,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
-import E43_model_trial_noise as E43
-import E51_block_carriers as E51C
-import E55_margin_proxy as E55
+from kcq import harness as H
+from experiments import E43_model_trial_noise as E43
+from experiments import E51_block_carriers as E51C
+from experiments import E55_margin_proxy as E55
 
 EXPERIMENT = 'E56_network_margin_proxy'
 ODORS, CONDS, BLOCK_PAIRS = E55.ODORS, E55.CONDS, E55.BLOCK_PAIRS
@@ -352,7 +352,7 @@ def main() -> None:
     agree.to_csv(out / 'agreement_pass.csv', index=False)
     write_table(pm, agree, conv, out, n_pass)
     make_figures(pm, out, n_pass)
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E56_network_margin_proxy.py',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E56_network_margin_proxy.py',
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(), **commits,
         model=H.model_provenance(orn_deltas=orn), approx_conc_note=H.APPROX_CONC_NOTE, models=names, n_passes=n_pass,
         pipeline_info={n: {k: (str(v) if isinstance(v, Path) else v) for k, v in infos[n].items()} for n in names},

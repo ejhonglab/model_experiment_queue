@@ -30,7 +30,7 @@ prediction for ep-6al, eb-t2h, ep-t2h and paa-B-myr (divergent in the data) and 
 B-myr-(-aPine) (convergent), model vs data, APL on and off.
 
 Outputs: <shared>/results/E9_centrifugal_input/ and ./outputs/E9_centrifugal_input/.
-Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python E9_centrifugal_input.py [--build-only]
+Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python experiments/E9_centrifugal_input.py [--build-only]
     [--bases bouton bouton_thr70] [--targets kc bouton both] [--rebuild]
 """
 from __future__ import annotations
@@ -45,14 +45,14 @@ from typing import Dict, Tuple
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
-from E3_drive_dependent_gain import BOUTON, TARGET, per_odor_extras, rate, tune_and_knockout
-from E4_substrate import score, kc_by_glomerulus
-from E12_breadth_apl import density_excess, e3_bouton_params
-from E16_claw_saturation import spearman_with_refs
-from E18_bouton_depletion import all_refs
-from E26_claw_power import sharing_deficit, deficit_table, WEAK
-from pull_neuprint_connectivity import glomerulus_of
+from kcq import harness as H
+from experiments.E3_drive_dependent_gain import BOUTON, TARGET, per_odor_extras, rate, tune_and_knockout
+from experiments.E4_substrate import score, kc_by_glomerulus
+from experiments.E12_breadth_apl import density_excess, e3_bouton_params
+from experiments.E16_claw_saturation import spearman_with_refs
+from experiments.E18_bouton_depletion import all_refs
+from experiments.E26_claw_power import sharing_deficit, deficit_table, WEAK
+from data_prep.pull_neuprint_connectivity import glomerulus_of
 
 EXPERIMENT = 'E9_centrifugal_input'
 HEMIBRAIN = (H.al_analysis_data_dir() / 'hemibrain_neuprint').resolve()
@@ -388,7 +388,7 @@ def main() -> None:
         make_figure(pd.DataFrame(rows), data_named, res_dir, base)
     if deficits:
         pd.concat(deficits).to_csv(res_dir / 'pair_deficits_long.csv', index=False, mode='a', header=not (res_dir / 'pair_deficits_long.csv').exists())
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E9_centrifugal_input.py',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E9_centrifugal_input.py',
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(),
         **H.code_commits(),
         olfsysm_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.olfsysm_dir(), capture_output=True, text=True).stdout.strip(),

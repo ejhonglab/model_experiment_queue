@@ -29,7 +29,7 @@ first paragraph after the title is styled as the byline. After converting, `lint
 like markdown (leftover `#`, `**`, backticks, `](`), which is how the "### heading" and
 split-sentence defects of hand-converted pages are caught.
 
-Usage: ./venv/bin/python md_to_artifact.py note.md page.html [--figdir DIR] [--title T]
+Usage: ./venv/bin/python reports/md_to_artifact.py note.md page.html [--figdir DIR] [--title T]
 A line `%%% html <path>` (relative to --figdir) inserts that file's HTML verbatim (the summary's
 progress plot from summary_progress_plot.py); lint ignores <script> blocks.
 Import: convert_markdown(md_text, figdir) -> html; lint(html) -> list of problems.

@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import E75_glomerulus_apl_profile as E75
+from experiments import E75_glomerulus_apl_profile as E75
 
 
 def _toy():

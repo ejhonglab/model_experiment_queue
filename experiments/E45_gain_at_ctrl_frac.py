@@ -36,7 +36,7 @@ comparison_table.md (one table per threshold, with the KC data from the data-tar
 E45_gain_at_ctrl_frac.png, provenance.json (this repository's and al_analysis's commits at the start, the input files'
 paths and sha256, the fits found and missing).
 
-Usage: ./venv/bin/python E45_gain_at_ctrl_frac.py [--out DIR]
+Usage: ./venv/bin/python experiments/E45_gain_at_ctrl_frac.py [--out DIR]
 """
 from __future__ import annotations
 
@@ -51,9 +51,9 @@ from typing import Dict, List, NamedTuple, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
-from E10_joint_fit import LOSS_WEIGHTS, RATE_SCALE, RATE_TARGET, make_loss
-from E26_claw_power import WEAK
+from kcq import harness as H
+from experiments.E10_joint_fit import LOSS_WEIGHTS, RATE_SCALE, RATE_TARGET, make_loss
+from experiments.E26_claw_power import WEAK
 
 EXPERIMENT = 'E45_gain_at_ctrl_frac'
 CTRL_FRAC = H.data_target('ctrl_frac')
@@ -449,7 +449,7 @@ def main() -> None:
         help=f'output folder (default: <shared>/results/{EXPERIMENT}/)')
     args = ap.parse_args()
     # recorded at the start, so a pull during the run cannot change the commit it names
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script=Path(__file__).name,
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script=H.script_path(__file__),
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(), **git_state(),
         ctrl_frac=CTRL_FRAC, rate_tag=RATE_TAG, weak_odors=WEAK, approx_conc_note=H.APPROX_CONC_NOTE,
         arms=[a._asdict() for a in ARMS])

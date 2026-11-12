@@ -26,7 +26,7 @@ Each variant runs in its own subprocess; `base` runs first and writes the KC set
 compact results to <shared>/results/E14_oracle_coresponders/, per-KC outputs to
 ./outputs/E14_oracle_coresponders/.
 
-Usage: OMP_NUM_THREADS=6 nice -n 10 ./venv/bin/python E14_oracle_coresponders.py
+Usage: OMP_NUM_THREADS=6 nice -n 10 ./venv/bin/python experiments/E14_oracle_coresponders.py
     [--bases ...] [--variants ...] [--score-only]
 """
 import argparse
@@ -42,9 +42,9 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
-from E5_kc_heterogeneity import BASES, rate, kc_type_rates, TUNING_VARIANT_KWS
-from E11_coincidence_claw_inhibition import excess_profile
+from kcq import harness as H
+from experiments.E5_kc_heterogeneity import BASES, rate, kc_type_rates, TUNING_VARIANT_KWS
+from experiments.E11_coincidence_claw_inhibition import excess_profile
 
 
 EXP = 'E14_oracle_coresponders'
@@ -334,7 +334,7 @@ def main() -> None:
     if len(tab):
         make_figure(res_dir, tab)
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),
-        script='E14_oracle_coresponders.py', host=os.uname().nodename,
+        script='experiments/E14_oracle_coresponders.py', host=os.uname().nodename,
         **H.code_commits(),
         olfsysm_commit=subprocess.run(['git', 'rev-parse', 'HEAD'],
             cwd=H.olfsysm_dir(), capture_output=True, text=True).stdout.strip(),

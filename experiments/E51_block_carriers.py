@@ -18,7 +18,7 @@ saved outputs (0 mismatching entries required) and against the fits.csv response
    to APL on (sum_i (c_on_i - c_off_i), exact) split into the KCs that separate the pair with APL
    on (of which "APL-made": responding to both with APL off), those responding to both with APL on,
    and the rest. The pair's excess is its APL-on distance's residual from the isotonic fit on the
-   APL-off distance over the 120 pairs (as E48 / `kc_remapping_harness.compare_on_off`).
+   APL-off distance over the 120 pairs (as E48 / `kcq.harness.compare_on_off`).
 2. Threshold margins. The deterministic runs are repeated with olfsysm's `save_vm_sims` (spike
    counts checked to reproduce exactly), once with the thresholds out of reach (no KC spikes) and
    once as they are. olfsysm integrates Vm(t) = Vm(t-1) + (D(t) - Vm(t-1)) dt / taum and resets Vm
@@ -45,7 +45,7 @@ saved outputs (0 mismatching entries required) and against the fits.csv response
 3. The pair excess per pseudo-recording: E48's part-B trials (outputs/E48_block_target_noise/
    partB/trials, the APL-on-matched sigma; 10 pseudo-recordings x 3 trials, APL on and off on the
    same threshold draws), each pseudo-recording processed as the KC data (three-trial means, cosine
-   over KCs; noise_floor_trial_distances.analyse), the excess per pair from that recording's APL-on
+   over KCs; kcq.noise_floor.analyse), the excess per pair from that recording's APL-on
    against its own APL-off distances ('paired') and against the mean APL-off distances over the
    recordings ('vs mean APL off', the construction the KC data allow: control and APL-blocked
    recordings are different flies). The KC data per control-fly recording against the mean
@@ -58,7 +58,7 @@ E51_noise_robust_block/partA/ (per model: <model>_kc_odor.parquet, the per-KC x 
 spike counts, responses, thresholds, critical factors, peak and odor-window mean drive; the checks;
 the breadth runs' bouton_base caches). With the per-KC tables present the models are not rebuilt
 (--resim rebuilds them).
-Usage: nice -n 10 ./venv/bin/python E51_block_carriers.py [--resim] [--out DIR]
+Usage: nice -n 10 ./venv/bin/python experiments/E51_block_carriers.py [--resim] [--out DIR]
 """
 from __future__ import annotations
 
@@ -75,9 +75,9 @@ import pandas as pd
 
 from scipy import stats as sstats
 
-import kc_remapping_harness as H
-import noise_floor_trial_distances as NF
-import E43_model_trial_noise as E43
+from kcq import harness as H
+from kcq import noise_floor as NF
+from experiments import E43_model_trial_noise as E43
 
 EXPERIMENT = 'E51_noise_robust_block'
 SUB = 'partA'
@@ -644,7 +644,7 @@ def make_figures(out: Path, per_rec: pd.DataFrame, summ: pd.DataFrame, kc_all: d
 
 README = """# E51 part A: where the fitted fruity × small-ester block lives
 
-Made by `E51_block_carriers.py` (model_experiment_queue {commit}), {generated}. Models: {models}, rebuilt at their fitted
+Made by `experiments/E51_block_carriers.py` (model_experiment_queue {commit}), {generated}. Models: {models}, rebuilt at their fitted
 parameters (E43_model_trial_noise.py's `fit_model`), the deterministic runs checked against the fits' saved outputs
 (0 mismatching entries; provenance.json, "checks"). The nine pairs: {{2h, IaA, pa}} × {{2-but, eb, ep}}. A pair's
 excess: its APL-on distance's residual from the isotonic fit on the APL-off distance over the 120 pairs (the block is
@@ -703,7 +703,7 @@ def main() -> None:
     loc.mkdir(parents=True, exist_ok=True)
     orn = H.apl16_orn_deltas()
     commit = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE, capture_output=True, text=True).stdout.strip()
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E51_block_carriers.py',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E51_block_carriers.py',
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(), **H.code_commits(),
         model=H.model_provenance(orn_deltas=orn), approx_conc_note=H.APPROX_CONC_NOTE)
     inputs = {}

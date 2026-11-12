@@ -18,9 +18,9 @@
 E10_joint_fit.py runs in its own process with the results folder of the scratch experiment E73_zcell_check
 redirected to outputs/E73_per_kc_normalization/partC_checks/ (nothing is written to the shared results); the
 E43 check writes its tables there too. Writes partC_checks/checks.json and prints a summary.
-Usage (from this folder; two E10 processes at a time, 16 threads each):
-    OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ./venv/bin/python -u E73_zcell_fit_checks.py [--only NAME ...] [--jobs 2]
-    ./venv/bin/python E73_zcell_fit_checks.py --compare-only   (the comparisons again, from the saved histories)
+Usage (from the repository root; two E10 processes at a time, 16 threads each):
+    OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ./venv/bin/python -u experiments/E73_zcell_fit_checks.py [--only NAME ...] [--jobs 2]
+    ./venv/bin/python experiments/E73_zcell_fit_checks.py --compare-only   (the comparisons again, from the saved histories)
 """
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 SCRATCH = 'E73_zcell_check'
 ROOT = H.HERE / 'outputs' / 'E73_per_kc_normalization' / 'partC_checks'
@@ -88,7 +88,7 @@ def run_e10(root: Path, e10_args: list) -> None:
         return d
 
     H.results_dir, H.outputs_dir = results_dir, outputs_dir
-    import E10_joint_fit
+    from experiments import E10_joint_fit
     sys.argv = ['E10_joint_fit.py', *e10_args]
     E10_joint_fit.main()
 
@@ -179,7 +179,7 @@ def check_e43() -> dict:
     out = H.HERE / 'outputs' / 'E69_kc_firing_ceiling' / 'trial_noise'
     if not out.exists():
         out = H.shared_dir() / 'data' / 'model_outputs' / 'E69_kc_firing_ceiling' / 'trial_noise'
-    cmd = [sys.executable, '-u', 'E43_model_trial_noise.py', '--part', 'B', '--analyse-only', '--zcell',
+    cmd = [sys.executable, '-u', 'experiments/E43_model_trial_noise.py', '--part', 'B', '--analyse-only', '--zcell',
         '--model-from', f'E69_kc_firing_ceiling:{E69_TRIAL_MODELS[0]}', '--results-dir', str(root / 'results'),
         '--outputs-dir', str(out)]
     t0 = time.time()
@@ -191,7 +191,7 @@ def check_e43() -> dict:
         return res
     z = read_csv(path)
     byv = read_csv(H.results_dir('E73_per_kc_normalization') / 'by_variant.csv')
-    import E73_per_kc_normalization as E73
+    from experiments import E73_per_kc_normalization as E73
     cmp = []
     for tag in E69_TRIAL_MODELS:
         model = f'E69-{tag}'

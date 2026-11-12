@@ -33,9 +33,9 @@ Yang's union prediction (data).
 Outputs: <shared>/results/E49_low_conc_kc/ (fractions.csv, mixtures.csv, checks.json,
 provenance.json, E49_low_conc_kc.png, comparison_table.md) and ./outputs/E49_low_conc_kc/
 (deterministic responses / spike counts per model, trials as npz, the bases' cache files).
-Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python E49_low_conc_kc.py [--models ...] [--no-noise]
+Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python experiments/E49_low_conc_kc.py [--models ...] [--no-noise]
        [--n-recordings 10] [--n-trials 3] [--local-test DIR]
-       ./venv/bin/python E49_low_conc_kc.py --summary   (tables and figure only)
+       ./venv/bin/python experiments/E49_low_conc_kc.py --summary   (tables and figure only)
 """
 from __future__ import annotations
 
@@ -50,9 +50,9 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
-from E10_joint_fit import base_kws, e19_row
-import E43_model_trial_noise as E43
+from kcq import harness as H
+from experiments.E10_joint_fit import base_kws, e19_row
+from experiments import E43_model_trial_noise as E43
 
 EXPERIMENT = 'E49_low_conc_kc'
 PARAM_KEYS = ('fixed_thr', 'wAPLKC_scale', 'wKCAPL_scale', 'wAPLPN_scale', 'wPNAPL_scale')
@@ -367,7 +367,7 @@ def main() -> None:
             f"; checks {chk}; {time.time() - t1:.0f}s", flush=True)
         del m
     data.to_csv(res_dir / 'data_fractions.csv', index=False)
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E49_low_conc_kc.py',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E49_low_conc_kc.py',
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(), models=args.models,
         model_sources=MODEL_SOURCES, noise_sources=NOISE_SOURCE, n_recordings=args.n_recordings, n_trials=args.n_trials, seed=args.seed,
         no_noise=args.no_noise, orn_input=orn_info, substitutions=subs, data_dir=str(yang_dir()),

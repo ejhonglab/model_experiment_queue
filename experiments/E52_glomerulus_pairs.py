@@ -37,10 +37,10 @@ coinput_null_draws.npz, odor_pair_scores.csv, score_correlations.csv, alignment_
 block_scores.csv, lesion_pairs.csv, lesion_outcome.csv, stats_variants.csv, comparison.csv,
 comparison_table.md, provenance.json, the figures) and ./outputs/E52_glomerulus_pairs/
 (lesioned wirings, swaps, per-variant responses / spike counts, partC/ caches).
-Usage: ./venv/bin/python E52_glomerulus_pairs.py --part A [--draws 200]
-       ./venv/bin/python E52_glomerulus_pairs.py --part B
-       OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python E52_glomerulus_pairs.py --part C [--seeds 0 1 2] [--models ...]
-       ./venv/bin/python E52_glomerulus_pairs.py --summary
+Usage: ./venv/bin/python experiments/E52_glomerulus_pairs.py --part A [--draws 200]
+       ./venv/bin/python experiments/E52_glomerulus_pairs.py --part B
+       OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python experiments/E52_glomerulus_pairs.py --part C [--seeds 0 1 2] [--models ...]
+       ./venv/bin/python experiments/E52_glomerulus_pairs.py --summary
 """
 from __future__ import annotations
 import argparse
@@ -55,8 +55,8 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-import kc_remapping_harness as H
-from E47_wiring_features import (MODELS, SHUFFLES, CLASS_LABEL, STATS, V, fitted_params, SCALE_KEYS,
+from kcq import harness as H
+from experiments.E47_wiring_features import (MODELS, SHUFFLES, CLASS_LABEL, STATS, V, fitted_params, SCALE_KEYS,
     CTRL_FRAC, data_values)
 
 EXPERIMENT = 'E52_glomerulus_pairs'
@@ -647,16 +647,16 @@ def make_lesions(W: pd.DataFrame, plan: pd.DataFrame, seeds: List[int], out_dir:
 
 def part_c(args, res_dir: Path, out_dir: Path) -> None:
     from al_analysis.mb_model import make_fixed_param_kc_simulator
-    from E1_apl_knockout import bisect_threshold
-    from E3_drive_dependent_gain import per_odor_extras, rate
-    from E4_substrate import score, kc_by_glomerulus
-    from E10_joint_fit import TAU, base_kws, bouton_base, breadth_weights, make_loss
-    from E12_breadth_apl import density_excess
-    from E16_claw_saturation import spearman_with_refs
-    from E18_bouton_depletion import all_refs
-    from E26_claw_power import sharing_deficit
-    from E35_divisive_apl import suppression_stats
-    from E44_operating_point import fraction_stats, losses
+    from experiments.E1_apl_knockout import bisect_threshold
+    from experiments.E3_drive_dependent_gain import per_odor_extras, rate
+    from experiments.E4_substrate import score, kc_by_glomerulus
+    from experiments.E10_joint_fit import TAU, base_kws, bouton_base, breadth_weights, make_loss
+    from experiments.E12_breadth_apl import density_excess
+    from experiments.E16_claw_saturation import spearman_with_refs
+    from experiments.E18_bouton_depletion import all_refs
+    from experiments.E26_claw_power import sharing_deficit
+    from experiments.E35_divisive_apl import suppression_stats
+    from experiments.E44_operating_point import fraction_stats, losses
     df = pd.read_csv(res_dir / 'coinput_pairs.csv')
     plan = lesion_plan(df, res_dir)
     W0 = base_wiring()
@@ -745,7 +745,7 @@ def part_c(args, res_dir: Path, out_dir: Path) -> None:
                 print(f'{tag} FAILED after {time.time() - t0:.0f}s: {e!r}', flush=True)
                 rows.append(dict(variant='retuned', tag=tag, part='C', model=mkey, shuffle=kind, seed=seed, error=repr(e)))
                 pd.DataFrame(rows).to_csv(stats_path, index=False)
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E52_glomerulus_pairs.py', part='C',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E52_glomerulus_pairs.py', part='C',
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(), models=args.models, seeds=args.seeds,
         null_class=NULL_CLASS, z_over=Z_OVER, lesions=list(LESIONS), model_sources={m: MODELS[m][:2] for m in args.models},
         ctrl_frac=CTRL_FRAC, kc_kc_tau=TAU, approx_conc_note=H.APPROX_CONC_NOTE, model=model_prov)
@@ -906,7 +906,7 @@ def main() -> None:
         return
     prov_path = res_dir / 'provenance.json'
     prov = json.loads(prov_path.read_text()) if prov_path.exists() else {}
-    prov[prov_key] = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E52_glomerulus_pairs.py',
+    prov[prov_key] = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E52_glomerulus_pairs.py',
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(), draws=args.draws, null_class=NULL_CLASS,
         z_over=Z_OVER, seconds=time.time() - t0, wiring='data/model_outputs/inputs/wPNKC_bouton_base.parquet',
         model=H.model_provenance(orn_deltas=H.apl16_orn_deltas()))

@@ -36,7 +36,7 @@ deterministic statistics of that evaluation from the fit's history, their natura
 on the host that ran it, else the shared archive), key thr<T>_gain<G>_noise_ev<EVAL>, and are marked
 on the history figure. Models whose fits or pipeline results are not in yet are listed as pending and
 left out of the figures. Nothing is simulated.
-Usage: ./venv/bin/python E51_noise_robust_block.py [--out DIR] [--partb DIR] [--partb-fallback DIR|none]
+Usage: ./venv/bin/python experiments/E51_noise_robust_block.py [--out DIR] [--partb DIR] [--partb-fallback DIR|none]
 """
 from __future__ import annotations
 
@@ -52,7 +52,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 EXPERIMENT = 'E51_noise_robust_block'
 V = 'spike_counts_cosine__'
@@ -354,7 +354,7 @@ def main() -> None:
     hist_files = make_history_figure(df, res_dir, out)
     for f in hist_files:
         inputs[str(f)] = hashlib.sha256(f.read_bytes()).hexdigest()
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E51_noise_robust_block.py',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E51_noise_robust_block.py',
         **H.code_commits(),
         inputs_sha256=inputs, partb=str(partb), partb_fallback=(None if fallback is None else str(fallback)),
         pipeline_source={m: pipeline_source.get(m) for m in sorted({mm[4] for mm in models if mm[4] is not None})},

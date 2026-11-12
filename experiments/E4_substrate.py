@@ -9,7 +9,7 @@ APL output removed (acute knockout). Shuffled hemibrain matrices (degree-preserv
 KC-type-preserving, glomerulus-frequency-preserving) are added through `--shuffles` once
 `al_analysis.wpnkc_shuffles` exists (atlas is writing it).
 
-Readouts (kc_remapping_harness): for APL on vs Yang's control and APL off vs TNT, the
+Readouts (kcq.harness): for APL on vs Yang's control and APL off vs TNT, the
 Spearman between model and measured deviations from the linear ORN prediction
 (`spearman_dev`, 120 pairs; the report's 0.60 for wd20 was on the 66 megamat pairs vs
 Remy's wild-type somata, reported here as `spearman_resid_vs_remap_wt`), plain Spearman,
@@ -20,7 +20,7 @@ KC-claw distances.
 Outputs: stats to <shared>/results/E4_substrate/, responses / spike counts / wPNKC to
 ./outputs/E4_substrate/.
 
-Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python E4_substrate.py [-v VARIANT ...]
+Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python experiments/E4_substrate.py [-v VARIANT ...]
     [--seeds N] [--rates 0.05 0.1] [--shuffles ...]
 """
 from __future__ import annotations
@@ -36,7 +36,7 @@ from typing import Dict, Optional
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 EXPERIMENT = 'E4_substrate'
 UNIFORM_N_CLAWS = 7
@@ -291,7 +291,7 @@ def main() -> None:
     make_figure(stats[stats.get('error', pd.Series(dtype=object)).isna()] if 'error' in stats
         else stats, res_dir, data_stats)
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),
-        script='E4_substrate.py', host=subprocess.run(['hostname'], capture_output=True,
+        script='experiments/E4_substrate.py', host=subprocess.run(['hostname'], capture_output=True,
             text=True).stdout.strip(),
         **H.code_commits(),
         variants={n: VARIANTS[n][0] for n in args.variants}, seeds=args.seeds,

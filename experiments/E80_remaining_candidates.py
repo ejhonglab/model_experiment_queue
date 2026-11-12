@@ -7,7 +7,7 @@ response amplitude against a KC's breadth in the flies, in baseline-noise units,
 families; the breadth-weighted reading of the fits against the effect in baseline-noise units and in Yang's z; each KC
 type alone with recording-bootstrap intervals) and the tables. Only shared data are read.
 
-    python E80_remaining_candidates.py --part {D,A,B,C,tables}
+    python experiments/E80_remaining_candidates.py --part {D,A,B,C,tables}
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from typing import Dict, List, Tuple
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 EXPERIMENT = 'E80_remaining_candidates'
 
@@ -66,7 +66,7 @@ def amplitude_by_breadth(out: Path) -> pd.DataFrame:
     squared response, in the flies (baseline-noise units) and in every archived fit of the best families (spike counts),
     with APL on and off. Writes amplitude_by_breadth.csv (one row per source, condition and class; 'pooled' over the
     recordings and 'recording_mean', the mean of each recording's value)."""
-    import E72_wiring_population as E72
+    from experiments import E72_wiring_population as E72
     thr = noise_threshold()
     rows = []
     for geno, label in (('TNT3c', 'control flies'), ('TNT', 'APL output blocked (TNT)')):
@@ -109,7 +109,7 @@ def breadth_weighted(out: Path) -> pd.DataFrame:
     against the APL effect in baseline-noise units and in Yang's z. Writes breadth_weighted.csv. Each condition's KCs
     are weighted by their own number of responses (two or more spikes); p 0 is the fit as it is; p_flies is the log-log
     slope of the control flies' mean amplitude against the class's middle number of odors (amplitude_by_breadth.csv)."""
-    import E72_wiring_population as E72
+    from experiments import E72_wiring_population as E72
     amp = pd.read_csv(out / 'amplitude_by_breadth.csv')
     ctl = amp[(amp.source == 'control flies')].set_index('cls').reindex([c[0] for c in CLASSES])
     mids = np.array([1.0, 2.5, 5.5, 10.0])
@@ -147,9 +147,9 @@ def type_split(out: Path) -> pd.DataFrame:
     C2 on the real wiring, and for the eight wirings' mean (K set on that type's own APL-on counts, as E72's `distances`
     sets it for all KCs) the pattern part and the ester / alcohol group errors against all eight recordings, with 90 %
     intervals over 500 resamples of the recordings."""
-    import E72_wiring_population as E72
-    import E77_input_side_common_error as E77
-    from E67_apl_effect_fits import refs
+    from experiments import E72_wiring_population as E72
+    from experiments import E77_input_side_common_error as E77
+    from experiments.E67_apl_effect_fits import refs
     mem = E77.members()
     fits = [E72.load_fit(f, tg) for _, f, tg in mem]
     ctrl = H.yang_recording_rdms_values('TNT3c', 'graded')
@@ -197,7 +197,7 @@ def archive_prep(out: Path) -> pd.DataFrame:
     """Before archive_model_outputs.py: variants.csv with every saved screen point (outputs/E80_remaining_candidates/
     screen/<tag>_*, tag C2_<point_id> or fit0_<point_id>) and pulse point (outputs/.../pulse/<point_id>_*) and their
     absolute parameters, and their pair distances (raw spike counts, the harness's primary model RDM) added to
-    model_pair_distances_long.csv, for the archive's params.csv and apl_effect_scores.py."""
+    model_pair_distances_long.csv, for the archive's params.csv and kcq/apl_effect.py."""
     odir = H.outputs_dir(EXPERIMENT)
     keep = ['fixed_thr', 'fixed_thr_off', 'wAPLKC_scale', 'wKCAPL_scale', 'wAPLPN_scale', 'wPNAPL_scale', 'wKCKC_scale',
             'thr_factor', 'apl_factor', 'rate_on', 'rate_off']
@@ -253,10 +253,10 @@ def main() -> None:
         archive_prep(out)
     elif args.part in ('A', 'B', 'C'):
         if args.part == 'A':
-            import E80_pulse as Pp
+            from experiments import E80_pulse as Pp
             Pp.run_pulse(out)
         else:
-            import E80_screen as S
+            from experiments import E80_screen as S
             {'B': S.screen, 'C': S.gate}[args.part](out)
     else:
         raise NotImplementedError(args.part)

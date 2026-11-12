@@ -14,7 +14,7 @@ runs the three-mechanism grid's block-first point (claw_thr 70, breadth 2, KC-KC
 with that width.
 
 Outputs: <shared>/results/E22_soft_knee/ and ./outputs/E22_soft_knee/.
-Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python E22_soft_knee.py [--widths 0 10 20 40]
+Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python experiments/E22_soft_knee.py [--widths 0 10 20 40]
     [--thr 70] [--combo W ...] [--figure-only]
 """
 from __future__ import annotations
@@ -29,14 +29,14 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
-from E1_apl_knockout import bisect_threshold
-from E3_drive_dependent_gain import BOUTON, TARGET, match_kc_apl_scale, per_odor_extras, rate, tune_and_knockout
-from E4_substrate import score, kc_by_glomerulus
-from E12_breadth_apl import density_excess
-from E16_claw_saturation import spearman_with_refs
-from E18_bouton_depletion import all_refs
-from E21_apl_off_sharing import pair_excess, SUBST
+from kcq import harness as H
+from experiments.E1_apl_knockout import bisect_threshold
+from experiments.E3_drive_dependent_gain import BOUTON, TARGET, match_kc_apl_scale, per_odor_extras, rate, tune_and_knockout
+from experiments.E4_substrate import score, kc_by_glomerulus
+from experiments.E12_breadth_apl import density_excess
+from experiments.E16_claw_saturation import spearman_with_refs
+from experiments.E18_bouton_depletion import all_refs
+from experiments.E21_apl_off_sharing import pair_excess, SUBST
 
 EXPERIMENT = 'E22_soft_knee'
 E16_OUT = H.HERE / 'outputs' / 'E16_claw_saturation'
@@ -223,7 +223,7 @@ def main() -> None:
         row.update(spearman_with_refs(on_p, off_p, refs)); row.update(sharing_deficit(s_off, data_pairs))
         record(tag, meta, row, on_p, off_p, r_on, r_off); done.add(tag)
 
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E22_soft_knee.py',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E22_soft_knee.py',
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(),
         **H.code_commits(),
         olfsysm_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.olfsysm_dir(), capture_output=True, text=True).stdout.strip(),

@@ -23,7 +23,7 @@ odor 0-0.5 s, simulation to 0.75 s, dt 0.5 ms.
 Outputs to <shared>/results/E6_readout_window/ (CSV tables, figures, provenance.json);
 per-base spike-count-by-window parquet under ./outputs/E6_readout_window/.
 
-Usage: OMP_NUM_THREADS=6 nice -n 10 ./venv/bin/python E6_readout_window.py [--bases ...]
+Usage: OMP_NUM_THREADS=6 nice -n 10 ./venv/bin/python experiments/E6_readout_window.py [--bases ...]
     [--no-tau-sweep]
 """
 import argparse
@@ -39,7 +39,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 
 EXP = 'E6_readout_window'
@@ -394,7 +394,7 @@ def main() -> None:
 
     make_figures(res, curves, rc, pw, wins, sw if sweep_rows else None)
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),
-        script='E6_readout_window.py', host=os.uname().nodename,
+        script='experiments/E6_readout_window.py', host=os.uname().nodename,
         **H.code_commits(),
         olfsysm_commit=subprocess.run(['git', 'rev-parse', 'HEAD'],
             cwd=H.olfsysm_dir(), capture_output=True, text=True).stdout.strip(),

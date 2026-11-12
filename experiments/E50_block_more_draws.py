@@ -25,7 +25,7 @@ draw of both classes plus E47's Curveball seed 2 and the real-wiring fit, with t
 under the names E47's tables use), per_class.csv (mean, sd, min, max, n per class),
 class_contrast.csv (the two classes' means, their difference and a Welch t-test per statistic),
 comparison_table.md and E50_block_more_draws.png.
-Usage: ./venv/bin/python E50_block_more_draws.py
+Usage: ./venv/bin/python experiments/E50_block_more_draws.py
 """
 from __future__ import annotations
 
@@ -40,8 +40,8 @@ import numpy as np
 import pandas as pd
 from scipy import stats as sps
 
-import kc_remapping_harness as H
-from E47_wiring_features import CLASS_LABEL, MODELS, STATS as E47_STATS, V, data_values
+from kcq import harness as H
+from experiments.E47_wiring_features import CLASS_LABEL, MODELS, STATS as E47_STATS, V, data_values
 
 EXPERIMENT = 'E50_block_more_draws'
 E47 = 'E47_wiring_features'
@@ -242,7 +242,7 @@ def main() -> None:
     make_figure(comp, e47_classes, data, res_dir)
     sources = {str(p.relative_to(shared)): sha(p) for p in (res_dir / 'fits.csv', shared / E47 / 'fits.csv',
         shared / E47 / 'per_class.csv', shared / REAL_EXP / 'fits.csv') if p.exists()}
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E50_block_more_draws.py',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E50_block_more_draws.py',
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(), model=MODEL,
         real_fit=[REAL_EXP, REAL_TAG], classes=list(CLASSES), sources=sources,
         **H.code_commits(),

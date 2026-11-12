@@ -18,7 +18,7 @@ ref40), and writes:
   model, so the pairs whose block the noise removes can be seen.
 Models whose pipeline results are not in yet are listed as pending and left out of the figures.
 Nothing is simulated.
-Usage: ./venv/bin/python E48_block_target_noise.py [--out DIR]
+Usage: ./venv/bin/python experiments/E48_block_target_noise.py [--out DIR]
 """
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 EXPERIMENT = 'E48_block_target_noise'
 V = 'spike_counts_cosine__'
@@ -173,7 +173,7 @@ def main() -> None:
         lines.append('Pipeline results still pending: ' + '; '.join(pend) + '.')
     (out / 'comparison_table.md').write_text('\n'.join(lines) + '\n')
     make_figures(df, excess, out, data_block_corr)
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E48_block_target_noise.py',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E48_block_target_noise.py',
         **H.code_commits(),
         inputs_sha256=inputs, models=[dict(label=m[0], experiment=m[1], tag=m[2], pipeline_model=m[3]) for m in MODELS],
         pending=pend)

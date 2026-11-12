@@ -15,7 +15,7 @@ above the threshold in the model (per-glomerulus PN rates per odor from the base
 
 Outputs: <shared>/results/E21_apl_off_sharing/ (pairs_excess.csv, group_deficit.csv,
 per_odor.csv, pair_codrive.csv, E21_apl_off_sharing.png, provenance.json).
-Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python E21_apl_off_sharing.py
+Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python experiments/E21_apl_off_sharing.py
 """
 from __future__ import annotations
 
@@ -29,9 +29,9 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-import kc_remapping_harness as H
-from E3_drive_dependent_gain import BOUTON
-from E12_breadth_apl import e3_bouton_params
+from kcq import harness as H
+from experiments.E3_drive_dependent_gain import BOUTON
+from experiments.E12_breadth_apl import e3_bouton_params
 
 EXPERIMENT = 'E21_apl_off_sharing'
 ARCHIVE = H.shared_dir() / 'data' / 'model_outputs'
@@ -172,7 +172,7 @@ def main() -> None:
     print('\nper-odor deficit, thr70 model:'); print(per_odor[per_odor.model == 'thr70'].set_index('odor')[['group', 'deficit', 'model_excess', 'data_excess', 'frac_off']].round(3).to_string())
     print('\ndeficit correlations:', json.dumps(corr, indent=0))
     make_figure(pairs, grp, per_odor, co, res_dir)
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E21_apl_off_sharing.py',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E21_apl_off_sharing.py',
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(),
         **H.code_commits(),
         models=models, data_table='results/E7_confound_controls/B_pairs_graded.csv (graded recipe)', approx_conc_note=H.APPROX_CONC_NOTE)

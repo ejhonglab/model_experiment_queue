@@ -1,8 +1,8 @@
-"""Tests of E77's split of the APL-effect error (kc_remapping_harness.apl_effect_inherited_split)."""
+"""Tests of E77's split of the APL-effect error (kcq.harness.apl_effect_inherited_split)."""
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 
 def _pairs(n_odors=6, seed=0):

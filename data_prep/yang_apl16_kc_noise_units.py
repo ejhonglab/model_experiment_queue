@@ -16,7 +16,7 @@ back; the control flies' and the APL-blocked flies' mean response rates over the
 noise_threshold are the registry's noise_ctrl_frac and noise_tnt_frac.
 
 Usage:
-    ./venv/bin/python yang_apl16_kc_noise_units.py [--out DIR] [--olfdb-src /opt/olfdb]
+    ./venv/bin/python data_prep/yang_apl16_kc_noise_units.py [--out DIR] [--olfdb-src /opt/olfdb]
 """
 import argparse
 import hashlib
@@ -29,9 +29,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parents[1]  # the repository root
 SHARED = H.shared_dir()
 DATASETS = {19: 'TNT', 20: 'TNT3c'}
 LABEL = {'TNT3c': 'control flies', 'TNT': 'APL output blocked (TNT)'}
@@ -154,7 +154,7 @@ Every trial of Yang's APL16 KC recordings (olfdb datasets 19, APL output blocked
 the same trials as data/yang_apl16_kc_olfdb/) with each response in units of the KC's own baseline noise, the KC data's
 side of the realism bands since Tom's decision of 2026-11-10 16:10 (CLAUDE.md of ejhonglab/model_experiment_queue,
 "The main goal for new experiments"; notes/response_criterion_decision.md). Written by
-`yang_apl16_kc_noise_units.py` of ejhonglab/model_experiment_queue ({when}, {commit});
+`data_prep/yang_apl16_kc_noise_units.py` of ejhonglab/model_experiment_queue ({when}, {commit});
 re-run it to regenerate.
 
 ## Units
@@ -221,7 +221,7 @@ Notes for each (suggested; the dataset number from the table): "Responses of olf
 (suite2p F - 0.7 Fneu) over the SD of Fc within the 51 pre-odor windows (each window's mean removed), i.e. Yang's
 whole-recording z response times the KC's whole-trace SD over that baseline SD (viki's per-KC scales from Yang's suite2p
 output, 2026-11-10). A trial mean above {thr:.4f} holds the control flies at their response rate by the 1 z criterion.
-Made by yang_apl16_kc_noise_units.py of ejhonglab/model_experiment_queue ({commit})."
+Made by data_prep/yang_apl16_kc_noise_units.py of ejhonglab/model_experiment_queue ({commit})."
 """
 
 
@@ -272,7 +272,7 @@ def main() -> None:
     rows = '\n'.join(f"| `{c['file']}` | {c['source_dataset']} | APL16: MB247dbLexA > GCaMP6s (KCs) [{g}], baseline-noise "
         f"units | {c['rows']} | {c['kcs']} |" for g, c in checks['olfdb'].items() if isinstance(c, dict) and 'file' in c)
     (out / 'olfdb' / 'README_olfdb.md').write_text(README_OLFDB.format(rows=rows, thr=thr, commit=commit))
-    prov = {'script': Path(__file__).name, 'generated': when, **H.code_commits(),
+    prov = {'script': H.script_path(__file__), 'generated': when, **H.code_commits(),
         'inputs': {str(p): sha256(p) for p in inputs}, 'noise_threshold': thr, 'checks': checks}
     (out / 'provenance.json').write_text(json.dumps(prov, indent=1, default=str) + '\n')
     print(json.dumps(checks, indent=1, default=str))

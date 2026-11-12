@@ -26,7 +26,7 @@ block) are recomputed on the corrected matrices to check they stand.
 Outputs: <shared>/results/noise_floor/noise_floor_summary.csv (one row per genotype x
 transform x quantity), corrected_pairs_long.csv (per pair: raw, corrected, both transforms),
 per_odor_floor.csv (per odor and recording), and provenance.json.
-Usage: ./venv/bin/python noise_floor_trial_distances.py
+Usage: ./venv/bin/python kcq/noise_floor.py
 """
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ from datetime import datetime, timezone
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 DATASETS = {'TNT': 19, 'TNT3c': 20}
 THRESH = 1.0
@@ -155,7 +155,7 @@ def main() -> None:
     fl = pd.concat(floors)
     print('\nper-odor single-trial floor (graded, mean over recordings):')
     print(fl[fl['transform'] == 'graded'].groupby(['genotype', 'odor']).single_trial_floor.mean().unstack(0).reindex(H.APL16_ODORS).round(3).to_string())
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='noise_floor_trial_distances.py',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='kcq/noise_floor.py',
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(),
         **H.code_commits(),
         inputs={g: str(H.yang_data_dir() / g / f'dataset_{i}_long.csv') for g, i in DATASETS.items()}, threshold=THRESH,

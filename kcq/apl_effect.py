@@ -6,7 +6,7 @@ The main target since 2026-11-09 17:55 (Tom; CLAUDE.md "The main goal for new ex
 of the 120 odor pairs, the distance with APL on minus the distance with APL off; in the KC data the
 control flies' cosine distance minus the distance with APL output blocked (TNT), each the mean over
 recordings, in a model its APL-on minus its acute APL-off distance (cosine on spike counts). Scored
-by `kc_remapping_harness.apl_effect_stats` (the APL-effect loss, the root mean squared difference
+by `kcq.harness.apl_effect_stats` (the APL-effect loss, the root mean squared difference
 from the data's per-pair effect over the 120 pairs, with its mean and pattern parts).
 
 Reads every <shared>/results/E<n>_*/model_pair_distances_long.csv (the spike-count cosine rows where
@@ -34,7 +34,7 @@ noise_<ctrl|tnt>_frac_<odor> entries); `realism_flag_zcrit` / `realism_zcrit` ke
 then (the KC data in Yang's whole-recording z, above 1 z: `opk_<on|off>_tv_zcrit`, and the response rate ρ
 of the experiment's own table, `spearman_rate_on_vs_data`), so that earlier write-ups can be checked.
 
-build_summary.py runs it before the progress plot. Usage: ./venv/bin/python apl_effect_scores.py
+build_summary.py runs it before the progress plot. Usage: ./venv/bin/python kcq/apl_effect.py
 [--no-figures] [--only-figures]
 """
 from __future__ import annotations
@@ -51,7 +51,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 RESULTS = H.shared_dir() / 'results'
 OUT = RESULTS / 'apl_effect'
@@ -175,7 +175,7 @@ _FRAC_DATA: Dict[Tuple[str, str], pd.Series] = {}
 
 def frac_data(cond: str, units: str = 'z') -> pd.Series:
     """The flies' per-odor response fractions (mean over recordings, `APL16_ODORS` order): control flies for 'on',
-    APL output blocked (TNT) for 'off', in `units` ('z': `kc_remapping_harness.yang_response_fractions`; 'noise':
+    APL output blocked (TNT) for 'off', in `units` ('z': `kcq.harness.yang_response_fractions`; 'noise':
     the registry's noise_<ctrl|tnt>_frac_<odor>)."""
     if (cond, units) not in _FRAC_DATA:
         if units == 'z':
@@ -409,8 +409,8 @@ def main() -> None:
         print(best.head(12).to_string(index=False, max_colwidth=45), flush=True)
     made = [] if args.no_figures else make_figures(df, data_on, data_off)
     (OUT / 'provenance.json').write_text(json.dumps(dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),
-        script='apl_effect_scores.py', host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(),
-        **H.code_commits(), statistic='kc_remapping_harness.apl_effect_stats (spike-count cosine; APL on minus acute APL off)',
+        script='kcq/apl_effect.py', host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(),
+        **H.code_commits(), statistic='kcq.harness.apl_effect_stats (spike-count cosine; APL on minus acute APL off)',
         data='control flies (TNT3c) minus APL output blocked (TNT), cosine, mean over recordings (harness.yang_mean_rdm)',
         realism_bands=dict(rate_on=RATE_ON_BAND, rate_ratio_off_over_on=RATE_RATIO_BAND, rate_rho_min=RATE_RHO_MIN,
             odors_per_kc_tv_max=dict(on=opk_band('on', 'noise'), off=opk_band('off', 'noise')),

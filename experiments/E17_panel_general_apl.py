@@ -25,7 +25,7 @@ The base model (coincidence-3 claw-dynamics at 5 %) and the oracle set are E15's
 outputs are copied so E15's scoring applies unchanged. Outputs: compact results to
 <shared>/results/E17_panel_general_apl/, per-KC outputs to ./outputs/E17_panel_general_apl/.
 
-Usage: OMP_NUM_THREADS=6 nice -n 10 ./venv/bin/python E17_panel_general_apl.py [--score-only]
+Usage: OMP_NUM_THREADS=6 nice -n 10 ./venv/bin/python experiments/E17_panel_general_apl.py [--score-only]
 """
 import argparse
 import itertools
@@ -43,10 +43,10 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-import kc_remapping_harness as H
-import E15_breadth_shared_apl as E15
-from E11_coincidence_claw_inhibition import shared_drive_glomeruli, FRUITY, SMALL
-from E14_oracle_coresponders import fit_on_off, KC_ID
+from kcq import harness as H
+from experiments import E15_breadth_shared_apl as E15
+from experiments.E11_coincidence_claw_inhibition import shared_drive_glomeruli, FRUITY, SMALL
+from experiments.E14_oracle_coresponders import fit_on_off, KC_ID
 
 
 EXP = 'E17_panel_general_apl'
@@ -280,7 +280,7 @@ def main() -> None:
     if len(tab):
         make_figure(res_dir, tab)
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),
-        script='E17_panel_general_apl.py', host=os.uname().nodename,
+        script='experiments/E17_panel_general_apl.py', host=os.uname().nodename,
         **H.code_commits(),
         olfsysm_commit=subprocess.run(['git', 'rev-parse', 'HEAD'],
             cwd=H.olfsysm_dir(), capture_output=True, text=True).stdout.strip(),

@@ -28,9 +28,9 @@ Outputs: <shared>/results/E47_wiring_features/ (stats_variants.csv, shuffle_summ
 per_odor_response_fractions.csv, comparison.csv, comparison_table.md, provenance.json,
 E47_wiring_features.png) and ./outputs/E47_wiring_features/ (responses / spike counts per
 variant, tuned_params.json; partA/ holds the bases' cache files).
-Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python E47_wiring_features.py [--models ...] [--shuffles ...] [--seeds 1 2 3 4 5]
-       ./venv/bin/python E47_wiring_features.py --summary   (tables and figure only)
-       ./venv/bin/python E47_wiring_features.py --local-test DIR --models thr70_gain1.5 --shuffles claw_permutation --seeds 1
+Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python experiments/E47_wiring_features.py [--models ...] [--shuffles ...] [--seeds 1 2 3 4 5]
+       ./venv/bin/python experiments/E47_wiring_features.py --summary   (tables and figure only)
+       ./venv/bin/python experiments/E47_wiring_features.py --local-test DIR --models thr70_gain1.5 --shuffles claw_permutation --seeds 1
 """
 from __future__ import annotations
 
@@ -45,17 +45,17 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
-from E1_apl_knockout import bisect_threshold
-from E3_drive_dependent_gain import per_odor_extras, rate
-from E4_substrate import score, kc_by_glomerulus
-from E10_joint_fit import TAU, base_kws, bouton_base, breadth_weights, make_loss
-from E12_breadth_apl import density_excess
-from E16_claw_saturation import spearman_with_refs
-from E18_bouton_depletion import all_refs
-from E26_claw_power import sharing_deficit
-from E35_divisive_apl import suppression_stats
-from E44_operating_point import fraction_stats, losses
+from kcq import harness as H
+from experiments.E1_apl_knockout import bisect_threshold
+from experiments.E3_drive_dependent_gain import per_odor_extras, rate
+from experiments.E4_substrate import score, kc_by_glomerulus
+from experiments.E10_joint_fit import TAU, base_kws, bouton_base, breadth_weights, make_loss
+from experiments.E12_breadth_apl import density_excess
+from experiments.E16_claw_saturation import spearman_with_refs
+from experiments.E18_bouton_depletion import all_refs
+from experiments.E26_claw_power import sharing_deficit
+from experiments.E35_divisive_apl import suppression_stats
+from experiments.E44_operating_point import fraction_stats, losses
 
 EXPERIMENT = 'E47_wiring_features'
 PARAM_KEYS = ('fixed_thr', 'wAPLKC_scale', 'wKCAPL_scale', 'wAPLPN_scale', 'wPNAPL_scale')
@@ -397,7 +397,7 @@ def main() -> None:
                     shuffle=shuffle, seed=seed, error=repr(e)))
                 pd.DataFrame(rows).to_csv(stats_path, index=False)
 
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E47_wiring_features.py',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E47_wiring_features.py',
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(), models=args.models,
         shuffles=args.shuffles, seeds=args.seeds, model_sources={m: MODELS[m][:2] for m in args.models},
         ctrl_frac=CTRL_FRAC, kc_kc_tau=TAU, loss_rate_targets=[0.05, CTRL_FRAC], approx_conc_note=H.APPROX_CONC_NOTE,

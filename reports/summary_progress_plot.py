@@ -21,7 +21,7 @@ the best model so far has closed (0 = the first model, 1 = the data's value or c
 hover text gives the raw values. Legend entries toggle their series. Re-run after every
 completed experiment, before rebuilding the summary page:
 
-    ./venv/bin/python summary_progress_plot.py
+    ./venv/bin/python reports/summary_progress_plot.py
 """
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 OUT = H.shared_dir() / 'results' / 'summary_progress'
 YEAR = 2026
@@ -88,7 +88,7 @@ METRIC_DEFS = {
     # the main target since 2026-11-09 17:55 (CLAUDE.md "The main goal for new experiments"): the per-pair
     # APL effect (APL-on minus APL-off distance); its loss against the KC data's (lower is better, the
     # target is the data's own floor) and the ρ across pairs; scored for every saved variant by
-    # apl_effect_scores.py (results/apl_effect/by_variant.csv, merged into each experiment's table by tag)
+    # kcq/apl_effect.py (results/apl_effect/by_variant.csv, merged into each experiment's table by tag)
     'apl_loss': ('APL-effect loss (per-pair APL on minus APL off; lower is better)', 'apl_effect_rmse_floor', '.3f',
         ['spike_counts_cosine__apl_effect_rmse']),
     'apl_rho': ('ρ on the per-pair APL effect', 'apl_effect_rho_ceiling', '.2f',
@@ -115,7 +115,7 @@ SERIES_COLORS = {
 APL_EFFECT = H.shared_dir() / 'results' / 'apl_effect' / 'by_variant.csv'
 _APL_EFFECT_COLS = ['spike_counts_cosine__apl_effect_rmse', 'spike_counts_cosine__apl_effect_spearman',
     'spike_counts_cosine__apl_effect_mean']
-# the response rate ρ the realism bands use (apl_effect_scores.py: against the KC data in baseline-noise units, from the
+# the response rate ρ the realism bands use (kcq/apl_effect.py: against the KC data in baseline-noise units, from the
 # archived responses), merged under its own name so it never replaces a table's own column
 BAND_RATE_RHO = 'band_rate_rho_on'
 TABLE_NAMES = ('stats_variants.csv', 'fits.csv', 'wkckc_controls.csv')
@@ -221,7 +221,7 @@ def load_tables(folder: Path) -> pd.DataFrame:
 
 
 def merge_apl_effect(folder: Path, df: pd.DataFrame) -> pd.DataFrame:
-    """Adds the per-pair APL-effect columns of `folder`'s variants (apl_effect_scores.py) to its
+    """Adds the per-pair APL-effect columns of `folder`'s variants (kcq/apl_effect.py) to its
     result table by tag; variants the table lacks are appended with their response rates."""
     if not APL_EFFECT.exists():
         return df
@@ -269,7 +269,7 @@ def best_rows(exp: str, df: pd.DataFrame) -> list:
 
 
 # the APL-effect series count only variants inside the realism bands (CLAUDE.md, "The main goal for new
-# experiments"; apl_effect_scores.py): the loss's mean part can be bought by moving the response rates
+# experiments"; kcq/apl_effect.py): the loss's mean part can be bought by moving the response rates
 REALISM_METRICS = {'apl_loss', 'apl_rho'}
 
 
@@ -277,10 +277,10 @@ def realistic(df: pd.DataFrame) -> pd.DataFrame:
     """The rows inside the realism bands: APL-on response rate and the APL-off / APL-on ratio in
     their bands, the APL-on response rate ρ not below its minimum, and the odors-per-KC distributions with
     APL on and off within their distance of the flies' (the last two where recorded). The KC data's side is in
-    baseline-noise units (Tom, 2026-11-10 16:10), as apl_effect_scores.py's realism_flag: the odors-per-KC
+    baseline-noise units (Tom, 2026-11-10 16:10), as kcq/apl_effect.py's realism_flag: the odors-per-KC
     distances and the response rate ρ come from its table (`merge_apl_effect`); a table without them falls back
     to its own response rate ρ."""
-    from apl_effect_scores import RATE_ON_BAND, RATE_RATIO_BAND, RATE_RHO_MIN
+    from kcq.apl_effect import RATE_ON_BAND, RATE_RATIO_BAND, RATE_RHO_MIN
     if not {'rate_on', 'rate_off'} <= set(df.columns):
         return df.iloc[0:0]
     on, off = pd.to_numeric(df['rate_on'], errors='coerce'), pd.to_numeric(df['rate_off'], errors='coerce')
@@ -289,7 +289,7 @@ def realistic(df: pd.DataFrame) -> pd.DataFrame:
     if rho_col in df.columns:
         rr = pd.to_numeric(df[rho_col], errors='coerce')
         ok &= rr.isna() | (rr >= RATE_RHO_MIN)
-    from apl_effect_scores import opk_band
+    from kcq.apl_effect import opk_band
     for cond in ('on', 'off'):
         col = f'opk_{cond}_tv'
         if col in df.columns:

@@ -20,7 +20,7 @@ results/E46_operating_point_redraw/{comparison.csv, comparison_table.md,
 E46_operating_point_redraw.png}. Losses are the fits' own; `loss_no_rate` (the loss without
 its APL-on response-rate term) is the number comparable across the two operating points.
 
-Usage: ./venv/bin/python E46_operating_point_redraw.py
+Usage: ./venv/bin/python experiments/E46_operating_point_redraw.py
 """
 from __future__ import annotations
 
@@ -31,8 +31,8 @@ from typing import Dict, Optional
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
-from E26_claw_power import WEAK
+from kcq import harness as H
+from experiments.E26_claw_power import WEAK
 
 EXPERIMENT = 'E46_operating_point_redraw'
 CORE3 = {'DC2', 'DM5', 'DM1'}

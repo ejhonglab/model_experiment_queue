@@ -13,7 +13,7 @@ and task lists, bold, inline code, links (http(s) URLs and in-page `#id` anchors
 in `{#id}` gets that id, e.g. `## Footnotes {#footnotes}`), and the escapes `\\~`, `\\[`, `\\]`,
 `\\_`. A paragraph starting with `*Added` is styled as a provenance note.
 
-Usage: ./venv/bin/python build_report_artifact.py [--out PATH]
+Usage: ./venv/bin/python reports/build_report_artifact.py [--out PATH]
 """
 import argparse
 import datetime as dt
@@ -23,7 +23,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 MD = HERE / 'apl_orn_to_kc_remapping_report.md'
-DEFAULT_OUT = HERE / 'outputs' / 'report_artifact' / 'report.html'
+# the repository root's outputs/ (gitignored)
+DEFAULT_OUT = HERE.parent / 'outputs' / 'report_artifact' / 'report.html'
 
 CSS = """
   :root { --ink: #1f2328; --muted: #57606a; --line: #d8dee4; --bg: #ffffff; --soft: #f6f8fa; --accent: #2a78d6; }

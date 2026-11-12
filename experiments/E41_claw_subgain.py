@@ -16,7 +16,7 @@ reproduces the fit (checked against E34's saved outputs). Part B is scored with 
 loss as well.
 
 Outputs: <shared>/results/E41_claw_subgain/ and ./outputs/E41_claw_subgain/.
-Usage: OMP_NUM_THREADS=12 nice -n 10 ./venv/bin/python E41_claw_subgain.py [--parts A B] [--gains 0 0.25 0.5 1]
+Usage: OMP_NUM_THREADS=12 nice -n 10 ./venv/bin/python experiments/E41_claw_subgain.py [--parts A B] [--gains 0 0.25 0.5 1]
 """
 from __future__ import annotations
 
@@ -29,17 +29,17 @@ from datetime import datetime, timezone
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
-from E1_apl_knockout import bisect_threshold
-from E3_drive_dependent_gain import BOUTON, TARGET, per_odor_extras, rate, tune_and_knockout
-from E4_substrate import score, kc_by_glomerulus
-from E10_joint_fit import base_kws, bouton_base, breadth_weights, make_loss
-from E12_breadth_apl import density_excess
-from E16_claw_saturation import spearman_with_refs
-from E18_bouton_depletion import all_refs
-from E26_claw_power import sharing_deficit, deficit_table, WEAK
-from E27_glomerulus_gain import ORACLE, gained
-from E35_divisive_apl import suppression_stats
+from kcq import harness as H
+from experiments.E1_apl_knockout import bisect_threshold
+from experiments.E3_drive_dependent_gain import BOUTON, TARGET, per_odor_extras, rate, tune_and_knockout
+from experiments.E4_substrate import score, kc_by_glomerulus
+from experiments.E10_joint_fit import base_kws, bouton_base, breadth_weights, make_loss
+from experiments.E12_breadth_apl import density_excess
+from experiments.E16_claw_saturation import spearman_with_refs
+from experiments.E18_bouton_depletion import all_refs
+from experiments.E26_claw_power import sharing_deficit, deficit_table, WEAK
+from experiments.E27_glomerulus_gain import ORACLE, gained
+from experiments.E35_divisive_apl import suppression_stats
 
 EXPERIMENT = 'E41_claw_subgain'
 PARAM_KEYS = ('fixed_thr', 'wAPLKC_scale', 'wKCAPL_scale', 'wAPLPN_scale', 'wPNAPL_scale')
@@ -228,7 +228,7 @@ def main() -> None:
 
     if deficits:
         pd.concat(deficits).to_csv(res_dir / 'pair_deficits_long.csv', index=False, mode='a', header=not (res_dir / 'pair_deficits_long.csv').exists())
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E41_claw_subgain.py',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E41_claw_subgain.py',
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(), parts=args.parts, base=BOUTON,
         thrs=args.thrs, gains=args.gains, b_gains=args.b_gains, fits={b: FITS[b] for b in args.fits},
         fits_source='results/E34_gain_bounded/fits.csv', tau=TAU, approx_conc_note=H.APPROX_CONC_NOTE, model=model_prov)

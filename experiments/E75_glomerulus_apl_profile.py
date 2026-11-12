@@ -37,7 +37,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 EXPERIMENT = 'E75_glomerulus_apl_profile'
 SITES = ('cell', 'claw', 'bouton')
@@ -131,7 +131,7 @@ def archive_vs_common(out: Path) -> pd.DataFrame:
     """Part B: for every archived variant with both conditions, its per-pair pattern error on raw counts (and under the
     calibrated readout where spike counts are archived) against the common error: correlation, projection, the ester
     and alcohol groups' errors. Writes archive_vs_common_error.csv."""
-    import E72_wiring_population as E72
+    from experiments import E72_wiring_population as E72
     data_raw = E72.data_for('raw')
     rows = []
     for folder in sorted(H.shared_dir().joinpath('results').glob('E*')):
@@ -189,8 +189,8 @@ class ProfileModel:
     is C2's own."""
 
     def __init__(self, out_dir: Path):
-        import E10_joint_fit as J
-        import E72_wiring_population as E72
+        from experiments import E10_joint_fit as J
+        from experiments import E72_wiring_population as E72
         from al_analysis.mb_model import make_fixed_param_kc_simulator
         self.orn = H.apl16_orn_deltas()
         self.p = E72.fitted_params(*C2)
@@ -284,9 +284,9 @@ _CACHE: Dict[str, object] = {}
 def score_point(o: Dict[str, tuple], base_eff: Dict[str, pd.Series]) -> Tuple[dict, List[dict]]:
     """A point's statistics (E72's per-readout effect statistics, the common-error comparison, the response statistics of
     E67's full_row, E74's class split under the readout) and its per-pair APL effect rows (raw and calibrated)."""
-    import E72_wiring_population as E72
-    import E67_apl_effect_fits as E67
-    import E74_apl_effect_by_odors_per_kc as E74
+    from experiments import E72_wiring_population as E72
+    from experiments import E67_apl_effect_fits as E67
+    from experiments import E74_apl_effect_by_odors_per_kc as E74
     row, pairs = {}, []
     for ro in ('raw', 'cal', 'binary'):
         d = E72.distances(o, ro)
@@ -317,8 +317,8 @@ def sensitivity_map(out: Path, points: Optional[Sequence[dict]] = None, stage: s
     error, the group errors, the response rates and ρ, odors per KC, the class split. Appends to sensitivity_map.csv and
     sensitivity_pairs.csv (resumable)."""
     import json
-    import E69_kc_firing_ceiling as E69
-    import E72_wiring_population as E72
+    from experiments import E69_kc_firing_ceiling as E69
+    from experiments import E72_wiring_population as E72
     model = ProfileModel(H.outputs_dir(EXPERIMENT))
     base_eff = {ro: H.apl_effect(*[E72.distances(model.base, ro)[c] for c in ('on', 'off')]) for ro in ('raw', 'cal')}
     mp, pp = out / 'sensitivity_map.csv', out / 'sensitivity_pairs.csv'
@@ -379,7 +379,7 @@ def map_matrix(out: Path, site: str, readout: str = 'cal') -> pd.DataFrame:
 
 def population_effect(readout: str = 'cal') -> pd.Series:
     """The per-pair APL effect of E72's mean over its eight wirings (the population whose error is the common error)."""
-    import E72_wiring_population as E72
+    from experiments import E72_wiring_population as E72
     fits = [E72.load_fit(f, t) for _, f, t in E72.new_fit_members()]
     md = E72.mean_distances([E72.distances(o, readout) for o in fits])
     e = H.apl_effect(md['on'], md['off'])
@@ -802,12 +802,12 @@ def save_points(out: Path, point_ids: Sequence[str] = SAVE_POINTS) -> pd.DataFra
     """Re-simulate chosen points of the map (their scores and bisected APL scale from sensitivity_map.csv) and save their
     APL-on and APL-off responses and spike counts under outputs/E75_glomerulus_apl_profile/ (tag C2_<point, ':' as '_'>),
     with their pair distances in model_pair_distances_long.csv and their parameters in variants.csv, for the archive,
-    apl_effect_scores.py and E73's / E74's readers; and their realism under both rules (the model's two spikes against the
+    kcq/apl_effect.py and E73's / E74's readers; and their realism under both rules (the model's two spikes against the
     KC data in baseline-noise units, the bands since 2026-11-10 16:10; and against Yang's z, the earlier bands) in
     realism_points.csv (C2 itself too)."""
     import json
-    import apl_effect_scores as A
-    import E72_wiring_population as E72
+    from kcq import apl_effect as A
+    from experiments import E72_wiring_population as E72
     m = pd.read_csv(out / 'sensitivity_map.csv').set_index('point_id')
     model = ProfileModel(H.outputs_dir(EXPERIMENT))
     odir = H.outputs_dir(EXPERIMENT)
@@ -950,7 +950,7 @@ def main() -> None:
     out = H.results_dir(EXPERIMENT)
     out.mkdir(parents=True, exist_ok=True)
     if args.part == 'A-score':
-        import E72_wiring_population as E72
+        from experiments import E72_wiring_population as E72
         E72.part_e_score(out)
     elif args.part == 'C':
         sensitivity_map(out, stage=args.stage)

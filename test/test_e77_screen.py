@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import E77_input_screen as S
+from experiments import E77_input_screen as S
 
 
 def _activity(n_units=7, n_odors=4, seed=0):
@@ -130,7 +130,7 @@ def test_claw_count_factor_permutation():
 
 
 def test_e20_gain_identity():
-    from E20_glomerulus_gain import gained_wPNKC
+    from experiments.E20_glomerulus_gain import gained_wPNKC
     W = _toy_wiring()
     peaks = pd.Series({'A': 120.0, 'B': 60.0, 'C': 200.0, 'D': 40.0})
     Wg, g = gained_wPNKC(W, peaks, 0.0, ['A', 'B', 'C'])

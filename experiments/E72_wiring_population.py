@@ -21,7 +21,7 @@ scores them and builds the population:
 Outputs in results/E72_wiring_population/: archive_wirings.csv, archive_population.csv, archive_curve.csv,
 archive_error_corr.csv (part A); stats_variants.csv, population.csv, curve.csv, common_error_pairs.csv,
 yardstick.csv, comparison_table.md, figures, provenance_score.json.
-Usage: ./venv/bin/python E72_wiring_population.py --part A | score
+Usage: ./venv/bin/python experiments/E72_wiring_population.py --part A | score
 """
 from __future__ import annotations
 
@@ -36,8 +36,8 @@ from typing import Dict, List, Optional, Sequence
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
-from E67_apl_effect_fits import full_row, odors_per_kc, refs, OPK_BINS
+from kcq import harness as H
+from experiments.E67_apl_effect_fits import full_row, odors_per_kc, refs, OPK_BINS
 
 EXPERIMENT = 'E72_wiring_population'
 ARCHIVE = H.shared_dir() / 'data' / 'model_outputs'
@@ -299,7 +299,7 @@ def score(out: Path) -> None:
         spread.append(row)
     pd.DataFrame(spread).to_csv(out / 'spread.csv', index=False)
     write_table(st, pd.DataFrame(pops), out)
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E72_wiring_population.py --part score',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E72_wiring_population.py --part score',
         **H.code_commits(),
         members=members)
     (out / 'provenance_score.json').write_text(json.dumps(prov, indent=1) + '\n')
@@ -573,7 +573,7 @@ def wiring_simulator(label: str, p_fit: Dict[str, float], orn: pd.DataFrame, out
     built as E10_joint_fit.py builds the fit's model (bouton_base of that wiring, its own breadth pre-pass, the connectome
     APL weights, KC-KC inhibition with tau TAU), started at `p_fit` (that wiring's fitted absolute parameters)."""
     from al_analysis.mb_model import make_fixed_param_kc_simulator
-    import E10_joint_fit as J
+    from experiments import E10_joint_fit as J
     if label == REAL:
         _, wnorm, W, breadth = J.bouton_base(orn, out_dir, None)
         override = {}
@@ -604,7 +604,7 @@ class PopulationLoss:
     and the per-odor terms on the wiring-mean response rates and fractions. With one wiring it is E10's loss."""
 
     def __init__(self):
-        import E10_joint_fit as J
+        from experiments import E10_joint_fit as J
         self.J = J
         self.w = J.loss_weights('apl')
         self.rate_target = float(H.data_target('ctrl_frac'))
@@ -619,7 +619,7 @@ class PopulationLoss:
 
     def __call__(self, outs: Sequence[Dict[str, tuple]]) -> Dict[str, float]:
         from scipy import stats
-        from E3_drive_dependent_gain import rate
+        from experiments.E3_drive_dependent_gain import rate
         J, v = self.J, H.PRIMARY_MODEL_RDM
         raw = {c: pd.concat([H.model_rdms(*o[c])[v] for o in outs], axis=1).mean(axis=1) for c in ('on', 'off')}
         cal_on, cal_off = [], []
@@ -743,8 +743,8 @@ def popfit_tables(out: Path) -> None:
     """Part D's outputs in the experiment's shared tables: each wiring at the shared parameter set (popfit_<wiring>,
     saved by population_fit) gets its pair distances appended to model_pair_distances_long.csv (as E10_joint_fit.py
     writes a fit's; skipped for tags already there) and a row of parameters in variants.csv (the shared set, each
-    wiring's tied KC->APL and bouton->APL scales, its wiring), for apl_effect_scores.py and the model-output archive."""
-    import E10_joint_fit as J
+    wiring's tied KC->APL and bouton->APL scales, its wiring), for kcq/apl_effect.py and the model-output archive."""
+    from experiments import E10_joint_fit as J
     res = json.loads((out / 'population_fit.json').read_text())
     theta, ratios = res['theta'], res['ratios']
     long_path = out / 'model_pair_distances_long.csv'
@@ -795,8 +795,8 @@ def release(out: Path) -> pd.DataFrame:
     counts are the real wiring's, which the claw permutations and the matched wirings keep per KC), and the squared CV of
     the number of odors per KC with APL on and off (E71's definitions), beside the KC data's per-recording values
     (E71.data_refs). Writes release.csv."""
-    import E10_joint_fit as J
-    import E71_input_scaled_threshold as E71
+    from experiments import E10_joint_fit as J
+    from experiments import E71_input_scaled_threshold as E71
     _, _, W, _ = J.bouton_base(H.apl16_orn_deltas(), H.outputs_dir(EXPERIMENT), None)
     claws = E71.n_claws_per_kc(W)
     fits = new_fit_members()

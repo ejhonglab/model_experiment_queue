@@ -23,7 +23,7 @@ Outputs in <shared>/data/yang_apl16_kc_noise_units/ (`--out`):
   panel, odor, repeat, value), value the change in Fc; olfdb/README_olfdb_unnormalized.md: the metadata for each upload;
 - README_unnormalized.md, provenance_unnormalized.json.
 
-Usage (on viki, where Yang's drive is mounted): ./venv/bin/python yang_apl16_kc_unnormalized.py [--drive-root /media/yang]
+Usage (on viki, where Yang's drive is mounted): ./venv/bin/python data_prep/yang_apl16_kc_unnormalized.py [--drive-root /media/yang]
 """
 from __future__ import annotations
 
@@ -39,8 +39,8 @@ import numpy as np
 import pandas as pd
 import yaml
 
-import kc_remapping_harness as H
-from yang_response_normalization import ODOR_NAMES, RECORDINGS, find_one, olfdb_matrix
+from kcq import harness as H
+from data_prep.yang_response_normalization import ODOR_NAMES, RECORDINGS, find_one, olfdb_matrix
 
 OUT = H.shared_dir() / 'data' / 'yang_apl16_kc_noise_units'
 DATASETS = {'TNT': 19, 'TNT3c': 20}
@@ -116,7 +116,7 @@ def readme(out: Path, checks: list, hal: dict, olf: dict, commit: str) -> None:
     txt = f"""# Yang's APL16 KC responses without normalization (the change in Fc)
 
 The un-normalized counterpart of the baseline-noise-unit files in this folder (README.md), at Yang's request
-(2026-11-10). Written by `yang_apl16_kc_unnormalized.py` of ejhonglab/model_experiment_queue
+(2026-11-10). Written by `data_prep/yang_apl16_kc_unnormalized.py` of ejhonglab/model_experiment_queue
 ({datetime.now():%Y-%m-%d %H:%M}, viki, {commit}) from Yang's suite2p output on her data drive; re-run it there to
 regenerate.
 
@@ -164,7 +164,7 @@ fluorescence units) instead of Yang's whole-recording z (../README_unnormalized.
 Notes for each (suggested; the dataset number from the table): "Responses of olfdb dataset <19 or 20> without normalization: a
 trial's mean Fc (suite2p F - 0.7 Fneu) 2-8 s after odor onset minus its mean over the 5 s before, in raw fluorescence units,
 from Yang's suite2p output (the same responses as the dataset's, before her whole-recording z-score; value / the KC's
-whole-trace SD of Fc gives the dataset's value). Made by yang_apl16_kc_unnormalized.py of
+whole-trace SD of Fc gives the dataset's value). Made by data_prep/yang_apl16_kc_unnormalized.py of
 ejhonglab/model_experiment_queue ({commit})." Not checked with olfdb's own loader on viki (/opt/olfdb is on hal); the layout,
 column names and types are those of the baseline-noise-unit files, which were.
 """
@@ -202,7 +202,7 @@ def main() -> None:
     olf = olfdb_files(d, args.out / 'olfdb')
     commit = subprocess.run(['git', 'rev-parse', '--short', 'HEAD'], cwd=H.HERE, capture_output=True, text=True).stdout.strip()
     readme(args.out, checks, hal, olf, commit)
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='yang_apl16_kc_unnormalized.py',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='data_prep/yang_apl16_kc_unnormalized.py',
                 **H.code_commits(), drive_root=str(args.drive_root), checks=checks, against_hal_dfc=hal, olfdb=olf,
                 files={p.name: sha256(p) for p in (args.out / 'per_trial_long_unnormalized.parquet',
                                                    args.out / 'trialmean_long_unnormalized.parquet',

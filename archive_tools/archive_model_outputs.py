@@ -11,10 +11,10 @@ params.csv (the stats table's identifying and parameter columns: tag, variant, b
 thresholds, APL / KC-KC scales, sweep parameters), provenance.json from results/, and a
 README.md listing the variants. The top-level README.md gets one row per experiment.
 
-    ./venv/bin/python archive_model_outputs.py E16_claw_saturation [E19_... ...]
-    ./venv/bin/python archive_model_outputs.py --all          # every outputs/E* folder
-    ./venv/bin/python archive_model_outputs.py --inputs       # ORN input + base wirings
-    ./venv/bin/python archive_model_outputs.py --all --params-only   # rebuild every params.csv
+    ./venv/bin/python archive_tools/archive_model_outputs.py E16_claw_saturation [E19_... ...]
+    ./venv/bin/python archive_tools/archive_model_outputs.py --all          # every outputs/E* folder
+    ./venv/bin/python archive_tools/archive_model_outputs.py --inputs       # ORN input + base wirings
+    ./venv/bin/python archive_tools/archive_model_outputs.py --all --params-only   # rebuild every params.csv
 
 File and folder names are ASCII only (CLAUDE.md); names with other characters are rejected.
 """
@@ -30,7 +30,7 @@ from pathlib import Path
 
 import pandas as pd
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 ARCHIVE = H.shared_dir() / 'data' / 'model_outputs'
 # identifying columns, every model parameter a script has put in its table (fit_mb_model kwargs,
@@ -187,8 +187,8 @@ def archive_experiment(name: str, host: str, params_only: bool = False, force_ha
 
 
 def save_inputs() -> None:
-    from E3_drive_dependent_gain import BOUTON, BASES
-    from E4_substrate import CLAWS
+    from experiments.E3_drive_dependent_gain import BOUTON, BASES
+    from experiments.E4_substrate import CLAWS
     from al_analysis.mb_model import fit_mb_model
     dst = ARCHIVE / 'inputs'; dst.mkdir(parents=True, exist_ok=True)
     orn = H.apl16_orn_deltas()
@@ -204,7 +204,7 @@ def save_inputs() -> None:
     (dst / 'bases.json').write_text(json.dumps(meta, indent=1))
     (dst / 'README.md').write_text('# Inputs shared by all experiments\n\n'
         '- `orn_deltas_apl16.csv`: the ORN input matrix (glomeruli x the 16 APL16 odors; odor-evoked rate changes in Hz '
-        'relative to the Hallem spontaneous rates olfsysm adds), as `kc_remapping_harness.apl16_orn_deltas()` returns it. '
+        'relative to the Hallem spontaneous rates olfsysm adds), as `kcq.harness.apl16_orn_deltas()` returns it. '
         'paa, euc and -aPine are at substituted ORN concentrations (see the harness).\n'
         '- `wPNKC_<base>.parquet`: the PN->KC claw weight matrix of each standard base (rows: claws with KC id / type / '
         'coordinates; columns: glomeruli, or glomerulus / PN / bouton for the bouton base); `bases.json`: the fit_mb_model '
@@ -222,7 +222,7 @@ def update_index(rows: list) -> None:
         'matrices of every model variant and condition, the variants\' parameters (`params.csv`, `tuned_params.json` where '
         'written), `provenance.json` (script, commit hashes, base kwargs, sweep settings), the run logs and a README listing '
         'the variants. `inputs/` holds what all experiments share: the ORN input matrix and the standard PN->KC wiring matrices. '
-        'File and folder names are ASCII only. Add or refresh a folder with `archive_model_outputs.py` from the repo folder.\n\n'
+        'File and folder names are ASCII only. Add or refresh a folder with `archive_tools/archive_model_outputs.py` from the repository root.\n\n'
         '| experiment | host | files | variants | conditions | copied |\n|---|---|---|---|---|---|\n')
     existing = {}
     if idx.exists():

@@ -38,10 +38,10 @@ provenance.json, and draws E37_spike_only_apl.png and E37_per_odor_suppression.p
 outputs (KC x odor responses and spike counts per variant and condition) go to
 ./outputs/E37_spike_only_apl/.
 
-Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python E37_spike_only_apl.py
+Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python experiments/E37_spike_only_apl.py
            [--fits spk_thr70_k2_s2 spk_thr70_gain1.5_k2_s2 spk_thr40_gain1.5_k2_cap3_s2]
            [--variants ref nopnapl nokckc nopnapl_nokckc] [--redo]
-       ./venv/bin/python E37_spike_only_apl.py --figure-only
+       ./venv/bin/python experiments/E37_spike_only_apl.py --figure-only
 """
 from __future__ import annotations
 
@@ -59,13 +59,13 @@ import numpy as np
 import pandas as pd
 from scipy import stats as sstats
 
-import kc_remapping_harness as H
-import E10_joint_fit as J
-from E1_apl_knockout import bisect_threshold
-from E3_drive_dependent_gain import per_odor_extras, rate
-from E4_substrate import score, kc_by_glomerulus
-from E12_breadth_apl import density_excess
-from E35_divisive_apl import suppression_stats
+from kcq import harness as H
+from experiments import E10_joint_fit as J
+from experiments.E1_apl_knockout import bisect_threshold
+from experiments.E3_drive_dependent_gain import per_odor_extras, rate
+from experiments.E4_substrate import score, kc_by_glomerulus
+from experiments.E12_breadth_apl import density_excess
+from experiments.E35_divisive_apl import suppression_stats
 
 EXPERIMENT = 'E37_spike_only_apl'
 # E36 fit tag -> (experiment holding its fits.csv, label)
@@ -326,7 +326,7 @@ def merge(res_dir: Path, data_rates: dict) -> Tuple[pd.DataFrame, pd.DataFrame, 
     pd.DataFrame(long).to_csv(res_dir / 'stage0_pair_distances_long.csv', index=False)
     (res_dir / 'tuned_params.json').write_text(json.dumps({p['tag']: p['params'] for p in parts}, indent=1,
         default=_jsonable) + '\n')
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E37_spike_only_apl.py',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E37_spike_only_apl.py',
         merged_on=socket.gethostname(), merged_at_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE,
             capture_output=True, text=True).stdout.strip(),
         fits={f: dict(experiment=e, label=l) for f, (e, l) in FITS.items()},

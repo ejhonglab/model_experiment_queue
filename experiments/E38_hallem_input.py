@@ -39,8 +39,8 @@ the fly's from E23). All statistics against the data use the lab's ORN reference
 data's input is what it is; only the model's drive changed).
 
 Outputs: <shared>/results/E38_hallem_input/ and ./outputs/E38_hallem_input/.
-Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python E38_hallem_input.py [--parts A B] [--variants lab hallem_shared ...]
-       ./venv/bin/python E38_hallem_input.py --figure-only
+Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python experiments/E38_hallem_input.py [--parts A B] [--variants lab hallem_shared ...]
+       ./venv/bin/python experiments/E38_hallem_input.py --figure-only
 """
 from __future__ import annotations
 
@@ -56,16 +56,16 @@ import numpy as np
 import pandas as pd
 from scipy import stats as sstats
 
-import kc_remapping_harness as H
-from E1_apl_knockout import bisect_threshold
-from E3_drive_dependent_gain import BOUTON, TARGET, per_odor_extras, rate, tune_and_knockout
-from E4_substrate import score, kc_by_glomerulus
-from E10_joint_fit import TAU, base_kws, bouton_base, breadth_weights
-from E12_breadth_apl import density_excess
-from E16_claw_saturation import spearman_with_refs
-from E18_bouton_depletion import all_refs
-from E26_claw_power import WEAK, deficit_table, sharing_deficit
-from E35_divisive_apl import suppression_stats
+from kcq import harness as H
+from experiments.E1_apl_knockout import bisect_threshold
+from experiments.E3_drive_dependent_gain import BOUTON, TARGET, per_odor_extras, rate, tune_and_knockout
+from experiments.E4_substrate import score, kc_by_glomerulus
+from experiments.E10_joint_fit import TAU, base_kws, bouton_base, breadth_weights
+from experiments.E12_breadth_apl import density_excess
+from experiments.E16_claw_saturation import spearman_with_refs
+from experiments.E18_bouton_depletion import all_refs
+from experiments.E26_claw_power import WEAK, deficit_table, sharing_deficit
+from experiments.E35_divisive_apl import suppression_stats
 
 EXPERIMENT = 'E38_hallem_input'
 HALLEM_ODORS: Dict[str, str] = {'ms': 'methyl salicylate', 'paa': 'phenylacetaldehyde',
@@ -415,7 +415,7 @@ def main() -> None:
 
     if deficits:
         pd.concat(deficits).to_csv(res_dir / 'pair_deficits_long.csv', index=False, mode='a', header=not (res_dir / 'pair_deficits_long.csv').exists())
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E38_hallem_input.py',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E38_hallem_input.py',
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(),
         base=BOUTON, part_a_claw_thr=args.thr, parts=args.parts, ref_fits={t: REF_FITS[t] for t in args.ref_fits}, part_b_variants=args.part_b_variants,
         hallem_odors=HALLEM_ODORS, hallem_conc_log10=HALLEM_CONC, yang_conc={o: H.YANG_CONC[o] for o in HALLEM_ODORS},

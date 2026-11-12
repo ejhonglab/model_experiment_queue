@@ -4,16 +4,16 @@ least-squares line of the control flies' KC distances on the mean ORN distances 
 megamat pairs with the residuals drawn, then the two comparisons the statistic makes (the control
 residual against the same residual of the wild-type KC somata; the residual with APL output
 blocked (TNT) against the natural-source distances). Same computation as
-`kc_remapping_harness.compare_to_references`. Writes results/summary_background/
+`kcq.harness.compare_to_references`. Writes results/summary_background/
 orn_residual_example.png.
-Usage: ./venv/bin/python summary_orn_residual_figure.py
+Usage: ./venv/bin/python reports/summary_orn_residual_figure.py
 """
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 OUT = H.shared_dir() / 'results' / 'summary_background' / 'orn_residual_example.png'
 

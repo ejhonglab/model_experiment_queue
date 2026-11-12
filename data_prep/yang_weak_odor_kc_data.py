@@ -21,7 +21,7 @@ as model input for each odor (orn_input_availability*.csv), from the committed O
 deltas and olfdb's pebbled glomerulus datasets, and README.md describing everything.
 
 Usage:
-    ./venv/bin/python yang_weak_odor_kc_data.py [--shared-dir DIR] [--olfdb URL]
+    ./venv/bin/python data_prep/yang_weak_odor_kc_data.py [--shared-dir DIR] [--olfdb URL]
 """
 from __future__ import annotations
 
@@ -43,9 +43,9 @@ from urllib.request import urlopen
 import numpy as np
 import pandas as pd
 
-from yang_apl16_kc_data import rdm_long
+from data_prep.yang_apl16_kc_data import rdm_long
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parents[1]  # the repository root
 # the al_analysis checkout the installed package comes from (found without importing it)
 AL_ANALYSIS = next(Path(p) for p in importlib.util.find_spec('al_analysis').submodule_search_locations
     if Path(p).is_dir()).parent
@@ -146,7 +146,7 @@ class Checks:
 
 
 def default_shared_dir() -> Path:
-    """The shared directory as kc_remapping_harness.shared_dir() finds it (without its
+    """The shared directory as kcq.harness.shared_dir() finds it (without its
     model imports)."""
     cands = [os.environ.get('KC_REMAPPING_SHARED')] + [
         f'/{root}/tensor/Tom/claude_kc_remapping' for root in ('local', 'mnt', 'media')
@@ -852,7 +852,7 @@ def write_readme(out_dir: Path, results: dict, avail: pd.DataFrame,
     a = L.append
     now = datetime.now().strftime('%Y-%m-%d %H:%M')
     a("# Yang's diagnostic-odor mixture and dilute natural-mixture KC data\n")
-    a(f'Made {now} by `yang_weak_odor_kc_data.py` (in ejhonglab/model_experiment_queue) '
+    a(f'Made {now} by `data_prep/yang_weak_odor_kc_data.py` (in ejhonglab/model_experiment_queue) '
         'from the files Yang sent Tom in April 2026 '
         '(`al_analysis/data/from_yang/20260415_YZtransfer/`, committed in al_analysis). '
         'Re-run that script to regenerate everything here (it overwrites this folder). '
@@ -1141,7 +1141,7 @@ def write_readme(out_dir: Path, results: dict, avail: pd.DataFrame,
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('--shared-dir', type=Path, default=None,
-        help='the shared directory (default: as kc_remapping_harness.shared_dir() finds '
+        help='the shared directory (default: as kcq.harness.shared_dir() finds '
         'it: $KC_REMAPPING_SHARED, /local/tensor/..., /mnt/tensor/...)')
     ap.add_argument('--olfdb', default=DEFAULT_OLFDB)
     args = ap.parse_args()
@@ -1189,7 +1189,7 @@ def main() -> None:
     mix_avail.to_csv(out_dir / 'orn_input_availability_mixtures.csv', index=False)
 
     (out_dir / 'checks.txt').write_text(
-        f'Checks run by yang_weak_odor_kc_data.py, {datetime.now():%Y-%m-%d %H:%M}\n'
+        f'Checks run by data_prep/yang_weak_odor_kc_data.py, {datetime.now():%Y-%m-%d %H:%M}\n'
         + '\n'.join(checks.lines) + '\n')
     write_readme(out_dir, results, avail, mix_avail, checks, binary_only, dilute_rules)
 
@@ -1205,7 +1205,7 @@ def main() -> None:
         'queue_commit': git('rev-parse', 'HEAD'),
         'al_analysis_commit': git('rev-parse', 'HEAD', cwd=AL_ANALYSIS),
         'script_uncommitted_changes': bool(git('status', '--porcelain', '--',
-            Path(__file__).name)),
+            str(Path(__file__).resolve().relative_to(HERE)))),
         'olfdb': args.olfdb,
         'olfdb_orn_datasets': list(OLFDB_ORN_DATASETS),
         'response_thresh': RESPONSE_THRESH,

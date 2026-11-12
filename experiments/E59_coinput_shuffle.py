@@ -31,9 +31,9 @@ Outputs: <shared>/results/E59_coinput_shuffle/ (matching_outcome.csv, stats_vari
 per_odor_response_fractions.csv, model_pair_distances_long.csv, comparison.csv, per_class.csv,
 paired_differences.csv, comparison_table.md, E59_coinput_shuffle.png, provenance.json; fits.csv from the
 re-fits) and ./outputs/E59_coinput_shuffle/ (the matched wirings, per-variant responses / spike counts).
-Usage: OMP_NUM_THREADS=2 ./venv/bin/python E59_coinput_shuffle.py --plan      (the matchings only, 6 processes)
-       OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python E59_coinput_shuffle.py [--seeds 1 2 3]
-       ./venv/bin/python E59_coinput_shuffle.py --summary
+Usage: OMP_NUM_THREADS=2 ./venv/bin/python experiments/E59_coinput_shuffle.py --plan      (the matchings only, 6 processes)
+       OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python experiments/E59_coinput_shuffle.py [--seeds 1 2 3]
+       ./venv/bin/python experiments/E59_coinput_shuffle.py --summary
 """
 from __future__ import annotations
 import argparse
@@ -46,11 +46,11 @@ from typing import Dict, List, Tuple
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
-from E47_wiring_features import MODELS, STATS, V, CLASS_LABEL, data_values
-from E52_glomerulus_pairs import base_wiring
-from E54_gain_and_lesion import run_variants, MODEL_LABEL, EXPERIMENT as E54
-from E57_convergence_transplant import PAIRED_COLS, E47, EXPERIMENT as E57
+from kcq import harness as H
+from experiments.E47_wiring_features import MODELS, STATS, V, CLASS_LABEL, data_values
+from experiments.E52_glomerulus_pairs import base_wiring
+from experiments.E54_gain_and_lesion import run_variants, MODEL_LABEL, EXPERIMENT as E54
+from experiments.E57_convergence_transplant import PAIRED_COLS, E47, EXPERIMENT as E57
 
 EXPERIMENT = 'E59_coinput_shuffle'
 CLASSES = ('curveball_within_type', 'curveball')

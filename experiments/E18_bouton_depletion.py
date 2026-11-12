@@ -13,7 +13,7 @@ spontaneous (median) and up to ~220 Hz during odors; sustained output saturates 
 1 / (p tau_r) Hz, so p 0.003-0.03 is mild to moderate compression, p >= 0.1 strong.
 
 Outputs: <shared>/results/E18_bouton_depletion/ and ./outputs/E18_bouton_depletion/.
-Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python E18_bouton_depletion.py
+Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python experiments/E18_bouton_depletion.py
     [--p 0.003 0.01 0.03 0.1] [--tau 0.05 0.2 1.0] [--figure-only]
 """
 from __future__ import annotations
@@ -28,11 +28,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
-from E3_drive_dependent_gain import BOUTON, TARGET, per_odor_extras, rate, tune_and_knockout
-from E4_substrate import score, kc_by_glomerulus
-from E12_breadth_apl import density_excess
-from E16_claw_saturation import reference_pairs, spearman_with_refs
+from kcq import harness as H
+from experiments.E3_drive_dependent_gain import BOUTON, TARGET, per_odor_extras, rate, tune_and_knockout
+from experiments.E4_substrate import score, kc_by_glomerulus
+from experiments.E12_breadth_apl import density_excess
+from experiments.E16_claw_saturation import reference_pairs, spearman_with_refs
 
 EXPERIMENT = 'E18_bouton_depletion'
 
@@ -192,7 +192,7 @@ def main() -> None:
         pairs.clear()
 
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),
-        script='E18_bouton_depletion.py', host=subprocess.run(['hostname'], capture_output=True,
+        script='experiments/E18_bouton_depletion.py', host=subprocess.run(['hostname'], capture_output=True,
             text=True).stdout.strip(),
         **H.code_commits(),
         olfsysm_commit=subprocess.run(['git', 'rev-parse', 'HEAD'],

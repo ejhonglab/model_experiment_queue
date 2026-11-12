@@ -40,7 +40,7 @@ comparison_table.md, agreement.csv, E55_predicted_vs_observed.png, E55_pairs.png
 ./outputs/E55_margin_proxy/ (per model: <model>_kc_odor.parquet, the per-KC x odor x condition table with
 the margins and change probabilities; <model>_replay.npz, the replay model's trials; <model>_checks.json).
 With the cached files present a model is not rebuilt (--resim rebuilds).
-Usage: OMP_NUM_THREADS=12 nice -n 10 ./venv/bin/python E55_margin_proxy.py [--models NAME ...] [--seed 43]
+Usage: OMP_NUM_THREADS=12 nice -n 10 ./venv/bin/python experiments/E55_margin_proxy.py [--models NAME ...] [--seed 43]
   [--resim] [--out DIR]
 """
 from __future__ import annotations
@@ -58,10 +58,10 @@ import numpy as np
 import pandas as pd
 from scipy import stats as sstats
 
-import kc_remapping_harness as H
-import noise_floor_trial_distances as NF
-import E43_model_trial_noise as E43
-import E51_block_carriers as E51C
+from kcq import harness as H
+from kcq import noise_floor as NF
+from experiments import E43_model_trial_noise as E43
+from experiments import E51_block_carriers as E51C
 
 EXPERIMENT = 'E55_margin_proxy'
 RES = H.shared_dir() / 'results'
@@ -643,7 +643,7 @@ def main() -> None:
     agree.to_csv(out / 'agreement.csv', index=False)
     write_table(per_model, out, agree)
     make_figures(per_model, per_pair, out)
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E55_margin_proxy.py',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E55_margin_proxy.py',
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(), **commits,
         model=H.model_provenance(orn_deltas=orn), approx_conc_note=H.APPROX_CONC_NOTE, models=names,
         pipeline_info={n: {k: (str(v) if isinstance(v, Path) else v) for k, v in infos[n].items()} for n in names},

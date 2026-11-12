@@ -8,21 +8,17 @@ the eight wirings' simulators reproduces its saved fit exactly at factor 1 and w
 E75's two archived profile points are reproduced exactly. Needs the shared directory; skipped without it."""
 
 import json
-import sys
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
 
-EXP_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(EXP_DIR))
-H = pytest.importorskip('kc_remapping_harness')
+H = pytest.importorskip('kcq.harness')
 try:
     H.data_targets_path().read_bytes()
 except (FileNotFoundError, OSError):
     pytest.skip('the shared directory (data-target registry) is not available', allow_module_level=True)
-E83 = pytest.importorskip('E83_cross_wiring_fit')
+E83 = pytest.importorskip('experiments.E83_cross_wiring_fit')
 
 
 @pytest.mark.parametrize('half', ['A', 'B'])
@@ -46,7 +42,7 @@ def test_populations_reproduce_the_probe():
         got = tuple(round(sc[f'{t}_pattern'], 4) for t in ('halfA', 'halfB', 'z8', 'z6'))
         assert got == vals, name
     # the eight wirings' error against all recordings is E72's common error
-    import E75_glomerulus_apl_profile as E75
+    from experiments import E75_glomerulus_apl_profile as E75
     c = E83._cs(E75.common_error('cal'))
     e = E83.pattern_error(E83.population([d[w] for w in E83.ALL_WIRINGS]), E83.targets()['z8']).reindex(c.index)
     assert float(np.max(np.abs(e.to_numpy() - c.to_numpy()))) < 1e-9

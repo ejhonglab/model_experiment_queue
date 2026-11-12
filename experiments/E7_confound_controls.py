@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """E7: confound controls and noise floor for the control (TNT3c) vs APL>TNT KC matrices.
 
-Data-only (Yang's APL16 per-recording KC data, via `kc_remapping_harness`). Four parts:
+Data-only (Yang's APL16 per-recording KC data, via `kcq.harness`). Four parts:
 
 A. Noise floor. Bootstrap over recordings and over flies of every pair-level statistic
    the report used (and the harness computes); per-pair bootstrap SD of the isotonic
@@ -23,7 +23,7 @@ D. Pipeline variants. Graded / binary / thresholded values x all / responsive ce
 Compact outputs (CSV tables, PDF/PNG figures, summary.json) go to the shared
 results/E7_confound_controls/; nothing large is produced.
 
-Usage: ./venv/bin/python E7_confound_controls.py [--n-boot 2000] [--n-split 1000] [--quick]
+Usage: ./venv/bin/python experiments/E7_confound_controls.py [--n-boot 2000] [--n-split 1000] [--quick]
 """
 import argparse
 from functools import partial
@@ -35,7 +35,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 
 EXP = 'E7_confound_controls'

@@ -18,8 +18,8 @@ model with the data's fractions and the untuned model's; bisection_history.csv; 
 harness scoring columns, per_odor_response_fractions.csv, model_pair_distances_long.csv, comparison_table.md,
 E62_rate_oracle.png, provenance.json) and ./outputs/E62_rate_oracle/ (per-variant responses / spike counts,
 the bouton bases).
-Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python E62_rate_oracle.py [--models thr40_gain1.5 ...] [--iters 8]
-       ./venv/bin/python E62_rate_oracle.py --summary
+Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python experiments/E62_rate_oracle.py [--models thr40_gain1.5 ...] [--iters 8]
+       ./venv/bin/python experiments/E62_rate_oracle.py --summary
 """
 from __future__ import annotations
 import argparse
@@ -32,9 +32,9 @@ from typing import Dict, List, Tuple
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
-from E47_wiring_features import MODELS, STATS, V, SCALE_KEYS, data_values, fitted_params
-from E54_gain_and_lesion import MODEL_LABEL
+from kcq import harness as H
+from experiments.E47_wiring_features import MODELS, STATS, V, SCALE_KEYS, data_values, fitted_params
+from experiments.E54_gain_and_lesion import MODEL_LABEL
 
 EXPERIMENT = 'E62_rate_oracle'
 ARMS = {'untuned': None, 'on': ('TNT3c', 'on'), 'off': ('TNT', 'off')}
@@ -65,15 +65,15 @@ def per_odor_fractions(responses: pd.DataFrame) -> pd.Series:
 
 def run_all(models: List[str], iters: int, res_dir: Path, out_dir: Path) -> None:
     from al_analysis.mb_model import make_fixed_param_kc_simulator
-    from E3_drive_dependent_gain import per_odor_extras, rate
-    from E4_substrate import score, kc_by_glomerulus
-    from E10_joint_fit import TAU, base_kws, bouton_base, breadth_weights, make_loss
-    from E12_breadth_apl import density_excess
-    from E16_claw_saturation import spearman_with_refs
-    from E18_bouton_depletion import all_refs
-    from E26_claw_power import sharing_deficit
-    from E35_divisive_apl import suppression_stats
-    from E44_operating_point import fraction_stats, losses, CTRL_FRAC
+    from experiments.E3_drive_dependent_gain import per_odor_extras, rate
+    from experiments.E4_substrate import score, kc_by_glomerulus
+    from experiments.E10_joint_fit import TAU, base_kws, bouton_base, breadth_weights, make_loss
+    from experiments.E12_breadth_apl import density_excess
+    from experiments.E16_claw_saturation import spearman_with_refs
+    from experiments.E18_bouton_depletion import all_refs
+    from experiments.E26_claw_power import sharing_deficit
+    from experiments.E35_divisive_apl import suppression_stats
+    from experiments.E44_operating_point import fraction_stats, losses, CTRL_FRAC
     stats_path = res_dir / 'stats_variants.csv'; fracs_path = res_dir / 'per_odor_response_fractions.csv'
     scales_path = res_dir / 'scales.csv'; hist_path = res_dir / 'bisection_history.csv'
     long_path = res_dir / 'model_pair_distances_long.csv'
@@ -187,7 +187,7 @@ def run_all(models: List[str], iters: int, res_dir: Path, out_dir: Path) -> None
             finish(tag, meta, on_out, off_out, W)
     prov_path = res_dir / 'provenance.json'
     prov = json.loads(prov_path.read_text()) if prov_path.exists() else {}
-    prov['runs'] = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E62_rate_oracle.py', models=models,
+    prov['runs'] = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E62_rate_oracle.py', models=models,
         arms=list(ARMS), iters=iters, bracket=[LO, HI], model_provenance=model_prov)
     prov_path.write_text(json.dumps(prov, indent=1, default=str))
 

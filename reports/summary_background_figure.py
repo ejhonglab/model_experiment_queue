@@ -17,7 +17,7 @@ output blocked (TNT)" everywhere; matrix panel titles name only what is shown an
 appears once, in the colorbar label, by name; long titles are split over two lines. Writes
 results/summary_background/{summary_background,summary_background_pearson}.png and merges the
 numbers it quotes into background_numbers.json there.
-Usage: ./venv/bin/python summary_background_figure.py
+Usage: ./venv/bin/python reports/summary_background_figure.py
 """
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ from itertools import combinations
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 OUT = H.shared_dir() / 'results' / 'summary_background'
 BLOCK_COLOR = '#d9480f'

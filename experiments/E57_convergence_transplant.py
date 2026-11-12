@@ -22,9 +22,9 @@ Outputs: <shared>/results/E57_convergence_transplant/ (transplant_pairs.csv, tra
 stats_variants.csv, comparison.csv, comparison_table.md, per_class.csv, paired_differences.csv, E57_convergence_transplant.png,
 provenance.json) and ./outputs/E57_convergence_transplant/ (the transplanted wirings, swaps,
 per-variant responses / spike counts, partC/ caches).
-Usage: ./venv/bin/python E57_convergence_transplant.py --plan            (the wirings only)
-       OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python E57_convergence_transplant.py [--seeds 1 2 3]
-       ./venv/bin/python E57_convergence_transplant.py --summary
+Usage: ./venv/bin/python experiments/E57_convergence_transplant.py --plan            (the wirings only)
+       OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python experiments/E57_convergence_transplant.py [--seeds 1 2 3]
+       ./venv/bin/python experiments/E57_convergence_transplant.py --summary
 """
 from __future__ import annotations
 import argparse
@@ -36,10 +36,10 @@ from typing import Dict, List, Tuple
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
-from E47_wiring_features import MODELS, STATS, V, CLASS_LABEL, data_values
-from E52_glomerulus_pairs import base_wiring, EXPERIMENT as E52
-from E54_gain_and_lesion import run_variants, MODEL_LABEL, EXPERIMENT as E54
+from kcq import harness as H
+from experiments.E47_wiring_features import MODELS, STATS, V, CLASS_LABEL, data_values
+from experiments.E52_glomerulus_pairs import base_wiring, EXPERIMENT as E52
+from experiments.E54_gain_and_lesion import run_variants, MODEL_LABEL, EXPERIMENT as E54
 
 EXPERIMENT = 'E57_convergence_transplant'
 E47 = 'E47_wiring_features'

@@ -3,7 +3,7 @@
 
 Yang's APL16 recordings hold three repeats of the 17 stimuli (45 s apart, about 13 min per repeat); olfdb's
 `repeat` is taken as the repeat's number. Every statistic here is computed per recording from the single trials
-(arrays repeats x KCs x odors, `kc_remapping_harness.yang_recording_trials`), averaged over recordings with equal
+(arrays repeats x KCs x odors, `kcq.harness.yang_recording_trials`), averaged over recordings with equal
 weight as the main target is, with 90 % intervals over 1000 resamples of the recordings (each genotype drawn with
 replacement, seed 0). The repeat statistics themselves are harness functions (`distances_by_kind`,
 `same_repeat_gap`, `noise_free_pair_distances`, `repeat_pair_table`, `repeat_response_stats`,
@@ -28,7 +28,7 @@ binarized (above 1 z, or above the bands' noise_threshold in baseline-noise unit
 - A4, noise-free distances and the noise-free per-pair APL effect (noise_free_pairs.csv, noise_free_summary.csv):
   per recording and pair, one minus the mean single-trial cosine between different repeats over the geometric mean
   of the two odors' same-odor values, averaged over recordings; from adjacent repeats and from the first against
-  the third as the check; the correction in use (noise_floor_trial_distances.py) and the trial means beside; the
+  the third as the check; the correction in use (kcq/noise_floor.py) and the trial means beside; the
   floor of the APL-effect loss and the ceiling of ρ on the per-pair APL effect by the resampling the present target
   uses (data_targets.apl_effect_resamples); the block, ρ on odor-odor distances between the two KC matrices and the
   isotonic R² of the on-against-off curve on each estimator's matrices.
@@ -54,7 +54,7 @@ binarized (above 1 z, or above the bands' noise_threshold in baseline-noise unit
 
 Part B, the models against the noise-free effect and the saved trials (`--part B`):
 - B1 (by_variant_noise_free.csv): every archived variant (each results/E*/model_pair_distances_long.csv, read as
-  apl_effect_scores.py reads them) on raw counts, and under the calibrated readout where its spike counts are
+  kcq/apl_effect.py reads them) on raw counts, and under the calibrated readout where its spike counts are
   archived (E72's `distances(..., 'cal')`), against the flies' per-pair APL effect as measured and against the
   noise-free effect (Yang's z): loss, mean and pattern parts, ρ on the per-pair APL effect, each group's error by
   condition; the rank correlation of the two losses over variants; the populations (the breadth-2 family's four
@@ -73,7 +73,7 @@ Part B, the models against the noise-free effect and the saved trials (`--part B
 the CSVs; `--part A` and `--part B` end with it. `registry_entries()` gives data_targets.py the new entries
 (`repeat_*`, `noise_free_*`). Outputs: <shared>/results/E81_repeat_structure/ (the CSVs above, comparison_table.md,
 E81_*.png, provenance_A.json / provenance_B.json, recorded at the start of each part).
-Usage (light CPU): OMP_NUM_THREADS=2 nice -n 10 ./venv/bin/python -u E81_repeat_structure.py --part A
+Usage (light CPU): OMP_NUM_THREADS=2 nice -n 10 ./venv/bin/python -u experiments/E81_repeat_structure.py --part A
 (or --part A6 for the stimulus order alone; provenance_A6.json).
 """
 from __future__ import annotations
@@ -91,7 +91,7 @@ from typing import Callable, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 EXPERIMENT = 'E81_repeat_structure'
 ODORS: List[str] = list(H.APL16_ODORS)
@@ -158,7 +158,7 @@ def _sha(p: Path) -> str:
 
 def write_provenance(part: str, settings: dict, inputs: Sequence[Path]) -> None:
     """provenance_<part>.json, at the start of the part (the code that runs, not the checkout at the end)."""
-    prov = dict(script='E81_repeat_structure.py', part=part, started=time.strftime('%Y-%m-%d %H:%M:%S%z'),
+    prov = dict(script='experiments/E81_repeat_structure.py', part=part, started=time.strftime('%Y-%m-%d %H:%M:%S%z'),
                 settings=settings, inputs={str(p): _sha(p) for p in inputs if Path(p).exists()},
                 code=H.model_provenance())
     (out_dir() / f'provenance_{part}.json').write_text(json.dumps(prov, indent=1, default=str) + '\n')
@@ -491,7 +491,7 @@ def part_a4(n_boot: int) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """A4: noise_free_pairs.csv (per units and pair: each estimator's distances and effect, the noise-free ones with
     intervals) and noise_free_summary.csv (scalars with intervals: means, groups, six pairs, the block, ρ between the
     two KC matrices, the isotonic R², the floor of the loss and the ceiling of ρ on the per-pair APL effect)."""
-    import data_targets as DT
+    from kcq import data_targets as DT
     srows, prows = [], []
     for units in UNITS:
         for values in (('graded', 'thresholded', 'binary') if units == 'z' else ('graded',)):
@@ -547,8 +547,8 @@ def common_errors() -> Dict[str, pd.Series]:
 
 
 def model_pair_distances(folder: str, tag: str) -> Tuple[pd.Series, pd.Series]:
-    """(APL on, acute APL off) raw-count cosine distances of one archived variant (apl_effect_scores.model_pairs)."""
-    import apl_effect_scores as AES
+    """(APL on, acute APL off) raw-count cosine distances of one archived variant (kcq.apl_effect.model_pairs)."""
+    from kcq import apl_effect as AES
     return AES.model_pairs(H.results_dir(folder))[tag]
 
 
@@ -1535,7 +1535,7 @@ def targets_z() -> Dict[str, dict]:
 
 def populations() -> Dict[str, List[Tuple[str, str, str]]]:
     """The populations scored in B1: [(label, folder, tag)]."""
-    import E72_wiring_population as E72
+    from experiments import E72_wiring_population as E72
     b8 = E72.new_fit_members()
     b4 = [m for m in b8 if m[0] in (E72.REAL, 'P1', 'P2', 'M1')]
     g4 = E72.new_fit_members(prefix_tag=E72.G_SUFFIX, real_folder=E72.G_REAL[0], real_tag=E72.G_REAL[1], draws=E72.G_DRAWS)
@@ -1544,8 +1544,8 @@ def populations() -> Dict[str, List[Tuple[str, str, str]]]:
 
 def part_b1(cal: bool = True) -> pd.DataFrame:
     """B1: by_variant_noise_free.csv, one row per archived variant (folder, tag) and per population."""
-    import apl_effect_scores as AES
-    import E72_wiring_population as E72
+    from kcq import apl_effect as AES
+    from experiments import E72_wiring_population as E72
     tg = targets_z()
     rows = []
     folders = sorted(p for p in (H.shared_dir() / 'results').glob('E*_*') if p.is_dir() and re.match(r'E\d+_', p.name))
@@ -1587,7 +1587,7 @@ def part_b1(cal: bool = True) -> pd.DataFrame:
                 row.update({f'{ro}_{tname}_split_{k}': v for k, v in H.inherited_shares(s).items()})
         rows.append(row)
     df = pd.DataFrame(rows)
-    # the present scores (apl_effect_scores.py's by_variant.csv) beside, as the check that raw_measured is them
+    # the present scores (kcq/apl_effect.py's by_variant.csv) beside, as the check that raw_measured is them
     bv = H.shared_dir() / 'results' / 'apl_effect' / 'by_variant.csv'
     if bv.exists():
         b = pd.read_csv(bv)[['folder', 'tag', 'spike_counts_cosine__apl_effect_rmse', 'realism_flag']]
@@ -1844,7 +1844,7 @@ def registry_entries() -> List[Tuple[str, float, str, Optional[Tuple[float, floa
     r = a4.loc[[('effect', 'noise_free', 'spearman_with_measured')]].iloc[0]
     out.append(('noise_free_apl_effect_rho_measured', r.value, 'ρ between the noise-free per-pair APL effect and the effect '
                 'as measured (trial means; the main target)', (r.lo, r.hi)))
-    import data_targets as DT
+    from kcq import data_targets as DT
     effect, boot_mean, boot_rmse, sh_rho = DT.apl_effect_resamples({g: T[g]['noise_free'] for g in GENOS})
     out.append(('noise_free_apl_effect_rmse_floor', float(np.mean(boot_rmse)), 'floor of the APL-effect loss against the '
                 'noise-free per-pair APL effect (as apl_effect_rmse_floor: resampled recordings against the measured ones)',
@@ -2240,7 +2240,7 @@ def table_b() -> List[str]:
                  'among the lowest ten by the noise-free one.')
     if 'present_raw_loss' in v:
         d = (v.raw_measured_loss - v.present_raw_loss).abs().max()
-        L.append(f'Check: the raw loss against the effect as measured equals apl_effect_scores.py\'s by_variant.csv to {d:.1e}.')
+        L.append(f'Check: the raw loss against the effect as measured equals kcq/apl_effect.py\'s by_variant.csv to {d:.1e}.')
     p = b1[b1.kind == 'population'].set_index('tag')
     L += ['', 'Populations (the mean over wirings of the pair distances per condition), no trial noise:', '',
           '| statistic | ' + ' | '.join(t.replace('_', ' ') for t in p.index) + ' |', '|---|' + '---:|' * len(p)]

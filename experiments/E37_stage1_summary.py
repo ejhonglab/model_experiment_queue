@@ -9,12 +9,12 @@ from their saved APL-on / acute APL-off responses) and the absolute fitted scale
 olfsysm's 0.5 ms step; since olfsysm ae6869c a KC spike's drive to APL no longer depends on the
 step, with outputs at 0.5 ms unchanged).
 
-Usage: ./venv/bin/python E37_stage1_summary.py
+Usage: ./venv/bin/python experiments/E37_stage1_summary.py
 """
 import pandas as pd
 
-import kc_remapping_harness as H
-from E35_divisive_apl import suppression_stats
+from kcq import harness as H
+from experiments.E35_divisive_apl import suppression_stats
 
 EXPERIMENT = 'E37_spike_only_apl'
 # (label, E36 optimum's stage-0 tag stem, stage-1 fit tag)

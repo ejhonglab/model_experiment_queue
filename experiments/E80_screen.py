@@ -57,8 +57,8 @@ screen_provenance.json, gate.csv, b1_curve.csv. Spike counts and responses of ev
 outputs/E80_remaining_candidates/screen/ (tag <base>_<point_id>, base C2 or fit0; conditions on / acute_off), with each
 point's per-KC threshold factors (<tag>_kc_thr_factor.parquet) where it has them.
 
-Usage (from this folder):
-    OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ./venv/bin/python -u E80_screen.py [--only ID ...] [--list]
+Usage (from the repository root):
+    OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ./venv/bin/python -u experiments/E80_screen.py [--only ID ...] [--list]
         [--workers N] [--gate]
 """
 from __future__ import annotations
@@ -75,8 +75,8 @@ from typing import Callable, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
-import E77_input_screen as S77
+from kcq import harness as H
+from experiments import E77_input_screen as S77
 
 EXPERIMENT = 'E80_remaining_candidates'
 C2 = S77.C2
@@ -199,7 +199,7 @@ class Base:
     target_on / target_off (response counts), size, n_kc, kws (scalar kwargs), label."""
 
     def __init__(self, name: str):
-        import E72_wiring_population as E72
+        from experiments import E72_wiring_population as E72
         if name not in BASES:
             raise ValueError(name)
         self.name = name
@@ -211,7 +211,7 @@ class Base:
             self.experiment, self.tag = C2
             self.label = 'C2, the breadth-2 APL-effect fit (E67)'
         else:
-            import E43_model_trial_noise as E43
+            from experiments import E43_model_trial_noise as E43
             from al_analysis.mb_model import make_fixed_param_kc_simulator
             self.experiment, self.tag = FIT0
             name43 = E43.model_from(f'{FIT0[0]}:{FIT0[1]}')
@@ -277,7 +277,7 @@ def _tied(p: dict, x: float) -> dict:
 def simulate_b1(base: Base, c: float, label: str = '') -> Tuple[Dict[str, tuple], dict]:
     """B1: the APL-on run with every KC's threshold x 1 / c and the APL scale (TIED_ON) bisected to the base's APL-on
     count; the APL-off run the base's own."""
-    import E69_kc_firing_ceiling as E69
+    from experiments import E69_kc_firing_ceiling as E69
     t0 = time.time()
     f = np.full(base.n_kc, 1.0 / float(c))
     x, (r, s), hist, at_b = E69.bisect_factor(lambda v: base.sim(_tied(base.p, v), kc_thr_factor=f), base.target_on,
@@ -291,7 +291,7 @@ def simulate_b1(base: Base, c: float, label: str = '') -> Tuple[Dict[str, tuple]
 def simulate_off_thr(base: Base, factors: pd.Series, label: str = '') -> Tuple[Dict[str, tuple], dict]:
     """B4: the APL-off run with the per-KC threshold factors `factors` (output row order) and the common threshold
     (fixed_thr) bisected to the base's APL-off count; the APL-on run the base's own."""
-    import E69_kc_firing_ceiling as E69
+    from experiments import E69_kc_firing_ceiling as E69
     t0 = time.time()
     if not factors.index.equals(base.type_index()):
         raise ValueError("the factors are not in the base's KC order")
@@ -321,7 +321,7 @@ def aplkc_weight_factors(base: Base, kc_type: str, factor: float) -> np.ndarray:
 def simulate_b5(base: Base, kc_type: str, factor: float, label: str = '') -> Tuple[Dict[str, tuple], dict]:
     """B5: the APL->KC weights of `kc_type`'s KCs x `factor` (in place in the simulator's unscaled weights, restored
     after), the APL scale (TIED_ON) bisected to the base's APL-on count; the APL-off run the base's own."""
-    import E69_kc_firing_ceiling as E69
+    from experiments import E69_kc_firing_ceiling as E69
     t0 = time.time()
     cell = base.info['cells']['wAPLKC_unscaled'].cell_contents
     w0 = cell.copy()
@@ -353,7 +353,7 @@ def _odor_task(sim: Callable, mp, order: np.ndarray, names: Sequence[str], p: di
     `mp.sim_only`), the APL-off run at a threshold factor (given, `thr`, or bisected to `target_off` responses), the
     APL-on run at that factor and C2's APL scales, and the APL-on run at a per-odor APL scale (given, `apl`, or bisected
     to `target_on` responses at that threshold factor). Every threshold factor goes through `kc_thr_factor` (all KCs)."""
-    import E69_kc_firing_ceiling as E69
+    from experiments import E69_kc_firing_ceiling as E69
     p_off = dict(p, wAPLKC_scale=0.0, wAPLPN_scale=0.0)
     out = []
     for jj in range(len(order)):
@@ -509,8 +509,8 @@ class OdorPool:
 def b3_targets(units: str, cols: Sequence[str], n_kc: int) -> Dict[str, List[int]]:
     """B3's per-odor response counts (round(fraction x KCs)): 'target_off' the flies' with APL output blocked (TNT),
     'target_on' the control flies', in `units` ('noise': the registry's noise_<tnt|ctrl>_frac_<odor>; 'z': Yang's z,
-    `kc_remapping_harness.yang_response_fractions`), in the outputs' column order."""
-    import apl_effect_scores as A
+    `kcq.harness.yang_response_fractions`), in the outputs' column order."""
+    from kcq import apl_effect as A
     ab = [H.odor_abbrev(c) for c in cols]
     return {f'target_{c}': [int(round(float(A.frac_data(c, units)[o]) * n_kc)) for o in ab] for c in ('off', 'on')}
 
@@ -526,7 +526,7 @@ def noise_data() -> dict:
     checked against its effect__noise__graded), its mean and the registry's 90 % interval of the mean
     (noise_apl_effect_mean), the noise-unit calibration target of the readout (noise_apl_effect_cal_target), and the
     mean of the effect in Yang's z (the target as defined)."""
-    import E72_wiring_population as E72
+    from experiments import E72_wiring_population as E72
     if not _NOISE:
         path = H.shared_dir() / E76_PAIRS
         df = pd.read_csv(path)
@@ -547,7 +547,7 @@ def noise_scores(o: Dict[str, tuple]) -> Tuple[dict, pd.DataFrame]:
     with K set on its APL-on counts to the noise-unit calibration target (`raw_noise_*`, `cal_noise_*`: loss, mean error,
     pattern, per-odor and pair-specific parts, ρ); the raw-count mean's error against the effect in Yang's z and whether
     it is inside the noise-unit interval. Returns (row, per-pair distances under the noise-unit readout)."""
-    import E72_wiring_population as E72
+    from experiments import E72_wiring_population as E72
     N = noise_data()
     s_on, s_off = o['on'][1].astype(float), o['off'][1].astype(float)
     K = H.calibrate_readout(s_on, 'saturating', N['cal_target'], stat='participation_ratio', responders_min=2.0)
@@ -702,7 +702,7 @@ def write_provenance(out: Path, specs: Sequence[dict], bases: Dict[str, Base]) -
     P = S77.c2_parts()
     N = noise_data()
     reg = H.data_targets_path()
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E80_screen.py',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E80_screen.py',
                 **H.code_commits(), model=H.model_provenance(orn_deltas=P['orn'], _wPNKC=P['W']),
                 bases={k: dict(experiment=b.experiment, tag=b.tag, label=b.label, params=b.p, kws=b.kws,
                                targets=dict(on=b.target_on, off=b.target_off, size=b.size), build_seconds=b.build_seconds,
@@ -986,7 +986,7 @@ def gate_table(s: pd.DataFrame, specs: Sequence[dict]) -> pd.DataFrame:
     half that share, (3) where it has a control (`control_of`), the control gains less than half as much on the pattern
     part; passes if inside the four bands (the rule since 2026-11-10 16:10) and all three hold. A handle's best point is
     its lowest cal_pattern among its points that are not identities or controls; it goes on if it passes."""
-    import E77_input_side_common_error as G
+    from experiments import E77_input_side_common_error as G
     base = s.loc['base']
     sp = {x['point_id']: x for x in specs}
     keep = [i for i in s.index if i in sp and not sp[i]['identity'] and sp[i]['handle'] not in ('B1', 'B1_fit0')]

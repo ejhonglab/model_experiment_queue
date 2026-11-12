@@ -22,7 +22,7 @@ that has them: E63's own, then E58's, E48's and E51's), and writes to results/E6
 - E63_block_pairs.png and E63_fit_histories.png as the other write-ups' figures;
 - with --per-odor, per_odor_rates.csv and E63_per_odor_rates.png.
 Nothing is simulated.
-Usage: ./venv/bin/python E63_rho_fit.py [--out DIR] [--per-odor]
+Usage: ./venv/bin/python experiments/E63_rho_fit.py [--out DIR] [--per-odor]
 """
 from __future__ import annotations
 
@@ -37,9 +37,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
-import E51_noise_robust_block as E51
-import E53_kckc_held_block as E53
+from kcq import harness as H
+from experiments import E51_noise_robust_block as E51
+from experiments import E53_kckc_held_block as E53
 
 EXPERIMENT = 'E63_rho_fit'
 V = 'spike_counts_cosine__'
@@ -54,7 +54,7 @@ FIT_COLS = E53.FIT_COLS + ('fit_term_vcf_off', 'loss_variant')
 
 
 def apl_effect_row(experiment: str, tag: str) -> dict:
-    """The APL-effect statistics (`kc_remapping_harness.apl_effect_stats`: the per-pair APL effect,
+    """The APL-effect statistics (`kcq.harness.apl_effect_stats`: the per-pair APL effect,
     APL-on minus acute APL-off distance, against the KC data's) of fit `tag` of `experiment`, from
     the deterministic pair distances its results folder saved (model_pair_distances_long.csv);
     empty if that table or the fit's rows are missing."""
@@ -187,7 +187,7 @@ def main() -> None:
     hist_files = make_history_figure(df, res_dir, out)
     for f in hist_files:
         inputs[str(f)] = hashlib.sha256(f.read_bytes()).hexdigest()
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E63_rho_fit.py',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E63_rho_fit.py',
         **H.code_commits(),
         inputs_sha256=inputs, partb_folders=[str(d) for d in folders],
         pipeline_source={m: pipeline_source.get(m) for m in sorted({mm[4] for mm in models if mm[4] is not None})},

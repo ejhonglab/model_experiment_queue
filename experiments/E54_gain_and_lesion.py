@@ -26,9 +26,9 @@ Outputs: <shared>/results/E54_gain_and_lesion/ (lesion_pairs.csv, lesion_outcome
 per_odor_response_fractions.csv, model_pair_distances_long.csv, comparison.csv, comparison_table.md,
 E54_gain_and_lesion.png, provenance.json; fits.csv from the re-fit) and ./outputs/E54_gain_and_lesion/
 (lesioned wirings, swaps, per-variant responses / spike counts, partC/ caches).
-Usage: ./venv/bin/python E54_gain_and_lesion.py --plan            (the lesions only)
-       OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python E54_gain_and_lesion.py [--parts A B C] [--seeds 0 1]
-       ./venv/bin/python E54_gain_and_lesion.py --summary
+Usage: ./venv/bin/python experiments/E54_gain_and_lesion.py --plan            (the lesions only)
+       OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python experiments/E54_gain_and_lesion.py [--parts A B C] [--seeds 0 1]
+       ./venv/bin/python experiments/E54_gain_and_lesion.py --summary
 """
 from __future__ import annotations
 import argparse
@@ -42,9 +42,9 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
-from E47_wiring_features import MODELS, STATS, V, fitted_params, SCALE_KEYS, CTRL_FRAC, data_values
-from E52_glomerulus_pairs import base_wiring, NULL_CLASS, EXPERIMENT as E52
+from kcq import harness as H
+from experiments.E47_wiring_features import MODELS, STATS, V, fitted_params, SCALE_KEYS, CTRL_FRAC, data_values
+from experiments.E52_glomerulus_pairs import base_wiring, NULL_CLASS, EXPERIMENT as E52
 
 EXPERIMENT = 'E54_gain_and_lesion'
 # the no-gain fits at 6.8 % (E45): key -> (experiment, tag, claw_thr, k, gain)
@@ -75,7 +75,7 @@ def split_plan(res_dir: Path) -> pd.DataFrame:
     """E52's targeted pairs with ORN data split by whether a gained glomerulus is in the pair, each
     subset with its own count-matched control pairs (|z| < 1 against every class, same ORN-input
     status, not used by E52's control or the other subset's)."""
-    from E27_glomerulus_gain import ORACLE
+    from experiments.E27_glomerulus_gain import ORACLE
     df = pd.read_csv(e52_results() / 'coinput_pairs.csv')
     plan52 = pd.read_csv(e52_results() / 'lesion_pairs.csv')
     targeted = plan52[(plan52.kind == 'lesion_targeted') & plan52.in_orn_input]
@@ -174,16 +174,16 @@ def run_variants(jobs: List[dict], res_dir: Path, out_dir: Path) -> None:
     weights; E70's oracle), retune (default True: the somatic threshold re-tuned to 6.8 % by bisection;
     False keeps the fitted threshold, variant 'fit')."""
     from al_analysis.mb_model import make_fixed_param_kc_simulator
-    from E1_apl_knockout import bisect_threshold
-    from E3_drive_dependent_gain import per_odor_extras, rate
-    from E4_substrate import score, kc_by_glomerulus
-    from E10_joint_fit import TAU, base_kws, bouton_base, breadth_weights, make_loss
-    from E12_breadth_apl import density_excess
-    from E16_claw_saturation import spearman_with_refs
-    from E18_bouton_depletion import all_refs
-    from E26_claw_power import sharing_deficit
-    from E35_divisive_apl import suppression_stats
-    from E44_operating_point import fraction_stats, losses
+    from experiments.E1_apl_knockout import bisect_threshold
+    from experiments.E3_drive_dependent_gain import per_odor_extras, rate
+    from experiments.E4_substrate import score, kc_by_glomerulus
+    from experiments.E10_joint_fit import TAU, base_kws, bouton_base, breadth_weights, make_loss
+    from experiments.E12_breadth_apl import density_excess
+    from experiments.E16_claw_saturation import spearman_with_refs
+    from experiments.E18_bouton_depletion import all_refs
+    from experiments.E26_claw_power import sharing_deficit
+    from experiments.E35_divisive_apl import suppression_stats
+    from experiments.E44_operating_point import fraction_stats, losses
     stats_path = res_dir / 'stats_variants.csv'; fracs_path = res_dir / 'per_odor_response_fractions.csv'
     orn = H.apl16_orn_deltas()
     orn_pairs = H.orn16_consensus_pairs(); drive = H.consensus_orn_drive(); ref = H.reference_pairs()
@@ -283,7 +283,7 @@ def run_variants(jobs: List[dict], res_dir: Path, out_dir: Path) -> None:
             pd.DataFrame(rows).to_csv(stats_path, index=False)
     prov_path = res_dir / 'provenance.json'
     prov = json.loads(prov_path.read_text()) if prov_path.exists() else {}
-    prov['runs'] = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E54_gain_and_lesion.py',
+    prov['runs'] = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E54_gain_and_lesion.py',
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(), n_jobs=len(jobs), tags=[j['tag'] for j in jobs],
         model_sources={**{m: MODELS[m][:2] for m in MODELS}, **{m: MODELS_NOGAIN[m][:2] for m in MODELS_NOGAIN}},
         ctrl_frac=CTRL_FRAC, kc_kc_tau=TAU, approx_conc_note=H.APPROX_CONC_NOTE, model=model_prov)

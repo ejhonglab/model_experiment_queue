@@ -7,7 +7,7 @@ The fits run with `E10_joint_fit.py --experiment E67_apl_effect_fits --loss apl 
 this script re-reads its saved spike counts and responses (outputs/E67_apl_effect_fits/, or the model-output
 archive once archived) and computes, under raw spike counts (cosine) and under E65's calibrated saturating readout
 (K set on the fit's APL-on counts to the control flies' responders-only participation ratio, applied unchanged to
-APL off; `kc_remapping_harness.calibrate_readout`): the APL-effect loss with its mean, per-odor and pair-specific
+APL off; `kcq.harness.calibrate_readout`): the APL-effect loss with its mean, per-odor and pair-specific
 parts (`apl_effect_decomposition`) and ρ on the per-pair APL effect; the loss against the data read with
 sub-threshold values zeroed and noise-corrected; the square-root readout and the binarized readout against the
 binarized data (checks); the block under raw counts, the readout and binarized; the mean distances; the
@@ -19,7 +19,7 @@ start is an archived model, the same full row from the archive.
 
 Outputs (results/E67_apl_effect_fits/): comparison.csv (one row per fit and start), comparison_table.md,
 E67_fit_histories.png, E67_mean_vs_pattern.png, provenance_comparison.json.
-Usage: ./venv/bin/python E67_apl_effect_fits.py
+Usage: ./venv/bin/python experiments/E67_apl_effect_fits.py
 """
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ from typing import Dict, Optional
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 EXPERIMENT = 'E67_apl_effect_fits'
 ARCHIVE = H.shared_dir() / 'data' / 'model_outputs'
@@ -198,7 +198,7 @@ def main() -> None:
     df.to_csv(res_dir / 'comparison.csv', index=False)
     write_table(df, res_dir)
     make_figures(df, res_dir)
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E67_apl_effect_fits.py',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E67_apl_effect_fits.py',
         **H.code_commits(),
         n_fits=int((df.kind == 'fit').sum()) if len(df) else 0, calibration_target=refs()['cal_target'],
         data_effect_means={v: float(refs()[v].mean()) for v in ('graded', 'thresholded', 'noise_corrected', 'binary')})

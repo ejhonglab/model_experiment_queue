@@ -13,7 +13,7 @@ acute APL off; scored as E16 / E18 plus the per-odor response fractions. `--comb
 then runs E19's balanced point (claw_thr 40, breadth k 2, KC-KC 30) with that gain.
 
 Outputs: <shared>/results/E20_glomerulus_gain/ and ./outputs/E20_glomerulus_gain/.
-Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python E20_glomerulus_gain.py
+Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python experiments/E20_glomerulus_gain.py
     [--alpha 0 0.5 1] [--thr 0 40 70] [--combo ALPHA ...] [--figure-only]
 """
 from __future__ import annotations
@@ -28,13 +28,13 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
-from E1_apl_knockout import bisect_threshold
-from E3_drive_dependent_gain import BOUTON, TARGET, match_kc_apl_scale, per_odor_extras, rate, tune_and_knockout
-from E4_substrate import score, kc_by_glomerulus
-from E12_breadth_apl import density_excess, e3_bouton_params
-from E16_claw_saturation import spearman_with_refs
-from E18_bouton_depletion import all_refs
+from kcq import harness as H
+from experiments.E1_apl_knockout import bisect_threshold
+from experiments.E3_drive_dependent_gain import BOUTON, TARGET, match_kc_apl_scale, per_odor_extras, rate, tune_and_knockout
+from experiments.E4_substrate import score, kc_by_glomerulus
+from experiments.E12_breadth_apl import density_excess, e3_bouton_params
+from experiments.E16_claw_saturation import spearman_with_refs
+from experiments.E18_bouton_depletion import all_refs
 
 EXPERIMENT = 'E20_glomerulus_gain'
 TAU = 0.05
@@ -242,7 +242,7 @@ def main() -> None:
         record(tag, meta, row, on_p, off_p, r_on, r_off)
         done.add(tag)
 
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E20_glomerulus_gain.py',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E20_glomerulus_gain.py',
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(),
         **H.code_commits(),
         olfsysm_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.olfsysm_dir(), capture_output=True, text=True).stdout.strip(),

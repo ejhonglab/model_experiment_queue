@@ -20,7 +20,7 @@ differs most between Yang's control matrix and Remy's somata.
 
 Outputs: <shared>/results/yang_remy_agreement/ (agreement_stats.csv, per_recording.csv,
 pair_table.csv, disagreements.csv, yang_remy_agreement.png, provenance.json).
-Usage: ./venv/bin/python yang_remy_kc_agreement.py
+Usage: ./venv/bin/python analyses/yang_remy_kc_agreement.py
 `agreement()` is imported by data_targets.py for the registry.
 """
 from __future__ import annotations
@@ -34,7 +34,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 OUT_NAME = 'yang_remy_agreement'
 # column in shared12_pairs.csv -> label used in tables and the figure
@@ -211,7 +211,7 @@ def main() -> None:
     dis = tab.reindex(tab['rank_diff_ctrl_minus_soma'].abs().sort_values(ascending=False).index).head(10)
     dis.to_csv(res_dir / 'disagreements.csv')
     make_figure(ref, per_rec, st, res_dir / f'{OUT_NAME}.png')
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='yang_remy_kc_agreement.py',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='analyses/yang_remy_kc_agreement.py',
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(),
         **H.code_commits(),
         inputs=dict(shared12_pairs=str(H.apl_pair_dir() / 'shared12_pairs.csv')),

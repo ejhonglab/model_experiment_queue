@@ -18,7 +18,7 @@ synapse counts, and multi-bouton claws assigned to the first / dominant bouton o
 synapses (mb_model `claw_weight`, `multibouton_claws`), scored as the experiments.
 
 Outputs: <shared>/results/bouton_claw_synapses/ (tables, summary.md) and a printed summary.
-Usage: ./venv/bin/python check_bouton_claw_synapses.py [--loader-table loader_claw2bouton.parquet] [--model]
+Usage: ./venv/bin/python data_prep/check_bouton_claw_synapses.py [--loader-table loader_claw2bouton.parquet] [--model]
 """
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 SYN_PATH = (H.al_analysis_data_dir() / 'from_pratyush' / '2025-12-05' /
     'PNbouton-to-KCclaw_Connectivity_2025-12-09-19-47-36.parquet')
@@ -189,8 +189,8 @@ def run_model_comparison(variants=None) -> None:
     (multibouton_claws, claw_weight) variant; scored as the experiments plus the rank
     agreement of each variant's pair distances with the default's and the fraction of
     (KC, odor) responses that differ from the default's."""
-    from E3_drive_dependent_gain import BOUTON, TARGET, rate
-    from E4_substrate import score, kc_by_glomerulus
+    from experiments.E3_drive_dependent_gain import BOUTON, TARGET, rate
+    from experiments.E4_substrate import score, kc_by_glomerulus
     from al_analysis.mb_model import fit_mb_model
     orn = H.apl16_orn_deltas(); orn_pairs = H.orn16_consensus_pairs(); drive = H.consensus_orn_drive()
     ref = H.reference_pairs()

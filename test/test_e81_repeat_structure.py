@@ -1,19 +1,14 @@
 #!/usr/bin/env python3
 """Tests for the repeat statistics of the KC-remapping harness (the flies' variability across the three
-repeats, E81: kc_remapping_harness.py): single-trial distances by
+repeats, E81: kcq/harness.py): single-trial distances by
 kind of trial pair, the same-repeat gap, the noise-free distances from products of different repeats and the
 parts of a response's variability, on synthetic recordings whose structure is known."""
-
-import sys
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
 
-EXP_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(EXP_DIR))
-H = pytest.importorskip('kc_remapping_harness')
+H = pytest.importorskip('kcq.harness')
 
 ODORS = list(H.APL16_ODORS)
 
@@ -207,7 +202,7 @@ def test_repeat_response_stats():
 # ---------------------------------------------------------------------------
 # part A6, the stimulus order: matching the order to the trials, the separation of two presentations, the
 # same-repeat gap's separation and block parts, and the random orders of the null
-E81 = pytest.importorskip('E81_repeat_structure')
+E81 = pytest.importorskip('experiments.E81_repeat_structure')
 STIM = ODORS + ['pfo']
 
 

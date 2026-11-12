@@ -4,7 +4,7 @@ recordings with APL output blocked (TNT), every archived model against it, and t
 fixed-unit effect.
 
 No mechanism is changed. The experiment measures how much of the APL-effect loss, and of each of its two parts (the mean
-APL effect and the pattern part, `kc_remapping_harness.apl_effect_stats`), depends on two choices on the data's side:
+APL effect and the pattern part, `kcq.harness.apl_effect_stats`), depends on two choices on the data's side:
 the unit in which a KC's responses enter the cosine distance, and which recordings make up the APL-off mean.
 
 The data in fixed units (data/yang_apl16_kc_noise_units/ in the shared directory, used as written, not re-derived): hal's
@@ -45,9 +45,9 @@ Parts (CLI `--part`):
   split-half ρ and its ceiling; the ester and alcohol groups' effects relative to the mean with intervals; ρ and the
   pattern difference against the z-based effect with intervals; the same with sub-threshold entries set to 0 and
   binarized (1 z; `noise_threshold`, 1.97 baseline-noise SDs, in baseline-noise units; each other unit at the threshold
-  that keeps the control flies' response rate). The split by odors per KC (`kc_remapping_harness.apl_effect_by_class`)
+  that keeps the control flies' response rate). The split by odors per KC (`kcq.harness.apl_effect_by_class`)
   in baseline-noise units at 1.97, beside E74's in z. Registry entries `noise_apl_effect_*` (`registry_entries`, added
-  by `data_targets.py --add-new`).
+  by `kcq/data_targets.py --add-new`).
 - C (no simulations): the archive. Every archived variant against the fixed-unit effects on raw counts, under E65's
   calibrated readout with K re-calibrated to the control flies' responders-only participation ratio taken in the same
   unit, and binarized against the data binarized in the same unit; rank correlations with the present scores overall
@@ -74,10 +74,10 @@ the write-up's figures (`--part figures`, from those tables, no simulations): E7
 and E76_subsets.png (part D; the latter also scores this experiment's own fits against the six, the two and the eight),
 E76_axes.png (part E).
 The check of E10_joint_fit.py's --apl-data-units (`--part check-e10`) writes outputs/E76_data_side_target/e10_check/.
-Usage (from this folder): ./venv/bin/python -u E76_data_side_target.py --part D | B | C [--jobs 3] | E-tables | table | figures
-       OMP_NUM_THREADS=12 OMP_THREAD_LIMIT=12 nice -n 10 ./venv/bin/python -u E76_data_side_target.py --part E --threads 12
+Usage (from the repository root): ./venv/bin/python -u experiments/E76_data_side_target.py --part D | B | C [--jobs 3] | E-tables | table | figures
+       OMP_NUM_THREADS=12 OMP_THREAD_LIMIT=12 nice -n 10 ./venv/bin/python -u experiments/E76_data_side_target.py --part E --threads 12
            [--bases c2 ceiling2] [--base2 EXP:TAG] [--only POINT ...] [--check-only]
-       ./venv/bin/python -u E76_data_side_target.py --part check-e10 [--check off noise]
+       ./venv/bin/python -u experiments/E76_data_side_target.py --part check-e10 [--check off noise]
 """
 from __future__ import annotations
 
@@ -94,7 +94,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 EXPERIMENT = 'E76_data_side_target'
 NOISE_DIR = H.shared_dir() / 'data' / 'yang_apl16_kc_noise_units'
@@ -118,7 +118,7 @@ UNIT_LABEL = {'z': "Yang's z (the target as defined)",
     'dff_fcmean': "the change in Fc over the KC's mean Fc (denominator floored at its 5th percentile)",
     'dff_fctrial': "each trial's change in Fc over its pre-odor Fc (floored at its 5th percentile), mean over trials"}
 # the readings of part D's tests: graded cosine distances in z and in baseline-noise units, and each recording's cosine
-# corrected for trial-to-trial noise (noise_floor_trial_distances.analyse) in the same two units
+# corrected for trial-to-trial noise (kcq.noise_floor.analyse) in the same two units
 READINGS = ('z', 'noise', 'nc_z', 'nc_noise')
 READING_LABEL = {'z': "Yang's z", 'noise': 'baseline-noise units', 'nc_z': "noise-corrected, Yang's z",
     'nc_noise': 'noise-corrected, baseline-noise units'}
@@ -172,7 +172,7 @@ def _per_kc(mats: Dict[str, Dict[tuple, pd.DataFrame]], s: pd.Series, divide: bo
 def unit_matrices(unit: str) -> Dict[str, Dict[tuple, pd.DataFrame]]:
     """{genotype: {(date, fly_num, hemibrain): KCs x the 16 odors (APL16_ODORS order) trial means in `unit`}}, recordings
     in sorted order, KCs indexed by olfdb's roi (as `data_targets.kc_response_matrices`)."""
-    import data_targets as DT
+    from kcq import data_targets as DT
     key = ('mats', unit)
     if key in _CACHE:
         return _CACHE[key]
@@ -245,7 +245,7 @@ def unit_recording_rdms(unit: str, values: str = 'graded') -> Dict[str, pd.DataF
 
 def _trial_arrays_noise(genotype: str) -> Dict[tuple, Dict[str, np.ndarray]]:
     """{recording: {odor: trials x KCs}} in baseline-noise units, from hal's per-trial file (KCs in sorted roi order, as
-    noise_floor_trial_distances.recording_arrays)."""
+    kcq.noise_floor.recording_arrays)."""
     t = _noise_file('per_trial_long.parquet', ['genotype', 'date', 'fly_num', 'hemibrain', 'roi', 'odor', 'repeat', 'value'])
     t = t[t['genotype'] == genotype].copy()
     t['abbrev'] = t['odor'].map(H.odor_abbrev)
@@ -271,7 +271,7 @@ def reading_rdms(reading: str) -> Dict[str, pd.DataFrame]:
         elif reading == 'nc_z':
             v = {g: H.yang_recording_rdms_values(g, 'noise_corrected') for g in GENOTYPES}
         elif reading == 'nc_noise':
-            from noise_floor_trial_distances import analyse
+            from kcq.noise_floor import analyse
             v = {}
             for g in GENOTYPES:
                 rows = {rec: H.canonical_pairs(analyse(by_odor, 'graded')[1]['corrected'])
@@ -320,7 +320,7 @@ def _pattern_diff(a: pd.Series, b: pd.Series) -> float:
 
 def _recording_meta() -> pd.DataFrame:
     """viki's recordings.csv (notes/yang_response_normalization), keyed (genotype, date, fly_num, hemibrain)."""
-    import data_targets as DT
+    from kcq import data_targets as DT
     r = pd.read_csv(DT.INPUTS['yang_norm_recordings'])
     day, unit = (r['recording'].str.split('_', expand=True)[i] for i in (0, 1))
     r.index = pd.MultiIndex.from_arrays([r['genotype'], day.str[:4] + '-' + day.str[4:6] + '-' + day.str[6:8],
@@ -468,10 +468,10 @@ def axis_tests(out: Path) -> pd.DataFrame:
 
 def archive_pairs() -> Dict[Tuple[str, str], Tuple[pd.Series, pd.Series]]:
     """{(folder, tag): (APL-on pairs, acute APL-off pairs)} of every archived variant (raw spike counts), as
-    `apl_effect_scores.model_pairs`, with at least 100 pairs."""
+    `kcq.apl_effect.model_pairs`, with at least 100 pairs."""
     if 'archive' not in _CACHE:
         import re
-        import apl_effect_scores as A
+        from kcq import apl_effect as A
         out = {}
         for folder in sorted(A.RESULTS.glob('E*_*')):
             if not re.match(r'E\d+_', folder.name) or not folder.is_dir():
@@ -501,7 +501,7 @@ def score_against(pairs: Dict[Tuple[str, str], Tuple[pd.Series, pd.Series]], tar
 def with_bands(df: pd.DataFrame) -> pd.DataFrame:
     """`df` (folder, tag) with the response rates and the realism flags of results/apl_effect/by_variant.csv
     (`realism_flag`: the bands with the KC data in baseline-noise units; `realism_flag_zcrit`: in Yang's z)."""
-    import apl_effect_scores as A
+    from kcq import apl_effect as A
     bv = pd.read_csv(A.OUT / 'by_variant.csv', keep_default_na=False, na_values=[''])
     cols = ['folder', 'tag', 'rate_on', 'rate_off', 'realism_flag', 'realism_flag_zcrit']
     bv = bv[cols].copy()
@@ -549,7 +549,7 @@ def e72_distances(readout: str = 'cal', cal_target: Optional[float] = None) -> T
     """E72's eight wirings (the real one's fit and the seven re-drawn ones, `E72_wiring_population.new_fit_members`):
     (labels, per-wiring {'on', 'off'} pair distances under `readout`); 'cal' calibrates each wiring's K on its own APL-on
     counts to `cal_target` (default the control flies' responders-only participation ratio in z, as E72)."""
-    import E72_wiring_population as E72
+    from experiments import E72_wiring_population as E72
     key = ('e72', readout, cal_target)
     if key not in _CACHE:
         labels, dists = [], []
@@ -575,7 +575,7 @@ def common_error_against(targets: Dict[str, pd.Series], readout: str = 'cal', ca
     means removed) recomputed against each named target effect: (per pair, one column per target, `common_<name>`, and
     the population's effect `population`; per target its rms, the ester and alcohol groups' mean errors and its
     correlation with the common error against `reference`)."""
-    import E72_wiring_population as E72
+    from experiments import E72_wiring_population as E72
     labels, dists = e72_distances(readout, cal_target)
     md = E72.mean_distances(dists)
     cols = {f'common_{n}': H.apl_effect_pair_parts(md['on'], md['off'], t)['error'] for n, t in targets.items()}
@@ -639,7 +639,7 @@ def split_halves(out: Path, n_splits: int = N_HALF_SPLITS, seed: int = SPLIT_SEE
 def _check_e75_splits(df: pd.DataFrame, n: int = 100) -> bool:
     """Whether the first `n` rows of split_halves.csv are E75 D1's splits (its `_split_halves`, seed 0): the same halves'
     effects."""
-    import E75_glomerulus_apl_profile as E75
+    from experiments import E75_glomerulus_apl_profile as E75
     ref = E75._split_halves(n_splits=n, seed=SPLIT_SEED)
     ctrl = H.yang_recording_rdms_values('TNT3c', 'graded')
     tnt = H.yang_recording_rdms_values('TNT', 'graded')
@@ -733,9 +733,9 @@ def part_d(out: Path) -> None:
 
 
 def _provenance(out: Path, part: str, extra: dict) -> None:
-    import data_targets as DT
+    from kcq import data_targets as DT
     commits = H.code_commits()
-    dirty = bool(subprocess.run(['git', 'status', '--porcelain', '--', Path(__file__).name, 'kc_remapping_harness.py', 'data_targets.py'],
+    dirty = bool(subprocess.run(['git', 'status', '--porcelain', '--', H.script_path(__file__), 'kcq/harness.py', 'kcq/data_targets.py'],
         cwd=H.HERE, capture_output=True, text=True).stdout.strip())
     files = {str(NOISE_DIR / n): None for n in ('trialmean_long.parquet', 'trialmean_long_unnormalized.parquet',
         'per_trial_long.parquet', 'per_trial_long_unnormalized.parquet')}
@@ -744,7 +744,7 @@ def _provenance(out: Path, part: str, extra: dict) -> None:
     for f in files:
         p = Path(f)
         files[f] = hashlib.sha256(p.read_bytes()).hexdigest() if p.exists() else None
-    prov = dict(script=f'{Path(__file__).name} --part {part}', generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),
+    prov = dict(script=f'{H.script_path(__file__)} --part {part}', generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),
         host=subprocess.run(['hostname', '-s'], capture_output=True, text=True).stdout.strip(), **commits,
         dirty=dirty, inputs=files, unit_thresholds={u: _CACHE.get(('thr', u)) for u in UNITS}, denominator_floors=dict(FLOORS),
         registry=str(H.data_targets_path()), **extra)
@@ -753,7 +753,7 @@ def _provenance(out: Path, part: str, extra: dict) -> None:
 
 def _fly_positions(df: pd.DataFrame, rng: np.random.Generator) -> np.ndarray:
     """Row positions of one draw of flies (date, fly_num) with replacement, all hemispheres of each drawn fly kept (as
-    `kc_remapping_harness.resample_recording_means(unit='fly')`)."""
+    `kcq.harness.resample_recording_means(unit='fly')`)."""
     flies = list(dict.fromkeys((r[0], r[1]) for r in df.index))
     drawn = [flies[i] for i in rng.integers(0, len(flies), len(flies))]
     pos = {f: [i for i, r in enumerate(df.index) if (r[0], r[1]) == f] for f in flies}
@@ -972,7 +972,7 @@ VALUES_LABEL = {'graded': 'graded', 'thresholded': 'sub-threshold entries set to
 def data_effect(unit: str = 'z', values: str = 'graded') -> pd.Series:
     """The KC data's per-pair APL effect (control flies minus APL output blocked (TNT), cosine, each the mean over
     recordings) with each KC's trial means in `unit`; `values` as `unit_recording_rdms`. In z, graded, this is
-    `kc_remapping_harness.yang_apl_effect()` (to rounding); in 'noise' it is the target of E10_joint_fit.py's
+    `kcq.harness.yang_apl_effect()` (to rounding); in 'noise' it is the target of E10_joint_fit.py's
     `--apl-data-units noise`."""
     R = unit_recording_rdms(unit, values)
     return H.apl_effect(R['TNT3c'].mean(), R['TNT'].mean())
@@ -1001,13 +1001,13 @@ CLASS_N_BOOT = 1000
 
 
 def class_split_units(out: Optional[Path], n_boot: int = CLASS_N_BOOT, seed: int = 0) -> pd.DataFrame:
-    """The split of the per-pair APL effect by odors per KC (`kc_remapping_harness.apl_effect_by_class`: each condition's
+    """The split of the per-pair APL effect by odors per KC (`kcq.harness.apl_effect_by_class`: each condition's
     class contributions to the cosine similarity averaged over its recordings, the classes set by that condition's
     responses) in baseline-noise units at noise_threshold, beside the same in z at 1 z (E74's): per unit, class and term
     the mean effect over pairs, its share of the effect's variance over pairs (cov(class effect, effect) / var(effect)),
     each condition's level and share of KCs, with 90 % intervals over `n_boot` resamples of recordings (one generator
     seeded `seed` per unit, the control recordings drawn first). Writes class_split_units.csv to `out` (if given)."""
-    import E74_apl_effect_by_odors_per_kc as E74
+    from experiments import E74_apl_effect_by_odors_per_kc as E74
     rows = []
     checks = {}
     for unit in ('z', 'noise'):
@@ -1205,7 +1205,7 @@ def registry_entries(n_boot: int = 1000, seed: int = 0) -> List[Tuple[str, float
             (f'{pre}{values}_rho_ceiling', v['rho_ceiling'], f'ceiling on ρ on {vl} (as {pre}rho_ceiling)', None)]
     nc = reading_rdms('nc_noise')
     out.append((f'{pre}noise_corrected_mean', float(H.apl_effect(nc['TNT3c'].mean(), nc['TNT'].mean()).mean()), f'{lab}, from '
-        'each recording\'s cosine corrected for trial-to-trial noise (noise_floor_trial_distances.analyse on the per-trial '
+        'each recording\'s cosine corrected for trial-to-trial noise (kcq.noise_floor.analyse on the per-trial '
         'values in baseline-noise units): mean over the 120 pairs', None))
     cs = class_split_units(None, seed=seed)
     cs = cs[(cs['unit'] == unit) & (cs['term'] == 'total')]
@@ -1310,7 +1310,7 @@ def common_error_units(out: Path) -> pd.DataFrame:
     calibrated readout (K at each unit's target), and the common error (the population's pattern error) recomputed against
     the baseline-noise effect beside the present one (z, K in z), with their correlation. Writes common_error_units.csv
     (per pair) and common_error_units_summary.csv."""
-    import E72_wiring_population as E72
+    from experiments import E72_wiring_population as E72
     rows, cols = [], {}
     for readout in ('raw', 'cal'):
         for u in C_UNITS_FIXED:
@@ -1482,8 +1482,8 @@ def part_e(out: Path, threads: int = 12, only: Optional[Sequence[str]] = None, c
     distribution and mean distances; per-pair distances (raw counts, and under the calibrated readout with K held at the
     base's own calibration in z and in baseline-noise units) to model_axes_pairs.csv. `part_e_tables` then reads them."""
     import time
-    import E69_kc_firing_ceiling as E69
-    from apl_effect_scores import odors_per_kc, OPK_BINS
+    from experiments import E69_kc_firing_ceiling as E69
+    from kcq.apl_effect import odors_per_kc, OPK_BINS
     odir = H.outputs_dir(EXPERIMENT) / 'partE'
     odir.mkdir(parents=True, exist_ok=True)
     spec = dict(E_BASES)
@@ -2139,7 +2139,7 @@ def subset_scores(out: Path) -> pd.DataFrame:
     model_pair_distances_long.csv, scored here against recording_subsets.csv's effects) loss and pattern part on raw
     spike counts against the eight, the six and the two, in Yang's z and in baseline-noise units: one row per model
     (`label`, `<subset>_<unit>_loss`, `<subset>_<unit>_pattern`, `fit` whether it is this experiment's)."""
-    import apl_effect_scores as A
+    from kcq import apl_effect as A
     sc = pd.read_csv(out / 'subsets_vs_archive.csv', keep_default_na=False, na_values=['']).set_index(['folder', 'tag'])
     cols = [f'{n}_{u}_{q}' for u in ('z', 'noise') for n in ('eight', 'six', 'two') for q in ('loss', 'pattern')]
     rows = []
@@ -2236,7 +2236,7 @@ def check_e10(name: str, extra: Sequence[str] = ()) -> dict:
         shutil.rmtree(root)
     root.mkdir(parents=True)
     args = [*E10_CHECK_ARGS, '--init-from', tag, '--init-from-experiment', exp, '--experiment', 'E73_zcell_check', *extra]
-    cmd = [sys.executable, '-u', str(H.HERE / 'E73_zcell_fit_checks.py'), '--run-e10', str(root), '--', *args]
+    cmd = [sys.executable, '-u', str(H.HERE / 'experiments' / 'E73_zcell_fit_checks.py'), '--run-e10', str(root), '--', *args]
     t0 = time.time()
     with open(root / 'log.txt', 'w') as log:
         rc = subprocess.run(cmd, cwd=H.HERE, stdout=log, stderr=subprocess.STDOUT).returncode

@@ -4,7 +4,7 @@
 Every other experiment compares one deterministic model run with KC matrices built from trial
 means of three noisy trials per odor, averaged over recordings. Here two models get
 trial-to-trial variability, and their trials go through the data's own pipeline
-(noise_floor_trial_distances.py: `analyse` per recording, then the mean over recordings), so the
+(kcq/noise_floor.py: `analyse` per recording, then the mean over recordings), so the
 model's floors, raw and noise-corrected mean distances, ρ and response rates are measured as the
 data's are, and the noisy model's grand mean can be compared with the deterministic run.
 
@@ -193,7 +193,7 @@ noise_levels.json are those of its last run). The tables are rewritten by every 
 whose trial files are not on this host keeps its rows from the existing tables, as its entries in
 noise_levels.json, checks.json and calibration.csv are kept.
 
-Usage: OMP_NUM_THREADS=12 nice -n 10 ./venv/bin/python E43_model_trial_noise.py [--models base70 ref40]
+Usage: OMP_NUM_THREADS=12 nice -n 10 ./venv/bin/python experiments/E43_model_trial_noise.py [--models base70 ref40]
        [--n-recordings 10] [--n-trials 3] [--cal-grid 25 50 100 200 400 800] [--cal-trials 3]
        [--analyse-only] [--figure-only]
        ... --part B [--sigma-grid 0.05 0.1 0.15 0.2 0.3] [--tune-trials 3] [--seed 43] [--rate-tol 0.01]
@@ -224,12 +224,12 @@ import numpy as np
 import pandas as pd
 from scipy import stats as sstats
 
-import kc_remapping_harness as H
-import noise_floor_trial_distances as NF
-from E10_joint_fit import (TAU, base_kws, bouton_base, breadth_weights, claw_transfer_kws, e19_row, kc_input_thr_factor,
+from kcq import harness as H
+from kcq import noise_floor as NF
+from experiments.E10_joint_fit import (TAU, base_kws, bouton_base, breadth_weights, claw_transfer_kws, e19_row, kc_input_thr_factor,
     read_orn_input)
-from E26_claw_power import WEAK
-from E27_glomerulus_gain import ORACLE
+from experiments.E26_claw_power import WEAK
+from experiments.E27_glomerulus_gain import ORACLE
 
 EXPERIMENT = 'E43_model_trial_noise'
 # (--model-from adds its models to MODELS and FIT_MODELS)
@@ -398,7 +398,7 @@ def captured_olfsysm_vars(store: dict):
 # ---------------------------------------------------------------------------
 # the data's pipeline, applied to KC data and model trials alike
 def summarize(recs: dict, how: str) -> dict:
-    """noise_floor_trial_distances' per-recording `analyse`, aggregated as its main() does: floors
+    """kcq.noise_floor's per-recording `analyse`, aggregated as its main() does: floors
     as the mean over odors within a recording, then over recordings; pair distances (raw and
     noise-corrected) as the mean over recordings.
 
@@ -671,7 +671,7 @@ def fit_model(name: str, orn: pd.DataFrame, out_dir: Path) -> dict:
         if wiring_tag is None:
             raise ValueError(f'{experiment}:{tag}: a wiring file without a wiring tag')
         wp = Path(str(wiring_file))
-        # (relative paths as E10_joint_fit.py read them, from this folder)
+        # (relative paths as E10_joint_fit.py read them, from the repository root)
         wp = wp if wp.is_absolute() else H.HERE / wp
         key = '/Tom/claude_kc_remapping/'
         if not wp.exists() and key in str(wp):
@@ -1264,7 +1264,7 @@ def analyse_zcell(levels_all: dict, n_rec: int, n_tr: int, out_dir: Path, res_di
         q: share of the session inside the response windows (default the registry's zcell_q_window).
         amp: the reading's amplitude map ('saturating' or 'linear').
     """
-    import E73_per_kc_normalization as E73
+    from experiments import E73_per_kc_normalization as E73
     q_window = H.data_target('zcell_q_window')
     q = q_window if q is None else float(q)
     qtag = '' if q == q_window else E73.q_tag(q)
@@ -2195,7 +2195,7 @@ def main_b(args) -> None:
         checks = json.loads(checks_path.read_text()) if checks_path.exists() else {}
         prov_path = res_dir / 'provenance.json'
         prev = json.loads(prov_path.read_text()) if prov_path.exists() else None
-        prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E43_model_trial_noise.py',
+        prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E43_model_trial_noise.py',
             part=args.part, host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(), models=args.models,
             model_descriptions={m: MODELS[m] for m in args.models}, ref_fit=REF_FIT, fits_source='results/E34_gain_bounded/fits.csv',
             model_sources={m: dict(experiment=FIT_MODELS[m][0], tag=FIT_MODELS[m][1]) for m in args.models if m in FIT_MODELS},
@@ -2434,7 +2434,7 @@ def main() -> None:
         prov_path = res_dir / 'provenance.json'
         prev = json.loads(prov_path.read_text()) if prov_path.exists() else None
         # code provenance at the start: the checkout can move (a pull) while the run goes on
-        prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E43_model_trial_noise.py',
+        prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E43_model_trial_noise.py',
             host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(), models=args.models,
             model_descriptions={m: MODELS[m] for m in args.models}, ref_fit=REF_FIT, fits_source='results/E34_gain_bounded/fits.csv',
             model_sources={m: dict(experiment=FIT_MODELS[m][0], tag=FIT_MODELS[m][1]) for m in args.models if m in FIT_MODELS},

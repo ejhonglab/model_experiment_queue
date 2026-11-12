@@ -4,7 +4,7 @@
 Runs `apl_coupling_sweep.run_base` (the 'fixed' and 'matched' sweeps over
 `apl_unit_coupling`) on the 16-odor APL16 input for each base model, then scores every
 matched model (APL split into spatial units, APL weights scaled so the number of KC-odor
-responses equals the single-APL model's) with `kc_remapping_harness`:
+responses equals the single-APL model's) with `kcq.harness`:
 - the on/off relation against the acute APL-off model (same thresholds, wAPLKC_scale=0):
   isotonic R2, fruity x small-ester block residual, per-odor APL effect vs ORN drive
 - agreement with Yang's control matrix, and the 66-pair references (claws, VCF)
@@ -20,7 +20,7 @@ Outputs: run_base's outputs regularized to the archive layout under ./outputs/E2
 bases whose runs exist are skipped on re-run);
 stats, figures and provenance to <shared>/results/E2_local_apl/.
 
-Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python E2_local_apl.py [-b BASE ...]
+Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python experiments/E2_local_apl.py [-b BASE ...]
     [-k COUPLING ...] [-d N_DYNAMICS_ODORS]
 """
 from __future__ import annotations
@@ -35,7 +35,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 # al_analysis/scripts/apl_coupling_sweep.py, in the al_analysis checkout beside this repository
 sys.path.insert(0, str(H.al_analysis_dir() / 'scripts'))
@@ -276,7 +276,7 @@ def main() -> None:
     data_stats['spearman_resid_vs_vcf_hyp'] = dref['spearman_resid_vs_vcf_hyp']
     make_figures(stats, res_dir, data_stats)
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),
-        script='E2_local_apl.py', host=subprocess.run(['hostname'], capture_output=True,
+        script='experiments/E2_local_apl.py', host=subprocess.run(['hostname'], capture_output=True,
             text=True).stdout.strip(),
         **H.code_commits(),
         bases={b: BASES[b] for b in args.bases}, couplings=args.couplings,

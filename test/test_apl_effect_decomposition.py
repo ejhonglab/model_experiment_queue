@@ -1,17 +1,14 @@
 #!/usr/bin/env python3
 """Tests for the APL-effect loss decomposition in the KC-remapping harness
-(kc_remapping_harness.py)."""
+(kcq/harness.py)."""
 
-import sys
 from itertools import combinations
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-H = pytest.importorskip('kc_remapping_harness')
+H = pytest.importorskip('kcq.harness')
 
 ODORS = ['a', 'b', 'c', 'd', 'e', 'f']
 

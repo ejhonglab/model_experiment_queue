@@ -12,7 +12,7 @@ rank and by a permutation test over random sets of eight. Writes the per-glomeru
 comparison, a candidate per-glomerulus correction (hemibrain calyx output per glomerulus over
 the model's PN->KC synapses, median-normalized) and a figure.
 
-Outputs: <shared>/results/E29_oracle_substrate/. Usage: ./venv/bin/python E29_oracle_substrate.py
+Outputs: <shared>/results/E29_oracle_substrate/. Usage: ./venv/bin/python experiments/E29_oracle_substrate.py
 """
 from __future__ import annotations
 
@@ -23,8 +23,8 @@ from datetime import datetime, timezone
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
-from E27_glomerulus_gain import ORACLE, TOP_GLOMS
+from kcq import harness as H
+from experiments.E27_glomerulus_gain import ORACLE, TOP_GLOMS
 
 EXPERIMENT = 'E29_oracle_substrate'
 HEMIBRAIN = (H.al_analysis_data_dir() / 'hemibrain_neuprint').resolve()
@@ -82,7 +82,7 @@ def main() -> None:
     axes[0].text(0.02, 0.95, 'orange: the oracle glomeruli', transform=axes[0].transAxes, fontsize=8, va='top')
     fig.suptitle('E29: the oracle glomeruli in the hemibrain vs the model wiring (36 driven glomeruli)', fontsize=11)
     fig.tight_layout(); fig.savefig(res_dir / 'E29_oracle_substrate.png', dpi=130); plt.close(fig)
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E29_oracle_substrate.py',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E29_oracle_substrate.py',
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(),
         **H.code_commits(),
         hemibrain=json.loads((HEMIBRAIN / 'provenance.json').read_text()), oracle=ORACLE, top_glomeruli=TOP_GLOMS, permutations=20000)

@@ -101,7 +101,7 @@ Part E (`--part E`, simulations; `--part E-tables` reads them; no gate): what th
 E81_shared_state.png) from the tables.
 
 The repeat statistics are computed here in numpy (`kind_arrays`), to the definitions of the harness functions
-(`kc_remapping_harness.distances_by_kind`, `same_repeat_gap`, `noise_free_pair_distances`; test/test_e81_model_noise.py
+(`kcq.harness.distances_by_kind`, `same_repeat_gap`, `noise_free_pair_distances`; test/test_e81_model_noise.py
 checks them against each other once the harness's bodies exist): a calibration evaluates them thousands of times.
 
 Outputs in results/E81_repeat_structure/: mix_levels.json, mix_scores.csv, mix_pairs.csv, mix_checks.csv,
@@ -110,14 +110,14 @@ per_presentation_search.csv, per_presentation_build_checks.json, provenance_D_pr
 shared_state_runs.csv, shared_state.csv, rundown_axes.csv, provenance_E.json (part E); model_noise_table.md and the
 figures (`--part table`). Part E's counts in outputs/E81_repeat_structure/partE/, part D's check's trials in
 outputs/E81_repeat_structure/partD_presentation/.
-Usage (from this folder):
-       OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 nice -n 10 ./venv/bin/python -u E81_model_noise.py --part D [--jobs 2]
+Usage (from the repository root):
+       OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 nice -n 10 ./venv/bin/python -u experiments/E81_model_noise.py --part D [--jobs 2]
            [--models C2 ...] [--no-rereads]
-       OMP_NUM_THREADS=12 OMP_THREAD_LIMIT=12 nice -n 10 ./venv/bin/python -u E81_model_noise.py --part E --threads 12
+       OMP_NUM_THREADS=12 OMP_THREAD_LIMIT=12 nice -n 10 ./venv/bin/python -u experiments/E81_model_noise.py --part E --threads 12
            [--smoke]
-       OMP_NUM_THREADS=12 OMP_THREAD_LIMIT=12 nice -n 10 ./venv/bin/python -u E81_model_noise.py --part D-presentation
+       OMP_NUM_THREADS=12 OMP_THREAD_LIMIT=12 nice -n 10 ./venv/bin/python -u experiments/E81_model_noise.py --part D-presentation
            [--workers 10] [--models C2 F1] [--search-recordings 2] [--n-recordings 3] [--smoke]
-       ./venv/bin/python -u E81_model_noise.py --part E-tables | table
+       ./venv/bin/python -u experiments/E81_model_noise.py --part E-tables | table
 """
 from __future__ import annotations
 
@@ -136,7 +136,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 EXPERIMENT = 'E81_repeat_structure'
 ARCHIVE = H.shared_dir() / 'data' / 'model_outputs'
@@ -196,7 +196,7 @@ def kind_arrays(Y: np.ndarray) -> Dict[str, np.ndarray]:
     - 'noise_free' (R, P): 1 - C_ab / sqrt(C_aa C_bb), C_ab the mean cosine between a in i and b in j over i != j, C_aa the
       same for a with itself;
     - 'trial_mean' (R, P): the cosine distance of the two odors' trial means;
-    - 'corrected' (R, P): the noise correction in use (`noise_floor_trial_distances.analyse`, graded): 1 - xbar_a.xbar_b /
+    - 'corrected' (R, P): the noise correction in use (`kcq.noise_floor.analyse`, graded): 1 - xbar_a.xbar_b /
       sqrt(P_a P_b), P = |xbar|^2 - (trial-to-trial variance summed over units) / T, floored at 1e-12.
     NaN cosines (an all-zero vector) are skipped in every mean."""
     Y = np.asarray(Y, dtype=float)
@@ -304,17 +304,17 @@ def summary_stats(k: Dict[str, np.ndarray]) -> Dict[str, object]:
 # the flies' side
 def flies_trials(genotype: str, unit: str) -> Dict[tuple, np.ndarray]:
     """{recording: (repeats, KCs, odors)} single-trial values of one genotype in `unit`: the harness's
-    `yang_recording_trials` once implemented, else olfdb's long files (z; noise_floor_trial_distances) or hal's
+    `yang_recording_trials` once implemented, else olfdb's long files (z; kcq.noise_floor) or hal's
     per-trial file (baseline-noise units; E76_data_side_target), repeats in olfdb's `repeat` order."""
     try:
         return {k: np.asarray(v, dtype=float) for k, v in H.yang_recording_trials(genotype, unit).items()}
     except NotImplementedError:
         pass
     if unit == 'z':
-        import noise_floor_trial_distances as NF
+        from kcq import noise_floor as NF
         recs = NF.recording_arrays(NF.load_trials(genotype))
     else:
-        import E76_data_side_target as E76
+        from experiments import E76_data_side_target as E76
         recs = E76._trial_arrays_noise(genotype)
     return {(str(r[0]), int(r[1]), str(r[2])): np.stack([by[o] for o in ODORS], axis=-1) for r, by in recs.items()}
 
@@ -475,7 +475,7 @@ class ModelMix:
             g = np.random.default_rng(ss)
             self.eps[c] = g.standard_normal(shape)
             self.eta[c] = g.standard_normal(shape)
-        import E76_data_side_target as E76
+        from experiments import E76_data_side_target as E76
         self.K = {u: H.calibrate_readout(self.det['on'], 'saturating', E76.cal_target(u), stat='participation_ratio',
             responders_min=2.0) for u in UNITS}
         self.flies = flies
@@ -785,7 +785,7 @@ def part_d(out: Path, args) -> None:
     t0 = datetime.now(timezone.utc)
     flies = {u: flies_side(u) for u in UNITS}
     fpairs = _flies_pairs(flies)
-    import E76_data_side_target as E76
+    from experiments import E76_data_side_target as E76
     data_checks = dict(
         z_trial_mean_vs_yang=float((H.apl_effect(*[fpairs[('z', 'trial_mean')][c] for c in CONDS]) - H.yang_apl_effect()).abs().max()),
         noise_trial_mean_vs_e76=float((H.apl_effect(*[fpairs[('noise', 'trial_mean')][c] for c in CONDS]) - E76.data_effect('noise')).abs().max()),
@@ -979,7 +979,7 @@ class PresentationRun:
     `odir`, so an interrupted run resumes."""
 
     def __init__(self, label: str, out: Path, odir: Path, args, flies: dict, log_rows: list):
-        import E43_model_trial_noise as E43
+        from experiments import E43_model_trial_noise as E43
         self.E43, self.label, self.out, self.odir, self.args, self.flies = E43, label, out, odir, args, flies
         self.spec = PRES_MODELS[label]
         self.name = E43.model_from(self.spec)
@@ -999,7 +999,7 @@ class PresentationRun:
         E43.ExcitabilityModel.thr_jitter = 'normal'
         self.orn = H.apl16_orn_deltas()
         self.checks_path = out / f'per_presentation_build_checks{args.sfx}.json'
-        self.prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E81_model_noise.py '
+        self.prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E81_model_noise.py '
             '--part D-presentation (E43_model_trial_noise.SessionB)', models=[self.name])
         self.sess = E43.SessionB(self.name, self.orn, odir, {}, self.checks_path, self.prov, odir / 'session_provenance.json')
         t0 = time.time()
@@ -1253,7 +1253,7 @@ def part_d_presentation(out: Path, args) -> None:
         print(ck[(ck['readout'] == 'raw') & (ck['unit'] == 'z')][['model', 'condition', 'sigma_s', 'sigma_p', 'same_odor',
             'flies_same_odor', 'gap', 'flies_gap', 'bin_same', 'flies_bin_same', 'bin_gap', 'flies_bin_gap',
             'bin_check_miss']].round(4).to_string(), flush=True)
-    import E43_model_trial_noise as E43
+    from experiments import E43_model_trial_noise as E43
     _provenance(out, f'D_presentation{args.sfx}', dict(started=t_start.isoformat(timespec='seconds'), models=info,
         seed=PRES_SEED, eta_seed=SEED, workers=args.workers, search_recordings=args.search_recordings, search_max=args.search_max,
         same_tol=args.same_tol, n_recordings=args.n_recordings, rate_tol=args.rate_tol, tune_max_evals=args.tune_max_evals,
@@ -1286,8 +1286,8 @@ def part_e(out: Path, threads: int = 12, smoke: bool = False) -> None:
     APL on and off checked against its archived spike counts (entry for entry), then each threshold factor with APL on
     and off (`smoke`: only thr0.9_on). Counts and responses to outputs/E81_repeat_structure/partE[_smoke]/; one row per
     point to shared_state_runs[_smoke].csv; checks and the model provenance to provenance_E[_smoke].json."""
-    import E69_kc_firing_ceiling as E69
-    import E76_data_side_target as E76
+    from experiments import E69_kc_firing_ceiling as E69
+    from experiments import E76_data_side_target as E76
     sfx = '_smoke' if smoke else ''
     odir = H.outputs_dir(EXPERIMENT) / f'partE{sfx}'
     odir.mkdir(parents=True, exist_ok=True)
@@ -1470,7 +1470,7 @@ def shared_state(out: Path, flies: Optional[dict] = None) -> pd.DataFrame:
         base_on = _e_counts(label, 'base_on')
         if base_on is None:
             continue
-        import E76_data_side_target as E76
+        from experiments import E76_data_side_target as E76
         K = H.calibrate_readout(base_on, 'saturating', E76.cal_target('z'), stat='participation_ratio', responders_min=2.0)
         for trip in TRIPLETS:
             for c, cn in (('on', 'on'), ('off', 'acute_off')):
@@ -1560,7 +1560,7 @@ UNIT_LABEL = {'z': "Yang's z", 'noise': 'baseline-noise units'}
 def part_table(out: Path) -> None:
     """model_noise_table.md (parts D and E) and the figures, from the tables."""
     L = ['# E81 parts D and E: the model\'s variability with the flies\' shares, and the shared state', '',
-         f'Generated {datetime.now().strftime("%Y-%m-%d %H:%M")} by E81_model_noise.py --part table (tables in this folder).', '']
+         f'Generated {datetime.now().strftime("%Y-%m-%d %H:%M")} by experiments/E81_model_noise.py --part table (tables in this folder).', '']
     chk_p, sc_p = out / 'mix_checks.csv', out / 'mix_scores.csv'
     if chk_p.exists() and sc_p.exists():
         chk, sc = pd.read_csv(chk_p), pd.read_csv(sc_p)
@@ -1828,10 +1828,10 @@ def figures(out: Path) -> None:
 # ---------------------------------------------------------------------------
 def _provenance(out: Path, part: str, extra: dict) -> None:
     commits = H.code_commits()
-    dirty = bool(subprocess.run(['git', 'status', '--porcelain', '--', Path(__file__).name, 'kc_remapping_harness.py',
-        'E43_model_trial_noise.py', 'E69_kc_firing_ceiling.py', 'E76_data_side_target.py'], cwd=H.HERE, capture_output=True,
+    dirty = bool(subprocess.run(['git', 'status', '--porcelain', '--', H.script_path(__file__), 'kcq/harness.py',
+        'experiments/E43_model_trial_noise.py', 'experiments/E69_kc_firing_ceiling.py', 'experiments/E76_data_side_target.py'], cwd=H.HERE, capture_output=True,
         text=True).stdout.strip())
-    prov = dict(script=f'{Path(__file__).name} --part {part}', generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),
+    prov = dict(script=f'{H.script_path(__file__)} --part {part}', generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),
         host=subprocess.run(['hostname', '-s'], capture_output=True, text=True).stdout.strip(), **commits,
         dirty=dirty, registry=str(H.data_targets_path()), **extra)
     (out / f'provenance_{part}.json').write_text(json.dumps(prov, indent=1, ensure_ascii=False, default=str) + '\n')

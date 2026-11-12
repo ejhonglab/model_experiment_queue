@@ -30,7 +30,7 @@ APL-off run of that base (data/hal_outputs/E16_claw_saturation/, else regenerate
 
 Outputs: <shared>/results/E10_joint_fit/ (fits.csv, history_k<k>.csv, best-fit score rows,
 figure) and ./outputs/E10_joint_fit/ (responses / spike counts of each best fit).
-Usage: OMP_NUM_THREADS=6 nice -n 10 ./venv/bin/python E10_joint_fit.py -k 3 1 [--maxfev 150]
+Usage: OMP_NUM_THREADS=6 nice -n 10 ./venv/bin/python experiments/E10_joint_fit.py -k 3 1 [--maxfev 150]
        [--kckc0 60] [--claw-thr 40] [--method Nelder-Mead|direct|differential_evolution] [--smoke]
        [--loss apl --apl-readout zcell --rate-criterion zcell [--zcell-q Q] [--zcell-map saturating|linear]
        [--zcell-calibrate every|start]] (E73 part C; see below)
@@ -173,7 +173,7 @@ it, as E80 / E82 re-hold their points (the APL's time constant does not change a
 DECAY` (with --loss apl, not with the zcell readings) computes the APL-effect terms (both readouts, block_cal and the
 calibrated mean distances) on kernel-weighted counts instead of spike counts: each spike weighted by the area inside
 the flies' window (2.0 to 8.1 s after onset) of the indicator kernel (1 - exp(-t / RISE)) exp(-t / DECAY) it starts,
-over that of a spike at the window's start (kc_remapping_harness.kernel_weighted_counts), from the spike times of every
+over that of a spike at the window's start (kcq.harness.kernel_weighted_counts), from the spike times of every
 evaluation (optimize_mb_model_params' condition_spike_times); the calibrated readout's K is calibrated on the weighted
 APL-on counts of the responders (two or more spikes over the whole simulation, which also stay the responses of every
 rate term) and applied unchanged to APL off (`apl_effect_terms`' responders_on). `--save-spike-times` saves the best
@@ -200,10 +200,10 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-import kc_remapping_harness as H
-from E3_drive_dependent_gain import BOUTON, per_odor_extras, rate
-from E4_substrate import score, kc_by_glomerulus
-from E12_breadth_apl import e3_bouton_params, density_excess
+from kcq import harness as H
+from experiments.E3_drive_dependent_gain import BOUTON, per_odor_extras, rate
+from experiments.E4_substrate import score, kc_by_glomerulus
+from experiments.E12_breadth_apl import e3_bouton_params, density_excess
 
 EXPERIMENT = 'E10_joint_fit'
 TAU = 0.05
@@ -312,7 +312,7 @@ def kernel_counts(spike_times: pd.DataFrame, like: pd.DataFrame, kernel: Tuple[f
     """(E82) A simulation's spike counts read through the flies' protocol: each spike (`spike_times`, the simulator's
     third output with spike_times=True) weighted by the area inside the flies' window of the indicator kernel with time
     constants `kernel` (rise, decay, seconds), over that of a spike at the window's start
-    (kc_remapping_harness.kernel_weighted_counts, with its window, 2.0 to 8.1 s after onset); KCs x odors as `like`
+    (kcq.harness.kernel_weighted_counts, with its window, 2.0 to 8.1 s after onset); KCs x odors as `like`
     (that simulation's spike counts)."""
     return H.kernel_weighted_counts(spike_times, like.index, like.columns, float(kernel[0]), float(kernel[1]))
 
@@ -472,7 +472,7 @@ def input_scaled_prepass(orn: pd.DataFrame, kws: dict, initial: Dict[str, float]
         print(f'input-scaled pre-pass (a {a:g}) from {spk_path.name}: fixed_thr x{rec["thr_factor"]:.5g}', flush=True)
     else:
         from al_analysis.mb_model import make_fixed_param_kc_simulator
-        from E69_kc_firing_ceiling import bisect_factor
+        from experiments.E69_kc_firing_ceiling import bisect_factor
         t0 = time.time()
         sim, _ = make_fixed_param_kc_simulator(orn, initial_params={k: float(initial[k]) for k in PARAM_KEYS}, **kws)
         off = dict(wAPLKC_scale=0.0, wAPLPN_scale=0.0)
@@ -536,7 +536,7 @@ def transfer_prepass(orn: pd.DataFrame, kws: dict, initial: Dict[str, float], of
         print(f'claw-transfer pre-pass ({label}) from {spk_path.name}: fixed_thr x{rec["thr_factor"]:.5g}', flush=True)
     else:
         from al_analysis.mb_model import make_fixed_param_kc_simulator
-        from E69_kc_firing_ceiling import bisect_factor
+        from experiments.E69_kc_firing_ceiling import bisect_factor
         t0 = time.time()
         p0 = {k: float(initial[k]) for k in PARAM_KEYS}
         off = dict(wAPLKC_scale=0.0, wAPLPN_scale=0.0)
@@ -697,7 +697,7 @@ def bouton_base(orn: pd.DataFrame, out_dir: Path, claw_thr=None, gain: Optional[
         off_path = out_dir / (f'wiring-{wiring_tag}_' + off_path.name)
         print(f'wiring replaced: {wiring_tag}', flush=True)
     if gain is not None and gain != 1.0:
-        from E27_glomerulus_gain import ORACLE, gained
+        from experiments.E27_glomerulus_gain import ORACLE, gained
         gloms = list(gain_gloms) if gain_gloms else list(ORACLE)
         missing = set(gloms) - set(wPNKC.columns.get_level_values('glomerulus'))
         if missing:
@@ -953,7 +953,7 @@ def zcell_terms(s_on: pd.DataFrame, s_off: pd.DataFrame, zcell: dict, cal: Optio
     odor-odor distances, the natural-source alignment, zcell_noise / _K / _noise_ratio and the calibration's
     flags) and zcell_realism_flagged (1 when E73's realism flag is set under the reading).
     """
-    import E73_per_kc_normalization as E73
+    from experiments import E73_per_kc_normalization as E73
     on, off = (H.abbrev_columns(s.astype(float))[H.APL16_ODORS] for s in (s_on, s_off))
     rows, cal = E73.zcell_rows({}, on, off, q=zcell['q'], a_map=zcell['amp'], readings=('graded',), cal=cal)
     r = rows[0]
@@ -1071,7 +1071,7 @@ def make_loss(data: dict, data_rates: Dict[str, pd.Series], orn_pairs: pd.Series
     if band_units == 'noise':
         if rate_criterion == 'zcell':
             raise ValueError("band_units 'noise' is for the two-spike rate terms; rate_criterion 'zcell' reads the data in z units")
-        from apl_effect_scores import frac_data
+        from kcq.apl_effect import frac_data
         data_rates = {'TNT3c': frac_data('on', 'noise'), 'TNT': frac_data('off', 'noise')}
     band_prefix = 'noise_' if band_units == 'noise' else ''
     ratio_target = float(data_rates['TNT'].reindex(H.APL16_ODORS).mean() /
@@ -1100,7 +1100,7 @@ def make_loss(data: dict, data_rates: Dict[str, pd.Series], orn_pairs: pd.Series
                 raise ValueError("apl_data_units 'noise' is for the raw and calibrated readouts; apl_readout 'zcell' reads the "
                     "data in Yang's z units")
             # (E76) the per-pair target, its floor and the readout's calibration target in baseline-noise units
-            import E76_data_side_target as E76
+            from experiments import E76_data_side_target as E76
             apl_floor = H.data_target('noise_apl_effect_rmse_floor')
             apl_data = E76.data_effect('noise')
             cal_target = H.data_target('noise_apl_effect_cal_target')
@@ -1108,7 +1108,7 @@ def make_loss(data: dict, data_rates: Dict[str, pd.Series], orn_pairs: pd.Series
         opk_data = np.array([H.data_target(f'{band_prefix}tnt_odors_per_kc_{b}') for b in OPK_BINS])
         use_zcell = apl_readout == 'zcell' or rate_criterion == 'zcell'
         if use_zcell:
-            import E73_per_kc_normalization as E73
+            from experiments import E73_per_kc_normalization as E73
             zcell = dict(zcell or {})
             zcell.setdefault('q', H.data_target('zcell_q_window'))
             zcell.setdefault('amp', 'saturating')
@@ -1128,7 +1128,7 @@ def make_loss(data: dict, data_rates: Dict[str, pd.Series], orn_pairs: pd.Series
                 raise ValueError("apl_class_term needs apl_readout 'zcell' (the class term is computed under the reading)")
             if apl_class_form not in APL_CLASS_FORMS:
                 raise ValueError(f'apl_class_form {apl_class_form!r}: one of {APL_CLASS_FORMS}')
-            import E74_apl_effect_by_odors_per_kc as E74
+            from experiments import E74_apl_effect_by_odors_per_kc as E74
             class_floor = H.data_target('apl_class_rmse_floor')
         elif apl_class_form != 'sq':
             raise ValueError('apl_class_form needs apl_class_term')
@@ -1173,7 +1173,7 @@ def make_loss(data: dict, data_rates: Dict[str, pd.Series], orn_pairs: pd.Series
             else:
                 terms['block'] = jterms['block']
         if proxy is not None and 'proxy' in outputs:
-            import noise_proxy
+            from kcq import noise_proxy
             pp = noise_proxy.pipeline_pairs(outputs['proxy'], proxy['n_recordings'], proxy['n_trials'],
                 proxy['n_spikes_for_response'])
             pout, pterms = stats_terms(*outputs['on'], *outputs['off'], rdms={'on': pp['on']['raw'], 'off': pp['acute_off']['raw']})
@@ -1307,7 +1307,7 @@ def make_loss(data: dict, data_rates: Dict[str, pd.Series], orn_pairs: pd.Series
         import inspect
         # (the harness function's window, reference time and onset: its defaults)
         loss_fn.apl.update(count_kernel=dict(rise=count_kernel[0], decay=count_kernel[1],
-            function='kc_remapping_harness.kernel_weighted_counts', defaults={k: p.default for k, p in
+            function='kcq.harness.kernel_weighted_counts', defaults={k: p.default for k, p in
             inspect.signature(H.kernel_weighted_counts).parameters.items() if p.default is not inspect.Parameter.empty}))
     # (E73 part C) the reading's settings, or None; the held calibration ('calibrate' 'start'; cleared per fit)
     loss_fn.zcell = zcell if use_zcell else None
@@ -1499,8 +1499,8 @@ def fit_one(k: float, orn, initial, wnorm, breadth, loss_fn, *, kckc0: float, ma
     if spike_times:
         hook_kws['condition_spike_times'] = ('on', 'off')
     if block_proxy is not None:
-        import noise_proxy
-        import E43_model_trial_noise as E43
+        from kcq import noise_proxy
+        from experiments import E43_model_trial_noise as E43
         store: dict = {}
         hook = noise_proxy.make_block_proxy_hook(store, orn, block_proxy['sigma'], block_proxy['thr_ratio'],
             block_proxy['n_recordings'], block_proxy['n_trials'], block_proxy['seed'], block_proxy['passes'],
@@ -1997,7 +1997,7 @@ def main() -> None:
         '' if input_tag is None else f'input-{input_tag}_')
     gain_gloms = None
     if gain is not None:
-        from E27_glomerulus_gain import ORACLE
+        from experiments.E27_glomerulus_gain import ORACLE
         gain_gloms = list(args.gain_glomeruli) if args.gain_glomeruli else list(ORACLE)
     print(f'bouton base ready ({time.time() - t0:.0f}s; claw_thr {args.claw_thr}; gain {gain}; '
         f'wiring {args.wiring}); tuned params {initial}', flush=True)
@@ -2204,7 +2204,7 @@ def main() -> None:
             flush=True
         )
         prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),
-            script='E10_joint_fit.py', host=subprocess.run(['hostname'], capture_output=True,
+            script='experiments/E10_joint_fit.py', host=subprocess.run(['hostname'], capture_output=True,
                 text=True).stdout.strip(),
             **start_prov,
             base=base_kws(args.claw_thr, args.apl_drive, claw_transfer), apl_drive=args.apl_drive,
@@ -2252,7 +2252,7 @@ def main() -> None:
                 if args.loss in ('structure', 'rho', 'apl') else {}),
             **(dict(apl_loss=dict(loss_fn.apl, note=('E67: the APL-effect term is the APL-effect loss (or its pattern part) over its '
                 'floor, on raw spike counts (cosine) or under the saturating readout n / (n + K), K re-calibrated at every evaluation '
-                '(kc_remapping_harness.calibrate_readout, responders_min 2) on the APL-on counts and applied unchanged to APL off; the '
+                '(kcq.harness.calibrate_readout, responders_min 2) on the APL-on counts and applied unchanged to APL off; the '
                 'data side is the graded effect (yang_apl_effect'
                 + ('' if args.apl_data_units == 'z' else '; with apl_data_units noise, E76_data_side_target.data_effect(\'noise\'), its '
                 'floor noise_apl_effect_rmse_floor and the calibration target noise_apl_effect_cal_target') + '); walls as in '

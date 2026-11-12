@@ -1,30 +1,26 @@
 #!/usr/bin/env python3
 """Tests for the realism bands' data side in baseline-noise units (Tom, 2026-11-10 16:10;
 model_experiment_queue): the registry's noise_* entries (data_targets.py `criterion_stats`,
-`noise_unit_criterion`), the flags of apl_effect_scores.py under both units and E73_per_kc_normalization.fixed_unit_flags
+`noise_unit_criterion`), the flags of kcq/apl_effect.py under both units and E73_per_kc_normalization.fixed_unit_flags
 (E10_joint_fit.make_loss's `band_units`: test_e10_band_units.py). Needs the shared directory (the data-target registry, the KC data and
 viki's per-KC scales); skipped without it."""
 
 import json
-import sys
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
 
-EXP_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(EXP_DIR))
-H = pytest.importorskip('kc_remapping_harness')
+H = pytest.importorskip('kcq.harness')
 try:
     H.data_targets_path().read_bytes()
     H.data_target('noise_threshold')
 except (FileNotFoundError, OSError):
     pytest.skip('the shared directory (data-target registry) is not available', allow_module_level=True)
 except KeyError:
-    pytest.skip('the registry has no noise_* entries yet (data_targets.py --add-new)', allow_module_level=True)
-D = pytest.importorskip('data_targets')
-S = pytest.importorskip('apl_effect_scores')
+    pytest.skip('the registry has no noise_* entries yet (kcq/data_targets.py --add-new)', allow_module_level=True)
+D = pytest.importorskip('kcq.data_targets')
+S = pytest.importorskip('kcq.apl_effect')
 
 ODORS = list(H.APL16_ODORS)
 LABELS = [f'{o} @ -3' for o in ODORS]
@@ -160,7 +156,7 @@ def test_archive_opk_both_units(tmp_path, monkeypatch):
 
 # ------------------------------------------------------------------- E73's fixed-unit columns
 def test_e73_fixed_unit_flags(monkeypatch):
-    E73 = pytest.importorskip('E73_per_kc_normalization')
+    E73 = pytest.importorskip('experiments.E73_per_kc_normalization')
     rng = np.random.default_rng(2)
     counts = {}
     rows = []

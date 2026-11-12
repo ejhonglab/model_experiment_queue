@@ -4,16 +4,11 @@ geometry: the glomerulus co-localization on two- and three-bouton layouts, the p
 and its flips on a synthetic point set, the masked Pearson r, the proxy's invariance when the local field is uniform and
 the leave-one-odor-out share. No connectome tables, measured maps or simulations needed."""
 
-import sys
-from pathlib import Path
-
 import numpy as np
 import pandas as pd
 import pytest
 
-EXP_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(EXP_DIR))
-E = pytest.importorskip('E79_connectome_maps')
+E = pytest.importorskip('experiments.E79_connectome_maps')
 
 
 def test_colocalization_two_glomeruli():

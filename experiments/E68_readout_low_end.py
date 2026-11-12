@@ -11,11 +11,11 @@ models, and how the KC data's own APL effect depends on how their low end is rea
 
 Part A (no simulations):
 
-A1, the data's low end (Yang's per-trial APL16 recordings, `noise_floor_trial_distances.load_trials`;
+A1, the data's low end (Yang's per-trial APL16 recordings, `kcq.noise_floor.load_trials`;
 11 control, 8 APL output blocked (TNT)), per recording, mean over recordings per genotype: the
 amplitude histogram of the trial means and the trial-to-trial sd by amplitude; the reproducible share of
 the low bands, cross-validated over trials (entries selected on the mean of two trials, read on the
-third); every pair's cosine split into three terms (`kc_remapping_harness.cosine_terms`: both of a KC's
+third); every pair's cosine split into three terms (`kcq.harness.cosine_terms`: both of a KC's
 entries responders, i.e. trial mean > 1 z; one a responder and the other sub-threshold; both
 sub-threshold) and the per-pair APL effect split the same way into mean, per-odor and pair-specific
 parts (recording-bootstrap intervals); the responder x sub-threshold term split by the sub-threshold
@@ -27,7 +27,7 @@ weak broad tuning; whether the negatives follow the number of responders to the 
 A2, readouts with a low end, on the archived APL-on and acute APL-off spike counts of the key models
 (E65's KEY_MODELS), the APL-effect fits (E67) if archived, and every archived variant without a realism
 flag. Every low-end parameter is calibrated on the model's APL-on counts against control-fly statistics
-that involve neither the APL effect nor any odor-odor distance (`kc_remapping_harness.calibrate_low_end`,
+that involve neither the APL effect nor any odor-odor distance (`kcq.harness.calibrate_low_end`,
 closed-form expectations through the noise, iterated to a fixed point) and applied unchanged to APL off:
 the half-saturation K (responders-only participation ratio), the one-spike floor b ((n + b) / (n + b +
 K) for n >= 1; the share of entries with a trial mean between 0.5 and 1.5 z, see below), the conversion c
@@ -84,8 +84,8 @@ Outputs, <shared>/results/E68_readout_low_end/: data_*.csv (A1), calibration.csv
 (one row per variant x configuration x reading), variant_amplitude.csv, key_models.csv,
 key_model_histograms.csv, one_spike_weight.csv, medians.csv, trials_low_end.csv, trials_calibration.csv,
 comparison_table.md, the figures, provenance.json.
-Usage: nice -n 10 ./venv/bin/python E68_readout_low_end.py [--jobs 8] [--only-key] [--boot 1000]
-       OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python E68_readout_low_end.py --part B [--b-step sims|trials|score]
+Usage: nice -n 10 ./venv/bin/python experiments/E68_readout_low_end.py [--jobs 8] [--only-key] [--boot 1000]
+       OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python experiments/E68_readout_low_end.py --part B [--b-step sims|trials|score]
 """
 from __future__ import annotations
 
@@ -109,8 +109,8 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
-from E65_spike_count_readout import KEY_MODELS
+from kcq import harness as H
+from experiments.E65_spike_count_readout import KEY_MODELS
 
 EXPERIMENT = 'E68_readout_low_end'
 ARCHIVE = H.shared_dir() / 'data' / 'model_outputs'
@@ -196,7 +196,7 @@ def trialmean_band_shares(genotype: str) -> Dict[str, float]:
 # A1: the data's low end
 def data_trials(genotype: str) -> Dict[tuple, Dict[str, np.ndarray]]:
     """{recording: {'X': trials x KCs x 16 odors, 'pfo': trials x KCs or None, 'repeat': repeat numbers}}."""
-    import noise_floor_trial_distances as NF
+    from kcq import noise_floor as NF
     p = H.yang_data_dir() / genotype / f'dataset_{NF.DATASETS[genotype]}_long.csv'
     d = pd.read_csv(p)
     d['abbrev'] = d['odor'].map(H.odor_abbrev)
@@ -726,7 +726,7 @@ def main() -> None:
     # the code state at the start of the run (the working tree may change while it runs)
     git = lambda *a: subprocess.run(['git', *a], cwd=H.HERE, capture_output=True, text=True).stdout.strip()
     git_state = dict(**H.code_commits(),
-        script_and_harness_dirty=bool(git('status', '--porcelain', '--', 'E68_readout_low_end.py', 'kc_remapping_harness.py', 'data_targets.py')))
+        script_and_harness_dirty=bool(git('status', '--porcelain', '--', 'experiments/E68_readout_low_end.py', 'kcq/harness.py', 'kcq/data_targets.py')))
     # A1
     a1 = part_a1(args.boot)
     for k in ('rec', 'hist', 'sd', 'cv', 'rep', 'neg', 'term_pairs'):
@@ -792,10 +792,10 @@ def main() -> None:
     key.to_csv(out / 'key_models.csv', index=False)
     write_table(out, dtab, a1, df, key, amp, one, med, tr, pd.DataFrame(tcal))
     figures(out, dtab, a1, key, hist, amp)
-    import noise_floor_trial_distances as NF
+    from kcq import noise_floor as NF
     inputs = [BY_VARIANT, E65_TABLE, H.data_targets_path(), H.yang_data_dir() / 'computed' / 'trialmean_responses_long.parquet',
         H.yang_data_dir() / 'computed' / 'rdm_per_recording_long.csv'] + [H.yang_data_dir() / g / f'dataset_{i}_long.csv' for g, i in NF.DATASETS.items()]
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E68_readout_low_end.py --part A',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E68_readout_low_end.py --part A',
         host=subprocess.run(['hostname', '-s'], capture_output=True, text=True).stdout.strip(), **git_state,
         inputs_sha256={str(p): sha256(p) for p in inputs if Path(p).exists()},
         n_variants=len(jobs), failed_variants=failed, n_trial_sets=len(tjobs), configs=[c[0] for c in CONFIGS], readings=list(READINGS), band=BAND,
@@ -1093,9 +1093,9 @@ def b_dir() -> Path:
 
 def e67_best() -> List[Tuple[str, str, str, str, str]]:
     """The APL-effect fits (E67) with the lowest loss under each definition (raw counts; the calibrated
-    readout), among the saved fits inside the realism bands (apl_effect_scores.realism_flag on the
+    readout), among the saved fits inside the realism bands (kcq.apl_effect.realism_flag on the
     fits' response rates and, where scored, their response rate ρ)."""
-    from apl_effect_scores import realism_flag
+    from kcq.apl_effect import realism_flag
     p = RESULTS / E67_FOLDER / 'fits.csv'
     if not p.exists():
         return []
@@ -1121,7 +1121,7 @@ def make_vm_model_class():
     """A subclass of the trial-noise experiment's (E43) excitability model that can record the KC
     membrane potential of a run and reduce it per KC and odor (imported lazily: E43 imports the model
     code)."""
-    import E43_model_trial_noise as E43
+    from experiments import E43_model_trial_noise as E43
     from al_analysis.mb_model import get_time_index
 
     class VmModel(E43.ExcitabilityModel):
@@ -1566,7 +1566,7 @@ def b_score(args) -> None:
     figure_b(res, hist_df, df)
     sims = json.loads((b_dir() / 'sims_log.json').read_text()) if (b_dir() / 'sims_log.json').exists() else []
     vm_infos = {k: load_vm(k)['info'] for k, *_ in models}
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E68_readout_low_end.py --part B',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E68_readout_low_end.py --part B',
         host=subprocess.run(['hostname', '-s'], capture_output=True, text=True).stdout.strip(), **H.code_commits(),
         model_provenance=H.model_provenance(orn_deltas=H.apl16_orn_deltas()), models=vm_infos, sims_log=sims,
         trials=json.loads(str(np.load(tp)['info'])) if tp.exists() else None, vm_configs=[list(map(str, c)) for c in VM_CONFIGS],

@@ -28,7 +28,7 @@ the onset is at k / v s.
   reproduction_checks.json).
 - (B) the target by window: per window (1 s bins from -2 to 20 s; the pulse 0-2 s, 2-4 s, 4-8.1 s, the target's window,
   0-8.1 s, 8.1-10.1 s, 10.1-12.2 s) and recording, the cosine distances of the trial means ('measured') and the
-  noise-free ones from products of different repeats (`kc_remapping_harness.noise_free_pair_distances`); per window the
+  noise-free ones from products of different repeats (`kcq.harness.noise_free_pair_distances`); per window the
   mean distances, the per-pair APL effect (mean, the ester and alcohol groups, the six pairs with near-identical ORN
   input, the block), ρ on the per-pair APL effect with the target's, the floor of the loss and the ceiling of ρ
   (data_targets.apl_effect_resamples, as the registry), with 90 % intervals over 1000 resamples of recordings and of
@@ -58,8 +58,8 @@ the six typical and the two strongest (E76); the control flies by label group as
 and as in the queue's notes (6 / 3 / 2; which side of 2024-07-10 fly 2 is the notes' third TNTin-nolabel recording is
 not known, so both readings; the notes' 2024-08-09 fly 3 side is taken as L, the one its YAML calls not labeled).
 
-Usage (from this folder; one thread, no simulations):
-    OMP_NUM_THREADS=1 OMP_THREAD_LIMIT=1 nice -n 10 ./venv/bin/python -u E84_trace_time_course.py --part A
+Usage (from the repository root; one thread, no simulations):
+    OMP_NUM_THREADS=1 OMP_THREAD_LIMIT=1 nice -n 10 ./venv/bin/python -u experiments/E84_trace_time_course.py --part A
 (then B, C, D, E, export; `--part table` rewrites comparison_table.md and the figures from the CSVs)
 """
 from __future__ import annotations
@@ -79,8 +79,8 @@ from typing import Callable, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
-import yang_response_normalization as YRN
+from kcq import harness as H
+from data_prep import yang_response_normalization as YRN
 
 EXPERIMENT = 'E84_trace_time_course'
 ODORS: List[str] = list(H.APL16_ODORS)
@@ -168,7 +168,7 @@ def _sha(p: Path) -> str:
 
 
 def write_provenance(part: str, settings: dict) -> None:
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E84_trace_time_course.py',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E84_trace_time_course.py',
                 part=part, **H.code_commits(),
                 recordings=[f'{g}:{r}' for g, r in YRN.RECORDINGS], neucoeff=NEUCOEFF, excerpt_s=list(EXCERPT_S),
                 approx_conc_note=H.APPROX_CONC_NOTE, **settings)
@@ -715,8 +715,8 @@ def population_effects() -> Dict[str, Dict[str, np.ndarray]]:
         for (p, ro), g in d.groupby(['population', 'readout']):
             _POP.setdefault(p, {})[ro] = _pairs_array(g.set_index(['odor_a', 'odor_b'])['effect'])
         return _POP
-    import E72_wiring_population as E72
-    import E81_repeat_structure as E81
+    from experiments import E72_wiring_population as E72
+    from experiments import E81_repeat_structure as E81
     pops = E81.populations()
     members = {'eight': E72.new_fit_members(), 'breadth2_four': pops['breadth2_four'], 'ceiling_four': pops['ceiling_four']}
     rows = []
@@ -807,7 +807,7 @@ def floor_ceiling(tab_g: Dict[str, np.ndarray], seed: int = 0) -> Dict[str, np.n
 
 def floor_ceiling_check(tab_g: Dict[str, np.ndarray], row: int) -> Dict[str, float]:
     """data_targets.apl_effect_resamples itself on one row, against `floor_ceiling`'s values for it."""
-    import data_targets as DT
+    from kcq import data_targets as DT
     recs = {g: pd.DataFrame(t[:, row, :], columns=_PAIR_IDX) for g, t in tab_g.items()}
     _, _, boot_rmse, sh_rho = DT.apl_effect_resamples(recs)
     r = float(np.nanmean(sh_rho))
@@ -894,11 +894,11 @@ VARIANT_WINDOWS = ('pulse', '2-4', '4-8.1', 'target', '0-8.1', '8.1-10.1')
 
 
 def variants_by_window(tabs, keys, row_keys) -> None:
-    """Every archived variant's raw-count APL effect (apl_effect_scores.model_pairs over results/E*/) against the flies'
+    """Every archived variant's raw-count APL effect (kcq.apl_effect.model_pairs over results/E*/) against the flies'
     effect in VARIANT_WINDOWS (all recordings, Yang's z, both estimators): loss, mean error, pattern part, ρ; the rank
     correlation over variants of each window's loss with the target window's and with the present scores
     (results/apl_effect/by_variant.csv)."""
-    import apl_effect_scores as AES
+    from kcq import apl_effect as AES
     effs, names = [], []
     folders = sorted(p for p in (H.shared_dir() / 'results').glob('E*_*') if p.is_dir() and re.match(r'E\d+_', p.name))
     for folder in folders:
@@ -1323,7 +1323,7 @@ def model_kernel_fits(TR: dict, t: np.ndarray) -> pd.DataFrame:
     """kernel_fits_models.csv: per saved E82 run, the kernel fitted to the control flies' responders' trace with the run's
     APL-on responders' spike-time histogram as the drive, then (amplitude only) the trace with APL output blocked (TNT)
     (all eight; the six typical) with its APL-off responders' histogram."""
-    import E82_flies_protocol as E82
+    from experiments import E82_flies_protocol as E82
     yc = subset_trace(TR, 'control flies', 'resp')[0]
     yt = {s: subset_trace(TR, s, 'resp')[0] for s in FIT_SUBSETS[1:3]}
     rows = []
@@ -1514,7 +1514,7 @@ def part_d(n_boot: int = N_BOOT) -> None:
     """Part D: kernel_fits.csv, kernel_fits_models.csv, protocol_readings_measured_kernel.csv (after the identity check
     against E82's protocol_readings.csv), protocol_populations_measured_kernel.csv, gate_measured_kernel.csv,
     trace_ratio_tests.csv, kernel_recovery.csv; part_d_checks.json."""
-    import E82_flies_protocol as E82
+    from experiments import E82_flies_protocol as E82
     TR = _traces_all()
     t = next(iter(TR.values()))['t']
     t0 = time.time()
@@ -1971,7 +1971,7 @@ def export_traces() -> None:
             raise RuntimeError(f'export {rec}: the written values do not reproduce olfdb ({dmax:.2g})')
     pd.DataFrame(vt).to_csv(d / 'volume_times.csv', index=False)
     rec0 = load_cache(*YRN.RECORDINGS[0])['meta']
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E84_trace_time_course.py --part export',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E84_trace_time_course.py --part export',
                 **H.code_commits(), neucoeff=NEUCOEFF, volume_rate=rec0['volume_rate'],
                 frame_rate=rec0['yaml']['frame_rate'], frame_per_volume=rec0['yaml']['frame_per_volume'], files=checks,
                 total_bytes=int(sum(v['bytes'] for v in checks.values())),
@@ -1988,7 +1988,7 @@ The per-trial signal of every KC of the 19 APL16 recordings of olfdb datasets 19
 and 20 (control flies, TNT3c, 11 recordings), around each of the 51 presentations (16 odors and the solvent, pfo, three
 repeats). Yang allowed sharing these traces on 2026-11-11 (in viki's terminal, about 10:55), for these 19 recordings
 only; the 12 APL16 recordings on her drives that are not in olfdb are on hold and are not here. Written by
-`E84_trace_time_course.py --part export` of model_experiment_queue ({prov['generated']},
+`experiments/E84_trace_time_course.py --part export` of model_experiment_queue ({prov['generated']},
 {prov['queue_commit'][:7]}) from the suite2p output on Yang's drive, read by
 `yang_response_normalization.read_suite2p`; re-run it on viki to regenerate.
 
@@ -2051,7 +2051,7 @@ def tables() -> str:
     """comparison_table.md from the parts' CSVs (the sections whose CSVs exist)."""
     o = out_dir()
     lines = [f'# E84: the time course of the APL effect in the flies\' traces',
-             '', f"Generated {datetime.now().strftime('%Y-%m-%d %H:%M')} by E84_trace_time_course.py (model_experiment_queue "
+             '', f"Generated {datetime.now().strftime('%Y-%m-%d %H:%M')} by experiments/E84_trace_time_course.py (model_experiment_queue "
              f"{_git('rev-parse', '--short', 'HEAD')}). Cosine distances between trial-mean response vectors over all KCs of a "
              'recording (\'as measured\'), or noise-free from products of different repeats (E81), means over recordings; '
              'intervals 90 % over 1000 resamples of recordings (of flies in the effect table\'s last column). KC data in '

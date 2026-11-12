@@ -7,15 +7,15 @@ spike-driven APL restarted from the claw-driven optima (hal: results/E36_spike_a
 atlas: results/E36_spike_apl_jointfit/fits.csv) against E31's / E34's claw-driven capped fits,
 with E35's suppression uniformity computed from the archived APL-on / APL-off responses.
 Writes results/E36_spike_apl/{E36_spike_apl.png, stage1_points.csv, stage2_fits.csv}.
-Usage: ./venv/bin/python E36_figure.py
+Usage: ./venv/bin/python experiments/E36_figure.py
 """
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
-from E35_divisive_apl import suppression_stats
+from kcq import harness as H
+from experiments.E35_divisive_apl import suppression_stats
 
 R = H.shared_dir() / 'results'
 A = H.shared_dir() / 'data' / 'model_outputs'

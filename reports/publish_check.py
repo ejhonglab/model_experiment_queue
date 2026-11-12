@@ -11,7 +11,7 @@ the live page has that the new build does not: if there are none, the new build 
 published once; if there are some, the template the build came from is behind someone's publish (pull, or
 ask in chat), and the publish must wait. The reverse (what only the new build has) is printed with --new.
 
-Usage: ./venv/bin/python publish_check.py <live index.html> <new index.html> [--new] [--width 300]
+Usage: ./venv/bin/python reports/publish_check.py <live index.html> <new index.html> [--new] [--width 300]
 Exit status 0 when the live page has nothing the new build lacks, 1 otherwise.
 """
 from __future__ import annotations

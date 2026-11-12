@@ -18,7 +18,7 @@ above threshold. Then, per odor:
 Writes results/E35_divisive_apl/margins_<thrtag>.csv and prints the rank correlations of
 each per-odor quantity with the odor's APL-off response fraction.
 
-Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python E35_apl_margins.py --thr 70 [--forms sub kcdiv boutondiv bothdiv]
+Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python experiments/E35_apl_margins.py --thr 70 [--forms sub kcdiv boutondiv bothdiv]
 """
 from __future__ import annotations
 
@@ -29,9 +29,9 @@ import numpy as np
 import pandas as pd
 from scipy import stats as sstats
 
-import kc_remapping_harness as H
-from E3_drive_dependent_gain import BOUTON, TARGET
-from E35_divisive_apl import EXPERIMENT, FORMS, thr_tag
+from kcq import harness as H
+from experiments.E3_drive_dependent_gain import BOUTON, TARGET
+from experiments.E35_divisive_apl import EXPERIMENT, FORMS, thr_tag
 
 DATA_RATIO = 2.2
 

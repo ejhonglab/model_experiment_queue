@@ -8,22 +8,18 @@ E75's. Needs the shared directory (the saved fits and the data); skipped without
 minutes (run with OMP_NUM_THREADS / OMP_THREAD_LIMIT set)."""
 
 import json
-import sys
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
 
-EXP_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(EXP_DIR))
-H = pytest.importorskip('kc_remapping_harness')
+H = pytest.importorskip('kcq.harness')
 try:
     H.data_targets_path().read_bytes()
 except (FileNotFoundError, OSError):
     pytest.skip('the shared directory (data-target registry) is not available', allow_module_level=True)
-X = pytest.importorskip('E83_cross_wiring_fit')
-SR = pytest.importorskip('E83_searches')
+X = pytest.importorskip('experiments.E83_cross_wiring_fit')
+SR = pytest.importorskip('experiments.E83_searches')
 
 
 def _have_fits() -> bool:
@@ -171,7 +167,7 @@ def test_linear_start(half):
     off = {w: f['saved']['off'][1] for w, f in fits.items()}
     Ks = {w: f['K'] for w, f in fits.items()}
     s = SR.linear_start(half, on, off, Ks)
-    import E75_glomerulus_apl_profile as E75
+    from experiments import E75_glomerulus_apl_profile as E75
     M = E75.map_matrix(H.results_dir(E75.EXPERIMENT), 'cell')
     assert list(s) == list(M.columns) and len(s) == 36
     v = np.array(list(s.values()))
@@ -193,7 +189,7 @@ def test_write_input_tables(tmp_path):
         want = np.asarray(done[o]) if o in done else np.ones(len(orn.index))
         # read_factors parses the CSV with pandas' default float parser (equal to within an ulp)
         assert np.allclose(F[o].to_numpy(), want, rtol=1e-14, atol=0)
-    from E10_joint_fit import read_orn_input
+    from experiments.E10_joint_fit import read_orn_input
     got = read_orn_input(str(tmp_path / 'inputs' / 'searched_halfA.csv'), orn)
     want = X.input_at(F, 1.0, orn)
     assert np.allclose(got.to_numpy(dtype=float), want.to_numpy(dtype=float), rtol=1e-14, atol=0)
@@ -215,7 +211,7 @@ def models():
 @pytest.mark.parametrize('w', X.S_WIRINGS)
 def test_zero_scores_reproduce_the_fit(models, w):
     """Arm P's identity: every glomerulus's score 0 at the APL factor 1 gives the wiring's saved APL-on run exactly."""
-    import E75_glomerulus_apl_profile as E75
+    from experiments import E75_glomerulus_apl_profile as E75
     m = models[w]
     gl = list(E75.map_matrix(H.results_dir(E75.EXPERIMENT), 'cell').columns)
     m.set_profile(SR.P_SITE, {g: 0.0 for g in gl})
@@ -233,9 +229,9 @@ def test_zero_scores_reproduce_the_fit(models, w):
 def test_real_profile_factors_are_e75s(models):
     """The real wiring's profile (E75's ridge cell profile at half strength) puts E75's factors on E75's breadth-weighted
     APL->KC weights, and its archived point (at E75's APL factor) is reproduced exactly."""
-    import E10_joint_fit as J
-    import E72_wiring_population as E72
-    import E75_glomerulus_apl_profile as E75
+    from experiments import E10_joint_fit as J
+    from experiments import E72_wiring_population as E72
+    from experiments import E75_glomerulus_apl_profile as E75
     out75 = H.results_dir(E75.EXPERIMENT)
     sc = X.e75_profile('ridge_x0.5')
     _, wnorm, W, breadth = J.bouton_base(H.apl16_orn_deltas(), H.outputs_dir(E75.EXPERIMENT), None)
@@ -263,7 +259,7 @@ def test_real_profile_factors_are_e75s(models):
 def test_factor_one_reproduces_the_fit(w):
     """Arm I's identity: the first searched odor as a pseudo-odor at factor 1, the lab input's breadth held, gives the
     wiring's saved APL-on and APL-off counts for that odor exactly."""
-    from E64_input_oracle import candidate_orn
+    from experiments.E64_input_oracle import candidate_orn
     P = X.wiring_parts(w)
     odor = SR.I_ODORS[0]
     sim, _ = X.build_simulator(w, orn=candidate_orn(P['orn'], odor, np.ones((1, len(P['orn'].index)))), breadth=P['breadth'])

@@ -42,7 +42,7 @@ effect; the amplitude statistics through the low end of the readout experiment's
 z with the data's measurement noise (one-spike floor with noise, 'floor_noise', and the plain
 readout with noise, 'cal_noise': entries above 4 z, the responders' mean amplitude, the 0.5-1.5 z
 band, both conditions); the odors-per-KC distribution in both conditions with its distance from the
-flies'; the realism flag (apl_effect_scores.realism_flag, all four bands).
+flies'; the realism flag (kcq.apl_effect.realism_flag, all four bands).
 
 Part B (E10_joint_fit.py --experiment E69_kc_firing_ceiling --loss apl --apl-readout both with the ceiling
 fixed, from part A's re-tuned parameters in tuned_params.json; its fits.csv and histories in the same
@@ -58,12 +58,12 @@ stats_variants.csv, model_pair_distances_long.csv, ceiling_readouts.csv, worst_p
 partA_variant_stats.csv, parts_A.csv, shares_A.csv, comparison_table.md, figures, provenance.json);
 counts and responses in outputs/E69_kc_firing_ceiling/<tag>_<on|acute_off>_<spike_counts|responses>.parquet.
 
-Usage (from this folder; one process at a time):
-    OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python E69_kc_firing_ceiling.py --stage run
+Usage (from the repository root; one process at a time):
+    OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python experiments/E69_kc_firing_ceiling.py --stage run
     (runs every missing check, the pilot and every missing setting, each in its own process, then
     --stage summarize)
-    ./venv/bin/python E69_kc_firing_ceiling.py --stage summarize
-    OMP_NUM_THREADS=8 nice -n 10 ./venv/bin/python E69_kc_firing_ceiling.py --stage partB  (after part B's fits)
+    ./venv/bin/python experiments/E69_kc_firing_ceiling.py --stage summarize
+    OMP_NUM_THREADS=8 nice -n 10 ./venv/bin/python experiments/E69_kc_firing_ceiling.py --stage partB  (after part B's fits)
 """
 from __future__ import annotations
 
@@ -81,7 +81,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 EXPERIMENT = 'E69_kc_firing_ceiling'
 RESULTS = H.shared_dir() / 'results'
@@ -166,7 +166,7 @@ def resolve_bases() -> Dict[str, dict]:
         return saved
     # (the APL-effect fits run on viki, whose E67 archive and fits.csv grow during part A: the bases are those of
     # the first call)
-    from apl_effect_scores import realism_flag
+    from kcq.apl_effect import realism_flag
     f = pd.read_csv(RESULTS / E67_FOLDER / 'fits.csv')
     f['flag'] = [realism_flag(r.rate_on, r.rate_off, r.spearman_rate_on_vs_data, np.nan, r.fit_opk_off_dist)
         for r in f.itertuples()]
@@ -209,9 +209,9 @@ class Model:
         """`ref` (experiment, tag): that fit at its fitted parameters instead of the base's (a part B fit,
         whose fits.csv row carries its KC refractory / adaptation parameters, which E43.fit_model passes on;
         `kc` must then be empty); `self.base` stays the base's."""
-        import E43_model_trial_noise as E43
+        from experiments import E43_model_trial_noise as E43
         from al_analysis.mb_model import make_fixed_param_kc_simulator
-        from E10_joint_fit import bouton_base
+        from experiments.E10_joint_fit import bouton_base
         b = bases()[key]
         if ref is not None and kc:
             raise ValueError('kc with ref: the fit row carries its own KC refractory / adaptation parameters')
@@ -261,7 +261,7 @@ _CTX: Dict[str, object] = {}
 
 def ctx() -> dict:
     if not _CTX:
-        import E66_per_odor_apl_profile as E66
+        from experiments import E66_per_odor_apl_profile as E66
         _CTX.update(E66.stats_context())
         _CTX['pr_target'] = H.data_target('ctrl_participation_ratio_resp')
         _CTX['effect'] = H.yang_apl_effect()
@@ -302,7 +302,7 @@ def amplitude_z_stats(on: pd.DataFrame, off: pd.DataFrame, K: float) -> dict:
     pseudo-recordings, seeds and calibration targets): 'floor_noise' (K, the one-spike floor b and the
     conversion c calibrated jointly on the APL-on counts) and 'cal_noise' (K as given, c on the APL-on
     response rate)."""
-    import E68_readout_low_end as E68
+    from experiments import E68_readout_low_end as E68
     s, floor_z = E68.refs()['noise_sd'], E68.refs()['floor_z']
     arr = {c: x.to_numpy(dtype=float) for c, x in (('on', on), ('acute_off', off))}
     out = {}
@@ -323,7 +323,7 @@ def amplitude_z_stats(on: pd.DataFrame, off: pd.DataFrame, K: float) -> dict:
 
 
 def opk_stats(r_on: pd.DataFrame, r_off: pd.DataFrame) -> dict:
-    from apl_effect_scores import OPK_BINS, odors_per_kc, opk_data
+    from kcq.apl_effect import OPK_BINS, odors_per_kc, opk_data
     out = {}
     for cond, r in (('on', r_on), ('off', r_off)):
         d = odors_per_kc(r)
@@ -336,7 +336,7 @@ def worst_pair_rows(tag: str, on: pd.DataFrame, off: pd.DataFrame, K: float) -> 
     """E66's five worst pairs under raw counts and the calibrated readout: the model's and the
     data's per-pair effect, the pair-specific part, and how many KCs carry half of the model's
     per-pair effect (E66 `kc_contributions`)."""
-    import E66_per_odor_apl_profile as E66
+    from experiments import E66_per_odor_apl_profile as E66
     rows = []
     for readout, kind, param in (('raw', 'raw', None), ('cal', 'saturating', K)):
         d_on, d_off = H.readout_pair_distances(on, kind, param), H.readout_pair_distances(off, kind, param)
@@ -357,9 +357,9 @@ def score(tag: str, meta: dict, model: Model, on_out, off_out) -> dict:
     """Every readout of one variant: E66's `score_variant` (the harness stats columns, the loss
     decomposition under each readout, the counts saved) plus this experiment's readouts, appended to
     ceiling_readouts.csv and worst_pairs.csv."""
-    import E66_per_odor_apl_profile as E66
-    from E10_joint_fit import apl_effect_terms
-    from apl_effect_scores import realism_flag
+    from experiments import E66_per_odor_apl_profile as E66
+    from experiments.E10_joint_fit import apl_effect_terms
+    from kcq.apl_effect import realism_flag
     c = ctx()
     on_s, off_s = on_out[1].astype(float), off_out[1].astype(float)
     K = H.calibrate_readout(on_s, 'saturating', c['pr_target'], stat='participation_ratio', responders_min=RESP_MIN)
@@ -816,7 +816,7 @@ def basecal_z_stats(df: pd.DataFrame) -> pd.DataFrame:
     one-spike floor and c as calibrated on the base's APL-on counts, held fixed), so that a change in the
     tail is the counts', not the re-calibration's; from the saved counts, with E68's noise and seeds. The
     APL-on response rate under the data's criterion is then no longer held at the flies' (z_basecal_rate_z_on)."""
-    import E68_readout_low_end as E68
+    from experiments import E68_readout_low_end as E68
     s, floor_z = E68.refs()['noise_sd'], E68.refs()['floor_z']
     rows = []
     for r in df.itertuples():
@@ -856,12 +856,12 @@ def setting_label(r) -> str:
 
 
 def write_table(df: pd.DataFrame) -> None:
-    from apl_effect_scores import opk_band
+    from kcq.apl_effect import opk_band
     dt = H.data_target
     pilot = read_json(res_dir() / 'pilot.json', {})
     bs = bases()
     L = ['# E69: a firing ceiling for the KCs, part A (fixed scales, both response rates held)', '',
-        f'Generated {datetime.now():%Y-%m-%d %H:%M} by E69_kc_firing_ceiling.py. Bases: ' +
+        f'Generated {datetime.now():%Y-%m-%d %H:%M} by experiments/E69_kc_firing_ceiling.py. Bases: ' +
         '; '.join(f"{k}: {b['label']} ({b['exp']}, {b['tag']})" for k, b in bs.items()) + '.', '',
         f"Pilot (base ref40, APL off, 3 ms refractory period, τ {PILOT_TAU:g} s): largest APL-off count {fmt(pilot.get('max_count_off_base'), '.0f')} "
         f"without a ceiling, {fmt(pilot.get('max_count_off_refractory_only'), '.0f')} with the refractory period alone; strengths " +
@@ -933,7 +933,7 @@ def write_partB_table(df: pd.DataFrame, noise: pd.DataFrame) -> None:
     """comparison_table_partB.md: each part B fit beside its start (a part A variant or an earlier fit),
     with the KC data; the fitted parameters; the fits through the trial-noise pipeline beside the
     APL-effect fits' (E67) three fits through the same pipeline."""
-    from apl_effect_scores import opk_band
+    from kcq.apl_effect import opk_band
     dt = H.data_target
     bs = bases()
     checks = read_json(res_dir() / 'base_checks.json', {})
@@ -950,8 +950,8 @@ def write_partB_table(df: pd.DataFrame, noise: pd.DataFrame) -> None:
         return r.realism_flag if isinstance(r.realism_flag, str) and r.realism_flag else '-'
 
     L = ['# E69: a firing ceiling for the KCs, part B (re-fits under the APL-effect loss with the ceiling fixed)', '',
-        f'Generated {datetime.now():%Y-%m-%d %H:%M} by E69_kc_firing_ceiling.py (`--stage partB`, `--stage summarize`). Fits: '
-        'E10_joint_fit.py --experiment E69_kc_firing_ceiling --loss apl --apl-readout both (the raw-count and the calibrated-readout '
+        f'Generated {datetime.now():%Y-%m-%d %H:%M} by experiments/E69_kc_firing_ceiling.py (`--stage partB`, `--stage summarize`). Fits: '
+        'experiments/E10_joint_fit.py --experiment E69_kc_firing_ceiling --loss apl --apl-readout both (the raw-count and the calibrated-readout '
         'APL-effect terms at weight 1 each), 3 ms refractory period and adaptation at τ 1 s fixed, the somatic threshold, APL->KC '
         '(KC->APL tied), APL->bouton (capped at 3 x the bouton base\'s) and KC-KC free, from part A\'s re-tuned parameters '
         '(tuned_params.json). Each fit re-simulated at its fitted parameters reproduces its saved spike counts exactly '
@@ -1067,7 +1067,7 @@ def figures(df: pd.DataFrame) -> None:
         ('opk_off_tv', 'odors per KC, APL off: distance from the flies', None, None, False),
         ('opk_on_tv', 'odors per KC, APL on: distance from the flies', None, None, False),
         ('pr_resp_raw_off', 'APL off: responders-only participation ratio, raw', dt('tnt_participation_ratio_resp'), 'APL output blocked (TNT)', True)]
-    from apl_effect_scores import opk_band
+    from kcq.apl_effect import opk_band
     fig, axes = plt.subplots(2, 3, figsize=(15, 8.5))
     for ax, (col, title, ref, ref_lab, is_pct) in zip(axes.ravel(), panels):
         for key, g in df.groupby('base', sort=False):
@@ -1153,7 +1153,7 @@ def write_provenance(df: pd.DataFrame) -> None:
     checks = read_json(res_dir() / 'base_checks.json', {})
     # (bases: each base's fit_mb_model kwargs, as the archive's params migration reads them; the selection in
     # base_selection)
-    prov = dict(generated=now(), host=socket.gethostname(), script='E69_kc_firing_ceiling.py', experiment=EXPERIMENT,
+    prov = dict(generated=now(), host=socket.gethostname(), script='experiments/E69_kc_firing_ceiling.py', experiment=EXPERIMENT,
         bases={k: v.get('kws_scalar', {}) for k, v in checks.items()}, base_selection=bases(), base_checks=checks,
         pilot=read_json(res_dir() / 'pilot.json', {}),
         settings=settings(), refractory_period=REFRACTORY, taus=TAUS, pilot_targets=PILOT_TARGETS, thr_bracket=THR_BRACKET,

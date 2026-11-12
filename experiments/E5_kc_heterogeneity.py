@@ -20,7 +20,7 @@ hemibrain wd20 model) tuned with APL on to a target mean response rate, the vari
   g x0.6, unknown x1; claw bases only), then tuned as usual
 
 Each variant gives an APL-on model and an acute APL-off model (same thresholds,
-`wAPLKC = 0`), scored with `kc_remapping_harness` as in E1: model on vs TNT3c, off vs TNT
+`wAPLKC = 0`), scored with `kcq.harness` as in E1: model on vs TNT3c, off vs TNT
 (Spearman, Spearman of deviations from the ORN prediction), on vs off (Spearman, isotonic
 R2, fruity x small-ester block, per-odor APL effect vs ORN drive), 66-pair references
 (deviations vs Remy's WT somata, residual vs VCF, claws), response rates overall, per
@@ -32,7 +32,7 @@ stop the rest; failures are recorded in `run_status.csv`. Re-running skips varia
 outputs exist. Large outputs (responses / spike counts parquet) go to
 ./outputs/E5_kc_heterogeneity/, compact results to <shared>/results/E5_kc_heterogeneity/.
 
-Usage: OMP_NUM_THREADS=6 nice -n 10 ./venv/bin/python E5_kc_heterogeneity.py
+Usage: OMP_NUM_THREADS=6 nice -n 10 ./venv/bin/python experiments/E5_kc_heterogeneity.py
     [--bases claw-dynamics claw] [--variants ...] [--target 0.05] [--score-only]
 """
 import argparse
@@ -49,7 +49,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 
 EXP = 'E5_kc_heterogeneity'
@@ -465,7 +465,7 @@ def main() -> None:
     if len(tab):
         make_figures(res_dir, tab, out_dir)
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),
-        script='E5_kc_heterogeneity.py', host=os.uname().nodename,
+        script='experiments/E5_kc_heterogeneity.py', host=os.uname().nodename,
         **H.code_commits(),
         omp_threads=os.environ.get('OMP_NUM_THREADS'), plan=plan,
         apl_type_factors=APL_TYPE_FACTORS, approx_conc_note=H.APPROX_CONC_NOTE)

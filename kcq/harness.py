@@ -17,7 +17,7 @@ Conventions (see experiment_priorities.md in the shared directory):
   Yang's (`APPROX_CONC_ODORS`, `APPROX_CONC_NOTE`): say so wherever results involving
   those odors are reported.
 
-Run `python kc_remapping_harness.py` to reproduce the report's data-vs-data statistics
+Run `python kcq/harness.py` to reproduce the report's data-vs-data statistics
 (and print bootstrap CIs over recordings) as a self-test.
 """
 from __future__ import annotations
@@ -42,9 +42,9 @@ from al_analysis import mb_model as _mb_model
 _mb_model.STRICT_CLEAN_OLFSYSM = True
 
 
-# this repository (model_experiment_queue); until 2026-11-11 it was the folder
-# scripts/claude_pair_remapping_experiments of al_analysis
-HERE = Path(__file__).resolve().parent
+# this repository's root (model_experiment_queue; this file is kcq/harness.py); until 2026-11-11 the repository was
+# the folder scripts/claude_pair_remapping_experiments of al_analysis
+HERE = Path(__file__).resolve().parents[1]
 
 # the report's odor order (= Yang's original matrix files)
 APL16_ODORS: List[str] = ['2h', 'IaA', 'pa', '2-but', 'eb', 'ep', '6al', 't2h', '1-8ol',
@@ -127,6 +127,13 @@ def _git(path: Path, *args: str) -> Optional[str]:
     return r.stdout.strip() if r.returncode == 0 else None
 
 
+def script_path(file: Union[str, Path]) -> str:
+    """The path of a file of this repository relative to its root (`script_path(__file__)` in
+    experiments/E10_joint_fit.py gives 'experiments/E10_joint_fit.py'), for provenance and for git
+    commands run from the root (cwd=HERE)."""
+    return Path(file).resolve().relative_to(HERE).as_posix()
+
+
 def code_commits() -> Dict[str, object]:
     """Returns the commits and dirty states of this repository and of the al_analysis checkout.
 
@@ -205,7 +212,7 @@ def data_target(name: str) -> float:
     """Value of one entry of the data-target registry (e.g. 'ctrl_ceiling', 'block').
 
     Figure scripts and loss functions read KC / ORN data values with this rather than from
-    literals. The registry is read once per process; run data_targets.py to rebuild it.
+    literals. The registry is read once per process; run kcq/data_targets.py to rebuild it.
 
     Raises:
         KeyError: `name` is not in the registry.
@@ -842,7 +849,7 @@ def yang_recording_rdms_values(genotype: str, values: str = 'graded') -> pd.Data
     transformed as `values` says: 'graded' (as `yang_recording_rdms`), 'thresholded' (trial
     means <= 1 set to 0 before the distance, as a model KC that does not respond contributes 0),
     'noise_corrected' (each recording's cosine corrected for trial-to-trial noise,
-    `noise_floor_trial_distances.analyse`: the distance a noise-free recording would show),
+    `kcq.noise_floor.analyse`: the distance a noise-free recording would show),
     'nonneg' (negative trial means set to 0) or 'floor' (trial means at or below the noise-defined
     floor `kc_noise_floor()` set to 0: twice the sd of a trial mean's noise, from the control
     flies' trial-to-trial sd of the non-responding entries, the same floor for both genotypes)."""
@@ -855,8 +862,8 @@ def yang_recording_rdms_values(genotype: str, values: str = 'graded') -> pd.Data
         return recording_rdms_from_matrices({k: transform_matrix(m, values='thresholded', thresh=thresh)
             for k, m in yang_recording_matrices(genotype).items()})
     if values == 'noise_corrected':
-        # a script module of this folder that imports the harness, hence imported here
-        from noise_floor_trial_distances import analyse, load_trials, recording_arrays
+        # a module of this package that imports the harness, hence imported here
+        from kcq.noise_floor import analyse, load_trials, recording_arrays
         rows = {}
         for rec, by_odor in recording_arrays(load_trials(genotype)).items():
             _, pr = analyse(by_odor, 'graded')
@@ -1579,7 +1586,7 @@ def sample_pseudo_recordings(signal, noise_sd: float, *, n_recordings: int = 10,
 def noise_corrected_pair_distances(trials: np.ndarray, odors: Sequence[str],
     min_reliability: Optional[float] = None) -> pd.Series:
     """The noise-corrected cosine distances of one recording from its trials (n_trials, units,
-    odors), as `noise_floor_trial_distances.analyse(..., 'graded')` computes them for the data:
+    odors), as `kcq.noise_floor.analyse(..., 'graded')` computes them for the data:
     each odor's signal power is the squared length of its trial mean minus the trial-to-trial
     variance summed over units divided by the number of trials (floored at 1e-12), and the
     corrected distance is 1 - (dot product of the trial means) / sqrt(signal power a x signal
@@ -1864,9 +1871,9 @@ def kc_trial_noise_sd(genotype: str = 'TNT3c') -> float:
     """The KC data's measurement noise: the trial-to-trial sd of the non-responding entries
     (trial mean <= 1 z), the root of the mean over those entries of their variance across the
     three trials (ddof 1), pooled over a genotype's recordings (Yang's per-trial values,
-    `noise_floor_trial_distances.load_trials`). Cached."""
+    `kcq.noise_floor.load_trials`). Cached."""
     if genotype not in _KC_NOISE_SD:
-        from noise_floor_trial_distances import load_trials, recording_arrays
+        from kcq.noise_floor import load_trials, recording_arrays
         var = []
         for by_odor in recording_arrays(load_trials(genotype)).values():
             X = np.stack([by_odor[o] for o in APL16_ODORS if o in by_odor], axis=-1)   # trials x KCs x odors

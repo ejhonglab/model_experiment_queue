@@ -24,7 +24,7 @@ Spearman of per-odor model response rates with the data's (on vs TNT3c, off vs T
 
 Outputs: <shared>/results/E3_drive_dependent_gain/ and ./outputs/E3_drive_dependent_gain/.
 
-Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python E3_drive_dependent_gain.py
+Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python experiments/E3_drive_dependent_gain.py
     [--parts A B C] [--inhadd 31.4088 100 314 1000 3141 10000]
 """
 from __future__ import annotations
@@ -41,8 +41,8 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-import kc_remapping_harness as H
-from E4_substrate import CLAWS, score, kc_by_glomerulus
+from kcq import harness as H
+from experiments.E4_substrate import CLAWS, score, kc_by_glomerulus
 
 EXPERIMENT = 'E3_drive_dependent_gain'
 TARGET = 0.05
@@ -300,7 +300,7 @@ def main() -> None:
             mode='a', header=not (res_dir / 'model_pair_distances_long.csv').exists()
         )
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),
-        script='E3_drive_dependent_gain.py', host=subprocess.run(['hostname'],
+        script='experiments/E3_drive_dependent_gain.py', host=subprocess.run(['hostname'],
             capture_output=True, text=True).stdout.strip(),
         **H.code_commits(),
         olfsysm_commit=subprocess.run(['git', 'rev-parse', 'HEAD'],

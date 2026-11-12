@@ -5,10 +5,10 @@ joint fit (part C, `class_term_stats`, called from E10_joint_fit.py's `--apl-cla
 
 A pair's cosine similarity is a sum over KCs. Each KC is put, in each condition, in a class by the number
 of the 16 odors it responds to in that condition (0, 1, 2-3, 4-7, 8 or more: the classes of the
-odors-per-KC realism band, `kc_remapping_harness.OPK_EDGES`), and the per-pair APL effect (the distance
+odors-per-KC realism band, `kcq.harness.OPK_EDGES`), and the per-pair APL effect (the distance
 with APL on minus with APL off, i.e. the similarity with APL off minus with APL on) becomes a sum of
 per-class effects: each condition's class contributions (averaged over its recordings) with APL off minus
-with APL on (`kc_remapping_harness.apl_effect_by_class`). A KC changes class between conditions, so a
+with APL on (`kcq.harness.apl_effect_by_class`). A KC changes class between conditions, so a
 class's effect says how much of each condition's similarity sits in KCs of that tuning width; no pairing
 of cells across flies is needed. Each class's contribution is also split into the responders' products
 ('both'), the responder x sub-threshold products ('one', E68's term) and the products of sub-threshold
@@ -72,7 +72,7 @@ data_pairs_by_class.csv (the data's per-pair class effects), floor.csv, yardstic
 row per variant x reading), pairs_key_models.csv, per_condition.csv, released_by_claws.csv, wirings.csv,
 rank_correlations.csv, series.csv, comparison_table.md, E74_classes.png, E74_series.png, provenance.json (with
 H.model_provenance).
-Usage: nice -n 10 ./venv/bin/python -u E74_apl_effect_by_odors_per_kc.py [--jobs 4] [--only-key] [--boot 2000]
+Usage: nice -n 10 ./venv/bin/python -u experiments/E74_apl_effect_by_odors_per_kc.py [--jobs 4] [--only-key] [--boot 2000]
        [--summarize-only] [--check-e10 off|on|lin]
 """
 from __future__ import annotations
@@ -102,7 +102,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 EXPERIMENT = 'E74_apl_effect_by_odors_per_kc'
 ARCHIVE = H.shared_dir() / 'data' / 'model_outputs'
@@ -633,7 +633,7 @@ def _load_counts(folder: str, tag: str, cond: str) -> np.ndarray:
 
 def _calibrate_zcell(on: np.ndarray) -> dict:
     """E73's calibration of the reading on APL-on counts (for variants E73's table does not have)."""
-    import E73_per_kc_normalization as E73
+    from experiments import E73_per_kc_normalization as E73
     t = E73.refs()['targets']
     q = E73.q_values()[0]
     drift = E73.refs()['drift']
@@ -671,7 +671,7 @@ def score_variant(job: tuple) -> Tuple[List[dict], Optional[dict]]:
             if keep:
                 kept[rd] = {k: blk[k] for k in ('on', 'off', 'share_on', 'share_off')}
         if trial_pattern is not None and tcal is not None:
-            import E73_per_kc_normalization as E73
+            from experiments import E73_per_kc_normalization as E73
             t_on, t_off = E73.load_trials(trial_pattern)
             blk = read_zcell(t_on, t_off, tcal, True)
             rows.append(dict(base, reading='zcell_trials', zcal_source='E73 by_variant (trials)', z_K=tcal['K'], z_noise=tcal['noise'],
@@ -733,7 +733,7 @@ def variant_jobs(only_key: bool = False) -> List[tuple]:
     """Every variant of results/apl_effect/by_variant.csv with both conditions archived (E73's `variant_list`),
     plus the archived key models and E72's wirings; each with E73's calibrations where E73's table has them (the
     reading is calibrated here, as E73 does, for the others)."""
-    import E73_per_kc_normalization as E73
+    from experiments import E73_per_kc_normalization as E73
     keep = {(f, t) for _, _, f, t in _key_archived()} | {(f, t) for _, _, mem in WIRING_GROUPS for _, f, t in mem}
     have = E73.variant_list(False)
     have += [(f, t) for f, t in sorted(keep) if (f, t) not in set(have)]
@@ -1351,7 +1351,7 @@ def write_provenance(out: Path, extra: dict) -> None:
         return hashlib.sha256(p.read_bytes()).hexdigest() if p.exists() else None
     inputs = {str(p): sha(p) for p in (RESULTS / 'apl_effect' / 'by_variant.csv', RESULTS / 'E73_per_kc_normalization' / 'by_variant.csv',
         H.yang_data_dir() / 'computed' / 'trialmean_responses_long.parquet', H.data_targets_path(), CLAW_WIRING)}
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script=Path(__file__).name, part='A',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script=H.script_path(__file__), part='A',
         host=socket.gethostname(), **H.code_commits(),
         inputs=inputs, archive=str(ARCHIVE), classes=list(CLASSES), criteria_z=list(CRITERIA_Z), spike_criteria=list(SPIKE_CRITERIA),
         pseudo_recordings=dict(n_recordings=N_RECORDINGS, n_trials=N_TRIALS, seed=SEED, note='numpy default_rng(seed): the APL-on '
@@ -1418,7 +1418,7 @@ def check_e10(name: str, extra: Sequence[str] = ()) -> dict:
         shutil.rmtree(root)
     root.mkdir(parents=True)
     args = [*E10_CHECK_ARGS, '--init-from', tag, '--init-from-experiment', exp, '--experiment', 'E73_zcell_check', *extra]
-    cmd = [sys.executable, '-u', str(H.HERE / 'E73_zcell_fit_checks.py'),
+    cmd = [sys.executable, '-u', str(H.HERE / 'experiments' / 'E73_zcell_fit_checks.py'),
         '--run-e10', str(root), '--', *args]
     t0 = time.time()
     with open(root / 'log.txt', 'w') as log:

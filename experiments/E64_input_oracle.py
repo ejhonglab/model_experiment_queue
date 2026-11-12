@@ -24,12 +24,12 @@ search; stats_variants.csv with the harness scoring columns for the untuned mode
 the controls; per_odor_response_fractions.csv; model_pair_distances_long.csv; comparison_table.md;
 E64_input_oracle.png; provenance.json) and ./outputs/E64_input_oracle/ (responses / spike counts of the
 scored variants, the bouton base).
-Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python E64_input_oracle.py [--pop 32] [--generations 10 6]
+Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python experiments/E64_input_oracle.py [--pop 32] [--generations 10 6]
            [--control-generations 8] [--odors ...] [--pass2-odors paa B-myr 2-but] [--controls ...] [--smoke]
        (a generation is one simulation of both conditions with --pop pseudo-odors: about 1.5 to 2 min at 16 threads,
        most of it the simulator's rebuild for the new input; the first pass searches every weak odor, later passes
        only --pass2-odors)
-       ./venv/bin/python E64_input_oracle.py --summary
+       ./venv/bin/python experiments/E64_input_oracle.py --summary
 """
 from __future__ import annotations
 import argparse
@@ -42,9 +42,9 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
-from E47_wiring_features import MODELS, STATS, V, data_values, fitted_params
-from E54_gain_and_lesion import MODEL_LABEL
+from kcq import harness as H
+from experiments.E47_wiring_features import MODELS, STATS, V, data_values, fitted_params
+from experiments.E54_gain_and_lesion import MODEL_LABEL
 
 EXPERIMENT = 'E64_input_oracle'
 MODEL = 'thr40_gain1.5'
@@ -94,15 +94,15 @@ def rate_penalty(frac_on: float, frac_off: float, d_on: float, d_off: float) -> 
 
 def run(args, res_dir: Path, out_dir: Path) -> None:
     from al_analysis.mb_model import make_fixed_param_kc_simulator
-    from E3_drive_dependent_gain import per_odor_extras, rate
-    from E4_substrate import score, kc_by_glomerulus
-    from E10_joint_fit import TAU, base_kws, bouton_base, breadth_weights, make_loss
-    from E12_breadth_apl import density_excess
-    from E16_claw_saturation import spearman_with_refs
-    from E18_bouton_depletion import all_refs
-    from E26_claw_power import sharing_deficit
-    from E35_divisive_apl import suppression_stats
-    from E44_operating_point import fraction_stats, losses, CTRL_FRAC
+    from experiments.E3_drive_dependent_gain import per_odor_extras, rate
+    from experiments.E4_substrate import score, kc_by_glomerulus
+    from experiments.E10_joint_fit import TAU, base_kws, bouton_base, breadth_weights, make_loss
+    from experiments.E12_breadth_apl import density_excess
+    from experiments.E16_claw_saturation import spearman_with_refs
+    from experiments.E18_bouton_depletion import all_refs
+    from experiments.E26_claw_power import sharing_deficit
+    from experiments.E35_divisive_apl import suppression_stats
+    from experiments.E44_operating_point import fraction_stats, losses, CTRL_FRAC
     rng = np.random.default_rng(args.seed)
     orn = H.apl16_orn_deltas()
     ab = odor_abbrevs(orn)
@@ -226,7 +226,7 @@ def run(args, res_dir: Path, out_dir: Path) -> None:
 
     def record_factors(factors: Dict[str, np.ndarray], label: str):
         try:
-            from E38_hallem_input import hallem_deltas
+            from experiments.E38_hallem_input import hallem_deltas
             hal = hallem_deltas(glomeruli)
         except Exception:
             hal = None
@@ -269,7 +269,7 @@ def run(args, res_dir: Path, out_dir: Path) -> None:
         on_c, off_c = simulate(orn_c)
         finish('I_controls', 'controls', on_c, off_c, cf, 'the control odors\' input searched from the untuned model')
         record_factors(cf, 'controls')
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E64_input_oracle.py', model=MODEL,
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E64_input_oracle.py', model=MODEL,
         search_odors=odors, control_odors=controls, pop=args.pop, generations=list(args.generations), control_generations=args.control_generations,
         bounds=list(BOUNDS), rate_tol=RATE_TOL, penalty=PENALTY, sigma0=SIGMA0, seed=args.seed, n_simulations=n_sims[0], model_provenance=model_prov)
     (res_dir / 'provenance.json').write_text(json.dumps(prov, indent=1, default=str))

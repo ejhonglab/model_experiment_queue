@@ -17,7 +17,7 @@ Everything is written under <shared>/data/yang_apl16_kc_olfdb/ (README.md there
 describes each output). Nothing is re-downloaded if the long CSVs are already present.
 
 Usage:
-    ./venv/bin/python yang_apl16_kc_data.py [--shared-dir DIR] [--olfdb URL]
+    ./venv/bin/python data_prep/yang_apl16_kc_data.py [--shared-dir DIR] [--olfdb URL]
 """
 import argparse
 import json
@@ -31,7 +31,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import spearmanr, pearsonr
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parents[1]  # the repository root
 DEFAULT_SHARED = Path('/local/tensor/Tom/claude_kc_remapping')
 DEFAULT_OLFDB = 'http://hal:8080'
 

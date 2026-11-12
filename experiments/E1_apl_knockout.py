@@ -10,7 +10,7 @@ hemibrain wd20 model) tuned to 5% and 10% mean response rate with APL on:
 - `homeo_data_off`: APL off, thresholds re-tuned so the rate is 0.150 / 0.068 = 2.2x the
   APL-on rate (the ratio in Yang's data)
 
-Each is scored with `kc_remapping_harness`: model APL-on vs TNT3c (control), APL-off vs
+Each is scored with `kcq.harness`: model APL-on vs TNT3c (control), APL-off vs
 TNT, the on/off relation (Spearman, linear / isotonic R2, fruity x small-ester block
 residual, per-odor APL effect vs ORN drive, ORN agreement) next to the data's, and the
 66-pair reference comparisons (claws, VCF, ...). All model RDM variants (spike counts /
@@ -21,7 +21,7 @@ Outputs: compact results (stats CSVs, matrices, figures, provenance) to
 <shared>/results/E1_apl_knockout/; full responses / spike counts to
 ./outputs/E1_apl_knockout/.
 
-Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python E1_apl_knockout.py [--quick]
+Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python experiments/E1_apl_knockout.py [--quick]
 """
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ from typing import Callable, Dict, Tuple
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 EXPERIMENT = 'E1_apl_knockout'
 DATA_RATE_RATIO = 0.150 / 0.068
@@ -257,7 +257,7 @@ def main() -> None:
         pearson_orn_input_vs_consensus=H.pearson(orn_input_pairs, orn_pairs),
     )
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),
-        script='E1_apl_knockout.py', host=subprocess.run(['hostname'], capture_output=True,
+        script='experiments/E1_apl_knockout.py', host=subprocess.run(['hostname'], capture_output=True,
             text=True).stdout.strip(),
         **H.code_commits(),
         olfsysm_commit=subprocess.run(['git', 'rev-parse', 'HEAD'],

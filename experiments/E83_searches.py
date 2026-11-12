@@ -38,9 +38,9 @@ Outputs, results/E83_cross_wiring_fit/ (or `--out`):
 Spike counts and responses of each wiring's final point under outputs/E83_cross_wiring_fit/<B|C>/ (tag
 <P|I>_half<half>_<wiring>), the checkpoints under outputs/E83_cross_wiring_fit/<B|C>/state_<half>/.
 
-Usage (from this folder; arm P on one 16-thread lane, arm I on four 8-thread workers):
-    OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ./venv/bin/python -u E83_searches.py --arm P --half A
-    OMP_NUM_THREADS=8 OMP_THREAD_LIMIT=8 nice -n 10 ./venv/bin/python -u E83_searches.py --arm I --half A
+Usage (from the repository root; arm P on one 16-thread lane, arm I on four 8-thread workers):
+    OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ./venv/bin/python -u experiments/E83_searches.py --arm P --half A
+    OMP_NUM_THREADS=8 OMP_THREAD_LIMIT=8 nice -n 10 ./venv/bin/python -u experiments/E83_searches.py --arm I --half A
 """
 from __future__ import annotations
 
@@ -58,8 +58,8 @@ from typing import Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
-import E83_cross_wiring_fit as X
+from kcq import harness as H
+from experiments import E83_cross_wiring_fit as X
 
 EXPERIMENT = X.EXPERIMENT
 S_WIRINGS = X.S_WIRINGS
@@ -260,11 +260,11 @@ def population_error(on: Mapping[str, pd.DataFrame], off: Mapping[str, pd.DataFr
 def provenance(out: Path, arm: str, half: str, extra: dict) -> None:
     """provenance_search_<arm>_<half>.json: the model's provenance (`H.model_provenance` on the lab's input and the real
     wiring), the commits, the wirings' fits with their absolute parameters and K, the halves' recordings, the settings."""
-    import E77_input_side_common_error as E77
+    from experiments import E77_input_side_common_error as E77
     parts = {w: X.wiring_parts(w) for w in S_WIRINGS}
     real = parts['real']
     hv = E77.recording_halves()
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E83_searches.py', arm=arm,
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E83_searches.py', arm=arm,
                 half=half, **H.code_commits(),
                 model=H.model_provenance(orn_deltas=real['orn'], _wPNKC=real['W']),
                 wirings={w: dict(folder=p['folder'], tag=p['tag'], params=p['p'], K=p['K'], target_on=p['target_on'],
@@ -301,7 +301,7 @@ def linear_start(half: str, saved_on: Mapping[str, pd.DataFrame], saved_off: Map
     """That half's linear profile at half strength: E75's cell-site map (the real wiring's per-pair change of the APL
     effect per unit score, under the calibrated readout) and `fit_scores` at ridge P_RIDGE against S's population
     pattern error with that half's recordings (at the fits), times P_START_STRENGTH. {glomerulus: score}."""
-    import E75_glomerulus_apl_profile as E75
+    from experiments import E75_glomerulus_apl_profile as E75
     c = population_error(saved_on, saved_off, Ks, X.half_target(half))
     M = E75.map_matrix(H.results_dir(E75.EXPERIMENT), P_SITE)
     M.index = pd.MultiIndex.from_tuples([tuple(sorted(x)) for x in M.index], names=['odor_a', 'odor_b'])
@@ -540,7 +540,7 @@ def _input_worker(conn, label: str) -> None:
     candidates simulated as pseudo-odors (E64's `candidate_orn` on the lab's input) on a simulator built for them at the
     wiring's fit, the lab input's breadth held, APL on and APL off; until None."""
     try:
-        from E64_input_oracle import candidate_orn
+        from experiments.E64_input_oracle import candidate_orn
         parts = X.wiring_parts(label)
         p = dict(parts['p'])
         conn.send(('ready', dict(label=label, n_kc=int(parts['saved']['on'][1].shape[0]),
@@ -626,7 +626,7 @@ class InputPool:
 
 
 def _odor_col(df: pd.DataFrame, odor: str):
-    from E64_input_oracle import out_col
+    from experiments.E64_input_oracle import out_col
     return out_col(df, odor)
 
 

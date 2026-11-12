@@ -23,7 +23,7 @@ w_i for co-responders vs other KCs).
 Outputs: compact results to <shared>/results/E15_breadth_shared_apl/, per-KC outputs to
 ./outputs/E15_breadth_shared_apl/. Each variant runs in its own subprocess; `base` first.
 
-Usage: OMP_NUM_THREADS=6 nice -n 10 ./venv/bin/python E15_breadth_shared_apl.py [--score-only]
+Usage: OMP_NUM_THREADS=6 nice -n 10 ./venv/bin/python experiments/E15_breadth_shared_apl.py [--score-only]
 """
 import argparse
 import itertools
@@ -39,10 +39,10 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
-from E5_kc_heterogeneity import BASES, rate, kc_type_rates
-from E11_coincidence_claw_inhibition import excess_profile, shared_drive_glomeruli
-from E14_oracle_coresponders import fit_on_off, coresponders, set_stats, FRUITY, SMALL, KC_ID
+from kcq import harness as H
+from experiments.E5_kc_heterogeneity import BASES, rate, kc_type_rates
+from experiments.E11_coincidence_claw_inhibition import excess_profile, shared_drive_glomeruli
+from experiments.E14_oracle_coresponders import fit_on_off, coresponders, set_stats, FRUITY, SMALL, KC_ID
 
 
 EXP = 'E15_breadth_shared_apl'
@@ -317,7 +317,7 @@ def main() -> None:
     if len(tab):
         make_figure(res_dir, tab)
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),
-        script='E15_breadth_shared_apl.py', host=os.uname().nodename,
+        script='experiments/E15_breadth_shared_apl.py', host=os.uname().nodename,
         **H.code_commits(),
         olfsysm_commit=subprocess.run(['git', 'rev-parse', 'HEAD'],
             cwd=H.olfsysm_dir(), capture_output=True, text=True).stdout.strip(),

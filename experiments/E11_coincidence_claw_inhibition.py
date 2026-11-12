@@ -19,7 +19,7 @@ inhibition applied before the coincidence test removes that block specifically:
 
 Base: chapter-3 claw-dynamics model at 5 % (2-spike criterion). Each variant: tuned with APL
 on, then acute APL off (`wAPLKC = 0`) with the same thresholds. Scored with
-`kc_remapping_harness` as E5 plus E7's density-null excess-similarity profile (binarized
+`kcq.harness` as E5 plus E7's density-null excess-similarity profile (binarized
 responses): block / other between-group / within-group excess distance vs the data
 (control: -0.05 / -0.05 / -0.33; TNT: -0.19 / -0.12 / -0.38).
 
@@ -27,7 +27,7 @@ Each variant runs in its own subprocess (as E5). Outputs: compact results to
 <shared>/results/E11_coincidence_claw_inhibition/, per-KC outputs to
 ./outputs/E11_coincidence_claw_inhibition/.
 
-Usage: OMP_NUM_THREADS=6 nice -n 10 ./venv/bin/python E11_coincidence_claw_inhibition.py
+Usage: OMP_NUM_THREADS=6 nice -n 10 ./venv/bin/python experiments/E11_coincidence_claw_inhibition.py
     [--variants ...] [--score-only]
 """
 import argparse
@@ -43,8 +43,8 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
-from E5_kc_heterogeneity import BASES, rate, kc_type_rates, TUNING_VARIANT_KWS
+from kcq import harness as H
+from experiments.E5_kc_heterogeneity import BASES, rate, kc_type_rates, TUNING_VARIANT_KWS
 
 
 EXP = 'E11_coincidence_claw_inhibition'
@@ -321,7 +321,7 @@ def main() -> None:
     if len(tab):
         make_figure(res_dir, tab)
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),
-        script='E11_coincidence_claw_inhibition.py', host=os.uname().nodename,
+        script='experiments/E11_coincidence_claw_inhibition.py', host=os.uname().nodename,
         **H.code_commits(),
         olfsysm_commit=subprocess.run(['git', 'rev-parse', 'HEAD'],
             cwd=H.olfsysm_dir(), capture_output=True, text=True).stdout.strip(),

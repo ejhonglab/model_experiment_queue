@@ -6,22 +6,19 @@ rows, its point list and the odor-relative knee's inhibition matrix. No simulati
 reads the data-target registry at import); skipped without it."""
 
 import json
-import sys
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
 
-EXP_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(EXP_DIR))
-H = pytest.importorskip('kc_remapping_harness')
+H = pytest.importorskip('kcq.harness')
 try:
     H.data_targets_path().read_bytes()
 except (FileNotFoundError, OSError):
     pytest.skip('the shared directory (data-target registry) is not available', allow_module_level=True)
-E10 = pytest.importorskip('E10_joint_fit')
-E78 = pytest.importorskip('E78_claw_knee')
+E10 = pytest.importorskip('experiments.E10_joint_fit')
+E78 = pytest.importorskip('experiments.E78_claw_knee')
 
 ODORS = list(H.APL16_ODORS)
 

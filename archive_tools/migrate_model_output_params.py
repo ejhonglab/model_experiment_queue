@@ -26,8 +26,8 @@ Backups go to <archive>/params_backup/<experiment>.params.csv.<timestamp>; the f
 <archive>/params_migration_log.csv (experiment, tag, column, old, new, source) and a copy
 per experiment. Dry run by default; `--apply` writes.
 
-    ./venv/bin/python migrate_model_output_params.py            # report what would change
-    ./venv/bin/python migrate_model_output_params.py --apply    # back up, write, log
+    ./venv/bin/python archive_tools/migrate_model_output_params.py            # report what would change
+    ./venv/bin/python archive_tools/migrate_model_output_params.py --apply    # back up, write, log
 """
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ from typing import Optional, Tuple
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 ARCHIVE = H.shared_dir() / 'data' / 'model_outputs'
 BASE_KW_COLS = ['one_row_per_claw', 'prat_claws', 'use_connectome_APL_weights', 'n_spikes_for_response',
@@ -105,8 +105,8 @@ RESULTS = H.shared_dir() / 'results'
 
 
 def script_constant(script: str, name: str) -> Optional[float]:
-    """A numeric module-level constant `NAME = <number>` of a script in this folder, or None."""
-    p = Path(__file__).with_name(script)
+    """A numeric module-level constant `NAME = <number>` of an experiment script (experiments/), or None."""
+    p = H.HERE / 'experiments' / script
     if not p.exists():
         return None
     m = re.search(rf'^{re.escape(name)}\s*=\s*({NUM})\s*$', p.read_text(), re.M)
@@ -114,8 +114,8 @@ def script_constant(script: str, name: str) -> Optional[float]:
 
 
 def script_option_default(script: str, option: str) -> Optional[float]:
-    """The numeric default of an argparse option of a script in this folder, or None."""
-    p = Path(__file__).with_name(script)
+    """The numeric default of an argparse option of an experiment script (experiments/), or None."""
+    p = H.HERE / 'experiments' / script
     if not p.exists():
         return None
     m = re.search(rf"add_argument\('{re.escape(option)}'[^)]*default=({NUM})", p.read_text())
@@ -170,20 +170,20 @@ def script_variants(exp: str):
     """Variant / base kwargs tables defined in the experiment's script (as of HEAD)."""
     try:
         if exp == 'E4':
-            import E4_substrate as E
+            from experiments import E4_substrate as E
             return {k: dict(v[0]) for k, v in E.VARIANTS.items()}, {}
         if exp == 'E5':
-            import E5_kc_heterogeneity as E
+            from experiments import E5_kc_heterogeneity as E
             bases = {k: dict(v) for k, v in getattr(E, 'BASES', {}).items()}
             return {k: (dict(v) if isinstance(v, dict) else {}) for k, v in E.VARIANTS.items()}, bases
         if exp == 'E11':
-            import E11_coincidence_claw_inhibition as E
+            from experiments import E11_coincidence_claw_inhibition as E
             return {}, {E.BASE: dict(E.BASES[E.BASE])}
         if exp == 'E14':
-            import E14_oracle_coresponders as E
+            from experiments import E14_oracle_coresponders as E
             return {}, {k: dict(v) for k, v in E.BASES14.items()}
         if exp == 'E17':
-            import E17_panel_general_apl as E
+            from experiments import E17_panel_general_apl as E
             return {}, {E.BASE: dict(E.BASE_KWS)}
     except Exception as e:  # scripts import the harness and data; failures are logged, not fatal
         print(f'  ({exp}: could not import its script for variant kwargs: {e!r})')

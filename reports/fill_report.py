@@ -11,9 +11,9 @@ markdown and a sidecar of every value's source, and optionally build the HTML pa
   line by line and lists every differing table cell / sentence with its row, column and key.
 - lint: in "KC data" rows and the best-models table, a number outside a placeholder is an error
   (`{{lit:<text> # <source>}}` is the escape).
-Usage: ./venv/bin/python fill_report.py reports/summary_template.md OUT.md [--html OUT.html]
+Usage: ./venv/bin/python reports/fill_report.py reports/summary_template.md OUT.md [--html OUT.html]
        [--no-tooltips] [--compare CURRENT.md] [--report DIFF.md]
-       ./venv/bin/python fill_report.py --check OUT.values.json
+       ./venv/bin/python reports/fill_report.py --check OUT.values.json
 """
 from __future__ import annotations
 
@@ -27,8 +27,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Tuple
 
-import kc_remapping_harness as H
-import report_values as R
+from kcq import harness as H
+from reports import report_values as R
 
 PH = re.compile(r'\{\{(.+?)\}\}')
 PV = re.compile(r'⟦pv:(.*?)§(.*?)⟧')
@@ -203,7 +203,7 @@ def main() -> None:
         n_values=len(side), lint=probs, values=side), indent=1, ensure_ascii=False, default=str) + '\n')
     print(f'filled {len(side)} placeholders -> {args.out} (sidecar {sidecar.name}); lint: {len(probs)} bare numbers')
     if args.html:
-        r = subprocess.run([sys.executable, str(H.HERE / 'md_to_artifact.py'), str(args.out), str(args.html), '--figdir', str(H.shared_dir())],
+        r = subprocess.run([sys.executable, str(H.HERE / 'reports' / 'md_to_artifact.py'), str(args.out), str(args.html), '--figdir', str(H.shared_dir())],
             capture_output=True, text=True)
         print(r.stdout.strip().split('\n')[-1] if r.stdout.strip() else r.stderr[-500:])
     if args.compare:

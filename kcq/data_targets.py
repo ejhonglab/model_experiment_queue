@@ -8,12 +8,12 @@ computed_at}}. Report templates reference entries as `{{data:<name>|spec}}` (rep
 figure scripts and loss functions should read their reference values from here instead of
 literals. KC distances are one minus the cosine similarity of per-recording trial-mean response
 vectors, averaged over recordings (the report's matrices); ORN distances are
-`kc_remapping_harness.orn16_consensus_pairs()` (1 - Pearson r, 36 glomeruli, olfdb). Entries named
+`kcq.harness.orn16_consensus_pairs()` (1 - Pearson r, 36 glomeruli, olfdb). Entries named
 `noise_*` are the KC data's side of the realism bands (Tom, 2026-11-10 16:10): each KC's responses in units
 of its own baseline noise, a response above `noise_threshold` (`noise_unit_criterion`). Entries named `repeat_*` and
 `noise_free_*` (not band entries) are the flies' variability across the three repeats (E81_repeat_structure.py): the
 same-repeat gap, and distances and the APL effect from products of different repeats.
-Usage: ./venv/bin/python data_targets.py [--add-new]
+Usage: ./venv/bin/python kcq/data_targets.py [--add-new]
 (--add-new: compute every entry but write only those not yet in the registry, keeping the existing entries as
 they are, and list any existing entry whose recomputed value or interval differs)
 """
@@ -29,7 +29,7 @@ from typing import Dict, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 OUT = H.shared_dir() / 'results' / 'data_targets' / 'data_targets.json'
 YANG = H.yang_data_dir() / 'computed'
@@ -98,7 +98,7 @@ def kc_scale_ratios(path: Optional[Path] = None) -> pd.Series:
     """Each KC's whole-trace SD of Fc (Yang's z unit) over its SD within the pre-odor windows (each window's mean
     removed), from viki's kc_scales.csv (yang_response_normalization.py, whose `kc` is the row order of the iscell
     ROIs and equals olfdb's `roi` within a recording); indexed (genotype, date, fly_num, hemibrain, roi) as the
-    trial means (`kc_remapping_harness.yang_trialmeans`)."""
+    trial means (`kcq.harness.yang_trialmeans`)."""
     ks = pd.read_csv(path or INPUTS['yang_norm_kc_scales'])
     day, unit = (ks.recording.str.split('_', expand=True)[i] for i in (0, 1))
     idx = pd.MultiIndex.from_arrays([ks.genotype, day.str[:4] + '-' + day.str[4:6] + '-' + day.str[6:8],
@@ -219,8 +219,8 @@ def noise_unit_criterion() -> Tuple[float, dict, dict]:
 
 def build() -> dict:
     """Computes every registry entry; returns {name: entry}."""
-    from E35_divisive_apl import suppression_stats
-    from summary_background_figure import rate_ratios
+    from experiments.E35_divisive_apl import suppression_stats
+    from reports.summary_background_figure import rate_ratios
     commit = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.HERE, capture_output=True, text=True).stdout.strip()
     now = datetime.now(timezone.utc).isoformat(timespec='seconds')
     sha = {k: _sha(p) for k, p in INPUTS.items()}
@@ -254,10 +254,10 @@ def build() -> dict:
             f'KCs, {"control flies" if g == "TNT3c" else "APL output blocked (TNT)"}: mean pair distance over the 120 pairs with '
             'sub-threshold responses (trial mean <= 1) set to 0 before the cosine distance, as a model\'s spike counts are 0 for '
             'non-responding KCs (1 - cosine per recording, mean over recordings)', 'harness.transform_matrix(values=thresholded) + recording_rdms_from_matrices', ['kc_trialmeans'])
-    # the trial-to-trial noise floor and the noise-corrected distances (noise_floor_trial_distances.py):
+    # the trial-to-trial noise floor and the noise-corrected distances (kcq/noise_floor.py):
     # noise inflates every cosine distance toward 1, so the corrected mean is the level a noise-free
     # model should match
-    from noise_floor_trial_distances import analyse as nf_analyse, load_trials as nf_load, recording_arrays as nf_recs
+    from kcq.noise_floor import analyse as nf_analyse, load_trials as nf_load, recording_arrays as nf_recs
     corrected_means = {}
     for g, name in (('TNT3c', 'ctrl'), ('TNT', 'tnt')):
         lab = 'control flies' if g == 'TNT3c' else 'APL output blocked (TNT)'
@@ -270,13 +270,13 @@ def build() -> dict:
         add(f'{name}_mean_dist_noise_corrected', corrected.mean(),
             f'KCs, {lab}: mean pair distance over the 120 pairs after correcting each recording\'s cosine for trial-to-trial noise '
             '(signal power |mean|^2 - s^2/n per odor; cosine of the trial means divided by the signal norms), mean over recordings: '
-            'the distance a noise-free recording would show', 'noise_floor_trial_distances.analyse', [f'kc_trials_{name}'])
+            'the distance a noise-free recording would show', 'kcq.noise_floor.analyse', [f'kc_trials_{name}'])
         add(f'{name}_trial_mean_floor', float(np.mean([f.trial_mean_floor.mean() for f in floors])),
             f'KCs, {lab}: expected 1 - cosine between two independent 3-trial means of the same odor (noise alone), mean over odors and recordings',
-            'noise_floor_trial_distances.analyse', [f'kc_trials_{name}'])
+            'kcq.noise_floor.analyse', [f'kc_trials_{name}'])
         add(f'{name}_single_trial_floor', float(np.mean([f.single_trial_floor.mean() for f in floors])),
             f'KCs, {lab}: 1 - cosine between two single trials of the same odor, mean over trial pairs, odors and recordings',
-            'noise_floor_trial_distances.analyse', [f'kc_trials_{name}'])
+            'kcq.noise_floor.analyse', [f'kc_trials_{name}'])
     # the block on the noise-corrected matrices: what a noise-free model should make, if the
     # correction holds for its noise (the trial-to-trial variability experiment, E43, found it
     # recovers a model's deterministic block for two of its three noise models)
@@ -285,7 +285,7 @@ def build() -> dict:
     add('block_corrected', st_c['block_fruity_small_iso'],
         'fruity x small-ester block on the noise-corrected matrices: mean isotonic residual of the 9 pairs (control on APL output '
         'blocked), each matrix the mean over recordings of its trial-noise-corrected cosine distances',
-        'noise_floor_trial_distances.analyse + harness.compare_on_off', ['kc_trials_ctrl', 'kc_trials_tnt'])
+        'kcq.noise_floor.analyse + harness.compare_on_off', ['kc_trials_ctrl', 'kc_trials_tnt'])
     for name, (m, lab, inp) in mats.items():
         fn = 'data_targets.build (pair distances)'
         add(f'{name}_mean_dist', m.mean(), f'{lab}: mean pair distance over the 120 pairs', fn, inp)
@@ -376,7 +376,7 @@ def build() -> dict:
         r_v = float(np.nanmean(sh_v))
         add(f'apl_effect_{key}_rho_ceiling', float(np.sqrt(2 * r_v / (1 + r_v))), f'ceiling on ρ on the per-pair APL effect computed from {lab} '
             '(as apl_effect_rho_ceiling)', fn_v, inp)
-    from E68_readout_low_end import trialmean_band_shares
+    from experiments.E68_readout_low_end import trialmean_band_shares
     bands = {'share_05_15': 'with a trial mean above 0.5 and at most 1.5 z', 'share_05_1': 'with a trial mean above 0.5 and at most 1 z',
         'share_1_15': 'with a trial mean above 1 and at most 1.5 z', 'share_025_1': 'with a trial mean above 0.25 and at most 1 z',
         'share_above_4': 'with a trial mean above 4 z', 'share_below_m025': 'with a trial mean below -0.25 z', 'share_negative': 'with a negative trial mean'}
@@ -411,7 +411,7 @@ def build() -> dict:
     rr = rate_ratios()
     add('rate_ratio_fraction', rr['rate_ratio_fraction'], 'response rate with APL output blocked (TNT) relative to control flies: ratio of the mean fractions of KCs responding', 'summary_background_figure.rate_ratios', ['kc_fractions'], ci=rr['rate_ratio_fraction_ci90'])
     add('rate_ratio_mean_response', rr['rate_ratio_mean_response'], 'the same ratio for the mean response size (trial-mean responses with negative values set to 0)', 'summary_background_figure.rate_ratios', ['kc_trialmeans'], ci=rr['rate_ratio_mean_response_ci90'])
-    from E26_claw_power import WEAK
+    from experiments.E26_claw_power import WEAK
     for g, name in (('TNT3c', 'ctrl'), ('TNT', 'tnt')):
         w = float(fr[g].mean()[WEAK].mean())
         add(f'{name}_weak_frac', w, 'fraction of KCs responding (trial mean > 1) to the six weak-input odors (ms, paa, euc, -aPine, B-myr, 1-8ol), mean over those odors and the recordings', 'data_targets.build', ['kc_fractions'])
@@ -464,7 +464,7 @@ def build() -> dict:
     # (66 pairs; yang_remy_kc_agreement.py). Remy's distances are correlation distances (1 - Pearson
     # across KC somata or claws), Yang's cosine distances, so the comparisons are rank-based
     # (Pearson r of the two distance sets is given as well).
-    from yang_remy_kc_agreement import agreement
+    from analyses.yang_remy_kc_agreement import agreement
     ag = agreement(ref, n_boot=2000, seed=0)
     agfn = 'yang_remy_kc_agreement.agreement'
     remy_sets = {'soma': "Remy's wild-type KC somata (kc_remy_combo, 18 flies; correlation distance)",
@@ -492,7 +492,7 @@ def build() -> dict:
     add('rho_ctrl_tnt_66', ag['rho_ctrl_tnt_66'], 'ρ on odor-odor distances between the two Yang KC matrices on the 66 shared pairs', agfn, ['kc_rdms', 'ref66'])
     # how concentrated each odor's response vector is, and how many odors each KC responds to (the compressive
     # readout experiment's part A, E65): the calibration targets of its readouts and of the APL-effect fits (E67)
-    from E65_spike_count_readout import part_a
+    from experiments.E65_spike_count_readout import part_a
     _, amp, _ = part_a()
     afn = 'E65_spike_count_readout.part_a (per recording over the 16 odors, mean over recordings)'
     for g, name in (('TNT3c', 'ctrl'), ('TNT', 'tnt')):
@@ -532,7 +532,7 @@ def build() -> dict:
     # z-score over the whole recording requires; q from the edge (the top 1 % of each recording's KCs by mean
     # square), from the single-odor responders with the largest trial means and from the noise budget (each KC's
     # own trial noise against its mean square), per recording, over the 19 APL16 recordings
-    from E73_per_kc_normalization import edge_stats, load_panel_trials
+    from experiments.E73_per_kc_normalization import edge_stats, load_panel_trials
     zrows = []
     for key, r in load_panel_trials('APL16').items():
         summ, _ = edge_stats(r['X'], r['stim'])
@@ -563,18 +563,18 @@ def build() -> dict:
     # unit) over its baseline-noise SD, by the number of odors it responds to
     yr = pd.read_csv(INPUTS['yang_norm_recordings'])
     add('zcell_q_window', yr.frac_window_volumes.mean(), 'the share of an APL16 recording inside its 51 response windows (18 volumes each, '
-        '2-8 s after onset, of about 7,194 volumes), mean over the 19 recordings', 'yang_response_normalization.py (recordings.csv)',
+        '2-8 s after onset, of about 7,194 volumes), mean over the 19 recordings', 'data_prep/yang_response_normalization.py (recordings.csv)',
         ['yang_norm_recordings'])
     ks = pd.read_csv(INPUTS['yang_norm_kc_scales'])
     for b in list(range(11)) + ['11plus']:
         m = ks.n_odors_z1 >= 11 if b == '11plus' else ks.n_odors_z1 == b
         add(f'kc_scale_ratio_{b}', ks.loc[m, 'scale_ratio'].median(), 'KCs (both genotypes) responding (trial mean > 1 z) to '
             f'{"11 or more" if b == "11plus" else b} of the 16 odors: the median of the whole-trace SD of Fc (the z unit) over its SD within '
-            'the pre-odor windows (each window\'s mean removed)', 'yang_response_normalization.py (kc_scales.csv)', ['yang_norm_kc_scales'])
+            'the pre-odor windows (each window\'s mean removed)', 'data_prep/yang_response_normalization.py (kc_scales.csv)', ['yang_norm_kc_scales'])
     # who carries the APL effect (E74): the per-pair effect split by the number of odors each KC responds to in each
     # condition (0, 1, 2-3, 4-7, 8 or more), with 90 % intervals over resamples of recordings, the floor of the
     # class-resolved loss and the single-recording-pair yardstick
-    from E74_apl_effect_by_odors_per_kc import registry_entries as e74_entries
+    from experiments.E74_apl_effect_by_odors_per_kc import registry_entries as e74_entries
     for name, value, definition, ci in e74_entries():
         add(name, value, definition, 'E74_apl_effect_by_odors_per_kc.data_tables (2000 resamples of recordings, seed 0)',
             ['kc_trialmeans'], ci=ci)
@@ -616,13 +616,13 @@ def build() -> dict:
     # the per-pair APL effect in baseline-noise units (E76, the data side of the main target): its statistics as the
     # apl_effect_* entries have them in Yang's z, the groups, its agreement with the z-based effect, the thresholded and
     # binarized versions, the calibrated readout's target and the split by odors per KC
-    from E76_data_side_target import registry_entries as e76_entries
+    from experiments.E76_data_side_target import registry_entries as e76_entries
     for name, value, definition, ci in e76_entries():
         add(name, value, definition, 'E76_data_side_target.registry_entries (effect_resamples: 1000 resamples of recordings, '
             'seed 0, as apl_effect_*)', ['noise_trialmeans', 'noise_trials', 'kc_trialmeans'], ci=ci)
     # the flies' variability across the three repeats (E81): the same-repeat gap, the run-down, and the noise-free distances
     # and per-pair APL effect from products of different repeats (90 % intervals over 1000 resamples of recordings, seed 0)
-    from E81_repeat_structure import registry_entries as e81_entries
+    from experiments.E81_repeat_structure import registry_entries as e81_entries
     for name, value, definition, ci in e81_entries():
         add(name, value, definition, 'E81_repeat_structure.registry_entries (harness repeat statistics; 1000 resamples of '
             'recordings, seed 0)', ['kc_trials_ctrl', 'kc_trials_tnt', 'noise_trials'], ci=ci)

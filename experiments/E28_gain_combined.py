@@ -16,7 +16,7 @@ E19); acute APL off = APL output weights zero. Points: claw_thr 70 x breadth 2 x
 (E19's balanced point) at gains 1, 1.5. Scored as E27 plus E19's statistics.
 
 Outputs: <shared>/results/E28_gain_combined/ and ./outputs/E28_gain_combined/.
-Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python E28_gain_combined.py [--points thr70_k2_kckc100 thr40_k2_kckc30] [--gains 1 1.25 1.5]
+Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python experiments/E28_gain_combined.py [--points thr70_k2_kckc100 thr40_k2_kckc30] [--gains 1 1.25 1.5]
 """
 from __future__ import annotations
 
@@ -29,17 +29,17 @@ from datetime import datetime, timezone
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
-from E1_apl_knockout import bisect_threshold
-from E3_drive_dependent_gain import BOUTON, match_kc_apl_scale, per_odor_extras, rate
-from E4_substrate import score, kc_by_glomerulus
-from E12_breadth_apl import density_excess
-from E16_claw_saturation import spearman_with_refs
-from E18_bouton_depletion import all_refs
-from E26_claw_power import sharing_deficit, deficit_table, WEAK
-from E27_glomerulus_gain import ORACLE, gained
-from E3_drive_dependent_gain import tune_and_knockout
-from E35_divisive_apl import suppression_stats
+from kcq import harness as H
+from experiments.E1_apl_knockout import bisect_threshold
+from experiments.E3_drive_dependent_gain import BOUTON, match_kc_apl_scale, per_odor_extras, rate
+from experiments.E4_substrate import score, kc_by_glomerulus
+from experiments.E12_breadth_apl import density_excess
+from experiments.E16_claw_saturation import spearman_with_refs
+from experiments.E18_bouton_depletion import all_refs
+from experiments.E26_claw_power import sharing_deficit, deficit_table, WEAK
+from experiments.E27_glomerulus_gain import ORACLE, gained
+from experiments.E3_drive_dependent_gain import tune_and_knockout
+from experiments.E35_divisive_apl import suppression_stats
 
 EXPERIMENT = 'E28_gain_combined'
 E16_OUT = H.HERE / 'outputs' / 'E16_claw_saturation'
@@ -201,7 +201,7 @@ def main() -> None:
             done.add(tag)
     if deficits:
         pd.concat(deficits).to_csv(res_dir / 'pair_deficits_long.csv', index=False, mode='a', header=not (res_dir / 'pair_deficits_long.csv').exists())
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E28_gain_combined.py', apl_drive=args.apl_drive,
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E28_gain_combined.py', apl_drive=args.apl_drive,
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(),
         **H.code_commits(),
         olfsysm_commit=subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=H.olfsysm_dir(), capture_output=True, text=True).stdout.strip(),

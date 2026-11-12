@@ -19,7 +19,7 @@ E12 (E4 statistics, per-odor drive / density readouts, E7's density-null excess 
 plus the APL-off / APL-on rate ratio (data 2.2; KC-KC inhibition can only lower it).
 
 Outputs: <shared>/results/E8_kc_kc_inhibition/ and ./outputs/E8_kc_kc_inhibition/.
-Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python E8_kc_kc_inhibition.py
+Usage: OMP_NUM_THREADS=16 nice -n 10 ./venv/bin/python experiments/E8_kc_kc_inhibition.py
     [--scales 0 10 30 100 300] [--slow-scales 30 100] [--configs plain breadth3]
 """
 from __future__ import annotations
@@ -34,11 +34,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
-from E1_apl_knockout import bisect_threshold
-from E3_drive_dependent_gain import BOUTON, per_odor_extras, rate
-from E4_substrate import score, kc_by_glomerulus
-from E12_breadth_apl import e3_bouton_params, density_excess
+from kcq import harness as H
+from experiments.E1_apl_knockout import bisect_threshold
+from experiments.E3_drive_dependent_gain import BOUTON, per_odor_extras, rate
+from experiments.E4_substrate import score, kc_by_glomerulus
+from experiments.E12_breadth_apl import e3_bouton_params, density_excess
 
 EXPERIMENT = 'E8_kc_kc_inhibition'
 E3_DIR = H.HERE / 'outputs' / 'E3_drive_dependent_gain'
@@ -230,7 +230,7 @@ def main() -> None:
             mode='a', header=not (res_dir / 'model_pair_distances_long.csv').exists()
         )
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),
-        script='E8_kc_kc_inhibition.py', host=subprocess.run(['hostname'], capture_output=True,
+        script='experiments/E8_kc_kc_inhibition.py', host=subprocess.run(['hostname'], capture_output=True,
             text=True).stdout.strip(),
         **H.code_commits(),
         olfsysm_commit=subprocess.run(['git', 'rev-parse', 'HEAD'],

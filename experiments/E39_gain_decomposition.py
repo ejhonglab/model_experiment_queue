@@ -21,7 +21,7 @@ targets since a103914) and a glomerulus x statistic table of marginal contributi
 glomerulus alone minus no gain; full set minus all-but-that-glomerulus).
 
 Outputs: <shared>/results/E39_gain_decomposition/ and ./outputs/E39_gain_decomposition/.
-Usage: OMP_NUM_THREADS=8 nice -n 10 ./venv/bin/python E39_gain_decomposition.py [--bases thr40 thr70]
+Usage: OMP_NUM_THREADS=8 nice -n 10 ./venv/bin/python experiments/E39_gain_decomposition.py [--bases thr40 thr70]
        [--variants full none ...] [--figure-only]
 """
 from __future__ import annotations
@@ -35,17 +35,17 @@ from datetime import datetime, timezone
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
-from E1_apl_knockout import bisect_threshold
-from E3_drive_dependent_gain import per_odor_extras, rate
-from E4_substrate import score
-from E10_joint_fit import base_kws, bouton_base, breadth_weights, make_loss
-from E12_breadth_apl import density_excess
-from E16_claw_saturation import spearman_with_refs
-from E18_bouton_depletion import all_refs
-from E26_claw_power import sharing_deficit, deficit_table, WEAK
-from E27_glomerulus_gain import ORACLE, gained
-from E35_divisive_apl import suppression_stats
+from kcq import harness as H
+from experiments.E1_apl_knockout import bisect_threshold
+from experiments.E3_drive_dependent_gain import per_odor_extras, rate
+from experiments.E4_substrate import score
+from experiments.E10_joint_fit import base_kws, bouton_base, breadth_weights, make_loss
+from experiments.E12_breadth_apl import density_excess
+from experiments.E16_claw_saturation import spearman_with_refs
+from experiments.E18_bouton_depletion import all_refs
+from experiments.E26_claw_power import sharing_deficit, deficit_table, WEAK
+from experiments.E27_glomerulus_gain import ORACLE, gained
+from experiments.E35_divisive_apl import suppression_stats
 
 EXPERIMENT = 'E39_gain_decomposition'
 GAIN = 1.5
@@ -297,7 +297,7 @@ def main() -> None:
             marginals(st, b).to_csv(res_dir / f'marginals_{b}.csv')
     if deficits:
         pd.concat(deficits).to_csv(res_dir / 'pair_deficits_long.csv', index=False, mode='a', header=not (res_dir / 'pair_deficits_long.csv').exists())
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E39_gain_decomposition.py',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E39_gain_decomposition.py',
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(), bases={b: BASES[b] for b in args.bases},
         fits_source='results/E34_gain_bounded/fits.csv', gain=GAIN, k=K, tau=TAU, oracle_glomeruli=ORACLE, per_odor_sets=SETS,
         variants={v: todo[v] for v in todo}, base_kws=base_kws(None), approx_conc_note=H.APPROX_CONC_NOTE)

@@ -24,7 +24,7 @@ the 5 s before; part A is kept as the independent check from the per-trial value
 
 Part B, the models (`--part B`): every archived variant with both conditions saved
 (data/model_outputs/<folder>/<tag>_<on|acute_off>_spike_counts.parquet), read as the recordings appear to
-be (`kc_remapping_harness.session_zscore`: per model KC a session of the panel's 16 odors and the solvent,
+be (`kcq.harness.session_zscore`: per model KC a session of the panel's 16 odors and the solvent,
 3 trials each, its spike counts through an amplitude map, linear or E65's saturating n / (n + K), the
 response confined to its window, which holds the share q = 51 x 18 / 7194 = 0.128 of the recording as in
 Yang's APL16 recordings (`zcell_q_window`; sensitivity at part A's footprint 0.18 and its interval), one
@@ -61,7 +61,7 @@ flag beside the existing ones (the row's own criterion against Yang's z, and rea
 definitions when part B ran).
 
 Outputs in <shared>/results/E73_per_kc_normalization/. Nothing is simulated.
-Usage: nice -n 10 ./venv/bin/python -u E73_per_kc_normalization.py --part A|B|summarize [--jobs 16] [--only-key]
+Usage: nice -n 10 ./venv/bin/python -u experiments/E73_per_kc_normalization.py --part A|B|summarize [--jobs 16] [--only-key]
        [--folders E71_input_scaled_threshold E72_wiring_population] (part B: add folders archived later, then --part summarize)
 """
 from __future__ import annotations
@@ -81,7 +81,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 EXPERIMENT = 'E73_per_kc_normalization'
 ARCHIVE = H.shared_dir() / 'data' / 'model_outputs'
@@ -519,7 +519,7 @@ def write_provenance(out: Path, part: str, extra: dict, models: bool = False, or
     import json
     import socket
     from datetime import datetime, timezone
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script=Path(__file__).name, part=part,
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script=H.script_path(__file__), part=part,
         host=socket.gethostname(), **H.code_commits(), **extra)
     if models:
         prov['model_provenance'] = H.model_provenance(orn_deltas=orn_deltas)
@@ -661,7 +661,7 @@ BREADTH_CHECK = (0, 1, 2, 3, 4, 6, 8, 11)
 def criterion_stats(s_on: dict, s_off: dict, breadth_checks: bool = True) -> dict:
     """The response-criterion statistics of both conditions (`zcell_stats` dicts), the response rate ρ against
     the KC data's per-odor fractions, the odors-per-KC distances from the flies' and the realism flag."""
-    from apl_effect_scores import OPK_BINS, opk_band, opk_data, realism_flag
+    from kcq.apl_effect import OPK_BINS, opk_band, opk_data, realism_flag
     out = {}
     for c, s in (('on', s_on), ('off', s_off)):
         out.update({f'{k}_{c}': s[k] for k in CRIT_KEYS if k in s})
@@ -687,7 +687,7 @@ def present_rows(base: dict, on: pd.DataFrame, off: pd.DataFrame) -> List[dict]:
     data) and the counts binarized at two spikes (against the binarized data); response statistics under the
     two-spike criterion, amplitudes through E68's conversion to z (c set so that the APL-on response rate under
     the data's criterion, through the data's measurement noise, is the control flies')."""
-    from apl_effect_scores import odors_per_kc
+    from kcq.apl_effect import odors_per_kc
     t = refs()['targets']
     s = refs()['noise_sd']
     K = H.calibrate_readout(on, 'saturating', t['pr'], stat='participation_ratio', responders_min=2.0)
@@ -1043,9 +1043,9 @@ def fixed_unit_flags(df: pd.DataFrame, jobs: int = 8) -> pd.DataFrame:
     counts) against the KC data in baseline-noise units (the registry's noise_* entries): per variant (folder, tag),
     fixed_rate_rho_<on|off> (the response rate ρ of the per-odor two-spike rates with the flies' in those units),
     fixed_opk_<on|off>_tv (the odors-per-KC distances from the flies' distributions in those units) and
-    fixed_realism_flag (`apl_effect_scores.realism_flag` with units 'noise'; '' inside every band)."""
+    fixed_realism_flag (`kcq.apl_effect.realism_flag` with units 'noise'; '' inside every band)."""
     from concurrent.futures import ThreadPoolExecutor
-    from apl_effect_scores import OPK_BINS, frac_data, opk_data, realism_flag
+    from kcq.apl_effect import OPK_BINS, frac_data, opk_data, realism_flag
     p = df[df.reading_def == 'present_raw'].drop_duplicates(['folder', 'tag']).set_index(['folder', 'tag'])
     with ThreadPoolExecutor(max_workers=jobs) as ex:
         per_odor = {(f, t): (on, off) for f, t, on, off in ex.map(_two_spike_rates_per_odor, list(p.index))}
@@ -1109,7 +1109,7 @@ def _row(df, folder, tag, reading_def, reading='graded'):
 
 def _template_columns() -> List[Tuple[str, str, str]]:
     """(label, folder, tag) of every model column of the summary's best-models table (its matrices buttons)."""
-    from apl_effect_scores import TEMPLATE, button_targets
+    from kcq.apl_effect import TEMPLATE, button_targets
     out = []
     for name, label in button_targets(TEMPLATE.read_text()).items():
         if name == 'data':
@@ -1150,7 +1150,7 @@ def write_tables(out: Path, df: pd.DataFrame, chosen: str, med: pd.Series, amp_t
     est = pd.read_csv(out / 'q_estimates.csv')
     synth = pd.read_csv(out / 'synthetic_per_recording.csv')
     L = [f'# E73: the per-KC normalization of the recordings (parts A and B)', '',
-         f'Generated by E73_per_kc_normalization.py. Yang\'s responses (her answer of 2026-11-10, checked against her pipeline by viki: '
+         f'Generated by experiments/E73_per_kc_normalization.py. Yang\'s responses (her answer of 2026-11-10, checked against her pipeline by viki: '
          'add_to_reports/yang_response_definition.md): each KC\'s Fc z-scored over the whole recording (about 7,194 volumes), a trial\'s '
          'response the mean z 2-8 s after onset (18 volumes) minus the mean over the 15 volumes before. The model\'s session is built the '
          f'same way: q = {q:.3f}, the share of the recording inside the 51 response windows (51 x 18 / 7,194), the response confined to its '

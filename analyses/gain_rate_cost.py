@@ -22,7 +22,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 SHARED = Path('/local/tensor/Tom/claude_kc_remapping')
 ARCH = SHARED / 'data' / 'model_outputs'

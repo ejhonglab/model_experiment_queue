@@ -54,11 +54,11 @@ runs_provenance.json. Responses, spike counts and spike times of every point und
 (<point_id>_{on,acute_off}_{responses,spike_counts,spike_times}.parquet, E80_pulse's naming). The breadth pre-passes
 are cached by E77_input_screen.handle_breadth under outputs/E77_input_side_common_error/breadth/.
 
-Usage (from this folder; one process at a time; a C++ error inside olfsysm's parallel region ends the process without
+Usage (from the repository root; one process at a time; a C++ error inside olfsysm's parallel region ends the process without
 a traceback, so run the parts in separate processes, `--part B1`, then B2 to B5: done points are skipped):
-    OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ./venv/bin/python -u E82_protocol_runs.py [--part B1 ...]
+    OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ./venv/bin/python -u experiments/E82_protocol_runs.py [--part B1 ...]
         [--only ID ...] [--list] [--results-dir DIR --outputs-dir DIR]
-    ./venv/bin/python E82_protocol_runs.py --populations
+    ./venv/bin/python experiments/E82_protocol_runs.py --populations
 """
 from __future__ import annotations
 
@@ -75,8 +75,8 @@ from typing import Callable, Dict, List, Optional, Sequence, Set, Tuple
 import numpy as np
 import pandas as pd
 
-import kc_remapping_harness as H
-import E80_pulse as E80P
+from kcq import harness as H
+from experiments import E80_pulse as E80P
 
 EXPERIMENT = 'E82_flies_protocol'
 PULSE = 2.0
@@ -269,16 +269,16 @@ def _empty(v) -> bool:
 
 
 def _draw_seed(label: str) -> int:
-    import E72_wiring_population as E72
+    from experiments import E72_wiring_population as E72
     prefix = dict(E72.DRAWS)[label]
     return int(prefix.split('seed')[1].rstrip('_'))
 
 
 def model_source(model: str) -> Tuple[str, str, Optional[str]]:
     """(results folder, tag, wiring label or None) of a model's saved fit."""
-    import E72_wiring_population as E72
-    import E77_input_screen as S
-    import E77_input_side_common_error as E77
+    from experiments import E72_wiring_population as E72
+    from experiments import E77_input_screen as S
+    from experiments import E77_input_side_common_error as E77
     if model == 'C2':
         return S.C2[0], S.C2[1], None
     if model == 'fit0':
@@ -304,8 +304,8 @@ def fit_row(folder: str, tag: str, wiring: Optional[str]) -> pd.Series:
     """The fits.csv row of a fit, checked to be what `build_simulator` builds: the bouton base with breadth exponent 2,
     KC-KC inhibition at E10's tau, APL driven by the claws, no per-claw threshold, glomerulus gain, other ORN input or
     input-scaled threshold, and the wiring `wiring` (None: the real one)."""
-    import E10_joint_fit as J
-    import E77_input_screen as S
+    from experiments import E10_joint_fit as J
+    from experiments import E77_input_screen as S
     f = pd.read_csv(H.results_dir(folder) / 'fits.csv')
     m = f[f.tag == tag]
     if len(m) != 1:
@@ -341,8 +341,8 @@ def model_parts(model: str) -> dict:
     the draw label)."""
     if model in _MODELS:
         return _MODELS[model]
-    import E72_wiring_population as E72
-    import E77_input_screen as S
+    from experiments import E72_wiring_population as E72
+    from experiments import E77_input_screen as S
     if model == 'C2':
         P = S.c2_parts()
         m = dict(p=dict(P['p']), kc={}, saved=P['saved'], target_on=P['target_on'], target_off=P['target_off'],
@@ -384,9 +384,9 @@ def wiring_parts(label: str) -> dict:
     APL weights are C2's (build_simulator uses those)."""
     if label in _WIRINGS:
         return _WIRINGS[label]
-    import E10_joint_fit as J
-    import E77_input_screen as S
-    import E77_input_side_common_error as E77
+    from experiments import E10_joint_fit as J
+    from experiments import E77_input_screen as S
+    from experiments import E77_input_side_common_error as E77
     P = S.c2_parts()
     seed = _draw_seed(label)
     if label.startswith('P'):
@@ -407,7 +407,7 @@ def wiring_parts(label: str) -> dict:
 def _d1_dirs() -> List[Path]:
     """Where part D's fits are: outputs/E82_flies_protocol/fits/ and the experiment's outputs folder, then the
     model-output archive."""
-    import E72_wiring_population as E72
+    from experiments import E72_wiring_population as E72
     return [H.outputs_dir(EXPERIMENT) / 'fits', H.outputs_dir(EXPERIMENT), E72.ARCHIVE / EXPERIMENT]
 
 
@@ -425,7 +425,7 @@ def d1_breadth() -> pd.Series:
     """The breadth behind D1's APL->KC weights: each KC's total spike count in the bouton base's APL-off run at the
     2 s pulse that E10_joint_fit cached for that fit (`<timing label>_base_acute_off_spike_counts.parquet`), as
     E10_joint_fit.bouton_base sums it."""
-    import E10_joint_fit as J
+    from experiments import E10_joint_fit as J
     name = J.timing_label(E80P.timing_kws(PULSE)) + '_base_acute_off_spike_counts.parquet'
     for d in _d1_dirs():
         if (d / name).exists():
@@ -438,7 +438,7 @@ def d1_breadth() -> pd.Series:
 def own_breadth(m: dict) -> pd.Series:
     """The breadth behind a model's saved APL->KC weights (the bouton base's pre-pass at olfsysm's 0.5 s pulse on its
     wiring; D1's at its 2 s pulse)."""
-    import E77_input_screen as S
+    from experiments import E77_input_screen as S
     if 'breadth' in m:
         return m['breadth']
     return S.c2_parts()['breadth'] if m['wiring'] is None else wiring_parts(m['wiring'])['breadth']
@@ -448,7 +448,7 @@ def point_breadth(spec: dict, m: dict) -> pd.Series:
     """The breadth pre-pass at the point's pulse with its pre-pass kwargs on its model's wiring
     (E77_input_screen.handle_breadth: the bouton base at E3's parameters, APL off, no KC-KC inhibition, no refractory
     period or adaptation)."""
-    import E77_input_screen as S
+    from experiments import E77_input_screen as S
     W = None if m['wiring'] is None else wiring_parts(m['wiring'])['W']
     return S.handle_breadth(dict(E80P.timing_kws(spec['pulse']), **spec['prepass']), wPNKC=W)
 
@@ -460,8 +460,8 @@ def build_simulator(extra_kws: Optional[dict], *, wPNKC: Optional[pd.DataFrame],
     weights, breadth exponent 2 on the APL->KC weights with `breadth`, KC-KC inhibition at the parameters' scale with
     time constant `kc_kc_tau`, on the wiring `wPNKC` (None: the hemibrain's). Returns (simulate, info) as
     build_c2_simulator does; info['kws'] has kc_kc_tau."""
-    import E10_joint_fit as J
-    import E77_input_screen as S
+    from experiments import E10_joint_fit as J
+    from experiments import E77_input_screen as S
     from al_analysis.mb_model import make_fixed_param_kc_simulator
     if {'kc_kc_tau', 'kc_kc_inh'} & set(extra_kws or {}):
         raise ValueError("pass kc_kc_tau as its own argument (the scale is the parameters' wKCKC_scale)")
@@ -490,7 +490,7 @@ def model_kws(spec: dict, m: dict) -> dict:
 
 def check_option(spec: dict, m: dict) -> None:
     """At an identity point the option must be at the fit's own value (RuntimeError otherwise)."""
-    import E10_joint_fit as J
+    from experiments import E10_joint_fit as J
     if float(J.TAU) != KC_KC_TAU:
         raise RuntimeError(f"E10's KC-KC tau is {J.TAU}, not {KC_KC_TAU}")
     if not spec['identity']:
@@ -600,9 +600,9 @@ def default_outputs() -> Path:
 def write_provenance(out: Path, specs: Sequence[dict]) -> None:
     """runs_provenance.json: the model's provenance (`H.model_provenance`, on the lab's input and C2's wiring), the
     points, the brackets of hold_rates, the constants; each point's source and parameters are in runs_params.json."""
-    import E77_input_screen as S
+    from experiments import E77_input_screen as S
     P = S.c2_parts()
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E82_protocol_runs.py',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E82_protocol_runs.py',
                 **H.code_commits(),
                 model=H.model_provenance(orn_deltas=P['orn'], _wPNKC=P['W']), apl_taum_supported=apl_taum_supported(),
                 c2=dict(experiment=S.C2[0], tag=S.C2[1]), fit0=dict(experiment=E80P.FIT0_FOLDER),
@@ -643,7 +643,7 @@ def run_points(out: Path, only: Optional[Sequence[str]] = None, outputs: Optiona
     runs_errors.csv and not marked done, and the points waiting for it are skipped; the others go on. RuntimeError at
     the end if anything failed.
     """
-    import E77_input_screen as S
+    from experiments import E77_input_screen as S
     out.mkdir(parents=True, exist_ok=True)
     outputs = default_outputs() if outputs is None else Path(outputs)
     specs = point_specs()
@@ -761,7 +761,7 @@ def population_rows(out: Path, outputs: Optional[Path] = None) -> pd.DataFrame:
     are the saved fits) and at 2 s re-held (its B1 points), where all four are done: E72.population_row (the mean over
     the wirings of the pair distances per condition, on raw counts, under the calibrated readout with K per wiring and
     binarized; the wiring-mean response rates and fractions; odors per KC)."""
-    import E72_wiring_population as E72
+    from experiments import E72_wiring_population as E72
     outputs = default_outputs() if outputs is None else Path(outputs)
     rp = out / 'runs.csv'
     done = set(pd.read_csv(rp).point_id) if rp.exists() else set()

@@ -28,7 +28,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-import kc_remapping_harness as H
+from kcq import harness as H
 
 EXPERIMENT = 'E23_weak_odor_responders'
 WEAK = ['ms', 'B-myr', 'euc', 'paa', '-aPine', '1-8ol']
@@ -111,7 +111,7 @@ def main() -> None:
     print('\noverlap profile vs glomerulus drive (Spearman over the other 15 odors):'); print(pred.round(2).to_string())
     print('\nconnectome populations:'); print(pop.round(3).to_string())
     make_figure(agg, pred, pop, res_dir)
-    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='E23_weak_odor_responders.py',
+    prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='experiments/E23_weak_odor_responders.py',
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip(),
         **H.code_commits(),
         threshold='trial-mean z > 1', top_gloms=TOP_GLOMS, approx_conc_note=H.APPROX_CONC_NOTE)
