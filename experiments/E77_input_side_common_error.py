@@ -637,19 +637,66 @@ def _pattern_sse(s_on: pd.DataFrame, s_off: pd.DataFrame, K: float, target: pd.S
     return float((err.to_numpy() ** 2).sum())
 
 
+def oracle_generator_seed(seed: int, half_name: str) -> int:
+    """The seed of `input_oracle`'s generator: `seed` for half 'A' of a split, `seed + 1` for half 'B'."""
+    return int(seed) + (0 if half_name == 'A' else 1)
+
+
+def oracle_paths(out: Path, half_name: str, tag: Optional[str] = None) -> Dict[str, Path]:
+    """`input_oracle`'s output files: {'history', 'factors', 'input'}: oracle_history_<half>.csv,
+    oracle_factors_<half>.csv and inputs/oracle_half<half>.csv, or, with `tag`, oracle_history_<tag>.csv,
+    oracle_factors_<tag>.csv and inputs/oracle_<tag>.csv."""
+    if tag is None:
+        return dict(history=out / f'oracle_history_{half_name}.csv', factors=out / f'oracle_factors_{half_name}.csv',
+                    input=out / 'inputs' / f'oracle_half{half_name}.csv')
+    return dict(history=out / f'oracle_history_{tag}.csv', factors=out / f'oracle_factors_{tag}.csv',
+                input=out / 'inputs' / f'oracle_{tag}.csv')
+
+
+def _save_checkpoint(path: Path, state: dict) -> None:
+    """Writes a search's state atomically (a temporary file, then renamed over the checkpoint)."""
+    import os
+    import pickle
+    tmp = path.with_name(path.name + '.tmp')
+    with open(tmp, 'wb') as f:
+        pickle.dump(state, f, protocol=pickle.HIGHEST_PROTOCOL)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, path)
+
+
+def _load_checkpoint(path: Path) -> dict:
+    import pickle
+    with open(path, 'rb') as f:
+        return pickle.load(f)
+
+
 def input_oracle(out: Path, half_name: str, odors: Sequence[str] = E_ODORS, pop: int = E_POP, gens: int = E_GENS,
-                 seed: int = 0) -> pd.DataFrame:
+                 seed: int = 0, split_seed: int = 0, tag: Optional[str] = None,
+                 checkpoint: Optional[Path] = None) -> pd.DataFrame:
     """Part E's search on one half of the recordings: on C2 at its fitted parameters and breadth on the real wiring,
     each odor of `odors` in turn gets a per-glomerulus factor vector in [0.5, 2] on the lab's response (glomeruli without
     a response stay without), searched by a (1 + pop) evolution strategy in log-factor space (E64's: pop candidates
     simulated as pseudo-odors, the incumbent's column replaced by each candidate's for the scoring) to minimize the
     squared pattern error of the per-pair APL effect under the readout (K held at C2's) against `half_name`'s effect,
     with a penalty when the odor's response fraction leaves +-15 % of C2's in either condition. Writes
-    oracle_history_<half>.csv, oracle_factors_<half>.csv and inputs/oracle_half<half>.csv (E38's layout)."""
+    oracle_history_<half>.csv, oracle_factors_<half>.csv and inputs/oracle_half<half>.csv (E38's layout).
+
+    Args:
+        half_name: 'A' or 'B', the half of `recording_halves(split_seed)` searched against (the other is reported).
+        seed: the generator's seed is `oracle_generator_seed(seed, half_name)` (seed for 'A', seed + 1 for 'B').
+        split_seed: the seed of `recording_halves` (0, E77's split, by default).
+        tag: names the output files instead of the half (`oracle_paths`), so that new searches do not overwrite E77's.
+        checkpoint: a file for the search's state, written after every generation (the incumbent's responses and
+            spike counts, the parent, its objective, sigma, the generator's state, the history and the finished odors'
+            factors); if it exists, the search resumes from it and continues exactly as it would have without the
+            interruption (the settings must be the checkpoint's). None (the default) writes none.
+    """
     from experiments import E77_input_screen as S
     from experiments.E64_input_oracle import candidate_orn, out_col
-    rng = np.random.default_rng(seed + (0 if half_name == 'A' else 1))
-    halves = recording_halves()
+    paths = oracle_paths(out, half_name, tag)
+    rng = np.random.default_rng(oracle_generator_seed(seed, half_name))
+    halves = recording_halves(split_seed)
     target = half_effect(halves[half_name])
     other = half_effect(halves['B' if half_name == 'A' else 'A'])
     P = S.c2_parts()
@@ -663,23 +710,53 @@ def input_oracle(out: Path, half_name: str, odors: Sequence[str] = E_ODORS, pop:
     lo, hi = np.log(E_BOUNDS[0]), np.log(E_BOUNDS[1])
     hist, frows = [], []
     orn_now = orn.astype(float).copy()
+    settings = dict(half_name=half_name, odors=list(odors), pop=int(pop), gens=int(gens), seed=int(seed),
+                    split_seed=int(split_seed), tag=tag)
+    start = (0, 0)
+    resume = None
+    if checkpoint is not None and Path(checkpoint).exists():
+        resume = _load_checkpoint(Path(checkpoint))
+        if resume['settings'] != settings:
+            raise ValueError(f'the checkpoint {checkpoint} is of another search: {resume["settings"]} (now {settings})')
+        rng.bit_generator.state = resume['rng']
+        r_on, s_on, r_off, s_off = (resume['frames'][k].copy() for k in ('r_on', 's_on', 'r_off', 's_off'))
+        hist, frows = [dict(h) for h in resume['hist']], [dict(r) for r in resume['frows']]
+        orn_now = resume['orn_now'].copy()
+        start = tuple(resume['next'])
+        print(f'half {half_name}: resuming from {checkpoint} at odor {start[0]} generation {start[1]}', flush=True)
+
+    def save_state(next_pos: Tuple[int, int], parent_state: Optional[dict]) -> None:
+        if checkpoint is None:
+            return
+        _save_checkpoint(Path(checkpoint), dict(
+            settings=settings, next=list(next_pos), rng=rng.bit_generator.state, parent=parent_state,
+            frames=dict(r_on=r_on, s_on=s_on, r_off=r_off, s_off=s_off), hist=hist, frows=frows, orn_now=orn_now))
     # the pseudo-odor path at factor 1 must give C2's own counts for the odor
     sim, _ = S.build_c2_simulator(orn=candidate_orn(orn, odors[0], np.ones((1, len(orn.index)))), breadth=breadth)
     chk_on, chk_off = sim(dict(params)), sim(dict(off_params))
     del sim
-    oc0 = out_col(s_on, odors[0])
-    for c_, sv in ((chk_on[1], s_on), (chk_off[1], s_off)):
+    saved_on, saved_off = P['saved']['on'][1], P['saved']['off'][1]
+    oc0 = out_col(saved_on, odors[0])
+    for c_, sv in ((chk_on[1], saved_on), (chk_off[1], saved_off)):
         if not np.array_equal(c_.iloc[:, 0].to_numpy(dtype=float), sv[oc0].to_numpy(dtype=float)):
             raise RuntimeError(f"the pseudo-odor run of {odors[0]} at factor 1 differs from C2's saved counts")
-    sse0 = _pattern_sse(s_on, s_off, K, target)
+    sse0 = _pattern_sse(saved_on, saved_off, K, target)
     print(f'half {half_name}: C2 pattern rms {np.sqrt(sse0 / 120):.4f} against this half, '
-          f'{np.sqrt(_pattern_sse(s_on, s_off, K, other) / 120):.4f} against the other', flush=True)
-    for odor in odors:
+          f'{np.sqrt(_pattern_sse(saved_on, saved_off, K, other) / 120):.4f} against the other', flush=True)
+    for oi, odor in enumerate(odors):
+        if oi < start[0]:
+            continue
         oc = out_col(s_on, odor)
-        parent = np.ones(len(orn.index))
-        parent_obj = _pattern_sse(s_on, s_off, K, target)
-        sigma = E_SIGMA0
-        for g in range(gens):
+        if resume is not None and oi == start[0] and start[1] > 0:
+            ps = resume['parent']
+            parent, parent_obj, sigma = np.array(ps['parent'], dtype=float), float(ps['parent_obj']), float(ps['sigma'])
+            g_first = start[1]
+        else:
+            parent = np.ones(len(orn.index))
+            parent_obj = _pattern_sse(s_on, s_off, K, target)
+            sigma = E_SIGMA0
+            g_first = 0
+        for g in range(g_first, gens):
             t0 = time.time()
             offspring = np.exp(np.clip(np.log(parent)[None, :] + sigma * rng.standard_normal((pop, len(parent))), lo, hi))
             cand = candidate_orn(orn, odor, offspring)
@@ -709,20 +786,23 @@ def input_oracle(out: Path, half_name: str, odors: Sequence[str] = E_ODORS, pop:
                              sigma=sigma, pattern_rms_half=float(np.sqrt(_pattern_sse(s_on, s_off, K, target) / 120)),
                              pattern_rms_other=float(np.sqrt(sse_other / 120)), frac_on=parts[b][2], frac_off=parts[b][3],
                              c2_frac_on=f0[odor][0], c2_frac_off=f0[odor][1], seconds=time.time() - t0))
-            pd.DataFrame(hist).to_csv(out / f'oracle_history_{half_name}.csv', index=False)
+            pd.DataFrame(hist).to_csv(paths['history'], index=False)
             print(f'half {half_name} {odor} gen {g}: best {objs[b]:.4f} (parent {parent_obj:.4f}), rms this half '
                   f'{hist[-1]["pattern_rms_half"]:.4f}, other {hist[-1]["pattern_rms_other"]:.4f}, sigma {sigma:.2f}, '
                   f'{time.time() - t0:.0f}s', flush=True)
+            if g < gens - 1:
+                save_state((oi, g + 1), dict(parent=parent.copy(), parent_obj=parent_obj, sigma=sigma))
         j = ab.index(odor)
         orn_now.iloc[:, j] = orn.iloc[:, j].to_numpy(dtype=float) * parent
         for gi, glom in enumerate(orn.index):
             frows.append(dict(half=half_name, odor=odor, glomerulus=glom, orn_delta=float(orn.iloc[gi, j]), factor=float(parent[gi]),
                               log2_factor=float(np.log2(parent[gi])), searched_delta=float(orn.iloc[gi, j] * parent[gi])))
-        pd.DataFrame(frows).to_csv(out / f'oracle_factors_{half_name}.csv', index=False)
+        pd.DataFrame(frows).to_csv(paths['factors'], index=False)
         lay = H.abbrev_columns(orn_now)
         lay.index.name = 'glomerulus'
         (out / 'inputs').mkdir(exist_ok=True)
-        lay.to_csv(out / 'inputs' / f'oracle_half{half_name}.csv')
+        lay.to_csv(paths['input'])
+        save_state((oi + 1, 0), None)
     return pd.DataFrame(hist)
 
 

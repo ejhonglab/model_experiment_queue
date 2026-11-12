@@ -567,11 +567,12 @@ def e77_oracle_run(half: str, label: str) -> Optional[Dict[str, tuple]]:
     return None
 
 
-def score_runs(runs: Mapping[Tuple[str, str], Dict[str, tuple]], change_meta: Optional[Mapping[str, dict]] = None
-               ) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def score_runs(runs: Mapping[Tuple[str, str], Dict[str, tuple]], change_meta: Optional[Mapping[str, dict]] = None,
+               tg: Optional[Mapping[str, pd.Series]] = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Readings: for every (change, wiring) run and every population of POPULATIONS whose wirings all have a run of the
     change, `effect_scores` under 'cal', 'calK' (each wiring's fit's K) and 'raw', with the paired change against the
-    same unit unchanged (change 'none': the saved fits, added here if absent).
+    same unit unchanged (change 'none': the saved fits, added here if absent). `tg`: the targets (default `targets()`;
+    E86 adds the halves of a second split).
 
     Returns:
         (readings, pairs): readings one row per (change, unit, readout) with unit a wiring or a population name (and
@@ -580,7 +581,7 @@ def score_runs(runs: Mapping[Tuple[str, str], Dict[str, tuple]], change_meta: Op
     for w in ALL_WIRINGS:
         runs.setdefault(('none', w), saved_fit(w)['saved'])
     change_meta = dict(change_meta or {})
-    tg = targets()
+    tg = targets() if tg is None else dict(tg)
     changes = list(dict.fromkeys(c for c, _ in runs))
     rows, prs = [], []
     for ch in changes:
