@@ -227,6 +227,10 @@ Each of these cost real time to diagnose; check them before blaming a script.
   hours (#5). test_view_apl_activity_script_no_show and
   test_view_apl_activity_script_bad_plot_args[--pixel-um 0] fail in the full suite but pass when
   run alone (not filed yet).
+- Two pytest runs at once by the same user share /tmp/pytest-of-<user>/, and each deletes the other's
+  older temp folders: on 2026-11-11 a short al_analysis test run made 18 of the queue's tests error
+  with "No such file or directory: '/tmp/pytest-of-tom/pytest-0'". Give a run that overlaps another
+  its own `--basetemp` (in the job's tmp folder).
 - On Tom's hosts:
   - hal's shell sets HONG2P_DATA and HONG2P_FAST_DATA to /mnt/d1/2p_data, which does not exist
     there, so a full `pytest` in al_analysis stops while collecting test/test_al_analysis.py
