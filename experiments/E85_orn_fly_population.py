@@ -966,11 +966,15 @@ def part_c() -> dict:
         g_all = float(r.loc[('B1', 'all'), 'gain_z8_pattern'])
         wires = r.loc['B1'].reindex(list(ALL_WIRINGS))
         n_lower = int((wires.gain_z8_pattern > 0).sum())
-        flags = int((b1.realism_flag.fillna('').astype(str).str.strip() != '').sum())
+        pr = population_realism_table(rt, runs)
+        pb = pr[(pr.group == 'B1')]
+        flags = int((pb.realism_flag.fillna('').astype(str).str.strip() != '').sum())
+        run_flags = int((b1.realism_flag.fillna('').astype(str).str.strip() != '').sum())
         raw_change = float(rr.loc[('B1', 'all'), 'z8_loss'] - rr.loc[('lab', 'all'), 'z8_loss'])
         moves = bool(g_all >= MOVE_GAIN and n_lower >= MIN_WIRINGS and flags == 0 and raw_change <= RAW_SLACK)
         res['B1'] = dict(pattern=float(r.loc[('B1', 'all'), 'z8_pattern']), lab=float(r.loc[('lab', 'all'), 'z8_pattern']),
-                         gain=g_all, n_wirings_lower=n_lower, n_flagged=flags, raw_loss_change=raw_change, moves=moves,
+                         gain=g_all, n_wirings_lower=n_lower, n_flagged_populations=flags, n_flagged_model_flies=run_flags,
+                         raw_loss_change=raw_change, moves=moves,
                          no_move=bool(abs(g_all) < NULL_GAIN), worse=bool(g_all <= -MOVE_GAIN),
                          rho_dist_on_change=float(r.loc[('B1', 'all'), 'rho_dist_on'] - r.loc[('lab', 'all'), 'rho_dist_on']),
                          mean_on_change=float(r.loc[('B1', 'all'), 'mean_on'] - r.loc[('lab', 'all'), 'mean_on']),
@@ -982,12 +986,70 @@ def part_c() -> dict:
     if ('B1', 'S') in r.index and ('B4', 'S') in r.index:
         gS, gC = float(r.loc[('B1', 'S'), 'gain_z8_pattern']), float(r.loc[('B4', 'S'), 'gain_z8_pattern'])
         res['control'] = dict(B1_S_gain=gS, B4_S_gain=gC, size_not_structure=bool(gS > 0 and gC >= CONTROL_SHARE * gS))
+    if not (out / 'population_realism.csv').exists() or ('B1', 'all') not in r.index:
+        population_realism_table(rt, runs)
     (out / 'verdict.json').write_text(json.dumps(res, indent=1, default=float) + '\n')
     write_archive_tables(rt, runs)
     comparison_table(readings, rt, res)
     figure(readings, rt)
     print(json.dumps({k: v for k, v in res.items() if k in ('B1', 'control', 'mixture', 'groups')}, indent=1, default=float), flush=True)
     return res
+
+
+def run_realism_parts(o: Dict[str, tuple]) -> dict:
+    """A run's response rates, per-odor response fractions (APL16 order) and odors-per-KC distributions, both
+    conditions."""
+    from kcq import apl_effect as A
+    row = {}
+    for c in ('on', 'off'):
+        r = o[c][0]
+        row[f'rate_{c}'] = float(r.to_numpy(dtype=float).mean())
+        row[f'frac_{c}'] = H.abbrev_columns(r.astype(float) > 0.5).mean().reindex(H.APL16_ODORS).to_numpy(dtype=float)
+        row[f'opk_{c}'] = A.odors_per_kc(r)
+    return row
+
+
+def population_realism(parts: Sequence[dict]) -> dict:
+    """The realism bands read on a population (the rule of 16:10: two spikes against the KC data in baseline-noise
+    units): the mean response rates over its model flies and their ratio, the response rate ρ of the mean per-odor
+    response fractions with APL on, the odors-per-KC distances of the mean distributions, and the flag."""
+    from kcq import apl_effect as A
+    row = {}
+    for c in ('on', 'off'):
+        row[f'rate_{c}'] = float(np.mean([q[f'rate_{c}'] for q in parts]))
+        frac = pd.Series(np.mean([q[f'frac_{c}'] for q in parts], axis=0), index=H.APL16_ODORS)
+        row[f'rate_rho_{c}'] = H.spearman(frac, A.frac_data(c, 'noise'))
+        d = np.mean([q[f'opk_{c}'] for q in parts], axis=0)
+        row[f'opk_{c}_tv'] = float(0.5 * np.abs(d - A.opk_data(c, 'noise')).sum())
+    row['ratio'] = row['rate_off'] / row['rate_on']
+    row['realism_flag'] = A.realism_flag(row['rate_on'], row['rate_off'], row['rate_rho_on'], row['opk_on_tv'],
+                                         row['opk_off_tv'], units='noise')
+    return row
+
+
+def population_realism_table(rt: pd.DataFrame, runs: Dict[str, Dict[str, tuple]]) -> pd.DataFrame:
+    """population_realism.csv: `population_realism` of the wirings at the lab's input (each, and S, T, all) and, per
+    group, of each wiring's nine model flies and of S, T and all."""
+    lab = {w: run_realism_parts(E.saved_fit(w)['saved']) for w in ALL_WIRINGS}
+    parts = {t: run_realism_parts(runs[t]) for t in rt.tag}
+    pops = {'S': S_WIRINGS, 'T': T_WIRINGS, 'all': ALL_WIRINGS}
+    rows = [dict(group='lab', unit=w, kind='wiring', n_model_flies=1, **population_realism([lab[w]])) for w in ALL_WIRINGS]
+    rows += [dict(group='lab', unit=n, kind='population', n_model_flies=len(ws), **population_realism([lab[w] for w in ws]))
+             for n, ws in pops.items()]
+    n9 = len(flies()['labels'])
+    for g, gt in rt.assign(group=[group_of(s) for s in rt.stage]).groupby('group', sort=False):
+        for w, wt in gt.groupby('wiring', sort=False):
+            if len(wt) == n9:
+                rows.append(dict(group=g, unit=w, kind='wiring_nine_flies', n_model_flies=n9,
+                                 **population_realism([parts[t] for t in wt.tag])))
+        for n, ws in pops.items():
+            sub = gt[gt.wiring.isin(ws)]
+            if len(sub) == n9 * len(ws):
+                rows.append(dict(group=g, unit=n, kind='population', n_model_flies=len(sub),
+                                 **population_realism([parts[t] for t in sub.tag])))
+    out = pd.DataFrame(rows)
+    out.to_csv(out_dir() / 'population_realism.csv', index=False)
+    return out
 
 
 def write_archive_tables(rt: pd.DataFrame, runs: Dict[str, Dict[str, tuple]]) -> None:
@@ -1067,6 +1129,15 @@ def comparison_table(readings: pd.DataFrame, rt: pd.DataFrame, res: dict) -> Non
                      f'{gt.ratio.min():.2f} to {gt.ratio.max():.2f} | {gt.rate_rho_on.min():.2f} to {gt.rate_rho_on.max():.2f} | '
                      f'{gt.opk_on_tv.max():.3f} / {gt.opk_off_tv.max():.3f} | {gt.max_count_on.max():.0f} / {gt.max_count_off.max():.0f} | '
                      f'{gt.thr_factor.min():.3f} to {gt.thr_factor.max():.3f} | {gt.apl_factor.min():.3f} to {gt.apl_factor.max():.3f} | {fl} |')
+    pr = pd.read_csv(out / 'population_realism.csv')
+    pr = pr[pr.kind != 'wiring']
+    lines += ['', '## Realism per population (the bands read on the mean over its model flies)', '',
+              '| group | unit | model flies | response rate on | off / on | response rate ρ, on | odors per KC TV, on / off | flag |',
+              '|---|---|---:|---:|---:|---:|---:|---|']
+    for q in pr.itertuples():
+        fl = q.realism_flag if isinstance(q.realism_flag, str) and q.realism_flag.strip() else '–'
+        lines.append(f'| {names.get(q.group, q.group)} | {q.unit} | {q.n_model_flies} | {q.rate_on:.3f} | {q.ratio:.2f} | '
+                     f'{q.rate_rho_on:.2f} | {q.opk_on_tv:.3f} / {q.opk_off_tv:.3f} | {fl} |')
     pa = json.loads((out / 'part_a.json').read_text())
     lines += ['', '## Part A: the input flies', '',
               f"Scaling: {pa['scaling']['method']}, slope {pa['scaling']['slope']:.2f}, R² of the lab input on the mean over flies "
