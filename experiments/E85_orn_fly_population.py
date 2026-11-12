@@ -702,6 +702,436 @@ def part_b(stages: Sequence[str] = STAGE_ORDER) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------------
+# C: the readings
+
+READOUTS = ('cal', 'raw')
+# thresholds of the entry, fixed before any run (on B1, the 'repro' flies held on all eight wirings)
+MOVE_GAIN, NULL_GAIN, MIN_WIRINGS, RAW_SLACK, CONTROL_SHARE = 0.003, 0.0015, 6, 0.005, 0.5
+MIXTURE_GAIN = 0.003
+N_DRAWS = 100
+
+
+def group_of(stage: str) -> str:
+    """The reading group of a stage: B1S and B1T together are 'B1'."""
+    return 'B1' if stage.startswith('B1') else stage
+
+
+def _pairs_masks(index: pd.MultiIndex) -> Dict[str, np.ndarray]:
+    """Boolean masks over pairs (canonical order): 'nearest' (E77's four), 'six' (E78's SIX), 'megamat' (both odors
+    megamat)."""
+    from experiments.E78_claw_knee import NEAREST, SIX
+    keys = [tuple(x) for x in index]
+    a, b = index.get_level_values(0), index.get_level_values(1)
+    return dict(nearest=np.array([k in {tuple(sorted(p)) for p in NEAREST} for k in keys]),
+                six=np.array([k in {tuple(sorted(p)) for p in SIX} for k in keys]),
+                megamat=np.asarray(a.isin(H.MEGAMAT12) & b.isin(H.MEGAMAT12)))
+
+
+_DATA: Dict[str, Dict[str, pd.Series]] = {}
+
+
+def data_distances() -> Dict[str, pd.Series]:
+    """The KC data's mean pair distances, control flies ('on') and APL output blocked (TNT) ('off'), all recordings
+    (E77's 'z8')."""
+    if not _DATA:
+        from experiments import E77_input_side_common_error as E77
+        _DATA.update(E77.data_distances('z8'))
+    return dict(_DATA)
+
+
+def scores(d: Dict[str, pd.Series], tg: Dict[str, pd.Series]) -> dict:
+    """E83's `effect_scores` plus the mean distances and ρ on odor-odor distances with APL on (against the control
+    flies) and APL off (against APL output blocked (TNT)), the near pairs' distances and APL effect, and the pattern part
+    over the 66 megamat pairs against all recordings."""
+    row = E.effect_scores(d, tg)
+    dd = data_distances()
+    on, off = E._cs(d['on']), E._cs(d['off'])
+    me = E._cs(H.apl_effect(on, off))
+    masks = _pairs_masks(me.index)
+    row.update(mean_on=float(on.mean()), mean_off=float(off.mean()),
+               rho_dist_on=H.spearman(on, dd['on'].reindex(on.index)), rho_dist_off=H.spearman(off, dd['off'].reindex(off.index)))
+    for k in ('nearest', 'six'):
+        row[f'{k}_on'] = float(on[masks[k]].mean())
+        row[f'{k}_off'] = float(off[masks[k]].mean())
+        row[f'{k}_effect'] = float(me[masks[k]].mean())
+    de = E._cs(tg['z8']).reindex(me.index)
+    mm = masks['megamat']
+    err = (me[mm] - me[mm].mean()) - (de[mm] - de[mm].mean())
+    row['z8_pattern_megamat'] = E._rms(err.to_numpy())
+    row['z8_loss_megamat'] = E._rms((me[mm] - de[mm]).to_numpy())
+    return row
+
+
+def data_scores() -> dict:
+    """The KC data's own values of `scores`' descriptive columns (mean distances, near pairs)."""
+    dd = data_distances()
+    on, off = E._cs(dd['on']), E._cs(dd['off'])
+    me = E._cs(H.apl_effect(on, off))
+    masks = _pairs_masks(me.index)
+    row = dict(mean_effect=float(me.mean()), mean_on=float(on.mean()), mean_off=float(off.mean()))
+    for k in ('nearest', 'six'):
+        row.update({f'{k}_on': float(on[masks[k]].mean()), f'{k}_off': float(off[masks[k]].mean()),
+                    f'{k}_effect': float(me[masks[k]].mean())})
+    return row
+
+
+def load_runs() -> Tuple[pd.DataFrame, Dict[str, Dict[str, tuple]]]:
+    """runs.csv and {tag: outputs} of every saved run."""
+    rt = E._read_rows(out_dir() / 'runs.csv')
+    runs = {}
+    for r in rt.itertuples():
+        o = load_run('B', r.tag)
+        if o is None:
+            print(f'{r.tag}: outputs missing', flush=True)
+            continue
+        runs[r.tag] = o
+    return rt[rt.tag.isin(runs)].reset_index(drop=True), runs
+
+
+def mixture_distances(fly_d: Sequence[Dict[str, pd.Series]], weights: Sequence[float]) -> Dict[str, pd.Series]:
+    """The weighted mean over input flies of their populations' distances per condition (weights summing to 1); with
+    equal weights, the population of every model fly in `fly_d`'s populations."""
+    w = np.asarray(weights, dtype=float)
+    return {c: E._cs(sum(wi * E._cs(d[c]) for wi, d in zip(w, fly_d))) for c in ('on', 'off')}
+
+
+def fit_mixture(fly_d: Sequence[Dict[str, pd.Series]], target: pd.Series) -> Tuple[np.ndarray, float]:
+    """Non-negative weights over the input flies, summing to 1, that minimize the pattern part of the mixture's
+    per-pair APL effect against `target` (SLSQP from equal weights); (weights, the fitted pattern part)."""
+    from scipy.optimize import minimize
+    n = len(fly_d)
+    on = np.stack([E._cs(d['on']).to_numpy() for d in fly_d])
+    off = np.stack([E._cs(d['off']).to_numpy() for d in fly_d])
+    idx = E._cs(fly_d[0]['on']).index
+    t = E._cs(target).reindex(idx).to_numpy()
+    t = t - t.mean()
+
+    def f(w):
+        e = w @ on - w @ off
+        e = e - e.mean()
+        return float(np.mean((e - t) ** 2))
+
+    r = minimize(f, np.full(n, 1.0 / n), method='SLSQP', bounds=[(0.0, 1.0)] * n,
+                 constraints=[dict(type='eq', fun=lambda w: w.sum() - 1.0)], options=dict(maxiter=500, ftol=1e-14))
+    w = np.clip(r.x, 0.0, None)
+    w = w / w.sum()
+    return w, float(np.sqrt(f(w)))
+
+
+def _dist(o: Dict[str, tuple], ro: str) -> Dict[str, pd.Series]:
+    return E.pair_distances(o, ro)
+
+
+def part_c() -> dict:
+    """Part C on the runs saved so far: readings.csv, pairs.csv, populations.csv, draw_terms.csv, yardstick.csv,
+    fly_mixture.csv, verdict.json, comparison_table.md, the figure, and the archive tables (model_pair_distances_long.csv,
+    variants.csv)."""
+    out = out_dir()
+    tg = E.targets()
+    rt, runs = load_runs()
+    if rt.empty:
+        raise RuntimeError('no runs yet')
+    rt['group'] = [group_of(s) for s in rt.stage]
+    flies_n = len(flies()['labels'])
+    # distances of every run and of the wirings at the lab's input
+    dist = {ro: {t: _dist(runs[t], ro) for t in rt.tag} for ro in READOUTS}
+    lab = {ro: {w: _dist(E.saved_fit(w)['saved'], ro) for w in ALL_WIRINGS} for ro in READOUTS}
+    rows, prs = [], []
+
+    def add(group, unit, kind, n, ro, d, ref):
+        sc = scores(d, tg)
+        row = dict(group=group, unit=unit, kind=kind, n_model_flies=n, readout=ro, **sc)
+        if ref is not None:
+            sr = scores(ref, tg)
+            for k in ('z8_pattern', 'z8_loss', 'mean_effect', 'z8_rho', 'z6_pattern', 'noise_free_pattern', 'noise8_pattern',
+                      'halfA_pattern', 'halfB_pattern', 'mean_on', 'mean_off', 'rho_dist_on', 'rho_dist_off', 'nearest_effect',
+                      'six_effect', 'z8_pattern_megamat'):
+                row[f'lab_{k}'] = sr[k]
+                row[f'gain_{k}'] = sr[k] - sc[k]
+        rows.append(row)
+        me = E._cs(H.apl_effect(d['on'], d['off']))
+        prs.append(pd.DataFrame(dict(group=group, unit=unit, readout=ro, odor_a=me.index.get_level_values(0),
+                                     odor_b=me.index.get_level_values(1), on=E._cs(d['on']).reindex(me.index).to_numpy(),
+                                     off=E._cs(d['off']).reindex(me.index).to_numpy(), effect=me.to_numpy())))
+
+    pops = {'S': S_WIRINGS, 'T': T_WIRINGS, 'all': ALL_WIRINGS}
+    for ro in READOUTS:
+        for w in ALL_WIRINGS:
+            add('lab', w, 'wiring', 1, ro, lab[ro][w], None)
+        for name, ws in pops.items():
+            add('lab', name, 'population', len(ws), ro, E.population([lab[ro][w] for w in ws]), None)
+        for g, gt in rt.groupby('group', sort=False):
+            for r in gt.itertuples():
+                add(g, r.tag, 'model_fly', 1, ro, dist[ro][r.tag], lab[ro][r.wiring])
+            for w, wt in gt.groupby('wiring', sort=False):
+                if len(wt) == flies_n:
+                    add(g, w, 'wiring_nine_flies', flies_n, ro, E.population([dist[ro][t] for t in wt.tag]), lab[ro][w])
+            for name, ws in pops.items():
+                sub = gt[gt.wiring.isin(ws)]
+                if len(sub) == flies_n * len(ws):
+                    add(g, name, 'population', len(sub), ro, E.population([dist[ro][t] for t in sub.tag]),
+                        E.population([lab[ro][w] for w in ws]))
+    readings = pd.DataFrame(rows)
+    readings.to_csv(out / 'readings.csv', index=False)
+    pd.concat(prs, ignore_index=True).to_csv(out / 'pairs.csv', index=False)
+    pop = readings[readings.kind.isin(['population', 'wiring_nine_flies'])]
+    pop.to_csv(out / 'populations.csv', index=False)
+
+    res = dict(**H.code_commits(), n_runs=int(len(rt)), groups={g: int(n) for g, n in rt.group.value_counts().items()})
+    b1 = rt[rt.group == 'B1']
+    full_b1 = len(b1) == flies_n * len(ALL_WIRINGS)
+    # draws of eight model flies, eight wirings and eight input flies
+    if full_b1:
+        key = {(r.wiring, r.fly_index): r.tag for r in b1.itertuples()}
+        rng = np.random.default_rng(0)
+        drows = []
+        for k in range(N_DRAWS):
+            perm = rng.permutation(flies_n)[:len(ALL_WIRINGS)]
+            tags = [key[(w, int(f))] for w, f in zip(ALL_WIRINGS, perm)]
+            for ro in READOUTS:
+                sc = scores(E.population([dist[ro][t] for t in tags]), tg)
+                drows.append(dict(draw=k, readout=ro, flies=' '.join(f'f{int(f)}' for f in perm),
+                                  **{c: sc[c] for c in ('z8_pattern', 'z8_loss', 'mean_effect', 'z8_rho', 'mean_on', 'mean_off',
+                                                        'rho_dist_on', 'rho_dist_off', 'six_effect', 'nearest_effect')}))
+        draws = pd.DataFrame(drows)
+        draws.to_csv(out / 'draws.csv', index=False)
+        # the draw terms of the per-pair APL effect (under the readout): wiring, input fly, interaction
+        dt = []
+        for ro in READOUTS:
+            eff = np.stack([[E._cs(H.apl_effect(dist[ro][key[(w, f)]]['on'], dist[ro][key[(w, f)]]['off'])).to_numpy()
+                             for f in range(flies_n)] for w in ALL_WIRINGS])           # wirings x flies x pairs
+            for centred in (False, True):
+                e = eff - eff.mean(axis=2, keepdims=True) if centred else eff
+                gm = e.mean(axis=(0, 1))
+                wm = e.mean(axis=1) - gm
+                fm = e.mean(axis=0) - gm
+                inter = e - gm - wm[:, None, :] - fm[None, :, :]
+                single = readings[(readings.group == 'B1') & (readings.kind == 'model_fly') & (readings.readout == ro)]
+                single = single.merge(b1[['tag', 'wiring', 'fly_index']], left_on='unit', right_on='tag')
+                labw = readings[(readings.group == 'lab') & (readings.kind == 'wiring') & (readings.readout == ro)].set_index('unit')
+                sd_in = float(np.sqrt(single.groupby('wiring').z8_pattern.var(ddof=1).mean()))
+                dt.append(dict(readout=ro, effect=('pattern (each model fly mean removed)' if centred else 'per-pair APL effect'),
+                               var_wiring=float((wm ** 2).mean()), var_fly=float((fm ** 2).mean()),
+                               var_interaction=float((inter ** 2).mean()),
+                               sd_single_pattern_within_wiring=sd_in,
+                               sd_single_pattern_over_wirings_lab=float(labw.loc[list(ALL_WIRINGS), 'z8_pattern'].std(ddof=1)),
+                               mean_single_minus_lab=float((single.z8_pattern - single.wiring.map(labw.z8_pattern)).mean())))
+        pd.DataFrame(dt).to_csv(out / 'draw_terms.csv', index=False)
+        # the yardstick: APL on from one model fly, APL off from another of a different wiring and input fly
+        yrows = []
+        de = E._cs(tg['z8'])
+        for ro in READOUTS:
+            items = [(w, f, dist[ro][key[(w, f)]]) for w in ALL_WIRINGS for f in range(flies_n)]
+            vals = []
+            for w1, f1, d1 in items:
+                for w2, f2, d2 in items:
+                    if w1 == w2 or f1 == f2:
+                        continue
+                    me = E._cs(H.apl_effect(d1['on'], d2['off']))
+                    dd = de.reindex(me.index)
+                    vals.append((E._rms((me - dd).to_numpy()), E._rms(((me - me.mean()) - (dd - dd.mean())).to_numpy())))
+            lv = []
+            for w1 in ALL_WIRINGS:
+                for w2 in ALL_WIRINGS:
+                    if w1 != w2:
+                        me = E._cs(H.apl_effect(lab[ro][w1]['on'], lab[ro][w2]['off']))
+                        dd = de.reindex(me.index)
+                        lv.append(E._rms((me - dd).to_numpy()))
+            v = np.asarray(vals)
+            yrows.append(dict(readout=ro, n=len(v), loss_median=float(np.median(v[:, 0])), loss_mean=float(v[:, 0].mean()),
+                              pattern_median=float(np.median(v[:, 1])), lab_two_wirings_loss_median=float(np.median(lv))))
+        pd.DataFrame(yrows).to_csv(out / 'yardstick.csv', index=False)
+        # the mixture of input flies: fitted on S against one half, scored on T against the other
+        mrows = []
+        for X, Y in (('A', 'B'), ('B', 'A')):
+            fly_S = [E.population([dist['cal'][key[(w, f)]] for w in S_WIRINGS]) for f in range(flies_n)]
+            fly_T = [E.population([dist['cal'][key[(w, f)]] for w in T_WIRINGS]) for f in range(flies_n)]
+            w_fit, fitted = fit_mixture(fly_S, tg[f'half{X}'])
+            eq = np.full(flies_n, 1.0 / flies_n)
+            sT_fit = E._rms(E.pattern_error(mixture_distances(fly_T, w_fit), tg[f'half{Y}']))
+            sT_eq = E._rms(E.pattern_error(mixture_distances(fly_T, eq), tg[f'half{Y}']))
+            sT_lab = E._rms(E.pattern_error(E.population([lab['cal'][w] for w in T_WIRINGS]), tg[f'half{Y}']))
+            sS_eq = E._rms(E.pattern_error(mixture_distances(fly_S, eq), tg[f'half{X}']))
+            mrows.append(dict(fitted_on=X, scored_on=Y, S_fitted=fitted, S_equal=sS_eq, T_unseen_fitted=sT_fit,
+                              T_unseen_equal=sT_eq, T_unseen_lab=sT_lab, gain_vs_equal=sT_eq - sT_fit, gain_vs_lab=sT_lab - sT_fit,
+                              **{f'w_f{i}': float(x) for i, x in enumerate(w_fit)}))
+        mix = pd.DataFrame(mrows)
+        mix.to_csv(out / 'fly_mixture.csv', index=False)
+        res['mixture'] = dict(passes=bool((mix.gain_vs_equal >= MIXTURE_GAIN).all()),
+                              gain_vs_equal=[float(x) for x in mix.gain_vs_equal], gain_vs_lab=[float(x) for x in mix.gain_vs_lab])
+    # the verdict on B1, the control and the matrices
+    r = readings[readings.readout == 'cal'].set_index(['group', 'unit'])
+    rr = readings[readings.readout == 'raw'].set_index(['group', 'unit'])
+    if ('B1', 'all') in r.index:
+        g_all = float(r.loc[('B1', 'all'), 'gain_z8_pattern'])
+        wires = r.loc['B1'].reindex(list(ALL_WIRINGS))
+        n_lower = int((wires.gain_z8_pattern > 0).sum())
+        flags = int((b1.realism_flag.fillna('').astype(str).str.strip() != '').sum())
+        raw_change = float(rr.loc[('B1', 'all'), 'z8_loss'] - rr.loc[('lab', 'all'), 'z8_loss'])
+        moves = bool(g_all >= MOVE_GAIN and n_lower >= MIN_WIRINGS and flags == 0 and raw_change <= RAW_SLACK)
+        res['B1'] = dict(pattern=float(r.loc[('B1', 'all'), 'z8_pattern']), lab=float(r.loc[('lab', 'all'), 'z8_pattern']),
+                         gain=g_all, n_wirings_lower=n_lower, n_flagged=flags, raw_loss_change=raw_change, moves=moves,
+                         no_move=bool(abs(g_all) < NULL_GAIN), worse=bool(g_all <= -MOVE_GAIN),
+                         rho_dist_on_change=float(r.loc[('B1', 'all'), 'rho_dist_on'] - r.loc[('lab', 'all'), 'rho_dist_on']),
+                         mean_on_change=float(r.loc[('B1', 'all'), 'mean_on'] - r.loc[('lab', 'all'), 'mean_on']),
+                         mean_off_change=float(r.loc[('B1', 'all'), 'mean_off'] - r.loc[('lab', 'all'), 'mean_off']))
+        ds = data_scores()
+        res['B1']['matrices'] = bool(res['B1']['rho_dist_on_change'] >= 0.03 or (
+            res['B1']['mean_on_change'] >= (ds['mean_on'] - float(r.loc[('lab', 'all'), 'mean_on'])) / 3.0
+            and res['B1']['mean_off_change'] >= (ds['mean_off'] - float(r.loc[('lab', 'all'), 'mean_off'])) / 3.0))
+    if ('B1', 'S') in r.index and ('B4', 'S') in r.index:
+        gS, gC = float(r.loc[('B1', 'S'), 'gain_z8_pattern']), float(r.loc[('B4', 'S'), 'gain_z8_pattern'])
+        res['control'] = dict(B1_S_gain=gS, B4_S_gain=gC, size_not_structure=bool(gS > 0 and gC >= CONTROL_SHARE * gS))
+    (out / 'verdict.json').write_text(json.dumps(res, indent=1, default=float) + '\n')
+    write_archive_tables(rt, runs)
+    comparison_table(readings, rt, res)
+    figure(readings, rt)
+    print(json.dumps({k: v for k, v in res.items() if k in ('B1', 'control', 'mixture', 'groups')}, indent=1, default=float), flush=True)
+    return res
+
+
+def write_archive_tables(rt: pd.DataFrame, runs: Dict[str, Dict[str, tuple]]) -> None:
+    """model_pair_distances_long.csv (raw spike counts, the harness's primary model RDM) and variants.csv (absolute
+    parameters) of every run, for kcq/apl_effect.py and the model-output archive."""
+    out = out_dir()
+    parts, vrows = [], []
+    for r in rt.itertuples():
+        o = runs[r.tag]
+        parts.append(pd.concat({(r.tag, 'on'): H.model_rdms(*o['on'])[H.PRIMARY_MODEL_RDM],
+                                (r.tag, 'acute_off'): H.model_rdms(*o['off'])[H.PRIMARY_MODEL_RDM]},
+                               names=['tag', 'condition', 'odor_a', 'odor_b']).rename('distance').reset_index())
+        vrows.append(dict(tag=r.tag, variant=r.tag, part='B', stage=r.stage, input_variant=r.variant, fly=r.fly,
+                          wiring=r.wiring, reading=r.reading, base='bouton', k=E.BREADTH_K, fit_folder=r.fit_folder,
+                          fit_tag=r.fit_tag, kc_kc_inh=r.wKCKC_scale,
+                          **{k: getattr(r, k) for k in ('fixed_thr', 'wAPLKC_scale', 'wKCAPL_scale', 'wAPLPN_scale', 'wPNAPL_scale',
+                                                        'thr_factor', 'apl_factor', 'rate_on', 'rate_off')},
+                          orn_input=r.orn_input, subdir='B'))
+    pd.concat(parts, ignore_index=True).to_csv(out / 'model_pair_distances_long.csv', index=False)
+    pd.DataFrame(vrows).to_csv(out / 'variants.csv', index=False)
+
+
+def _f(x, spec='.4f') -> str:
+    return E._fmt(x if x is None else float(x), spec)
+
+
+def comparison_table(readings: pd.DataFrame, rt: pd.DataFrame, res: dict) -> None:
+    """comparison_table.md: the populations against the wirings at the lab's input and the KC data, the per-wiring paired
+    gains, realism per group, the verdict."""
+    out = out_dir()
+    r = readings.set_index(['group', 'unit', 'readout'])
+    ds = data_scores()
+    cols = [('lab', 'S'), ('lab', 'T'), ('lab', 'all')] + [(g, u) for g in ('B1', 'B2', 'B3', 'B4', 'B5')
+                                                           for u in ('S', 'T', 'all') if (g, u, 'cal') in r.index]
+    names = {'lab': 'lab input', 'B1': 'repro, held', 'B2': 'as measured, held', 'B3': 'gain-free, held',
+             'B4': 'permuted, held', 'B5': 'repro, free'}
+    stats = [('pattern part, readout, all recordings (lower is better)', 'cal', 'z8_pattern', '.4f', None),
+             ('APL-effect loss, readout', 'cal', 'z8_loss', '.4f', None),
+             ('mean APL effect, readout', 'cal', 'mean_effect', '+.3f', ds['mean_effect']),
+             ('ρ on the per-pair APL effect, readout', 'cal', 'z8_rho', '.2f', None),
+             ('pattern part, readout, six typical TNT recordings', 'cal', 'z6_pattern', '.4f', None),
+             ('pattern part, readout, noise-free effect', 'cal', 'noise_free_pattern', '.4f', None),
+             ('pattern part, readout, baseline-noise units', 'cal', 'noise8_pattern', '.4f', None),
+             ('pattern part, readout, the 66 megamat pairs', 'cal', 'z8_pattern_megamat', '.4f', None),
+             ('APL-effect loss, raw counts', 'raw', 'z8_loss', '.4f', None),
+             ('mean APL effect, raw counts', 'raw', 'mean_effect', '+.3f', ds['mean_effect']),
+             ('mean distance, APL on / control flies, readout', 'cal', 'mean_on', '.3f', ds['mean_on']),
+             ('mean distance, APL off / APL output blocked (TNT), readout', 'cal', 'mean_off', '.3f', ds['mean_off']),
+             ('ρ on odor-odor distances, APL on, readout', 'cal', 'rho_dist_on', '.2f', None),
+             ('ρ on odor-odor distances, APL off, readout', 'cal', 'rho_dist_off', '.2f', None),
+             ('APL effect, four nearest ester pairs, readout', 'cal', 'nearest_effect', '+.3f', ds['nearest_effect']),
+             ('APL effect, six near pairs, readout', 'cal', 'six_effect', '+.3f', ds['six_effect'])]
+    lines = ['# E85: the ORN input as a population of flies', '',
+             f"Generated by experiments/E85_orn_fly_population.py at {res['queue_commit'][:7]} from {res['n_runs']} runs "
+             f"({', '.join(f'{g} {n}' for g, n in res['groups'].items())}).", '',
+             '## Populations', '',
+             '| statistic | KC data | ' + ' | '.join(f'{names[g]}<br>{u}' for g, u in cols) + ' |',
+             '|---|---:|' + '---:|' * len(cols)]
+    for label, ro, c, spec, dv in stats:
+        cells = [_f(r.loc[(g, u, ro), c], spec) if (g, u, ro) in r.index else '–' for g, u in cols]
+        lines.append(f'| {label} | {_f(dv, spec) if dv is not None else "–"} | ' + ' | '.join(cells) + ' |')
+    lines += ['', '## The repro flies on each wiring (B1, readout, all recordings)', '',
+              '| wiring | lab input | nine flies | gain | single flies, min to max |', '|---|---:|---:|---:|---:|']
+    mf = readings[(readings.group == 'B1') & (readings.kind == 'model_fly') & (readings.readout == 'cal')]
+    mf = mf.merge(rt[['tag', 'wiring']], left_on='unit', right_on='tag')
+    for w in ALL_WIRINGS:
+        if ('B1', w, 'cal') in r.index:
+            s = mf[mf.wiring == w].z8_pattern
+            lines.append(f"| {w} | {_f(r.loc[('lab', w, 'cal'), 'z8_pattern'])} | {_f(r.loc[('B1', w, 'cal'), 'z8_pattern'])} | "
+                         f"{_f(r.loc[('B1', w, 'cal'), 'gain_z8_pattern'], '+.4f')} | {_f(s.min())} to {_f(s.max())} |")
+    lines += ['', '## Realism per group (every run)', '',
+              '| group | runs | response rate on | off / on | response rate ρ, on | odors per KC TV, on / off | largest count on / off | thr factor | APL factor | flagged |',
+              '|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|']
+    for g, gt in rt.assign(group=[group_of(s) for s in rt.stage]).groupby('group', sort=False):
+        fl = int((gt.realism_flag.fillna('').astype(str).str.strip() != '').sum())
+        lines.append(f'| {names.get(g, g)} | {len(gt)} | {gt.rate_on.min():.3f} to {gt.rate_on.max():.3f} | '
+                     f'{gt.ratio.min():.2f} to {gt.ratio.max():.2f} | {gt.rate_rho_on.min():.2f} to {gt.rate_rho_on.max():.2f} | '
+                     f'{gt.opk_on_tv.max():.3f} / {gt.opk_off_tv.max():.3f} | {gt.max_count_on.max():.0f} / {gt.max_count_off.max():.0f} | '
+                     f'{gt.thr_factor.min():.3f} to {gt.thr_factor.max():.3f} | {gt.apl_factor.min():.3f} to {gt.apl_factor.max():.3f} | {fl} |')
+    pa = json.loads((out / 'part_a.json').read_text())
+    lines += ['', '## Part A: the input flies', '',
+              f"Scaling: {pa['scaling']['method']}, slope {pa['scaling']['slope']:.2f}, R² of the lab input on the mean over flies "
+              f"{pa['scaling']['r2']:.3f} ({pa['scaling']['note']}). Reliability r_g: median {pa['reliability']['r_g_median']:.2f}, "
+              f"{pa['reliability']['r_g_min']:.2f} to {pa['reliability']['r_g_max']:.2f}. Near-pair check: ratio "
+              f"{pa['near_check']['ratio_at_c1']:.3f} at factor 1, common factor {pa['near_check']['c']:g}. SD across flies of "
+              f"log2(fly / mean), median: {pa['spread']['median_sd_log2_all']:.2f} (all entries), "
+              f"{pa['spread']['median_sd_log2_above10']:.2f} (mean above 10 % of the largest), "
+              f"{pa['spread']['median_sd_log2_above30']:.2f} (above 30 %).", '',
+              '| searched input at 0.6 | entries within 1 SD (log2) | within 2 SD | within 1 SD (spike deltas) | within 2 SD | share in the flies\' span | label permutations | odors above the permutations\' 95th percentile |',
+              '|---|---:|---:|---:|---:|---:|---:|---:|']
+    ss = pd.read_csv(out / 'searched_inputs_summary.csv')
+    for q in ss.itertuples():
+        lines.append(f'| {q.input} | {q.within1_log2:.1%} | {q.within2_log2:.1%} | {q.within1_spike_deltas:.1%} | '
+                     f'{q.within2_spike_deltas:.1%} | {q.span_share:.1%} | {q.span_share_perm_mean:.1%} | {q.n_odors_above_perm_p95} of {q.n_odors} |')
+    lines += ['', '## Verdict', '', '```', json.dumps({k: v for k, v in res.items() if k in ('B1', 'control', 'mixture')},
+                                                      indent=1, default=float), '```', '']
+    (out / 'comparison_table.md').write_text('\n'.join(lines))
+
+
+def figure(readings: pd.DataFrame, rt: pd.DataFrame) -> None:
+    """E85_populations.png: per wiring, the pattern part under the readout against all recordings at the lab's input,
+    for each repro model fly and for the nine flies' population (B1); and the near pairs' APL effect."""
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    r = readings[readings.readout == 'cal']
+    mf = r[(r.group == 'B1') & (r.kind == 'model_fly')].merge(rt[['tag', 'wiring']], left_on='unit', right_on='tag')
+    if mf.empty:
+        return
+    fig, axs = plt.subplots(1, 2, figsize=(11, 4), constrained_layout=True)
+    ax = axs[0]
+    for i, w in enumerate(ALL_WIRINGS):
+        s = mf[mf.wiring == w].z8_pattern
+        ax.scatter(np.full(len(s), i) + np.linspace(-0.2, 0.2, len(s)), s, s=10, color='0.6',
+                   label='single model flies' if i == 0 else None)
+        lab = r[(r.group == 'lab') & (r.unit == w)].z8_pattern
+        ax.scatter([i], lab, marker='_', s=300, color='k', label='lab input' if i == 0 else None)
+        nine = r[(r.group == 'B1') & (r.unit == w) & (r.kind == 'wiring_nine_flies')].z8_pattern
+        if len(nine):
+            ax.scatter([i], nine, marker='o', s=40, color='C0', label='nine input flies' if i == 0 else None)
+    ax.set(xticks=range(len(ALL_WIRINGS)), xticklabels=ALL_WIRINGS,
+           ylabel='pattern part of the APL-effect loss\n(calibrated readout, all recordings)', title='each wiring')
+    ax.legend(fontsize=8)
+    ax = axs[1]
+    pr = pd.read_csv(out_dir() / 'pairs.csv')
+    dd = data_distances()
+    de = E._cs(H.apl_effect(dd['on'], dd['off']))
+    pops = [('lab', 'all'), ('B1', 'all')]
+    x = np.arange(len(de))
+    order = np.argsort(de.to_numpy())
+    ax.plot(x, de.to_numpy()[order], color='k', label='KC data')
+    for g, u in pops:
+        p = pr[(pr.group == g) & (pr.unit == u) & (pr.readout == 'cal')].set_index(['odor_a', 'odor_b']).effect
+        if len(p):
+            ax.plot(x, E._cs(p).reindex(de.index).to_numpy()[order], lw=0.8,
+                    label='eight wirings, lab input' if g == 'lab' else 'eight wirings x nine input flies')
+    ax.set(xlabel='odor pair (ordered by the KC data)', ylabel='APL effect (APL on minus off)\ncosine distance',
+           title='per-pair APL effect, populations')
+    ax.legend(fontsize=8)
+    fig.savefig(out_dir() / 'E85_populations.png', dpi=150)
+    plt.close(fig)
+
+
+# ---------------------------------------------------------------------------
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
@@ -720,7 +1150,7 @@ def main() -> None:
             raise SystemExit(f'unknown stages {sorted(bad)}')
         part_b(stages)
     elif a.part == 'C':
-        raise NotImplementedError('part C is written while part B runs')
+        part_c()
     print(f'done in {time.time() - t0:.0f}s', flush=True)
 
 

@@ -71,3 +71,23 @@ def test_lab_input_reproduces_the_real_wirings_fit():
     r = X.held_reading('real', H.apl16_orn_deltas(), 'E85_lab')
     assert r['thr_factor'] == 1.0 and r['apl_factor'] == 1.0
     assert E._same({'on': r['on'], 'off': r['off']}, E.saved_fit('real')['saved']) == (0, 0)
+
+
+def test_mixture_with_equal_weights_is_the_population():
+    import pandas as pd
+    E = X.E
+    rng = np.random.default_rng(0)
+    idx = pd.MultiIndex.from_tuples([tuple(sorted(p)) for p in H.PAIRS16], names=['odor_a', 'odor_b'])
+    runs = {(w, f): {c: pd.Series(rng.uniform(0.2, 1.0, len(idx)), index=idx) for c in ('on', 'off')}
+            for w in X.S_WIRINGS for f in range(9)}
+    fly_d = [E.population([runs[(w, f)] for w in X.S_WIRINGS]) for f in range(9)]
+    mix = X.mixture_distances(fly_d, np.full(9, 1.0 / 9))
+    pop = E.population(list(runs.values()))
+    for c in ('on', 'off'):
+        assert np.allclose(mix[c].to_numpy(), pop[c].reindex(mix[c].index).to_numpy(), atol=1e-12)
+    # a fly with all the weight is that fly's population
+    one = X.mixture_distances(fly_d, np.eye(9)[3])
+    assert np.allclose(one['on'].to_numpy(), E._cs(fly_d[3]['on']).to_numpy())
+    # the fitted weights are on the simplex
+    w, fitted = X.fit_mixture(fly_d, pd.Series(rng.normal(0.18, 0.05, len(idx)), index=idx))
+    assert np.all(w >= 0) and np.isclose(w.sum(), 1.0) and fitted >= 0
