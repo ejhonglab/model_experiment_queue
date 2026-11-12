@@ -124,6 +124,7 @@ co-localization: Of two glomeruli, how close their PN boutons lie in the calyx: 
 - E83: the input and APL's glomerulus profile fitted on several wirings at once (completed)
 - E84: the time course of the APL effect in the flies' traces (completed)
 - E85: the ORN input as a population of flies (running)
+- E86: the controls and the replication of the reduced searched input (running)
 ???
 
 ## What the data show: the ORN→KC remapping in control flies, and what blocking APL output does to it

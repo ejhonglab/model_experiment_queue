@@ -1159,6 +1159,7 @@ Canonical experiment names for summary reports:
 | E83 | the input and APL's glomerulus profile fitted on several wirings at once |
 | E84 | the time course of the APL effect in the flies' traces |
 | E85 | the ORN input as a population of flies |
+| E86 | the controls and the replication of the reduced searched input |
 
 ## Model-output archive (data/model_outputs/ in the shared directory)
 
