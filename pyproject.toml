@@ -1,0 +1,18 @@
+# The queue's own packages, installed editable into ./venv (`./venv/bin/pip install -e .` from this
+# repository's root; CLAUDE.md, "Code changes"), so that every script imports the others absolutely
+# (`from kcq import harness as H`, `from experiments import E10_joint_fit as J`) whether it is run
+# by path or with -m.
+[build-system]
+requires = ["setuptools >= 64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "model_experiment_queue"
+version = "0.0.0"
+description = "The KC-remapping experiment queue: experiment scripts, their harness and the queue's tools"
+# none listed: the model (al_analysis, hong2p, olfsysm) is installed editable from the checkouts
+# beside this one, and brings the rest (CLAUDE.md, "Code changes")
+dependencies = []
+
+[tool.setuptools]
+packages = ["kcq", "experiments", "data_prep", "analyses", "reports", "archive_tools", "coordination"]
