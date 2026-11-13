@@ -1100,7 +1100,9 @@ def part_b5() -> dict:
 # the session z-score's share of the session's frames inside the response windows: Remy's 3 s pulse over her trials'
 # 25 s of frames (-5 to 20 s), the model's response taken as confined to its window
 Q_SESSION = 3.0 / 25.0
-SUBSETS = ('shared', 'all')             # the shared glomeruli's boutons / claws, and all of them
+# the shared glomeruli's boutons / claws, all of them, and those of the 36 glomeruli the model's ORN input has (the
+# wiring's other 18 glomeruli get no ORN input in the model, so their PNs carry only the antennal lobe's lateral signal)
+SUBSETS = ('shared', 'all', 'input')
 MODEL_READINGS = ('rate', 'session_z', 'noisy_nr', 'noisy_measured')
 NOISE_FREE = ('rate', 'session_z')
 
@@ -1207,11 +1209,13 @@ def stage_units(st: dict, stage: str) -> pd.DataFrame:
 
 
 def subset_mask(stage: str, units: pd.Index, meta: Optional[dict], subset: str) -> np.ndarray:
-    """The units of `subset`: 'all', or 'shared' (those of the 28 shared glomeruli: a bouton's glomerulus, a claw's
-    (`unit_meta`), a PN's own)."""
+    """The units of `subset`: 'all'; 'shared' (those of the 28 shared glomeruli: a bouton's glomerulus, a claw's
+    (`unit_meta`), a PN's own); 'input' (those of the 36 glomeruli of the model's ORN input)."""
     if subset == 'all':
         return np.ones(len(units), dtype=bool)
-    sh = list(shared_glomeruli())
+    sh = list(shared_glomeruli()) if subset == 'shared' else list(H.apl16_orn_deltas().index)
+    if subset not in ('shared', 'input'):
+        raise ValueError(subset)
     if stage == 'bouton':
         return np.isin(meta['bouton_glomerulus'], sh)
     if stage == 'claw':
@@ -1615,21 +1619,29 @@ def part_c() -> dict:
     nc = pd.read_csv(out_dir() / 'noise_check.csv')
     passed = check_passes(nc)
     vr = verdict_rows(sm, steps, passed)
-    both = {'bouton': SUBSETS, 'claw': SUBSETS}
+    both = {'bouton': ('shared', 'all'), 'claw': ('shared', 'all')}
     vb = verdict_rows(sm, steps, passed, both)
+    alt = {'claws_input': {'bouton': ('shared',), 'claw': ('input',)},
+           'claws_shared': {'bouton': ('shared',), 'claw': ('shared',)},
+           'all_three': {'bouton': SUBSETS, 'claw': SUBSETS}}
+    va = {k: verdict_rows(sm, steps, passed, v) for k, v in alt.items()}
     pr = pn_verdict_rows(sm)
-    pd.concat([vr.assign(verdict_subsets='primary'), vb.assign(verdict_subsets='both'), pr.assign(verdict_subsets='pn')],
-              ignore_index=True).to_csv(out_dir() / 'verdict_rows.csv', index=False)
+    pd.concat([vr.assign(verdict_subsets='primary'), vb.assign(verdict_subsets='both'), pr.assign(verdict_subsets='pn')] +
+              [x.assign(verdict_subsets=k) for k, x in va.items()], ignore_index=True).to_csv(out_dir() / 'verdict_rows.csv', index=False)
     ee = effect_errors()
     st = json.loads((out_dir() / 'step_target.json').read_text())
     out = dict(noise_check_passed=passed, effect_error=ee, groups={}, both_subsets={}, step_target_usable=bool(st['usable']),
-               verdict_subsets={k: list(v) for k, v in VERDICT_SUBSETS.items()})
+               verdict_subsets={k: list(v) for k, v in VERDICT_SUBSETS.items()},
+               alternatives={k: dict(subsets={e: list(x) for e, x in v.items()}, groups={}) for k, v in alt.items()})
     pn_res = {g: element_result(pr[pr.group == g]) for g in GROUPS}
     for g in GROUPS:
         res = {el: element_result(vr[(vr.group == g) & (vr.element == el)]) for el in ('bouton', 'claw', 'step_on', 'step_off')}
         out['groups'][g] = dict(verdict=group_verdict(res, ee[g]), elements=res, pn=pn_res[g])
         rb = {el: element_result(vb[(vb.group == g) & (vb.element == el)]) for el in ('bouton', 'claw', 'step_on', 'step_off')}
         out['both_subsets'][g] = dict(verdict=group_verdict(rb, ee[g]), elements=rb)
+        for k, x in va.items():
+            ra = {el: element_result(x[(x.group == g) & (x.element == el)]) for el in ('bouton', 'claw', 'step_on', 'step_off')}
+            out['alternatives'][k]['groups'][g] = dict(verdict=group_verdict(ra, ee[g]), elements=ra)
     out['d1_due'] = bool(st['usable'])
     out['d2_due'] = bool(any(v['verdict'] == 'upstream' and v['elements']['bouton']['differs'] for v in out['groups'].values())
                          or any(v['differs'] for v in pn_res.values()))
@@ -1999,8 +2011,8 @@ def comparison_table() -> None:
           '| stage | subset | share of the spike signal | APL | reading | ' + ' | '.join(TABLE_GROUP_HEAD[g] for g in TABLE_GROUPS) + ' |',
           '|---|---|---:|---|---|' + '---:|' * len(TABLE_GROUPS)]
     for stage, subsets, shares, readings in (('pn', ('shared', 'all'), (0.0,), ('change', 'rate', 'minsub')),
-                                             ('bouton', ('shared', 'all'), (0.0,), MODEL_READINGS),
-                                             ('claw', ('all', 'shared'), CLAW_SPIKE_SHARES, MODEL_READINGS),
+                                             ('bouton', ('shared', 'all', 'input'), (0.0,), MODEL_READINGS),
+                                             ('claw', ('all', 'shared', 'input'), CLAW_SPIKE_SHARES, MODEL_READINGS),
                                              ('soma', ('all',), (0.0,), ('cal_pearson', 'cal_cosine', 'raw_pearson', 'raw_cosine'))):
         for subset in subsets:
             for share in shares:
@@ -2039,7 +2051,7 @@ def comparison_table() -> None:
     for step in ('on', 'off'):
         for soma in (SOMA_STEP_READING,) + SOMA_STEP_BESIDE:
             for sub, sh, rd in (('all', 0.0, 'session_z'), ('all', 0.0, 'rate'), ('all', 0.0, 'noisy_nr'), ('all', 0.25, 'session_z'),
-                                ('all', 0.5, 'session_z'), ('shared', 0.0, 'session_z')):
+                                ('all', 0.5, 'session_z'), ('shared', 0.0, 'session_z'), ('input', 0.0, 'session_z')):
                 if soma != SOMA_STEP_READING and (sub, sh, rd) != ('all', 0.0, 'session_z'):
                     continue
                 x = sg[(sg.step == step) & (sg.soma == soma) & (sg.subset == sub) & (sg.share == sh) & (sg.reading == rd)]
@@ -2070,7 +2082,8 @@ def comparison_table() -> None:
           f"subset); the model's steps with the somata under the calibrated readout (Pearson) against Yang's control flies "
           f"and APL output blocked (TNT) minus the claws.", '',
           '| group | verdict | boutons | claws | step with APL on | step without APL | PN stage (beside) | error in the effect '
-          '| verdict with both subsets as readings |', '|---|---|---|---|---|---|---|---:|---|']
+          '| with both subsets as readings | claws of the 36 input glomeruli | claws of the 28 shared glomeruli |',
+          '|---|---|---|---|---|---|---|---:|---|---|---|']
 
     def el(e):
         return f"{e['n_differ']}/{e['n_readings']}" + (' differs' if e['differs'] else ' mixed' if e['mixed'] else '')
@@ -2078,7 +2091,9 @@ def comparison_table() -> None:
         x = v['groups'][g]
         L.append(f"| {GROUP_NAMES[g]} | {x['verdict']} | {el(x['elements']['bouton'])} | {el(x['elements']['claw'])} | "
                  f"{el(x['elements']['step_on'])} | {el(x['elements']['step_off'])} | {el(x['pn'])} | "
-                 f"{_f(v['effect_error'][g], '+.3f')} | {v['both_subsets'][g]['verdict']} |")
+                 f"{_f(v['effect_error'][g], '+.3f')} | {v['both_subsets'][g]['verdict']} | "
+                 f"{v['alternatives']['claws_input']['groups'][g]['verdict']} ({el(v['alternatives']['claws_input']['groups'][g]['elements']['claw'])}) | "
+                 f"{v['alternatives']['claws_shared']['groups'][g]['verdict']} ({el(v['alternatives']['claws_shared']['groups'][g]['elements']['claw'])}) |")
     L += ['', 'Cells: readings in which the element differs (all of the rule\'s three conditions) / readings read.', '',
           '### The comparisons behind it (primary subsets; model population against the flies)', '',
           '| element | group | model reading | flies | share | model | flies [90 %] | wirings on the side | differs |',
@@ -2202,6 +2217,16 @@ def figures() -> None:
         mv = [np.nan] + [float(sm[(sm.stage == st) & (sm.subset == sub) & (sm.share == sh) & (sm.cond == cond) &
                                   (sm.reading == rd) & (sm.wiring == 'population')][g].iloc[0]) for _, _, (st, sub, sh, cond, rd), _ in stages[1:]]
         ax.plot(x + 0.08, mv, 's--', color='#d9480f', lw=1.2, ms=5, label='model, population of 8 (dots: wirings)')
+        for sub, mk, lab in (('input', '^', "model claws / boutons of the 36 input glomeruli"),
+                             ('shared', 'D', "model claws of the 28 shared glomeruli")):
+            for i, st in ((2, 'bouton'), (3, 'claw')):
+                if st == 'bouton' and sub == 'shared':
+                    continue
+                y = sm[(sm.stage == st) & (sm.subset == sub) & (sm.share == 0.0) & (sm.cond == 'on') & (sm.reading == 'session_z')
+                       & (sm.wiring == 'population')][g]
+                if len(y):
+                    ax.plot([i + 0.22], [float(y.iloc[0])], mk, mfc='none', color='#d9480f', ms=6,
+                            label=lab if (g == 'ester' and i == 3) else None)
         ax.set_xticks(x)
         ax.set_xticklabels([s[0] for s in stages], rotation=35, ha='right', fontsize=8)
         ax.set_title(GROUP_NAMES[g], fontsize=10)
