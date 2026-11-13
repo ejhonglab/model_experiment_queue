@@ -302,14 +302,14 @@ def cos_dist(x: np.ndarray) -> np.ndarray:
     return (1.0 - c)[_iu()]
 
 
-def mean_dist(mats: Sequence[np.ndarray]) -> np.ndarray:
-    """The mean over recordings of `cos_dist` (NaN-aware: a recording with a silent odor leaves its pairs out)."""
-    return np.nanmean(np.stack([cos_dist(m) for m in mats]), axis=0)
+def rec_dist(mats: Sequence[np.ndarray]) -> np.ndarray:
+    """`cos_dist` of each recording (recordings x 120, triu order)."""
+    return np.stack([cos_dist(m) for m in mats]) if len(mats) else np.full((0, len(_iu()[0])), np.nan)
 
 
-def mean_dist_noise_free(trials: Sequence[np.ndarray]) -> np.ndarray:
-    """The mean over recordings of the noise-free distances (`H.noise_free_pair_distances`, products of different
-    repeats) of thresholded-convention single trials, in triu order."""
+def rec_dist_noise_free(trials: Sequence[np.ndarray]) -> np.ndarray:
+    """The noise-free distances (`H.noise_free_pair_distances`, products of different repeats) of each recording's
+    thresholded-convention single trials (recordings x 120, triu order)."""
     i, j = _iu()
     o = H.APL16_ODORS
     keys = [(o[a], o[b]) for a, b in zip(i, j)]
@@ -318,7 +318,28 @@ def mean_dist_noise_free(trials: Sequence[np.ndarray]) -> np.ndarray:
         s = H.noise_free_pair_distances(tr, H.APL16_ODORS, values='graded')
         s.index = [tuple(x) for x in s.index]
         out.append(np.array([s.get(k, s.get(k[::-1], np.nan)) for k in keys], dtype=float))
-    return np.nanmean(np.stack(out), axis=0)
+    return np.stack(out) if out else np.full((0, len(keys)), np.nan)
+
+
+def _nanmean_rows(r: np.ndarray) -> np.ndarray:
+    """The mean over recordings (rows), NaN-aware: a recording with a silent odor leaves its pairs out."""
+    if r.shape[0] == 0:
+        return np.full(r.shape[1], np.nan)
+    with np.errstate(invalid='ignore'):
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', RuntimeWarning)
+            return np.nanmean(r, axis=0)
+
+
+def mean_dist(mats: Sequence[np.ndarray]) -> np.ndarray:
+    """The mean over recordings of `cos_dist`."""
+    return _nanmean_rows(rec_dist(mats))
+
+
+def mean_dist_noise_free(trials: Sequence[np.ndarray]) -> np.ndarray:
+    """The mean over recordings of `rec_dist_noise_free`."""
+    return _nanmean_rows(rec_dist_noise_free(trials))
 
 
 def binarize(mats: Sequence[np.ndarray]) -> List[np.ndarray]:
@@ -330,7 +351,9 @@ def binarize(mats: Sequence[np.ndarray]) -> List[np.ndarray]:
 
 class Reading:
     """The flies' recordings of one unit and one reading ('trial_means', 'noise_free' or 'binary'), restricted to the
-    given recordings (default all), with the data's effect in the thresholded convention and `predict(form, ...)`."""
+    given recordings (default all; an empty list of control recordings leaves the data's side out), with the data's
+    effect in the thresholded convention, the per-recording distances (`rec_on`, `rec_off`: recordings x 120) and
+    `predict(form, ...)` / `predict_rows(form, c)`."""
 
     def __init__(self, unit: str = 'z', reading: str = 'trial_means', ctrl: Optional[Sequence[tuple]] = None,
                  tnt: Optional[Sequence[tuple]] = None):
@@ -348,18 +371,18 @@ class Reading:
             self.tr_ctrl = [tr['TNT3c'][k] for k in self.ctrl_keys]
             self.tr_tnt = [tr['TNT'][k] for k in self.tnt_keys]
             self.rate1 = _rate(list(trial_arrays(unit)['TNT3c'].values()), self.crit1)
-            d_on = mean_dist_noise_free([thresholded(x, self.crit1) for x in self.tr_ctrl])
-            d_off = mean_dist_noise_free([thresholded(x, self.crit1) for x in self.tr_tnt])
+            self.rec_on = rec_dist_noise_free([thresholded(x, self.crit1) for x in self.tr_ctrl])
+            self.rec_off = rec_dist_noise_free([thresholded(x, self.crit1) for x in self.tr_tnt])
         elif reading in ('trial_means', 'binary'):
             on = [thresholded(m, self.crit) for m in self.tm_ctrl]
             off = [thresholded(m, self.crit) for m in self.tm_tnt]
             if reading == 'binary':
                 on, off = binarize(on), binarize(off)
-            d_on, d_off = mean_dist(on), mean_dist(off)
+            self.rec_on, self.rec_off = rec_dist(on), rec_dist(off)
         else:
             raise ValueError(reading)
-        self.d_on, self.d_off = d_on, d_off
-        self.data = d_on - d_off
+        self.d_on, self.d_off = _nanmean_rows(self.rec_on), _nanmean_rows(self.rec_off)
+        self.data = self.d_on - self.d_off
 
     def inhibitions(self, form, A_perm=None, B_perm=None) -> List[np.ndarray]:
         """The inhibition (before c) of each TNT recording: a Form, ('similar', power), or with permuted strengths /
@@ -376,25 +399,30 @@ class Reading:
                                       None if B_perm is None else B_perm[n]))
         return out
 
-    def predict(self, form, kind: Optional[str] = None, A_perm=None, B_perm=None, c: Optional[float] = None
-                ) -> Tuple[np.ndarray, float]:
-        """(the predicted per-pair effect in triu order, c): the form on the TNT recordings at the control flies' rate
-        (or at the given c), its distances minus the same recordings' own."""
+    def predict_rows(self, form, kind: Optional[str] = None, A_perm=None, B_perm=None, c: Optional[float] = None
+                     ) -> Tuple[np.ndarray, float]:
+        """(the reduced TNT recordings' distances, recordings x 120, c): the form on the TNT recordings at the control
+        flies' rate (or at the given c)."""
         kind = form.kind if isinstance(form, Form) else (kind or 'subtractive')
         inhs = self.inhibitions(form, A_perm, B_perm)
         if self.reading == 'noise_free':
             if c is None:
                 c = fit_c(self.tr_tnt, [np.broadcast_to(i, x.shape) for i, x in zip(inhs, self.tr_tnt)], self.crit1, self.rate1)
             red = [apply_form(x, c, i[None], kind, self.crit1) for x, i in zip(self.tr_tnt, inhs)]
-            d = mean_dist_noise_free(red)
-        else:
-            if c is None:
-                c = fit_c(self.tm_tnt, inhs, self.crit, self.rate)
-            red = [apply_form(m, c, i, kind, self.crit) for m, i in zip(self.tm_tnt, inhs)]
-            if self.reading == 'binary':
-                red = binarize(red)
-            d = mean_dist(red)
-        return d - self.d_off, c
+            return rec_dist_noise_free(red), c
+        if c is None:
+            c = fit_c(self.tm_tnt, inhs, self.crit, self.rate)
+        red = [apply_form(m, c, i, kind, self.crit) for m, i in zip(self.tm_tnt, inhs)]
+        if self.reading == 'binary':
+            red = binarize(red)
+        return rec_dist(red), c
+
+    def predict(self, form, kind: Optional[str] = None, A_perm=None, B_perm=None, c: Optional[float] = None
+                ) -> Tuple[np.ndarray, float]:
+        """(the predicted per-pair effect in triu order, c): the form on the TNT recordings at the control flies' rate
+        (or at the given c), its distances minus the same recordings' own."""
+        rows, c = self.predict_rows(form, kind, A_perm, B_perm, c)
+        return _nanmean_rows(rows) - self.d_off, c
 
     def predict_oracle(self, kind: str) -> np.ndarray:
         """The per-odor oracle's predicted effect (each odor's fraction set to the control flies' of these recordings;
@@ -710,14 +738,418 @@ def part_a(out: Path) -> dict:
     return verdict_a(out)
 
 
+# ---------------------------------------------------------------------------
+# part B: the models' responses through the same forms
+
+RAW_CRIT = 1.5      # a model response is two or more spikes (counts are integers: above 1.5)
+
+
+def _odor_matrix(counts: pd.DataFrame) -> np.ndarray:
+    """KCs x the 16 APL odors (APL16 order) of a model's spike counts (columns abbreviated)."""
+    c = H.abbrev_columns(counts)
+    return c[list(H.APL16_ODORS)].to_numpy(dtype=float)
+
+
+class ModelResponses:
+    """One model's APL-on and APL-off responses read as the flies' are in part A: 'raw' (spike counts, a response two
+    or more spikes) or 'cal' (E65's calibrated saturating readout n / (n + K), K set on the run's APL-on counts, the
+    criterion the readout of 1.5 spikes); values not above the criterion set to 0."""
+
+    def __init__(self, o: Dict[str, tuple], readout: str, K: Optional[float] = None, label: str = ''):
+        from experiments import E83_cross_wiring_fit as E
+        self.label, self.readout = label, readout
+        on, off = _odor_matrix(o['on'][1]), _odor_matrix(o['off'][1])
+        if readout == 'raw':
+            self.crit = RAW_CRIT
+        elif readout == 'cal':
+            K = E.readout_K(o) if K is None else K
+            self.K = K
+            on, off = on / (on + K), off / (off + K)
+            self.crit = RAW_CRIT / (RAW_CRIT + K)
+        else:
+            raise ValueError(readout)
+        self.on, self.off = on, off
+        self.rate_on = float((on > self.crit).mean())
+        self.d_on = cos_dist(thresholded(on, self.crit))
+        self.d_off = cos_dist(thresholded(off, self.crit))
+
+    def form(self, form, c: Optional[float] = None) -> Tuple[np.ndarray, float]:
+        """(the APL-off distances after the form, c): c set so that the APL-off response rate after the form is the
+        model's own APL-on rate."""
+        kind = form.kind if isinstance(form, Form) else 'subtractive'
+        if isinstance(form, tuple) and form[0] == 'similar':
+            inh = similar_inhibition(self.off, self.crit, form[1])
+        else:
+            inh = inhibition(self.off, form, self.crit)
+        if c is None:
+            c = fit_c([self.off], [inh], self.crit, self.rate_on)
+        return cos_dist(apply_form(self.off, c, inh, kind, self.crit)), c
+
+
+def model_families() -> Dict[str, List[Tuple[str, str, str]]]:
+    """{'b2': [(wiring, folder, tag)] the breadth-2 APL-effect fits of the eight wirings (E72 part B, E83's members),
+    'fc': the firing-ceiling family (E69's fit at the literature setting on the real wiring, E72 part G's on P1, P2,
+    M1)}."""
+    from experiments import E72_wiring_population as E72
+    from experiments import E83_cross_wiring_fit as E
+    b2 = [(w, f, t) for w, (f, t) in E.members().items()]
+    fc = E72.new_fit_members(prefix_tag=E72.G_SUFFIX, real_folder=E72.G_REAL[0], real_tag=E72.G_REAL[1], draws=E72.G_DRAWS)
+    return {'b2': b2, 'fc': [tuple(x) for x in fc]}
+
+
+def _load(folder: str, tag: str) -> Dict[str, tuple]:
+    from experiments import E72_wiring_population as E72
+    o = E72.load_fit(folder, tag)
+    if o is None:
+        raise RuntimeError(f'no saved outputs for {folder}:{tag}')
+    return o
+
+
+def chosen_form(out: Path) -> Form:
+    """The form A2 chose: of the global forms chosen on half X in the four held-out readings in z with the trial noise
+    removed (the reading the deterministic models are set against), the one chosen most often, ties broken by the lower
+    mean pattern part on the unseen halves."""
+    ho = pd.read_csv(out / 'held_out.csv')
+    g = ho[(ho.unit == 'z') & (ho.reading == 'noise_free')]
+    agg = g.groupby('chosen_form').agg(n=('chosen_form', 'size'), pat=('chosen_pattern', 'mean')).reset_index()
+    best = agg.sort_values(['n', 'pat'], ascending=[False, True]).iloc[0].chosen_form
+    r = g[g.chosen_form == best].iloc[0]
+    return Form(r.chosen_kind, float(r.chosen_q), float(r.chosen_p), r.chosen_breadth if isinstance(r.chosen_breadth, str) and r.chosen_breadth else 'count')
+
+
+def _pop(ds: Sequence[np.ndarray]) -> np.ndarray:
+    return np.nanmean(np.stack(ds), axis=0)
+
+
 def part_b(out: Path) -> dict:
-    """The models' APL-off responses through the forms: model_forms.csv, two_by_two.csv."""
-    raise NotImplementedError
+    """The models through the forms (no simulations): each family's wirings and population, raw and under the
+    calibrated readout, with the model's own APL, the uniform form, the form A2 chose, the family's own exponent (q 0,
+    p 2) and the best of the grid for that model (by pattern part against the data), scored against the data's effect
+    with the trial noise removed and as trial means (z); the form nearest the model's own APL (the grid form whose APL-off
+    result is closest, rms over pairs, to the model's APL-on distances) applied to the flies; the two-by-two and B's
+    verdict. model_forms.csv, two_by_two.csv, verdict_B.json."""
+    import json
+    f_ch = chosen_form(out)
+    forms = grid()
+    data = {r: Reading('z', r) for r in ('noise_free', 'trial_means')}
+    rows, tb = [], []
+    vb = {}
+    for fam, members in model_families().items():
+        for readout in ('raw', 'cal'):
+            mrs = [ModelResponses(_load(f, t), readout, label=w) for w, f, t in members]
+            res = {}   # (name, unit) -> effect vector
+            per = {'own': [], 'uniform': [], 'chosen': [], 'q0_p2': []}
+            for mr in mrs:
+                per['own'].append((mr.d_on, mr.d_off))
+                for lab, f in (('uniform', UNIFORM), ('chosen', f_ch), ('q0_p2', Form('subtractive', 0.0, 2.0, 'count'))):
+                    per[lab].append((mr.form(f)[0], mr.d_off))
+            for lab, pairs in per.items():
+                for n, (d1, d0) in enumerate(pairs):
+                    res[(lab, mrs[n].label)] = d1 - d0
+                res[(lab, 'population')] = _pop([a for a, _ in pairs]) - _pop([b for _, b in pairs])
+            # the best of the grid for the population, and the form nearest the model's own APL
+            pop_on = _pop([mr.d_on for mr in mrs])
+            pop_off = _pop([mr.d_off for mr in mrs])
+            best, best_pat, near, near_rms = None, np.inf, None, np.inf
+            grid_d = {}
+            for f in forms:
+                d = _pop([mr.form(f)[0] for mr in mrs])
+                grid_d[f] = d
+                pat = scores(d - pop_off, data['noise_free'].data)['pattern']
+                if pat < best_pat:
+                    best, best_pat = f, pat
+                rms = float(np.sqrt(np.nanmean((d - pop_on) ** 2)))
+                if rms < near_rms:
+                    near, near_rms = f, rms
+            res[('best_grid', 'population')] = grid_d[best] - pop_off
+            for (lab, unit), eff in res.items():
+                for rname, rd in data.items():
+                    rows.append(dict(family=fam, readout=readout, inhibition=lab, unit=unit, data_reading=rname,
+                                     form={'own': "the model's own APL", 'uniform': UNIFORM.name, 'chosen': f_ch.name,
+                                           'q0_p2': 'sub_q0_p2_count', 'best_grid': best.name}[lab], **scores(eff, rd.data)))
+            # the flies' side of the two-by-two
+            flies = {}
+            for rname, rd in data.items():
+                flies[('uniform', rname)] = scores(rd.predict(UNIFORM)[0], rd.data)
+                flies[('chosen', rname)] = scores(rd.predict(f_ch)[0], rd.data)
+                flies[('nearest_to_model', rname)] = scores(rd.predict(near)[0], rd.data)
+            for rname, rd in data.items():
+                for who, lab, sc in (
+                        ('flies', 'uniform', flies[('uniform', rname)]), ('flies', 'chosen', flies[('chosen', rname)]),
+                        ('flies', 'nearest_to_model', flies[('nearest_to_model', rname)]),
+                        ('model', 'uniform', scores(res[('uniform', 'population')], rd.data)),
+                        ('model', 'chosen', scores(res[('chosen', 'population')], rd.data)),
+                        ('model', 'own', scores(res[('own', 'population')], rd.data)),
+                        ('model', 'best_grid', scores(res[('best_grid', 'population')], rd.data))):
+                    tb.append(dict(family=fam, readout=readout, data_reading=rname, responses=who, inhibition=lab,
+                                   form={'uniform': UNIFORM.name, 'chosen': f_ch.name, 'nearest_to_model': near.name,
+                                         'own': "the model's own APL", 'best_grid': best.name}[lab],
+                                   nearest_rms=near_rms if lab == 'nearest_to_model' else np.nan, **sc))
+            if fam == 'b2':
+                nf = data['noise_free'].data
+                own = scores(res[('own', 'population')], nf)['pattern']
+                mch = scores(res[('chosen', 'population')], nf)['pattern']
+                fch = flies[('chosen', 'noise_free')]['pattern']
+                lower = sum(scores(res[('chosen', mr.label)], nf)['pattern'] <= scores(res[('own', mr.label)], nf)['pattern'] - B_FORM_GAIN
+                            for mr in mrs)
+                vb[readout] = dict(own=own, model_chosen=mch, flies_chosen=fch, n_wirings_chosen_lower=int(lower),
+                                   in_responses=bool(own - mch < B_RESPONSES_NOT and fch <= own - B_FLIES_GAIN),
+                                   in_form=bool(mch <= own - B_FORM_GAIN and lower >= B_FORM_WIRINGS),
+                                   nearest_form=near.name, nearest_rms=near_rms, best_grid=best.name)
+            print(f'B {fam} {readout}: own {scores(res[("own", "population")], data["noise_free"].data)["pattern"]:.4f} '
+                  f'chosen {scores(res[("chosen", "population")], data["noise_free"].data)["pattern"]:.4f} '
+                  f'best {best.name} {best_pat:.4f} nearest {near.name} {near_rms:.4f}', flush=True)
+    pd.DataFrame(rows).to_csv(out / 'model_forms.csv', index=False)
+    pd.DataFrame(tb).to_csv(out / 'two_by_two.csv', index=False)
+    v = dict(chosen_form=f_ch.name, by_readout=vb,
+             verdict=('in the responses' if any(x['in_responses'] for x in vb.values()) and not any(x['in_form'] for x in vb.values())
+                      else 'in the form' if any(x['in_form'] for x in vb.values()) and not any(x['in_responses'] for x in vb.values())
+                      else 'both'))
+    (out / 'verdict_B.json').write_text(json.dumps(v, indent=1) + '\n')
+    (out / 'provenance_B.json').write_text(json.dumps(dict(script='experiments/E87_inhibition_form.py', part='B', **H.code_commits(),
+        families={k: [list(x) for x in v2] for k, v2 in model_families().items()}), indent=1, default=str) + '\n')
+    return v
+
+
+# ---------------------------------------------------------------------------
+# part C: a target that needs no APL
+
+def _tnt_flies(keys: Sequence[tuple]) -> List[tuple]:
+    return sorted({(k[0], k[1]) for k in keys})
+
+
+def _halves_of_flies(keys: Sequence[tuple], rng) -> Tuple[np.ndarray, np.ndarray]:
+    """Row indices of `keys` split by fly (a fly's hemispheres together) into two halves at random."""
+    flies = _tnt_flies(keys)
+    perm = [flies[i] for i in rng.permutation(len(flies))]
+    a = set(perm[:len(perm) // 2])
+    ia = np.array([n for n, k in enumerate(keys) if (k[0], k[1]) in a])
+    ib = np.array([n for n, k in enumerate(keys) if (k[0], k[1]) not in a])
+    return ia, ib
+
+
+def _sb_ceiling(r: float) -> float:
+    return float(np.sqrt(2 * r / (1 + r))) if r > 0 else float('nan')
+
+
+def within_target_stats(unit: str, reading: str, form: Form, tnt: Optional[Sequence[tuple]] = None,
+                        n_boot: int = 1000, n_split: int = 200, seed: int = 0) -> dict:
+    """The effect of `form` within the recordings with APL output blocked (its distances minus the recordings' own,
+    the form's c at the control flies' rate): the target (the mean over recordings), its floor (the pattern part and
+    loss of the mean over resampled recordings against it, c held) and the agreement of two halves of the flies (ρ,
+    Spearman-Brown-corrected to the ceiling). Resampling is over the per-recording rows."""
+    rd = Reading(unit, reading, ctrl=[], tnt=tnt)
+    rows, c = rd.predict_rows(form)
+    eff = rows - rd.rec_off
+    t = _nanmean_rows(eff)
+    rng = np.random.default_rng(seed)
+    n = eff.shape[0]
+    fl_p, fl_l = [], []
+    for _ in range(n_boot):
+        e = _nanmean_rows(eff[rng.integers(0, n, n)]) - t
+        ok = ~np.isnan(e)
+        fl_l.append(float(np.sqrt(np.mean(e[ok] ** 2))))
+        fl_p.append(float(np.std(e[ok])))
+    rs = []
+    for _ in range(n_split):
+        ia, ib = _halves_of_flies(rd.tnt_keys, rng)
+        ta, tb = _nanmean_rows(eff[ia]), _nanmean_rows(eff[ib])
+        ok = ~(np.isnan(ta) | np.isnan(tb))
+        rs.append(float(H.spearman(pd.Series(ta[ok]), pd.Series(tb[ok]))))
+    r = float(np.nanmean(rs))
+    return dict(target=t, c=c, floor_pattern=float(np.mean(fl_p)), floor_loss=float(np.mean(fl_l)), half_rho=r,
+                ceiling=_sb_ceiling(r), mean=float(np.nanmean(t)), sd=float(np.nanstd(t)), n_tnt=n)
+
+
+def main_target_stats(unit: str, reading: str, n_boot: int = 1000, n_split: int = 200, seed: int = 0) -> dict:
+    """The main target in the same convention (the thresholded data effect): the floor of its pattern part (the
+    recordings of both genotypes resampled) and the Spearman-Brown ceiling of two halves of each genotype's flies."""
+    rd = Reading(unit, reading)
+    rng = np.random.default_rng(seed)
+    nc, nt = rd.rec_on.shape[0], rd.rec_off.shape[0]
+    fl = []
+    for _ in range(n_boot):
+        e = (_nanmean_rows(rd.rec_on[rng.integers(0, nc, nc)]) - _nanmean_rows(rd.rec_off[rng.integers(0, nt, nt)])) - rd.data
+        ok = ~np.isnan(e)
+        fl.append(float(np.std(e[ok])))
+    rs = []
+    for _ in range(n_split):
+        ca, cb = _halves_of_flies(rd.ctrl_keys, rng)
+        ta, tb = _halves_of_flies(rd.tnt_keys, rng)
+        da = _nanmean_rows(rd.rec_on[ca]) - _nanmean_rows(rd.rec_off[ta])
+        db = _nanmean_rows(rd.rec_on[cb]) - _nanmean_rows(rd.rec_off[tb])
+        ok = ~(np.isnan(da) | np.isnan(db))
+        rs.append(float(H.spearman(pd.Series(da[ok]), pd.Series(db[ok]))))
+    r = float(np.nanmean(rs))
+    return dict(floor_pattern=float(np.mean(fl)), half_rho=r, ceiling=_sb_ceiling(r), mean=float(np.nanmean(rd.data)),
+                sd=float(np.nanstd(rd.data)))
+
+
+def _model_within(mr: 'ModelResponses', form) -> np.ndarray:
+    return mr.form(form)[0] - mr.d_off
+
+
+def _e85_model_flies() -> List[Tuple[str, Dict[str, tuple]]]:
+    """E85's 72 model flies (B1: each wiring with each ORN fly's reproducible input, both response rates held), from
+    outputs/E85_orn_fly_population/B/ (viki's)."""
+    d = H.outputs_dir('E85_orn_fly_population') / 'B'
+    out = []
+    for p in sorted(d.glob('B1[ST]_repro_f*_*_on_spike_counts.parquet')):
+        tag = p.name[:-len('_on_spike_counts.parquet')]
+        q = d / f'{tag}_acute_off_spike_counts.parquet'
+        if q.exists():
+            out.append((tag, {'on': (None, pd.read_parquet(p)), 'off': (None, pd.read_parquet(q))}))
+    return out
+
+
+def archive_variants() -> List[Tuple[str, str, Path, Path]]:
+    """Every archived variant with APL-on and acute APL-off spike counts on the 16 APL odors: [(folder, variant, on, off)],
+    E86's excepted."""
+    root = H.shared_dir() / 'data' / 'model_outputs'
+    out = []
+    for off in sorted(root.rglob('*_acute_off_spike_counts.parquet')):
+        rel = off.relative_to(root)
+        folder = rel.parts[0]
+        if folder in ('inputs', 'E86_reduced_input_candidate'):
+            continue
+        on = off.with_name(off.name.replace('_acute_off_spike_counts.parquet', '_on_spike_counts.parquet'))
+        if on.exists():
+            out.append((folder, off.name[:-len('_acute_off_spike_counts.parquet')], on, off))
+    return out
 
 
 def part_c(out: Path) -> dict:
-    """The target without APL (apl_free_target.csv), the models against it, the archive scan (archive_scan.csv)."""
-    raise NotImplementedError
+    """C1 (apl_free_target.csv: the within-fly effect of the uniform form, the form A2 chose and q 1 / p 1, as trial
+    means and with the trial noise removed, in both units, with the six typical recordings beside, its floor, the halves'
+    agreement and ceiling, beside the main target's in the same convention); C2 (apl_free_models.csv: both families'
+    wirings and populations and E85's 72 model flies against it); C3 (archive_scan.csv: every archived variant); C's
+    verdict (verdict_C.json)."""
+    import json
+    from experiments import E77_input_side_common_error as E77
+    f_ch = chosen_form(out)
+    forms = {'uniform': UNIFORM, 'chosen': f_ch, 'q1_p1': Form('subtractive', 1.0, 1.0, 'count')}
+    rows, tg = [], {}
+    strong = [tuple(k) for k in E77.STRONG_TNT]
+    for unit in UNITS:
+        for reading in ('trial_means', 'noise_free'):
+            mt = main_target_stats(unit, reading)
+            for lab, f in forms.items():
+                for subset in ('all', 'six_typical'):
+                    tnt = None if subset == 'all' else [k for k in trialmean_mats(unit)['TNT'] if k not in strong]
+                    st = within_target_stats(unit, reading, f, tnt=tnt)
+                    if subset == 'all':
+                        tg[(unit, reading, lab)] = st['target']
+                    rows.append(dict(unit=unit, reading=reading, form_label=lab, form=f.name, subset=subset,
+                                     **{k: v for k, v in st.items() if k != 'target'},
+                                     main_floor_pattern=mt['floor_pattern'], main_ceiling=mt['ceiling'], main_half_rho=mt['half_rho'],
+                                     usable=bool(st['floor_pattern'] <= C_FLOOR_RATIO * mt['floor_pattern'] and st['ceiling'] >= C_CEILING)))
+                    print(f'C1 {unit} {reading} {lab} {subset}: floor {st["floor_pattern"]:.4f} (main {mt["floor_pattern"]:.4f}) '
+                          f'ceiling {st["ceiling"]:.3f} (main {mt["ceiling"]:.3f})', flush=True)
+    c1 = pd.DataFrame(rows)
+    c1.to_csv(out / 'apl_free_target.csv', index=False)
+    pd.concat([pd.DataFrame(dict(unit=u, reading=r, form_label=l, effect=_pairs(v))).reset_index() for (u, r, l), v in tg.items()],
+              ignore_index=True).to_csv(out / 'apl_free_target_pairs.csv', index=False)
+    # C2: the models against it (z, both readings, the chosen form)
+    mrows = []
+    fams = model_families()
+    for readout in ('raw', 'cal'):
+        for fam, members in fams.items():
+            mrs = [ModelResponses(_load(f, t), readout, label=w) for w, f, t in members]
+            for lab, f in forms.items():
+                effs = [(mr.label, _model_within(mr, f)) for mr in mrs]
+                effs.append(('population', _pop([mr.form(f)[0] for mr in mrs]) - _pop([mr.d_off for mr in mrs])))
+                for unit_lab, e in effs:
+                    for reading in ('trial_means', 'noise_free'):
+                        mrows.append(dict(source=fam, readout=readout, unit=unit_lab, form_label=lab, reading=reading,
+                                          **scores(e, tg[('z', reading, lab)])))
+        flies = _e85_model_flies()
+        if flies:
+            mrs = [ModelResponses(o, readout, label=tag) for tag, o in flies]
+            for lab, f in forms.items():
+                pop = _pop([mr.form(f)[0] for mr in mrs]) - _pop([mr.d_off for mr in mrs])
+                for reading in ('trial_means', 'noise_free'):
+                    mrows.append(dict(source='E85_model_flies', readout=readout, unit='population', form_label=lab, reading=reading,
+                                      **scores(pop, tg[('z', reading, lab)])))
+                    for mr in mrs:
+                        mrows.append(dict(source='E85_model_flies', readout=readout, unit=mr.label, form_label=lab, reading=reading,
+                                          **scores(_model_within(mr, f), tg[('z', reading, lab)])))
+        print(f'C2 {readout}', flush=True)
+    c2 = pd.DataFrame(mrows)
+    c2.to_csv(out / 'apl_free_models.csv', index=False)
+    c3 = archive_scan(out, f_ch, tg)
+    v = dict(chosen_form=f_ch.name,
+             usable={f'{u}_{lab}': bool(c1[(c1.unit == u) & (c1.form_label == lab) & (c1.subset == 'all')].usable.all())
+                     for u in UNITS for lab in forms},
+             n_standout=int(c3.standout.sum()) if len(c3) else 0,
+             standouts=c3[c3.standout][['folder', 'variant']].values.tolist() if len(c3) else [])
+    (out / 'verdict_C.json').write_text(json.dumps(v, indent=1) + '\n')
+    (out / 'provenance_C.json').write_text(json.dumps(dict(script='experiments/E87_inhibition_form.py', part='C', **H.code_commits()),
+                                                      indent=1, default=str) + '\n')
+    return v
+
+
+def archive_scan(out: Path, f_ch: Form, tg: dict) -> pd.DataFrame:
+    """C3: every archived variant (`archive_variants`) through the chosen form against C1's target (z, the trial noise
+    removed, and trial means), raw and under the readout; joined with results/apl_effect/by_variant.csv (its own
+    APL-effect loss and realism); a variant stands out if its pattern part against the target (raw, noise-free) is lower
+    than that of the breadth-2 fit on the same wiring by C_STANDOUT or more, with a mean effect of at least C_MEAN_SHARE of
+    the flies', inside the realism bands. archive_scan.csv."""
+    from experiments import E72_wiring_population as E72
+    rows = []
+    vs = archive_variants()
+    for n, (folder, variant, on, off) in enumerate(vs):
+        try:
+            o = {'on': (None, pd.read_parquet(on)), 'off': (None, pd.read_parquet(off))}
+            cols = list(H.abbrev_columns(o['on'][1]).columns)
+            if not set(H.APL16_ODORS) <= set(cols):
+                continue
+            for readout in ('raw', 'cal'):
+                mr = ModelResponses(o, readout, label=variant)
+                if mr.rate_on <= 0 or not (mr.off > mr.crit).any():
+                    continue
+                e = _model_within(mr, f_ch)
+                row = dict(folder=folder, variant=variant, readout=readout, n_kc=int(mr.off.shape[0]), rate_on=mr.rate_on,
+                           rate_off=float((mr.off > mr.crit).mean()))
+                for reading in ('noise_free', 'trial_means'):
+                    s = scores(e, tg[('z', reading, 'chosen')])
+                    row.update({f'{reading}_{k}': s[k] for k in ('pattern', 'loss', 'mean', 'rho')})
+                rows.append(row)
+        except Exception as ex:   # a malformed file is listed, not fatal
+            rows.append(dict(folder=folder, variant=variant, error=repr(ex)[:200]))
+        if n % 200 == 0:
+            print(f'C3 {n} of {len(vs)}', flush=True)
+    df = pd.DataFrame(rows)
+    bv = pd.read_csv(H.shared_dir() / 'results' / 'apl_effect' / 'by_variant.csv')
+    bv = bv.rename(columns={'tag': 'variant', 'spike_counts_cosine__apl_effect_rmse': 'own_apl_loss',
+                            'spike_counts_cosine__apl_effect_rmse_centered': 'own_apl_pattern'})
+    df = df.merge(bv[['folder', 'variant', 'own_apl_loss', 'own_apl_pattern', 'realism_flag']].drop_duplicates(['folder', 'variant']),
+                  on=['folder', 'variant'], how='left')
+    # the breadth-2 fit on the same wiring
+    ref = {}
+    for w, f, t in model_families()['b2']:
+        ref[w] = (f, t)
+    prefixes = {lab: prefix for lab, prefix in E72.DRAWS}
+
+    def wiring_of(v: str) -> str:
+        for lab, prefix in prefixes.items():
+            if v.startswith(prefix):
+                return lab
+        return 'real' if not v.startswith('wiring-') else ''
+    df['wiring'] = df.variant.astype(str).map(wiring_of)
+    base = {}
+    for w, (f, t) in ref.items():
+        m = df[(df.folder == f) & (df.variant == t) & (df.readout == 'raw')]
+        base[w] = float(m.noise_free_pattern.iloc[0]) if len(m) else np.nan
+    df['b2_same_wiring_pattern'] = df.wiring.map(base)
+    flies_mean = float(np.nanmean(tg[('z', 'noise_free', 'chosen')]))
+    df['standout'] = ((df.readout == 'raw') & (df.noise_free_pattern <= df.b2_same_wiring_pattern - C_STANDOUT)
+                      & (df.noise_free_mean >= C_MEAN_SHARE * flies_mean) & df.realism_flag.isna())
+    df.to_csv(out / 'archive_scan.csv', index=False)
+    ok = df[(df.readout == 'raw') & df.own_apl_loss.notna() & df.noise_free_pattern.notna()]
+    if len(ok) > 2:
+        print(f'C3: {len(df)} rows; ρ of the pattern against the target with the own APL-effect loss '
+              f'{H.spearman(ok.noise_free_pattern, ok.own_apl_loss):.2f}; standouts {int(df.standout.sum())}', flush=True)
+    return df
 
 
 def part_d1(out: Path) -> dict:
