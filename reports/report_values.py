@@ -220,7 +220,7 @@ def format_value(value: Any, spec: Optional[str]) -> str:
         s = format(float(value) if not spec.endswith('d') else int(round(float(value))), spec)
     else:
         s = str(value)
-    if s.startswith('-') and float(s) == 0:
+    if s.startswith('-') and not any(c in '123456789' for c in s.split('e')[0].split('E')[0]):
         s = s[1:]
     return s.replace('-', '−')
 
