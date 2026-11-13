@@ -1532,13 +1532,14 @@ def _realism_own(folder: str, variant: str, on: str, off: str, bv: pd.DataFrame)
 
 def c_jobs() -> List[tuple]:
     """Every archived variant (E87's `archive_variants`, E86's excepted) and E85's 72 model flies (viki's
-    outputs/E85_orn_fly_population/B/)."""
+    outputs/E85_orn_fly_population/B/, where the archive does not already hold them)."""
     jobs = [(f, v, 'archive', str(on), str(off)) for f, v, on, off in E87.archive_variants()]
+    have = {(j[0], j[1]) for j in jobs}
     d = H.outputs_dir('E85_orn_fly_population') / 'B'
     for p in sorted(d.glob('B1[ST]_repro_f*_*_on_spike_counts.parquet')):
         tag = p.name[:-len('_on_spike_counts.parquet')]
         q = d / f'{tag}_acute_off_spike_counts.parquet'
-        if q.exists():
+        if q.exists() and ('E85_orn_fly_population', tag) not in have:   # archived ones are scanned once
             jobs.append(('E85_orn_fly_population', tag, 'E85_model_flies', str(p), str(q)))
     return jobs
 
@@ -1572,6 +1573,8 @@ def score_c(out: Path, df: Optional[pd.DataFrame] = None) -> dict:
     from experiments import E83_cross_wiring_fit as E
     if df is None:
         df = pd.read_csv(out / 'archive_scan_raw.csv')
+    # a run scanned from two places (the archive and an experiment's outputs) is kept once
+    df = df.drop_duplicates(['folder', 'variant', 'reading'], keep='first').reset_index(drop=True)
     fams = E87.model_families()
     fam_of = {(f, t): fam for fam, mem in fams.items() for _, f, t in mem}
     df['family'] = [fam_of.get((f, v), 'E85 model flies' if s == 'E85_model_flies' else '')
@@ -1604,8 +1607,13 @@ def score_c(out: Path, df: Optional[pd.DataFrame] = None) -> dict:
     df['ester_L_no_further'] = (df.chg_L_ester - df.flies_chg_L_ester).abs() <= (df.base_chg_L_ester - df.flies_chg_L_ester).abs()
     for k, f in (('ester_R', 'chg_R_ester'), ('ester_L', 'chg_L_ester'), ('alcohol_L', 'chg_L_alcohol')):
         df[f'{k}_towards_flies'] = (df[f] - df[f'flies_{f}']).abs() < (df[f'base_{f}'] - df[f'flies_{f}']).abs()
-    df['cand'] = df.reading.isin(['r1', 'r3raw']) & ((df.bin_gain >= C_BIN_GAIN)
-                                                      | ((df.alcohol_L_progress >= C_HALFWAY) & df.ester_L_no_further))
+    # "at least halfway from the baseline's to the flies'": the variant's change ends within (1 - C_HALFWAY) of the
+    # baseline's distance from the flies' (progress 0.5 to 1.5; an overshoot past that is not counted)
+    df['alcohol_L_halfway'] = ((df.chg_L_alcohol - df.flies_chg_L_alcohol).abs()
+                               <= (1 - C_HALFWAY) * (df.base_chg_L_alcohol - df.flies_chg_L_alcohol).abs())
+    df['cand'] = df.reading.isin(['r1', 'r3raw']) & ((df.bin_gain >= C_BIN_GAIN) | (df.alcohol_L_halfway & df.ester_L_no_further))
+    df['cand_by'] = np.where(df.cand & (df.bin_gain >= C_BIN_GAIN), 'binarized pattern part',
+                             np.where(df.cand, 'alcohol co-response change', ''))
     roots = H.shared_dir() / 'data' / 'model_outputs'
     jobs = {(f, v): (on, off) for f, v, s, on, off in c_jobs()}
     real = {}
@@ -1637,8 +1645,11 @@ def score_c(out: Path, df: Optional[pd.DataFrame] = None) -> dict:
     st = df[df.standout]
     v = dict(n_variants=int(df[['folder', 'variant']].drop_duplicates().shape[0]), n_errors=int(df.error.notna().sum()) if 'error' in df else 0,
              n_candidates=int(df.cand.sum()), n_standout=int(len(st)),
-             standouts=st[['folder', 'variant', 'reading', 'wiring', 'bin_pattern', 'base_bin_pattern', 'alcohol_L_progress',
-                           'realism_own']].values.tolist(),
+             n_standout_by={f'{k[0]}: {k[1]}': int(v) for k, v in st.groupby(['reading', 'cand_by']).size().items()} if len(st) else {},
+             standout_variants=int(st[['folder', 'variant']].drop_duplicates().shape[0]),
+             standout_handles={f: int(n) for f, n in st.drop_duplicates(['folder', 'variant']).folder.value_counts().items()},
+             standouts=st[['folder', 'variant', 'reading', 'wiring', 'cand_by', 'bin_pattern', 'base_bin_pattern', 'alcohol_L_progress',
+                           'chg_L_alcohol', 'base_chg_L_alcohol', 'realism_own']].values.tolist(),
              candidates_outside_bands=df[df.cand & (df.realism_own != 'inside the bands')][['folder', 'variant', 'reading', 'realism_own']].values.tolist()[:50],
              flies_changes={rd: fl[rd] for rd in fl}, families=fam_rank,
              handles_top=bh.head(15).to_dict(orient='records'),
