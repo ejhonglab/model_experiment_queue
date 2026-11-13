@@ -18,9 +18,13 @@ directory's notes/ and are linked from here.
   Placed line's rationale, and viki's chat posts of 21:28, 23:22.
 - **Done.** `rescore_archive` (47040d0) rereads the rule under each readout with the matched baseline; archive_scan.csv and
   verdict_C.json rewritten. D2, the design's conditional step for a handle that stands out (E80's B3 on the breadth-2 fits of S),
-  running on viki since 23:48.
-- **Remains.** D2's result; the note, page (republish), Status, a dated annotation under the Placed line and the summary
-  passage corrected; then move here to Resolved.
+  ran 23:48 to 00:26 (095702b), and part B's two-by-two on its runs (78f83d5). The note was corrected and extended (2026-11-13
+  00:28 and 00:38; the mislabel fixed), its page rebuilt and saved to reports/; E87's Status line carries a dated correction and
+  D2's results; the placement rationale was revised twice by the planning subagent (00:30, 00:40; #10 stands); the summary passage
+  was written with the corrected scan, D2 and its two-by-two (3c343b6) and the summary rebuilt (00:44); chat corrected (23:50,
+  00:39).
+- **Remains.** The published page (https://claude.ai/artifact/Gga6ZBaTxTbHKYCvDzc7xw) still shows the first version: republish
+  from reports/E87_inhibition_form.html when hal resumes (requested in chat); then move here to Resolved.
 
 ### The raw-count readings of the main target are tied to the model's 0.5 s odor pulse; the flies had 2 s (found 2026-11-11 02:37, viki, E80)
 - **What.** Every model number compares spike counts of a 0.5 s pulse, counted to 0.75 s, with the flies' calcium signal 2 to 8 s
