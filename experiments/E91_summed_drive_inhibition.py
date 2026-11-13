@@ -23,12 +23,13 @@ Parts (CLI `--part`):
   and to its margin over threshold (the share of the margin it takes: (peak0 - peak1) / (peak0 - thr), peaks of the
   KC's leaky integration of D and of D - U, no spikes); by class (the responders with APL on; E88's classes of the
   ester and the alcohol groups' shared responders; number of claws; quartile of the breadth weight; KC type); the
-  prediction of what s = 1 does at fixed scales (each responder's count times the ratio of its supra-threshold areas of
-  the leaky integration of D - U and of D: a count-level reading that ignores the spikes' resets and the KC-KC
-  inhibition), read as the change of the per-pair APL effect. unabsorbed.csv; per KC and odor under
-  outputs/E91_summed_drive_inhibition/A/. Acheck (after B1): the predicted against the simulated change of the
-  per-pair effect (B1's s = 1 at F exponent 2 re-held, the entry's check; its run at the fit's scales beside);
-  prediction.csv, prediction.json.
+  prediction of which responders s = 1 removes at fixed scales (a count-level reading that ignores the spikes' resets
+  and the KC-KC inhibition: each KC's count times the ratio of its areas above threshold of the leaky integration of
+  D - U and of D, rounded; a responder predicted below two spikes is removed), read as the change of the per-pair APL
+  effect with the removed responders' counts set to 0 ('removed', the entry's check) and with every count scaled
+  ('scaled', beside). unabsorbed.csv; per KC and odor under outputs/E91_summed_drive_inhibition/A/. Acheck (after
+  B1): the predicted against the simulated change of the per-pair effect (B1's s = 1 at F exponent 2 re-held, the
+  entry's check; its run at the fit's scales beside); prediction.csv, prediction.json.
 - B1: the fits as they are, s of 0.5 and 1 at the family's measure F with exponents 2, 1 and 0.5 and with no weighting
   (8 settings, 32 points), the tied APL scale bisected to each wiring's APL-on count (E89's `weighting_reading`); plus
   s = 1 at F exponent 2 at the fit's scales (no bisection; 4 points, for part A's check, not a setting of the choice).
@@ -115,6 +116,7 @@ CO_CANDIDATE = 'gm'                                 # the geometric mean of E88'
 
 # part A
 PREDICT_RHO = 0.8                                   # the prediction stands at this correlation or more
+PRED_KINDS = ('removed', 'scaled')                  # part A's predictions: the responders removed (primary); the counts
 
 # part C (the entry's rules)
 CHOICE_MIN_GAIN = 0.0015
@@ -982,7 +984,8 @@ def _kc_odor_table(w: str, o: Dict[str, tuple], st: dict, st_off: dict) -> pd.Da
     with np.errstate(divide='ignore', invalid='ignore'):
         ratio = np.where(st['area0'] > 0, st['area1'] / st['area0'], np.nan)
         margin_share = np.where(st['peak0'] > st['thr'][:, None], (st['peak0'] - st['peak1']) / (st['peak0'] - st['thr'][:, None]), np.nan)
-    pred = np.where(c_on > 0, c_on * np.where(np.isfinite(ratio), ratio, 1.0), c_on)
+    # each KC's count times the ratio of its areas above threshold, rounded to whole spikes (no area: unchanged)
+    pred = np.where(c_on > 0, np.round(c_on * np.where(np.isfinite(ratio), ratio, 1.0)), c_on)
     rep = lambda a: np.repeat(np.asarray(a), n_o)
     df = pd.DataFrame(dict(wiring=w, kc_id=rep(ids), kc_type=rep(kc['kc_type'].to_numpy()), odor=np.tile(odors, n_kc),
                            n_claws=rep(kc['n_claws'].to_numpy()), breadth=rep(kc['breadth'].to_numpy()),
@@ -991,10 +994,11 @@ def _kc_odor_table(w: str, o: Dict[str, tuple], st: dict, st_off: dict) -> pd.Da
                            resp_off=(c_off > RAW_CRIT).ravel(), D=st['D'].ravel(), U=st['U'].ravel(),
                            thr=rep(st['thr']), peak0=st['peak0'].ravel(), peak1=st['peak1'].ravel(), area0=st['area0'].ravel(),
                            area1=st['area1'].ravel(), margin_share=margin_share.ravel(), n_half_on=st['n_half'].ravel(),
-                           n_half_off=st_off['n_half'].ravel(), n_driven_on=st['n_driven'].ravel(), pred_count_s1=pred.ravel()))
+                           n_half_off=st_off['n_half'].ravel(), n_driven_on=st['n_driven'].ravel(), pred_count_scaled=pred.ravel()))
     with np.errstate(divide='ignore', invalid='ignore'):
         df['U_over_D'] = np.where(df.D > 0, df.U / df.D, np.nan)
-    df['pred_removed'] = df.resp_on & (df.pred_count_s1 <= RAW_CRIT)
+    df['pred_removed'] = df.resp_on & (df.pred_count_scaled <= RAW_CRIT)
+    df['pred_count_removed'] = np.where(df.pred_removed, 0.0, df.count_on)
     return df
 
 
@@ -1046,13 +1050,15 @@ def class_table(df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def predicted_run(df: pd.DataFrame, o: Dict[str, tuple]) -> Dict[str, tuple]:
-    """Part A's predicted run at s = 1 and fixed scales: the APL-on counts `pred_count_s1` (responses two or more), the
-    APL-off run unchanged."""
+def predicted_run(df: pd.DataFrame, o: Dict[str, tuple], kind: str = 'removed') -> Dict[str, tuple]:
+    """Part A's predicted run at s = 1 and fixed scales (`kind`, PRED_KINDS): 'removed', the responders predicted to
+    fall below two spikes set to 0 and every other count as it is (the entry's prediction of which responders s = 1
+    removes); 'scaled', every count times its KC's ratio of supra-threshold areas, rounded. Responses two or more
+    spikes; the APL-off run unchanged."""
     on_r, on_s = o['on']
     ids = on_s.index.get_level_values(H.KC_ID_LEVEL)
     odors = [H.odor_abbrev(c) for c in on_s.columns]
-    piv = df.pivot(index='kc_id', columns='odor', values='pred_count_s1').reindex(index=ids, columns=odors)
+    piv = df.pivot(index='kc_id', columns='odor', values=f'pred_count_{kind}').reindex(index=ids, columns=odors)
     s = pd.DataFrame(piv.to_numpy(dtype=float), index=on_s.index, columns=on_s.columns)
     r = (s > RAW_CRIT).astype(on_r.dtypes.iloc[0])
     return {'on': (r, s), 'off': o['off']}
@@ -1060,7 +1066,7 @@ def predicted_run(df: pd.DataFrame, o: Dict[str, tuple]) -> Dict[str, tuple]:
 
 def part_a(out: Path, wirings: Sequence[str] = E83.S_WIRINGS) -> pd.DataFrame:
     """Part A (the module docstring); unabsorbed.csv (class_table over S and each wiring) and, per wiring,
-    outputs/.../A/unabsorbed_<wiring>.parquet (per KC and odor) and the predicted run (A/pred_s1_<wiring>_*.parquet)."""
+    outputs/.../A/unabsorbed_<wiring>.parquet (per KC and odor) and the predicted runs (A/pred_s1_<kind>_<wiring>_*.parquet)."""
     import gc
     cc = E89._commits_clean()
     frames = []
@@ -1078,9 +1084,10 @@ def part_a(out: Path, wirings: Sequence[str] = E83.S_WIRINGS) -> pd.DataFrame:
         st_off = claw_stats(m.rv, m.mp, m.order, off[1].to_numpy(dtype=float) > RAW_CRIT, apl=False)
         df = _kc_odor_table(w, m.saved, st, st_off)
         df.to_parquet(path)
-        po = predicted_run(df, m.saved)
-        po['on'][0].to_parquet(_a_dir() / f'pred_s1_{w}_on_responses.parquet')
-        po['on'][1].to_parquet(_a_dir() / f'pred_s1_{w}_on_spike_counts.parquet')
+        for kind in PRED_KINDS:
+            po = predicted_run(df, m.saved, kind)
+            po['on'][0].to_parquet(_a_dir() / f'pred_s1_{kind}_{w}_on_responses.parquet')
+            po['on'][1].to_parquet(_a_dir() / f'pred_s1_{kind}_{w}_on_spike_counts.parquet')
         frames.append(df)
         print(f'E91 A {w}: responders with APL on {int(df.resp_on.sum())}, unabsorbed over them {df[df.resp_on].U.mean():.3g} '
               f'(drive {df[df.resp_on].D.mean():.3g}); predicted removed at s = 1 {int(df.pred_removed.sum())}', flush=True)
@@ -1094,9 +1101,9 @@ def part_a(out: Path, wirings: Sequence[str] = E83.S_WIRINGS) -> pd.DataFrame:
     return ct
 
 
-def _pred_run(w: str) -> Dict[str, tuple]:
+def _pred_run(w: str, kind: str = 'removed') -> Dict[str, tuple]:
     o = E83.saved_fit(w)['saved']
-    ps = [_a_dir() / f'pred_s1_{w}_on_{k}.parquet' for k in ('responses', 'spike_counts')]
+    ps = [_a_dir() / f'pred_s1_{kind}_{w}_on_{k}.parquet' for k in ('responses', 'spike_counts')]
     if not all(p.exists() for p in ps):
         raise RuntimeError(f'no prediction for {w}: run --part A')
     return {'on': tuple(pd.read_parquet(p) for p in ps), 'off': o['off']}
@@ -1105,35 +1112,37 @@ def _pred_run(w: str) -> Dict[str, tuple]:
 def part_a_check(out: Path) -> dict:
     """Part A's prediction against B1's simulations: per pair the change of the APL effect (s = 1 at F exponent 2 minus
     the unchanged fits) under each readout, on S's population and each wiring, predicted (A) and simulated (B1's
-    re-held point, the entry's check; the run at the fit's scales beside); the prediction stands if the correlation on
-    S's population under the calibrated readout against the re-held point is PREDICT_RHO or more. prediction.csv,
-    prediction.json. Also the overlap of the responders predicted and simulated (fixed scales) to be removed."""
+    re-held point, the entry's check; the run at the fit's scales beside), for both predictions (PRED_KINDS); the
+    prediction stands if the correlation of the 'removed' prediction on S's population under the calibrated readout
+    against the re-held point is PREDICT_RHO or more ('scaled' and raw counts beside). prediction.csv, prediction.json.
+    Also the overlap of the responders predicted and simulated (fixed scales) to be removed."""
     rows, res = [], dict(threshold=PREDICT_RHO, units={})
     sims = {'reheld': variant_name('B1', REFERENCE, 1.0), 'fixed': variant_name('B1', REFERENCE, 1.0, fixed=True)}
     W = E83.S_WIRINGS
     for ro in ('cal', 'raw'):
         d0 = {w: E83.pair_distances(E83.saved_fit(w)['saved'], ro) for w in W}
-        dp = {w: E83.pair_distances(_pred_run(w), ro) for w in W}
         ds = {}
         for k, v in sims.items():
             got = {w: load_run(run_tag(v, w)) for w in W}
             if all(x is not None for x in got.values()):
                 ds[k] = {w: E83.pair_distances(got[w], ro) for w in W}
-        for unit, ws in [('S', W)] + [(w, (w,)) for w in W]:
-            pop = lambda dd: E83.population([dd[w] for w in ws])
-            e0 = E83._cs(H.apl_effect(*[pop(d0)[c] for c in ('on', 'off')]))
-            ep = E83._cs(H.apl_effect(*[pop(dp)[c] for c in ('on', 'off')]))
-            pred = ep - e0
-            r = dict(readout=ro, unit=unit)
-            for k, dd in ds.items():
-                es = E83._cs(H.apl_effect(*[pop(dd)[c] for c in ('on', 'off')]))
-                simc = (es - e0).reindex(pred.index)
-                r[f'r_{k}'] = float(np.corrcoef(pred.to_numpy(), simc.to_numpy())[0, 1])
-                r[f'mean_change_{k}'] = float(simc.mean())
-                for (a, b), x, y in zip(pred.index, pred.to_numpy(), simc.to_numpy()):
-                    rows.append(dict(readout=ro, unit=unit, sim=k, odor_a=a, odor_b=b, predicted=x, simulated=y))
-            r['mean_change_predicted'] = float(pred.mean())
-            res['units'][f'{unit}:{ro}'] = r
+        for kind in PRED_KINDS:
+            dp = {w: E83.pair_distances(_pred_run(w, kind), ro) for w in W}
+            for unit, ws in [('S', W)] + [(w, (w,)) for w in W]:
+                pop = lambda dd: E83.population([dd[w] for w in ws])
+                e0 = E83._cs(H.apl_effect(*[pop(d0)[c] for c in ('on', 'off')]))
+                ep = E83._cs(H.apl_effect(*[pop(dp)[c] for c in ('on', 'off')]))
+                pred = ep - e0
+                r = dict(readout=ro, unit=unit, prediction=kind)
+                for k, dd in ds.items():
+                    es = E83._cs(H.apl_effect(*[pop(dd)[c] for c in ('on', 'off')]))
+                    simc = (es - e0).reindex(pred.index)
+                    r[f'r_{k}'] = float(np.corrcoef(pred.to_numpy(), simc.to_numpy())[0, 1])
+                    r[f'mean_change_{k}'] = float(simc.mean())
+                    for (a, b), x, y in zip(pred.index, pred.to_numpy(), simc.to_numpy()):
+                        rows.append(dict(readout=ro, unit=unit, prediction=kind, sim=k, odor_a=a, odor_b=b, predicted=x, simulated=y))
+                r['mean_change_predicted'] = float(pred.mean())
+                res['units'][f'{kind}:{unit}:{ro}'] = r
     # the responders removed: predicted against the fixed-scale simulation
     ov = {}
     for w in W:
@@ -1142,18 +1151,18 @@ def part_a_check(out: Path) -> dict:
             continue
         s0 = E83.saved_fit(w)['saved']['on'][1].to_numpy(dtype=float) > RAW_CRIT
         s1 = o['on'][1].to_numpy(dtype=float) > RAW_CRIT
-        pr = _pred_run(w)['on'][1].to_numpy(dtype=float) > RAW_CRIT
+        pr = _pred_run(w, 'removed')['on'][1].to_numpy(dtype=float) > RAW_CRIT
         rem_sim, rem_pred = s0 & ~s1, s0 & ~pr
         inter = int((rem_sim & rem_pred).sum())
         ov[w] = dict(removed_simulated=int(rem_sim.sum()), removed_predicted=int(rem_pred.sum()), both=inter,
                      added_simulated=int((~s0 & s1).sum()),
                      jaccard=float(inter / max(1, int((rem_sim | rem_pred).sum()))))
     res['removed_overlap_fixed_scales'] = ov
-    key = res['units'].get('S:cal', {})
+    key = res['units'].get('removed:S:cal', {})
     res['stands'] = bool(key.get('r_reheld', np.nan) >= PREDICT_RHO) if 'r_reheld' in key else None
     pd.DataFrame(rows).to_csv(out / 'prediction.csv', index=False)
     _write_json(out / 'prediction.json', res)
-    print(f"E91 A check: r (S, calibrated readout) re-held {key.get('r_reheld', np.nan):.3f}, fixed scales "
+    print(f"E91 A check: r (the responders removed, S, calibrated readout) re-held {key.get('r_reheld', np.nan):.3f}, fixed scales "
           f"{key.get('r_fixed', np.nan):.3f}; stands: {res['stands']}", flush=True)
     return res
 
@@ -1544,7 +1553,7 @@ def verdict91(out: Path, rd: Optional[pd.DataFrame] = None) -> dict:
         v['B3'] = dict(d_pattern=d, differs=bool(any(abs(x) > B3_DIFF for x in d.values())))
     if (out / 'prediction.json').exists():
         p = json.loads((out / 'prediction.json').read_text())
-        v['A_prediction'] = dict(stands=p.get('stands'), S_cal=p['units'].get('S:cal'))
+        v['A_prediction'] = dict(stands=p.get('stands'), **{k: p['units'].get(k) for k in ('removed:S:cal', 'scaled:S:cal', 'removed:S:raw')})
     if (out / 'd_scores.json').exists():
         v['D'] = json.loads((out / 'd_scores.json').read_text())
     if (out / 'coresponse.csv').exists():
@@ -1830,7 +1839,7 @@ def figure(out: Path) -> Optional[Path]:
         ax.legend(fontsize=8)
     if has_pred:
         p = pd.read_csv(out / 'prediction.csv')
-        p = p[(p.unit == 'S') & (p.readout == 'cal')]
+        p = p[(p.unit == 'S') & (p.readout == 'cal') & (p.prediction == 'removed')]
         ax = axes[2]
         for k, col in (('reheld', '#2e86ab'), ('fixed', '#d1495b')):
             q = p[p.sim == k]
@@ -1839,7 +1848,7 @@ def figure(out: Path) -> Optional[Path]:
                 ax.scatter(q.predicted, q.simulated, s=10, color=col,
                            label=f"{'APL scale re-held' if k == 'reheld' else 'at the fit scales'} (r {r:.2f})")
         ax.axline((0, 0), slope=1, color='0.5', lw=0.7)
-        ax.set_xlabel('predicted change of the per-pair APL effect (part A)')
+        ax.set_xlabel('predicted change of the per-pair APL effect (part A, the responders removed)')
         ax.set_ylabel('simulated change (s = 1, F at exponent 2)')
         ax.set_title("S's population, calibrated readout", fontsize=9)
         ax.legend(fontsize=8)
@@ -1874,11 +1883,11 @@ def comparison_table(out: Path) -> str:
     if (out / 'prediction.json').exists():
         p = json.loads((out / 'prediction.json').read_text())
         L += ["## A: the prediction against B1's simulations (correlation of the per-pair change of the APL effect)", '',
-              '| unit:readout | re-held (the check) | at the fit\'s scales | mean change predicted | re-held | fixed |', '|---|---:|---:|---:|---:|---:|']
+              '| prediction:unit:readout | re-held (the check) | at the fit\'s scales | mean change predicted | re-held | fixed |', '|---|---:|---:|---:|---:|---:|']
         for k, r in p['units'].items():
             L.append(f"| {k} | {_f(r.get('r_reheld'), '.3f')} | {_f(r.get('r_fixed'), '.3f')} | {_f(r.get('mean_change_predicted'), '+.4f')} | "
                      f"{_f(r.get('mean_change_reheld'), '+.4f')} | {_f(r.get('mean_change_fixed'), '+.4f')} |")
-        L += ['', f"Stands (S, calibrated readout, re-held, r >= {PREDICT_RHO}): {p.get('stands')}.", '']
+        L += ['', f"Stands (the responders removed, S, calibrated readout, re-held, r >= {PREDICT_RHO}): {p.get('stands')}.", '']
     if (out / 'readings.csv').exists():
         rd = pd.read_csv(out / 'readings.csv')
         runs = runs_table(out)
