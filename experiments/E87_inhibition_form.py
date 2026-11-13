@@ -1422,7 +1422,8 @@ def part_d1(out: Path, wirings: Optional[Sequence[str]] = None, n_workers: int =
 
 
 def write_variants(out: Path) -> pd.DataFrame:
-    """variants.csv for the model-output archive: one row per D1 run (tag = the file names' variant; the APL-on side is
+    """variants.csv for the model-output archive and model_pair_distances_long.csv for kcq/apl_effect.py (raw spike
+    counts, the harness's primary model RDM; APL off the wiring's own saved fit): one row per D1 run (tag = the file names' variant; the APL-on side is
     the run, the APL-off side the wiring's own saved fit, `ref_experiment` / `ref_fit`), with the run's absolute
     parameters (APL removed: wAPLKC_scale and wAPLPN_scale 0), `factor` (c) and `config` (the form)."""
     runs = pd.read_csv(out / 'runs_D.csv')
@@ -1438,6 +1439,15 @@ def write_variants(out: Path) -> pd.DataFrame:
                          max_count_on=r.max_count_on, max_count_off=r.max_count_off))
     df = pd.DataFrame(rows)
     df.to_csv(out / 'variants.csv', index=False)
+    from experiments import E83_cross_wiring_fit as E
+    parts = []
+    for _, r in runs.iterrows():
+        on = _load_d(r.tag)
+        off = E.saved_fit(r.wiring)['saved']['off']
+        parts.append(pd.concat({(r.tag, 'on'): H.model_rdms(*on)[H.PRIMARY_MODEL_RDM],
+                                (r.tag, 'acute_off'): H.model_rdms(*off)[H.PRIMARY_MODEL_RDM]},
+                               names=['tag', 'condition', 'odor_a', 'odor_b']).rename('distance').reset_index())
+    pd.concat(parts, ignore_index=True).to_csv(out / 'model_pair_distances_long.csv', index=False)
     return df
 
 
