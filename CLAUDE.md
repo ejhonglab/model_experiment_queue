@@ -1161,6 +1161,7 @@ Canonical experiment names for summary reports:
 | E85 | the ORN input as a population of flies |
 | E86 | the controls and the replication of the reduced searched input |
 | E87 | the form of APL's inhibition in the flies' own responses |
+| E88 | the common error split into who responds and how strongly |
 
 ## Model-output archive (data/model_outputs/ in the shared directory)
 
