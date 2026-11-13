@@ -456,10 +456,12 @@ def test_http(tmp_path):
     t.start()
     base = 'http://127.0.0.1:{}'.format(httpd.server_address[1])
     try:
-        # / is the tabbed page: Report (Summary, Experiments and mechanisms) and Monitor
+        # / is the tabbed page: Report (Summary, Experiments and mechanisms, Since the priority
+        # changes) and Monitor
         page = urllib.request.urlopen(base + '/').read().decode()
         assert '<title>Model experiments</title>' in page
-        for label in ('>Report<', '>Monitor<', '>Summary<', '>Experiments and mechanisms<'):
+        for label in ('>Report<', '>Monitor<', '>Summary<', '>Experiments and mechanisms<',
+                '>Since the priority changes<'):
             assert label in page
         monitor = urllib.request.urlopen(base + '/monitor').read().decode()
         assert '<title>Model experiments</title>' in monitor and '<h2>Hosts</h2>' in monitor
@@ -485,6 +487,49 @@ def test_http(tmp_path):
         assert {h['host'] for h in state['hosts']} == {'hal', 'atlas'}
         with pytest.raises(urllib.error.HTTPError):
             urllib.request.urlopen(base + '/../etc/passwd')
+    finally:
+        httpd.shutdown()
+
+
+def test_since_priority_changes_view(tmp_path):
+    """The third Report view: its sub-tab (last in the bar) and frame source come from REPORTS, its
+    file is served and listed once a copy is saved, and the missing-file page shows until then."""
+    make_shared(tmp_path, time.time())
+    reports = tmp_path / 'reports'
+    reports.mkdir()
+    httpd = ThreadingHTTPServer(('127.0.0.1', 0),
+        server.make_handler(server.Monitor(str(tmp_path)), 30))
+    t = threading.Thread(target=httpd.serve_forever, daemon=True)
+    t.start()
+    base = 'http://127.0.0.1:{}'.format(httpd.server_address[1])
+    try:
+        page = urllib.request.urlopen(base + '/').read().decode()
+        tab = '<a data-view="since-priority-changes" href="#since-priority-changes">'
+        assert tab + 'Since the priority changes</a></div>' in page
+        assert page.index('data-view="experiments"') < page.index(tab)
+        # the page's map of views is generated from REPORTS
+        views = json.loads(page.split('var V=', 1)[1].split(',F={}', 1)[0])
+        assert views == dict(summary=dict(src='/report/summary', rep=1),
+            experiments=dict(src='/report/experiments', rep=1),
+            monitor=dict(src='/monitor'),
+            **{'since-priority-changes': dict(src='/report/since-priority-changes', rep=1)})
+        # no copy saved yet: the missing-file page, and nothing listed
+        with pytest.raises(urllib.error.HTTPError) as e:
+            urllib.request.urlopen(base + '/report/since-priority-changes')
+        assert e.value.code == 404
+        assert 'No Since the priority changes report has been saved' in e.value.read().decode()
+        assert json.loads(urllib.request.urlopen(base + '/api/reports').read()) == {}
+        # save_report_copy.py's copy and its --current link
+        (reports / 'since_priority_changes.html').write_text('<!doctype html><html><body>'
+            '<h1>since the changes</h1><a href="https://example.org/x">x</a></body></html>')
+        os.symlink('since_priority_changes.html', str(reports / 'current-since-priority-changes.html'))
+        body = urllib.request.urlopen(base + '/report/since-priority-changes').read().decode()
+        assert '<h1>since the changes</h1>' in body and "a[i].target='_blank'" in body
+        info = json.loads(urllib.request.urlopen(base + '/api/reports').read())
+        assert set(info) == {'since-priority-changes'}
+        assert info['since-priority-changes']['label'] == 'Since the priority changes'
+        assert info['since-priority-changes']['file'] == 'since_priority_changes.html'
+        assert info['since-priority-changes']['mtime'] > 0
     finally:
         httpd.shutdown()
 

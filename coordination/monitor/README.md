@@ -10,12 +10,17 @@ and each host's `<host>_status.md` supplies the rest.
 ## Viewing it
 
 Open **http://hal:17486** on any computer on the lab network. The page has two tabs, chosen in
-the bar at the top (the address remembers the view: `#summary`, `#experiments`, `#monitor`):
+the bar at the top (the address remembers the view: `#summary`, `#experiments`,
+`#since-priority-changes`, `#monitor`):
 
-- **Report** (the default), with two sub-tabs: **Summary**, the latest all-experiments summary,
-  and **Experiments and mechanisms**, the report page with the experiment list (the files
-  `reports/current-summary.html` and `reports/current-report.html` in the shared directory, the
-  copies `save_report_copy.py` keeps current). Each is shown in its own frame, as published, with
+- **Report** (the default), with three sub-tabs: **Summary**, the latest all-experiments summary,
+  **Experiments and mechanisms**, the report page with the experiment list, and **Since the
+  priority changes**, what was learned since the last two changes of the main goal (a snapshot,
+  rebuilt only on request). They are the files `reports/current-summary.html`,
+  `reports/current-report.html` and `reports/current-since-priority-changes.html` in the shared
+  directory, the copies `save_report_copy.py` keeps current (`REPORTS` in `server.py` lists them;
+  a new view needs only an entry there). Until a copy is saved, a view says so. Each is shown in
+  its own frame, as published, with
   its own contents list, full-screen figures and hover definitions; switching tabs keeps each
   view's place. The reports never reload by themselves: once a minute the page checks whether a
   newer copy has been saved and, if so, says so in the bar with a "reload" link. Links to other

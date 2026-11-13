@@ -11,13 +11,15 @@ Reads only the shared directory (Tom/claude_kc_remapping under /local/tensor or 
 - <host>_status.md, each host's self-reported status (its front matter, if any);
 - chat.md entry headers, experiment_priorities.md (experiment index, work claims).
 
-Serves `/`, a page with two tabs: Report (the default; sub-tabs Summary and Experiments and
-mechanisms, the latest copies of the summary and the report page in the shared directory's
-reports/, each in its own frame, never reloaded by themselves: a note offers a reload when a newer
-copy is saved) and Monitor (`/monitor`, the dashboard; it updates itself in place, without a page
-reload, and not while it is hidden or anything is full screen; query parameters `days`, `tokens`
-and `group` choose what the usage plots show). Also `/report/<summary|experiments>` (the report
-files), `/api/reports` (their file names and times) and `/api/state` (the dashboard's data as JSON).
+Serves `/`, a page with two tabs: Report (the default; sub-tabs Summary, Experiments and
+mechanisms, and Since the priority changes: the latest copies of the summary, the report page and
+the page on what was learned since the main goal's last two changes, in the shared directory's
+reports/ (`REPORTS`), each in its own frame, never reloaded by themselves: a note offers a reload
+when a newer copy is saved) and Monitor (`/monitor`, the dashboard; it updates itself in place,
+without a page reload, and not while it is hidden or anything is full screen; query parameters
+`days`, `tokens` and `group` choose what the usage plots show). Also `/report/<view>` (the report
+files: `summary`, `experiments`, `since-priority-changes`), `/api/reports` (their file names and
+times) and `/api/state` (the dashboard's data as JSON).
 Standard library only, so it runs under any system python3 >= 3.8.
 """
 import argparse
@@ -769,11 +771,13 @@ LIVE_SCRIPT = (
     "catch(function(){}).then(function(){last=Date.now();busy=false})}setInterval(function(){if("
     "!busy&&Date.now()-last>=R&&shown())update()},5000)})();")
 
-# the reports shown in the Report tab: view -> (tab label, file in <shared>/reports/; the
-# current-*.html links that save_report_copy.py keeps pointing at the latest copy)
+# the reports shown in the Report tab, in the sub-tabs' order: view (URL hash, /report/<view>) ->
+# (tab label, file in <shared>/reports/; the current-*.html links that save_report_copy.py keeps
+# pointing at the latest copy). A new view needs only an entry here.
 REPORTS = {
     'summary': ('Summary', 'current-summary.html'),
     'experiments': ('Experiments and mechanisms', 'current-report.html'),
+    'since-priority-changes': ('Since the priority changes', 'current-since-priority-changes.html'),
 }
 # added to each report page served: links to other sites open in a new browser tab, not in the frame
 REPORT_LINK_SCRIPT = (
@@ -827,7 +831,7 @@ body.shell { height: 100vh; overflow: hidden; display: flex; flex-direction: col
 .bar a { text-decoration: none; }
 .tabs a, .subtabs a { color: var(--muted); padding: 4px 10px; border-radius: 6px; white-space: nowrap; }
 .tabs a.on { color: var(--fg); background: var(--chip); font-weight: 600; }
-.subtabs { display: flex; gap: 2px; border-left: 1px solid var(--line); padding-left: 10px; }
+.subtabs { display: flex; flex-wrap: wrap; gap: 2px; border-left: 1px solid var(--line); padding-left: 10px; }
 .subtabs[hidden] { display: none; }
 .subtabs a.on { color: var(--fg); font-weight: 600; box-shadow: inset 0 -2px 0 var(--blue);
   border-radius: 0; }
@@ -842,15 +846,15 @@ body.shell { height: 100vh; overflow: hidden; display: flex; flex-direction: col
 .missing { padding: 24px 16px; color: var(--muted); }
 """
 
-# the tabbed page: views by URL hash (#summary, #experiments, #monitor; default the last report
-# view shown, else Summary); each view's frame is made on first show and only hidden afterwards, so
-# it keeps its scroll position and any figure open in it; report frames are never reloaded by
-# themselves: once a minute (while the page is visible) /api/reports is checked and a note offers
-# the reload when the shown report's file has changed since its frame was loaded
+# the tabbed page: views by URL hash (a REPORTS key or #monitor; default the last report view
+# shown, else Summary; @VIEWS@ is replaced by shell_views()); each view's frame is made on first
+# show and only hidden afterwards, so it keeps its scroll position and any figure open in it;
+# report frames are never reloaded by themselves: once a minute (while the page is visible)
+# /api/reports is checked and a note offers the reload when the shown report's file has changed
+# since its frame was loaded
 SHELL_SCRIPT = (
-    "(function(){var V={summary:{src:'/report/summary',rep:1},experiments:{src:'/report/"
-    "experiments',rep:1},monitor:{src:'/monitor'}},F={},seen={},info={},cur=null;function lab(v){"
-    "var a=document.querySelector('[data-view='+v+']');return a?a.textContent:v}function last(){"
+    "(function(){var V=@VIEWS@,F={},seen={},info={},cur=null;function lab(v){var a=document."
+    "querySelector('[data-view=\"'+v+'\"]');return a?a.textContent:v}function last(){"
     "try{var v=localStorage.getItem('reportView');return V[v]&&V[v].rep?v:'summary'}catch(e){"
     "return 'summary'}}function getInfo(cb){fetch('/api/reports',{cache:'no-store'}).then(function"
     "(r){return r.json()}).then(function(d){info=d;cb(d)}).catch(function(){})}function frame(v){if"
@@ -876,8 +880,16 @@ SHELL_SCRIPT = (
     "();")
 
 
+def shell_views():
+    """The tabbed page's views as a JavaScript object: each Report view's frame source (`rep` marks
+    a report) and the Monitor's."""
+    views = {v: dict(src='/report/' + v, rep=1) for v in REPORTS}
+    views['monitor'] = dict(src='/monitor')
+    return json.dumps(views, separators=(',', ':'))
+
+
 def render_shell(server_host):
-    """The tabbed page served at `/`: Report (Summary, Experiments and mechanisms) and Monitor."""
+    """The tabbed page served at `/`: Report (a sub-tab per entry of REPORTS) and Monitor."""
     sub = ''.join('<a data-view="{0}" href="#{0}">{1}</a>'.format(v, esc(label))
         for v, (label, _) in REPORTS.items())
     return ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
@@ -895,7 +907,7 @@ def render_shell(server_host):
         '<span class="alone" title="the host serving this page">{host}</span></nav>'
         '<div id="views"></div><script>{script}</script></body></html>').format(
         theme=THEME_SCRIPT, title=esc(TITLE), css=CSS + SHELL_CSS, sub=sub, host=esc(server_host),
-        script=SHELL_SCRIPT)
+        script=SHELL_SCRIPT.replace('@VIEWS@', shell_views()))
 
 
 def missing_report(view):
