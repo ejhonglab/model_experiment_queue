@@ -182,6 +182,13 @@ default (the fits as before, nothing in the loss changes); recorded in fits.csv 
 count_kernel_rise, count_kernel_decay) and the provenance (protocol) only when given; tag suffix after k<k>:
 _pulse<S> (the simulation ending 0.25 s after the pulse, as E80's; otherwise _pulse<S>end<E>, or _end<E> with --sim-end
 alone), _apltau<T in ms>, _kr<RISE>d<DECAY>; refused with --block-proxy and --apl-drive spikes_only.
+APL's inhibition on the KC's summed drive (E91): `--claw-inh-pool S` sets fit_mb_model's claw_inh_pool (olfsysm
+mp.kc.claw_inh_pool, 0 to 1) in every simulation of the fit: each KC's summed drive is the sum over its claws of
+max(x, 0) + S min(x, 0), x a claw's PN drive minus APL's inhibition of it (the claw states that drive APL stay the
+clipped ones, and nothing changes with APL off, so the breadth run is unchanged). Off by default (None: the fits as
+before, the kwarg not passed); recorded in fits.csv (claw_inh_pool) and the provenance (claw_inh_pool) only when given;
+tag part pool<S>_ after the other model parts (before k<k>); refused with --block-proxy (its replays rebuild the drives
+without it) and --claw-thr (olfsysm refuses a per-claw transfer with it).
 """
 from __future__ import annotations
 
@@ -257,6 +264,22 @@ def claw_transfer_tag(transfer: Optional[dict]) -> str:
     t = transfer or {}
     return ('' if 'claw_thr_subgain' not in t else f"sg{t['claw_thr_subgain']:g}") + (
         '' if 'claw_thr_width' not in t else f"w{t['claw_thr_width']:g}")
+
+
+def claw_inh_pool_kws(pool: Optional[float]) -> dict:
+    """(E91) fit_mb_model's claw_inh_pool kwarg, as --claw-inh-pool sets it: {} for None (not passed, the fits as
+    before), else {'claw_inh_pool': S} with S checked to be finite and in [0, 1] (ValueError otherwise)."""
+    if pool is None:
+        return {}
+    s = float(pool)
+    if not (np.isfinite(s) and 0.0 <= s <= 1.0):
+        raise ValueError(f'--claw-inh-pool must be finite and in [0, 1] (got {pool})')
+    return {'claw_inh_pool': s}
+
+
+def claw_inh_pool_tag(pool: Optional[float]) -> str:
+    """(E91) The tag part of --claw-inh-pool: pool<S>_; '' for None."""
+    return '' if pool is None else f'pool{float(pool):g}_'
 
 
 # (E82) the simulation ends this long after the pulse unless --sim-end says otherwise (E80's 0.25 s, olfsysm's tail)
@@ -1369,7 +1392,7 @@ def fit_one(k: float, orn, initial, wnorm, breadth, loss_fn, *, kckc0: float, ma
     init_exact_expect: Optional[dict] = None, kckc_fixed: Optional[float] = None,
     block_proxy: Optional[dict] = None, kc_spiking: Optional[dict] = None,
     kc_thr_factor_fixed: Optional[np.ndarray] = None, claw_transfer: Optional[dict] = None,
-    protocol: Optional[dict] = None, spike_times: bool = False):
+    protocol: Optional[dict] = None, spike_times: bool = False, claw_inh_pool: Optional[float] = None):
     """One joint fit; `kc_thr_factors` (K x KCs, `jitter_factors`) adds the K jittered runs of
     each condition (`jitter_conditions`) to every evaluation; `init_exact_expect` (not None)
     starts exactly at the `init_from` fit's parameters (`init_from_fit` with exact=True);
@@ -1387,7 +1410,9 @@ def fit_one(k: float, orn, initial, wnorm, breadth, loss_fn, *, kckc0: float, ma
     pulse's and the simulation's ends and the APL's time constant) likewise; `spike_times` simulates the 'on'
     and 'off' conditions with their spike times in every evaluation (optimize_mb_model_params'
     condition_spike_times: the loss gets them, e.g. for --count-kernel, and the result has the best
-    evaluation's as 'condition_spike_times')."""
+    evaluation's as 'condition_spike_times'); `claw_inh_pool` (E91: `claw_inh_pool_kws`, the pooled share of the
+    APL>claw inhibition the claws do not absorb) is a fixed model kwarg of every simulation of the fit (not passed
+    when None)."""
     from pyolfsysm.mb_model import optimize_mb_model_params
     wAPLKC = breadth_weights(wnorm['wAPLKC'], breadth, k)
     r19 = None if (claw_thr is None or apl_drive != 'claws') else e19_row(claw_thr, k, kckc0)
@@ -1495,6 +1520,11 @@ def fit_one(k: float, orn, initial, wnorm, breadth, loss_fn, *, kckc0: float, ma
     bad = set(protocol) - set(TIMING_KEYS) - {'apl_taum'}
     if bad:
         raise ValueError(f'unknown protocol kwargs {sorted(bad)}')
+    # (E91; only when given, so the default path is unchanged)
+    pool_kws = claw_inh_pool_kws(claw_inh_pool)
+    if pool_kws and block_proxy is not None:
+        # (the proxy's replays rebuild each KC's drive from the clipped claws)
+        raise NotImplementedError('--block-proxy with --claw-inh-pool')
     # (E82; only when asked, so the default path is unchanged)
     if spike_times:
         hook_kws['condition_spike_times'] = ('on', 'off')
@@ -1515,7 +1545,7 @@ def fit_one(k: float, orn, initial, wnorm, breadth, loss_fn, *, kckc0: float, ma
             maxfev=maxfev, optimizer_kws=opt_kws, verify=False, verbose=verbose,
             **base_kws(claw_thr, apl_drive, claw_transfer), **wiring_kws, _wAPLKC=wAPLKC, _wKCAPL=wnorm['wKCAPL'],
             _wAPLPN=wnorm['wAPLPN'], _wPNAPL=wnorm['wPNAPL'], kc_kc_inh=kckc0, kc_kc_tau=TAU, **kc_spiking,
-            **protocol
+            **protocol, **pool_kws
         )
     return res, init, bounds
 
@@ -1756,6 +1786,10 @@ def main() -> None:
     ap.add_argument('--save-spike-times', action='store_true',
         help="(E82) save the best fit's spike times (<tag>_<on|acute_off>_spike_times.parquet); every evaluation then "
             'also returns them (always with --count-kernel)')
+    ap.add_argument('--claw-inh-pool', type=float, default=None, metavar='S',
+        help="(E91) fit_mb_model's claw_inh_pool in every simulation of the fit: each KC's summed drive is the sum over "
+            'its claws of max(x, 0) + S min(x, 0), x the claw\'s PN drive minus APL\'s inhibition (0 to 1; 0 the clipped '
+            'form, 1 APL\'s inhibition on the summed drive); off by default; tag part pool<S>_')
     ap.add_argument('--smoke', action='store_true', help='time a few evaluations and exit')
     ap.add_argument('--figure-only', action='store_true', help='only redraw the figures from saved results')
     args = ap.parse_args()
@@ -1978,6 +2012,16 @@ def main() -> None:
             ap.error('--claw-thr-subgain / --claw-thr-width with --kc-thr-input-exp is not supported')
         if args.apl_drive != 'claws':
             ap.error('--claw-thr-subgain / --claw-thr-width need --apl-drive claws')
+    # (E91) the pooled share of the APL>claw inhibition the claws do not absorb, fixed
+    try:
+        claw_inh_pool_kws(args.claw_inh_pool)
+    except ValueError as e:
+        ap.error(str(e))
+    if args.claw_inh_pool is not None:
+        if args.block_proxy > 0:
+            ap.error('--claw-inh-pool with --block-proxy is not supported')
+        if args.claw_thr is not None:
+            ap.error('--claw-inh-pool with --claw-thr is not supported (olfsysm refuses a per-claw transfer with it)')
     initial, wnorm, wPNKC, breadth = bouton_base(orn, out_dir, args.claw_thr, gain=gain,
         gain_gloms=args.gain_glomeruli, wiring=args.wiring, wiring_seed=args.wiring_seed,
         apl_drive=args.apl_drive, base_params=args.base_params, info=base_info, input_tag=input_tag,
@@ -2020,7 +2064,8 @@ def main() -> None:
             + ('opk' if args.apl_opk_term else '') + (('cls' + ('' if class_form == 'sq' else class_form)) if args.apl_class_term else '')
             + ('dnu' if args.apl_data_units == 'noise' else '') + '_')
     prefix = zcell_tag + band_tag + {'spikes': 'spk_', 'spikes_only': 'spko_'}.get(args.apl_drive, '') + ('' if args.claw_thr is None else f'thr{args.claw_thr:g}{claw_transfer_tag(claw_transfer)}_') + wiring_tag + (
-        '' if gain is None else f'gain{gain:g}_') + rate_tag + block_tag + loss_tag + kckc_tag + kc_tag + thrin_tag + proxy_tag + jit_tag
+        '' if gain is None else f'gain{gain:g}_') + rate_tag + block_tag + loss_tag + kckc_tag + kc_tag + thrin_tag + (
+        claw_inh_pool_tag(args.claw_inh_pool)) + proxy_tag + jit_tag
     jit_factors, jit_meta = None, {}
     if jit_k > 0:
         jit_factors = jitter_factors(jit_k, len(breadth), jit_sigma, args.jitter_seed, jit_scale)
@@ -2063,7 +2108,8 @@ def main() -> None:
             block_proxy=proxy, kc_spiking=kc_spiking, kc_thr_factor_fixed=thr_in_factor,
             **({} if not claw_transfer else dict(claw_transfer=claw_transfer)),
             **({} if not protocol else dict(protocol=protocol)),
-            **({} if not save_spike_times else dict(spike_times=True))
+            **({} if not save_spike_times else dict(spike_times=True)),
+            **({} if args.claw_inh_pool is None else dict(claw_inh_pool=args.claw_inh_pool))
         )
         hist = res['history']
         hist.to_csv(res_dir / f'history_{tag}.csv')
@@ -2135,6 +2181,8 @@ def main() -> None:
             **protocol,
             **(dict(count_kernel_rise=count_kernel[0], count_kernel_decay=count_kernel[1]) if count_kernel is not None
                 else {}),
+            # (E91: the pooled share of the APL>claw inhibition the claws do not absorb; absent when not given)
+            **claw_inh_pool_kws(args.claw_inh_pool),
             # (E73 part C: the per-KC session z-score reading's settings; absent when not used)
             **(dict(rate_criterion=args.rate_criterion, zcell_q=loss_fn.zcell['q'], zcell_map=loss_fn.zcell['amp'],
                 zcell_calibrate=loss_fn.zcell['calibrate'], zcell_drift=loss_fn.zcell['drift'])
@@ -2242,6 +2290,11 @@ def main() -> None:
                 'index, rec, rep)) for the given passes, each KC\'s KC-KC inhibition from the other KCs\' spikes of the previous pass '
                 '(pass 1: the deterministic run\'s); the block (the pipeline\'s three-trial-mean distances, isotonic excess) of the '
                 'last pass replaces the deterministic block in the block term; everything else deterministic'))) if proxy is not None else {}),
+            **(dict(claw_inh_pool=dict(value=float(args.claw_inh_pool), note=('E91: every simulation (APL on and APL off) has '
+                'fit_mb_model\'s claw_inh_pool S: each KC\'s summed drive is the sum over its claws of max(x, 0) + S min(x, 0), '
+                'x the claw\'s PN drive minus APL\'s inhibition of it (olfsysm mp.kc.claw_inh_pool); the claw states that '
+                'drive APL stay the clipped ones and nothing changes with APL off, so the breadth run (APL off) is the '
+                'base\'s'))) if args.claw_inh_pool is not None else {}),
             loss_weights=loss_weights(args.loss),
             block_target=loss_fn.block_target, block_target_spec=args.block_target,
             block_scale=BLOCK_SCALE, rate_target=loss_fn.rate_target, rate_target_spec=args.rate_target,

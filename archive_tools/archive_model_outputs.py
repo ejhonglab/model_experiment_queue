@@ -54,7 +54,7 @@ PARAM_COLS = ['tag', 'variant', 'base', 'config', 'kind', 'point', 'part', 'seed
     'time_stim_end', 'time_end', 'apl_taum', 'count_kernel_rise', 'count_kernel_decay', 'option', 'value', 'fixed_thr_off',
     'kc_thr_input_exp', 'breadth_kept', 'prepass_thr_factor', 'prepass_fixed_thr',
     'rel', 'start_experiment', 'start_tag', 'breadth_from', 'kckc', 'kckc_factor',
-    'max_count_on', 'max_count_off',
+    'max_count_on', 'max_count_off', 'claw_inh_pool', 'allow_net_inh_per_claw', 'ext_inh_kc_max',
     'init_from', 'init_thr', 'loss_variant', 'method', 'maxfev', 'kckc0', 'thr0_factor',
     'n_kcs', 'n_glomeruli', 'rate_on', 'rate_off', 'rate_acute_off', 'rate_homeo_full_off',
     'rate_homeo_data_off', 'error']
