@@ -6,7 +6,9 @@ Without simulations: B1's permuted inputs are E83's `permuted_factors` draws at 
 factors as a set; the inverted input's and the candidate's factors multiply to one; halves C and D are disjoint, cover
 all recordings and keep the two strong recordings apart; the searches' generator seeds; `input_oracle`'s defaults name
 E77's files; a search interrupted and resumed from its checkpoint continues exactly (on a stand-in simulator, so it runs
-in seconds); `change_stats`' group shares; the verdict on made-up tables. The first-generation check of part C
+in seconds); `change_stats`' group shares; the verdict on made-up tables; part E's plan and its pure functions (the
+five-of-six rule, its label-permuted null, the agreement of factors and of per-pair changes, the pairs moved, the
+paired differences over the re-drawn wirings) on made-up tables. The first-generation check of part C
 (`input_oracle` at its defaults reproduces E77's oracle_history_A.csv to the last digit) simulates a generation of 32
 candidates (minutes): it runs here only with E86_SIMULATE=1, otherwise as `--part C-check`. Needs the shared directory;
 skipped without it."""
@@ -370,3 +372,169 @@ def test_verdict_incomplete_and_replicate_kinds():
     assert v['outcome'] == 'incomplete' and any(m.startswith('C2') for m in v['missing'])
     v = E86.verdict(_table(c1=(0.003, 0.002), c2=(-0.001, 0.0004)), FLIES)
     assert v['replicate_kinds']['C1']['carries'] and not v['replicate_kinds']['C2']['carries']
+
+
+# ---------------------------------------------------------------------------
+# part E: the six inputs (pure functions on made-up tables)
+
+def test_part_e_plan_and_six():
+    out = H.results_dir(E86.EXPERIMENT)
+    plan = E86.plan_e(out)
+    assert len(plan) == 16 and {p['wiring'] for p in plan} == set(E83.S_WIRINGS)
+    assert {p['change'] for p in plan} == set(E86.SEARCHES) and all(p['part'] == 'E' for p in plan)
+    assert len({p['tag'] for p in plan}) == 16
+    assert not {p['tag'] for p in plan} & {p['tag'] for p in E86.plan_c_read(out)}
+    for p in plan:
+        assert p['unseen'] == E86.UNSEEN[E86.SEARCHES[p['change']]['half']] and p['size'] == 0.6
+    assert E86.DRAWS7 == ('P1', 'P2', 'M1', 'P3', 'P4', 'M2', 'M3')
+    meta = E86.six_meta()
+    assert list(meta) == list(E86.SIX)
+    assert E86.relation(meta['cand_A'], meta['C1_A']) == 'same half'
+    assert E86.relation(meta['cand_A'], meta['cand_B']) == 'same split'
+    assert E86.relation(meta['C2_C'], meta['C2_D']) == 'same split'
+    assert E86.relation(meta['C1_B'], meta['C2_D']) == 'other split'
+    # E85's part A4 code reads the new searches' factor tables as part C wrote them
+    E85 = pytest.importorskip('experiments.E85_orn_fly_population')
+    for n in E86.SEARCHES:
+        name, tab = E86.E85_SIX[n]
+        pd.testing.assert_frame_equal(E85.searched_factors(name, {name: tab}), E86.search_factors(out, n))
+    pd.testing.assert_frame_equal(E85.searched_factors('E77_halfA'), E85.searched_factors(*E86.E85_SIX['cand_A']
+                                                                                          [:1], {'E77_halfA': E86.E85_SIX['cand_A'][1]}))
+
+
+def _tables(values, odors=('o1', 'o2'), gloms=('g1', 'g2', 'g3')):
+    """{name: glomeruli x odors} from {name: flat values, odor by odor}."""
+    return {n: pd.DataFrame(np.asarray(v, dtype=float).reshape(len(odors), len(gloms)).T, index=list(gloms),
+                            columns=list(odors)) for n, v in values.items()}
+
+
+def test_five_of_six():
+    # six tables, two odors x three glomeruli (odor by odor: o1's g1, g2, g3, then o2's)
+    vals = {
+        't1': [0.9, 0.9, -0.6, 0.0, 1.0, 0.3],
+        't2': [0.8, 0.8, -0.6, 0.5, 1.0, 0.3],
+        't3': [0.7, 0.7, -0.6, 0.5, 1.0, 0.3],
+        't4': [0.6, 0.6, -0.6, 0.5, 1.0, 0.3],
+        't5': [0.5, 0.5, 0.9, 0.5, -1.0, 0.3],
+        't6': [-0.6, 0.4, 0.9, 0.5, -1.0, 0.3],
+    }
+    e = E86.five_of_six(_tables(vals), scale_read=0.6).set_index(['odor', 'glomerulus'])
+    # o1 g1: five of six above 0, mean 2.9 / 6, not beyond 0.5
+    assert e.loc[('o1', 'g1'), 'n_agree'] == 5 and e.loc[('o1', 'g1'), 'sign'] == 1
+    assert e.loc[('o1', 'g1'), 'mean_log2'] == pytest.approx(2.9 / 6) and not e.loc[('o1', 'g1'), 'meets']
+    # o1 g2: all six above 0, mean 0.65: meets; at 0.6, 0.39: does not
+    assert e.loc[('o1', 'g2'), 'n_agree'] == 6 and e.loc[('o1', 'g2'), 'meets']
+    assert e.loc[('o1', 'g2'), 'mean_log2_read'] == pytest.approx(0.39) and not e.loc[('o1', 'g2'), 'meets_read']
+    # o1 g3: four of six below 0: not five
+    assert e.loc[('o1', 'g3'), 'n_agree'] == 4 and not e.loc[('o1', 'g3'), 'meets']
+    # o2 g1: a 0 counts for neither sign; the other five above, mean 2.5 / 6: not beyond
+    assert e.loc[('o2', 'g1'), 'n_above'] == 5 and e.loc[('o2', 'g1'), 'n_below'] == 0
+    assert not e.loc[('o2', 'g1'), 'meets']
+    # o2 g2: four of six above, two below: not five, though the mean is 0.33
+    assert e.loc[('o2', 'g2'), 'n_agree'] == 4 and not e.loc[('o2', 'g2'), 'meets']
+    # o2 g3: all six at 0.3: agree, mean below 0.5
+    assert e.loc[('o2', 'g3'), 'n_agree'] == 6 and not e.loc[('o2', 'g3'), 'meets']
+    assert int(e.meets.sum()) == 1 and int(e.meets_read.sum()) == 0
+    # negative entries meet it the same way, and the per-table columns are kept
+    neg = E86.five_of_six(_tables({k: -np.asarray(v) for k, v in vals.items()})).set_index(['odor', 'glomerulus'])
+    assert neg.loc[('o1', 'g2'), 'meets'] and neg.loc[('o1', 'g2'), 'sign'] == -1
+    assert int(neg.meets.sum()) == 1 and neg.loc[('o1', 'g2'), 't6'] == pytest.approx(-0.4)
+    # five that agree but whose mean has the other sign (one very large opposite value) do not meet it
+    odd = _tables({f't{i}': [0.6] * 6 for i in range(1, 6)} | {'t6': [-6.0] * 6})
+    assert not E86.five_of_six(odd).meets.any()
+
+
+def test_five_of_six_null_is_deterministic():
+    F = {n: E86.candidate_factors(X) for n, X in (('a', 'A'), ('b', 'B'))}
+    n1 = E86.five_of_six_null(F, n=2, min_agree=2, beyond=0.0)
+    n2 = E86.five_of_six_null(F, n=2, min_agree=2, beyond=0.0)
+    pd.testing.assert_frame_equal(n1, n2)
+    assert list(n1.columns) == ['draw', 'n_meets', 'n_meets_read', 'n_agree'] and len(n1) == 2
+    # draw 0 permutes table i with seed E_NULL_SEED0 + 2 * 0 + i
+    L = E86.log2_factors({'a': E83.permuted_factors(F['a'], E86.E_NULL_SEED0),
+                          'b': E83.permuted_factors(F['b'], E86.E_NULL_SEED0 + 1)})
+    assert int(E86.five_of_six(L, min_agree=2, beyond=0.0).meets.sum()) == n1.n_meets.iloc[0]
+    s = E86.null_summary(3, pd.Series([1, 2, 3, 4]))
+    assert s['null_mean'] == 2.5 and s['null_frac_ge'] == 0.5 and s['n_draws'] == 4
+
+
+def test_factor_agreement():
+    rng = np.random.default_rng(1)
+    base = rng.normal(0, 0.5, 6)
+    L = _tables({'cand_A': base, 'C1_A': base, 'C2_C': -base, 'cand_B': rng.normal(0, 0.5, 6)})
+    meta = {n: E86.six_meta()[n] for n in L}
+    ag = E86.factor_agreement(L, meta).set_index(['input_a', 'input_b'])
+    assert len(ag) == 6
+    assert ag.loc[('cand_A', 'C1_A'), 'factors_corr'] == pytest.approx(1.0)
+    assert ag.loc[('cand_A', 'C1_A'), 'relation'] == 'same half'
+    assert ag.loc[('cand_A', 'C2_C'), 'factors_corr'] == pytest.approx(-1.0)
+    assert ag.loc[('cand_A', 'C2_C'), 'relation'] == 'other split'
+    assert ag.loc[('cand_A', 'cand_B'), 'relation'] == 'same split'
+    for o in ('o1', 'o2'):
+        assert ag.loc[('cand_A', 'C1_A'), f'factors_corr_{o}'] == pytest.approx(1.0)
+    r = ag.loc[('cand_A', 'cand_B')]
+    per = [r['factors_corr_o1'], r['factors_corr_o2']]
+    assert r['factors_corr_per_odor_median'] == pytest.approx(np.median(per))
+    assert r['factors_corr_per_odor_min'] == pytest.approx(min(per))
+    ent = E86.five_of_six(L, min_agree=3)
+    bo = E86.agreement_by_odor(ag.reset_index(), ent, odors=('o1', 'o2')).set_index('odor')
+    assert bo.loc['o1', 'corr_mean_same_half'] == pytest.approx(1.0) and bo.loc['o1', 'n_entries'] == 3
+
+
+def _effects(idx, rng):
+    base = pd.Series(rng.normal(0.1, 0.05, len(idx)), index=idx)
+    d = pd.Series(rng.normal(0, 0.02, len(idx)), index=idx)
+    eff = {('none', 'T'): base, ('a', 'T'): base + d, ('b', 'T'): base + 2 * d, ('c', 'T'): base - d,
+           ('none', 'draws7'): base, ('a', 'draws7'): base + d}
+    return eff, base, d
+
+
+def test_changes_agreement_and_pairs_moved():
+    rng = np.random.default_rng(2)
+    idx = E86.targets()['z8'].index
+    eff, base, d = _effects(idx, rng)
+    pd.testing.assert_series_equal(E86.change_effect(eff, 'b', 'T'), 2 * d, check_names=False)
+    assert E86.change_effect(eff, 'b', 'draws7') is None
+    ca = E86.changes_agreement(eff, ['a', 'b', 'c'], ('T', 'draws7')).set_index(['input_a', 'input_b'])
+    assert ca.loc[('a', 'b'), 'changes_corr_T'] == pytest.approx(1.0)
+    assert ca.loc[('a', 'c'), 'changes_corr_T'] == pytest.approx(-1.0)
+    assert np.isnan(ca.loc[('a', 'b'), 'changes_corr_draws7'])
+    # pairs moved: the mean change of a, b, c is 2 d / 3; a and b share its sign wherever d is not 0
+    target = pd.Series(rng.normal(0.18, 0.06, len(idx)), index=idx)
+    pm = E86.pairs_moved(eff, ['a', 'b', 'c'], 'T', target)
+    assert len(pm) == 120 and pm.n_inputs.iloc[0] == 3 and (pm.n_same_sign == 2).all()
+    assert np.allclose(pm.mean_change, (pm.a + pm.b + pm.c) / 3)
+    assert (np.abs(pm.mean_change).diff().dropna() <= 0).all()
+    assert (pm.group == 'ester').sum() == 15 and (pm.group == 'alcohol').sum() == 6
+    r = pm.iloc[0]
+    k = (r.odor_a, r.odor_b)
+    asked = (target - target.mean()) - (base - base.mean())
+    assert r.asked == pytest.approx(asked.loc[k]) and r.mean_change == pytest.approx(2 * d.loc[k] / 3)
+    # a unit where only some inputs have a reading uses those
+    pm7 = E86.pairs_moved(eff, ['a', 'b', 'c'], 'draws7', target)
+    assert pm7.n_inputs.iloc[0] == 1 and 'b' not in pm7.columns
+    assert E86.pairs_moved(eff, ['b'], 'draws7', target).empty
+
+
+def test_paired_differences():
+    rows = []
+    for ch, diffs in (('x', [-0.002, 0.001, -0.003, np.nan, -0.001, 0.0, -0.004]), ('y', [0.001] * 7)):
+        for w, dd in zip(E86.DRAWS7, diffs):
+            if np.isnan(dd):
+                continue
+            for against, sign in (('unseen', 1), ('all', -1)):
+                rows.append(dict(change=ch, unit=w, against=against, unchanged=0.05, changed=0.05 + sign * dd))
+        rows.append(dict(change=ch, unit='T', against='unseen', unchanged=0.05, changed=0.0))
+    tb = pd.DataFrame(rows)
+    pdf = E86.paired_differences(tb).set_index('change')
+    assert list(pdf.index) == ['x', 'y']
+    assert pdf.loc['x', 'n'] == 6 and pdf.loc['x', 'n_lower'] == 4 and not pdf.loc['x', 'complete']
+    assert pdf.loc['x', 'mean'] == pytest.approx(np.mean([-0.002, 0.001, -0.003, -0.001, 0.0, -0.004]))
+    assert np.isnan(pdf.loc['x', 'P3']) and pdf.loc['x', 'P1'] == pytest.approx(-0.002)
+    assert pdf.loc['x', 'M1'] == pytest.approx(-0.003)
+    assert pdf.loc['y', 'complete'] and pdf.loc['y', 'n_lower'] == 0 and pdf.loc['y', 'mean'] == pytest.approx(0.001)
+    pa = E86.paired_differences(tb, against='all').set_index('change')
+    # the signs turned: only P2's -0.001 is lower (0 is not)
+    assert pa.loc['x', 'n_lower'] == 1 and pa.loc['y', 'n_lower'] == 7
+    # T is not a re-drawn wiring
+    assert 'T' not in pdf.columns

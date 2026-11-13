@@ -64,7 +64,7 @@ import json
 import time
 from itertools import combinations
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -388,9 +388,10 @@ def near_ratio(dist: pd.DataFrame, variant: str = 'repro') -> Tuple[float, pd.Da
 # ---------------------------------------------------------------------------
 # A4: the searched inputs against the flies' spread
 
-def searched_factors(name: str) -> pd.DataFrame:
-    """A searched input's factors as glomeruli x odors (E83's `read_factors`)."""
-    folder, f = SEARCHED[name]
+def searched_factors(name: str, tables: Optional[Mapping[str, Tuple[str, str]]] = None) -> pd.DataFrame:
+    """A searched input's factors as glomeruli x odors (E83's `read_factors`); `tables` maps names to (results folder,
+    factor table) (SEARCHED by default)."""
+    folder, f = (SEARCHED if tables is None else tables)[name]
     return E.read_factors(H.results_dir(folder) / f)
 
 
@@ -417,16 +418,18 @@ def span_share(dev_o: np.ndarray, v: np.ndarray) -> float:
     return float(p @ p / (v @ v))
 
 
-def searched_tables() -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """(per entry, per input and odor) tables of part A4 (the module docstring)."""
+def searched_tables(tables: Optional[Mapping[str, Tuple[str, str]]] = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """(per entry, per input and odor) tables of part A4 (the module docstring), for the inputs of `tables` (name ->
+    (results folder, factor table); SEARCHED by default; E86's part E passes its new searches)."""
+    tables = SEARCHED if tables is None else tables
     F = flies()
     sp = spread_table().set_index(['odor', 'glomerulus'])
     st = trial_stats(F['x'])
     lab = H.abbrev_columns(H.apl16_orn_deltas())
     hal = hallem_log2()
     rows, srows = [], []
-    for name in SEARCHED:
-        fac = searched_factors(name)
+    for name in tables:
+        fac = searched_factors(name, tables)
         searched = [o for o in fac.columns if not np.allclose(fac[o].to_numpy(), 1.0)]
         for o in searched:
             if o not in F['odors']:

@@ -37,7 +37,19 @@ Parts (CLI `--part`):
 - score: readings.csv, pairs.csv, two_by_two.csv and inputs.csv (one row per input: g and the gate's statistics), the
   archive tables (model_pair_distances_long.csv, variants.csv), runs.csv.
 - D: score, then the verdict (`verdict`): gate.csv, replication.csv, null.csv, verdict.json, comparison_table.md.
-- E, F: only on "passes" / "carries" (not written).
+- E (only on "passes" or "carries"): what the input is. The six inputs searched on the real wiring (SIX: E77's two, the
+  candidate, whose readings at 0.6 on all eight wirings are E83's part A2 runs, read, not rerun; part C's four, on T
+  from C-read) are scored on every population and wiring (partE_readings.csv, partE_pairs.csv, partE_two_by_two.csv),
+  the seven re-drawn wirings (P1, P2, M1, P3, P4, M2, M3) as paired differences against the unseen half of each input's
+  split (partE_wirings.csv, partE_inputs.csv); the agreement of the six (log2 factors over all entries and per odor,
+  per-pair changes on T, the seven and all eight; partE_agreement.csv, partE_agreement_by_odor.csv); the entries on
+  which five of the six agree in sign with a mean log2 factor beyond +-0.5 (the list a measurement could test, named
+  only with ten or more; partE_entries.csv, partE_five_of_six.csv, with the rule's label-permuted counts beside it in
+  partE_null.csv); the pairs the six move (partE_pairs_moved.csv); the six against the ORN flies' spread and Hallem's
+  data through E85's part A4 code (partE_vs_flies*.csv); part_e.json, the "Part E" section of comparison_table.md.
+  These tables need no simulation and are written first; then the four new inputs at 0.6 on S (16 held readings,
+  runs_E.csv, tags E_<input>_<wiring>), and the tables again on all eight wirings. E-tables: the tables only.
+- F: only on "passes" (not written).
 
 Outputs: results/E86_reduced_input_candidate/ (shared directory; also runs_<part>.csv with absolute parameters and
 realism per point, provenance_<part>.json with `H.model_provenance` per point, inputs/<change>.csv in E38's layout) and
@@ -47,6 +59,7 @@ conditions on / acute_off), the searches' checkpoints under C/, the breadth runs
 Usage (from the repository root):
     OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ./venv/bin/python -u experiments/E86_reduced_input_candidate.py --part B
     OMP_NUM_THREADS=8 OMP_THREAD_LIMIT=8 nice -n 10 ./venv/bin/python -u experiments/E86_reduced_input_candidate.py --part C --search C1_A
+    OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ./venv/bin/python -u experiments/E86_reduced_input_candidate.py --part E
 """
 from __future__ import annotations
 
@@ -256,9 +269,10 @@ def _rms(x) -> float:
     return float(np.sqrt(np.mean(x ** 2)))
 
 
-def _e83_effects(readout: str = 'cal') -> Dict[Tuple[str, str], pd.Series]:
-    """{(change, unit): per-pair APL effect (canonical order)} from E83's pairs.csv."""
-    pr = pd.read_csv(H.results_dir(E83.EXPERIMENT) / 'pairs.csv', float_precision='round_trip')
+def _e83_effects(readout: str = 'cal', path: Optional[Path] = None) -> Dict[Tuple[str, str], pd.Series]:
+    """{(change, unit): per-pair APL effect (canonical order)} from E83's pairs.csv (or `path`, a table of the same
+    layout, e.g. part E's partE_pairs.csv)."""
+    pr = pd.read_csv(H.results_dir(E83.EXPERIMENT) / 'pairs.csv' if path is None else path, float_precision='round_trip')
     pr = pr[pr.readout == readout]
     out = {}
     for (ch, unit), g in pr.groupby(['change', 'unit'], sort=False):
@@ -725,10 +739,12 @@ def collect_runs(out: Path) -> Tuple[Dict[Tuple[str, str], Dict[str, tuple]], pd
     return runs, pd.DataFrame(rows)
 
 
-def two_by_two(readings: pd.DataFrame, meta: Mapping[str, dict]) -> pd.DataFrame:
-    """Per input (change) on T and its single wirings, under the calibrated readout: the pattern part unchanged and
-    changed against the half searched on, the half never seen, all recordings and the six typical ones, the gain and the
-    reduction of the squared pattern error (E83's `two_by_two` columns, with this experiment's halves)."""
+def two_by_two(readings: pd.DataFrame, meta: Mapping[str, dict], units: Sequence[str] = ('T',) + T_WIRINGS
+               ) -> pd.DataFrame:
+    """Per input (change) on `units` (T and its single wirings by default; part E: every population and wiring), under
+    the calibrated readout: the pattern part unchanged and changed against the half searched on, the half never seen,
+    all recordings and the six typical ones, the gain and the reduction of the squared pattern error (E83's `two_by_two`
+    columns, with this experiment's halves)."""
     r = readings[readings.readout == 'cal']
     base = r[r.change == 'none'].set_index('unit')
     rows = []
@@ -736,7 +752,7 @@ def two_by_two(readings: pd.DataFrame, meta: Mapping[str, dict]) -> pd.DataFrame
         g = r[r.change == ch].set_index('unit')
         if g.empty:
             continue
-        for unit in ('T',) + T_WIRINGS:
+        for unit in units:
             if unit not in g.index:
                 continue
             for which, t in (('searched', f"half{m['half']}"), ('unseen', f"half{m['unseen']}"), ('all', 'z8'), ('six', 'z6')):
@@ -777,10 +793,11 @@ def inputs_table(readings: pd.DataFrame, tb: pd.DataFrame, rt: pd.DataFrame, met
     return pd.DataFrame(rows)
 
 
-def _archive_tables(out: Path, rt: pd.DataFrame) -> None:
+def _archive_tables(out: Path, rt: pd.DataFrame, of_parts: Sequence[str] = PARTS) -> None:
     """model_pair_distances_long.csv rows (raw spike counts, the harness's primary model RDM) and variants.csv rows
-    (absolute parameters) of this experiment's own runs, for kcq/apl_effect.py and the model-output archive."""
-    own = rt[rt.part.isin(PARTS)] if len(rt) else rt
+    (absolute parameters) of this experiment's own runs (those of `of_parts`), for kcq/apl_effect.py and the model-output
+    archive."""
+    own = rt[rt.part.isin(of_parts)] if len(rt) else rt
     parts, vrows = [], []
     for r in own.to_dict('records'):
         o = load_run(r['part'], r['tag'])
@@ -1027,12 +1044,609 @@ def _comparison_table_d(out: Path, it: pd.DataFrame, v: dict) -> None:
 
 
 # ---------------------------------------------------------------------------
-# parts E and F (only on "passes" / "carries")
+# part E (on "passes" or "carries"): what the input is
 
-def part_e(out: Path) -> None:
-    """Part E, only on "passes" or "carries" (not written)."""
-    raise NotImplementedError('part E runs only on "passes" or "carries"; not written yet')
+PART_E = 'E'
+# the six inputs searched on the real wiring: E77's two (the candidate; E83's part A2 read them at SIZE on all eight
+# wirings, archived, read, not rerun) and part C's four (on T from C-read, on S from this part)
+SIX = ('cand_A', 'cand_B', 'C1_A', 'C1_B', 'C2_C', 'C2_D')
+SIX_LABELS = {'cand_A': "the candidate, half A (E77's)", 'cand_B': "the candidate, half B (E77's)",
+              'C1_A': 'second draw, half A (C1_A)', 'C1_B': 'second draw, half B (C1_B)',
+              'C2_C': 'second split, half C (C2_C)', 'C2_D': 'second split, half D (C2_D)'}
+# the six under E85's part A4 code: input -> (E85's name, (results folder, factor table)); E77's two keep E85's names,
+# so that E85's rows of them are reproduced
+E85_SIX = {'cand_A': ('E77_halfA', ('E77_input_side_common_error', 'oracle_factors_A.csv')),
+           'cand_B': ('E77_halfB', ('E77_input_side_common_error', 'oracle_factors_B.csv')),
+           **{n: (f'E86_{n}', (EXPERIMENT, f'oracle_factors_{n}.csv')) for n in SEARCHES}}
+DRAWS7 = tuple(E83.POPULATIONS['draws7'])
+E_UNITS = tuple(E83.POPULATIONS) + tuple(E83.ALL_WIRINGS)
+# the list a measurement could test (fixed before any run): the entries (glomerulus x odor) on which at least E_AGREE of
+# the six agree in sign with a mean log2 factor beyond +-E_LOG2 (the searched factors, at their full log size; the same
+# rule on the change as read, SIZE times the log2 factor, is given beside); with fewer than E_MIN_ENTRIES the input is
+# described by the pairs it moves and no measurement is named
+E_AGREE, E_LOG2, E_MIN_ENTRIES = 5, 0.5, 10
+# beside the rule, not part of it: its counts with each of the six tables label-permuted (E83's `permuted_factors`;
+# table i of draw d with seed E_NULL_SEED0 + len(SIX) * d + i)
+N_NULL_E, E_NULL_SEED0 = 1000, 100000
+E_TOP_PAIRS = 12
 
+
+def require_e(out: Path) -> dict:
+    """verdict.json; raises unless its outcome is 'passes' or 'carries' (part E runs only then)."""
+    v = json.loads((out / 'verdict.json').read_text())
+    if v['outcome'] not in ('passes', 'carries'):
+        raise RuntimeError(f"the verdict is {v['outcome']!r}: part E runs only on 'passes' or 'carries'")
+    return v
+
+
+def six_meta() -> Dict[str, dict]:
+    """The six inputs' metadata (`_change_meta`'s)."""
+    meta = _change_meta()
+    return {n: meta[n] for n in SIX}
+
+
+def six_factors(out: Path) -> Dict[str, pd.DataFrame]:
+    """The six inputs' searched factors, glomeruli x the 16 odors (1 where not searched)."""
+    F = {f'cand_{X}': candidate_factors(X) for X in ('A', 'B')}
+    F.update({n: search_factors(out, n) for n in SEARCHES})
+    return {n: F[n] for n in SIX}
+
+
+def log2_factors(F: Mapping[str, pd.DataFrame], odors: Sequence[str] = E77.E_ODORS) -> Dict[str, pd.DataFrame]:
+    """log2 of factor tables, restricted to `odors` (the ten searched)."""
+    return {n: np.log2(f[list(odors)].astype(float)) for n, f in F.items()}
+
+
+def plan_e(out: Path) -> List[dict]:
+    """Part E's points: part C's four new inputs at SIZE on S (16 points, tags E_<input>_<wiring>; the change keeps the
+    input's name, so that its readings on S and on T (C-read) make one input on all eight wirings)."""
+    plan = []
+    for name, cfg in SEARCHES.items():
+        search_factors(out, name)
+        plan += [dict(part=PART_E, change=name, group=name.split('_')[0], kind='search', seed=GENERATOR_SEEDS[name],
+                      half=cfg['half'], unseen=UNSEEN[cfg['half']], size=SIZE, wiring=w, tag=f'E_{name}_{w}')
+                 for w in E83.S_WIRINGS]
+    return plan
+
+
+def relation(a: Mapping, b: Mapping) -> str:
+    """How two inputs' searches relate, from their 'half': 'same half' (the same recordings searched), 'same split' (the
+    two halves of one split) or 'other split'."""
+    if a['half'] == b['half']:
+        return 'same half'
+    return 'same split' if split_of(a['half']) == split_of(b['half']) else 'other split'
+
+
+def factor_agreement(L: Mapping[str, pd.DataFrame], meta: Mapping[str, Mapping]) -> pd.DataFrame:
+    """Pairwise agreement of log2 factor tables (glomeruli x odors, one layout): the correlation over all entries and,
+    per odor, over its glomeruli (each odor's in factors_corr_<odor>; their median, min and max), with the pair's
+    `relation`."""
+    names = list(L)
+    rows = []
+    for i, a in enumerate(names):
+        for b in names[i + 1:]:
+            A, B = L[a], L[b].reindex(index=L[a].index, columns=L[a].columns)
+            per_odor = [float(np.corrcoef(A[o].to_numpy(), B[o].to_numpy())[0, 1]) for o in A.columns]
+            rows.append(dict(input_a=a, input_b=b, relation=relation(meta[a], meta[b]),
+                             factors_corr=float(np.corrcoef(A.to_numpy().ravel(), B.to_numpy().ravel())[0, 1]),
+                             factors_corr_per_odor_median=float(np.median(per_odor)),
+                             factors_corr_per_odor_min=float(np.min(per_odor)),
+                             factors_corr_per_odor_max=float(np.max(per_odor)),
+                             **{f'factors_corr_{o}': c for o, c in zip(A.columns, per_odor)}))
+    return pd.DataFrame(rows)
+
+
+def change_effect(effects: Mapping[Tuple[str, str], pd.Series], name: str, unit: str) -> Optional[pd.Series]:
+    """Input `name`'s change of the per-pair APL effect on `unit` (changed minus unchanged, the unchanged one's pair
+    order), or None without both readings."""
+    if (name, unit) not in effects or ('none', unit) not in effects:
+        return None
+    base = effects[('none', unit)]
+    return (effects[(name, unit)].reindex(base.index) - base)
+
+
+def changes_agreement(effects: Mapping[Tuple[str, str], pd.Series], names: Sequence[str],
+                      units: Sequence[str]) -> pd.DataFrame:
+    """Pairwise correlation of the inputs' per-pair changes (`change_effect`) on each unit (changes_corr_<unit>; NaN
+    where either lacks a reading on it)."""
+    rows = []
+    for i, a in enumerate(names):
+        for b in names[i + 1:]:
+            row = dict(input_a=a, input_b=b)
+            for u in units:
+                da, db = change_effect(effects, a, u), change_effect(effects, b, u)
+                row[f'changes_corr_{u}'] = (np.nan if da is None or db is None else
+                                            float(np.corrcoef(da.to_numpy(), db.to_numpy())[0, 1]))
+            rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def _rule(st: np.ndarray, min_agree: int, beyond: float, scale: float = 1.0) -> Tuple[np.ndarray, ...]:
+    """The rule on a stack of log2 factors (tables first): (number above 0, below 0, the majority sign, how many share
+    it, the mean, meets). An entry meets it when at least `min_agree` share the sign and `scale` times the mean is
+    beyond +-`beyond` in that sign (0 counts for neither sign)."""
+    npos, nneg = (st > 0).sum(axis=0), (st < 0).sum(axis=0)
+    sign = np.sign(npos - nneg)
+    n_agree = np.maximum(npos, nneg)
+    mean = st.mean(axis=0)
+    meets = (n_agree >= min_agree) & (sign != 0) & (sign * mean * scale > beyond)
+    return npos, nneg, sign, n_agree, mean, meets
+
+
+def five_of_six(L: Mapping[str, pd.DataFrame], min_agree: int = E_AGREE, beyond: float = E_LOG2,
+                scale_read: float = SIZE) -> pd.DataFrame:
+    """Per entry (odor, glomerulus) of a set of log2 factor tables (glomeruli x odors, one layout): each table's log2
+    factor (a column per table), how many are above and below 0, the majority sign and how many share it (n_agree), the
+    mean (mean_log2; mean_log2_read at `scale_read`), and the rule (`_rule`): `meets` on the log2 factors, `meets_read`
+    on the change as read (`scale_read` times them)."""
+    names = list(L)
+    ref = L[names[0]]
+    st = np.stack([L[n].reindex(index=ref.index, columns=ref.columns).to_numpy(dtype=float) for n in names])
+    npos, nneg, sign, n_agree, mean, meets = _rule(st, min_agree, beyond)
+    meets_read = _rule(st, min_agree, beyond, scale_read)[-1]
+    rows = []
+    for j, o in enumerate(ref.columns):
+        for i, g in enumerate(ref.index):
+            rows.append(dict(odor=o, glomerulus=g, **{n: float(st[k, i, j]) for k, n in enumerate(names)},
+                             n_above=int(npos[i, j]), n_below=int(nneg[i, j]), sign=int(sign[i, j]),
+                             n_agree=int(n_agree[i, j]), mean_log2=float(mean[i, j]),
+                             mean_log2_read=float(scale_read * mean[i, j]), meets=bool(meets[i, j]),
+                             meets_read=bool(meets_read[i, j])))
+    return pd.DataFrame(rows)
+
+
+def _factors_sha256(F: Mapping[str, pd.DataFrame]) -> str:
+    import hashlib
+    h = hashlib.sha256()
+    for n, f in F.items():
+        h.update(n.encode())
+        h.update(f.to_csv(float_format='%.17g').encode())
+    return h.hexdigest()
+
+
+def five_of_six_null(F: Mapping[str, pd.DataFrame], n: int = N_NULL_E, seed0: int = E_NULL_SEED0,
+                     odors: Sequence[str] = E77.E_ODORS, min_agree: int = E_AGREE, beyond: float = E_LOG2,
+                     scale_read: float = SIZE) -> pd.DataFrame:
+    """The rule's counts with every table's factors label-permuted (E83's `permuted_factors`: each odor's factors over
+    its responding glomeruli), table i of draw d with seed seed0 + len(F) * d + i: one row per draw (n_meets,
+    n_meets_read, n_agree: the entries with at least `min_agree` sharing the sign)."""
+    names = list(F)
+    rows = []
+    for d in range(n):
+        st = np.stack([np.log2(E83.permuted_factors(F[k], seed0 + len(names) * d + i)[list(odors)].to_numpy(dtype=float))
+                       for i, k in enumerate(names)])
+        r = _rule(st, min_agree, beyond)
+        rows.append(dict(draw=d, n_meets=int(r[-1].sum()), n_meets_read=int(_rule(st, min_agree, beyond, scale_read)[-1].sum()),
+                         n_agree=int((r[3] >= min_agree).sum())))
+    return pd.DataFrame(rows)
+
+
+def null_summary(observed: float, null: pd.Series) -> dict:
+    """An observed count against its null: the null's mean, 95th percentile and the share of draws at or above it."""
+    null = pd.Series(null, dtype=float)
+    return dict(observed=float(observed), null_mean=float(null.mean()), null_p95=float(np.quantile(null, 0.95)),
+                null_frac_ge=float((null >= observed).mean()), n_draws=int(len(null)))
+
+
+def paired_differences(tb: pd.DataFrame, wirings: Sequence[str] = DRAWS7, against: str = 'unseen') -> pd.DataFrame:
+    """Per input (change) of a `two_by_two` table, its single wirings `wirings` as paired differences against
+    `against`: changed minus unchanged on each wiring (a column per wiring, NaN without a reading; negative is better),
+    how many have a reading (n) and are lower (n_lower), their mean, and whether every wiring has one (complete)."""
+    t = tb[(tb.against == against) & tb.unit.isin(list(wirings))]
+    rows = []
+    for ch in dict.fromkeys(t.change):
+        g = t[t.change == ch].set_index('unit')
+        d = (g.changed - g.unchanged).reindex(list(wirings))
+        have = d.dropna()
+        rows.append(dict(change=ch, against=against, **{w: float(d[w]) for w in wirings}, n=int(len(have)),
+                         n_lower=int((have < 0).sum()), mean=float(have.mean()) if len(have) else np.nan,
+                         complete=bool(len(have) == len(wirings))))
+    return pd.DataFrame(rows)
+
+
+def pairs_moved(effects: Mapping[Tuple[str, str], pd.Series], names: Sequence[str], unit: str,
+                target: pd.Series) -> pd.DataFrame:
+    """Per odor pair, the inputs' changes of the per-pair APL effect on `unit` (`change_effect`; inputs without a
+    reading there left out), their mean, how many inputs share the mean's sign, what `target` asks (its per-pair effect
+    minus the unchanged model's, both means removed) and the pair's group (ester, alcohol or other); sorted by the size
+    of the mean change."""
+    ch = {n: change_effect(effects, n, unit) for n in names}
+    ch = {n: v for n, v in ch.items() if v is not None}
+    if not ch:
+        return pd.DataFrame()
+    base = effects[('none', unit)]
+    idx = base.index
+    D = pd.DataFrame({n: v.reindex(idx).to_numpy() for n, v in ch.items()}, index=idx)
+    mean = D.mean(axis=1)
+    same = (np.sign(D.to_numpy()) == np.sign(mean.to_numpy())[:, None]).sum(axis=1)
+    t = E83._cs(target).reindex(idx)
+    asked = (t - t.mean()) - (base - base.mean())
+    masks = E77.kind_masks(idx)
+    group = np.where(masks['ester'], 'ester', np.where(masks['alcohol'], 'alcohol', 'other'))
+    res = pd.DataFrame(dict(odor_a=idx.get_level_values(0), odor_b=idx.get_level_values(1), unit=unit, group=group,
+                            **{n: D[n].to_numpy() for n in D.columns}, mean_change=mean.to_numpy(),
+                            n_inputs=D.shape[1], n_same_sign=same, asked=asked.to_numpy()))
+    return res.iloc[np.argsort(-np.abs(res.mean_change.to_numpy()), kind='stable')].reset_index(drop=True)
+
+
+def agreement_by_odor(ag: pd.DataFrame, ent: pd.DataFrame, odors: Sequence[str] = E77.E_ODORS) -> pd.DataFrame:
+    """Per odor: the inputs' pairwise correlations of its log2 factors (`factor_agreement`'s per-odor columns: mean,
+    min, max over the pairs, and the mean over pairs searched on the same half), and of its entries (`five_of_six`) how
+    many have at least E_AGREE sharing the sign and how many meet the rule."""
+    rows = []
+    for o in odors:
+        c = ag[f'factors_corr_{o}']
+        e = ent[ent.odor == o]
+        rows.append(dict(odor=o, corr_mean=float(c.mean()), corr_min=float(c.min()), corr_max=float(c.max()),
+                         corr_mean_same_half=float(c[ag.relation == 'same half'].mean()), n_entries=int(len(e)),
+                         n_agree=int((e.n_agree >= E_AGREE).sum()), n_meets=int(e.meets.sum()),
+                         n_meets_read=int(e.meets_read.sum())))
+    return pd.DataFrame(rows)
+
+
+def collect_six(out: Path) -> Tuple[Dict[Tuple[str, str], Dict[str, tuple]], pd.DataFrame]:
+    """The six inputs' runs so far, {(change, wiring): outputs}, and their rows: the candidate's E83 part A2 runs at
+    SIZE on all eight wirings (archived, not rerun; rows from E83's runs_A2.csv), part C's four on T (runs_Cread.csv)
+    and on S (runs_E.csv)."""
+    runs, rows = {}, []
+    a2 = pd.read_csv(H.results_dir(E83.EXPERIMENT) / 'runs_A2.csv', float_precision='round_trip')
+    for X in ('A', 'B'):
+        for w in E83.ALL_WIRINGS:
+            tag = f'A2_half{X}_s{SIZE:g}_{w}'
+            o = E83.load_run('A2', tag)
+            if o is None:
+                raise RuntimeError(f"E83's run {tag} not found")
+            runs[(f'cand_{X}', w)] = o
+            rows.append(dict(a2[a2.tag == tag].iloc[0].to_dict(), part='A2', change=f'cand_{X}', group='candidate',
+                             kind='candidate', half=X, unseen=UNSEEN[X],
+                             source=f"E83 part A2 ({tag}, archived, not rerun)"))
+    for part in ('Cread', PART_E):
+        for r in E83._read_rows(out / f'runs_{part}.csv').to_dict('records'):
+            if r.get('change') not in SIX:
+                continue
+            o = load_run(part, r['tag'])
+            if o is None:
+                print(f"{r['tag']}: outputs missing", flush=True)
+                continue
+            runs[(r['change'], r['wiring'])] = o
+            rows.append(r)
+    return runs, pd.DataFrame(rows)
+
+
+def score_e(out: Path) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """The six inputs' runs so far (`collect_six`) scored with E83's `score_runs` against this experiment's targets
+    (populations only where all their wirings have a reading): partE_readings.csv, partE_pairs.csv and
+    partE_two_by_two.csv (`two_by_two` on every population and wiring). T's g of each input must equal part D's
+    inputs.csv (raises otherwise). Returns (readings, pairs, two_by_two, runs rows)."""
+    runs, rt = collect_six(out)
+    meta = six_meta()
+    sm = {k: dict({a: b for a, b in v.items() if a != 'kind'}, input_kind=v['kind']) for k, v in meta.items()}
+    readings, pairs = E83.score_runs(runs, sm, tg=targets())
+    readings.to_csv(out / 'partE_readings.csv', index=False)
+    pairs.to_csv(out / 'partE_pairs.csv', index=False)
+    tb = two_by_two(readings, meta, units=E_UNITS)
+    tb.to_csv(out / 'partE_two_by_two.csv', index=False)
+    it = pd.read_csv(out / 'inputs.csv', float_precision='round_trip').set_index('change')
+    for n in SIX:
+        got = tb[(tb.change == n) & (tb.unit == 'T') & (tb.against == 'unseen')].gain
+        if len(got) != 1 or abs(float(got.iloc[0]) - float(it.loc[n, 'g'])) > 1e-12:
+            raise RuntimeError(f"{n}: T's g {list(got)} differs from part D's {float(it.loc[n, 'g'])}")
+    return readings, pairs, tb, rt
+
+
+def inputs_e(readings: pd.DataFrame, tb: pd.DataFrame, rt: pd.DataFrame) -> pd.DataFrame:
+    """One row per input of the six: g (the pattern part against the unseen half of its split, unchanged minus changed)
+    on S, T, the seven re-drawn wirings as a population (draws7) and all eight, and against all recordings; the seven
+    as paired differences (`paired_differences`: number lower, mean, against the unseen half and against all
+    recordings); the raw-count loss change against all recordings and the mean APL effect under the readout on the
+    seven and on all eight; the readings flagged by the four bands (the rule of 16:10) of all its readings."""
+    meta = six_meta()
+    pu = paired_differences(tb, DRAWS7, 'unseen').set_index('change')
+    pa = paired_differences(tb, DRAWS7, 'all').set_index('change')
+    rows = []
+    for n in SIX:
+        m = meta[n]
+        row = dict(input=n, label=SIX_LABELS[n], group=m['group'], searched_on=m['half'], unseen=m['unseen'],
+                   split=split_of(m['half']))
+        for u in ('S', 'T', 'draws7', 'all8'):
+            q = tb[(tb.change == n) & (tb.unit == u)].set_index('against')
+            row[f'g_{u}'] = float(q.loc['unseen', 'gain']) if 'unseen' in q.index else np.nan
+            row[f'g_all_{u}'] = float(q.loc['all', 'gain']) if 'all' in q.index else np.nan
+        for p, k in ((pu, 'draws7'), (pa, 'draws7_all')):
+            row[f'{k}_n'] = int(p.loc[n, 'n']) if n in p.index else 0
+            row[f'{k}_lower'] = int(p.loc[n, 'n_lower']) if n in p.index else 0
+            row[f'{k}_mean_diff'] = float(p.loc[n, 'mean']) if n in p.index else np.nan
+        for u in ('draws7', 'all8'):
+            raw = readings[(readings.change == n) & (readings.unit == u) & (readings.readout == 'raw')]
+            raw0 = readings[(readings.change == 'none') & (readings.unit == u) & (readings.readout == 'raw')]
+            cal = readings[(readings.change == n) & (readings.unit == u) & (readings.readout == 'cal')]
+            row[f'raw_loss_change_{u}'] = float(raw.z8_loss.iloc[0] - raw0.z8_loss.iloc[0]) if len(raw) else np.nan
+            row[f'mean_effect_cal_{u}'] = float(cal.mean_effect.iloc[0]) if len(cal) else np.nan
+        rr = rt[rt.change == n] if len(rt) else rt
+        flags = rr.realism_flag.fillna('').astype(str).str.strip() != '' if len(rr) else pd.Series(dtype=bool)
+        row.update(n_points=int(len(rr)), n_flagged=int(flags.sum()),
+                   wirings=','.join(w for w in E83.ALL_WIRINGS if w in set(rr.get('wiring', []))))
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def vs_flies() -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, dict]:
+    """The six inputs against the ORN flies' spread and Hallem's data through E85's part A4 code
+    (`E85_orn_fly_population.searched_tables` and `searched_summary`, at E85's SEARCH_SIZE, which is SIZE): per entry,
+    per input and odor, and per input, with the correlation of the change (log2, as read) with Hallem's ratio to the
+    lab's input over the entries E38's table has. E77's two keep E85's names, and their summary rows are compared with
+    E85's searched_inputs_summary.csv (the largest absolute difference is returned with the tables)."""
+    from experiments import E85_orn_fly_population as E85
+    if float(E85.SEARCH_SIZE) != SIZE:
+        raise RuntimeError(f"E85's part A4 reads the inputs at {E85.SEARCH_SIZE}, not {SIZE}")
+    searched = {E85_SIX[n][0]: E85_SIX[n][1] for n in SIX}
+    entries, span = E85.searched_tables(searched)
+    summ = E85.searched_summary(entries, span)
+    hc = []
+    for name, e in entries.groupby('input', sort=False):
+        h = e.dropna(subset=['hallem_log2_vs_lab'])
+        hc.append(dict(input=name, n_hallem=int(len(h)), hallem_odors=','.join(sorted(set(h.odor))),
+                       hallem_corr=float(np.corrcoef(h.log2_change, h.hallem_log2_vs_lab)[0, 1]) if len(h) >= 3 else np.nan))
+    summ = summ.merge(pd.DataFrame(hc), on='input', how='left')
+    inv = {v[0]: k for k, v in E85_SIX.items()}
+    for df in (entries, span, summ):
+        df.insert(0, 'e86_input', df.input.map(inv))
+    ref = pd.read_csv(H.results_dir(E85.EXPERIMENT) / 'searched_inputs_summary.csv', float_precision='round_trip')
+    ref = ref.set_index('input')
+    s = summ.set_index('input')
+    cols = [c for c in ref.columns if c in s.columns and pd.api.types.is_numeric_dtype(ref[c])]
+    diffs = {k: float(np.nanmax(np.abs(s.loc[k, cols].to_numpy(dtype=float) - ref.loc[k, cols].to_numpy(dtype=float))))
+             for k in (E85_SIX['cand_A'][0], E85_SIX['cand_B'][0]) if k in ref.index}
+    check = dict(e85_rows=list(diffs), columns=cols, max_abs_diff=max(diffs.values()) if diffs else None,
+                 reproduced=bool(diffs) and max(diffs.values()) <= 1e-12)
+    return entries, span, summ, check
+
+
+def annotate_entries(ent: pd.DataFrame) -> pd.DataFrame:
+    """`five_of_six`'s entries with the lab's input, the ORN flies' mean and spread (E85's `spread_table`: SD across
+    flies of log2(fly / mean)), the mean change as read in units of that spread, the entry's share of the flies'
+    largest mean response, and Hallem's log2 ratio to the lab's input where E38's table has it (E85's `hallem_log2`)."""
+    from experiments import E85_orn_fly_population as E85
+    sp = E85.spread_table().set_index(['odor', 'glomerulus'])
+    hal = E85.hallem_log2()
+    lab = H.abbrev_columns(H.apl16_orn_deltas())
+    keys = list(zip(ent.odor, ent.glomerulus))
+    get = lambda k, c: float(sp.loc[k, c]) if k in sp.index else np.nan
+    res = ent.copy()
+    res['lab_input'] = [float(lab.loc[g, o]) for o, g in keys]
+    res['flies_mean'] = [get(k, 'mean') for k in keys]
+    res['flies_share_of_largest'] = [get(k, 'share_of_largest') for k in keys]
+    res['flies_sd_log2'] = [get(k, 'sd_log2_ratio') for k in keys]
+    res['read_in_flies_sd'] = res.mean_log2_read / res.flies_sd_log2
+    res['hallem_log2_vs_lab'] = [float(hal.get(k, np.nan)) for k in keys]
+    return res
+
+
+def part_e_tables(out: Path, n_null: int = N_NULL_E) -> dict:
+    """Part E's tables from whatever runs exist (the six on T exist before any of this part's runs): partE_readings.csv,
+    partE_pairs.csv, partE_two_by_two.csv (`score_e`); partE_inputs.csv (`inputs_e`); partE_wirings.csv (the seven
+    re-drawn wirings as paired differences, against the unseen half and all recordings); partE_agreement.csv (pairwise:
+    log2 factors over all entries and per odor, per-pair changes on T, the seven and all eight) and
+    partE_agreement_by_odor.csv; partE_entries.csv (every entry under the rule, annotated) and partE_five_of_six.csv
+    (those that meet it); partE_null.csv (the rule's label-permuted counts; reused while the six factor tables are
+    unchanged); partE_pairs_moved.csv (on T and the seven, against all recordings); partE_vs_flies.csv,
+    partE_vs_flies_span.csv, partE_vs_flies_summary.csv (E85's part A4 code); the archive tables' rows of this part's
+    runs; part_e.json and the "Part E" section of comparison_table.md."""
+    v = require_e(out)
+    t0 = time.time()
+    readings, pairs, tb, rt = score_e(out)
+    ie = inputs_e(readings, tb, rt)
+    ie.to_csv(out / 'partE_inputs.csv', index=False)
+    pdiff = pd.concat([paired_differences(tb, DRAWS7, a) for a in ('unseen', 'all')], ignore_index=True)
+    pdiff.to_csv(out / 'partE_wirings.csv', index=False)
+    meta = six_meta()
+    F = six_factors(out)
+    L = log2_factors(F)
+    effects = _e83_effects('cal', out / 'partE_pairs.csv')
+    change_units = ('T', 'draws7', 'all8')
+    ag = factor_agreement(L, meta).merge(changes_agreement(effects, SIX, change_units), on=['input_a', 'input_b'])
+    ag.to_csv(out / 'partE_agreement.csv', index=False)
+    ent = annotate_entries(five_of_six(L))
+    ent.to_csv(out / 'partE_entries.csv', index=False)
+    listed = ent[ent.meets].copy()
+    listed = listed.iloc[np.argsort(-np.abs(listed.mean_log2.to_numpy()), kind='stable')]
+    listed.to_csv(out / 'partE_five_of_six.csv', index=False)
+    bo = agreement_by_odor(ag, ent)
+    bo.to_csv(out / 'partE_agreement_by_odor.csv', index=False)
+    sha = _factors_sha256(F)
+    np_path = out / 'partE_null.csv'
+    null = pd.read_csv(np_path) if np_path.exists() else pd.DataFrame()
+    if not (len(null) == n_null and 'factors_sha256' in null.columns and (null.factors_sha256 == sha).all()):
+        print(f'the rule under {n_null} label permutations of the six', flush=True)
+        null = five_of_six_null(F, n_null).assign(factors_sha256=sha)
+        null.to_csv(np_path, index=False)
+    pm = pd.concat([pairs_moved(effects, SIX, u, targets()['z8']) for u in ('T', 'draws7')], ignore_index=True)
+    pm.to_csv(out / 'partE_pairs_moved.csv', index=False)
+    fe, fs, fsum, fcheck = vs_flies()
+    fe.to_csv(out / 'partE_vs_flies.csv', index=False)
+    fs.to_csv(out / 'partE_vs_flies_span.csv', index=False)
+    fsum.to_csv(out / 'partE_vs_flies_summary.csv', index=False)
+    rt_e = rt[rt.part == PART_E] if len(rt) else rt
+    if len(rt_e):
+        _archive_tables(out, rt_e, of_parts=(PART_E,))
+
+    rule = dict(min_agree=E_AGREE, beyond_log2=E_LOG2, min_entries=E_MIN_ENTRIES, n_entries=int(len(ent)),
+                n_agree=int((ent.n_agree >= E_AGREE).sum()), n_meets=int(ent.meets.sum()),
+                n_meets_read=int(ent.meets_read.sum()),
+                null_meets=null_summary(ent.meets.sum(), null.n_meets),
+                null_meets_read=null_summary(ent.meets_read.sum(), null.n_meets_read),
+                null_agree=null_summary((ent.n_agree >= E_AGREE).sum(), null.n_agree),
+                null_seed0=E_NULL_SEED0, factors_sha256=sha)
+    rule['description'] = 'list' if rule['n_meets'] >= E_MIN_ENTRIES else 'pairs'
+    by_rel = lambda col: {r: float(g[col].mean()) for r, g in ag.groupby('relation') if g[col].notna().any()}
+    agreement = dict(factors_corr_mean=float(ag.factors_corr.mean()), factors_corr_min=float(ag.factors_corr.min()),
+                     factors_corr_max=float(ag.factors_corr.max()), factors_corr_by_relation=by_rel('factors_corr'),
+                     factors_corr_per_odor_median_mean=float(ag.factors_corr_per_odor_median.mean()))
+    for u in change_units:
+        c = ag[f'changes_corr_{u}']
+        agreement[f'changes_corr_{u}_mean'] = float(c.mean()) if c.notna().any() else None
+        agreement[f'changes_corr_{u}_by_relation'] = by_rel(f'changes_corr_{u}') if c.notna().any() else None
+    moved = {}
+    for u, g in pm.groupby('unit', sort=False):
+        moved[u] = dict(n_inputs=int(g.n_inputs.iloc[0]), corr_mean_change_asked=float(np.corrcoef(g.mean_change, g.asked)[0, 1]),
+                        n_pairs_5of6_same_sign=int((g.n_same_sign >= E_AGREE).sum()),
+                        groups={k: dict(n=int(len(q)), mean_change=float(q.mean_change.mean()), asked=float(q.asked.mean()))
+                                for k, q in g.groupby('group')})
+    new = ie[ie.input.isin(list(SEARCHES))]
+    res = dict(script=SCRIPT, generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), **H.code_commits(),
+               verdict=v['outcome'], size=SIZE, six=list(SIX), seconds=time.time() - t0,
+               runs=dict(n_E=int(len(rt_e)), planned_E=len(SEARCHES) * len(E83.S_WIRINGS),
+                         n_flagged_E=int((rt_e.realism_flag.fillna('').astype(str).str.strip() != '').sum()) if len(rt_e) else 0),
+               inputs={r['input']: {k: r[k] for k in ('g_S', 'g_T', 'g_draws7', 'g_all8', 'g_all_draws7', 'draws7_n',
+                                                      'draws7_lower', 'draws7_mean_diff', 'raw_loss_change_draws7',
+                                                      'mean_effect_cal_draws7', 'n_points', 'n_flagged')}
+                       for r in ie.to_dict('records')},
+               means=dict(six_g_draws7=float(ie.g_draws7.mean()), new_g_draws7=float(new.g_draws7.mean()),
+                          six_draws7_mean_diff=float(ie.draws7_mean_diff.mean()),
+                          six_draws7_lower=int(ie.draws7_lower.sum()), six_draws7_n=int(ie.draws7_n.sum())),
+               agreement=agreement, rule=rule, pairs_moved=moved,
+               flies=dict(e85_check=fcheck, summary=fsum.drop(columns=['input']).set_index('e86_input').to_dict('index')),
+               flies_mean_effect=float(targets()['z8'].mean()),
+               sources=dict(candidate_runs=f'data/model_outputs/{E83.EXPERIMENT}/A2 (E83 part A2, archived)',
+                            candidate_rows=f'results/{E83.EXPERIMENT}/runs_A2.csv',
+                            factors={n: f'results/{E85_SIX[n][1][0]}/{E85_SIX[n][1][1]}' for n in SIX},
+                            e85_code='experiments/E85_orn_fly_population.py (searched_tables, searched_summary, '
+                                     'spread_table, hallem_log2)'))
+    (out / 'part_e.json').write_text(json.dumps(res, indent=1, default=float) + '\n')
+    _comparison_table_e(out, ie, pdiff, ag, bo, listed, pm, fsum, fcheck, res)
+    print(json.dumps(dict(runs=res['runs'], means=res['means'], agreement=agreement,
+                          rule={k: rule[k] for k in ('n_agree', 'n_meets', 'n_meets_read', 'description')},
+                          null=rule['null_meets'], e85_check=fcheck), indent=1, default=float), flush=True)
+    print(ie[['input', 'g_S', 'g_T', 'g_draws7', 'g_all8', 'draws7_lower', 'draws7_n', 'draws7_mean_diff',
+              'n_flagged']].round(4).to_string(index=False), flush=True)
+    return res
+
+
+def _comparison_table_e(out: Path, ie: pd.DataFrame, pdiff: pd.DataFrame, ag: pd.DataFrame, bo: pd.DataFrame,
+                        listed: pd.DataFrame, pm: pd.DataFrame, fsum: pd.DataFrame, fcheck: dict, res: dict) -> None:
+    rule = res['rule']
+    n_e, planned = res['runs']['n_E'], res['runs']['planned_E']
+    L = ['', f"The verdict is **{res['verdict']}**, so part E runs. The six inputs searched on the real wiring: E77's two "
+         "(the candidate; E83's part A2 read them at 0.6 on all eight wirings, archived, not rerun) and part C's four "
+         f"(on T from C-read, on S from this part: {n_e} of {planned} readings so far). Each at 0.6 of its log size, both "
+         'response rates re-held. Pattern part of the APL-effect loss under the calibrated readout, against the half of '
+         "each input's split that its search never saw (lower is better).", '',
+         "### The six on the seven re-drawn wirings (paired differences against the unseen half)", '',
+         'Changed minus unchanged on each wiring (negative is better); – where a wiring has no reading yet.', '',
+         '| input | searched on / scored on | ' + ' | '.join(DRAWS7) + ' | lower | mean |',
+         '|---|---|' + '---:|' * (len(DRAWS7) + 2)]
+    pu = pdiff[pdiff.against == 'unseen'].set_index('change')
+    for r in ie.to_dict('records'):
+        q = pu.loc[r['input']] if r['input'] in pu.index else None
+        cells = [_fmt(q[w], '+.4f') if q is not None else '–' for w in DRAWS7]
+        L.append(f"| {r['label']} | {r['searched_on']} / {r['unseen']} | " + ' | '.join(cells) +
+                 f" | {r['draws7_lower']} of {r['draws7_n']} | {_fmt(r['draws7_mean_diff'], '+.4f')} |")
+    L += ['', 'As populations (the mean over their wirings of the pair distances per condition); g = unchanged minus '
+          'changed (positive is better):', '',
+          '| input | g: S | g: T | g: the seven re-drawn | g: all eight | g against all recordings: the seven | '
+          'raw-count loss change: the seven | mean APL effect: the seven | readings flagged |',
+          '|---|---:|---:|---:|---:|---:|---:|---:|---:|']
+    for r in ie.to_dict('records'):
+        L.append(f"| {r['label']} | {_fmt(r['g_S'], '+.4f')} | {_fmt(r['g_T'], '+.4f')} | {_fmt(r['g_draws7'], '+.4f')} | "
+                 f"{_fmt(r['g_all8'], '+.4f')} | {_fmt(r['g_all_draws7'], '+.4f')} | "
+                 f"{_fmt(r['raw_loss_change_draws7'], '+.4f')} | {_fmt(r['mean_effect_cal_draws7'], '+.3f')} | "
+                 f"{r['n_flagged']} of {r['n_points']} |")
+    L.append(f"| KC data | | | | | | | {_fmt(res['flies_mean_effect'], '+.3f')} | |")
+    m = res['means']
+    L += ['', f"- Over the six: mean g on the seven {_fmt(m['six_g_draws7'], '+.4f')} (the four new "
+          f"{_fmt(m['new_g_draws7'], '+.4f')}); {m['six_draws7_lower']} of {m['six_draws7_n']} single re-drawn wirings "
+          f"lower, mean change {_fmt(m['six_draws7_mean_diff'], '+.4f')}."]
+    a = res['agreement']
+    L += ['', '### The agreement of the six', '',
+          '| inputs | searched | log2 factors, all 360 entries | per odor, median (min to max) | per-pair change on T | '
+          'on the seven re-drawn | on all eight |', '|---|---|---:|---:|---:|---:|---:|']
+    for r in ag.to_dict('records'):
+        L.append(f"| {SIX_LABELS[r['input_a']]} / {SIX_LABELS[r['input_b']]} | {r['relation']} | "
+                 f"{_fmt(r['factors_corr'], '.2f')} | {_fmt(r['factors_corr_per_odor_median'], '.2f')} "
+                 f"({_fmt(r['factors_corr_per_odor_min'], '.2f')} to {_fmt(r['factors_corr_per_odor_max'], '.2f')}) | "
+                 f"{_fmt(r['changes_corr_T'], '.2f')} | {_fmt(r['changes_corr_draws7'], '.2f')} | "
+                 f"{_fmt(r['changes_corr_all8'], '.2f')} |")
+    rel = lambda d: '; '.join(f'{k} {_fmt(x, ".2f")}' for k, x in (d or {}).items())
+    L += ['', f"- Mean over the 15 pairs: log2 factors {_fmt(a['factors_corr_mean'], '.2f')} ({rel(a['factors_corr_by_relation'])}); "
+          f"per-pair changes on T {_fmt(a['changes_corr_T_mean'], '.2f')} ({rel(a['changes_corr_T_by_relation'])})"
+          + (f"; on the seven {_fmt(a['changes_corr_draws7_mean'], '.2f')} ({rel(a['changes_corr_draws7_by_relation'])})"
+             if a.get('changes_corr_draws7_mean') is not None else '') + '.', '',
+          '| odor | log2 factors: mean correlation over the 15 pairs (min to max) | same half | entries with five of six '
+          'agreeing in sign (of 36) | meeting the rule | the rule at 0.6 |', '|---|---:|---:|---:|---:|---:|']
+    for r in bo.to_dict('records'):
+        L.append(f"| {r['odor']} | {_fmt(r['corr_mean'], '.2f')} ({_fmt(r['corr_min'], '.2f')} to {_fmt(r['corr_max'], '.2f')}) | "
+                 f"{_fmt(r['corr_mean_same_half'], '.2f')} | {r['n_agree']} | {r['n_meets']} | {r['n_meets_read']} |")
+    nm, nr = rule['null_meets'], rule['null_meets_read']
+    L += ['', '### The entries on which five of the six agree', '',
+          f"- The rule (fixed before any run): at least {E_AGREE} of the six agree in sign and the mean log2 factor is "
+          f"beyond ±{E_LOG2}. {rule['n_meets']} of {rule['n_entries']} entries meet it ({rule['n_agree']} have five of six "
+          f"agreeing in sign). On the change as read (0.6 of the log2 factor): {rule['n_meets_read']}.",
+          f"- Beside the rule, not part of it: with each input's factors label-permuted over each odor's glomeruli (E83's "
+          f"`permuted_factors`, {nm['n_draws']} draws) {_fmt(nm['null_mean'], '.1f')} entries meet it on average (95th "
+          f"percentile {_fmt(nm['null_p95'], '.0f')}; {_fmt(100 * nm['null_frac_ge'], '.1f')} % of draws as many or more); "
+          f"at 0.6, {_fmt(nr['null_mean'], '.1f')} (95th percentile {_fmt(nr['null_p95'], '.0f')}; "
+          f"{_fmt(100 * nr['null_frac_ge'], '.1f')} %).",
+          ('- Ten or more entries: the list below is the one a measurement could test.' if rule['description'] == 'list' else
+           '- Fewer than ten entries: the input is described by the pairs it moves (below), and no measurement is named.')]
+    if rule['description'] == 'list':
+        L += ['', '| odor | glomerulus | log2 factors of the six (' + ' / '.join(SIX) + ') | mean | as read (0.6) | lab input '
+              '(spike deltas) | the flies\' SD (log2) | as read, in the flies\' SDs | Hallem, log2 ratio to the lab input |',
+              '|---|---|---|---:|---:|---:|---:|---:|---:|']
+        for r in listed.to_dict('records'):
+            L.append(f"| {r['odor']} | {r['glomerulus']} | " + ' / '.join(_fmt(r[n], '+.2f') for n in SIX) +
+                     f" | {_fmt(r['mean_log2'], '+.2f')} | {_fmt(r['mean_log2_read'], '+.2f')} | {_fmt(r['lab_input'], '.1f')} | "
+                     f"{_fmt(r['flies_sd_log2'], '.2f')} | {_fmt(r['read_in_flies_sd'], '+.1f')} | "
+                     f"{_fmt(r['hallem_log2_vs_lab'], '+.2f')} |")
+    L += ['', '### The pairs the six move (against all recordings)', '']
+    for u, name in (('T', 'T'), ('draws7', 'the seven re-drawn wirings')):
+        g = pm[pm.unit == u] if len(pm) else pm
+        if not len(g):
+            continue
+        mv = res['pairs_moved'][u]
+        L += [f"- On {name} ({mv['n_inputs']} inputs): the correlation of the mean change of the per-pair APL effect with "
+              f"what all recordings ask (their effect minus the unchanged model's, both means removed) "
+              f"{_fmt(mv['corr_mean_change_asked'], '.2f')}; {mv['n_pairs_5of6_same_sign']} of 120 pairs moved the same way "
+              f"by at least {E_AGREE} inputs; by group (mean change / asked): " +
+              '; '.join(f"{k} ({q['n']}) {_fmt(q['mean_change'], '+.4f')} / {_fmt(q['asked'], '+.4f')}"
+                        for k, q in mv['groups'].items()) + '.']
+    u = 'draws7' if 'draws7' in res['pairs_moved'] and res['pairs_moved']['draws7']['n_inputs'] == len(SIX) else 'T'
+    g = pm[pm.unit == u].head(E_TOP_PAIRS) if len(pm) else pm
+    if len(g):
+        L += ['', f"The {E_TOP_PAIRS} pairs with the largest mean change on {'the seven re-drawn wirings' if u == 'draws7' else 'T'}:", '',
+              '| pair | group | mean change | inputs sharing its sign | what all recordings ask |', '|---|---|---:|---:|---:|']
+        for r in g.to_dict('records'):
+            L.append(f"| {r['odor_a']}, {r['odor_b']} | {r['group']} | {_fmt(r['mean_change'], '+.4f')} | "
+                     f"{r['n_same_sign']} of {r['n_inputs']} | {_fmt(r['asked'], '+.4f')} |")
+    L += ['', "### Against the ORN flies and Hallem's data (E85's part A4 code)", '',
+          '| input | entries within one SD of the flies\' spread (log2) | within two | rms log2 change | share of the squared '
+          'size inside the nine flies\' span (permuted mean) | odors above the permuted 95th percentile | correlation with '
+          'Hallem\'s ratio to the lab input (entries) |', '|---|---:|---:|---:|---:|---:|---:|']
+    for r in fsum.to_dict('records'):
+        L.append(f"| {SIX_LABELS[r['e86_input']]} | {_fmt(100 * r['within1_log2'], '.0f')} % | {_fmt(100 * r['within2_log2'], '.1f')} % | "
+                 f"{_fmt(r['rms_log2_change'], '.2f')} | {_fmt(r['span_share'], '.2f')} ({_fmt(r['span_share_perm_mean'], '.2f')}) | "
+                 f"{int(r['n_odors_above_perm_p95'])} of {int(r['n_odors'])} | {_fmt(r['hallem_corr'], '.2f')} ({int(r['n_hallem'])}) |")
+    L += ['', f"- E85's rows of E77's two inputs are {'reproduced' if fcheck['reproduced'] else 'not reproduced'} by the same "
+          f"code here (largest difference {_fmt(fcheck['max_abs_diff'], '.1g')})."]
+    _section(out, '## Part E: what the input is (no simulations, then the four new inputs on S)', L + [''])
+
+
+def part_e(out: Path, simulate: bool = True) -> dict:
+    """Part E, only on "passes" or "carries" (`require_e`): the tables that need no simulation first
+    (`part_e_tables` on the runs that exist), then (with `simulate`) the four new inputs on S (`plan_e`, 16 held
+    readings; resumable: runs_E.csv, provenance_E.json, outputs under outputs/E86_reduced_input_candidate/E/), then the
+    tables again on all eight wirings."""
+    require_e(out)
+    print('part E: the tables that need no simulation', flush=True)
+    res = part_e_tables(out)
+    if simulate:
+        run_points(out, PART_E, plan_e(out))
+        print('part E: the tables on all eight wirings', flush=True)
+        res = part_e_tables(out)
+    return res
+
+
+# ---------------------------------------------------------------------------
+# part F (only on "passes")
 
 def part_f(out: Path) -> None:
     """Part F, only on "passes" (not written; needs E83's build_simulator with the family and the pulse as arguments)."""
@@ -1042,7 +1656,7 @@ def part_f(out: Path) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('--part', required=True, choices=['A', 'identity', 'B1', 'B2', 'B3', 'B', 'C-check', 'C', 'C-read',
-                                                      'score', 'D', 'E', 'F'])
+                                                      'score', 'D', 'E', 'E-tables', 'F'])
     ap.add_argument('--search', choices=list(SEARCHES), help='part C: the search to run')
     ap.add_argument('--no-resume', action='store_true', help='part C: start the search over (ignore its checkpoint)')
     ap.add_argument('--no-simulate', action='store_true', help="part C-check: compare the last run's history only")
@@ -1079,6 +1693,8 @@ def main() -> None:
         write_verdict(out)
     elif args.part == 'E':
         part_e(out)
+    elif args.part == 'E-tables':
+        part_e(out, simulate=False)
     else:
         part_f(out)
 
