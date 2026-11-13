@@ -1806,7 +1806,8 @@ def score_d1(out: Path) -> pd.DataFrame:
                 sc, sc0 = E.effect_scores(ds[-1]), E.effect_scores(d0s[-1])
                 rows.append(dict(form_label=k, form=f.name, readout=ro, unit=w, **sc, **{f'unchanged_{kk}': vv for kk, vv in sc0.items()}))
                 if ro == 'raw':
-                    mr = X.ModelResponses({'on': o['off'], 'off': o['off']}, 'raw', label=w)
+                    # the count-level reading: the same form on the base's APL-off counts, its c set to the run's APL-on rate
+                    mr = X.ModelResponses(o, 'raw', label=w)
                     prox.append(mr.form(f)[0])
                     offs.append(mr.d_off)
             d, d0 = E.population(ds), E.population(d0s)
