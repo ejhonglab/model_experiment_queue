@@ -1369,7 +1369,7 @@ def base_thresholds(w: str, n_workers: int = 16) -> dict:
         n = len(pool.cols)
         outs, _ = pool.run_task(dict(thr=[1.0] * n, apl=[1.0] * n, label=f'E89 one-odor identity {w}'))
         ns, nr = E._same({'on': outs['on1'], 'off': outs['off']}, fit['saved'])
-        _identity_add(H.results_dir(EXPERIMENT), f'one_odor_path_{w}', dict(count_diffs=ns, response_diffs=nr))
+        _identity_add(H.results_dir(EXPERIMENT), f'one_odor_path_{w}', dict(count_diffs=ns, response_diffs=nr), _commits_clean())
         if ns or nr:
             raise RuntimeError(f'{w}: the one-odor path does not reproduce the saved fit')
         tg = S80.b3_targets(C2_UNITS, pool.cols, int(fit['saved']['on'][0].shape[0]))
@@ -1393,10 +1393,12 @@ def base_off(w: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
     raise RuntimeError(f'no base APL-off run for {w}: run base_thresholds first')
 
 
-def _identity_add(out: Path, key: str, d: dict) -> None:
+def _identity_add(out: Path, key: str, d: dict, cc: Optional[dict] = None) -> None:
+    """Adds an identity entry to identity_C.json with `cc` (the commits snapshot of the process that ran it; default
+    H.code_commits() now)."""
     path = out / 'identity_C.json'
     v = json.loads(path.read_text()) if path.exists() else {}
-    v[key] = dict(d, **H.code_commits())
+    v[key] = dict(d, **(cc if cc is not None else H.code_commits()))
     _write_json(path, v)
 
 
@@ -1454,7 +1456,7 @@ def part_c2(out: Path, wirings: Sequence[str], weights: Optional[Sequence[Tuple[
                     d2 = E87._load_d2(f'D2_b3_thrapl_{E87.D2_UNITS}_{wiring}')
                     ns, nr = E._same(o, d2)
                     _identity_add(out, f'C2_{wiring}', dict(count_diffs=ns, response_diffs=nr,
-                                                            against=f'E87 D2_b3_thrapl_{E87.D2_UNITS}_{wiring}'))
+                                                            against=f'E87 D2_b3_thrapl_{E87.D2_UNITS}_{wiring}'), cc)
                     print(f'E89 C0 (C2) identity {wiring}: {ns} count / {nr} response differences', flush=True)
                     if ns or nr:
                         raise RuntimeError(f"{wiring}: the base with F at exponent 2 does not reproduce E87's D2 run")
@@ -1509,7 +1511,7 @@ def part_c0(out: Path, arm: str, wirings: Sequence[str], n_workers: int = 16) ->
             set_weights(model, None)
         ns, nr = E._same({'on': on, 'off': model.saved['off']}, model.saved)
         _identity_add(out, f'C1_{wiring}', dict(weights_equal=same_w, count_diffs=ns, response_diffs=nr,
-                                                against=f'{model.folder}:{model.tag}'))
+                                                against=f'{model.folder}:{model.tag}'), cc)
         print(f'E89 C0 (C1) identity {wiring}: weights equal {same_w}, {ns} count / {nr} response differences', flush=True)
         if ns or nr or not same_w:
             raise RuntimeError(f'{wiring}: F at exponent 2 through the new path does not reproduce the saved fit')
@@ -1527,25 +1529,612 @@ def part_c0(out: Path, arm: str, wirings: Sequence[str], n_workers: int = 16) ->
     return json.loads((out / 'identity_C.json').read_text())
 
 
-def score_c(out: Path) -> dict:
-    """The readings, the co-response, the choice, the gate and the verdicts: readings_C.csv, coresponse_C.csv,
-    choice_C.csv, gate_C.csv, verdict_C.json."""
-    raise NotImplementedError
+def targets89() -> Dict[str, pd.Series]:
+    """E83's targets plus the second split's halves C and D (E77's `recording_halves(1)`, its 'A' and 'B')."""
+    if 'targets' not in _CACHE:
+        from experiments import E77_input_side_common_error as E77
+        from experiments import E83_cross_wiring_fit as E
+        tg = dict(E.targets())
+        h = E77.recording_halves(1)
+        tg['halfC'], tg['halfD'] = E._cs(E77.half_effect(h['A'])), E._cs(E77.half_effect(h['B']))
+        _CACHE['targets'] = tg
+    return _CACHE['targets']
+
+
+HALF_OTHER = {'A': 'B', 'B': 'A', 'C': 'D', 'D': 'C'}
+
+
+def _runs_table(out: Path) -> pd.DataFrame:
+    parts = [pd.read_csv(out / n) for n in ('runs_C1.csv', 'runs_C2.csv', 'runs_C3.csv') if (out / n).exists()]
+    df = pd.concat(parts, ignore_index=True, sort=False) if parts else pd.DataFrame()
+    if len(df):
+        df['permute_seed'] = df.permute_seed.astype('float') if 'permute_seed' in df else np.nan
+        df['variant'] = [f"{a}_{w}" + (f'_perm{int(p)}' if pd.notna(p) else '') for a, w, p in zip(df.arm, df.weighting, df.permute_seed)]
+        df['flagged'] = df.realism_flag.fillna('').astype(str).str.strip() != ''
+    return df
+
+
+def _distances(tag: str, wiring: str) -> Dict[str, Dict[str, pd.Series]]:
+    from experiments import E83_cross_wiring_fit as E
+    key = ('dist', tag)
+    if key not in _CACHE:
+        o = load_run(tag)
+        if o is None:
+            raise RuntimeError(f'no saved run {tag}')
+        K = E.saved_fit(wiring)['K']
+        _CACHE[key] = {'cal': E.pair_distances(o, 'cal'), 'calK': E.pair_distances(o, 'calK', K), 'raw': E.pair_distances(o, 'raw')}
+    return _CACHE[key]
+
+
+def _unchanged_distances(wiring: str) -> Dict[str, Dict[str, pd.Series]]:
+    from experiments import E83_cross_wiring_fit as E
+    key = ('dist_unchanged', wiring)
+    if key not in _CACHE:
+        o = E.saved_fit(wiring)['saved']
+        K = E.saved_fit(wiring)['K']
+        _CACHE[key] = {'cal': E.pair_distances(o, 'cal'), 'calK': E.pair_distances(o, 'calK', K), 'raw': E.pair_distances(o, 'raw')}
+    return _CACHE[key]
+
+
+def _score_row(d: Dict[str, pd.Series]) -> dict:
+    from experiments import E83_cross_wiring_fit as E
+    row = E.effect_scores(d, targets89())
+    eff = E._cs(H.apl_effect(d['on'], d['off']))
+    row['block'] = float(H.block_means(eff).get('fruity-small_ester', np.nan))
+    return row
+
+
+def readings_c(out: Path) -> pd.DataFrame:
+    """readings_C.csv: per variant (arm, weighting, permutation) and unit (each wiring, S and T where all four wirings
+    have a run) and readout ('cal' the calibrated readout with K set on each run's APL-on counts, E83's readings and
+    gate; 'calK' the fit's K; 'raw' raw counts) E83's `effect_scores` against every target (the halves of both splits,
+    all recordings, the six typical, the noise-free effect, baseline-noise units) and the block of the per-pair effect;
+    beside, the unchanged fits ('unchanged'); per unit the number of flagged runs and runs at a bracket's bound."""
+    from experiments import E83_cross_wiring_fit as E
+    runs = _runs_table(out)
+    rows = []
+    groups = list(runs.groupby(['arm', 'variant', 'weighting'], sort=False, dropna=False))
+    groups.append((('unchanged', 'unchanged', 'F_k2'), None))
+    for (arm, variant, weighting), g in groups:
+        if g is None:
+            ds = {w: _unchanged_distances(w) for w in E.ALL_WIRINGS}
+            meta = {w: dict(flagged=False, at_bound=False) for w in E.ALL_WIRINGS}
+            perm = np.nan
+        else:
+            g = g.drop_duplicates('wiring', keep='last')
+            ds = {r.wiring: _distances(r.tag, r.wiring) for r in g.itertuples()}
+            meta = {r.wiring: dict(flagged=bool(r.flagged), at_bound=bool(r.at_bound)) for r in g.itertuples()}
+            perm = g.permute_seed.iloc[0]
+        units = [(w, (w,)) for w in ds] + [(p, ws) for p, ws in (('S', E.S_WIRINGS), ('T', E.T_WIRINGS)) if all(w in ds for w in ws)]
+        for unit, ws in units:
+            for ro in ('cal', 'calK', 'raw'):
+                d = ds[unit][ro] if len(ws) == 1 and unit in ds else E.population([ds[w][ro] for w in ws])
+                rows.append(dict(arm=arm, variant=variant, weighting=weighting, permute_seed=perm, unit=unit, n_wirings=len(ws), readout=ro,
+                                 n_flagged=int(sum(meta[w]['flagged'] for w in ws)), n_at_bound=int(sum(meta[w]['at_bound'] for w in ws)),
+                                 **_score_row(d)))
+    df = pd.DataFrame(rows)
+    df.to_csv(out / 'readings_C.csv', index=False)
+    return df
+
+
+def _pat(rd: pd.DataFrame, variant: str, unit: str, target: str, col: str = 'pattern', readout: str = 'cal') -> float:
+    r = rd[(rd.variant == variant) & (rd.unit == unit) & (rd.readout == readout)]
+    return float(r[f'{target}_{col}'].iloc[0]) if len(r) else np.nan
+
+
+def _ref_variant(arm: str) -> str:
+    return f'{arm}_{wtag(REFERENCE)}'
+
+
+def choose(rd: pd.DataFrame, arm: str, half: str) -> dict:
+    """The choice on S against half `half` (readout 'cal'): the weighting with the lowest pattern part of S's population,
+    among the reference and the weightings whose four runs are inside the bands and not at a bracket's bound; nothing to
+    confirm if it is the reference or its gain is below CHOICE_MIN_GAIN."""
+    g = rd[(rd.arm == arm) & (rd.unit == 'S') & (rd.readout == 'cal') & rd.permute_seed.isna()]
+    ref = _ref_variant(arm)
+    ok = g[(g.variant == ref) | ((g.n_flagged == 0) & (g.n_at_bound == 0))]
+    if ok.empty or ref not in set(g.variant):
+        return dict(arm=arm, half=half, chosen=None, confirm=False, note='runs missing')
+    best = ok.loc[ok[f'half{half}_pattern'].idxmin()]
+    p_ref = float(g[g.variant == ref][f'half{half}_pattern'].iloc[0])
+    gain = p_ref - float(best[f'half{half}_pattern'])
+    confirm = bool(best.variant != ref and gain >= CHOICE_MIN_GAIN)
+    return dict(arm=arm, half=half, chosen=best.variant, chosen_weighting=best.weighting, pattern=float(best[f'half{half}_pattern']),
+                ref_pattern=p_ref, gain=gain, confirm=confirm, n_eligible=int(len(ok)), n_weightings=int(len(g)),
+                excluded=sorted(set(g.variant) - set(ok.variant)))
+
+
+def _wt_of(variant: str) -> Tuple[str, float]:
+    tag = variant.split('_', 1)[1]
+    if tag == 'none':
+        return NO_WEIGHTING
+    m, k = tag.split('_k')
+    return (m, float(k))
+
+
+def _gate_direction(rd: pd.DataFrame, runs: pd.DataFrame, arm: str, X: str, chosen: Optional[str], ref: str,
+                    controls: Sequence[str]) -> dict:
+    """One direction of E83's gate on T: the chosen weighting (chosen on half X) against `ref` ('unchanged' or the
+    base's reference) on the other half Y."""
+    from experiments import E83_cross_wiring_fit as E
+    Y = HALF_OTHER[X]
+    row = dict(arm=arm, searched_on=X, against=Y, chosen=chosen, reference=ref)
+    if chosen is None or not ((rd.variant == chosen) & (rd.unit == 'T')).any():
+        row.update(g=0.0, confirmed=False, note='nothing to confirm' if chosen is None else 'T runs missing')
+        return row
+    flies_mean = float(targets89()['z8'].mean())
+    r0, r1 = _pat(rd, ref, 'T', f'half{Y}'), _pat(rd, chosen, 'T', f'half{Y}')
+    row.update(confirmed=True, ref_pattern=r0, pattern=r1, g=r0 - r1)
+    row['n_singles_lower'] = int(sum(_pat(rd, ref, w, f'half{Y}') - _pat(rd, chosen, w, f'half{Y}') > 0 for w in E.T_WIRINGS))
+    row['raw_loss_change'] = _pat(rd, chosen, 'T', 'z8', 'loss', 'raw') - _pat(rd, ref, 'T', 'z8', 'loss', 'raw')
+    row['mean_effect_cal'] = float(rd[(rd.variant == chosen) & (rd.unit == 'T') & (rd.readout == 'cal')].mean_effect.iloc[0])
+    row['flies_mean'] = flies_mean
+    row['sq_reduction_all'] = 1.0 - _pat(rd, chosen, 'T', 'z8') ** 2 / _pat(rd, ref, 'T', 'z8') ** 2
+    row['sq_reduction_six'] = 1.0 - _pat(rd, chosen, 'T', 'z6') ** 2 / _pat(rd, ref, 'T', 'z6') ** 2
+    rr = runs[(runs.variant == chosen) & runs.wiring.isin(E.T_WIRINGS)]
+    row['n_flagged'] = int(rr.flagged.sum())
+    gc = [r0 - _pat(rd, c, 'T', f'half{Y}') for c in controls if ((rd.variant == c) & (rd.unit == 'T')).any()]
+    row['control_gains'] = json.dumps([float(x) for x in gc])
+    row['v'] = bool(gc) and all(x < CONTROL_RATIO * row['g'] for x in gc) if row['g'] >= CHOICE_MIN_GAIN else None
+    return row
+
+
+def gate89(rows: Sequence[dict]) -> dict:
+    """E83's gate on two directions (`_gate_direction` rows; with the second split, the mean of the splits' values per
+    direction): (i) g >= GATE_GAIN in both; (ii) at least GATE_SINGLES of T's eight wiring-by-direction cells lower;
+    (iii) every run inside the bands, T's raw-count loss not above the reference's by more than GATE_RAW_SLACK, T's mean
+    APL effect under the readout within GATE_MEAN_SLACK of the flies'; (iv) T's squared pattern error against all
+    recordings GATE_SQ_ALL lower (the mean of the directions) and GATE_SQ_SIX against the six typical; (v) each permuted
+    control gains less than CONTROL_RATIO as much; borderline if a g is between GATE_BORDER."""
+    rows = list(rows)
+    both = dict(g_min=float(min(r.get('g', 0.0) for r in rows)), directions=len(rows))
+    conf = all(r.get('confirmed') for r in rows)
+    both['i'] = bool(conf and all(r['g'] >= GATE_GAIN for r in rows))
+    both['ii'] = bool(conf and sum(r['n_singles_lower'] for r in rows) >= GATE_SINGLES)
+    if conf:
+        fm = rows[0]['flies_mean']
+        worst_mean = max((r['mean_effect_cal'] for r in rows), key=lambda x: abs(x - fm))
+        both.update(raw_loss_change=float(max(r['raw_loss_change'] for r in rows)), mean_effect_cal=float(worst_mean),
+                    sq_reduction_all=float(np.mean([r['sq_reduction_all'] for r in rows])),
+                    sq_reduction_six=float(np.mean([r['sq_reduction_six'] for r in rows])),
+                    n_flagged=int(sum(r['n_flagged'] for r in rows)), n_singles_lower=int(sum(r['n_singles_lower'] for r in rows)))
+        both['iii'] = bool(both['n_flagged'] == 0 and both['raw_loss_change'] <= GATE_RAW_SLACK and abs(worst_mean - fm) <= GATE_MEAN_SLACK)
+        both['iv'] = bool(both['sq_reduction_all'] >= GATE_SQ_ALL and both['sq_reduction_six'] >= GATE_SQ_SIX)
+        vs = [r.get('v') for r in rows]
+        both['v'] = bool(all(v is True for v in vs))
+    else:
+        both.update(iii=False, iv=False, v=False)
+    both['borderline'] = bool(any(GATE_BORDER[0] <= r.get('g', 0.0) <= GATE_BORDER[1] for r in rows))
+    return both
+
+
+def _mean_rows_dir(a: dict, b: dict) -> dict:
+    """The mean of two splits' direction rows (numbers averaged, the singles summed over both and halved)."""
+    out = dict(a)
+    for k in ('g', 'n_singles_lower', 'raw_loss_change', 'mean_effect_cal', 'sq_reduction_all', 'sq_reduction_six'):
+        if k in a and k in b:
+            out[k] = 0.5 * (a[k] + b[k])
+    out['n_flagged'] = a.get('n_flagged', 0) + b.get('n_flagged', 0)
+    out['confirmed'] = bool(a.get('confirmed') and b.get('confirmed'))
+    out['v'] = (a.get('v') is not False) and (b.get('v') is not False) and (a.get('v') or b.get('v'))
+    return out
+
+
+def equal_rule(rd: pd.DataFrame, arm: str) -> List[dict]:
+    """A weaker weighting is an equal if its exponent is 1 or less (any measure; no weighting included) and, on S under
+    the readout against all recordings and against both halves, its pattern part is within EQUAL_PATTERN of the
+    reference's (|difference|; 'better' says whether it is lower), every run inside the bands, the raw-count loss within
+    EQUAL_RAW and the mean APL effect within EQUAL_MEAN of the reference's."""
+    ref = _ref_variant(arm)
+    out = []
+    g = rd[(rd.arm == arm) & (rd.unit == 'S') & rd.permute_seed.isna()]
+    if ref not in set(g.variant):
+        return out
+    for v in sorted(set(g.variant) - {ref}):
+        m, k = _wt_of(v)
+        if k > 1:
+            continue
+        d = {t: _pat(rd, v, 'S', t) - _pat(rd, ref, 'S', t) for t in ('halfA', 'halfB', 'z8')}
+        raw = _pat(rd, v, 'S', 'z8', 'loss', 'raw') - _pat(rd, ref, 'S', 'z8', 'loss', 'raw')
+        me = float(g[(g.variant == v) & (g.readout == 'cal')].mean_effect.iloc[0]) - float(g[(g.variant == ref) & (g.readout == 'cal')].mean_effect.iloc[0])
+        nf = int(g[(g.variant == v) & (g.readout == 'cal')].n_flagged.iloc[0])
+        eq = bool(all(abs(x) <= EQUAL_PATTERN for x in d.values()) and nf == 0 and abs(raw) <= EQUAL_RAW and abs(me) <= EQUAL_MEAN)
+        out.append(dict(arm=arm, variant=v, measure=m if k else 'none', exponent=k, **{f'd_pattern_{t}': x for t, x in d.items()},
+                        d_raw_loss=raw, d_mean_effect=me, n_flagged=nf, equal=eq, better=bool(all(x < 0 for x in d.values()))))
+    return out
+
+
+def c3_plan(out: Path, rd: Optional[pd.DataFrame] = None) -> dict:
+    """The choice per base and half of both splits (choice_C.csv) and what C3 runs: per arm the directions of the first
+    split with something to confirm, and, once T's g of the first split is known and borderline, the second split's."""
+    rd = pd.read_csv(out / 'readings_C.csv') if rd is None else rd
+    ch = [choose(rd, arm, h) for arm in ARMS for h in ('A', 'B', 'C', 'D')]
+    pd.DataFrame(ch).to_csv(out / 'choice_C.csv', index=False)
+    return {(c['arm'], c['half']): c for c in ch}
 
 
 def part_c3(out: Path, n_workers: int = 16) -> pd.DataFrame:
-    """C3: the confirmation on T for each base and direction with something to confirm, and the permuted controls."""
-    raise NotImplementedError
+    """C3 on T's four wirings, per base and direction with something to confirm (the first split): for C1 the chosen
+    weighting at each wiring's fit with the APL scale re-held (the reference: T's unchanged fits); for C2 the base on T
+    (`base_thresholds`: the identity of the one-odor path, then the per-odor thresholds solved as E88 solved S's), the
+    reference and the chosen weighting with per-odor APL scales. Then, where g >= CHOICE_MIN_GAIN, the permuted controls
+    (seeds CONTROL_SEEDS); where g is borderline, the second split's choice and T's runs of a weighting newly chosen
+    there (and its controls). Resumable: runs_C3.csv. Then `score_c`."""
+    from experiments import E83_cross_wiring_fit as E
+    T = list(E.T_WIRINGS)
+    for stage in ('first', 'controls', 'second', 'controls2'):
+        readings_c(out)
+        plan = c3_plan(out)
+        rd = pd.read_csv(out / 'readings_C.csv')
+        runs = _runs_table(out)
+        for arm in ARMS:
+            halves = ('A', 'B') if stage in ('first', 'controls') else ('C', 'D')
+            if stage in ('second', 'controls2'):
+                g1 = [_gate_direction(rd, runs, arm, X, plan[(arm, X)]['chosen'] if plan[(arm, X)]['confirm'] else None,
+                                      'unchanged' if arm == 'C1' else _ref_variant(arm), []) for X in ('A', 'B')]
+                if not any(GATE_BORDER[0] <= r.get('g', 0.0) <= GATE_BORDER[1] for r in g1):
+                    continue
+            for X in halves:
+                c = plan[(arm, X)]
+                if not c['confirm']:
+                    continue
+                w = _wt_of(c['chosen'])
+                ref = 'unchanged' if arm == 'C1' else _ref_variant(arm)
+                if stage in ('first', 'second'):
+                    if arm == 'C1':
+                        part_c1(out, T, [w], runs_name='runs_C3.csv')
+                    else:
+                        part_c2(out, T, [REFERENCE, w], n_workers, runs_name='runs_C3.csv', identity=False)
+                else:
+                    gd = _gate_direction(rd, runs, arm, X, c['chosen'], ref, [])
+                    if gd.get('g', 0.0) < CHOICE_MIN_GAIN:
+                        continue
+                    for seed in CONTROL_SEEDS:
+                        if arm == 'C1':
+                            part_c1(out, T, [w], runs_name='runs_C3.csv', extra=f'_perm{seed}', permute_seed=seed)
+                        else:
+                            part_c2(out, T, [w], n_workers, runs_name='runs_C3.csv', extra=f'_perm{seed}', permute_seed=seed,
+                                    identity=False)
+    return score_c(out)
+
+
+# the co-response beside every point (E88's B1 on S's population)
+
+def _co_job(job: tuple) -> dict:
+    """One run read by E88's readings 1 and 1b and, with a candidate, by part A's candidate at L1 and L3: the
+    per-condition per-pair means (s, O, R) of each."""
+    tag, wiring, K, cand, lc, rel, gap = job
+    warnings.simplefilter('ignore')
+    for k in ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS'):
+        os.environ.setdefault(k, '1')
+    o = load_run(tag)
+    mr = ModelReading89(o, label=tag, K=K, rel_target=rel, gap_target=gap)
+    res = dict(tag=tag, wiring=wiring, readings={})
+    for rd in ('r1', 'r1b'):
+        F = mr.mean_factors(rd)
+        res['readings'][rd] = {c: dict(s=F[c].s, O=F[c].O, R=F[c].R) for c in CONDS}
+    if cand is not None:
+        for level in ('L1', 'L3'):
+            v = {c: mr.level_values(level, c, {lc: LC_EDGES[lc]} if cand == 'lc' else None)[0] for c in CONDS}
+            F = {c: cand_factors(v[c], cand, lc) for c in CONDS}
+            res['readings'][f'cand_{level}'] = {c: dict(s=F[c].s, O=F[c].O, R=F[c].R) for c in CONDS}
+    return res
+
+
+def coresponse_c(out: Path, n_workers: int = 4) -> pd.DataFrame:
+    """coresponse_C.csv: per S point (arm, weighting) the changes of L and R under APL for the four nearest ester pairs,
+    the ester group and the alcohol group on S's population (E88's `log_changes`), in E88's readings 1 and 1b and with
+    part A's candidate (the one chosen on the breadth-2 population for C1, on the base for C2, if it passes for who
+    responds there) at L1 and L3, against the flies' (reading 1, and the candidate; 90 % intervals over resampled
+    recordings); a group's change reaches the flies' at a point if it does not differ (E88's B1 rule: outside the
+    flies' interval and by a factor of B1_FACTOR or more) at any of those readings."""
+    from concurrent.futures import ProcessPoolExecutor
+    import multiprocessing
+    from experiments import E83_cross_wiring_fit as E
+    runs = _runs_table(out)
+    runs = runs[runs.permute_seed.isna() & runs.wiring.isin(E.S_WIRINGS)].drop_duplicates('tag', keep='last')
+    choice = json.loads((out / 'estimator_choice.json').read_text()) if (out / 'estimator_choice.json').exists() else None
+    lc = choice['lc_edges']['chosen'] if choice else None
+    cand_of = {}
+    for arm, pop in (('C1', 'b2'), ('C2', 'base')):
+        c = choice['populations'][pop] if choice else None
+        cand_of[arm] = c['chosen'] if c and c['chosen'] and c['candidates'][c['chosen']]['passes_who'] else None
+    rel = E88.flies_reliability('z')
+    gap = {c: v['thresholded'] for c, v in flies_gap_target('z').items()}
+    cache = out / 'coresponse_C_cache.pkl'
+    import pickle
+    done = pickle.loads(cache.read_bytes()) if cache.exists() else {}
+    jobs = [(r.tag, r.wiring, E.saved_fit(r.wiring)['K'], cand_of[r.arm], lc, rel, gap) for r in runs.itertuples()
+            if (r.tag, cand_of[r.arm]) not in done]
+    if jobs:
+        with ProcessPoolExecutor(max_workers=n_workers, mp_context=multiprocessing.get_context('spawn')) as ex:
+            for res, j in zip(ex.map(_co_job, jobs), jobs):
+                done[(j[0], j[3])] = res
+                cache.write_bytes(pickle.dumps(done))
+                print(f'coresponse {j[0]}', flush=True)
+    # the flies
+    fl = {}
+    for subset in E88.SUBSETS:
+        rf = E88.flies_factors('z', 'r1', E88.flies_subset(subset))
+        F = {c: rf[c].mean() for c in CONDS}
+        bch = [E88.log_changes(b, ('L', 'R')) for b in E88.flies_boot(rf)]
+        fl[('r1', subset)] = (E88.log_changes(F, ('L', 'R')), bch)
+        for cand in {c for c in cand_of.values() if c}:
+            fv = flies_values({lc: LC_EDGES[lc]} if cand == 'lc' else {})
+            tnt = E88.flies_subset(subset)
+            fl[(f'cand:{cand}', subset)] = (E88.log_changes(flies_cand(fv, cand, lc, tnt), ('L', 'R')),
+                                            [E88.log_changes(b, ('L', 'R')) for b in flies_cand_boot(fv, cand, lc, tnt)])
+    rows = []
+    for (arm, variant), g in runs.groupby(['arm', 'variant'], sort=False):
+        if set(g.wiring) != set(E.S_WIRINGS):
+            continue
+        cand = cand_of[arm]
+        readings = ['r1', 'r1b'] + ([f'cand_{lv}' for lv in ('L1', 'L3')] if cand else [])
+        for rd in readings:
+            Fs = [done[(t, cand)]['readings'][rd] for t in g.tag]
+            Fp = {c: E88.Factors(*(E88._mean_rows(np.stack([f[c][k] for f in Fs])) for k in ('s', 'O', 'R'))) for c in CONDS}
+            ch = E88.log_changes(Fp, ('L', 'R'))
+            for subset in E88.SUBSETS:
+                fkey = ('r1', subset) if rd.startswith('r1') else (f'cand:{cand}', subset)
+                fch, fb = fl[fkey]
+                for f in ('L', 'R'):
+                    for grp in ('nearest4', 'ester', 'alcohol'):
+                        k = f'chg_{f}_{grp}'
+                        lo, hi = np.nanpercentile([b[k] for b in fb], E88.INTERVAL)
+                        x = ch[k]
+                        outside = not (lo <= x <= hi)
+                        big = abs(x - fch[k]) >= np.log(B1_FACTOR)
+                        rows.append(dict(arm=arm, variant=variant, weighting=g.weighting.iloc[0], reading=rd,
+                                         candidate=cand if rd.startswith('cand') else '', subset=subset, factor=f, group=grp,
+                                         ratio=float(np.exp(x)), flies_ratio=float(np.exp(fch[k])), flies_lo=float(np.exp(lo)),
+                                         flies_hi=float(np.exp(hi)), differs=bool(outside and big)))
+    df = pd.DataFrame(rows)
+    if len(df):
+        reach = df.groupby(['arm', 'variant', 'subset', 'factor', 'group']).differs.any().rename('differs_somewhere').reset_index()
+        reach['reaches_flies'] = ~reach.differs_somewhere
+        df = df.merge(reach[['arm', 'variant', 'subset', 'factor', 'group', 'reaches_flies']], on=['arm', 'variant', 'subset', 'factor', 'group'])
+    df.to_csv(out / 'coresponse_C.csv', index=False)
+    return df
+
+
+def score_c(out: Path, n_workers: int = 4, coresponse: bool = True) -> dict:
+    """The readings (readings_C.csv), the co-response beside every S point (coresponse_C.csv), the choice (choice_C.csv),
+    the gate (gate_C.csv: per arm, split, direction and reference) and the verdicts (verdict_C.json: per base whether a
+    weighting lowers the pattern part ((i), (ii) and (v) against the base's own reference), passes (all five against T's
+    unchanged fits) or is level; the weaker weightings that are equals; the weightings' realism flags)."""
+    rd = readings_c(out)
+    if coresponse:
+        coresponse_c(out, n_workers)
+    plan = c3_plan(out, rd)
+    runs = _runs_table(out)
+    grows, v = [], dict(thresholds=dict(CHOICE_MIN_GAIN=CHOICE_MIN_GAIN, GATE_GAIN=GATE_GAIN, GATE_BORDER=GATE_BORDER,
+                                        GATE_SINGLES=GATE_SINGLES, GATE_RAW_SLACK=GATE_RAW_SLACK, GATE_MEAN_SLACK=GATE_MEAN_SLACK,
+                                        GATE_SQ_ALL=GATE_SQ_ALL, GATE_SQ_SIX=GATE_SQ_SIX, CONTROL_RATIO=CONTROL_RATIO,
+                                        EQUAL_PATTERN=EQUAL_PATTERN, EQUAL_RAW=EQUAL_RAW, EQUAL_MEAN=EQUAL_MEAN),
+                        readout='cal (the calibrated readout, K set on each run\'s APL-on counts; E83\'s readings and gate)', arms={})
+    for arm in ARMS:
+        refs = {'own': 'unchanged' if arm == 'C1' else _ref_variant(arm), 'unchanged': 'unchanged'}
+        av = dict(choice={h: plan[(arm, h)] for h in ('A', 'B', 'C', 'D')}, gate={})
+        for rname, ref in refs.items():
+            dirs = {}
+            for split, hs in SPLITS.items():
+                for X in hs:
+                    c = plan[(arm, X)]
+                    chosen = c['chosen'] if c['confirm'] else None
+                    ctrls = [f'{chosen}_perm{s}' for s in CONTROL_SEEDS] if chosen else []
+                    r = _gate_direction(rd, runs, arm, X, chosen, ref, ctrls)
+                    r.update(split=split, reference_kind=rname)
+                    dirs[(split, X)] = r
+                    grows.append(r)
+            first = [dirs[(0, X)] for X in SPLITS[0]]
+            gt = gate89(first)
+            if gt['borderline'] and all((1, X) in dirs for X in SPLITS[1]):
+                second = [dirs[(1, X)] for X in SPLITS[1]]
+                if all(r.get('confirmed') or r.get('note') == 'nothing to confirm' for r in second):
+                    gt = dict(gate89([_mean_rows_dir(a, b) for a, b in zip(first, second)]), read_on='the mean of the two splits',
+                              first_split=gt)
+            av['gate'][rname] = gt
+        own, unch = av['gate']['own'], av['gate']['unchanged']
+        lowers = bool(own['i'] and own['ii'] and own['v'])
+        passes = bool(all(unch[k] for k in ('i', 'ii', 'iii', 'iv', 'v')))
+        av['verdict'] = 'passes' if passes else ('lowers the pattern part' if lowers else 'level')
+        av['equals'] = equal_rule(rd, arm)
+        g = rd[(rd.arm == arm) & (rd.unit == 'S') & (rd.readout == 'cal') & rd.permute_seed.isna()]
+        av['S'] = {r.variant: dict(halfA=r.halfA_pattern, halfB=r.halfB_pattern, all=r.z8_pattern, loss=r.z8_loss,
+                                   mean_effect=r.mean_effect, rho=r.z8_rho, n_flagged=int(r.n_flagged), n_at_bound=int(r.n_at_bound))
+                   for r in g.itertuples()}
+        rr = runs[(runs.arm == arm) & runs.flagged]
+        av['flagged_runs'] = rr[['tag', 'realism_flag']].values.tolist()
+        v['arms'][arm] = av
+    pd.DataFrame(grows).to_csv(out / 'gate_C.csv', index=False)
+    if (out / 'coresponse_C.csv').exists():
+        co = pd.read_csv(out / 'coresponse_C.csv')
+        if len(co):
+            reach = co[(co.factor == 'L') & (co.group == 'alcohol')].drop_duplicates(['arm', 'variant', 'subset'])
+            v['alcohol_coresponse_reaches_flies'] = {f'{r.arm}:{r.variant}:{r.subset}': bool(r.reaches_flies) for r in reach.itertuples()}
+    _write_json(out / 'verdict_C.json', v)
+    for arm in ARMS:
+        print(f"C {arm}: {v['arms'][arm]['verdict']}; choice A {plan[(arm, 'A')]['chosen']} (gain {plan[(arm, 'A')].get('gain', np.nan):.4f}), "
+              f"B {plan[(arm, 'B')]['chosen']} (gain {plan[(arm, 'B')].get('gain', np.nan):.4f})", flush=True)
+    return v
+
+
+def figure_c(out: Path) -> Optional[Path]:
+    """E89_weightings.png: per base, S's pattern part under the readout against half A, half B and all recordings by
+    weighting (the reference dashed; flagged weightings hollow), and the alcohol group's co-response change (reading 1)
+    against the flies' interval."""
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    if not (out / 'readings_C.csv').exists():
+        return None
+    rd = pd.read_csv(out / 'readings_C.csv')
+    co = pd.read_csv(out / 'coresponse_C.csv') if (out / 'coresponse_C.csv').exists() else pd.DataFrame()
+    order = [wtag(w) for w in weightings()]
+    fig, axes = plt.subplots(2, 2, figsize=(13, 8), sharex=True)
+    for j, arm in enumerate(ARMS):
+        g = rd[(rd.arm == arm) & (rd.unit == 'S') & (rd.readout == 'cal') & rd.permute_seed.isna()].set_index('weighting')
+        x = np.arange(len(order))
+        ax = axes[0, j]
+        for t, col, lab in (('halfA', '#d1495b', 'half A'), ('halfB', '#2e86ab', 'half B'), ('z8', '0.2', 'all recordings')):
+            y = [g[f'{t}_pattern'].get(w, np.nan) for w in order]
+            fl = [g['n_flagged'].get(w, 0) > 0 for w in order]
+            ax.plot(x, y, '-', color=col, lw=0.8, label=lab)
+            ax.scatter(x, y, s=28, facecolors=['none' if f else col for f in fl], edgecolors=col)
+            ref = g[f'{t}_pattern'].get(wtag(REFERENCE), np.nan)
+            ax.axhline(ref, color=col, ls='--', lw=0.7)
+        ax.set_title(f"{'the fits as they are' if arm == 'C1' else 'the base with the flies recruitment'}: S's pattern part "
+                     '(calibrated readout)', fontsize=9)
+        ax.set_ylabel('pattern part of the APL-effect loss')
+        ax.legend(fontsize=8)
+        ax = axes[1, j]
+        if len(co):
+            c = co[(co.arm == arm) & (co.reading == 'r1') & (co.subset == 'all') & (co.factor == 'L') & (co.group == 'alcohol')].set_index('weighting')
+            y = [c['ratio'].get(w, np.nan) for w in order]
+            ax.plot(x, y, 'o-', color='#2e86ab', label='model, S (trial means)')
+            if len(c):
+                ax.axhspan(c.flies_lo.iloc[0], c.flies_hi.iloc[0], color='0.85', label="KC data's 90 % interval")
+                ax.axhline(c.flies_ratio.iloc[0], color='0.4', lw=1)
+        ax.set_ylabel("alcohol group's co-response change (on / off)")
+        ax.set_xticks(x)
+        ax.set_xticklabels(order, rotation=60, fontsize=8)
+        ax.legend(fontsize=8)
+    fig.tight_layout()
+    path = out / 'E89_weightings.png'
+    fig.savefig(path, dpi=130)
+    plt.close(fig)
+    return path
 
 
 def write_variants(out: Path) -> pd.DataFrame:
-    """variants.csv and model_pair_distances_long.csv of C's runs."""
-    raise NotImplementedError
+    """variants.csv for the model-output archive and model_pair_distances_long.csv for kcq/apl_effect.py (raw spike
+    counts, the harness's primary model RDM): one row per C run with absolute parameters (the APL scales as run; on the
+    base the per-odor threshold factors and APL scales in JSON, their range in multiplier_min / max and scale_min / max),
+    the weighting (measure, exponent, permutation seed), the factors' range and realism."""
+    runs = _runs_table(out).drop_duplicates('tag', keep='last')
+    rows, parts = [], []
+    for _, r in runs.iterrows():
+        kind = ("the breadth weighting of APL's inhibition on the fit as it is: each KC's APL->KC weight x ((m + 1) / mean(m + 1))^k, "
+                'the APL scale (APL->KC, KC->APL, bouton->APL tied) re-held at the fit\'s APL-on count; APL-off run the fit\'s'
+                if r.arm == 'C1' else
+                "the breadth weighting of APL's inhibition on the base with the flies' recruitment: per-odor threshold factors (E88's "
+                "D1 base; the flies' fractions with APL output blocked (TNT), baseline-noise units), each KC's APL->KC weight x "
+                "((m + 1) / mean(m + 1))^k, each odor's APL scale re-held at the control flies' count for that odor")
+        row = dict(tag=r.tag, variant=r.tag, part=r.part, arm=r.arm, kind=kind, config=r.weighting, breadth_def=r.measure,
+                   breadth_k=r.exponent, k=r.exponent, seed=r.permute_seed, wiring=r.wiring, ref_experiment=r.fit_folder,
+                   ref_fit=r.fit_tag, fixed_thr=r.fixed_thr, wAPLKC_scale=r.wAPLKC_scale, wKCAPL_scale=r.wKCAPL_scale,
+                   wAPLPN_scale=r.wAPLPN_scale, wPNAPL_scale=r.wPNAPL_scale, wKCKC_scale=r.wKCKC_scale, apl_factor=r.apl_factor,
+                   scale_min=r.apl_min, scale_max=r.apl_max, rate_on=r.rate_on, rate_off=r.rate_off, max_count_on=r.max_count_on,
+                   max_count_off=r.max_count_off, wAPLKC_sha256=r.wAPLKC_sha256)
+        if r.arm == 'C2':
+            row.update(scaled_odors='per odor', multiplier_min=r.thr_min, multiplier_max=r.thr_max,
+                       thr_per_odor=r.thr_per_odor, apl_per_odor=r.apl_per_odor)
+        rows.append(row)
+        o = load_run(r.tag)
+        parts.append(pd.concat({(r.tag, 'on'): H.model_rdms(*o['on'])[H.PRIMARY_MODEL_RDM],
+                                (r.tag, 'acute_off'): H.model_rdms(*o['off'])[H.PRIMARY_MODEL_RDM]},
+                               names=['tag', 'condition', 'odor_a', 'odor_b']).rename('distance').reset_index())
+    df = pd.DataFrame(rows)
+    df.to_csv(out / 'variants.csv', index=False)
+    pd.concat(parts, ignore_index=True).to_csv(out / 'model_pair_distances_long.csv', index=False)
+    return df
+
+
+def _f(x, spec: str = '.4f') -> str:
+    return E87._f(x, spec)
 
 
 def comparison_table(out: Path) -> str:
     """comparison_table.md from the parts' tables."""
-    raise NotImplementedError
+    L = ['# E89: the co-response read with a checked estimate and the breadth weighting inside the models\' APL', '',
+         f'Generated by experiments/E89_apl_breadth_weighting.py at {H.code_commits().get("queue_commit", "")[:7]}.', '']
+    if (out / 'estimator_choice.json').exists():
+        ch = json.loads((out / 'estimator_choice.json').read_text())
+        L += ['## A0: the candidates on known truth', '',
+              f"(c)'s edges set on the firing-ceiling population: {ch['lc_edges']['chosen']} (largest |error| of L over the binding "
+              f"levels: " + ', '.join(f'{k} {_f(x)}' for k, x in ch['lc_edges']['worst_L_binding'].items()) + ').', '',
+              f"Flies' same-repeat gap on the thresholded single trials (L3's target): control flies {_f(ch['flies_gap']['on']['thresholded'])}, "
+              f"APL output blocked (TNT) {_f(ch['flies_gap']['off']['thresholded'])} (graded, E81's: {_f(ch['flies_gap']['on']['graded'])} / "
+              f"{_f(ch['flies_gap']['off']['graded'])}).", '',
+              'The largest |group-mean error| (five groups, both conditions, both seeds) in units of the similarity; tolerance 0.03. '
+              'Binding levels L1, L3h, L3, L3x; L2 beside.', '']
+        for pop, c in ch['populations'].items():
+            L += [f'### {pop}: chosen {c["chosen"]} ({c["chosen_passes"]})', '',
+                  '| candidate | factor | ' + ' | '.join(LEVELS) + ' | passes who / full |', '|---|---|' + '---:|' * len(LEVELS) + '---|']
+            for cand, d in c['candidates'].items():
+                for f in ('R', 'L', 'G', 's'):
+                    L.append(f'| {cand} | {f} | ' + ' | '.join(_f(d['worst'][lv][f], '.3f') for lv in LEVELS) +
+                             f" | {d['passes_who']} / {d['passes_full']} |")
+            L.append('')
+    if (out / 'levels.csv').exists():
+        lv = pd.read_csv(out / 'levels.csv')
+        L += ['### The levels (means over runs and seeds)', '', '| level | condition | multiplier | share | gap (thresholded) | gap graded | reliability | rate |',
+              '|---|---|---:|---:|---:|---:|---:|---:|']
+        for (lev, c), g in lv.groupby(['level', 'condition'], sort=False):
+            L.append(f'| {lev} | {c} | {_f(g.m.mean(), ".2f")} | {_f(g.share.mean(), ".2f")} | {_f(g.gap.mean(), ".3f")} | '
+                     f'{_f(g.gap_graded.mean(), ".3f")} | {_f(g.reliability.mean(), ".3f")} | {_f(g.rate_tm.mean(), ".3f")} |')
+        L.append('')
+    if (out / 'verdict_A.json').exists():
+        va = json.loads((out / 'verdict_A.json').read_text())
+        L += ['## A1: the verdicts with the chosen candidate', '', '```', json.dumps({k: va[k] for k in va if k != 'A2'}, indent=1)[:12000], '```', '']
+    if (out / 'changes.csv').exists():
+        ch = pd.read_csv(out / 'changes.csv')
+        L += ['## A2: the co-response (L) and recruitment (R) changes under APL (on / off; four nearest / ester / alcohol)', '',
+              '| candidate | source | level | L | R | L, truth | R, truth |', '|---|---|---|---:|---:|---:|---:|']
+
+        def trio(sub, f, col='ratio'):
+            return ' / '.join(_f(sub[(sub.factor == f) & (sub.group == g)][col].iloc[0], '.2f') if len(sub[(sub.factor == f) & (sub.group == g)]) else '–'
+                              for g in ('nearest4', 'ester', 'alcohol'))
+        for cand, gc in ch.groupby('candidate', sort=False):
+            for subset in E88.SUBSETS:
+                s = gc[(gc.source == 'flies') & (gc.subset == subset)]
+                L.append(f'| {cand} | KC data ({subset}) | | {trio(s, "L")} | {trio(s, "R")} | | |')
+            for pop in A_POPULATIONS:
+                for lev in LEVELS:
+                    s = gc[(gc.source == 'model') & (gc.population == pop) & (gc.level == lev)]
+                    if len(s):
+                        L.append(f'| {cand} | {pop} | {lev} | {trio(s, "L")} | {trio(s, "R")} | {trio(s, "L", "truth_ratio")} | {trio(s, "R", "truth_ratio")} |')
+        L.append('')
+    if (out / 'verdict_B.json').exists():
+        vb = json.loads((out / 'verdict_B.json').read_text())
+        L += ['## B: the weighting in the saved models', '',
+              '| family | member nearest the flies (trial means) | its change / flies\' | gain under the readout | gain on raw counts | follows |',
+              '|---|---|---:|---:|---:|---|']
+        for fam, d in vb['families'].items():
+            n = d.get('nearest', {}).get('trial_means')
+            if n:
+                L.append(f"| {fam} | {n['member']} | {_f(n['change'], '.2f')} / {_f(n['flies'], '.2f')} | {_f(n['gain_cal'])} | {_f(n['gain_raw'])} | {n['follows']} |")
+        L.append('')
+    if (out / 'readings_C.csv').exists():
+        rd = pd.read_csv(out / 'readings_C.csv')
+        for arm in ARMS:
+            g = rd[(rd.arm == arm) & (rd.unit == 'S') & (rd.readout == 'cal') & rd.permute_seed.isna()]
+            if g.empty:
+                continue
+            graw = rd[(rd.arm == arm) & (rd.unit == 'S') & (rd.readout == 'raw') & rd.permute_seed.isna()].set_index('variant')
+            L += [f"## C, {'the fits as they are (C1)' if arm == 'C1' else 'the base with the flies recruitment (C2)'}: S's population", '',
+                  '| weighting | pattern, half A | half B | all | loss | mean APL effect | ρ | raw-count loss | ester / alcohol error | block | flagged / at bound |',
+                  '|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|']
+            for r in g.itertuples():
+                L.append(f'| {r.weighting} | {r.halfA_pattern:.4f} | {r.halfB_pattern:.4f} | {r.z8_pattern:.4f} | {r.z8_loss:.4f} | '
+                         f'{r.mean_effect:+.3f} | {r.z8_rho:.2f} | {graw.z8_loss.get(r.variant, np.nan):.4f} | '
+                         f'{r.z8_err_ester:+.3f} / {r.z8_err_alcohol:+.3f} | {r.block:+.3f} | {r.n_flagged} / {r.n_at_bound} |')
+            L.append('')
+    for name in ('choice_C.csv', 'gate_C.csv'):
+        if (out / name).exists():
+            d = pd.read_csv(out / name)
+            try:
+                txt = d.to_markdown(index=False, floatfmt='.4f')
+            except ImportError:
+                txt = '```\n' + d.to_string() + '\n```'
+            L += [f'## {name}', '', txt, '']
+    if (out / 'verdict_C.json').exists():
+        vc = json.loads((out / 'verdict_C.json').read_text())
+        L += ['## Verdict C', '', '```', json.dumps({a: dict(verdict=x['verdict'], gate=x['gate'], equals=[e for e in x['equals'] if e['equal']])
+                                                    for a, x in vc['arms'].items()}, indent=1)[:12000], '```', '']
+    text = '\n'.join(L) + '\n'
+    (out / 'comparison_table.md').write_text(text)
+    return text
 
 
 def _wirings(arg: str) -> Tuple[str, ...]:
@@ -1598,9 +2187,11 @@ def main() -> None:
         part_c1(out, ws)
         part_c2(out, ws, n_workers=args.workers)
     elif args.part == 'C3':
-        part_c3(out, args.workers)
+        part_c3(out, 16)
+        figure_c(out)
     elif args.part == 'Cscore':
-        score_c(out)
+        score_c(out, args.workers)
+        figure_c(out)
     elif args.part == 'variants':
         write_variants(out)
     if args.part in ('A', 'B', 'Cscore', 'C3', 'variants', 'table'):

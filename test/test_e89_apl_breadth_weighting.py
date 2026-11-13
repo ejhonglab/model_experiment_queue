@@ -188,3 +188,50 @@ def test_level3_middle_share_gives_the_flies_gap_and_repeatability():
     v1, _ = mr.level_values('L1', 'on')
     f1, f2 = mr.factors('r1')['on'].mean(), mr.factors('r2')['on'].mean()
     assert np.allclose(v1['O_tm'], f1.O, equal_nan=True) and np.allclose(v1['O_nr'], f2.O, equal_nan=True)
+
+
+def _fake_readings(pats_S: dict, pats_T: dict = None, flagged=(), arm='C1'):
+    """A made-up readings table: S's (and T's) pattern parts per variant tag, the same against every target."""
+    rows = []
+    for unit, pats in (('S', pats_S), ('T', pats_T or {})):
+        for tag, p in pats.items():
+            v = f'{arm}_{tag}'
+            for ro in ('cal', 'raw'):
+                rows.append(dict(arm=arm, variant=v, weighting=tag, permute_seed=np.nan, unit=unit, readout=ro,
+                                 n_flagged=int(tag in flagged), n_at_bound=0, halfA_pattern=p, halfB_pattern=p, halfC_pattern=p,
+                                 halfD_pattern=p, z8_pattern=p, z6_pattern=p, z8_loss=p + (0.02 if ro == 'raw' else 0.0),
+                                 mean_effect=0.178))
+            if unit == 'T':
+                for w in ('P3', 'P4', 'M2', 'M3'):
+                    for ro in ('cal', 'raw'):
+                        rows.append(dict(rows[-1], unit=w, readout=ro))
+    return pd.DataFrame(rows)
+
+
+def test_choice_reference_reads_level_and_small_gains_have_nothing_to_confirm():
+    rd = _fake_readings({'F_k2': 0.050, 'S_k1': 0.051, 'N_k1': 0.052})
+    c = X.choose(rd, 'C1', 'A')
+    assert c['chosen'] == 'C1_F_k2' and not c['confirm']
+    rd = _fake_readings({'F_k2': 0.050, 'S_k1': 0.049, 'N_k1': 0.052})
+    c = X.choose(rd, 'C1', 'A')
+    assert c['chosen'] == 'C1_S_k1' and np.isclose(c['gain'], 0.001) and not c['confirm']
+    rd = _fake_readings({'F_k2': 0.050, 'S_k1': 0.048, 'N_k1': 0.040}, flagged=('N_k1',))
+    c = X.choose(rd, 'C1', 'B')
+    assert c['chosen'] == 'C1_S_k1' and c['confirm'] and 'C1_N_k1' in c['excluded']
+
+
+def test_gate_and_the_borderline_rule():
+    runs = pd.DataFrame(dict(variant=['C1_S_k1'] * 4, wiring=['P3', 'P4', 'M2', 'M3'], flagged=[False] * 4))
+    rd = pd.concat([_fake_readings({'F_k2': 0.050, 'S_k1': 0.048}, {'S_k1': 0.050}),
+                    _fake_readings({}, {'F_k2': 0.0538}).assign(variant=lambda d: d.variant.str.replace('C1_F_k2', 'unchanged'))])
+    rows = [X._gate_direction(rd, runs, 'C1', X_, 'C1_S_k1', 'unchanged', []) for X_ in ('A', 'B')]
+    assert all(np.isclose(r['g'], 0.0038) for r in rows)
+    g = X.gate89(rows)
+    assert g['i'] and g['ii'] and g['borderline'] and not g['v']   # no control run: (v) not read as holding
+    rows_none = [dict(rows[0]), X._gate_direction(rd, runs, 'C1', 'B', None, 'unchanged', [])]
+    g2 = X.gate89(rows_none)
+    assert not g2['i'] and rows_none[1]['note'] == 'nothing to confirm'
+    big = [dict(r, g=0.006) for r in rows]
+    assert not X.gate89(big)['borderline']
+    m = X._mean_rows_dir(dict(rows[0], g=0.004), dict(rows[0], g=0.002))
+    assert np.isclose(m['g'], 0.003)
