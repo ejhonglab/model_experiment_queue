@@ -1162,6 +1162,7 @@ Canonical experiment names for summary reports:
 | E86 | the controls and the replication of the reduced searched input |
 | E87 | the form of APL's inhibition in the flies' own responses |
 | E88 | the common error split into who responds and how strongly |
+| E89 | the co-response read with a checked estimate and the breadth weighting inside the models' APL |
 
 ## Model-output archive (data/model_outputs/ in the shared directory)
 
