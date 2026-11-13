@@ -1152,17 +1152,305 @@ def archive_scan(out: Path, f_ch: Form, tg: dict) -> pd.DataFrame:
     return df
 
 
-def part_d1(out: Path) -> dict:
-    """The forms as a static inhibition in place of APL on the eight wirings (runs_D.csv, readings_D.csv)."""
-    raise NotImplementedError
+# ---------------------------------------------------------------------------
+# part D: the forms as a static inhibition in place of APL (simulations)
+
+D_BRACKET, D_STEP = (1.0, 200.0), 1.3    # bisect_factor on v = 1 + c (c = 0 at v = 1, responses fall with v)
+
+
+def d_forms(out: Path) -> Dict[str, Form]:
+    """D1's five forms: uniform; q 1, p 0; the form A2 chose; q 1, p 1; q 0, p 2 (breadth by count unless the chosen
+    form's)."""
+    return {'uniform': UNIFORM, 'q1_p0': Form('subtractive', 1.0, 0.0), 'chosen': chosen_form(out),
+            'q1_p1': Form('subtractive', 1.0, 1.0), 'q0_p2': Form('subtractive', 0.0, 2.0)}
+
+
+def _d_worker(conn, label: str, parts: dict, fit: dict, js: List[int]) -> None:
+    """A part-D worker: wiring `label`'s simulator (E83's `build_simulator`, the fit's parameters, the lab's input and
+    breadth) on the ORN columns `js`, then for each task (a list of per-odor KC threshold factors, or None) the APL-off
+    one-odor runs (`mp.sim_only`) of its odors, until None."""
+    try:
+        from experiments import E83_cross_wiring_fit as E
+        E._PARTS[label] = parts
+        E._FITS[label] = fit
+        sim, info = E.build_simulator(label, orn=parts['orn'].iloc[:, js], breadth=parts['breadth'])
+        cells = info['cells']
+        mp, order = cells['mp'].cell_contents, np.asarray(cells['odor_order'].cell_contents, dtype=int)
+        names = [str(c) for c in cells['odor_index'].cell_contents]
+        p_off = dict(info['params'], wAPLKC_scale=0.0, wAPLPN_scale=0.0)
+        n_kc = int(fit['saved']['on'][0].shape[0])
+        conn.send(('ready', names))
+    except Exception as e:
+        conn.send(('error', repr(e)))
+        return
+    while True:
+        msg = conn.recv()
+        if msg is None:
+            break
+        try:
+            res = []
+            for jj in range(len(order)):
+                fac = np.ones(n_kc) if msg[jj] is None else np.asarray(msg[jj], dtype=float)
+                mp.sim_only = [int(order[jj])]
+                try:
+                    r, s = sim(p_off, kc_thr_factor=fac)
+                finally:
+                    mp.sim_only = []
+                res.append((names[jj], r.iloc[:, jj].to_numpy(), s.iloc[:, jj].to_numpy()))
+            conn.send(('ok', res))
+        except Exception as e:
+            conn.send(('error', repr(e)))
+
+
+class WiringPool:
+    """One wiring's one-odor APL-off runs spread over worker processes (spawned, one OpenMP thread each), as E80's
+    OdorPool does for C2; `run(factors)` takes per-odor KC threshold factors (KCs x odors, the saved outputs' column
+    order; None for all ones) and returns (responses, spike counts) in the saved outputs' layout."""
+
+    def __init__(self, label: str, n_workers: int = 16):
+        import multiprocessing
+        import os
+        from experiments import E83_cross_wiring_fit as E
+        self.label = label
+        parts = E.wiring_parts(label)
+        fit = E.saved_fit(label)
+        self.template = fit['saved']['off']
+        self.cols = [str(c) for c in self.template[0].columns]
+        n = len(self.cols)
+        self.groups = [list(map(int, g)) for g in np.array_split(np.arange(n), max(1, min(n_workers, n)))]
+        send = {k: parts[k] for k in parts}
+        ctx = multiprocessing.get_context('spawn')
+        keep = {k: os.environ.get(k) for k in ('OMP_NUM_THREADS', 'OMP_THREAD_LIMIT')}
+        os.environ['OMP_NUM_THREADS'] = os.environ['OMP_THREAD_LIMIT'] = '1'
+        self.procs, self.conns = [], []
+        try:
+            for js in self.groups:
+                a, b = ctx.Pipe()
+                pr = ctx.Process(target=_d_worker, args=(b, label, send, fit, js), daemon=True)
+                pr.start()
+                self.procs.append(pr)
+                self.conns.append(a)
+        finally:
+            for k, v in keep.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+        for conn, js in zip(self.conns, self.groups):
+            status, v = conn.recv()
+            if status != 'ready':
+                self.close()
+                raise RuntimeError(f'{label}: a worker failed to start: {v}')
+            if v != [self.cols[j] for j in js]:
+                self.close()
+                raise RuntimeError(f'{label}: a worker has odors {v}, expected {[self.cols[j] for j in js]}')
+
+    def run(self, factors: Optional[np.ndarray]) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        for conn, js in zip(self.conns, self.groups):
+            conn.send([None if factors is None else factors[:, j] for j in js])
+        R, S = self.template[0].copy(), self.template[1].copy()
+        for conn, js in zip(self.conns, self.groups):
+            status, v = conn.recv()
+            if status != 'ok':
+                raise RuntimeError(f'{self.label}: a worker failed: {v}')
+            for j, (name, r, s) in zip(js, v):
+                if name != self.cols[j]:
+                    raise RuntimeError(f'{self.label}: odor {name} where {self.cols[j]} was expected')
+                R.iloc[:, j] = r
+                S.iloc[:, j] = s
+        return R, S
+
+    def close(self) -> None:
+        for conn in self.conns:
+            try:
+                conn.send(None)
+            except Exception:
+                pass
+        for pr in self.procs:
+            pr.join(timeout=30)
+            if pr.is_alive():
+                pr.terminate()
+        self.procs, self.conns = [], []
+
+
+def _d_dir() -> Path:
+    d = H.outputs_dir(EXPERIMENT) / 'D'
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _save_d(tag: str, r: pd.DataFrame, s: pd.DataFrame) -> None:
+    d = _d_dir()
+    r.to_parquet(d / f'{tag}_on_responses.parquet')
+    s.to_parquet(d / f'{tag}_on_spike_counts.parquet')
+
+
+def _load_d(tag: str) -> Optional[Tuple[pd.DataFrame, pd.DataFrame]]:
+    d = _d_dir()
+    ps = [d / f'{tag}_on_{k}.parquet' for k in ('responses', 'spike_counts')]
+    return tuple(pd.read_parquet(p) for p in ps) if all(p.exists() for p in ps) else None
+
+
+def static_factors(off_counts: pd.DataFrame, form: Form, c: float) -> np.ndarray:
+    """1 + c * A_o^q * B_k^p (KCs x odors, the outputs' column order) from the wiring's own APL-off spike counts (a
+    response two or more spikes)."""
+    m = off_counts.to_numpy(dtype=float)
+    return 1.0 + c * inhibition(m, form, RAW_CRIT)
+
+
+def part_d1(out: Path, wirings: Optional[Sequence[str]] = None, n_workers: int = 16) -> pd.DataFrame:
+    """D1: on each wiring of C2's family, first the identity (the saved APL-off run reproduced through the one-odor
+    path), then for each of D1's forms the per-odor KC thresholds raised by 1 + c A^q B^p with APL removed, c bisected
+    to the wiring's APL-on response count; the APL-off run the wiring's own. Resumable (runs under outputs/.../D/, rows in
+    runs_D.csv). Then the readings (readings_D.csv) and D1's verdict (verdict_D.json)."""
+    import json
+    import time
+    from experiments import E69_kc_firing_ceiling as E69
+    from experiments import E83_cross_wiring_fit as E
+    wirings = list(E.ALL_WIRINGS if wirings is None else wirings)
+    forms = d_forms(out)
+    runs_path = out / 'runs_D.csv'
+    done = set(pd.read_csv(runs_path).tag) if runs_path.exists() else set()
+    ident_path = out / 'identity_D.json'
+    ident = json.loads(ident_path.read_text()) if ident_path.exists() else {}
+    for w in wirings:
+        todo = [k for k in forms if f'D1_{k}_{w}' not in done]
+        if not todo and w in ident:
+            continue
+        fit = E.saved_fit(w)
+        pool = WiringPool(w, n_workers)
+        try:
+            if w not in ident:
+                r, s = pool.run(None)
+                ns = int((s.to_numpy(dtype=float) != fit['saved']['off'][1].to_numpy(dtype=float)).sum())
+                nr = int((r.to_numpy(dtype=float) != fit['saved']['off'][0].to_numpy(dtype=float)).sum())
+                ident[w] = dict(count_diffs=ns, response_diffs=nr, **H.code_commits())
+                ident_path.write_text(json.dumps(ident, indent=1, default=str) + '\n')
+                print(f'D1 identity {w}: {ns} count / {nr} response differences', flush=True)
+                if ns or nr:
+                    raise RuntimeError(f'{w}: the one-odor path does not reproduce the saved APL-off run')
+            off = fit['saved']['off']
+            for k in todo:
+                f = forms[k]
+                tag = f'D1_{k}_{w}'
+                t0 = time.time()
+                v, (r, s), hist, at_b = E69.bisect_factor(lambda v: pool.run(static_factors(off[1], f, v - 1.0)),
+                                                          fit['target_on'], fit['size'], D_BRACKET, D_STEP, f'{tag} c')
+                _save_d(tag, r, s)
+                o = {'on': (r, s), 'off': off}
+                row = dict(part='D1', form_label=k, form=f.name, wiring=w, tag=tag, c=v - 1.0, n_on=int((r.to_numpy() > 0.5).sum()),
+                           target_on=fit['target_on'], at_bound=bool(at_b), n_sims=len(hist), seconds=time.time() - t0,
+                           fit_folder=fit['folder'], fit_tag=fit['tag'], **{kk: fit['p'][kk] for kk in E.PARAM_KEYS},
+                           K_fit=fit['K'], **H.code_commits())
+                row.update(E.realism(o))
+                pd.DataFrame([row]).to_csv(runs_path, mode='a', header=not runs_path.exists(), index=False)
+                print(f'D1 {tag}: c {v - 1.0:.4g}, {row["n_on"]} / {fit["target_on"]} responses, {len(hist)} sims, '
+                      f'{time.time() - t0:.0f}s', flush=True)
+        finally:
+            pool.close()
+    return score_d1(out)
+
+
+def score_d1(out: Path) -> pd.DataFrame:
+    """D1's readings: per form, each wiring and the population (S, T, all eight), E83's `effect_scores` under the
+    readout and on raw counts against all of E83's targets; the agreement with part B's count-level effect of the same
+    form (raw counts, z with the trial noise removed in B's convention is not used here: the correlation of the two
+    per-pair effects and the difference of their pattern parts against the main target, both on raw counts); the
+    verdict. readings_D.csv, verdict_D.json."""
+    import json
+    from experiments import E83_cross_wiring_fit as E
+    runs = pd.read_csv(out / 'runs_D.csv')
+    forms = d_forms(out)
+    rows, vd = [], {}
+    pops = {'S': E.S_WIRINGS, 'T': E.T_WIRINGS, 'all8': E.ALL_WIRINGS}
+    for k, f in forms.items():
+        ws = [w for w in E.ALL_WIRINGS if f'D1_{k}_{w}' in set(runs.tag)]
+        dist = {ro: {} for ro in ('cal', 'raw')}
+        base = {ro: {} for ro in ('cal', 'raw')}
+        proxy = {}
+        for w in ws:
+            fit = E.saved_fit(w)
+            r, s = _load_d(f'D1_{k}_{w}')
+            o = {'on': (r, s), 'off': fit['saved']['off']}
+            for ro in ('cal', 'raw'):
+                dist[ro][w] = E.pair_distances(o, ro, fit['K'] if ro == 'cal' else None)
+                base[ro][w] = E.pair_distances(fit['saved'], ro, fit['K'] if ro == 'cal' else None)
+            mr = ModelResponses(fit['saved'], 'raw', label=w)
+            proxy[w] = mr.form(f)[0]
+        for ro in ('cal', 'raw'):
+            units = {w: [w] for w in ws}
+            units.update({p: list(m) for p, m in pops.items() if all(w in ws for w in m)})
+            for u, members in units.items():
+                d = E.population([dist[ro][w] for w in members])
+                d0 = E.population([base[ro][w] for w in members])
+                sc, sc0 = E.effect_scores(d), E.effect_scores(d0)
+                rows.append(dict(form_label=k, form=f.name, readout=ro, unit=u, n_wirings=len(members),
+                                 **sc, **{f'unchanged_{kk}': vv for kk, vv in sc0.items()},
+                                 mean_on=float(d['on'].mean()), mean_off=float(d['off'].mean())))
+        if all(w in ws for w in E.ALL_WIRINGS):
+            r8 = [x for x in rows if x['form_label'] == k and x['unit'] == 'all8']
+            cal, raw = next(x for x in r8 if x['readout'] == 'cal'), next(x for x in r8 if x['readout'] == 'raw')
+            singles = [x for x in rows if x['form_label'] == k and x['readout'] == 'cal' and x['unit'] in E.ALL_WIRINGS]
+            n_lower = sum(x['z8_pattern'] < x['unchanged_z8_pattern'] for x in singles)
+            # the proxy: the simulated against the count-level (part B, raw counts, thresholded convention) population effect
+            sim_eff = E.population([dist['raw'][w] for w in E.ALL_WIRINGS])
+            sim_e = _cs_effect(sim_eff)
+            cnt = _pop([proxy[w] for w in E.ALL_WIRINGS]) - _pop([ModelResponses(E.saved_fit(w)['saved'], 'raw').d_off for w in E.ALL_WIRINGS])
+            cnt_e = _pairs(cnt)
+            ok = sim_e.notna() & cnt_e.notna()
+            r_proxy = float(np.corrcoef(sim_e[ok], cnt_e[ok])[0, 1])
+            tg = E.targets()['z8']
+            pat_sim = scores(_pairs_to_triu(sim_e), _pairs_to_triu(tg))['pattern']
+            pat_cnt = scores(cnt, _pairs_to_triu(tg))['pattern']
+            vd[k] = dict(form=f.name, pattern_cal=cal['z8_pattern'], unchanged=D_UNCHANGED, n_wirings_lower=int(n_lower),
+                         raw_loss=raw['z8_loss'], better=bool(cal['z8_pattern'] <= D_UNCHANGED - D_GAIN and n_lower >= D_WIRINGS
+                                                              and raw['z8_loss'] <= D_RAW_UNCHANGED + D_RAW_SLACK),
+                         worse=bool(cal['z8_pattern'] >= D_UNCHANGED + D_GAIN), proxy_r=r_proxy,
+                         proxy_pattern_diff=float(abs(pat_sim - pat_cnt)),
+                         proxy_stands=bool(r_proxy >= D_PROXY_R and abs(pat_sim - pat_cnt) < D_PROXY_DIFF))
+    df = pd.DataFrame(rows)
+    df.to_csv(out / 'readings_D.csv', index=False)
+    (out / 'verdict_D.json').write_text(json.dumps(vd, indent=1) + '\n')
+    return df
+
+
+def _cs_effect(d: Dict[str, pd.Series]) -> pd.Series:
+    from experiments import E83_cross_wiring_fit as E
+    return E._cs(H.apl_effect(d['on'], d['off']))
+
+
+def _pairs_to_triu(s: pd.Series) -> np.ndarray:
+    """A canonical pair Series as a 120-vector in triu order of APL16_ODORS (the inverse of `_pairs`)."""
+    i, j = _iu()
+    o = H.APL16_ODORS
+    keys = [tuple(sorted((o[a], o[b]))) for a, b in zip(i, j)]
+    s = s.copy()
+    s.index = [tuple(sorted(x)) for x in s.index]
+    return np.array([s.get(k, np.nan) for k in keys], dtype=float)
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
-    ap.add_argument('--part', choices=('A', 'B', 'C', 'D1', 'D2', 'verdict'), required=True)
+    ap.add_argument('--part', choices=('A', 'A2', 'verdictA', 'B', 'C', 'D1', 'D1score'), required=True)
+    ap.add_argument('--wirings', default=None, help='D1: a comma-separated list of wirings (default all eight)')
+    ap.add_argument('--workers', type=int, default=16, help='D1: worker processes (one thread each)')
     args = ap.parse_args()
     out = H.results_dir(EXPERIMENT)
-    {'A': part_a, 'B': part_b, 'C': part_c, 'D1': part_d1}[args.part](out)
+    if args.part == 'A':
+        part_a(out)
+    elif args.part == 'A2':
+        part_a2(out)
+        verdict_a(out)
+    elif args.part == 'verdictA':
+        print(verdict_a(out))
+    elif args.part == 'B':
+        part_b(out)
+    elif args.part == 'C':
+        part_c(out)
+    elif args.part == 'D1':
+        part_d1(out, None if args.wirings is None else args.wirings.split(','), args.workers)
+    elif args.part == 'D1score':
+        score_d1(out)
 
 
 if __name__ == '__main__':

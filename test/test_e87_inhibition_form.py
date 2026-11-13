@@ -85,3 +85,17 @@ def test_halves(seed):
         a, b = set(h['A'][g]), set(h['B'][g])
         assert a and b and not (a & b)
         assert a | b == set(tm[key])
+
+
+@pytest.mark.skipif(__import__('os').environ.get('QUICK') == '1', reason='D1 identity: a pool of one-odor simulators (minutes)')
+def test_d1_identity_real_wiring():
+    """D1's one-odor path (APL off, all KC threshold factors 1) reproduces the real wiring's saved APL-off run."""
+    E = pytest.importorskip('experiments.E83_cross_wiring_fit')
+    pool = X.WiringPool('real', n_workers=16)
+    try:
+        r, s = pool.run(None)
+    finally:
+        pool.close()
+    fit = E.saved_fit('real')
+    assert np.array_equal(s.to_numpy(dtype=float), fit['saved']['off'][1].to_numpy(dtype=float))
+    assert np.array_equal(r.to_numpy(dtype=float), fit['saved']['off'][0].to_numpy(dtype=float))
