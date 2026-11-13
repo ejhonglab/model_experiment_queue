@@ -7,7 +7,9 @@ of the 120 odor pairs, the distance with APL on minus the distance with APL off;
 control flies' cosine distance minus the distance with APL output blocked (TNT), each the mean over
 recordings, in a model its APL-on minus its acute APL-off distance (cosine on spike counts). Scored
 by `kcq.harness.apl_effect_stats` (the APL-effect loss, the root mean squared difference
-from the data's per-pair effect over the 120 pairs, with its mean and pattern parts).
+from the data's per-pair effect over the 120 pairs, with its mean and pattern parts), and the pattern part's
+amplitude and shape parts (`kcq.harness.apl_effect_spread_shape`; columns `..._apl_effect_amplitude`, `_shape`,
+`_sd_model`, `_sd_data`, `_sd_ratio`).
 
 Reads every <shared>/results/E<n>_*/model_pair_distances_long.csv (the spike-count cosine rows where
 the table has a `variant` column; conditions `on` and `acute_off`), takes each variant's response
@@ -59,7 +61,8 @@ ARCHIVE = H.shared_dir() / 'data' / 'model_outputs'
 TEMPLATE = H.HERE / 'reports' / 'summary_template.md'
 V = 'spike_counts_cosine'
 STAT_KEYS = ('apl_effect_rmse', 'apl_effect_rmse_centered', 'apl_effect_mean', 'apl_effect_mean_error',
-    'apl_effect_spearman', 'apl_effect_pearson', 'apl_effect_n_pairs')
+    'apl_effect_spearman', 'apl_effect_pearson', 'apl_effect_n_pairs',
+    'apl_effect_amplitude', 'apl_effect_shape', 'apl_effect_sd_model', 'apl_effect_sd_data', 'apl_effect_sd_ratio')
 # the realism bands (CLAUDE.md, "The main goal for new experiments"): APL-on response rate (the control
 # flies' 0.068; models tuned at 0.05 or 0.068), the APL-off / APL-on response rate ratio (the data's 2.28 in
 # baseline-noise units, 90 % interval 2.0-2.7 over recordings; 2.2 and 1.9-2.5 in Yang's z; a ratio band rather
@@ -247,6 +250,8 @@ def score_all(data: pd.Series) -> pd.DataFrame:
             st = H.apl_effect_stats(on, off, data)
             if st['apl_effect_n_pairs'] < 100:
                 continue
+            # the pattern part split into its amplitude and shape parts (Yang, 2026-11-13)
+            st.update(H.apl_effect_spread_shape(on, off, data))
             rr = rates.get(tag) or archive_rates(folder, tag) or {}
             row = dict(exp=m.group(1), folder=folder.name, tag=tag, **{f'{V}__{k}': v for k, v in st.items()},
                 rate_on=rr.get('rate_on', np.nan), rate_off=rr.get('rate_off', np.nan),

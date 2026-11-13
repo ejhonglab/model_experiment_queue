@@ -982,6 +982,20 @@ def apl_effect_decomposition(on: pd.Series, off: pd.Series, data: Optional[pd.Se
     return _effects.effect_decomposition(on, off, data, APL16_ODORS, prefix='apl_effect_')
 
 
+def apl_effect_spread_shape(on: pd.Series, off: pd.Series, data: Optional[pd.Series] = None
+    ) -> Dict[str, float]:
+    """The pattern part of the APL-effect loss (`apl_effect_stats`' `apl_effect_rmse_centered`) split
+    exactly into an amplitude part and a shape part, `rmse_centered**2 = amplitude**2 + shape**2`
+    (`pyolfsysm.effects.effect_spread_shape`; Yang's request of 2026-11-13, from
+    analyses/apl_effect_metrics.py): `apl_effect_amplitude` = |sd_model - sd_data| (the model's
+    per-pair effects too spread out or too compressed over the pairs), `apl_effect_shape` = sqrt(2
+    sd_model sd_data (1 - r)) (a different pattern at matched spread; r Pearson's), and
+    `apl_effect_sd_model`, `apl_effect_sd_data`, `apl_effect_sd_ratio`. `data` defaults to
+    `yang_apl_effect()`."""
+    data = yang_apl_effect() if data is None else data
+    return _effects.effect_spread_shape(on, off, data, APL16_ODORS, prefix='apl_effect_')
+
+
 # ---------------------------------------------------------------------------
 # readouts of the model's spike counts (E65): the model's side of the per-pair APL effect is a
 # cosine distance on raw spike counts, the data's on z-scored GCaMP fluorescence, which
