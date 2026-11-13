@@ -8,7 +8,7 @@ directory's notes/ and are linked from here.
 
 ## Open
 
-### pyolfsysm's `get_time_index` places every step up to one step late, so closed windows read with it lose their end step (found 2026-11-13 12:05, atlas's code subagent for E90)
+### pyolfsysm's `get_time_index` places every step up to one step late, so closed windows read with it lose their end step (found 2026-11-13 12:04, atlas's code subagent for E90)
 - **What.** `pyolfsysm.mb_model.get_time_index` spreads the run's n steps evenly from its first time to `time_end` inclusive
   (`np.linspace(t0, t1, num=n)`), so step k is labelled t0 + k (t1 - t0) / (n - 1) instead of olfsysm's t0 + k dt: every
   label is late by k / (n - 1) of a step (0.73 of a step at the odor onset and 0.91 at the end of the 0.5 s pulse with the
