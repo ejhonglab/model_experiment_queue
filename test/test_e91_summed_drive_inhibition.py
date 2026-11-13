@@ -351,7 +351,8 @@ def test_e89s_c1_point_reproduced():
     m = X.WiringModel91(w, check=False)
     wk, _ = X._setting_weights(m, wt)
     res = X.b_reading(m, wk, s=0.0, label='test')
-    r89 = pd.read_csv(H.results_dir(E89.EXPERIMENT) / 'runs_C1.csv').set_index('tag').loc[E89.run_tag('C1', wt, w)]
+    r89 = pd.read_csv(H.results_dir(E89.EXPERIMENT) / 'runs_C1.csv', float_precision='round_trip').set_index('tag')
+    r89 = r89.loc[E89.run_tag('C1', wt, w)]
     assert res['apl_factor'] == float(r89['apl_factor'])
     assert np.array_equal(res['on'][1].to_numpy(), ref['on'][1].to_numpy())
     assert np.isfinite(res['stats']['U']).all() and (res['stats']['U'] >= 0).all()

@@ -947,7 +947,8 @@ def part_0(out: Path, wirings: Sequence[str] = E83.S_WIRINGS, kwarg_wiring: str 
     wk, _ = _setting_weights(m, wt)
     res = b_reading(m, wk, s=0.0, label=f'E91 identity E89 C1 {E89.wtag(wt)} {w}')
     ref = E89.load_run(E89.run_tag('C1', wt, w))
-    r89 = pd.read_csv(H.results_dir(E89.EXPERIMENT) / 'runs_C1.csv').set_index('tag').loc[E89.run_tag('C1', wt, w)]
+    r89 = pd.read_csv(H.results_dir(E89.EXPERIMENT) / 'runs_C1.csv', float_precision='round_trip').set_index('tag')
+    r89 = r89.loc[E89.run_tag('C1', wt, w)]
     ns, nr = E83._same({'on': res['on'], 'off': res['off']}, ref) if ref is not None else (-1, -1)
     d = dict(count_diffs=ns, response_diffs=nr, apl_factor=res['apl_factor'], apl_factor_e89=float(r89['apl_factor']),
              against=f'E89 {E89.run_tag("C1", wt, w)}')
