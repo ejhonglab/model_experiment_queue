@@ -8,24 +8,6 @@ directory's notes/ and are linked from here.
 
 ## Open
 
-### E87's archive scan read its stand-out rule on raw counts only (found 2026-11-12 23:45, viki's planning subagent for E87's summary passage; checked by viki)
-- **What.** C3 of the form of APL's inhibition in the flies' own responses (E87) set every archived variant against the breadth-2 fit
-  on the same wiring, but took the fit's raw-count value for the readout rows too, and flagged raw counts only. On raw counts nothing
-  stands out (best 0.006 below, 0.008 asked); under the calibrated readout seven variants do: E80's six per-odor recruitment
-  oracles on the real wiring (0.008 to 0.015 below) and E30's fit on P2 (0.010). The note also called E80's variants "trial-noise
-  runs"; they are the per-odor recruitment oracle (B3).
-- **Affects.** verdict_C.json, archive_scan.csv, E87's note and page (published from hal), its Status and Completed lines, the
-  Placed line's rationale, and viki's chat posts of 21:28, 23:22.
-- **Done.** `rescore_archive` (47040d0) rereads the rule under each readout with the matched baseline; archive_scan.csv and
-  verdict_C.json rewritten. D2, the design's conditional step for a handle that stands out (E80's B3 on the breadth-2 fits of S),
-  ran 23:48 to 00:26 (095702b), and part B's two-by-two on its runs (78f83d5). The note was corrected and extended (2026-11-13
-  00:28 and 00:38; the mislabel fixed), its page rebuilt and saved to reports/; E87's Status line carries a dated correction and
-  D2's results; the placement rationale was revised twice by the planning subagent (00:30, 00:40; #10 stands); the summary passage
-  was written with the corrected scan, D2 and its two-by-two (3c343b6) and the summary rebuilt (00:44); chat corrected (23:50,
-  00:39).
-- **Remains.** The published page (https://claude.ai/artifact/Gga6ZBaTxTbHKYCvDzc7xw) still shows the first version: republish
-  from reports/E87_inhibition_form.html when hal resumes (requested in chat); then move here to Resolved.
-
 ### The raw-count readings of the main target are tied to the model's 0.5 s odor pulse; the flies had 2 s (found 2026-11-11 02:37, viki, E80)
 - **What.** Every model number compares spike counts of a 0.5 s pulse, counted to 0.75 s, with the flies' calcium signal 2 to 8 s
   after the onset of a 2 s pulse. With the flies' pulse (E80, both response rates re-held, parameters fitted at 0.5 s), C2's
@@ -230,6 +212,25 @@ directory's notes/ and are linked from here.
   against their sources); the per-experiment notes keep their hand-typed values.
 
 ## Resolved
+
+### E87's archive scan read its stand-out rule on raw counts only (found 2026-11-12 23:45, viki's planning subagent for E87's summary passage; checked by viki)
+- **What.** C3 of the form of APL's inhibition in the flies' own responses (E87) set every archived variant against the breadth-2 fit
+  on the same wiring, but took the fit's raw-count value for the readout rows too, and flagged raw counts only. On raw counts nothing
+  stands out (best 0.006 below, 0.008 asked); under the calibrated readout seven variants do: E80's six per-odor recruitment
+  oracles on the real wiring (0.008 to 0.015 below) and E30's fit on P2 (0.010). The note also called E80's variants "trial-noise
+  runs"; they are the per-odor recruitment oracle (B3).
+- **Affects.** verdict_C.json, archive_scan.csv, E87's note and page (published from hal), its Status and Completed lines, the
+  Placed line's rationale, and viki's chat posts of 21:28, 23:22.
+- **Done.** `rescore_archive` (47040d0) rereads the rule under each readout with the matched baseline; archive_scan.csv and
+  verdict_C.json rewritten. D2, the design's conditional step for a handle that stands out (E80's B3 on the breadth-2 fits of S),
+  ran 23:48 to 00:26 (095702b), and part B's two-by-two on its runs (78f83d5). The note was corrected and extended (2026-11-13
+  00:28 and 00:38; the mislabel fixed), its page rebuilt and saved to reports/; E87's Status line carries a dated correction and
+  D2's results; the placement rationale was revised twice by the planning subagent (00:30, 00:40; #10 stands); the summary passage
+  was written with the corrected scan, D2 and its two-by-two (3c343b6) and the summary rebuilt (00:44); chat corrected (23:50,
+  00:39).
+- **Resolved (2026-11-13 10:43).** The page was rebuilt from the corrected note (00:38) and republished from atlas to the same URL
+  (https://claude.ai/artifact/Gga6ZBaTxTbHKYCvDzc7xw, version 3); reports/E87_inhibition_form.html and its README row
+  updated. Every affected output is now regenerated or annotated.
 
 ### E82's part C dropped part D's two fits from its readings when their fits/ folder was missing (found 2026-11-11 11:50, viki's planning subagent)
 - **What.** `E82_flies_protocol.saved_runs()` read part D's fits (D1, D2) only from a `fits/` subfolder of the outputs folder or the
