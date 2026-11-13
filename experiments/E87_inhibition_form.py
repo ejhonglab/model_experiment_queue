@@ -1155,7 +1155,76 @@ def archive_scan(out: Path, f_ch: Form, tg: dict) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 # part D: the forms as a static inhibition in place of APL (simulations)
 
-D_BRACKET, D_STEP = (1.0, 200.0), 1.3    # bisect_factor on v = 1 + c (c = 0 at v = 1, responses fall with v)
+D_C0, D_C_MAX = 0.4, 50.0      # D1's search for c: start, bound
+D_TOL_FRAC, D_MAX_EVALS = 0.001, 16   # stop within max(2, 0.1 % of the target) responses, or after this many runs
+
+
+def bisect_c(run, target_n: int, label: str = '') -> Tuple[float, tuple, List[dict], bool]:
+    """c >= 0 at which run(c)'s number of responses (responses > 0.5) is within max(2, D_TOL_FRAC x target) of
+    `target_n`: from D_C0, doubling or halving until bracketed (c = 0 is the APL-off run, above the target), then regula
+    falsi with the Illinois modification, at most D_MAX_EVALS runs. A tolerance, because the count jumps by more than one
+    response near the target (exact bisection spent 40 runs a point in the first try). Returns (c, outputs, history,
+    at_bound), the evaluated point nearest the target."""
+    tol = max(2, int(round(D_TOL_FRAC * target_n)))
+    hist, best = [], None
+
+    def ev(c):
+        nonlocal best
+        out = run(c)
+        n = int((out[0].to_numpy(dtype=float) > 0.5).sum())
+        hist.append(dict(c=float(c), n=n))
+        print(f'  {label} c {c:.6g} -> {n} responses (target {target_n})', flush=True)
+        if best is None or abs(n - target_n) < abs(best[1] - target_n):
+            best = (float(c), n, out)
+        return n
+    lo, n_lo = 0.0, None             # c = 0: the APL-off count, above the target
+    c = D_C0
+    n = ev(c)
+    if abs(n - target_n) <= tol:
+        return best[0], best[2], hist, False
+    if n > target_n:
+        lo, n_lo = c, n
+        hi, n_hi = None, None
+        while n > target_n:
+            c = min(2 * c, D_C_MAX)
+            n = ev(c)
+            if abs(n - target_n) <= tol:
+                return best[0], best[2], hist, False
+            if n > target_n:
+                if c >= D_C_MAX:
+                    return best[0], best[2], hist, True
+                lo, n_lo = c, n
+        hi, n_hi = c, n
+    else:
+        hi, n_hi = c, n
+        while n < target_n:
+            c = c / 2
+            n = ev(c)
+            if abs(n - target_n) <= tol:
+                return best[0], best[2], hist, False
+            if n < target_n:
+                hi, n_hi = c, n
+            if len(hist) >= D_MAX_EVALS:
+                return best[0], best[2], hist, True
+        lo, n_lo = c, n
+    side = 0
+    while len(hist) < D_MAX_EVALS:
+        c = hi - (n_hi - target_n) * (hi - lo) / (n_hi - n_lo)
+        c = min(max(c, lo + 0.05 * (hi - lo)), hi - 0.05 * (hi - lo))
+        n = ev(c)
+        if abs(n - target_n) <= tol:
+            break
+        if n > target_n:
+            lo, n_lo = c, n
+            if side == -1:
+                n_hi = target_n + (n_hi - target_n) / 2
+            side = -1
+        else:
+            hi, n_hi = c, n
+            if side == 1:
+                n_lo = target_n + (n_lo - target_n) / 2
+            side = 1
+    return best[0], best[2], hist, False
 
 
 def d_forms(out: Path) -> Dict[str, Form]:
@@ -1300,12 +1369,11 @@ def static_factors(off_counts: pd.DataFrame, form: Form, c: float) -> np.ndarray
 
 def part_d1(out: Path, wirings: Optional[Sequence[str]] = None, n_workers: int = 16) -> pd.DataFrame:
     """D1: on each wiring of C2's family, first the identity (the saved APL-off run reproduced through the one-odor
-    path), then for each of D1's forms the per-odor KC thresholds raised by 1 + c A^q B^p with APL removed, c bisected
-    to the wiring's APL-on response count; the APL-off run the wiring's own. Resumable (runs under outputs/.../D/, rows in
+    path), then for each of D1's forms the per-odor KC thresholds raised by 1 + c A^q B^p with APL removed, c searched
+    (`bisect_c`) to the wiring's APL-on response count; the APL-off run the wiring's own. Resumable (runs under outputs/.../D/, rows in
     runs_D.csv). Then the readings (readings_D.csv) and D1's verdict (verdict_D.json)."""
     import json
     import time
-    from experiments import E69_kc_firing_ceiling as E69
     from experiments import E83_cross_wiring_fit as E
     wirings = list(E.ALL_WIRINGS if wirings is None else wirings)
     forms = d_forms(out)
@@ -1334,8 +1402,8 @@ def part_d1(out: Path, wirings: Optional[Sequence[str]] = None, n_workers: int =
                 f = forms[k]
                 tag = f'D1_{k}_{w}'
                 t0 = time.time()
-                v, (r, s), hist, at_b = E69.bisect_factor(lambda v: pool.run(static_factors(off[1], f, v - 1.0)),
-                                                          fit['target_on'], fit['size'], D_BRACKET, D_STEP, f'{tag} c')
+                c, (r, s), hist, at_b = bisect_c(lambda c: pool.run(static_factors(off[1], f, c)), fit['target_on'], tag)
+                v = 1.0 + c
                 _save_d(tag, r, s)
                 o = {'on': (r, s), 'off': off}
                 row = dict(part='D1', form_label=k, form=f.name, wiring=w, tag=tag, c=v - 1.0, n_on=int((r.to_numpy() > 0.5).sum()),
