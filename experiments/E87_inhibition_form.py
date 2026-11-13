@@ -1421,6 +1421,26 @@ def part_d1(out: Path, wirings: Optional[Sequence[str]] = None, n_workers: int =
     return df
 
 
+def write_variants(out: Path) -> pd.DataFrame:
+    """variants.csv for the model-output archive: one row per D1 run (tag = the file names' variant; the APL-on side is
+    the run, the APL-off side the wiring's own saved fit, `ref_experiment` / `ref_fit`), with the run's absolute
+    parameters (APL removed: wAPLKC_scale and wAPLPN_scale 0), `factor` (c) and `config` (the form)."""
+    runs = pd.read_csv(out / 'runs_D.csv')
+    forms = d_forms(out)
+    rows = []
+    for _, r in runs.iterrows():
+        f = forms[r.form_label]
+        rows.append(dict(tag=r.tag, variant=r.tag, part='D1', kind='static inhibition in place of APL: each KC threshold for each '
+                         'odor x (1 + factor A_o^q B_k^p), A and B from the wiring\'s own APL-off run', config=f.name,
+                         factor=r.c, wiring=r.wiring, ref_experiment=r.fit_folder, ref_fit=r.fit_tag, fixed_thr=r.fixed_thr,
+                         wAPLKC_scale=0.0, wKCAPL_scale=r.wKCAPL_scale, wAPLPN_scale=0.0, wPNAPL_scale=r.wPNAPL_scale,
+                         wKCKC_scale=r.wKCKC_scale, k=2.0, breadth_k=2.0, rate_on=r.rate_on, rate_off=r.rate_off,
+                         max_count_on=r.max_count_on, max_count_off=r.max_count_off))
+    df = pd.DataFrame(rows)
+    df.to_csv(out / 'variants.csv', index=False)
+    return df
+
+
 def score_d1(out: Path) -> pd.DataFrame:
     """D1's readings: per form, each wiring and the population (S, T, all eight), E83's `effect_scores` under the
     readout and on raw counts against all of E83's targets; the agreement with part B's count-level effect of the same
@@ -1580,7 +1600,7 @@ def comparison_table(out: Path) -> str:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
-    ap.add_argument('--part', choices=('A', 'A2', 'verdictA', 'B', 'C', 'D1', 'D1score', 'table'), required=True)
+    ap.add_argument('--part', choices=('A', 'A2', 'verdictA', 'B', 'C', 'D1', 'D1score', 'table', 'variants'), required=True)
     ap.add_argument('--wirings', default=None, help='D1: a comma-separated list of wirings (default all eight)')
     ap.add_argument('--workers', type=int, default=16, help='D1: worker processes (one thread each)')
     args = ap.parse_args()
@@ -1603,6 +1623,8 @@ def main() -> None:
         comparison_table(out)
     elif args.part == 'table':
         comparison_table(out)
+    elif args.part == 'variants':
+        write_variants(out)
 
 
 if __name__ == '__main__':
