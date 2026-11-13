@@ -124,3 +124,67 @@ def test_c0_base_reproduces_e87_d2_real_wiring():
         pool.close()
     d2 = X.E87._load_d2(f'D2_b3_thrapl_{X.E87.D2_UNITS}_real')
     assert E._same({'on': outs['on'], 'off': outs['off']}, d2) == (0, 0)
+
+
+def _zero_noise_recording(rng, n_kc=400, p=0.12):
+    """A noise-free recording (three identical repeats) with no value within 0.3 of the criterion 1."""
+    C = np.clip(rng.normal(0.0, 0.15, (n_kc, len(ODORS))), -0.6, 0.6)
+    resp = rng.random((n_kc, len(ODORS))) < p
+    C[resp] = 1.5 + rng.exponential(2.0, int(resp.sum()))
+    return C, np.repeat(C[None], 3, axis=0)
+
+
+def test_candidates_return_the_truth_at_zero_noise():
+    E87, E88 = X.E87, X.E88
+    rng = np.random.default_rng(7)
+    C, trials = _zero_noise_recording(rng)
+    v = X.recording_values(C, trials, 1.0, 1.0, {k: X.LC_EDGES[k] for k in ('crit', 'coarse')})
+    s, O, R = E88.factors_of_matrix(E87.thresholded(C, 1.0))
+    for cand, lc, tol in (('tm', None, 1e-12), ('nr', None, 1e-12), ('gm', None, 1e-12), ('hf', None, 1e-6),
+                          ('lc', 'crit', 1e-6), ('lc', 'coarse', 1e-6)):
+        F = X.cand_factors(v, cand, lc)
+        assert np.allclose(F.O, O, atol=tol, rtol=0, equal_nan=True), cand
+        assert np.allclose(F.R, R, atol=1e-12, rtol=0, equal_nan=True) and np.allclose(F.s, s, atol=1e-12, rtol=0, equal_nan=True)
+    # the geometric mean equals the two estimates where they agree
+    v2 = dict(v, O_nr=v['O_tm'].copy())
+    assert np.allclose(X.cand_factors(v2, 'gm').O, v['O_tm'], atol=1e-14, equal_nan=True)
+
+
+def test_hf_overlap_recovers_a_known_mixture():
+    rng = np.random.default_rng(8)
+    n_kc, n_rep = 20000, 3
+    z = rng.random((n_kc, len(ODORS))) < 0.15
+    z[:, 1] = z[:, 0] & (rng.random(n_kc) < 0.6) | (~z[:, 0] & (rng.random(n_kc) < 0.05))
+    h, e = 0.8, 0.03
+    x = np.where(z[None], rng.random((n_rep, n_kc, len(ODORS))) < h, rng.random((n_rep, n_kc, len(ODORS))) < e).astype(float)
+    O, f, prm = X.hf_overlap(x)
+    zf = z.astype(float)
+    O_true = (zf.T @ zf / n_kc)[X._iu()] / np.sqrt(np.outer(zf.mean(axis=0), zf.mean(axis=0))[X._iu()])
+    assert np.allclose(f, zf.mean(axis=0), atol=0.01)
+    assert np.abs(O - O_true).max() < 0.03
+
+
+def test_same_repeat_gap_is_the_harness_statistic():
+    rng = np.random.default_rng(9)
+    tr = np.where(rng.random((3, 300, len(ODORS))) < 0.1, rng.exponential(2.0, (3, 300, len(ODORS))), 0.0)
+    tr += rng.normal(0, 0.3, (3, 300, 1)) * (tr > 0)
+    assert np.isclose(X.same_repeat_gap(tr), H.same_repeat_gap(H.distances_by_kind(tr, ODORS, values='graded')), atol=1e-12)
+
+
+@pytest.mark.skipif(not _shared(), reason='needs the shared directory (a saved fit and the flies)')
+def test_level3_middle_share_gives_the_flies_gap_and_repeatability():
+    E88 = X.E88
+    gap = X.flies_gap_target('z')
+    rel = E88.flies_reliability('z')
+    w, key, K = X.a_runs()['b2'][0]
+    mr = X.ModelReading89(X._load_run(key), label=w, seed=X.SEEDS[1], K=K, rel_target=rel,
+                          gap_target={c: v['thresholded'] for c, v in gap.items()})
+    for c in X.CONDS:
+        _, info = mr.level_values('L3', c)
+        assert abs(info['gap'] - gap[c]['thresholded']) <= 0.005, (c, info)
+        assert abs(info['reliability'] - rel[c]) <= 0.01, (c, info)
+        assert abs(info['rate_tm'] - mr.rate['r1'][c]) < 0.002 and abs(info['rate_st'] - mr.rate['r1'][c]) < 0.002
+    # level 1 is E88's readings 1 and 2
+    v1, _ = mr.level_values('L1', 'on')
+    f1, f2 = mr.factors('r1')['on'].mean(), mr.factors('r2')['on'].mean()
+    assert np.allclose(v1['O_tm'], f1.O, equal_nan=True) and np.allclose(v1['O_nr'], f2.O, equal_nan=True)
