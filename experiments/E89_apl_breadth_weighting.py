@@ -2011,22 +2011,25 @@ def figure_c(out: Path) -> Optional[Path]:
         g = rd[(rd.arm == arm) & (rd.unit == 'S') & (rd.readout == 'cal') & rd.permute_seed.isna()].set_index('weighting')
         x = np.arange(len(order))
         ax = axes[0, j]
+        groups = [[i for i, w in enumerate(order) if w.startswith(m + '_') or (m == 'F' and w == 'none')] for m in MEASURES]
         for t, col, lab in (('halfA', '#d1495b', 'half A'), ('halfB', '#2e86ab', 'half B'), ('z8', '0.2', 'all recordings')):
-            y = [g[f'{t}_pattern'].get(w, np.nan) for w in order]
+            y = np.array([g[f'{t}_pattern'].get(w, np.nan) for w in order])
             fl = [g['n_flagged'].get(w, 0) > 0 for w in order]
-            ax.plot(x, y, '-', color=col, lw=0.8, label=lab)
+            for n, idx in enumerate(groups):     # lines within a measure only (F from no weighting to the reference)
+                ax.plot(x[idx], y[idx], '-', color=col, lw=0.8, label=lab if n == 0 else None)
             ax.scatter(x, y, s=28, facecolors=['none' if f else col for f in fl], edgecolors=col)
             ref = g[f'{t}_pattern'].get(wtag(REFERENCE), np.nan)
             ax.axhline(ref, color=col, ls='--', lw=0.7)
-        ax.set_title(f"{'the fits as they are' if arm == 'C1' else 'the base with the flies recruitment'}: S's pattern part "
-                     '(calibrated readout)', fontsize=9)
+        ax.set_title(f"{'the fits as they are' if arm == 'C1' else 'the base with the flies’ recruitment'}: S's pattern part "
+                     '(calibrated readout; hollow: a run outside the bands)', fontsize=9)
         ax.set_ylabel('pattern part of the APL-effect loss')
         ax.legend(fontsize=8)
         ax = axes[1, j]
         if len(co):
             c = co[(co.arm == arm) & (co.reading == 'r1') & (co.subset == 'all') & (co.factor == 'L') & (co.group == 'alcohol')].set_index('weighting')
-            y = [c['ratio'].get(w, np.nan) for w in order]
-            ax.plot(x, y, 'o-', color='#2e86ab', label='model, S (trial means)')
+            y = np.array([c['ratio'].get(w, np.nan) for w in order])
+            for n, idx in enumerate(groups):
+                ax.plot(x[idx], y[idx], 'o-', color='#2e86ab', label='model, S (trial means)' if n == 0 else None)
             if len(c):
                 ax.axhspan(c.flies_lo.iloc[0], c.flies_hi.iloc[0], color='0.85', label="KC data's 90 % interval")
                 ax.axhline(c.flies_ratio.iloc[0], color='0.4', lw=1)
