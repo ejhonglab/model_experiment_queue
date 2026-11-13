@@ -8,7 +8,7 @@ directory's notes/ and are linked from here.
 
 ## Open
 
-### pyolfsysm's `get_time_index` places every step up to one step late, so closed windows read with it lose their end step (found 2026-11-13 12:04, atlas's code subagent for E90)
+### pyolfsysm's `get_time_index` placed every step up to one step late, so closed windows read with it lost their end step (found 2026-11-13 12:04, atlas's code subagent for E90; fixed in olfsysm 17cef71)
 - **What.** `pyolfsysm.mb_model.get_time_index` spreads the run's n steps evenly from its first time to `time_end` inclusive
   (`np.linspace(t0, t1, num=n)`), so step k is labelled t0 + k (t1 - t0) / (n - 1) instead of olfsysm's t0 + k dt: every
   label is late by k / (n - 1) of a step (0.73 of a step at the odor onset and 0.91 at the end of the 0.5 s pulse with the
@@ -29,11 +29,36 @@ directory's notes/ and are linked from here.
   whose first replayed step, found with `searchsorted(t, time_start - dt / 2) - 2`, comes out one step early, two steps before
   olfsysm's KC loop, where nothing has started; their identity checks against olfsysm's counts passed. pyolfsysm's own users:
   `get_dynamics`' time coordinate (plots, `slice_to_odor_pulse`, fit_mb_model's ORN / PN means returned with dynamics), none of
-  which the queue's numbers use. E90 reads its windows on olfsysm's own times (`E90_model_stages.step_times`).
+  which the queue's numbers use. E90 reads its windows on olfsysm's own times (`E90_model_stages.step_times`). Also (found
+  with the fix): E66's per-odor PN rates (E32's `glomerulus_pn_rates`; the odor properties in multiplier_correlates.csv), E77's
+  part B in `E77_input_side_common_error.py` (the same runner), E78's `largest_bouton_rates_for` (the knee's level on E49's
+  extended input, computed afresh), and E91's `claw_stats` (`n_half`, over DRIVE_WINDOW, closed at 0.5 s).
 - **Done.** E90 avoids it; this entry.
-- **Remains.** Fix `get_time_index` in pyolfsysm to label step k as t0 + k dt (after viki's pending olfsysm push), with a
-  test against olfsysm's step times, and re-run test/test_frozen_step3.py and the affected scripts' identity checks; decide
-  whether E78's knee points need a re-check.
+- **Done (2026-11-13 15:40, atlas's code subagent).** olfsysm 17cef71: `get_time_index` labels step k as time_pre_start + k dt
+  (from time_start's step once the pretime is removed) with olfsysm's truncating step counts, rounded to 1e-9 s as
+  `_spike_times_frame`'s, so the step at 0.5 s is exactly 0.5 and the last is time_end - dt; `legacy_linspace=True` returns the old
+  times; `slice_to_odor_pulse` is half-open, [start, time_stim_end), the steps it gave before with either times; the stray debug
+  print is gone. Tests: olfsysm's test/test_time_index.py (the times against olfsysm's steps with and without the pretime, against
+  an ORN run's onset and the step its odor input first falls, the legacy times, `slice_to_odor_pulse`) and test_model_timing.py's
+  last time; the frozen dynamics summaries of test_characterize_model.py moved in their time ranges only (26 files: first
+  -0.4994998 to -0.4995, last 0.75 to 0.7495; counts and sums unchanged), updated in the same commit. olfsysm's QUICK=1
+  test_mb_model.py, test_frozen_from_queue.py and test_characterize_model.py fail only the known #2, #3, #4; the queue's QUICK=1
+  suite passes test_frozen_step3.py and all but two tests that do not involve the grid (test_apl_effect_spread_shape.py needed
+  viki's olfsysm c871832 and passes after the rebase; test_e89's level-3 test needs E87's D2 runs, which are on viki only).
+  No caller passes the legacy keyword, since no identity check or reproduction depends on the grid: E77's identity points use
+  exponent 0 (factors exactly 1); the replays of E51, E55, E56 and noise_proxy.py now start at step 2998 instead of 2997, both
+  before olfsysm's KC loop (3001), so their counts are unchanged; E43, E68, E6, E37 and E51's odor window are half-open or
+  closed at the lower edge (E6's GCaMP bins keep 10 steps); E9, E20, E78 and E79 read their window readings back from caches
+  where these exist (glomerulus_rates_evoked.csv, the data archive's glomerulus_peaks.csv, pn_rates.csv,
+  connectome_pn_rates.csv), so reruns reproduce the saved numbers and E78's knee points as fitted. Size, measured on the
+  bouton base (E3's parameters) and on C2 (the same PN stage): PN and bouton window means move by at most 0.021 Hz (median 0.015 %, at most 0.035 % of means above 1 Hz); the largest rate
+  per odor (E78's knee level) by at most 0.023 %, E20's glomerulus peaks by 0.025 %, C2's per-odor PN totals (E77 part B) by
+  0.021 %, E3's PN max / min ratio 1.0809 to 1.0808, E79's evoked rates by 0.021 Hz (at most 0.24 % of those above 1 Hz), so
+  E78's knee points need no re-check. The notes of E3, E9, E20, E21, E32, E66, E77, E78 and E79 carry a dated line under
+  their titles.
+- **Remains.** E91 (running on viki since 13:32) reads `claw_stats`' `n_half` on the old grid in the parts run before viki pulls
+  olfsysm 17cef71 and on the exact grid after (one step of 1001 in each claw's window-mean drive); its note should say which,
+  and then this entry moves to Resolved.
 
 ### The raw-count readings of the main target are tied to the model's 0.5 s odor pulse; the flies had 2 s (found 2026-11-11 02:37, viki, E80)
 - **What.** Every model number compares spike counts of a 0.5 s pulse, counted to 0.75 s, with the flies' calcium signal 2 to 8 s
