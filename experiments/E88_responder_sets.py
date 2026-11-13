@@ -1662,17 +1662,190 @@ def score_c(out: Path, df: Optional[pd.DataFrame] = None) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# part D (simulations; not implemented here)
+# part D1: the flies' form in place of APL on the base with the flies' recruitment (simulations)
+
+D1_UNITS = 'noise'                  # the base's per-odor recruitment, as E87's D2 (baseline-noise units)
+D1_GAIN = 0.003                     # better / worse than the unchanged fits by this (S, readout, all recordings)
+D1_WIRINGS_LOWER = 3                # of S's four wirings
+D1_UNCHANGED = 0.0500               # S's pattern part under the readout against all recordings, the unchanged fits (E83)
+D1_RAW_UNCHANGED = 0.0782           # S's raw-count loss, the unchanged fits
+D1_RAW_SLACK = 0.005
+D1_PROXY_R, D1_PROXY_DIFF = 0.8, 0.006
+
+
+def d1_forms() -> dict:
+    """D1's three forms: the flies' chosen form (E87's, read from its held_out.csv), q 1 with p 0, and uniform."""
+    from experiments import E87_inhibition_form as X
+    return {'chosen': X.chosen_form(H.results_dir(X.EXPERIMENT)), 'q1_p0': X.Form('subtractive', 1.0, 0.0),
+            'uniform': X.UNIFORM}
+
+
+def _d1_dir() -> Path:
+    d = H.outputs_dir(EXPERIMENT) / 'D1'
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def base_thresholds(out: Path, w: str, n_workers: int = 16) -> Dict[str, float]:
+    """The base's per-odor threshold factors on wiring `w`: each odor's response fraction with APL off at the flies' with
+    APL output blocked (TNT) in D1_UNITS, re-solved with E87's B3Pool (E80's one-odor task, APL off only) and saved to
+    outputs/E88_responder_sets/D1/base_thr_<w>.json; read from there when present."""
+    import json
+    from experiments import E87_inhibition_form as X
+    from experiments import E80_screen as S80
+    from experiments import E83_cross_wiring_fit as E
+    path = _d1_dir() / f'base_thr_{w}.json'
+    if path.exists():
+        return json.loads(path.read_text())
+    fit = E.saved_fit(w)
+    pool = X.B3Pool(w, n_workers)
+    try:
+        tg = S80.b3_targets(D1_UNITS, pool.cols, int(fit['saved']['on'][0].shape[0]))
+        outs, recs = pool.run_b3(dict(target_off=tg['target_off'], label=f'E88 D1 base {w}'))
+    finally:
+        pool.close()
+    thr = {r['odor']: float(r['thr']) for r in recs}
+    path.write_text(json.dumps(dict(thr=thr, target_off=tg['target_off'], target_on=tg['target_on'],
+                                    cols=list(pool.cols), **H.code_commits()), indent=1) + '\n')
+    off = outs['off']
+    off[0].to_parquet(_d1_dir() / f'base_{w}_acute_off_responses.parquet')
+    off[1].to_parquet(_d1_dir() / f'base_{w}_acute_off_spike_counts.parquet')
+    return json.loads(path.read_text())
+
 
 def part_d1(out: Path, n_workers: int = 16) -> pd.DataFrame:
-    """D1: the flies' chosen form as a static inhibition in place of APL on S's four wirings with the flies' per-odor
-    recruitment (E87's D2 thresholds, re-solved with `B3Pool`). Not implemented: part D is a later step."""
-    raise NotImplementedError('E88 part D1 is not implemented yet')
+    """D1 (see the entry): on S's four wirings, the base (per-odor thresholds at the flies' fractions with APL output
+    blocked, APL removed), its identity against E87's D2 APL-off run, then each form with APL removed and each KC's
+    threshold for each odor multiplied by base_thr_o x (1 + c A_o^q B_k^p) (A, B from the base's APL-off counts), c
+    searched (E87's bisect_c) to within two responses of the total that the control flies' per-odor fractions give on
+    that wiring. Resumable (runs under outputs/.../D1/, rows in runs_D1.csv), then `score_d1`."""
+    import json
+    import time
+    from experiments import E87_inhibition_form as X
+    from experiments import E83_cross_wiring_fit as E
+    forms = d1_forms()
+    runs_path = out / 'runs_D1.csv'
+    done = set(pd.read_csv(runs_path).tag) if runs_path.exists() else set()
+    ident_path = out / 'identity_D1.json'
+    ident = json.loads(ident_path.read_text()) if ident_path.exists() else {}
+    for w in E.S_WIRINGS:
+        tags = {k: f'D1_{k}_{w}' for k in forms}
+        if all(t in done for t in tags.values()) and w in ident:
+            continue
+        b = base_thresholds(out, w, n_workers)
+        fit = E.saved_fit(w)
+        pool = X.WiringPool(w, n_workers)
+        try:
+            thr = np.array([b['thr'][c] for c in pool.cols])
+            n_kc = int(fit['saved']['on'][0].shape[0])
+            base_fac = np.tile(thr, (n_kc, 1))
+            r0, s0 = pool.run(base_fac)
+            d2off = X._load_d2(f'D2_b3_thr_{D1_UNITS}_{w}')['off']
+            ns = int((s0.to_numpy(dtype=float) != d2off[1].to_numpy(dtype=float)).sum())
+            nr = int((r0.to_numpy(dtype=float) != d2off[0].to_numpy(dtype=float)).sum())
+            ident[w] = dict(count_diffs=ns, response_diffs=nr, **H.code_commits())
+            ident_path.write_text(json.dumps(ident, indent=1, default=str) + '\n')
+            print(f'E88 D1 identity {w}: {ns} count / {nr} response differences', flush=True)
+            if ns or nr:
+                raise RuntimeError(f"{w}: the base's APL-off run does not reproduce E87's D2 run")
+            target = int(sum(b['target_on']))
+            for k, f in forms.items():
+                tag = tags[k]
+                if tag in done:
+                    continue
+                t0 = time.time()
+                inh = X.inhibition(s0.to_numpy(dtype=float), f, X.RAW_CRIT)
+                c, (r, s), hist, at_b = X.bisect_c(lambda c: pool.run(base_fac * (1.0 + c * inh)), target, tag)
+                r.to_parquet(_d1_dir() / f'{tag}_on_responses.parquet')
+                s.to_parquet(_d1_dir() / f'{tag}_on_spike_counts.parquet')
+                o = {'on': (r, s), 'off': (r0, s0)}
+                row = dict(part='D1', form_label=k, form=f.name, wiring=w, tag=tag, c=c, n_on=int((r.to_numpy() > 0.5).sum()),
+                           target_on=target, at_bound=bool(at_b), n_sims=len(hist), seconds=time.time() - t0,
+                           base_thr_min=float(thr.min()), base_thr_max=float(thr.max()), fit_folder=fit['folder'], fit_tag=fit['tag'],
+                           **{kk: fit['p'][kk] for kk in E.PARAM_KEYS}, **H.code_commits())
+                row.update(E.realism(o))
+                pd.DataFrame([row]).to_csv(runs_path, mode='a', header=not runs_path.exists(), index=False)
+                print(f'E88 D1 {tag}: c {c:.4g}, {row["n_on"]} / {target} responses, {len(hist)} sims', flush=True)
+        finally:
+            pool.close()
+    return score_d1(out)
+
+
+def _d1_run(w: str, k: Optional[str]) -> Dict[str, tuple]:
+    d = _d1_dir()
+    off = tuple(pd.read_parquet(d / f'base_{w}_acute_off_{x}.parquet') for x in ('responses', 'spike_counts'))
+    if k is None:
+        return {'off': off}
+    on = tuple(pd.read_parquet(d / f'D1_{k}_{w}_on_{x}.parquet') for x in ('responses', 'spike_counts'))
+    return {'on': on, 'off': off}
+
+
+def score_d1(out: Path) -> pd.DataFrame:
+    """D1's readings: per form, each wiring of S and their population, E83's effect_scores under the readout (each
+    wiring's fit's K) and on raw counts against all of E83's targets, beside the unchanged fits and the base with the
+    model's own APL (E87's D2 arms thr and thrapl); the count-level proxy (E87's ModelResponses on the base, the same form)
+    against the simulated per-pair effect; D1's thresholds. readings_D1.csv, verdict_D1.json."""
+    import json
+    from experiments import E87_inhibition_form as X
+    from experiments import E83_cross_wiring_fit as E
+    runs = pd.read_csv(out / 'runs_D1.csv')
+    forms = d1_forms()
+    rows, vd = [], {}
+    for k, f in forms.items():
+        ws = [w for w in E.S_WIRINGS if f'D1_{k}_{w}' in set(runs.tag)]
+        if len(ws) < len(E.S_WIRINGS):
+            continue
+        for ro in ('cal', 'raw'):
+            ds, d0s, prox, offs = [], [], [], []
+            for w in ws:
+                fit = E.saved_fit(w)
+                K = fit['K'] if ro == 'cal' else None
+                o = _d1_run(w, k)
+                ds.append(E.pair_distances(o, ro, K))
+                d0s.append(E.pair_distances(fit['saved'], ro, K))
+                sc, sc0 = E.effect_scores(ds[-1]), E.effect_scores(d0s[-1])
+                rows.append(dict(form_label=k, form=f.name, readout=ro, unit=w, **sc, **{f'unchanged_{kk}': vv for kk, vv in sc0.items()}))
+                if ro == 'raw':
+                    mr = X.ModelResponses({'on': o['off'], 'off': o['off']}, 'raw', label=w)
+                    prox.append(mr.form(f)[0])
+                    offs.append(mr.d_off)
+            d, d0 = E.population(ds), E.population(d0s)
+            sc, sc0 = E.effect_scores(d), E.effect_scores(d0)
+            rows.append(dict(form_label=k, form=f.name, readout=ro, unit='S', **sc, **{f'unchanged_{kk}': vv for kk, vv in sc0.items()}))
+            if ro == 'raw':
+                sim = E._cs(H.apl_effect(d['on'], d['off']))
+                cnt = X._pairs(X._pop(prox) - X._pop(offs))
+                ok = sim.notna() & cnt.notna()
+                r_proxy = float(np.corrcoef(sim[ok], cnt[ok])[0, 1])
+                tg = E.targets()['z8']
+                pat_sim = X.scores(X._pairs_to_triu(sim), X._pairs_to_triu(tg))['pattern']
+                pat_cnt = X.scores(X._pairs_to_triu(cnt), X._pairs_to_triu(tg))['pattern']
+                proxy = dict(proxy_r=r_proxy, proxy_pattern_diff=float(abs(pat_sim - pat_cnt)),
+                             proxy_carries=bool(r_proxy >= D1_PROXY_R and abs(pat_sim - pat_cnt) < D1_PROXY_DIFF))
+        df = pd.DataFrame(rows)
+        g = df[df.form_label == k]
+        cal = g[(g.readout == 'cal') & (g.unit == 'S')].iloc[0]
+        raw = g[(g.readout == 'raw') & (g.unit == 'S')].iloc[0]
+        singles = g[(g.readout == 'cal') & (g.unit != 'S')]
+        flags = runs[runs.form_label == k].realism_flag
+        n_lower = int((singles.z8_pattern < singles.unchanged_z8_pattern).sum())
+        vd[k] = dict(form=f.name, pattern=float(cal.z8_pattern), unchanged=D1_UNCHANGED, n_wirings_lower=n_lower,
+                     raw_loss=float(raw.z8_loss), mean_effect=float(cal.mean_effect), n_flagged=int(flags.notna().sum()),
+                     better=bool(cal.z8_pattern <= D1_UNCHANGED - D1_GAIN and n_lower >= D1_WIRINGS_LOWER and not flags.notna().any()
+                                 and raw.z8_loss <= D1_RAW_UNCHANGED + D1_RAW_SLACK),
+                     worse=bool(cal.z8_pattern >= D1_UNCHANGED + D1_GAIN), **proxy)
+    df = pd.DataFrame(rows)
+    df.to_csv(out / 'readings_D1.csv', index=False)
+    (out / 'verdict_D1.json').write_text(json.dumps(vd, indent=1) + '\n')
+    return df
 
 
 def part_d2(out: Path, n_workers: int = 16) -> pd.DataFrame:
-    """D2: up to three handles that stand out in C, on S's four wirings. Not implemented: part D is a later step."""
-    raise NotImplementedError('E88 part D2 is not implemented yet')
+    """D2: up to three handles that stand out in C, on S's four wirings. Not run: part A's split verdict is "not read"
+    (the known-truth check fails the co-response in both verdict readings), so by outcome (c) no handle is taken further,
+    and C's stand-out rule (79 variants, nearly every experiment counting as "a handle the present code has") does not
+    pick three handles without a planning decision."""
+    raise NotImplementedError('E88 part D2 is not run (outcome (c); see the docstring)')
 
 
 # ---------------------------------------------------------------------------

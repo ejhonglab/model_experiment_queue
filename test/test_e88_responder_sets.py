@@ -172,3 +172,20 @@ def test_reading_1_reproduces_e74():
     mine = float(np.nanmean(X.effect(m.mean_factors('r1'))))
     assert abs(mine - blk['mean_thresholded']) < 1e-12
     assert abs(m.rate['r1']['on'] - blk['rate_on']) < 1e-15 and abs(m.rate['r1']['off'] - blk['rate_off']) < 1e-15
+
+
+@pytest.mark.skipif(__import__('os').environ.get('QUICK') == '1', reason="D1's base identity: a pool of one-odor simulators (minutes)")
+def test_d1_base_reproduces_e87_d2_real_wiring():
+    """D1's base on the real wiring (per-odor thresholds re-solved at the flies' fractions with APL output blocked, APL
+    off) reproduces E87's D2 APL-off run exactly."""
+    E87 = pytest.importorskip('experiments.E87_inhibition_form')
+    b = X.base_thresholds(H.results_dir(X.EXPERIMENT), 'real')
+    pool = E87.WiringPool('real', n_workers=16)
+    try:
+        cols = list(pool.cols)
+        n_kc = int(E87._load_d2('D2_b3_thr_noise_real')['off'][0].shape[0])
+        r, s = pool.run(np.tile(np.array([b['thr'][c] for c in cols]), (n_kc, 1)))
+    finally:
+        pool.close()
+    off = E87._load_d2('D2_b3_thr_noise_real')['off']
+    assert np.array_equal(s.to_numpy(dtype=float), off[1].to_numpy(dtype=float))
