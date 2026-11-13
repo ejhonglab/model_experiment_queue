@@ -8,7 +8,7 @@ directory's notes/ and are linked from here.
 
 ## Open
 
-### E87's archive scan read its stand-out rule on raw counts only (found 2026-11-13 00:05, viki's planning subagent for E87's summary passage; checked by viki)
+### E87's archive scan read its stand-out rule on raw counts only (found 2026-11-12 23:45, viki's planning subagent for E87's summary passage; checked by viki)
 - **What.** C3 of the form of APL's inhibition in the flies' own responses (E87) set every archived variant against the breadth-2 fit
   on the same wiring, but took the fit's raw-count value for the readout rows too, and flagged raw counts only. On raw counts nothing
   stands out (best 0.006 below, 0.008 asked); under the calibrated readout seven variants do: E80's six per-odor recruitment
@@ -18,7 +18,7 @@ directory's notes/ and are linked from here.
   Placed line's rationale, and viki's chat posts of 21:28, 23:22.
 - **Done.** `rescore_archive` (47040d0) rereads the rule under each readout with the matched baseline; archive_scan.csv and
   verdict_C.json rewritten. D2, the design's conditional step for a handle that stands out (E80's B3 on the breadth-2 fits of S),
-  running on viki since 00:08.
+  running on viki since 23:48.
 - **Remains.** D2's result; the note, page (republish), Status, a dated annotation under the Placed line and the summary
   passage corrected; then move here to Resolved.
 
