@@ -1784,13 +1784,101 @@ def model_steps_of(mp: pd.DataFrame) -> pd.DataFrame:
     return pd.concat([df, pop], ignore_index=True)
 
 
+D2_HANDLES = ('S1', 'S3')                 # E77's screen: the PN normalization (pn_inhadd) and the ORN exponent
+
+
+def al_stage(extra_kws: Optional[dict] = None, orn: Optional[pd.DataFrame] = None) -> Dict[str, pd.DataFrame]:
+    """The antennal-lobe stage alone of C2's family with an AL setting: the PN rates' window and pre-odor means
+    (glomeruli x odors) of one fit_mb_model call at the bouton base's parameters (E3's; the PN layer does not depend on
+    the KC layer's parameters, the wiring's claws or APL) with the bouton base's kwargs plus `extra_kws`, on the input
+    `orn` (the lab's by default)."""
+    from experiments import E10_joint_fit as J
+    from experiments.E12_breadth_apl import e3_bouton_params
+    from pyolfsysm.mb_model import fit_mb_model, get_sim_var
+    orn = H.apl16_orn_deltas() if orn is None else orn
+    p0 = e3_bouton_params()
+    _, _, wPNKC, pd0 = fit_mb_model(orn, fixed_thr=p0['fixed_thr'], wAPLKC=p0['wAPLKC_scale'], wKCAPL=p0['wKCAPL_scale'],
+                                    wAPLPN=p0['wAPLPN_scale'], wPNAPL=p0['wPNAPL_scale'],
+                                    **dict(J.base_kws(None), **(extra_kws or {})), return_olfsysm_vars=True)
+    mp_, rv = pd0['mp'], pd0['rv']
+    t = step_times(mp_, rv)
+    w = _windows(t, MODEL_WINDOW)
+    pn = get_sim_var(rv.pn, 'pn_sims')
+    gl = list(dict.fromkeys(wPNKC.columns.get_level_values('glomerulus')))
+    out = {k: pd.DataFrame({H.odor_abbrev(c): np.asarray(pn[i])[:, w[k]].mean(axis=1) for i, c in enumerate(orn.columns)},
+                           index=pd.Index(gl, name='glomerulus')) for k in ('win', 'pre')}
+    return out
+
+
+def pn_statistics(win: pd.DataFrame, pre: pd.DataFrame) -> dict:
+    """The PN stage's statistics against A3 on the 28 shared glomeruli (rate changes): the group means of the pair
+    distances and their rms difference from the PN dendrites', the CV of the per-odor totals, the correlation of the
+    entries with the PN dendrites'."""
+    a3 = pd.read_csv(out_dir() / 'al_transfer.csv')
+    ent = a3[(a3.section == 'entries') & (a3.map == 'linear') & (a3.stat == 'pn')]
+    P = ent.assign(g=ent.key.str.split('|').str[0], o=ent.key.str.split('|').str[1]).pivot(index='g', columns='o',
+                                                                                         values='value')[list(ODORS)]
+    gl = list(P.index)
+    X = (win - pre).loc[gl, list(ODORS)]
+    gm = group_means(odor_distances(X))
+    fl = flies_group('pn_dend28')
+    dif = {g: gm[g] - float(fl.loc[g, 'mean']) for g in TABLE_GROUPS}
+    tot = X.sum(axis=0)
+    return dict(**{f'dist_{g}': gm[g] for g in GROUPS}, **{f'diff_{g}': d for g, d in dif.items()},
+                dist_rms_diff=float(np.sqrt(np.mean([d ** 2 for d in dif.values()]))), cv_totals=_cv(tot),
+                cv_totals_flies=_cv(P.sum(axis=0)), r_entries_pn_dend=_corr(X.to_numpy().ravel(), P.to_numpy().ravel()),
+                r_totals_pn_dend=_corr(tot, P.sum(axis=0)))
+
+
 def part_d2() -> pd.DataFrame:
-    """D2 (only if the verdict says): not run unless verdict.json says it is due."""
+    """D2 (only if verdict.json says it is due): the PN stage (`al_stage`, `pn_statistics`) of E77's screen's
+    normalization (S1: pn_inhadd with pn_inhsc raised as E3 / E32) and exponent (S3: the ORN input's positive deltas to a
+    power) settings, identity points first (S1's must reproduce part B's PN window means exactly), beside the settings'
+    saved main-target scores from E77's screen.csv; which setting is nearest the recorded stage (the rms over the five
+    groups of the difference from the PN dendrites' distances; the totals' CV beside) and which the main target prefers
+    (the lowest pattern part under the calibrated readout; the loss beside). d2_pn_settings.csv, d2.json."""
+    from experiments import E77_input_screen as S
     v = json.loads((out_dir() / 'verdict.json').read_text())
     if not v.get('d2_due'):
         print('D2 is not due (verdict.json)', flush=True)
         return pd.DataFrame()
-    raise NotImplementedError('D2 is due: the PN stage of E77\'s screen settings is to be written')
+    t0 = time.time()
+    specs = [x for x in S.point_specs() if x['handle'] in D2_HANDLES]
+    screen = pd.read_csv(H.results_dir(S.EXPERIMENT) / 'screen.csv').set_index('point_id')
+    ref = load_stage('B', 'real_on')
+    rows = []
+    for sp in specs:
+        orn = S.orn_for(sp['orn'])
+        st = al_stage(sp['kws'], orn)
+        row = dict(point_id=sp['point_id'], handle=sp['handle'], setting=sp['setting'], value=sp['value'],
+                   identity=bool(sp['identity']), **pn_statistics(st['win'], st['pre']))
+        if sp['identity']:
+            rw = ref['pn_win'].copy()
+            rw.columns = [H.odor_abbrev(c) for c in rw.columns]
+            row['identity_max_abs_diff'] = float(np.max(np.abs(st['win'][list(rw.columns)].to_numpy() - rw.to_numpy())))
+        if sp['point_id'] in screen.index:
+            r = screen.loc[sp['point_id']]
+            for c in ('cal_loss', 'cal_pattern', 'cal_rho', 'cal_mean', 'raw_loss', 'raw_pattern', 'cal_err_ester', 'cal_err_alcohol'):
+                if c in r.index:
+                    row[c] = float(r[c])
+        rows.append(row)
+        print(f"D2 {sp['point_id']}: rms diff {row['dist_rms_diff']:.3f}, CV {row['cv_totals']:.3f}, "
+              f"cal pattern {row.get('cal_pattern', np.nan):.4f}", flush=True)
+    df = pd.DataFrame(rows)
+    df.to_csv(out_dir() / 'd2_pn_settings.csv', index=False)
+    res = {}
+    for h, x in df.groupby('handle'):
+        x = x.dropna(subset=['cal_pattern'])
+        res[h] = dict(nearest_recorded=str(x.loc[x.dist_rms_diff.idxmin(), 'point_id']),
+                      nearest_cv=str(x.loc[(x.cv_totals - x.cv_totals_flies).abs().idxmin(), 'point_id']),
+                      preferred_by_target=str(x.loc[x.cal_pattern.idxmin(), 'point_id']),
+                      preferred_by_loss=str(x.loc[x.cal_loss.idxmin(), 'point_id']))
+        res[h]['same'] = res[h]['nearest_recorded'] == res[h]['preferred_by_target']
+    _write_json(out_dir() / 'd2.json', dict(res, identity=[r.get('identity_max_abs_diff') for r in rows if r['identity']],
+                                            seconds=round(time.time() - t0, 1)))
+    _write_json(out_dir() / 'provenance_D2.json', dict(part='D2', script=H.script_path(__file__),
+        model=H.model_provenance(orn_deltas=H.apl16_orn_deltas()), points=[x['point_id'] for x in specs]))
+    return df
 
 
 def _f(x, spec: str = '.3f') -> str:
@@ -2058,6 +2146,21 @@ def comparison_table() -> None:
                 L.append(f"| {fam} | {_f(r['z8_loss'], '.4f')} | {_f(r['z8_pattern'], '.4f')} | {_f(r['z8_rho'])} | "
                          f"{_f(r['mean_effect'], '+.3f')} | {_f(r['err_ester'], '+.3f')} | {_f(r['err_alcohol'], '+.3f')} |")
         L.append('')
+    if (o / 'd2_pn_settings.csv').exists():
+        d2 = pd.read_csv(o / 'd2_pn_settings.csv')
+        dj = json.loads((o / 'd2.json').read_text())
+        L += ['## D2: the PN stage of E77\'s screen\'s normalization (S1) and exponent (S3) settings beside their main-target '
+              'scores', '', '| point | rms difference from the PN dendrites\' group distances | ' +
+              ' | '.join(f'distance, {TABLE_GROUP_HEAD[g]}' for g in TABLE_GROUPS) +
+              ' | CV of the totals (PN dendrites ' + _f(d2.cv_totals_flies.iloc[0]) + ') | r of the entries | pattern part (cal) '
+              '| APL-effect loss (cal) | ρ on the per-pair APL effect (cal) |', '|---|' + '---:|' * (len(TABLE_GROUPS) + 6)]
+        for _, r in d2.iterrows():
+            L.append(f'| {r.point_id} | {_f(r.dist_rms_diff)} | ' + ' | '.join(_f(r[f"dist_{g}"]) for g in TABLE_GROUPS) +
+                     f' | {_f(r.cv_totals)} | {_f(r.r_entries_pn_dend)} | {_f(r.get("cal_pattern"), ".4f")} | '
+                     f'{_f(r.get("cal_loss"), ".4f")} | {_f(r.get("cal_rho"))} |')
+        L += [''] + [f"- {h}: nearest the recorded stage {x['nearest_recorded']} (nearest on the totals' CV {x['nearest_cv']}); "
+                     f"preferred by the main target's pattern part {x['preferred_by_target']} (by the loss {x['preferred_by_loss']}); "
+                     f"the same: {x['same']}." for h, x in dj.items() if h in D2_HANDLES] + ['']
     (o / 'comparison_table.md').write_text('\n'.join(L) + '\n')
     write_variants()
     figures()
