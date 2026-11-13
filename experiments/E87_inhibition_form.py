@@ -424,8 +424,11 @@ def scores(pred: np.ndarray, data: np.ndarray) -> dict:
     masks = E77.kind_masks(ps.index)
     six = np.array([tuple(x) in {tuple(sorted(q)) for q in E78.SIX} for x in ps.index])
     near = masks['nearest']
-    r = float(np.corrcoef(ps[ok], ds[ok])[0, 1])
-    slope = float(np.polyfit(ps[ok], ds[ok], 1)[0])
+    if float(np.std(ps[ok])) > 0:
+        r = float(np.corrcoef(ps[ok], ds[ok])[0, 1])
+        slope = float(np.polyfit(ps[ok], ds[ok], 1)[0])
+    else:   # a constant prediction (no inhibition): no line
+        r, slope = float('nan'), float('nan')
     blk = H.block_means(ps.dropna())
     return dict(loss=float(np.sqrt((e ** 2).mean())), mean=float(ps.mean()), pattern=float(np.sqrt((ec ** 2).mean())),
                 rho=float(H.spearman(ps[ok], ds[ok])), r2=r * r, slope=slope,
