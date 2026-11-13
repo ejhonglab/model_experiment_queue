@@ -803,8 +803,8 @@ def _windows(t: np.ndarray, window: Tuple[float, float]) -> Dict[str, np.ndarray
 
 def step_times(mp, rv) -> np.ndarray:
     """The time of every simulation step, pre_start + k dt (or start + k dt once the pretime is removed), from olfsysm's
-    parameters. (`get_time_index` spreads the steps evenly from the first time to time_end inclusive, which puts every
-    step a fraction of a step later than olfsysm's, enough to move a window's first step.)"""
+    parameters. (Written when pyolfsysm's `get_time_index` spread the steps evenly to time_end inclusive, a fraction of
+    a step later than olfsysm's; since olfsysm 17cef71 it returns these same times.)"""
     n = int(np.asarray(rv.orn.sims[0]).shape[-1])
     dt = float(mp.time_dt)
     for t0 in (float(mp.time_pre_start), float(mp.time_start)):
