@@ -1443,7 +1443,7 @@ def part_bscore() -> pd.DataFrame:
     reading, the population's and each wiring's group means beside the flies'), noise_check.csv, steps_model.csv,
     pn_stage.csv."""
     t0 = time.time()
-    mp = model_pairs(force=True)
+    mp = model_pairs()
     nc = noise_check(mp)
     steps = model_steps(mp)
     gw = _group_table(mp, KEY + ['wiring'])
@@ -1462,7 +1462,7 @@ def pn_stage_table(mp: pd.DataFrame) -> pd.DataFrame:
     their CV over the 12 odors, and the group means of the pair distances (pn_stage.csv)."""
     st = load_stage('B', 'real_on')
     a3 = pd.read_csv(out_dir() / 'al_transfer.csv')
-    ent = a3[(a3.section == 'entries') & (a3.map == 'linear')]
+    ent = a3[(a3.section == 'entries') & (a3['map'] == 'linear')]
     ent = ent.assign(glomerulus=ent.key.str.split('|').str[0], odor=ent.key.str.split('|').str[1])
     P = ent[ent.stat == 'pn'].pivot(index='glomerulus', columns='odor', values='value')[list(ODORS)]
     O = ent[ent.stat == 'orn'].pivot(index='glomerulus', columns='odor', values='value')[list(ODORS)]
@@ -1815,7 +1815,7 @@ def pn_statistics(win: pd.DataFrame, pre: pd.DataFrame) -> dict:
     distances and their rms difference from the PN dendrites', the CV of the per-odor totals, the correlation of the
     entries with the PN dendrites'."""
     a3 = pd.read_csv(out_dir() / 'al_transfer.csv')
-    ent = a3[(a3.section == 'entries') & (a3.map == 'linear') & (a3.stat == 'pn')]
+    ent = a3[(a3.section == 'entries') & (a3['map'] == 'linear') & (a3.stat == 'pn')]
     P = ent.assign(g=ent.key.str.split('|').str[0], o=ent.key.str.split('|').str[1]).pivot(index='g', columns='o',
                                                                                          values='value')[list(ODORS)]
     gl = list(P.index)
@@ -2094,7 +2094,7 @@ def comparison_table() -> None:
     a3 = pd.read_csv(o / 'al_transfer.csv')
     sm3 = a3[a3.section == 'summary']
     L += ['', 'A3 (the flies, linear dF/F and through the saturating map, the bound for the indicator): ' + '; '.join(
-        f"{r.map} {r.stat} {_f(r.value)} [{_f(r.lo, '.2f')}, {_f(r.hi, '.2f')}]" for _, r in sm3.iterrows()) + '.', '']
+        f"{r['map']} {r.stat} {_f(r.value)} [{_f(r.lo, '.2f')}, {_f(r.hi, '.2f')}]" for _, r in sm3.iterrows()) + '.', '']
     # B5
     if (o / 'stages_b5.csv').exists():
         b5 = pd.read_csv(o / 'stages_b5.csv')
