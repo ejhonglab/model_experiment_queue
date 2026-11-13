@@ -1959,6 +1959,41 @@ def score_c(out: Path, n_workers: int = 4, coresponse: bool = True) -> dict:
     return v
 
 
+def figure_a(out: Path) -> Optional[Path]:
+    """E89_estimator_check.png: per check population (the breadth-2 population, the base) and factor (R, L, s, G) the
+    largest |group-mean error| (five groups, both conditions, both seeds; units of the similarity) of each candidate at
+    each level, against the tolerance."""
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    if not (out / 'estimator_check.csv').exists() or not (out / 'estimator_choice.json').exists():
+        return None
+    ec = pd.read_csv(out / 'estimator_check.csv', keep_default_na=False, na_values=[''])
+    lc = json.loads((out / 'estimator_choice.json').read_text())['lc_edges']['chosen']
+    ec['lc_edges'] = ec.lc_edges.fillna('')
+    w = worst_errors(ec[(ec.candidate != 'lc') | (ec.lc_edges == lc)])
+    cols = {'tm': '0.55', 'nr': '#8c564b', 'gm': '#d1495b', 'lc': '#2e86ab', 'hf': '#6a994e'}
+    fig, axes = plt.subplots(2, 4, figsize=(15, 7), sharey=True)
+    x = np.arange(len(LEVELS))
+    for i, pop in enumerate(CHECK_POPULATIONS):
+        for j, f in enumerate(('R', 'L', 's', 'G')):
+            ax = axes[i, j]
+            for cand in CANDIDATES:
+                g = w[(w.population == pop) & (w.candidate == cand) & (w.factor == f)].set_index('level')
+                ax.plot(x, [g.abs_err.get(lv, np.nan) for lv in LEVELS], 'o-', color=cols[cand], label=CANDIDATE_NAMES[cand])
+            ax.axhline(EST_TOL, color='k', ls='--', lw=0.8)
+            ax.set_xticks(x)
+            ax.set_xticklabels(LEVELS)
+            ax.set_title(f"{'breadth-2 population' if pop == 'b2' else 'the base with the flies recruitment'}: {f}", fontsize=9)
+        axes[i, 0].set_ylabel('largest |group-mean error|\n(units of the similarity)')
+    axes[0, 0].legend(fontsize=7)
+    fig.tight_layout()
+    path = out / 'E89_estimator_check.png'
+    fig.savefig(path, dpi=130)
+    plt.close(fig)
+    return path
+
+
 def figure_c(out: Path) -> Optional[Path]:
     """E89_weightings.png: per base, S's pattern part under the readout against half A, half B and all recordings by
     weighting (the reference dashed; flagged weightings hollow), and the alcohol group's co-response change (reading 1)
@@ -2194,6 +2229,10 @@ def main() -> None:
         figure_c(out)
     elif args.part == 'variants':
         write_variants(out)
+    if args.part in ('A', 'table'):
+        figure_a(out)
+    if args.part == 'table':
+        figure_c(out)
     if args.part in ('A', 'B', 'Cscore', 'C3', 'variants', 'table'):
         comparison_table(out)
 
