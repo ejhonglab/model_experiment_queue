@@ -1608,9 +1608,48 @@ def comparison_table(out: Path) -> str:
     return text
 
 
+def figure(out: Path) -> Path:
+    """E87_forms.png: the per-pair APL effect predicted against the data's (z, sub-threshold responses set to 0, the
+    trial noise removed): the flies' responses with a uniform inhibition and with the chosen form; the breadth-2
+    population's responses with its own APL and with the flies' chosen form (raw counts). Lines of identity."""
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    from experiments import E77_input_side_common_error as E77
+    rd = Reading('z', 'noise_free')
+    f_ch = chosen_form(out)
+    mrs = [ModelResponses(_load(f, t), 'raw', label=w) for w, f, t in model_families()['b2']]
+    off = _pop([mr.d_off for mr in mrs])
+    panels = [("the flies' responses, uniform inhibition", rd.predict(UNIFORM)[0]),
+              ("the flies' responses, the flies' form", rd.predict(f_ch)[0]),
+              ("the model's responses, its own APL", _pop([mr.d_on for mr in mrs]) - off),
+              ("the model's responses, the flies' form", _pop([mr.form(f_ch)[0] for mr in mrs]) - off)]
+    data = _pairs(rd.data)
+    est = E77.kind_masks(data.index)['ester']
+    fig, axes = plt.subplots(1, 4, figsize=(16, 4.3), sharex=True, sharey=True)
+    lo, hi = -0.05, 0.40
+    for ax, (title, pred) in zip(axes, panels):
+        ps = _pairs(pred)
+        s = scores(pred, rd.data)
+        ax.plot([lo, hi], [lo, hi], color='0.6', lw=1)
+        ax.scatter(data[~est], ps[~est], s=12, color='0.35', label='other pairs')
+        ax.scatter(data[est], ps[est], s=16, color='#d1495b', label='ester pairs')
+        ax.set_title(f'{title}\n(pattern part {s["pattern"]:.3f}, mean {s["mean"]:+.3f})', fontsize=9)
+        ax.set_xlim(lo, hi)
+        ax.set_ylim(lo, hi)
+        ax.set_xlabel('KC data: per-pair APL effect')
+    axes[0].set_ylabel('predicted per-pair APL effect')
+    axes[0].legend(fontsize=8, loc='upper left')
+    fig.tight_layout()
+    path = out / 'E87_forms.png'
+    fig.savefig(path, dpi=130)
+    plt.close(fig)
+    return path
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
-    ap.add_argument('--part', choices=('A', 'A2', 'verdictA', 'B', 'C', 'D1', 'D1score', 'table', 'variants'), required=True)
+    ap.add_argument('--part', choices=('A', 'A2', 'verdictA', 'B', 'C', 'D1', 'D1score', 'table', 'variants', 'figure'), required=True)
     ap.add_argument('--wirings', default=None, help='D1: a comma-separated list of wirings (default all eight)')
     ap.add_argument('--workers', type=int, default=16, help='D1: worker processes (one thread each)')
     args = ap.parse_args()
@@ -1635,6 +1674,8 @@ def main() -> None:
         comparison_table(out)
     elif args.part == 'variants':
         write_variants(out)
+    elif args.part == 'figure':
+        figure(out)
 
 
 if __name__ == '__main__':
