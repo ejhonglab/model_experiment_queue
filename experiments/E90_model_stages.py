@@ -2258,8 +2258,8 @@ def figures() -> None:
     on_w = series(pr, 'on_remy', 'claw_noise_removed')
     ax = axes[0]
     ax.scatter(eff.to_numpy(), on_w.to_numpy(), c=col, s=18)
-    ax.set_xlabel("per-pair APL effect, KCs (control flies minus APL output blocked (TNT)), cosine")
-    ax.set_ylabel("step from claws to somata, wild type (Remy's somata minus claws, noise removed)")
+    ax.set_xlabel("per-pair APL effect, KCs\n(control flies minus APL output blocked (TNT), cosine)", fontsize=9)
+    ax.set_ylabel("step, wild type\n(Remy's somata minus claws, noise removed)", fontsize=9)
     ax.set_title(f'flies: r = {_corr(eff, on_w):.2f}', fontsize=10)
     for ax, (step, flstep) in zip(axes[1:], (('on', 'on_ctrl'), ('off', 'off_tnt'))):
         fv = series(pr, flstep, 'claw_noise_removed')
@@ -2268,8 +2268,8 @@ def figures() -> None:
         ax.scatter(fv.to_numpy(), mv.to_numpy(), c=col, s=18)
         lim = [min(np.nanmin(fv), np.nanmin(mv)) - 0.05, max(np.nanmax(fv), np.nanmax(mv)) + 0.05]
         ax.plot(lim, lim, ':', color='0.5', lw=1)
-        ax.set_xlabel(f"flies: {'control flies' if step == 'on' else 'APL output blocked (TNT)'} minus claws (noise removed)")
-        ax.set_ylabel(f"model: somata APL {step} (calibrated readout) minus claws (session z), population")
+        ax.set_xlabel(f"flies: {'control flies' if step == 'on' else 'APL output blocked (TNT)'}\nminus claws (noise removed)", fontsize=9)
+        ax.set_ylabel(f"model: somata APL {step} (calibrated readout)\nminus all claws (session z), population of 8", fontsize=9)
         ax.set_title(f"step {'with APL on' if step == 'on' else 'without APL'}: r = {_corr(fv, mv):.2f}", fontsize=10)
     for ax in axes:
         ax.grid(True, color='0.9', lw=0.6)
