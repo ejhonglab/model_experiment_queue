@@ -1841,6 +1841,33 @@ def score_d1(out: Path) -> pd.DataFrame:
     return df
 
 
+def write_variants(out: Path) -> pd.DataFrame:
+    """variants.csv for the model-output archive and model_pair_distances_long.csv for kcq/apl_effect.py (raw spike
+    counts, the harness's primary model RDM): one row per D1 run (APL-on side the run, APL-off side the base), and the
+    four bases (tag base_<wiring>, APL off only), with absolute parameters, the form and c (`factor`)."""
+    from experiments import E83_cross_wiring_fit as E
+    runs = pd.read_csv(out / 'runs_D1.csv')
+    forms = d1_forms()
+    rows, parts = [], []
+    for _, r in runs.iterrows():
+        f = forms[r.form_label]
+        rows.append(dict(tag=r.tag, variant=r.tag, part='D1', kind="the flies' form as a static inhibition in place of APL on the "
+                         "base with the flies' per-odor recruitment: each KC threshold for each odor x base_thr_o x (1 + factor "
+                         "A_o^q B_k^p), A and B from the base's APL-off run", config=f.name, factor=r.c, scaled_odors='per odor',
+                         wiring=r.wiring, ref_experiment=r.fit_folder, ref_fit=r.fit_tag, fixed_thr=r.fixed_thr, wAPLKC_scale=0.0,
+                         wKCAPL_scale=r.wKCAPL_scale, wAPLPN_scale=0.0, wPNAPL_scale=r.wPNAPL_scale, wKCKC_scale=r.wKCKC_scale,
+                         k=2.0, breadth_k=2.0, rate_on=r.rate_on, rate_off=r.rate_off, max_count_on=r.max_count_on,
+                         max_count_off=r.max_count_off))
+        o = _d1_run(r.wiring, r.form_label)
+        parts.append(pd.concat({(r.tag, 'on'): H.model_rdms(*o['on'])[H.PRIMARY_MODEL_RDM],
+                                (r.tag, 'acute_off'): H.model_rdms(*o['off'])[H.PRIMARY_MODEL_RDM]},
+                               names=['tag', 'condition', 'odor_a', 'odor_b']).rename('distance').reset_index())
+    df = pd.DataFrame(rows)
+    df.to_csv(out / 'variants.csv', index=False)
+    pd.concat(parts, ignore_index=True).to_csv(out / 'model_pair_distances_long.csv', index=False)
+    return df
+
+
 def part_d2(out: Path, n_workers: int = 16) -> pd.DataFrame:
     """D2: up to three handles that stand out in C, on S's four wirings. Not run: part A's split verdict is "not read"
     (the known-truth check fails the co-response in both verdict readings), so by outcome (c) no handle is taken further,
@@ -2004,7 +2031,7 @@ def comparison_table(out: Path) -> str:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
-    ap.add_argument('--part', choices=('A', 'verdictA', 'B', 'C', 'Cscore', 'D1', 'D2', 'table'), required=True)
+    ap.add_argument('--part', choices=('A', 'verdictA', 'B', 'C', 'Cscore', 'D1', 'D1score', 'D2', 'variants', 'table'), required=True)
     ap.add_argument('--workers', type=int, default=8, help='C: worker processes')
     args = ap.parse_args()
     warnings.simplefilter('ignore', RuntimeWarning)
@@ -2021,8 +2048,12 @@ def main() -> None:
         score_c(out)
     elif args.part == 'D1':
         part_d1(out)
+    elif args.part == 'D1score':
+        score_d1(out)
     elif args.part == 'D2':
         part_d2(out)
+    elif args.part == 'variants':
+        write_variants(out)
     comparison_table(out)
 
 
