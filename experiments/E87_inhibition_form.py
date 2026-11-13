@@ -1685,6 +1685,49 @@ def score_d2(out: Path) -> pd.DataFrame:
     return df
 
 
+def two_by_two_d2(out: Path) -> pd.DataFrame:
+    """Part B's two-by-two on D2's runs (the breadth-2 fits of S with E80's per-odor recruitment) beside the unchanged
+    fits: per arm, readout, wiring and S's population, the model's own APL and the flies' chosen form on the model's
+    APL-off responses (c at the model's own APL-on rate), against the data's effect (z, sub-threshold responses set to
+    0) with the trial noise removed and as trial means; with B's rule (the chosen form lower than the model's own APL by
+    B_FORM_GAIN on the population, and the number of single wirings where it is). two_by_two_D2.csv,
+    verdict_B_D2.json."""
+    import json
+    from experiments import E83_cross_wiring_fit as E
+    f_ch = chosen_form(out)
+    data = {r: Reading('z', r) for r in ('noise_free', 'trial_means')}
+    rows, vb = [], {}
+    for arm in ('unchanged',) + D2_ARMS:
+        for ro in ('raw', 'cal'):
+            own, frm, offs = [], [], []
+            for w in E.S_WIRINGS:
+                fit = E.saved_fit(w)
+                o = fit['saved'] if arm == 'unchanged' else _load_d2(f'D2_b3_{arm}_{D2_UNITS}_{w}')
+                mr = ModelResponses(o, ro, K=fit['K'], label=w)
+                own.append(mr.d_on)
+                frm.append(mr.form(f_ch)[0])
+                offs.append(mr.d_off)
+                for rn, rd in data.items():
+                    for lab, d in (('own', mr.d_on), ('chosen', frm[-1])):
+                        rows.append(dict(arm=arm, readout=ro, unit=w, inhibition=lab, data_reading=rn, **scores(d - mr.d_off, rd.data)))
+            for rn, rd in data.items():
+                for lab, d in (('own', own), ('chosen', frm)):
+                    rows.append(dict(arm=arm, readout=ro, unit='S', inhibition=lab, data_reading=rn,
+                                     **scores(_pop(d) - _pop(offs), rd.data)))
+    df = pd.DataFrame(rows)
+    df.to_csv(out / 'two_by_two_D2.csv', index=False)
+    nf = df[df.data_reading == 'noise_free']
+    for arm in ('unchanged',) + D2_ARMS:
+        for ro in ('raw', 'cal'):
+            g = nf[(nf.arm == arm) & (nf.readout == ro)].pivot_table(index='unit', columns='inhibition', values='pattern')
+            gain = g['own'] - g['chosen']
+            vb[f'{arm}_{ro}'] = dict(own=float(g.loc['S', 'own']), chosen=float(g.loc['S', 'chosen']), gain=float(gain['S']),
+                                     n_wirings_gain=int((gain.drop('S') >= B_FORM_GAIN).sum()),
+                                     in_form=bool(gain['S'] >= B_FORM_GAIN and (gain.drop('S') >= B_FORM_GAIN).sum() >= 3))
+    (out / 'verdict_B_D2.json').write_text(json.dumps(vb, indent=1) + '\n')
+    return df
+
+
 def write_variants(out: Path) -> pd.DataFrame:
     """variants.csv for the model-output archive and model_pair_distances_long.csv for kcq/apl_effect.py (raw spike
     counts, the harness's primary model RDM; APL off the wiring's own saved fit): one row per D1 run (tag = the file names' variant; the APL-on side is
@@ -1945,7 +1988,7 @@ def figure(out: Path) -> Path:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
-    ap.add_argument('--part', choices=('A', 'A2', 'verdictA', 'B', 'C', 'D1', 'D1score', 'table', 'variants', 'figure', 'C3rescore', 'D2', 'D2score'), required=True)
+    ap.add_argument('--part', choices=('A', 'A2', 'verdictA', 'B', 'C', 'D1', 'D1score', 'table', 'variants', 'figure', 'C3rescore', 'D2', 'D2score', 'B_D2'), required=True)
     ap.add_argument('--wirings', default=None, help='D1: a comma-separated list of wirings (default all eight)')
     ap.add_argument('--workers', type=int, default=16, help='D1: worker processes (one thread each)')
     args = ap.parse_args()
@@ -1980,6 +2023,8 @@ def main() -> None:
     elif args.part == 'D2score':
         score_d2(out)
         comparison_table(out)
+    elif args.part == 'B_D2':
+        two_by_two_d2(out)
 
 
 if __name__ == '__main__':
