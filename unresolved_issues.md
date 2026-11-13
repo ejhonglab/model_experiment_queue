@@ -8,6 +8,20 @@ directory's notes/ and are linked from here.
 
 ## Open
 
+### E87's archive scan read its stand-out rule on raw counts only (found 2026-11-13 00:05, viki's planning subagent for E87's summary passage; checked by viki)
+- **What.** C3 of the form of APL's inhibition in the flies' own responses (E87) set every archived variant against the breadth-2 fit
+  on the same wiring, but took the fit's raw-count value for the readout rows too, and flagged raw counts only. On raw counts nothing
+  stands out (best 0.006 below, 0.008 asked); under the calibrated readout seven variants do: E80's six per-odor recruitment
+  oracles on the real wiring (0.008 to 0.015 below) and E30's fit on P2 (0.010). The note also called E80's variants "trial-noise
+  runs"; they are the per-odor recruitment oracle (B3).
+- **Affects.** verdict_C.json, archive_scan.csv, E87's note and page (published from hal), its Status and Completed lines, the
+  Placed line's rationale, and viki's chat posts of 21:28, 23:22.
+- **Done.** `rescore_archive` (47040d0) rereads the rule under each readout with the matched baseline; archive_scan.csv and
+  verdict_C.json rewritten. D2, the design's conditional step for a handle that stands out (E80's B3 on the breadth-2 fits of S),
+  running on viki since 00:08.
+- **Remains.** D2's result; the note, page (republish), Status, a dated annotation under the Placed line and the summary
+  passage corrected; then move here to Resolved.
+
 ### The raw-count readings of the main target are tied to the model's 0.5 s odor pulse; the flies had 2 s (found 2026-11-11 02:37, viki, E80)
 - **What.** Every model number compares spike counts of a 0.5 s pulse, counted to 0.75 s, with the flies' calcium signal 2 to 8 s
   after the onset of a 2 s pulse. With the flies' pulse (E80, both response rates re-held, parameters fitted at 0.5 s), C2's
