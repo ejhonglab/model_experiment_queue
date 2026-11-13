@@ -1452,6 +1452,10 @@ def part_bscore() -> pd.DataFrame:
     sm = pd.concat([gp, gw], ignore_index=True)
     sm.to_csv(out_dir() / 'stages_model.csv', index=False)
     pn_stage_table(mp)
+    _write_json(out_dir() / 'provenance_Bscore.json', dict(part='Bscore', script=H.script_path(__file__), **H.code_commits(),
+        settings=dict(Q_SESSION=Q_SESSION, SUBSETS=SUBSETS, CLAW_SPIKE_SHARES=CLAW_SPIKE_SHARES, N_NOISE_REPS=N_NOISE_REPS,
+                      NOISE_SEED=NOISE_SEED, NOISE_CHECK_TOL=NOISE_CHECK_TOL, MODEL_WINDOW=MODEL_WINDOW, PRE_WINDOW=PRE_WINDOW),
+        model_pairs=str(local_dir() / 'model_pairs.parquet'), seconds=round(time.time() - t0, 1)))
     print(f'Bscore in {time.time() - t0:.0f} s; noise check: {check_passes(nc)}', flush=True)
     return sm
 
@@ -1634,6 +1638,8 @@ def part_c() -> dict:
                         flies_steps='Yang control flies / APL output blocked (TNT) minus the claws, Pearson',
                         d2='due if a group is upstream with the bouton stage differing, or the PN stage differs for any group')
     _write_json(out_dir() / 'verdict.json', out)
+    _write_json(out_dir() / 'provenance_C.json', dict(part='C', script=H.script_path(__file__), **H.code_commits(),
+        rules=out['rules'], verdict_subsets=out['verdict_subsets']))
     print(json.dumps({g: v['verdict'] for g, v in out['groups'].items()}, indent=1), flush=True)
     return out
 
