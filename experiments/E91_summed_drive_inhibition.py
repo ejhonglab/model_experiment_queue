@@ -1913,7 +1913,11 @@ def comparison_table(out: Path) -> str:
             L.append('')
     for name in ('choice.csv', 'gate.csv', 'equal.csv', 'd_scores.csv'):
         if (out / name).exists():
-            d = pd.read_csv(out / name)
+            try:
+                d = pd.read_csv(out / name)
+            except pd.errors.EmptyDataError:
+                L += [f'## {name}', '', '(none)', '']
+                continue
             try:
                 txt = d.to_markdown(index=False, floatfmt='.4f')
             except ImportError:
