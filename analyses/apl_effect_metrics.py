@@ -34,7 +34,9 @@ Writes <shared>/results/apl_effect_metrics/: by_variant_metrics.csv, metric_corr
 (all variants) and metric_correlations_realistic.csv, split_half_reliability.csv,
 best_by_metric.csv, best_per_experiment.csv, top25_overlap.csv, shares.csv (per variant inside
 the bands, the mean part's share of the loss squared, the amplitude part's and the per-odor part's
-shares of the pattern part squared, and the ratio of the spreads), data_pairs.csv (the data's
+shares of the pattern part squared, and the ratio of the spreads), odor_share_reliability.csv (how
+reproducible single odors' shares are between random halves of the recordings: the data's own per-odor
+profile and the error of the two models quoted on 2026-11-13, ODOR_SHARE_MODELS), data_pairs.csv (the data's
 per-pair effect and its standard error) and provenance.json.
 
 Usage: ./venv/bin/python analyses/apl_effect_metrics.py [--n-splits 200]
@@ -182,6 +184,42 @@ def split_half_reliability(M: np.ndarray, ctrl: pd.DataFrame, tnt: pd.DataFrame,
         n_splits=n_splits) for k, v in res.items()])
 
 
+# the models whose single-odor shares of the error were quoted (viki's reply of 2026-11-13 13:00)
+ODOR_SHARE_MODELS = {'C2 (breadth-2 APL-effect fit, real wiring; E67)': ('E67_apl_effect_fits', 'rate0.068_aplboth_k2_cap3'),
+                     'E86 C1_B_P3': ('E86_reduced_input_candidate', 'C1_B_P3')}
+
+
+def odor_share_reliability(df: pd.DataFrame, M: np.ndarray, ctrl: pd.DataFrame, tnt: pd.DataFrame, X: np.ndarray,
+                           n_splits: int, seed: int = SEED) -> pd.DataFrame:
+    """How reproducible single odors' shares are between random halves of the recordings: per split, the r over
+    the 16 odors between the shares (`X`'s least-squares projection) computed against each half, for the data's own
+    effect, for the error of each of ODOR_SHARE_MODELS (each side's mean removed) and the r over pairs of its
+    pair-specific part; mean and 5 / 95 % over splits."""
+    rng = np.random.default_rng(seed)
+    C, T = ctrl.to_numpy(), tnt.to_numpy()
+    Xp = np.linalg.pinv(X)
+    models = {}
+    for lab, (folder, tag) in ODOR_SHARE_MODELS.items():
+        i = df.index[(df.folder == folder) & (df.tag == tag)]
+        if len(i):
+            models[lab] = M[i[0]]
+    res = {'data effect: odor shares': []}
+    for lab in models:
+        res[f'{lab}: error odor shares'] = []
+        res[f'{lab}: error pair-specific part'] = []
+    for _ in range(n_splits):
+        pc, pt = rng.permutation(len(C)), rng.permutation(len(T))
+        ds = [C[pc[:len(C) // 2]].mean(0) - T[pt[:len(T) // 2]].mean(0), C[pc[len(C) // 2:]].mean(0) - T[pt[len(T) // 2:]].mean(0)]
+        res['data effect: odor shares'].append(np.corrcoef(*[Xp @ (dh - dh.mean()) for dh in ds])[0, 1])
+        for lab, m in models.items():
+            es = [(m - m.mean()) - (dh - dh.mean()) for dh in ds]
+            sh = [Xp @ e for e in es]
+            res[f'{lab}: error odor shares'].append(np.corrcoef(*sh)[0, 1])
+            res[f'{lab}: error pair-specific part'].append(np.corrcoef(*[e - X @ s for e, s in zip(es, sh)])[0, 1])
+    return pd.DataFrame([dict(what=k, r_between_halves=np.mean(v), lo=np.percentile(v, 5), hi=np.percentile(v, 95),
+        n_splits=n_splits) for k, v in res.items()])
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('--n-splits', type=int, default=200)
@@ -221,6 +259,7 @@ def main() -> None:
 
     rel = split_half_reliability(M[uniq], ctrl, tnt, X, a.n_splits, rng)
     rel.to_csv(OUT / 'split_half_reliability.csv', index=False)
+    odor_share_reliability(df, M, ctrl, tnt, X, a.n_splits).to_csv(OUT / 'odor_share_reliability.csv', index=False)
 
     best_rows, top = [], {}
     for k in RANKED:
