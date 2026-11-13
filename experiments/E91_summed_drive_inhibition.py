@@ -37,7 +37,8 @@ Parts (CLI `--part`):
   B1_none).
 - B2: the base with the flies' recruitment (E88's per-odor thresholds; each odor's APL scale bisected to the control
   flies' count for that odor, as E89's `part_c2`), s = 1 at exponents 2 and 1 and with no weighting (12 points). E89's
-  saved C2 points are the references (B2_F_k2, B2_F_k1, B2_none).
+  saved C2 points are the references (B2_F_k2, B2_F_k1, B2_none); first, on the real wiring, this path at s = 0 must
+  reproduce E89's C2 run at exponent 2 exactly (identity.json).
 - B3, for the record: olfsysm's `allow_net_inh_per_claw=True` at exponent 2 on the fits as they are (4 points).
 - co: the co-response change of the four nearest ester pairs, the ester and the alcohol groups under APL beside every S
   point (E89's `coresponse_c`: readings 1 and 1b, and the geometric mean of E88's two estimates, 'gm', at L1 and L3).
@@ -798,11 +799,12 @@ def base_off91(w: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
 
 
 def b2_points(out: Path, wirings: Sequence[str], settings: Sequence[dict], runs_name: str, part: str,
-              n_workers: int = 16) -> pd.DataFrame:
+              n_workers: int = 16, identity: bool = False) -> pd.DataFrame:
     """Settings on the base with the flies' recruitment (B2 and C's runs of that base; dict(w, s, control) as
     `b1_points`): per wiring the base's per-odor thresholds (`base_thresholds91`), then each setting with each odor's
     APL scale (tied) bisected to the control flies' count for that odor (E80's B3, baseline-noise units). The APL-off
-    run must equal the base's. Resumable (rows in `runs_name`)."""
+    run must equal the base's. With `identity`, first on S's first wiring this path at s = 0 and F at exponent 2 must
+    reproduce E89's C2 run exactly (identity.json, 'B2_s0_<wiring>'). Resumable (rows in `runs_name`)."""
     from experiments import E80_screen as S80
     cc = E89._commits_clean()
     path = out / runs_name
@@ -823,6 +825,18 @@ def b2_points(out: Path, wirings: Sequence[str], settings: Sequence[dict], runs_
         try:
             thr = [float(b['thr'][c]) for c in pool.cols]
             tg = S80.b3_targets(E89.C2_UNITS, pool.cols, int(fit['saved']['on'][0].shape[0]))
+            idp = out / 'identity.json'
+            key = f'B2_s0_{wiring}'
+            if identity and wiring == E83.S_WIRINGS[0] and key not in (json.loads(idp.read_text()) if idp.exists() else {}):
+                wk0 = E89.apl_kc_weights(parts['wnorm']['wAPLKC'], parts['breadth'], REFERENCE[1])
+                outs, recs = pool.run_task(dict(thr=thr, target_on=tg['target_on'], label=f'E91 identity {key}'), wk0, s=0.0,
+                                           claw=False)
+                ref = E89.load_run(E89.run_tag('C2', REFERENCE, wiring))
+                ns, nr = E83._same({'on': outs['on'], 'off': outs['off']}, ref) if ref is not None else (-1, -1)
+                _identity_add(out, key, dict(count_diffs=ns, response_diffs=nr, against=f"E89 {E89.run_tag('C2', REFERENCE, wiring)}"), cc)
+                print(f'E91 identity {key}: {ns} count / {nr} response differences', flush=True)
+                if ns or nr:
+                    raise RuntimeError(f"{key}: the B2 path at s = 0 does not reproduce E89's C2 run")
             for v, st in todo:
                 tag = run_tag(v, wiring)
                 pv = parse_variant(v)
@@ -871,7 +885,8 @@ def b2_points(out: Path, wirings: Sequence[str], settings: Sequence[dict], runs_
 
 def part_b2(out: Path, wirings: Sequence[str], n_workers: int = 16) -> pd.DataFrame:
     """B2: s = 1 at exponents 2, 1 and no weighting on the base with the flies' recruitment (12 points)."""
-    return b2_points(out, wirings, [dict(w=w, s=s) for w in B2_WEIGHTINGS for s in B2_POOLS], 'runs_B2.csv', 'B2', n_workers)
+    return b2_points(out, wirings, [dict(w=w, s=s) for w in B2_WEIGHTINGS for s in B2_POOLS], 'runs_B2.csv', 'B2', n_workers,
+                     identity=True)
 
 
 # ---------------------------------------------------------------------------
