@@ -1163,6 +1163,8 @@ Canonical experiment names for summary reports:
 | E87 | the form of APL's inhibition in the flies' own responses |
 | E88 | the common error split into who responds and how strongly |
 | E89 | the co-response read with a checked estimate and the breadth weighting inside the models' APL |
+| E90 | the model's stages against the flies' stages |
+| E91 | APL's inhibition on the KC's summed drive |
 
 ## Model-output archive (data/model_outputs/ in the shared directory)
 
