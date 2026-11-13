@@ -8,6 +8,33 @@ directory's notes/ and are linked from here.
 
 ## Open
 
+### pyolfsysm's `get_time_index` places every step up to one step late, so closed windows read with it lose their end step (found 2026-11-13 12:05, atlas's code subagent for E90)
+- **What.** `pyolfsysm.mb_model.get_time_index` spreads the run's n steps evenly from its first time to `time_end` inclusive
+  (`np.linspace(t0, t1, num=n)`), so step k is labelled t0 + k (t1 - t0) / (n - 1) instead of olfsysm's t0 + k dt: every
+  label is late by k / (n - 1) of a step (0.73 of a step at the odor onset and 0.91 at the end of the 0.5 s pulse with the
+  pretime kept). Half-open windows [t0, t1) with edges on the step grid select exactly olfsysm's steps. A closed upper edge
+  (`t <= 0.5`) loses the step at t1 (the step at which the pulse ends); an open lower edge (`t > t0`) gains the step at t0,
+  which for `bouton_sims` with t0 = -0.5 is the run's first step, still NaN (E90's first launch stopped on that NaN). Measured on
+  the bouton base (E3's parameters, the lab's input, 0.5 s pulse): the window 0 to 0.5 s holds 1000 steps instead of 1001, and
+  the PN and bouton window means move by at most 0.021 Hz (median 0.015 % and at most 0.06 % of means above 1 Hz). Spikes
+  counted in a closed window could lose a spike at the pulse's last step (unmeasured). `_spike_times_frame` (the spike times
+  of E80 / E82 / E84's kernel readings) computes olfsysm's own times and is not affected.
+- **Affects.** Callers in this repository with a closed upper edge, all reading the 0 to 0.5 s window of PN or bouton rates:
+  E3's `pn_contrast`, E9, E20, E21, E32's `glomerulus_pn_rates`, E77's screen (`PerOdorRunner.pn_rates` / `activity`: part B's PN
+  totals and distances, the L1 / L2 emulations' factors), E78 (`who_selects`, and `largest_bouton_rates`, which sets the
+  odor-relative knee's inhibition in part C's fits), E79's connectome maps. Their numbers can move in the fourth significant
+  digit (0.06 % at most on a window mean); the odor-relative knee's level moves by the same share, and what that does to E78's
+  fitted points is unmeasured (expected well below their reported precision). Not affected: E6, E43, E51's odor window and
+  E37 (half-open windows or a closed lower edge); the replays of E51, E55, E56 and kcq/noise_proxy.py (E60's batched proxy),
+  whose first replayed step, found with `searchsorted(t, time_start - dt / 2) - 2`, comes out one step early, two steps before
+  olfsysm's KC loop, where nothing has started; their identity checks against olfsysm's counts passed. pyolfsysm's own users:
+  `get_dynamics`' time coordinate (plots, `slice_to_odor_pulse`, fit_mb_model's ORN / PN means returned with dynamics), none of
+  which the queue's numbers use. E90 reads its windows on olfsysm's own times (`E90_model_stages.step_times`).
+- **Done.** E90 avoids it; this entry.
+- **Remains.** Fix `get_time_index` in pyolfsysm to label step k as t0 + k dt (after viki's pending olfsysm push), with a
+  test against olfsysm's step times, and re-run test/test_frozen_step3.py and the affected scripts' identity checks; decide
+  whether E78's knee points need a re-check.
+
 ### The raw-count readings of the main target are tied to the model's 0.5 s odor pulse; the flies had 2 s (found 2026-11-11 02:37, viki, E80)
 - **What.** Every model number compares spike counts of a 0.5 s pulse, counted to 0.75 s, with the flies' calcium signal 2 to 8 s
   after the onset of a 2 s pulse. With the flies' pulse (E80, both response rates re-held, parameters fitted at 0.5 s), C2's
