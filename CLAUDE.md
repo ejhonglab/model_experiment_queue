@@ -1216,6 +1216,11 @@ change only, so that no other host's content is dropped; `reports/publish_check.
 what the previous copy has that a new build lacks. Per-experiment pages and add_to_reports pages are
 still published.
 
+The Report tab's third view, "Since the priority changes", is a snapshot of what was learned since the main goal's
+last two changes (written at Tom's request, 2026-11-13), rebuilt only on request and not kept current at each completion:
+`./venv/bin/python reports/build_since_priority_changes.py` (from its template; reads only what build_summary.py made), then
+`./venv/bin/python reports/save_report_copy.py outputs/_artifacts/since_priority_changes/index.html since_priority_changes --current current-since-priority-changes.html`.
+
 Every artifact page we publish (per-experiment summaries, add_to_reports pages) must also exist as a
 self-contained file under
 `<shared>/reports/`, the same document the artifact's share > export download gives. The
