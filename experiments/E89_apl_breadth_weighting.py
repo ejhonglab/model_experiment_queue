@@ -2136,12 +2136,17 @@ def comparison_table(out: Path) -> str:
     if (out / 'verdict_B.json').exists():
         vb = json.loads((out / 'verdict_B.json').read_text())
         L += ['## B: the weighting in the saved models', '',
-              '| family | member nearest the flies (trial means) | its change / flies\' | gain under the readout | gain on raw counts | follows |',
-              '|---|---|---:|---:|---:|---|']
+              '| family | operating point | member nearest the flies (trial means) | its change / flies\' | gain under the readout | '
+              'gain on raw counts | follows | nearest on the deterministic counts (follows) | realism of the nearest |',
+              '|---|---:|---|---:|---:|---:|---|---|---|']
         for fam, d in vb['families'].items():
             n = d.get('nearest', {}).get('trial_means')
+            n3 = d.get('nearest', {}).get('deterministic_counts', {})
             if n:
-                L.append(f"| {fam} | {n['member']} | {_f(n['change'], '.2f')} / {_f(n['flies'], '.2f')} | {_f(n['gain_cal'])} | {_f(n['gain_raw'])} | {n['follows']} |")
+                fl = n.get('realism_flag')
+                L.append(f"| {fam} | {d['operating_point']:g} | {n['member']} | {_f(n['change'], '.2f')} / {_f(n['flies'], '.2f')} | "
+                         f"{_f(n['gain_cal'])} | {_f(n['gain_raw'])} | {n['follows']} | {n3.get('member', '')} ({n3.get('follows', '')}) | "
+                         f"{fl if isinstance(fl, str) and fl and fl != 'nan' else 'inside the bands'} |")
         L.append('')
     if (out / 'readings_C.csv').exists():
         rd = pd.read_csv(out / 'readings_C.csv')
