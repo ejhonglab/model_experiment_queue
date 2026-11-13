@@ -1701,6 +1701,16 @@ def write_variants(out: Path) -> pd.DataFrame:
                          wAPLKC_scale=0.0, wKCAPL_scale=r.wKCAPL_scale, wAPLPN_scale=0.0, wPNAPL_scale=r.wPNAPL_scale,
                          wKCKC_scale=r.wKCKC_scale, k=2.0, breadth_k=2.0, rate_on=r.rate_on, rate_off=r.rate_off,
                          max_count_on=r.max_count_on, max_count_off=r.max_count_off))
+    d2 = pd.read_csv(out / 'runs_D2.csv') if (out / 'runs_D2.csv').exists() else pd.DataFrame()
+    for _, r in d2.iterrows():
+        rows.append(dict(tag=r.tag, variant=r.tag, part='D2', kind=f"E80's per-odor recruitment (B3, arm {r.arm}, {r.units} units): "
+                         "per-odor thresholds on the TNT flies' fractions" + {'thr': ' in both conditions at the fit\'s APL scales',
+                                                                              'throff': ' with APL off only (the APL-on run the fit\'s own)',
+                                                                              'thrapl': ', then per-odor APL scales on the control flies\''}[r.arm],
+                         config=r.arm, scaled_odors='per odor', factor=np.nan, wiring=r.wiring, ref_experiment=r.fit_folder,
+                         ref_fit=r.fit_tag, fixed_thr=r.fixed_thr, wAPLKC_scale=r.wAPLKC_scale, wKCAPL_scale=r.wKCAPL_scale,
+                         wAPLPN_scale=r.wAPLPN_scale, wPNAPL_scale=r.wPNAPL_scale, wKCKC_scale=r.wKCKC_scale, k=2.0, breadth_k=2.0,
+                         rate_on=r.rate_on, rate_off=r.rate_off, max_count_on=r.max_count_on, max_count_off=r.max_count_off))
     df = pd.DataFrame(rows)
     df.to_csv(out / 'variants.csv', index=False)
     from experiments import E83_cross_wiring_fit as E
@@ -1710,6 +1720,11 @@ def write_variants(out: Path) -> pd.DataFrame:
         off = E.saved_fit(r.wiring)['saved']['off']
         parts.append(pd.concat({(r.tag, 'on'): H.model_rdms(*on)[H.PRIMARY_MODEL_RDM],
                                 (r.tag, 'acute_off'): H.model_rdms(*off)[H.PRIMARY_MODEL_RDM]},
+                               names=['tag', 'condition', 'odor_a', 'odor_b']).rename('distance').reset_index())
+    for _, r in d2.iterrows():
+        o = _load_d2(r.tag)
+        parts.append(pd.concat({(r.tag, 'on'): H.model_rdms(*o['on'])[H.PRIMARY_MODEL_RDM],
+                                (r.tag, 'acute_off'): H.model_rdms(*o['off'])[H.PRIMARY_MODEL_RDM]},
                                names=['tag', 'condition', 'odor_a', 'odor_b']).rename('distance').reset_index())
     pd.concat(parts, ignore_index=True).to_csv(out / 'model_pair_distances_long.csv', index=False)
     return df
@@ -1862,8 +1877,25 @@ def comparison_table(out: Path) -> str:
         for _, r in rd[rd.unit.isin(['S', 'T', 'all8'])].iterrows():
             lines.append(f'| {r.form} | {r.readout} | {r.unit} | {_f(r.z8_pattern)} | {_f(r.unchanged_z8_pattern)} | {_f(r.z8_loss)} | '
                          f'{_f(r.mean_effect, "+.3f")} | {_f(r.z8_rho, ".2f")} | {_f(r.mean_on, ".3f")} / {_f(r.mean_off, ".3f")} |')
+    if (out / 'archive_scan.csv').exists():
+        a = pd.read_csv(out / 'archive_scan.csv')
+        if 'standout' in a:
+            st = a[a.standout.astype(bool)]
+            lines += ['', '## C3: archived variants that stand out (against C1\'s target, the chosen form, the trial noise removed)', '',
+                      '| folder | variant | readout | wiring | pattern part | breadth-2 fit, same wiring | mean |', '|---|---|---|---|---:|---:|---:|']
+            for _, r in st.iterrows():
+                lines.append(f'| {r.folder} | {r.variant} | {r.readout} | {r.wiring} | {_f(r.noise_free_pattern)} | '
+                             f'{_f(r.b2_same_wiring_pattern)} | {_f(r.noise_free_mean, "+.3f")} |')
+    if (out / 'readings_D2.csv').exists():
+        rd2 = pd.read_csv(out / 'readings_D2.csv')
+        lines += ['', '## D2: E80\'s per-odor recruitment on the breadth-2 fits of S (baseline-noise units)', '',
+                  '| arm | readout | unit | main target: pattern part | unchanged | loss | mean APL effect | ρ | C1\'s target: pattern part | unchanged |',
+                  '|---|---|---|---:|---:|---:|---:|---:|---:|---:|']
+        for _, r in rd2.iterrows():
+            lines.append(f'| {r.arm} | {r.readout} | {r.unit} | {_f(r.z8_pattern)} | {_f(r.unchanged_z8_pattern)} | {_f(r.z8_loss)} | '
+                         f'{_f(r.mean_effect, "+.3f")} | {_f(r.z8_rho, ".2f")} | {_f(r.c1_pattern)} | {_f(r.c1_unchanged_pattern)} |')
     lines += ['', '## Verdicts', '']
-    for part in ('A', 'B', 'C', 'D'):
+    for part in ('A', 'B', 'C', 'D', 'D2'):
         p = out / f'verdict_{part}.json'
         if p.exists():
             lines += [f'### {part}', '', '```', json.dumps(json.loads(p.read_text()), indent=1), '```', '']
