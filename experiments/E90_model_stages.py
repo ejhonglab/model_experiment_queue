@@ -1010,6 +1010,7 @@ def part_b(wirings: Optional[Sequence[str]] = None) -> None:
             continue
         t0 = time.time()
         sr = StageRun(w)
+        unit_meta(w, sr.W)
         for c, cc in CONDS:
             st = sr.run(c)
             _save_stage(d, f'{w}_{cc}', st, (st['responses'], st['spike_counts']))
@@ -1198,21 +1199,23 @@ def _rms(x) -> float:
     return float(np.sqrt(np.mean(x ** 2)))
 
 
-def stage_units(st: dict, stage: str, W: pd.DataFrame) -> pd.DataFrame:
+def stage_units(st: dict, stage: str) -> pd.DataFrame:
     """A run's stage as units x odors changes (window mean minus pre-odor mean), odor columns abbreviated."""
     x = st[f'{stage}_win'] - st[f'{stage}_pre']
     x.columns = [H.odor_abbrev(c) for c in x.columns]
     return x
 
 
-def subset_mask(stage: str, units: pd.Index, W: pd.DataFrame, subset: str) -> np.ndarray:
+def subset_mask(stage: str, units: pd.Index, meta: Optional[dict], subset: str) -> np.ndarray:
+    """The units of `subset`: 'all', or 'shared' (those of the 28 shared glomeruli: a bouton's glomerulus, a claw's
+    (`unit_meta`), a PN's own)."""
     if subset == 'all':
         return np.ones(len(units), dtype=bool)
-    sh = set(shared_glomeruli())
+    sh = list(shared_glomeruli())
     if stage == 'bouton':
-        return np.asarray(pd.Index(W.columns.get_level_values('glomerulus')).isin(sh))
+        return np.isin(meta['bouton_glomerulus'], sh)
     if stage == 'claw':
-        return np.isin(glomerulus_of_claws(W), list(sh))
+        return np.isin(meta['claw_glomerulus'], sh)
     if stage == 'pn':
         return np.asarray(units.isin(sh))
     raise ValueError(stage)
@@ -1224,7 +1227,23 @@ def wiring_matrix(label: str) -> pd.DataFrame:
     return E83.wiring_parts(label)['W']
 
 
-def read_wiring(label: str, st_on: dict, st_off: dict, W: pd.DataFrame, rng: np.random.Generator,
+def unit_meta(label: str, W: Optional[pd.DataFrame] = None) -> dict:
+    """A wiring's units' metadata, cached under outputs/E90_model_stages/B/<label>_units.json: 'bouton_glomerulus' (in
+    the wiring's bouton order), 'claw_glomerulus' and 'kc_of_claw' (in its claw order). `label` a part B wiring or a D1
+    model's wiring."""
+    path = local_dir('B') / f'{label}_units.json'
+    if path.exists():
+        d = json.loads(path.read_text())
+        return {k: np.asarray(v) for k, v in d.items()}
+    W = wiring_matrix(label) if W is None else W
+    d = dict(bouton_glomerulus=[str(x) for x in W.columns.get_level_values('glomerulus')],
+             claw_glomerulus=[str(x) for x in glomerulus_of_claws(W)],
+             kc_of_claw=[int(x) for x in W.index.get_level_values(H.KC_ID_LEVEL)])
+    path.write_text(json.dumps(d) + '\n')
+    return {k: np.asarray(v) for k, v in d.items()}
+
+
+def read_wiring(label: str, st_on: dict, st_off: dict, meta: dict, rng: np.random.Generator,
                 with_noise: bool = True) -> List[dict]:
     """Every reading of one wiring's bouton and claw stages (APL on and off; SUBSETS; claws in CLAW_SPIKE_SHARES): rows of
     stage, subset, share, cond, reading, odor_a, odor_b, value (pair distance, 1 - Pearson across units), plus the noise
@@ -1232,14 +1251,19 @@ def read_wiring(label: str, st_on: dict, st_off: dict, W: pd.DataFrame, rng: np.
     rows = []
     rel = {st: flies_reliability(st) for st in ('bouton', 'claw')}
     nflies = {'bouton': stage_samples()['bouton_measured'].shape[0], 'claw': stage_samples()['claw_measured'].shape[0]}
-    kc_of_claw = np.asarray(W.index.get_level_values(H.KC_ID_LEVEL))
-    ch_on = stage_units(st_on, 'claw', W)
+    kc_of_claw = np.asarray(meta['kc_of_claw'])
+    for st in (st_on, st_off):
+        if not np.array_equal(np.asarray(st['claw_win'].index.get_level_values(H.KC_ID_LEVEL)).astype(int), kc_of_claw.astype(int)):
+            raise RuntimeError(f'{label}: the claws are not those of the units\' metadata')
+        if len(st['bouton_win']) != len(meta['bouton_glomerulus']):
+            raise RuntimeError(f'{label}: the boutons are not those of the units\' metadata')
+    ch_on = stage_units(st_on, 'claw')
     scales = (_rms(ch_on.to_numpy()), _rms(st_on['spike_counts'].to_numpy(dtype=float)))
     for cond, st in (('on', st_on), ('off', st_off)):
         for stage in ('bouton', 'claw'):
-            U = stage_units(st, stage, W)
+            U = stage_units(st, stage)
             for subset in SUBSETS:
-                m = subset_mask(stage, U.index, W, subset)
+                m = subset_mask(stage, U.index, meta, subset)
                 for share in (CLAW_SPIKE_SHARES if stage == 'claw' else (0.0,)):
                     V = claw_signal(U, st['spike_counts'], kc_of_claw, share, scales) if stage == 'claw' else U
                     V = _drop_silent(V.loc[m])
@@ -1303,8 +1327,7 @@ def model_pairs(force: bool = False) -> pd.DataFrame:
             print(f'{w}: no stage matrices yet', flush=True)
             continue
         t0 = time.time()
-        W = wiring_matrix(w)
-        rows += read_wiring(w, st['on'], st['off'], W, np.random.default_rng(NOISE_SEED + i))
+        rows += read_wiring(w, st['on'], st['off'], unit_meta(w), np.random.default_rng(NOISE_SEED + i))
         for c in ('on', 'off'):
             rows += pn_rows(w, st[c], c)
         K = E83.readout_K({'on': (st['on']['responses'], st['on']['spike_counts'])})
@@ -1396,24 +1419,10 @@ FLY_STEP_OF = {('on', 'pearson'): 'on_ctrl', ('off', 'pearson'): 'off_tnt', ('on
 
 
 def model_steps(mp: pd.DataFrame) -> pd.DataFrame:
-    """steps_model.csv: per wiring (and the population) the steps per pair: the somata (soma reading `soma`, APL on and
+    """steps_model.csv: per wiring (and the population) the steps per pair: the somata (each soma reading, APL on and
     off) minus the claw stage with APL on (each claw reading, subset and share); rows step ('on' / 'off'), soma, subset,
-    share, reading, wiring, odor_a, odor_b, value."""
-    claw = mp[(mp.stage == 'claw') & (mp.cond == 'on')]
-    soma = mp[mp.stage == 'soma']
-    rows = []
-    for (w, sr, sc), s in soma.groupby(['wiring', 'reading', 'cond']):
-        sv = pd.Series(s.value.to_numpy(), index=pd.MultiIndex.from_arrays([s.odor_a, s.odor_b]))
-        for (sub, sh, rd), c in claw[claw.wiring == w].groupby(['subset', 'share', 'reading']):
-            cv = pd.Series(c.value.to_numpy(), index=pd.MultiIndex.from_arrays([c.odor_a, c.odor_b])).reindex(sv.index)
-            st = sv - cv
-            rows.append(pd.DataFrame(dict(step=sc, soma=sr, subset=sub, share=sh, reading=rd, wiring=w,
-                                          odor_a=st.index.get_level_values(0), odor_b=st.index.get_level_values(1),
-                                          value=st.to_numpy())))
-    df = pd.concat(rows, ignore_index=True)
-    pop = df.groupby(['step', 'soma', 'subset', 'share', 'reading', 'odor_a', 'odor_b'])['value'].mean().reset_index()
-    pop['wiring'] = 'population'
-    df = pd.concat([df, pop], ignore_index=True)
+    share, reading, wiring, odor_a, odor_b, value (`model_steps_of`)."""
+    df = model_steps_of(mp)
     df.to_csv(out_dir() / 'steps_model.csv', index=False)
     return df
 
@@ -1534,15 +1543,24 @@ def group_verdict(res: Dict[str, dict], effect_err: float) -> str:
     return 'none'
 
 
-def verdict_rows(sm: pd.DataFrame, steps: pd.DataFrame, passed: Dict[str, bool]) -> pd.DataFrame:
+# the subset each stage is read on for the verdict, as the recordings were made: Remy's PN boutons are GH146-labelled
+# boutons, so the boutons of the GH146 glomeruli the model's input shares; her claws are KC claws, which receive from
+# every PN, so all claws (the steps likewise). The other subset is reported beside, and the verdict with both subsets as
+# readings is given too (verdict.json's 'both_subsets').
+VERDICT_SUBSETS = {'bouton': ('shared',), 'claw': ('all',)}
+
+
+def verdict_rows(sm: pd.DataFrame, steps: pd.DataFrame, passed: Dict[str, bool],
+                 subsets: Optional[Dict[str, Sequence[str]]] = None) -> pd.DataFrame:
     """Every (element, group, reading) comparison the verdict reads (`differs`), the model's APL-on stages against the
     flies' (wild type) and the model's steps against the flies' (Yang's control flies and APL output blocked (TNT) minus
-    the claws, Pearson)."""
+    the claws, Pearson), on `subsets` (VERDICT_SUBSETS by default)."""
+    subsets = VERDICT_SUBSETS if subsets is None else subsets
     rows = []
     for stage in ('bouton', 'claw'):
         for mr, fr in reading_pairs(passed[stage]):
             fl = flies_group(f'{stage}_{fr}')
-            sub = sm[(sm.stage == stage) & (sm.cond == 'on') & (sm.reading == mr)]
+            sub = sm[(sm.stage == stage) & (sm.cond == 'on') & (sm.reading == mr) & sm.subset.isin(subsets[stage])]
             for (subset, share), x in sub.groupby(['subset', 'share']):
                 pop = x[x.wiring == 'population'].iloc[0]
                 wir = x[x.wiring != 'population']
@@ -1555,7 +1573,7 @@ def verdict_rows(sm: pd.DataFrame, steps: pd.DataFrame, passed: Dict[str, bool])
     for step in ('on', 'off'):
         for mr, fr in reading_pairs(passed['claw']):
             fl = flies_step_group(FLY_STEP_OF[(step, 'pearson')], fr)
-            sub = gs[(gs.step == step) & (gs.soma == SOMA_STEP_READING) & (gs.reading == mr)]
+            sub = gs[(gs.step == step) & (gs.soma == SOMA_STEP_READING) & (gs.reading == mr) & gs.subset.isin(subsets['claw'])]
             for (subset, share), x in sub.groupby(['subset', 'share']):
                 pop = x[x.wiring == 'population'].iloc[0]
                 wir = x[x.wiring != 'population']
@@ -1593,15 +1611,21 @@ def part_c() -> dict:
     nc = pd.read_csv(out_dir() / 'noise_check.csv')
     passed = check_passes(nc)
     vr = verdict_rows(sm, steps, passed)
+    both = {'bouton': SUBSETS, 'claw': SUBSETS}
+    vb = verdict_rows(sm, steps, passed, both)
     pr = pn_verdict_rows(sm)
-    pd.concat([vr, pr], ignore_index=True).to_csv(out_dir() / 'verdict_rows.csv', index=False)
+    pd.concat([vr.assign(verdict_subsets='primary'), vb.assign(verdict_subsets='both'), pr.assign(verdict_subsets='pn')],
+              ignore_index=True).to_csv(out_dir() / 'verdict_rows.csv', index=False)
     ee = effect_errors()
     st = json.loads((out_dir() / 'step_target.json').read_text())
-    out = dict(noise_check_passed=passed, effect_error=ee, groups={}, step_target_usable=bool(st['usable']))
+    out = dict(noise_check_passed=passed, effect_error=ee, groups={}, both_subsets={}, step_target_usable=bool(st['usable']),
+               verdict_subsets={k: list(v) for k, v in VERDICT_SUBSETS.items()})
     pn_res = {g: element_result(pr[pr.group == g]) for g in GROUPS}
     for g in GROUPS:
         res = {el: element_result(vr[(vr.group == g) & (vr.element == el)]) for el in ('bouton', 'claw', 'step_on', 'step_off')}
         out['groups'][g] = dict(verdict=group_verdict(res, ee[g]), elements=res, pn=pn_res[g])
+        rb = {el: element_result(vb[(vb.group == g) & (vb.element == el)]) for el in ('bouton', 'claw', 'step_on', 'step_off')}
+        out['both_subsets'][g] = dict(verdict=group_verdict(rb, ee[g]), elements=rb)
     out['d1_due'] = bool(st['usable'])
     out['d2_due'] = bool(any(v['verdict'] == 'upstream' and v['elements']['bouton']['differs'] for v in out['groups'].values())
                          or any(v['differs'] for v in pn_res.values()))
@@ -1615,26 +1639,525 @@ def part_c() -> dict:
 
 
 # ---------------------------------------------------------------------------
+# B5's readings and realism
+
+def part_b5score() -> pd.DataFrame:
+    """B5's stages read as part B's (`read_wiring`, `pn_rows`, `soma_rows`, K on its own APL-on counts) beside the real
+    wiring at the 0.5 s pulse (stages_b5.csv: group means per stage, subset, share, condition and reading, for
+    'real_pulse2' and 'real'), and the four bands of B5's point (b5_realism.json, E83's `realism`: E77's `realism_of`)."""
+    from experiments import E83_cross_wiring_fit as E83
+    st = {c: load_stage('B5', f'real_pulse2_{cc}') for c, cc in CONDS}
+    if any(v is None for v in st.values()):
+        raise RuntimeError('B5 has not run')
+    rows = read_wiring('real_pulse2', st['on'], st['off'], unit_meta('real'), np.random.default_rng(NOISE_SEED + 100))
+    for c in ('on', 'off'):
+        rows += pn_rows('real_pulse2', st[c], c)
+    o = {c: (st[c]['responses'], st[c]['spike_counts']) for c in ('on', 'off')}
+    K = E83.readout_K(o)
+    rows += soma_rows('real_pulse2', {c: st[c]['spike_counts'] for c in ('on', 'off')}, K)
+    b5 = pd.DataFrame(rows)
+    b5.to_parquet(local_dir() / 'b5_pairs.parquet')
+    mp = pd.read_parquet(local_dir() / 'model_pairs.parquet')
+    both = pd.concat([b5, mp[mp.wiring == 'real']], ignore_index=True)
+    g = _group_table(both, KEY + ['wiring'])
+    g.to_csv(out_dir() / 'stages_b5.csv', index=False)
+    real = E83.realism(o)
+    real0 = E83.realism(E83.saved_fit('real')['saved'])
+    _write_json(out_dir() / 'b5_realism.json', dict(pulse2=real, pulse05_real=real0, K_pulse2=K,
+                                                    K_pulse05=E83.saved_fit('real')['K']))
+    print(json.dumps(real, indent=1, default=str), flush=True)
+    return g
+
+
+# ---------------------------------------------------------------------------
 # D
 
+D1_MODELS = ('fit1', 'P1_fc', 'P2_fc', 'M1_fc')            # E69's fit 1 and E72 part G's fits (E82's names)
+D1_C2_WIRINGS = ('real', 'P1', 'P2', 'M1')                 # C2's family on the same four wirings
+
+
+def d1_run(model: str) -> dict:
+    """One firing-ceiling fit (E82_protocol_runs's `model_parts`: its parameters, refractory period and adaptation, its
+    wiring and breadth) built as E82 builds it, run at its parameters APL on and off with APL's activity saved; its counts
+    must equal its saved ones exactly; the stage matrices saved under outputs/E90_model_stages/D1/."""
+    import gc
+    from experiments import E82_protocol_runs as R
+    m = R.model_parts(model)
+    W = None if m['wiring'] is None else R.wiring_parts(m['wiring'])['W']
+    sim, info = R.build_simulator(m['kc'], wPNKC=W, breadth=R.own_breadth(m), params=m['p'])
+    cells = info['cells']
+    mp_, rv = cells['mp'].cell_contents, cells['rv'].cell_contents
+    order = np.asarray(cells['odor_order'].cell_contents, dtype=int)
+    mp_.kc.save_inh_sims = True
+    Wd = info['wPNKC']
+    d = local_dir('D1')
+    res = {}
+    for c, cc in CONDS:
+        q = dict(m['p']) if c == 'on' else dict(m['p'], wAPLKC_scale=0.0, wAPLPN_scale=0.0)
+        r, s_ = sim(q)
+        rs, ss = m['saved'][c]
+        nd = int((s_.to_numpy(dtype=float) != ss.to_numpy(dtype=float)).sum())
+        nr = int((r.to_numpy(dtype=float) != rs.to_numpy(dtype=float)).sum())
+        res[c] = dict(counts_differ=nd, responses_differ=nr)
+        if nd or nr:
+            raise RuntimeError(f'D1 {model} {c}: {nd} counts and {nr} responses differ from its saved fit')
+        st = read_stages(mp_, rv, Wd, order, [H.odor_abbrev(x) for x in r.columns], MODEL_WINDOW)
+        _save_stage(d, f'{model}_{cc}', st, (r, s_))
+        print(f'D1 {model} {c}: exact', flush=True)
+    del sim, info, cells, mp_, rv
+    gc.collect()
+    return dict(res, wiring=m['wiring'] or 'real', source=list(m['source']), params=m['p'], kc=m['kc'])
+
+
 def part_d1() -> pd.DataFrame:
-    raise NotImplementedError
+    """D1: the firing-ceiling family's four fits read as C2's (identities first), their steps beside C2's family on the
+    same four wirings, and both families' scores on the main target (d1_steps.csv, d1.json)."""
+    from experiments import E82_protocol_runs as R
+    from experiments import E83_cross_wiring_fit as E83
+    t0 = time.time()
+    path = out_dir() / 'd1.json'
+    rec = json.loads(path.read_text()) if path.exists() else {}
+    for mdl in D1_MODELS:
+        if load_stage('D1', f'{mdl}_on') is None or mdl not in rec:
+            rec[mdl] = d1_run(mdl)
+            _write_json(path, rec)
+    rows = []
+    for i, mdl in enumerate(D1_MODELS):
+        st = {c: load_stage('D1', f'{mdl}_{cc}') for c, cc in CONDS}
+        rows += read_wiring(mdl, st['on'], st['off'], unit_meta(rec[mdl]['wiring']),
+                            np.random.default_rng(NOISE_SEED + 200 + i))
+        for c in ('on', 'off'):
+            rows += pn_rows(mdl, st[c], c)
+        o = {c: (st[c]['responses'], st[c]['spike_counts']) for c in ('on', 'off')}
+        rows += soma_rows(mdl, {c: st[c]['spike_counts'] for c in ('on', 'off')}, E83.readout_K(o))
+    fc = pd.DataFrame(rows)
+    fc.to_parquet(local_dir() / 'd1_pairs.parquet')
+    mp = pd.read_parquet(local_dir() / 'model_pairs.parquet')
+    c2 = mp[mp.wiring.isin(D1_C2_WIRINGS)]
+    out = []
+    for fam, df in (('C2_S4', c2), ('fc_S4', fc)):
+        steps = model_steps_of(df)
+        pop = steps[steps.wiring == 'population']
+        gt = _group_table(pop, ['step', 'soma', 'subset', 'share', 'reading'])
+        gt.insert(0, 'family', fam)
+        out.append(gt)
+        stg = _group_table(populations(df), KEY)
+        stg.insert(0, 'family', fam)
+        stg.insert(1, 'step', 'stage')
+        out.append(stg)
+    tab = pd.concat(out, ignore_index=True)
+    tab.to_csv(out_dir() / 'd1_steps.csv', index=False)
+    # both families' populations of four on the main target (calibrated readout)
+    tg = E83.targets()
+    sc = {}
+    for fam, runs in (('C2_S4', [E83.saved_fit(w)['saved'] for w in D1_C2_WIRINGS]),
+                      ('fc_S4', [R.model_parts(m)['saved'] for m in D1_MODELS])):
+        dist = E83.population([E83.pair_distances(o, 'cal') for o in runs])
+        e = E83.effect_scores(dist, {'z8': tg['z8']})
+        err = E83.pattern_error(dist, tg['z8'])
+        mk = group_masks(err.index)
+        sc[fam] = dict(e, **{f'err_{g}': float(err[mk[g]].mean()) for g in GROUPS})
+    rec['main_target'] = sc
+    rec['seconds'] = round(time.time() - t0, 1)
+    _write_json(path, rec)
+    _write_json(out_dir() / 'provenance_D1.json', dict(part='D1', script=H.script_path(__file__),
+        model=H.model_provenance(orn_deltas=H.apl16_orn_deltas()), models=list(D1_MODELS)))
+    return tab
+
+
+def model_steps_of(mp: pd.DataFrame) -> pd.DataFrame:
+    """`model_steps` without writing steps_model.csv."""
+    claw = mp[(mp.stage == 'claw') & (mp.cond == 'on')]
+    soma = mp[mp.stage == 'soma']
+    rows = []
+    for (w, sr, sc), s_ in soma.groupby(['wiring', 'reading', 'cond']):
+        sv = pd.Series(s_.value.to_numpy(), index=pd.MultiIndex.from_arrays([s_.odor_a, s_.odor_b]))
+        for (sub, sh, rd), c in claw[claw.wiring == w].groupby(['subset', 'share', 'reading']):
+            cv = pd.Series(c.value.to_numpy(), index=pd.MultiIndex.from_arrays([c.odor_a, c.odor_b])).reindex(sv.index)
+            st = sv - cv
+            rows.append(pd.DataFrame(dict(step=sc, soma=sr, subset=sub, share=sh, reading=rd, wiring=w,
+                                          odor_a=st.index.get_level_values(0), odor_b=st.index.get_level_values(1),
+                                          value=st.to_numpy())))
+    df = pd.concat(rows, ignore_index=True)
+    pop = df.groupby(['step', 'soma', 'subset', 'share', 'reading', 'odor_a', 'odor_b'])['value'].mean().reset_index()
+    pop['wiring'] = 'population'
+    return pd.concat([df, pop], ignore_index=True)
 
 
 def part_d2() -> pd.DataFrame:
-    raise NotImplementedError
+    """D2 (only if the verdict says): not run unless verdict.json says it is due."""
+    v = json.loads((out_dir() / 'verdict.json').read_text())
+    if not v.get('d2_due'):
+        print('D2 is not due (verdict.json)', flush=True)
+        return pd.DataFrame()
+    raise NotImplementedError('D2 is due: the PN stage of E77\'s screen settings is to be written')
+
+
+def _f(x, spec: str = '.3f') -> str:
+    try:
+        return format(float(x), spec) if np.isfinite(float(x)) else '-'
+    except (TypeError, ValueError):
+        return str(x)
+
+
+TABLE_GROUPS = ('ester', 'alcohol', 'ester_alcohol', 'other', 'near')
+TABLE_GROUP_HEAD = {'ester': 'ester (15)', 'alcohol': 'alcohol (6)', 'ester_alcohol': 'ester with alcohol (24)',
+                    'other': 'other (21)', 'near': 'near (6)'}
+
+
+def _flies_cell(fl: pd.DataFrame, g: str) -> str:
+    return f"{_f(fl.loc[g, 'mean'])} [{_f(fl.loc[g, 'lo'], '.2f')}, {_f(fl.loc[g, 'hi'], '.2f')}]"
+
+
+def write_variants() -> pd.DataFrame:
+    """variants.csv (one row per saved run, the archive's params.csv source): tag, wiring, part, the absolute parameters,
+    the protocol, the response rates and the counts' identity."""
+    from experiments import E83_cross_wiring_fit as E83
+    rows = []
+    idn = json.loads((out_dir() / 'identity.json').read_text()) if (out_dir() / 'identity.json').exists() else {}
+    for w in ALL_WIRINGS:
+        st = load_stage('B', f'{w}_on')
+        if st is None:
+            continue
+        f = E83.saved_fit(w)
+        off = load_stage('B', f'{w}_acute_off')
+        rows.append(dict(tag=w, variant=w, part='B', wiring=w, ref_experiment=f['folder'], ref_fit=f['tag'], k=2.0,
+                         **{k: f['p'][k] for k in E83.PARAM_KEYS if k in f['p']}, kc_kc_tau=0.05, time_stim_end=0.5,
+                         rate_on=float(st['responses'].to_numpy(dtype=float).mean()),
+                         rate_acute_off=float(off['responses'].to_numpy(dtype=float).mean()),
+                         identity_exact=bool(idn.get(f'run_{w}_on', {}).get('exact') and idn.get(f'run_{w}_off', {}).get('exact'))))
+    b5 = out_dir() / 'b5_point.json'
+    if b5.exists():
+        b = json.loads(b5.read_text())
+        st = load_stage('B5', 'real_pulse2_on')
+        off = load_stage('B5', 'real_pulse2_acute_off')
+        rows.append(dict(tag='real_pulse2', variant='real_pulse2', part='B5', wiring='real', ref_experiment='E82_flies_protocol',
+                         ref_fit='B1_C2', k=2.0, **b['params'], kc_kc_tau=0.05, time_stim_end=PULSE, time_end=PULSE + 0.25,
+                         rate_on=float(st['responses'].to_numpy(dtype=float).mean()),
+                         rate_acute_off=float(off['responses'].to_numpy(dtype=float).mean()), identity_exact=bool(b.get('exact'))))
+    d1 = out_dir() / 'd1.json'
+    if d1.exists():
+        rec = json.loads(d1.read_text())
+        for mdl in D1_MODELS:
+            if mdl not in rec:
+                continue
+            st = load_stage('D1', f'{mdl}_on')
+            off = load_stage('D1', f'{mdl}_acute_off')
+            r = rec[mdl]
+            rows.append(dict(tag=mdl, variant=mdl, part='D1', wiring=r['wiring'], ref_experiment=r['source'][0],
+                             ref_fit=r['source'][1], k=2.0, **r['params'], **r['kc'], kc_kc_tau=0.05, time_stim_end=0.5,
+                             rate_on=float(st['responses'].to_numpy(dtype=float).mean()),
+                             rate_acute_off=float(off['responses'].to_numpy(dtype=float).mean()),
+                             identity_exact=bool(r['on']['counts_differ'] == 0 and r['off']['counts_differ'] == 0)))
+    df = pd.DataFrame(rows)
+    df.to_csv(out_dir() / 'variants.csv', index=False)
+    return df
 
 
 def comparison_table() -> None:
-    raise NotImplementedError
+    """comparison_table.md: B0's identities, the stage table and the steps (flies and model, by group), the noise check,
+    the verdict, the step target, B5, the PN stage and D1 if run; and the figures."""
+    import subprocess
+    o = out_dir()
+    commit = subprocess.run(['git', 'rev-parse', '--short', 'HEAD'], cwd=H.HERE, capture_output=True, text=True).stdout.strip()
+    L = [f"# E90: the model's stages against the flies' stages", '',
+         f'Generated by experiments/E90_model_stages.py at {commit}. Distances are 1 - Pearson r across units unless '
+         'stated; groups of the 66 megamat pairs; flies\' values with 90 % intervals from resampling each stage\'s flies '
+         f'(Yang\'s recordings), {N_BOOT} resamples. The model is C2\'s family (the breadth-2 APL-effect fit, 6.8 %, the '
+         '0.5 s pulse) on E72 part B\'s eight wirings at their own fits; "population" is the mean over the eight of the '
+         'pair distances.', '']
+    idn = json.loads((o / 'identity.json').read_text())
+    ci = idn['claw_identity']
+    L += ['## B0: identities', '',
+          f"- Every wiring's run with the rates saved reproduces its saved fit exactly, APL on and off: "
+          f"{all(v.get('exact') for k, v in idn.items() if k.startswith('run_'))} "
+          f"({sum(1 for k in idn if k.startswith('run_'))} runs, counts and responses differing: "
+          f"{sum(v.get('counts_differ', 0) + v.get('responses_differ', 0) for k, v in idn.items() if k.startswith('run_'))}).",
+          f"- Claw inputs (wiring x bouton rate minus APL's inhibition at the step before, clipped at 0) against olfsysm's "
+          f"claw_sims on the real wiring ({', '.join(ci['odors'])}; {ci['n_claws']} claws, {ci['steps_compared']} odor-steps): "
+          f"{ci['claw_values_differ']} values differ (largest |difference| {ci['claw_max_abs_diff']:g}); the run's counts "
+          f"equal C2's saved counts of those odors ({ci['counts_differ']} differ); one bouton per claw: {ci['one_bouton_per_claw']}.",
+          '']
+    fl_keys = [('orn', 'ORNs (olfdb, 9 flies, 36 glomeruli)'), ('orn_pebbled28', 'ORNs, 28 shared glomeruli'),
+               ('pn_dend', 'PN dendrites (GH146, 7 flies, 29 glomeruli)'), ('pn_dend28', 'PN dendrites, 28 shared glomeruli'),
+               ('bouton_measured', 'PN boutons as measured (5 flies)'), ('bouton_noise_removed', 'PN boutons, noise removed'),
+               ('claw_measured', 'KC claws as measured (4 flies)'), ('claw_noise_removed', 'KC claws, noise removed'),
+               ('soma_remy', "KC somata, Remy's wild type (18 flies)"), ('soma_ctrl', 'KC somata, control flies (11 recordings)'),
+               ('soma_tnt', 'KC somata, APL output blocked (TNT) (8 recordings)'), ('soma_ctrl_cos', 'KC somata, control flies, cosine'),
+               ('soma_tnt_cos', 'KC somata, APL output blocked (TNT), cosine')]
+    L += ['## A1 and B: the stage table by group', '', '### The flies', '',
+          '| stage | ' + ' | '.join(TABLE_GROUP_HEAD[g] for g in TABLE_GROUPS) + ' |',
+          '|---|' + '---:|' * len(TABLE_GROUPS)]
+    for k, lab in fl_keys:
+        fl = flies_group(k)
+        L.append(f'| {lab} | ' + ' | '.join(_flies_cell(fl, g) for g in TABLE_GROUPS) + ' |')
+    sm = pd.read_csv(o / 'stages_model.csv')
+    pop = sm[sm.wiring == 'population']
+
+    def mrow(stage, subset, share, cond, reading):
+        x = pop[(pop.stage == stage) & (pop.subset == subset) & (pop.share == share) & (pop.cond == cond) & (pop.reading == reading)]
+        w = sm[(sm.wiring != 'population') & (sm.stage == stage) & (sm.subset == subset) & (sm.share == share)
+               & (sm.cond == cond) & (sm.reading == reading)]
+        if not len(x):
+            return None
+        return ' | '.join(f"{_f(x.iloc[0][g])} ({_f(w[g].min(), '.2f')}-{_f(w[g].max(), '.2f')})" for g in TABLE_GROUPS)
+    L += ['', '### The model (population of eight; the wirings\' range in parentheses)', '',
+          '| stage | subset | share of the spike signal | APL | reading | ' + ' | '.join(TABLE_GROUP_HEAD[g] for g in TABLE_GROUPS) + ' |',
+          '|---|---|---:|---|---|' + '---:|' * len(TABLE_GROUPS)]
+    for stage, subsets, shares, readings in (('pn', ('shared', 'all'), (0.0,), ('change', 'rate', 'minsub')),
+                                             ('bouton', ('shared', 'all'), (0.0,), MODEL_READINGS),
+                                             ('claw', ('all', 'shared'), CLAW_SPIKE_SHARES, MODEL_READINGS),
+                                             ('soma', ('all',), (0.0,), ('cal_pearson', 'cal_cosine', 'raw_pearson', 'raw_cosine'))):
+        for subset in subsets:
+            for share in shares:
+                for cond in ('on', 'off'):
+                    for rd in readings:
+                        r = mrow(stage, subset, share, cond, rd)
+                        if r is not None:
+                            L.append(f'| {stage} | {subset} | {share:g} | {cond} | {rd} | {r} |')
+    # steps
+    sf = pd.read_csv(o / 'steps_flies_summary.csv')
+    L += ['', '## A2: the flies\' steps (somata minus claws)', '',
+          '| step | claws | ' + ' | '.join(TABLE_GROUP_HEAD[g] for g in TABLE_GROUPS) +
+          ' | ester minus alcohol [90 %] | r with the APL effect | r with the common error | halves agree | floor | SD over pairs |',
+          '|---|---|' + '---:|' * (len(TABLE_GROUPS) + 6)]
+    stp = pd.read_csv(o / 'steps_flies.csv')
+    for _, r in sf.iterrows():
+        x = stp[(stp.step == r.step) & (stp.claw == r.claw) & (stp.kind == 'group')].set_index('group')
+        L.append(f'| {r.step} | {r.claw[5:]} | ' + ' | '.join(_flies_cell(x, g) for g in TABLE_GROUPS) +
+                 f" | {_f(r.ester_minus_alcohol)} [{_f(r.ester_minus_alcohol_lo, '.2f')}, {_f(r.ester_minus_alcohol_hi, '.2f')}]"
+                 f' | {_f(r.r_effect)} | {_f(r.r_common_error)} | {_f(r.halves_common)} | {_f(r.floor)} | {_f(r.sd_over_pairs)} |')
+    L += ['', 'on_remy: Remy\'s wild-type somata minus the claws; on_ctrl / off_tnt: Yang\'s control flies / APL output '
+          'blocked (TNT) minus the claws (Pearson; _cos: the somata as cosine). Halves: Pearson r over the 66 pairs between '
+          'the steps from the two halves of the claw flies (three splits of two and two), all of the somata\'s flies in '
+          'both; floor: the rms over the 66 pairs (means removed) of a resampled step minus the measured one.', '']
+    st = json.loads((o / 'step_target.json').read_text())
+    L += ['## The step target', '', f"Rule: {st['rule']}.", '']
+    for k, v in st['readings'].items():
+        L.append(f"- claws {k}: halves agree {v['halves_agreement']:.3f} (somata also split: {v['halves_agreement_split_somata']:.3f}), "
+                 f"floor {v['floor']:.4f} against half its SD {0.5 * v['sd_over_pairs']:.4f}: usable {v['usable']}.")
+    L += [f"- Usable: {st['usable']}.", '']
+    # model steps
+    sg = _group_table(pd.read_csv(o / 'steps_model.csv'), ['step', 'soma', 'subset', 'share', 'reading', 'wiring'])
+    L += ['## B: the model\'s steps (somata minus its claw stage with APL on)', '',
+          '| step | somata | claws (subset, share, reading) | ' + ' | '.join(TABLE_GROUP_HEAD[g] for g in TABLE_GROUPS) + ' |',
+          '|---|---|---|' + '---:|' * len(TABLE_GROUPS)]
+    for step in ('on', 'off'):
+        for soma in (SOMA_STEP_READING,) + SOMA_STEP_BESIDE:
+            for sub, sh, rd in (('all', 0.0, 'session_z'), ('all', 0.0, 'rate'), ('all', 0.0, 'noisy_nr'), ('all', 0.25, 'session_z'),
+                                ('all', 0.5, 'session_z'), ('shared', 0.0, 'session_z')):
+                if soma != SOMA_STEP_READING and (sub, sh, rd) != ('all', 0.0, 'session_z'):
+                    continue
+                x = sg[(sg.step == step) & (sg.soma == soma) & (sg.subset == sub) & (sg.share == sh) & (sg.reading == rd)]
+                pw, ww = x[x.wiring == 'population'], x[x.wiring != 'population']
+                if not len(pw):
+                    continue
+                L.append(f'| {step} | {soma} | {sub}, {sh:g}, {rd} | ' + ' | '.join(
+                    f"{_f(pw.iloc[0][g])} ({_f(ww[g].min(), '.2f')}-{_f(ww[g].max(), '.2f')})" for g in TABLE_GROUPS) + ' |')
+    # noise check
+    nc = pd.read_csv(o / 'noise_check.csv')
+    pnc = nc[nc.wiring == 'population']
+    L += ['', '## The check of the noise removal', '',
+          f'On the model\'s known values (the session z reading), three trials per odor at the flies\' per-odor block-to-block '
+          f'reliability (boutons {remy_reliability("bouton")[list(ODORS)].to_numpy().mean():.3f}, claws '
+          f'{remy_reliability("claw")[list(ODORS)].to_numpy().mean():.3f} on average), as many pseudo-flies as the stage has '
+          f'flies, {N_NOISE_REPS} replicates; tolerance {NOISE_CHECK_TOL}.', '',
+          '| stage | largest abs error of the noise-removed estimate (population, every group, subset, share, APL on / off) | '
+          'largest over single wirings | as measured: mean error (attenuation) | passes |', '|---|---:|---:|---:|---|']
+    for stg in ('bouton', 'claw'):
+        a, b = pnc[pnc.stage == stg], nc[(nc.stage == stg) & (nc.wiring != 'population')]
+        L.append(f'| {stg} | {_f(a.error.abs().max(), ".4f")} | {_f(b.error.abs().max(), ".4f")} | '
+                 f'{_f(a.error_measured.mean(), ".3f")} | {bool(a.within.all())} |')
+    # verdict
+    v = json.loads((o / 'verdict.json').read_text())
+    vr = pd.read_csv(o / 'verdict_rows.csv')
+    L += ['', '## C: the verdict', '',
+          f"Readings: the noise check {v['noise_check_passed']}; subsets {v['verdict_subsets']} (the steps on the claws' "
+          f"subset); the model's steps with the somata under the calibrated readout (Pearson) against Yang's control flies "
+          f"and APL output blocked (TNT) minus the claws.", '',
+          '| group | verdict | boutons | claws | step with APL on | step without APL | PN stage (beside) | error in the effect '
+          '| verdict with both subsets as readings |', '|---|---|---|---|---|---|---|---:|---|']
+
+    def el(e):
+        return f"{e['n_differ']}/{e['n_readings']}" + (' differs' if e['differs'] else ' mixed' if e['mixed'] else '')
+    for g in GROUPS:
+        x = v['groups'][g]
+        L.append(f"| {GROUP_NAMES[g]} | {x['verdict']} | {el(x['elements']['bouton'])} | {el(x['elements']['claw'])} | "
+                 f"{el(x['elements']['step_on'])} | {el(x['elements']['step_off'])} | {el(x['pn'])} | "
+                 f"{_f(v['effect_error'][g], '+.3f')} | {v['both_subsets'][g]['verdict']} |")
+    L += ['', 'Cells: readings in which the element differs (all of the rule\'s three conditions) / readings read.', '',
+          '### The comparisons behind it (primary subsets; model population against the flies)', '',
+          '| element | group | model reading | flies | share | model | flies [90 %] | wirings on the side | differs |',
+          '|---|---|---|---|---:|---:|---:|---:|---|']
+    vp = vr[vr.verdict_subsets.isin(['primary', 'pn'])]
+    for _, r in vp[vp.group.isin(TABLE_GROUPS)].iterrows():
+        L.append(f"| {r.element} | {r.group} | {r.model_reading} | {r.flies_reading} | {r.share:g} | {_f(r.model)} | "
+                 f"{_f(r.flies)} [{_f(r.lo, '.2f')}, {_f(r.hi, '.2f')}] | {int(r.n_same_side)}/{int(r.n_wirings)} | {bool(r.differs)} |")
+    # PN stage
+    ps = pd.read_csv(o / 'pn_stage.csv')
+    L += ['', '## B1: the PN stage on the 28 shared glomeruli (outcome g)', '',
+          '| reading | r of the entries with the PN dendrites | with the ORN dF/F | with the ORN input | CV of the per-odor totals | '
+          'r of the totals with the PN dendrites\' | ' + ' | '.join(f'distance, {TABLE_GROUP_HEAD[g]}' for g in TABLE_GROUPS) + ' |',
+          '|---|' + '---:|' * (5 + len(TABLE_GROUPS))]
+    for _, r in ps.iterrows():
+        L.append(f"| {r.reading} | {_f(r.get('r_entries_pn_dend'))} | {_f(r.get('r_entries_orn_dff'))} | "
+                 f"{_f(r.get('r_entries_orn_input'))} | {_f(r.cv_totals)} | {_f(r.get('r_totals_pn_dend'))} | " +
+                 ' | '.join(_f(r[f'dist_{g}']) for g in TABLE_GROUPS) + ' |')
+    a3 = pd.read_csv(o / 'al_transfer.csv')
+    sm3 = a3[a3.section == 'summary']
+    L += ['', 'A3 (the flies, linear dF/F and through the saturating map, the bound for the indicator): ' + '; '.join(
+        f"{r.map} {r.stat} {_f(r.value)} [{_f(r.lo, '.2f')}, {_f(r.hi, '.2f')}]" for _, r in sm3.iterrows()) + '.', '']
+    # B5
+    if (o / 'stages_b5.csv').exists():
+        b5 = pd.read_csv(o / 'stages_b5.csv')
+        rz = json.loads((o / 'b5_realism.json').read_text())
+        L += ['## B5: the flies\' 2 s pulse (E82\'s re-held B1_C2 point), stages over 0.5-2 s, against the 0.5 s pulse (real wiring)', '',
+              '| stage | subset | APL | reading | pulse | ' + ' | '.join(TABLE_GROUP_HEAD[g] for g in TABLE_GROUPS) + ' |',
+              '|---|---|---|---|---|' + '---:|' * len(TABLE_GROUPS)]
+        for stage, sub, rd in (('pn', 'shared', 'change'), ('bouton', 'shared', 'session_z'), ('bouton', 'shared', 'rate'),
+                               ('claw', 'all', 'session_z'), ('claw', 'all', 'rate'), ('soma', 'all', 'cal_pearson'),
+                               ('soma', 'all', 'raw_cosine')):
+            for cond in ('on', 'off'):
+                for w, lab in (('real', '0.5 s'), ('real_pulse2', '2 s')):
+                    x = b5[(b5.wiring == w) & (b5.stage == stage) & (b5.subset == sub) & (b5.share == 0.0) & (b5.cond == cond) & (b5.reading == rd)]
+                    if len(x):
+                        L.append(f'| {stage} | {sub} | {cond} | {rd} | {lab} | ' + ' | '.join(_f(x.iloc[0][g]) for g in TABLE_GROUPS) + ' |')
+        L += ['', '### Realism of B5\'s point (the four bands, the rule of 2026-11-10 16:10; the earlier rule beside)', '',
+              '| statistic | 2 s pulse (B5) | 0.5 s pulse (C2, real wiring) | band |', '|---|---:|---:|---|',
+              f"| APL-on response rate | {_f(rz['pulse2']['rate_on'], '.4f')} | {_f(rz['pulse05_real']['rate_on'], '.4f')} | 0.045-0.085 |",
+              f"| APL-off / APL-on ratio | {_f(rz['pulse2']['ratio'])} | {_f(rz['pulse05_real']['ratio'])} | 1.6-2.9 |",
+              f"| response rate ρ, APL on | {_f(rz['pulse2']['rate_rho_on'])} | {_f(rz['pulse05_real']['rate_rho_on'])} | 0.37 or more |",
+              f"| odors per KC, distance, APL on | {_f(rz['pulse2']['opk_on_tv'])} | {_f(rz['pulse05_real']['opk_on_tv'])} | 0.155 |",
+              f"| odors per KC, distance, APL off | {_f(rz['pulse2']['opk_off_tv'])} | {_f(rz['pulse05_real']['opk_off_tv'])} | 0.223 |",
+              f"| largest spike count, APL on / off | {rz['pulse2']['max_count_on']} / {rz['pulse2']['max_count_off']} | "
+              f"{rz['pulse05_real']['max_count_on']} / {rz['pulse05_real']['max_count_off']} | |",
+              f"| flag | {rz['pulse2']['realism_flag'] or 'none'} | {rz['pulse05_real']['realism_flag'] or 'none'} | |",
+              f"| flag, earlier rule (Yang's z) | {rz['pulse2']['realism_flag_zcrit'] or 'none'} | {rz['pulse05_real']['realism_flag_zcrit'] or 'none'} | |", '']
+    if (o / 'd1_steps.csv').exists():
+        d1 = pd.read_csv(o / 'd1_steps.csv')
+        rec = json.loads((o / 'd1.json').read_text())
+        L += ['## D1: the firing-ceiling family (fit 1, P1, P2, M1) beside C2\'s on the same four wirings', '',
+              '| family | element | somata | claws reading | ' + ' | '.join(TABLE_GROUP_HEAD[g] for g in TABLE_GROUPS) + ' |',
+              '|---|---|---|---|' + '---:|' * len(TABLE_GROUPS)]
+        for fam in ('C2_S4', 'fc_S4'):
+            for step in ('on', 'off'):
+                x = d1[(d1.family == fam) & (d1.step == step) & (d1.soma == SOMA_STEP_READING) & (d1.subset == 'all')
+                       & (d1.share == 0.0) & (d1.reading == 'session_z')]
+                if len(x):
+                    L.append(f'| {fam} | step {step} | {SOMA_STEP_READING} | all, session_z | ' + ' | '.join(_f(x.iloc[0][g]) for g in TABLE_GROUPS) + ' |')
+            for stage, sub in (('bouton', 'shared'), ('claw', 'all')):
+                x = d1[(d1.family == fam) & (d1.step == 'stage') & (d1.stage == stage) & (d1.subset == sub) & (d1.share == 0.0)
+                       & (d1.cond == 'on') & (d1.reading == 'session_z')]
+                if len(x):
+                    L.append(f'| {fam} | {stage} (APL on) | | {sub}, session_z | ' + ' | '.join(_f(x.iloc[0][g]) for g in TABLE_GROUPS) + ' |')
+        mt = rec.get('main_target', {})
+        if mt:
+            L += ['', '| family (population of four) | APL-effect loss (z8) | pattern part | ρ on the per-pair APL effect | mean APL effect | '
+                  'error, ester | error, alcohol |', '|---|---:|---:|---:|---:|---:|---:|']
+            for fam, r in mt.items():
+                L.append(f"| {fam} | {_f(r['z8_loss'], '.4f')} | {_f(r['z8_pattern'], '.4f')} | {_f(r['z8_rho'])} | "
+                         f"{_f(r['mean_effect'], '+.3f')} | {_f(r['err_ester'], '+.3f')} | {_f(r['err_alcohol'], '+.3f')} |")
+        L.append('')
+    (o / 'comparison_table.md').write_text('\n'.join(L) + '\n')
+    write_variants()
+    figures()
+
+
+def figures() -> None:
+    """E90_stages.png (the group means by stage, flies with intervals and the model's population with its wirings, ester
+    and alcohol groups and the other two) and E90_steps.png (per pair: the flies' step in wild-type flies against the
+    APL effect; the model's steps against the flies')."""
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    o = out_dir()
+    sm = pd.read_csv(o / 'stages_model.csv')
+    fig, axes = plt.subplots(1, 4, figsize=(17, 4.6), sharey=True)
+    stages = [('ORNs', 'orn', ('pn', 'shared', 0.0, 'on', 'change'), None),
+              ('PN dendrites', 'pn_dend28', ('pn', 'shared', 0.0, 'on', 'change'), 'model PNs'),
+              ('PN boutons', 'bouton_noise_removed', ('bouton', 'shared', 0.0, 'on', 'session_z'), None),
+              ('KC claws', 'claw_noise_removed', ('claw', 'all', 0.0, 'on', 'session_z'), None),
+              ('somata, APL on', 'soma_ctrl', ('soma', 'all', 0.0, 'on', 'cal_pearson'), None),
+              ('somata, APL off', 'soma_tnt', ('soma', 'all', 0.0, 'off', 'cal_pearson'), None)]
+    for ax, g in zip(axes, ('ester', 'alcohol', 'ester_alcohol', 'other')):
+        x = np.arange(len(stages))
+        fm = [flies_group(k).loc[g] for _, k, _, _ in stages]
+        ax.errorbar(x - 0.08, [f['mean'] for f in fm], yerr=[[f['mean'] - f['lo'] for f in fm], [f['hi'] - f['mean'] for f in fm]],
+                    fmt='o-', color='k', lw=1.4, capsize=3, label='flies (90 % interval)')
+        for i, (_, _, (st, sub, sh, cond, rd), _) in enumerate(stages):
+            if i == 0:
+                continue
+            sel = sm[(sm.stage == st) & (sm.subset == sub) & (sm.share == sh) & (sm.cond == cond) & (sm.reading == rd)]
+            w = sel[sel.wiring != 'population'][g].to_numpy()
+            ax.plot(np.full(len(w), i + 0.08), w, '.', color='#d9480f', alpha=0.5, ms=5)
+        mv = [np.nan] + [float(sm[(sm.stage == st) & (sm.subset == sub) & (sm.share == sh) & (sm.cond == cond) &
+                                  (sm.reading == rd) & (sm.wiring == 'population')][g].iloc[0]) for _, _, (st, sub, sh, cond, rd), _ in stages[1:]]
+        ax.plot(x + 0.08, mv, 's--', color='#d9480f', lw=1.2, ms=5, label='model, population of 8 (dots: wirings)')
+        ax.set_xticks(x)
+        ax.set_xticklabels([s[0] for s in stages], rotation=35, ha='right', fontsize=8)
+        ax.set_title(GROUP_NAMES[g], fontsize=10)
+        ax.grid(True, color='0.9', lw=0.6)
+        ax.spines[['top', 'right']].set_visible(False)
+    axes[0].set_ylabel('distance between two odors\n(1 - Pearson r across units), group mean')
+    axes[0].legend(fontsize=7.5, frameon=False, loc='lower right')
+    fig.suptitle('Stages by group: flies (ORNs and PN dendrites per fly; boutons and claws noise removed; somata: control '
+                 'flies / APL output blocked (TNT)) and the model (PN rate changes, session z of boutons and claws, somata '
+                 'under the calibrated readout)', fontsize=9)
+    fig.tight_layout()
+    fig.savefig(o / 'E90_stages.png', dpi=150)
+    plt.close(fig)
+    # the steps per pair
+    S = stage_samples()
+    stp = pd.read_csv(o / 'steps_flies.csv')
+    pr = stp[stp.kind == 'pair']
+    eff = _target_effect()
+    ms = pd.read_csv(o / 'steps_model.csv')
+    ms = ms[(ms.wiring == 'population') & (ms.soma == SOMA_STEP_READING) & (ms.subset == 'all') & (ms.share == 0.0)
+            & (ms.reading == 'session_z')]
+    masks = group_masks(megamat_pairs())
+    col = np.where(masks['ester'], '#2b6cb0', np.where(masks['alcohol'], '#d9480f', np.where(masks['ester_alcohol'], '#6b46c1', '0.6')))
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4.6))
+
+    def series(df, step, claw):
+        x = df[(df.step == step) & (df.claw == claw)]
+        return pd.Series(x['mean'].to_numpy(), index=pd.MultiIndex.from_arrays([x.odor_a, x.odor_b])).reindex(megamat_pairs())
+    on_w = series(pr, 'on_remy', 'claw_noise_removed')
+    ax = axes[0]
+    ax.scatter(eff.to_numpy(), on_w.to_numpy(), c=col, s=18)
+    ax.set_xlabel("per-pair APL effect, KCs (control flies minus APL output blocked (TNT)), cosine")
+    ax.set_ylabel("step from claws to somata, wild type (Remy's somata minus claws, noise removed)")
+    ax.set_title(f'flies: r = {_corr(eff, on_w):.2f}', fontsize=10)
+    for ax, (step, flstep) in zip(axes[1:], (('on', 'on_ctrl'), ('off', 'off_tnt'))):
+        fv = series(pr, flstep, 'claw_noise_removed')
+        mv = ms[ms.step == step]
+        mv = pd.Series(mv.value.to_numpy(), index=pd.MultiIndex.from_arrays([mv.odor_a, mv.odor_b])).reindex(megamat_pairs())
+        ax.scatter(fv.to_numpy(), mv.to_numpy(), c=col, s=18)
+        lim = [min(np.nanmin(fv), np.nanmin(mv)) - 0.05, max(np.nanmax(fv), np.nanmax(mv)) + 0.05]
+        ax.plot(lim, lim, ':', color='0.5', lw=1)
+        ax.set_xlabel(f"flies: {'control flies' if step == 'on' else 'APL output blocked (TNT)'} minus claws (noise removed)")
+        ax.set_ylabel(f"model: somata APL {step} (calibrated readout) minus claws (session z), population")
+        ax.set_title(f"step {'with APL on' if step == 'on' else 'without APL'}: r = {_corr(fv, mv):.2f}", fontsize=10)
+    for ax in axes:
+        ax.grid(True, color='0.9', lw=0.6)
+        ax.spines[['top', 'right']].set_visible(False)
+    axes[0].scatter([], [], c='#2b6cb0', label='ester group')
+    axes[0].scatter([], [], c='#d9480f', label='alcohol group')
+    axes[0].scatter([], [], c='#6b46c1', label='ester with alcohol')
+    axes[0].scatter([], [], c='0.6', label='other pairs')
+    axes[0].legend(fontsize=7.5, frameon=False)
+    fig.suptitle('The step from claws to somata, per megamat pair (1 - Pearson r)', fontsize=10)
+    fig.tight_layout()
+    fig.savefig(o / 'E90_steps.png', dpi=150)
+    plt.close(fig)
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
-    ap.add_argument('--part', required=True, choices=['A', 'B0', 'B', 'B5', 'Bscore', 'C', 'D1', 'D2', 'table'])
+    ap.add_argument('--part', required=True, choices=['A', 'B0', 'B', 'B5', 'B5score', 'Bscore', 'C', 'D1', 'D2', 'table'])
     ap.add_argument('--wirings', nargs='*', default=None)
     a = ap.parse_args()
-    {'A': part_a, 'B0': part_b0, 'B': lambda: part_b(a.wirings), 'B5': part_b5, 'Bscore': part_bscore, 'C': part_c,
+    {'A': part_a, 'B0': part_b0, 'B': lambda: part_b(a.wirings), 'B5': part_b5, 'B5score': part_b5score,
+     'Bscore': part_bscore, 'C': part_c,
      'D1': part_d1, 'D2': part_d2, 'table': comparison_table}[a.part]()
 
 
