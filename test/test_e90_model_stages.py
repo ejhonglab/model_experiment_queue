@@ -159,3 +159,21 @@ def test_claw_inputs_reproduce_claw_sims():
     res = X.claw_identity()
     assert res['counts_differ'] == 0
     assert res['claw_values_differ'] == 0 and res['exact']
+
+
+def test_cross_half_recovers_the_mean_pattern():
+    # flies = a shared pattern plus fly-specific deviations; the cross-half estimate recovers the shared pattern's
+    # distances, while the per-fly distances are larger
+    rng = np.random.default_rng(4)
+    n_odors, n_gl, n_flies = len(X.ODORS), 400, 8
+    base = rng.standard_normal((n_odors, n_gl))
+    base[1] = 0.8 * base[0] + 0.6 * base[1]
+    flies = base[None] + 0.7 * rng.standard_normal((n_flies, n_odors, n_gl))
+    est = X.cross_half_distances(flies)
+    truth = X._pairs_from_square(1 - np.corrcoef(base), X.ODORS)
+    assert float((est - truth).abs().mean()) < 0.03
+    pair = X._canon(X.ODORS[0], X.ODORS[1])
+    per_fly = np.mean([X._pairs_from_square(1 - np.corrcoef(f), X.ODORS)[pair] for f in flies])
+    assert abs(est[pair] - truth[pair]) < 0.03
+    # the correlated pair is farther apart per fly (the fly-specific deviations attenuate it)
+    assert per_fly - truth[pair] > 0.1

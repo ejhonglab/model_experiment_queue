@@ -1899,6 +1899,178 @@ def part_d2() -> pd.DataFrame:
     return df
 
 
+# ---------------------------------------------------------------------------
+# the addendum (2026-11-13): the antennal lobe's distances with the flies' noise removed, and the steps by soma reading
+
+def al_trials(kind: str, glomeruli: Sequence[str]) -> Tuple[np.ndarray, List[str]]:
+    """The megamat trials of al_analysis's sent_to_remy/2023-10-29 table `kind` ('GH146' / 'pebbled') on `glomeruli`:
+    (flies x trials x odors x glomeruli dF/F, NaN where a fly lacks a glomerulus; the flies' labels)."""
+    df = pd.read_pickle(gh146_dir() / f'{kind}_ij_certain-roi_stats.p')
+    m = df.loc['megamat']
+    m = m[m.index.get_level_values('odor2') == 'solvent']
+    m = m.droplevel(['is_pair', 'odor2'])
+    m.index = pd.MultiIndex.from_arrays([[H.odor_abbrev(o) for o in m.index.get_level_values('odor1')],
+                                         m.index.get_level_values('repeat')], names=['odor', 'repeat'])
+    reps = sorted(m.index.get_level_values('repeat').unique())
+    flies, out = [], []
+    for (date, fly), sub in m.T.groupby(level=['date', 'fly_num']):
+        x = sub.droplevel(['date', 'fly_num']).T                 # (odor, repeat) x glomeruli
+        a = np.full((len(reps), len(ODORS), len(glomeruli)), np.nan)
+        for ti, r in enumerate(reps):
+            y = x.xs(r, level='repeat').reindex(index=list(ODORS), columns=list(glomeruli))
+            a[ti] = y.to_numpy(dtype=float)
+        flies.append(f'{pd.Timestamp(date).date()}/{int(fly)}')
+        out.append(a)
+    return np.stack(out), flies
+
+
+def _corr_rows(A: np.ndarray, B: np.ndarray) -> np.ndarray:
+    """Pearson r between every row of A and every row of B (odors x units each)."""
+    a = A - A.mean(axis=1, keepdims=True)
+    b = B - B.mean(axis=1, keepdims=True)
+    a /= np.linalg.norm(a, axis=1, keepdims=True)
+    b /= np.linalg.norm(b, axis=1, keepdims=True)
+    return a @ b.T
+
+
+def cross_half_distances(fly_means: np.ndarray, splits: Optional[int] = None, seed: int = 0) -> pd.Series:
+    """The distances between the flies' mean patterns with the flies' noise removed (flies x odors x glomeruli trial
+    means, NaN where a fly lacks a glomerulus): for each split of the flies into two halves, the correlations of odor i's
+    half-A mean with odor j's half-B mean (and the swap, averaged), and of each odor's two half means (its reliability,
+    the diagonal), on the glomeruli both halves have; averaged over the splits (all of them, or `splits` at random),
+    then 1 - r_ij / sqrt(r_ii r_jj). The 66 megamat pairs."""
+    n = fly_means.shape[0]
+    allsp = [h for h in combinations(range(n), n // 2)]
+    if splits is not None and splits < len(allsp):
+        rng = np.random.default_rng(seed)
+        allsp = [allsp[i] for i in rng.choice(len(allsp), splits, replace=False)]
+    acc, k = np.zeros((len(ODORS), len(ODORS))), 0
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', RuntimeWarning)
+        for h in allsp:
+            rest = [i for i in range(n) if i not in h]
+            A, B = np.nanmean(fly_means[list(h)], axis=0), np.nanmean(fly_means[rest], axis=0)
+            ok = ~(np.isnan(A).any(axis=0) | np.isnan(B).any(axis=0))
+            C = _corr_rows(A[:, ok], B[:, ok])
+            acc += 0.5 * (C + C.T)
+            k += 1
+    return _pairs_from_square(disattenuate(acc / k), ODORS)
+
+
+def trial_noise_removed(trials: np.ndarray) -> pd.Series:
+    """Per fly, the trial noise removed as Remy's block averages remove it (`block_average_distances` on the fly's
+    trials, on the glomeruli it has), then the mean over the flies; the 66 megamat pairs."""
+    rows = []
+    for f in range(trials.shape[0]):
+        x = trials[f]
+        ok = ~np.isnan(x).any(axis=(0, 1))
+        rows.append(_pairs_from_square(block_average_distances(x[:, :, ok])[1], ODORS))
+    return pd.concat(rows, axis=1).mean(axis=1)
+
+
+def _jackknife(fn, n: int) -> Tuple[pd.Series, pd.Series]:
+    """Delete-one jackknife over flies of a pair-Series statistic `fn(index_list)`: (estimate on all flies, SE)."""
+    full = fn(list(range(n)))
+    loo = pd.concat([fn([i for i in range(n) if i != j]) for j in range(n)], axis=1)
+    se = np.sqrt((n - 1) / n * ((loo.sub(loo.mean(axis=1), axis=0)) ** 2).sum(axis=1))
+    return full, se
+
+
+def al_noise_removed() -> pd.DataFrame:
+    """pn_stage_noise_removed.csv: the PN dendrites (GH146) and the ORNs (pebbled) on the 28 shared glomeruli, and the
+    ORNs on the 36 input glomeruli, in three readings: per fly then averaged (the note's), per fly with the trial noise
+    removed (as Remy's block averages), and across flies with the flies' noise removed (`cross_half_distances`, the
+    reading of the flies' mean pattern, which the model's input is); per group, with a 90 % interval from a delete-one
+    jackknife over flies (normal, 1.645 SE; for the per-fly readings, of the mean over flies). Beside: the model's PN
+    stage (rate change, rate, lowest rate subtracted; population of eight, all wirings alike) and the rule of part C
+    against each reading."""
+    sh = shared_glomeruli()
+    model36 = list(H.apl16_orn_deltas().index)
+    rows = []
+    sm = pd.read_csv(out_dir() / 'stages_model.csv')
+    for key, kind, gl in (('pn_dend28', 'GH146', sh), ('orn_pebbled28', 'pebbled', sh), ('orn_pebbled36', 'pebbled', model36)):
+        tr, flies = al_trials(kind, gl)
+        means = np.nanmean(tr, axis=1)                              # flies x odors x glomeruli
+        n = tr.shape[0]
+
+        def per_fly(idx):
+            out = []
+            for f in idx:
+                x = means[f]
+                ok = ~np.isnan(x).any(axis=0)
+                out.append(odor_distances(pd.DataFrame(x[:, ok].T, columns=list(ODORS))))
+            return pd.concat(out, axis=1).mean(axis=1)
+        readings = {'per_fly': per_fly, 'per_fly_trial_noise_removed': lambda idx: trial_noise_removed(tr[idx]),
+                    'across_flies_noise_removed': lambda idx: cross_half_distances(means[idx])}
+        for rd, fn in readings.items():
+            est, se = _jackknife(fn, n)
+            gm = group_means(est)
+            # the group means' SE from the jackknife of the group means themselves
+            loo = [group_means(fn([i for i in range(n) if i != j])) for j in range(n)]
+            for g in GROUPS:
+                v = np.array([x[g] for x in loo])
+                gse = float(np.sqrt((n - 1) / n * ((v - v.mean()) ** 2).sum()))
+                row = dict(key=key, table=kind, n_glomeruli=len(gl), n_flies=n, reading=rd, group=g, mean=gm[g],
+                           se=gse, lo=gm[g] - 1.645 * gse, hi=gm[g] + 1.645 * gse)
+                if key == 'pn_dend28':
+                    for mr in ('change', 'rate', 'minsub'):
+                        x = sm[(sm.stage == 'pn') & (sm.subset == 'shared') & (sm.cond == 'on') & (sm.reading == mr)]
+                        pop = float(x[x.wiring == 'population'][g].iloc[0])
+                        r = differs(pop, x[x.wiring != 'population'][g].to_numpy(), gm[g], row['lo'], row['hi'])
+                        row[f'model_{mr}'] = pop
+                        row[f'differs_{mr}'] = r['differs']
+                rows.append(row)
+    df = pd.DataFrame(rows)
+    df.to_csv(out_dir() / 'pn_stage_noise_removed.csv', index=False)
+    return df
+
+
+STEP_SOMA_READINGS = ('cal_pearson', 'raw_pearson', 'cal_cosine', 'raw_cosine')
+
+
+def steps_by_reading() -> pd.DataFrame:
+    """steps_by_reading.csv: the model's two steps (somata minus its APL-on claws under the session z-score, drive alone)
+    from all claws, the input glomeruli's and the shared glomeruli's, with the somata as raw counts and under the
+    calibrated readout, Pearson and cosine (population and the wirings' range), beside the flies' steps (the control
+    flies / APL output blocked (TNT) minus the noise-removed claws, the somata as Pearson or cosine); and part C's rule
+    applied to each (for information: the verdict reads the calibrated readout as Pearson)."""
+    ms = pd.read_csv(out_dir() / 'steps_model.csv')
+    gs = _group_table(ms[(ms.share == 0.0) & (ms.reading == 'session_z')], ['step', 'soma', 'subset', 'wiring'])
+    rows = []
+    for step in ('on', 'off'):
+        for soma in STEP_SOMA_READINGS:
+            meas = soma.split('_')[1]
+            fl = flies_step_group(FLY_STEP_OF[(step, meas)], 'noise_removed')
+            for sub in ('input', 'all', 'shared'):
+                x = gs[(gs.step == step) & (gs.soma == soma) & (gs.subset == sub)]
+                pop, wir = x[x.wiring == 'population'].iloc[0], x[x.wiring != 'population']
+                for g in GROUPS:
+                    r = differs(float(pop[g]), wir[g].to_numpy(), float(fl.loc[g, 'mean']), float(fl.loc[g, 'lo']),
+                                float(fl.loc[g, 'hi']))
+                    rows.append(dict(step=step, soma=soma, claws=sub, group=g, model=float(pop[g]),
+                                     model_min=float(wir[g].min()), model_max=float(wir[g].max()), flies=float(fl.loc[g, 'mean']),
+                                     flies_lo=float(fl.loc[g, 'lo']), flies_hi=float(fl.loc[g, 'hi']),
+                                     flies_step=FLY_STEP_OF[(step, meas)], diff=r['diff'], n_same_side=r['n_same_side'],
+                                     differs=r['differs']))
+    df = pd.DataFrame(rows)
+    df.to_csv(out_dir() / 'steps_by_reading.csv', index=False)
+    return df
+
+
+def part_addendum() -> None:
+    """The addendum's two tables (`al_noise_removed`, `steps_by_reading`) and their provenance."""
+    t0 = time.time()
+    a = al_noise_removed()
+    b = steps_by_reading()
+    _write_json(out_dir() / 'provenance_addendum.json', dict(part='addendum', script=H.script_path(__file__), **H.code_commits(),
+        inputs=dict(gh146=str(gh146_dir()), stages_model='stages_model.csv', steps_model='steps_model.csv',
+                    steps_flies='steps_flies.csv'), seconds=round(time.time() - t0, 1)))
+    pd.set_option('display.width', 250)
+    g = a[a.group.isin(['ester', 'alcohol', 'near'])]
+    print(g[['key', 'reading', 'group', 'mean', 'lo', 'hi'] + [c for c in g.columns if c.startswith('differs')]].round(3).to_string())
+    print(b[(b.claws == 'input') & b.group.isin(['ester', 'alcohol'])].round(3).to_string())
+
+
 def _f(x, spec: str = '.3f') -> str:
     try:
         return format(float(x), spec) if np.isfinite(float(x)) else '-'
@@ -2287,11 +2459,11 @@ def figures() -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
-    ap.add_argument('--part', required=True, choices=['A', 'B0', 'B', 'B5', 'B5score', 'Bscore', 'C', 'D1', 'D2', 'table'])
+    ap.add_argument('--part', required=True, choices=['A', 'B0', 'B', 'B5', 'B5score', 'Bscore', 'C', 'D1', 'D2', 'table', 'addendum'])
     ap.add_argument('--wirings', nargs='*', default=None)
     a = ap.parse_args()
     {'A': part_a, 'B0': part_b0, 'B': lambda: part_b(a.wirings), 'B5': part_b5, 'B5score': part_b5score,
-     'Bscore': part_bscore, 'C': part_c,
+     'Bscore': part_bscore, 'C': part_c, 'addendum': part_addendum,
      'D1': part_d1, 'D2': part_d2, 'table': comparison_table}[a.part]()
 
 
