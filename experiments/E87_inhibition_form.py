@@ -1276,6 +1276,8 @@ class WiringPool:
     OdorPool does for C2; `run(factors)` takes per-odor KC threshold factors (KCs x odors, the saved outputs' column
     order; None for all ones) and returns (responses, spike counts) in the saved outputs' layout."""
 
+    _WORKER = staticmethod(_d_worker)
+
     def __init__(self, label: str, n_workers: int = 16):
         import multiprocessing
         import os
@@ -1295,7 +1297,7 @@ class WiringPool:
         try:
             for js in self.groups:
                 a, b = ctx.Pipe()
-                pr = ctx.Process(target=_d_worker, args=(b, label, send, fit, js), daemon=True)
+                pr = ctx.Process(target=self._WORKER, args=(b, label, send, fit, js), daemon=True)
                 pr.start()
                 self.procs.append(pr)
                 self.conns.append(a)
@@ -1418,6 +1420,268 @@ def part_d1(out: Path, wirings: Optional[Sequence[str]] = None, n_workers: int =
             pool.close()
     df = score_d1(out)
     comparison_table(out)
+    return df
+
+
+# ---------------------------------------------------------------------------
+# C3's rule under both readouts, and D2: the handle that stands out (E80's per-odor recruitment, B3)
+
+def rescore_archive(out: Path) -> pd.DataFrame:
+    """C3's rule read under each readout against the breadth-2 fit on the same wiring under the same readout (the first
+    scan compared every row with the raw-count value and flagged raw counts only): a variant stands out under a readout
+    if its pattern part against C1's target (z, the trial noise removed, the chosen form) is lower than the breadth-2
+    fit's by C_STANDOUT or more, with a mean effect of at least C_MEAN_SHARE of the flies', and inside the realism bands
+    on its own run (from results/apl_effect/by_variant.csv, or, where that has no response rates, from the run's
+    spike counts, a response two or more spikes, through E77's `realism_of`). Rewrites archive_scan.csv (columns
+    b2_same_wiring_pattern, gain, realism_own, standout) and verdict_C.json."""
+    import json
+    from experiments import E77_input_side_common_error as E77
+    df = pd.read_csv(out / 'archive_scan.csv')
+    tg = pd.read_csv(out / 'apl_free_target.csv')
+    flies_mean = float(tg[(tg.unit == 'z') & (tg.reading == 'noise_free') & (tg.form_label == 'chosen') & (tg.subset == 'all')]['mean'].iloc[0])
+    base = {}
+    for w, f, t in model_families()['b2']:
+        for ro in ('raw', 'cal'):
+            m = df[(df.folder == f) & (df.variant == t) & (df.readout == ro)]
+            base[(w, ro)] = float(m.noise_free_pattern.iloc[0]) if len(m) else np.nan
+    df['b2_same_wiring_pattern'] = [base.get((w, ro), np.nan) for w, ro in zip(df.wiring, df.readout)]
+    df['gain'] = df.b2_same_wiring_pattern - df.noise_free_pattern
+    cand = (df.gain >= C_STANDOUT) & (df.noise_free_mean >= C_MEAN_SHARE * flies_mean)
+    bv = pd.read_csv(H.shared_dir() / 'results' / 'apl_effect' / 'by_variant.csv')
+    root = H.shared_dir() / 'data' / 'model_outputs'
+    realism_own = {}
+    for folder, variant in df.loc[cand, ['folder', 'variant']].drop_duplicates().itertuples(index=False):
+        row = bv[(bv.folder == folder) & (bv.tag == variant)]
+        if len(row) and pd.notna(row.rate_on.iloc[0]):
+            realism_own[(folder, variant)] = row.realism_flag.iloc[0] if pd.notna(row.realism_flag.iloc[0]) else 'inside the bands'
+            continue
+        on = next(iter((root / folder).rglob(f'{variant}_on_spike_counts.parquet')), None)
+        off = next(iter((root / folder).rglob(f'{variant}_acute_off_spike_counts.parquet')), None)
+        if on is None or off is None:
+            realism_own[(folder, variant)] = 'not scored'
+            continue
+        s_on, s_off = pd.read_parquet(on), pd.read_parquet(off)
+        o = {'on': ((s_on >= 2).astype(float), s_on), 'off': ((s_off >= 2).astype(float), s_off)}
+        r = E77.realism_of(o)
+        realism_own[(folder, variant)] = r['realism_flag'] if isinstance(r['realism_flag'], str) and r['realism_flag'] else 'inside the bands'
+    df['realism_own'] = [realism_own.get((f, v), np.nan) for f, v in zip(df.folder, df.variant)]
+    df['standout'] = cand & (df.realism_own == 'inside the bands')
+    df.to_csv(out / 'archive_scan.csv', index=False)
+    v = json.loads((out / 'verdict_C.json').read_text())
+    st = df[df.standout]
+    v.update(n_standout=int(len(st)), standouts=st[['folder', 'variant', 'readout', 'wiring']].values.tolist(),
+             standout_rule='under each readout against the breadth-2 fit on the same wiring under that readout (corrected '
+                           '2026-11-12; the first scan read raw counts only and found none)')
+    (out / 'verdict_C.json').write_text(json.dumps(v, indent=1) + '\n')
+    print(f'C3 rescored: {len(st)} standouts', flush=True)
+    return df
+
+
+D2_UNITS = 'noise'                       # the bands' units, and the strongest standout under the readout
+D2_ARMS = ('thr', 'throff', 'thrapl')    # E80's B3 arms
+
+
+def _d2_worker(conn, label: str, parts: dict, fit: dict, js: List[int]) -> None:
+    """A D2 worker: wiring `label`'s simulator on the ORN columns `js` (as `_d_worker`), then E80's B3 one-odor task
+    (`E80_screen._odor_task`: per-odor threshold bisected to its APL-off target, the APL-on run at that threshold and
+    the fit's APL scales, then a per-odor APL scale bisected to its APL-on target) for each task received, until None."""
+    try:
+        from experiments import E83_cross_wiring_fit as E
+        from experiments import E80_screen as S80
+        E._PARTS[label] = parts
+        E._FITS[label] = fit
+        sim, info = E.build_simulator(label, orn=parts['orn'].iloc[:, js], breadth=parts['breadth'])
+        cells = info['cells']
+        mp, order = cells['mp'].cell_contents, np.asarray(cells['odor_order'].cell_contents, dtype=int)
+        names = [str(c) for c in cells['odor_index'].cell_contents]
+        n_kc = int(fit['saved']['on'][0].shape[0])
+        conn.send(('ready', names))
+    except Exception as e:
+        conn.send(('error', repr(e)))
+        return
+    while True:
+        msg = conn.recv()
+        if msg is None:
+            break
+        try:
+            conn.send(('ok', S80._odor_task(sim, mp, order, names, dict(info['params']), n_kc, msg)))
+        except Exception as e:
+            conn.send(('error', repr(e)))
+
+
+class B3Pool(WiringPool):
+    """WiringPool whose workers run E80's B3 task (`_d2_worker`); `run_b3(task)` takes per-odor lists ('target_off',
+    'target_on', or 'thr' / 'apl') in the outputs' column order and returns ({'off', 'on1', 'on'}: (responses, spike
+    counts)), per-odor records)."""
+
+    _WORKER = staticmethod(_d2_worker)
+
+    def run_b3(self, task: dict):
+        keys = ('thr', 'target_off', 'apl', 'target_on')
+        for conn, js in zip(self.conns, self.groups):
+            conn.send(dict({k: (None if task.get(k) is None else [task[k][j] for j in js]) for k in keys}, label=task.get('label', '')))
+        recs = [None] * len(self.cols)
+        for conn, js in zip(self.conns, self.groups):
+            status, v = conn.recv()
+            if status != 'ok':
+                raise RuntimeError(f'{self.label}: a worker failed: {v}')
+            for j, rec in zip(js, v):
+                recs[j] = rec
+        from experiments import E83_cross_wiring_fit as E
+        saved = E.saved_fit(self.label)['saved']
+        outs = {}
+        for key in ('off', 'on1', 'on'):
+            src = saved['off' if key == 'off' else 'on']
+            R, S = src[0].copy(), src[1].copy()
+            for j, rec in enumerate(recs):
+                if rec['odor'] != self.cols[j]:
+                    raise RuntimeError(f"odor {j}: {rec['odor']} where {self.cols[j]} was expected")
+                R.iloc[:, j] = rec[key][0][:, 0]
+                S.iloc[:, j] = rec[key][1][:, 0]
+            outs[key] = (R, S)
+        return outs, recs
+
+
+def _save_d2(tag: str, o: Dict[str, tuple]) -> None:
+    d = _d_dir()
+    for c, f in (('on', 'on'), ('off', 'acute_off')):
+        o[c][0].to_parquet(d / f'{tag}_{f}_responses.parquet')
+        o[c][1].to_parquet(d / f'{tag}_{f}_spike_counts.parquet')
+
+
+def _load_d2(tag: str) -> Optional[Dict[str, tuple]]:
+    d = _d_dir()
+    out = {}
+    for c, f in (('on', 'on'), ('off', 'acute_off')):
+        ps = [d / f'{tag}_{f}_{k}.parquet' for k in ('responses', 'spike_counts')]
+        if not all(p.exists() for p in ps):
+            return None
+        out[c] = tuple(pd.read_parquet(p) for p in ps)
+    return out
+
+
+def part_d2(out: Path, n_workers: int = 16) -> pd.DataFrame:
+    """D2 (run because C3, read under each readout, has variants that stand out through a handle the present code has:
+    E80's per-odor recruitment, B3): that handle on the breadth-2 fits of S, in baseline-noise units (D2_UNITS), its three
+    arms (thr: per-odor thresholds on the TNT flies' fractions in both conditions at the fit's APL scales; throff: the
+    thresholds with APL off only; thrapl: the thresholds, then per-odor APL scales on the control flies' fractions);
+    12 points. Each wiring's identity first (the one-odor path at factors 1 reproduces its saved fit). Resumable (runs
+    under outputs/.../D/, rows in runs_D2.csv); then `score_d2`."""
+    import json
+    import time
+    from experiments import E83_cross_wiring_fit as E
+    from experiments import E80_screen as S80
+    runs_path = out / 'runs_D2.csv'
+    done = set(pd.read_csv(runs_path).tag) if runs_path.exists() else set()
+    ident_path = out / 'identity_D2.json'
+    ident = json.loads(ident_path.read_text()) if ident_path.exists() else {}
+    for w in E.S_WIRINGS:
+        tags = {arm: f'D2_b3_{arm}_{D2_UNITS}_{w}' for arm in D2_ARMS}
+        if all(t in done for t in tags.values()) and w in ident:
+            continue
+        fit = E.saved_fit(w)
+        pool = B3Pool(w, n_workers)
+        try:
+            if w not in ident:
+                n = len(pool.cols)
+                outs, _ = pool.run_b3(dict(thr=[1.0] * n, apl=[1.0] * n, label=f'D2 identity {w}'))
+                o = {'on': outs['on1'], 'off': outs['off']}
+                ns, nr = E._same(o, fit['saved'])
+                ident[w] = dict(count_diffs=ns, response_diffs=nr, **H.code_commits())
+                ident_path.write_text(json.dumps(ident, indent=1, default=str) + '\n')
+                print(f'D2 identity {w}: {ns} count / {nr} response differences', flush=True)
+                if ns or nr:
+                    raise RuntimeError(f'{w}: the one-odor B3 path does not reproduce the saved fit')
+            t0 = time.time()
+            tg = S80.b3_targets(D2_UNITS, pool.cols, int(fit['saved']['on'][0].shape[0]))
+            outs, recs = pool.run_b3(dict(tg, label=f'D2 {w}'))
+            secs = time.time() - t0
+            for arm, tag in tags.items():
+                on = {'thr': outs['on1'], 'throff': fit['saved']['on'], 'thrapl': outs['on']}[arm]
+                o = {'on': on, 'off': outs['off']}
+                _save_d2(tag, o)
+                row = dict(part='D2', handle='E80 B3 per-odor recruitment', arm=arm, units=D2_UNITS, wiring=w, tag=tag,
+                           n_on=int((on[0].to_numpy() > 0.5).sum()), n_off=int((outs['off'][0].to_numpy() > 0.5).sum()),
+                           target_on_total=int(sum(tg['target_on'])), target_off_total=int(sum(tg['target_off'])),
+                           thr_min=float(min(r['thr'] for r in recs)), thr_max=float(max(r['thr'] for r in recs)),
+                           apl_min=float(min(r['apl'] for r in recs)) if arm == 'thrapl' else 1.0,
+                           apl_max=float(max(r['apl'] for r in recs)) if arm == 'thrapl' else 1.0,
+                           at_bound=bool(any(r['at_bound_thr'] or (arm == 'thrapl' and r['at_bound_apl']) for r in recs)),
+                           n_sims=int(sum(r['n_sims'] for r in recs)), seconds=secs, fit_folder=fit['folder'], fit_tag=fit['tag'],
+                           **{k: fit['p'][k] for k in E.PARAM_KEYS}, **H.code_commits())
+                row.update(E.realism(o))
+                pd.DataFrame([row]).to_csv(runs_path, mode='a', header=not runs_path.exists(), index=False)
+                print(f'D2 {tag}: {row["n_on"]} / {row["n_off"]} responses, thresholds x {row["thr_min"]:.3g} to {row["thr_max"]:.3g}, '
+                      f'{secs:.0f}s', flush=True)
+        finally:
+            pool.close()
+    return score_d2(out)
+
+
+def score_d2(out: Path) -> pd.DataFrame:
+    """D2's readings: per arm, each wiring of S and their population, (1) the main target (E83's `effect_scores` under the
+    readout and on raw counts) against the unchanged fits with E83's gate statistics on S (the pattern part lower by
+    0.003 or more, lower on at least 3 of the 4 wirings, the raw-count loss within 0.005 and the mean APL effect within
+    0.01 of the unchanged, the squared pattern error 15 % lower; read on all recordings, as nothing was searched on a
+    half), and (2) C1's target (the chosen form within the model's APL-off responses against the flies', z, the trial
+    noise removed), raw and under the readout. readings_D2.csv, verdict_D2.json."""
+    import json
+    from experiments import E83_cross_wiring_fit as E
+    runs = pd.read_csv(out / 'runs_D2.csv')
+    f_ch = chosen_form(out)
+    c1 = Reading('z', 'noise_free', ctrl=[])
+    t_c1, _ = c1.predict(f_ch)
+    rows, vd = [], {}
+    for arm in D2_ARMS:
+        ws = [w for w in E.S_WIRINGS if f'D2_b3_{arm}_{D2_UNITS}_{w}' in set(runs.tag)]
+        for ro in ('cal', 'raw'):
+            ds, d0s, c1e, c1b = [], [], [], []
+            for w in ws:
+                fit = E.saved_fit(w)
+                o = _load_d2(f'D2_b3_{arm}_{D2_UNITS}_{w}')
+                K = fit['K'] if ro == 'cal' else None
+                ds.append(E.pair_distances(o, ro, K))
+                d0s.append(E.pair_distances(fit['saved'], ro, K))
+                mr = ModelResponses(o, ro, K=fit['K'], label=w)
+                mr0 = ModelResponses(fit['saved'], ro, K=fit['K'], label=w)
+                c1e.append((mr.form(f_ch)[0], mr.d_off))
+                c1b.append((mr0.form(f_ch)[0], mr0.d_off))
+                sc, sc0 = E.effect_scores(ds[-1]), E.effect_scores(d0s[-1])
+                s1 = scores(c1e[-1][0] - c1e[-1][1], t_c1)
+                s10 = scores(c1b[-1][0] - c1b[-1][1], t_c1)
+                rows.append(dict(arm=arm, readout=ro, unit=w, **sc, **{f'unchanged_{k}': v for k, v in sc0.items()},
+                                 c1_pattern=s1['pattern'], c1_mean=s1['mean'], c1_unchanged_pattern=s10['pattern']))
+            if len(ws) == len(E.S_WIRINGS):
+                d, d0 = E.population(ds), E.population(d0s)
+                sc, sc0 = E.effect_scores(d), E.effect_scores(d0)
+                e1 = _pop([a for a, _ in c1e]) - _pop([b for _, b in c1e])
+                e10 = _pop([a for a, _ in c1b]) - _pop([b for _, b in c1b])
+                s1, s10 = scores(e1, t_c1), scores(e10, t_c1)
+                rows.append(dict(arm=arm, readout=ro, unit='S', **sc, **{f'unchanged_{k}': v for k, v in sc0.items()},
+                                 c1_pattern=s1['pattern'], c1_mean=s1['mean'], c1_unchanged_pattern=s10['pattern']))
+    df = pd.DataFrame(rows)
+    df.to_csv(out / 'readings_D2.csv', index=False)
+    for arm in D2_ARMS:
+        g = df[(df.arm == arm)]
+        if not (g.unit == 'S').any():
+            continue
+        cal = g[(g.readout == 'cal') & (g.unit == 'S')].iloc[0]
+        raw = g[(g.readout == 'raw') & (g.unit == 'S')].iloc[0]
+        singles = g[(g.readout == 'cal') & (g.unit != 'S')]
+        flags = runs[runs.arm == arm].realism_flag
+        vd[arm] = dict(pattern=float(cal.z8_pattern), unchanged=float(cal.unchanged_z8_pattern),
+                       i_lower=bool(cal.z8_pattern <= cal.unchanged_z8_pattern - 0.003),
+                       ii_wirings_lower=int((singles.z8_pattern < singles.unchanged_z8_pattern).sum()),
+                       iii_raw_loss=float(raw.z8_loss), iii_raw_loss_unchanged=float(raw.unchanged_z8_loss),
+                       iii_mean=float(cal.mean_effect),
+                       iii=bool(raw.z8_loss <= raw.unchanged_z8_loss + 0.005 and abs(cal.mean_effect - 0.178) <= 0.01
+                                and not flags.notna().any()),
+                       iv_sq_fall=float(1 - cal.z8_pattern ** 2 / cal.unchanged_z8_pattern ** 2),
+                       c1_pattern_cal=float(cal.c1_pattern), c1_unchanged_cal=float(cal.c1_unchanged_pattern),
+                       c1_pattern_raw=float(raw.c1_pattern), c1_unchanged_raw=float(raw.c1_unchanged_pattern),
+                       n_flagged=int(flags.notna().sum()))
+        vd[arm]['gate'] = bool(vd[arm]['i_lower'] and vd[arm]['ii_wirings_lower'] >= 3 and vd[arm]['iii'] and vd[arm]['iv_sq_fall'] >= 0.15)
+    (out / 'verdict_D2.json').write_text(json.dumps(vd, indent=1) + '\n')
     return df
 
 
@@ -1649,7 +1913,7 @@ def figure(out: Path) -> Path:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
-    ap.add_argument('--part', choices=('A', 'A2', 'verdictA', 'B', 'C', 'D1', 'D1score', 'table', 'variants', 'figure'), required=True)
+    ap.add_argument('--part', choices=('A', 'A2', 'verdictA', 'B', 'C', 'D1', 'D1score', 'table', 'variants', 'figure', 'C3rescore', 'D2', 'D2score'), required=True)
     ap.add_argument('--wirings', default=None, help='D1: a comma-separated list of wirings (default all eight)')
     ap.add_argument('--workers', type=int, default=16, help='D1: worker processes (one thread each)')
     args = ap.parse_args()
@@ -1676,6 +1940,14 @@ def main() -> None:
         write_variants(out)
     elif args.part == 'figure':
         figure(out)
+    elif args.part == 'C3rescore':
+        rescore_archive(out)
+    elif args.part == 'D2':
+        part_d2(out, args.workers)
+        comparison_table(out)
+    elif args.part == 'D2score':
+        score_d2(out)
+        comparison_table(out)
 
 
 if __name__ == '__main__':
