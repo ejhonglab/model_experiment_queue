@@ -176,6 +176,30 @@ def test_the_control_has_one_value_per_kc():
         assert np.isclose(cm.to_numpy().mean(), s * U.to_numpy().mean())          # the same total inhibition
 
 
+def test_the_controls_static_inhibition_only_with_apl_on():
+    """The control's static inhibition is present in every run with APL on and absent in the APL-off run (all APL scales
+    0), and restored after it, so the control's APL-off run is the base's."""
+    mp = SimpleNamespace(kc=SimpleNamespace(N=5, ext_inh_scale=1.0))
+    rv = SimpleNamespace(kc=SimpleNamespace(ext_inh=np.zeros((0, 0))))
+    ext = np.arange(5, dtype=float)
+    seen = []
+
+    def sim(params, kc_thr_factor=None):
+        seen.append((dict(params), rv.kc.ext_inh.copy()))
+        return 'r', 's'
+
+    assert X.apl_on_only_ext(sim, mp, rv, None, 3) is sim
+    X.set_ext_inh(mp, rv, ext, 3)
+    w = X.apl_on_only_ext(sim, mp, rv, ext, 3)
+    assert w(dict(wAPLKC_scale=0.5, wAPLPN_scale=0.2), kc_thr_factor=np.ones(5)) == ('r', 's')
+    w(dict(wAPLKC_scale=0.0, wAPLPN_scale=0.0), kc_thr_factor=np.ones(5))
+    w(dict(wAPLKC_scale=0.0, wAPLPN_scale=0.3))
+    assert seen[0][1].shape == (5, 3) and np.array_equal(seen[0][1][:, 0], ext)    # APL on: present
+    assert seen[1][1].size == 0                                                      # APL off: absent
+    assert seen[2][1].shape == (5, 3)                                                # APL on at the boutons: present
+    assert rv.kc.ext_inh.shape == (5, 3)                                             # restored after the APL-off run
+
+
 def test_shared_classes_are_e88s():
     E88 = pytest.importorskip('experiments.E88_responder_sets')
     rng = np.random.default_rng(5)

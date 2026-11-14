@@ -293,6 +293,26 @@ def set_ext_inh(mp, rv, per_kc: Optional[np.ndarray], n_odors: int = 0) -> None:
     rv.kc.ext_inh = np.repeat(v[:, None], int(n_odors), axis=1)
 
 
+def apl_on_only_ext(sim, mp, rv, ext: Optional[np.ndarray], n_odors: int):
+    """`sim` with the control's static inhibition `ext` present only in runs with APL on: a run with every APL scale at
+    0 (the APL-off run of E80's one-odor task, `wAPLKC_scale` and `wAPLPN_scale` 0) runs without it and restores it
+    after. The control stands in for what APL's pooled inhibition does, which goes with APL, so the control's APL-off
+    run is the base's (checked in `b2_points`). Returns `sim` itself when `ext` is None."""
+    if ext is None:
+        return sim
+
+    def wrapped(params, *args, **kwargs):
+        off = all(float(params.get(k, 1.0)) == 0.0 for k in ('wAPLKC_scale', 'wAPLPN_scale'))
+        if not off:
+            return sim(params, *args, **kwargs)
+        set_ext_inh(mp, rv, None)
+        try:
+            return sim(params, *args, **kwargs)
+        finally:
+            set_ext_inh(mp, rv, ext, n_odors)
+    return wrapped
+
+
 # ---------------------------------------------------------------------------
 # the claws' net drives, from a run's saved bouton rates and APL activity
 
@@ -695,10 +715,12 @@ def _c91_worker(conn, label: str, parts: dict, fit: dict, js: List[int]) -> None
             try:
                 set_pool(mp, s, net)
                 set_ext_inh(mp, rv, ext, len(order))
-                res = S80._odor_task(sim, mp, order, names, dict(info['params']), n_kc, msg)
+                # (the control's static inhibition only with APL on; its APL-off run is the base's)
+                sim_t = apl_on_only_ext(sim, mp, rv, ext, len(order))
+                res = S80._odor_task(sim_t, mp, order, names, dict(info['params']), n_kc, msg)
                 if claw:
                     for jj, rec in enumerate(res):
-                        rec['claw'] = _odor_claw_stats(sim, mp, rv, order, jj, info['params'], rec, n_kc)
+                        rec['claw'] = _odor_claw_stats(sim_t, mp, rv, order, jj, info['params'], rec, n_kc)
             finally:
                 kc[...] = kc0
                 set_ext_inh(mp, rv, None)
