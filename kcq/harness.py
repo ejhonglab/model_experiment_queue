@@ -1021,14 +1021,19 @@ def apl_effect_stats_readout(on_counts: pd.DataFrame, off_counts: pd.DataFrame, 
     """`apl_effect_stats` of a model whose APL-on and acute APL-off spike counts are read out
     the same way (`readout`, one `kind` and `param` for both conditions, so the APL effect stays
     a prediction). `data` defaults to the KC data's effect, or for kind 'binary' to the effect
-    of the binarized data (`yang_apl_effect(binarize=1.0)`). The keys of `apl_effect_stats`,
-    plus `mean_dist_on` and `mean_dist_off` (the mean pair distance in each condition)."""
+    of the binarized data (`yang_apl_effect(binarize=1.0)`). The keys of `apl_effect_stats`
+    (Pearson r on the per-pair APL effect among them, `apl_effect_pearson`), plus `mean_dist_on`
+    and `mean_dist_off` (the mean pair distance in each condition), and the pattern part's
+    amplitude and shape parts under this readout (`apl_effect_spread_shape`: `apl_effect_amplitude`,
+    `apl_effect_shape`, `apl_effect_sd_model`, `apl_effect_sd_data`, `apl_effect_sd_ratio`; how the
+    main target is read since 2026-11-13 16:22, CLAUDE.md)."""
     if data is None:
         data = yang_apl_effect(binarize=1.0) if kind == 'binary' else yang_apl_effect()
     on = readout_pair_distances(on_counts, kind, param)
     off = readout_pair_distances(off_counts, kind, param)
     out = apl_effect_stats(on, off, data)
     out.update(mean_dist_on=float(on.mean()), mean_dist_off=float(off.mean()))
+    out.update(apl_effect_spread_shape(on, off, data))
     return out
 
 

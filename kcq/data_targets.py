@@ -55,19 +55,34 @@ def _sha(p: Path) -> str:
     return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 
 
-def apl_effect_resamples(recs: dict, seed: int = 0) -> tuple:
+def apl_effect_resamples(recs: dict, seed: int = 0, parts: Optional[dict] = None) -> tuple:
     """The per-pair APL effect of per-recording distances `recs` ({'TNT3c', 'TNT'}: rows recordings,
     columns pairs), with 1000 resamples of recordings (each genotype with replacement: the resampled
     effects' means, their RMS differences from the measured effect) and 500 random split halves (ρ
-    between the halves' effects), in this order from one generator seeded `seed`."""
+    between the halves' effects), in this order from one generator seeded `seed`.
+
+    `parts`, a dict, is filled from the same resamples and splits (the draws and the returned values do
+    not change): 'pattern', 'amplitude', 'shape', 'sd_ratio' and 'pearson', per resample, what a resampled
+    data set scores against the measured effect as a model would (`kcq.harness.apl_effect_stats`' pattern
+    part and Pearson r, `apl_effect_spread_shape`'s parts and spread ratio), and 'pearson_split_half', per
+    split, Pearson r between the halves' effects."""
     effect = H.apl_effect(recs['TNT3c'].mean(), recs['TNT'].mean())
     rng_e = np.random.default_rng(seed)
+    if parts is not None:
+        parts.update({k: [] for k in ('pattern', 'amplitude', 'shape', 'sd_ratio', 'pearson', 'pearson_split_half')})
     boot_mean, boot_rmse = [], []
     for _ in range(1000):
         m = H.resample_recording_means(recs, rng_e)
         e_b = H.apl_effect(m['TNT3c'], m['TNT']).reindex(effect.index)
         boot_mean.append(float(e_b.mean()))
         boot_rmse.append(float(np.sqrt(np.mean((e_b - effect) ** 2))))
+        if parts is not None:
+            st = H.apl_effect_stats(m['TNT3c'], m['TNT'], effect)
+            sp = H.apl_effect_spread_shape(m['TNT3c'], m['TNT'], effect)
+            parts['pattern'].append(st['apl_effect_rmse_centered'])
+            parts['pearson'].append(st['apl_effect_pearson'])
+            for k in ('amplitude', 'shape', 'sd_ratio'):
+                parts[k].append(sp[f'apl_effect_{k}'])
     sh_rho = []
     for _ in range(500):
         halves = [{}, {}]
@@ -78,6 +93,8 @@ def apl_effect_resamples(recs: dict, seed: int = 0) -> tuple:
         a = H.apl_effect(halves[0]['TNT3c'], halves[0]['TNT'])
         b = H.apl_effect(halves[1]['TNT3c'], halves[1]['TNT']).reindex(a.index)
         sh_rho.append(H.spearman(a, b))
+        if parts is not None:
+            parts['pearson_split_half'].append(H.pearson(a, b))
     return effect, boot_mean, boot_rmse, sh_rho
 
 
@@ -318,7 +335,8 @@ def build() -> dict:
     # since 2026-11-09 17:55): its mean and spread, the loss a model with the true effect would
     # still show against the measured one (bootstrap over recordings), and the ceiling on ρ
     # across pairs (Spearman-Brown-corrected split halves)
-    effect, boot_mean, boot_rmse, sh_rho = apl_effect_resamples(recs)
+    parts = {}
+    effect, boot_mean, boot_rmse, sh_rho = apl_effect_resamples(recs, parts=parts)
     efn = 'harness.apl_effect; 90 % interval and floor: harness.resample_recording_means (1000 resamples of recordings, seed 0)'
     add('apl_effect_mean', effect.mean(), 'mean over the 120 pairs of the per-pair APL effect: the control flies\' distance minus the distance '
         'with APL output blocked (TNT), cosine, each the mean over recordings', efn, ['kc_rdms'], ci=np.percentile(boot_mean, [5, 95]))
@@ -335,6 +353,22 @@ def build() -> dict:
         'data_targets.build', ['kc_rdms'], ci=np.percentile(sh_rho, [5, 95]))
     add('apl_effect_rho_ceiling', float(np.sqrt(full)), 'ceiling on ρ on the per-pair APL effect: sqrt of the Spearman-Brown-corrected split-half ρ '
         '(the expected ρ of a noise-free model with the true per-pair effect against the measured one)', 'data_targets.build', ['kc_rdms'])
+    # the pattern part's amplitude and shape parts and Pearson r (how the main target is read, 2026-11-13 16:22): their
+    # floors from the resamples above, the Pearson ceiling from its splits
+    pfn = 'harness.apl_effect_stats / apl_effect_spread_shape; floor and interval over the resamples of apl_effect_rmse_floor'
+    add('apl_effect_sd_pattern', float(np.sqrt(np.mean((effect - effect.mean()) ** 2))), 'root mean square over the 120 pairs of the per-pair '
+        'APL effect minus its mean (ddof 0): the data\'s spread, sd_data of the amplitude part and the spread ratio', 'harness.apl_effect', ['kc_rdms'])
+    for k, what in (('pattern', 'the pattern part of the APL-effect loss (both means removed, apl_effect_rmse_centered)'),
+                    ('amplitude', 'the amplitude part of the pattern part (|sd_model - sd_data|, sd the spread over the 120 pairs)'),
+                    ('shape', 'the shape part of the pattern part (sqrt(2 sd_model sd_data (1 - r)), r Pearson\'s)')):
+        add(f'apl_effect_{k}_floor', float(np.mean(parts[k])), f'floor of {what}: a resampled data set (recordings drawn with replacement '
+            'within each genotype) against the measured effect, mean over the resamples of apl_effect_rmse_floor', pfn, ['kc_rdms'],
+            ci=np.percentile(parts[k], [5, 95]))
+    r_shp = float(np.nanmean(parts['pearson_split_half'])); full_p = 2 * r_shp / (1 + r_shp)
+    add('apl_effect_pearson_split_half', r_shp, 'Pearson r on the per-pair APL effect between random halves of the recordings (the 500 splits of '
+        'apl_effect_rho_split_half)', 'data_targets.build', ['kc_rdms'], ci=np.percentile(parts['pearson_split_half'], [5, 95]))
+    add('apl_effect_pearson_ceiling', float(np.sqrt(full_p)), 'ceiling on Pearson r on the per-pair APL effect: sqrt of the Spearman-Brown-corrected '
+        'split-half Pearson r (as apl_effect_rho_ceiling)', 'data_targets.build', ['kc_rdms'])
     # the same for the data read like-for-like with a model readout (the compressive readout
     # experiment, E65): binarized at trial mean > 1 (the target of a binarized model readout) and
     # thresholded (trial means <= 1 set to 0, as a non-responding model KC contributes 0); and the

@@ -24,3 +24,29 @@ def test_parts_add_to_pattern_part():
     d = H.yang_apl_effect()
     assert np.isclose(sp['apl_effect_sd_data'], float(np.sqrt(np.mean((d - d.mean()) ** 2))), rtol=1e-12)
     assert np.isclose(sp['apl_effect_sd_ratio'], sp['apl_effect_sd_model'] / sp['apl_effect_sd_data'])
+
+
+def _counts(seed: int, p_resp: float) -> pd.DataFrame:
+    rng = np.random.default_rng(seed)
+    u = rng.random((800, len(H.APL16_ODORS))) * rng.gamma(3.0, 1 / 3.0, (800, 1))
+    n = np.where(u < p_resp, 2 + rng.geometric(0.12, u.shape), np.where(u < p_resp + 0.05, 1, 0))
+    return pd.DataFrame(n.astype(float), columns=list(H.APL16_ODORS))
+
+
+def test_readout_stats_carry_the_parts():
+    """`apl_effect_stats_readout` keeps every key and value it had (`apl_effect_stats` of the read-out distances, the
+    mean distances) and adds the amplitude and shape parts of the same read-out distances, which add in squares to its
+    pattern part."""
+    on, off = _counts(1, 0.07), _counts(2, 0.14)
+    for kind, param in (('raw', None), ('saturating', 4.0)):
+        out = H.apl_effect_stats_readout(on, off, kind, param)
+        d_on, d_off = H.readout_pair_distances(on, kind, param), H.readout_pair_distances(off, kind, param)
+        old = dict(H.apl_effect_stats(d_on, d_off), mean_dist_on=float(d_on.mean()), mean_dist_off=float(d_off.mean()))
+        new = H.apl_effect_spread_shape(d_on, d_off)
+        assert list(out) == list(old) + list(new)
+        assert all(out[k] == v or (np.isnan(out[k]) and np.isnan(v)) for k, v in old.items())
+        assert all(out[k] == v for k, v in new.items())
+        assert np.isclose(out['apl_effect_amplitude'] ** 2 + out['apl_effect_shape'] ** 2,
+                          out['apl_effect_rmse_centered'] ** 2, rtol=1e-10)
+        assert np.isclose(out['apl_effect_shape'] ** 2, 2 * out['apl_effect_sd_model'] * out['apl_effect_sd_data']
+                          * (1 - out['apl_effect_pearson']), rtol=1e-8)
