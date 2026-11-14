@@ -99,3 +99,30 @@ def test_d1_identity_real_wiring():
     fit = E.saved_fit('real')
     assert np.array_equal(s.to_numpy(dtype=float), fit['saved']['off'][1].to_numpy(dtype=float))
     assert np.array_equal(r.to_numpy(dtype=float), fit['saved']['off'][0].to_numpy(dtype=float))
+
+
+def test_d2_runs_read_from_the_archive_when_not_local(tmp_path, monkeypatch):
+    """`_load_d2` reads a D run from this host's outputs/ or, when they are not there, from the model-output archive."""
+    import pandas as pd
+    X = pytest.importorskip('experiments.E87_inhibition_form')
+    local, arch = tmp_path / 'local', tmp_path / 'archive'
+    local.mkdir()
+    arch.mkdir()
+    monkeypatch.setattr(X, '_d_dir', lambda: local)
+    monkeypatch.setattr(X, '_d_archive_dir', lambda: arch)
+    tag = 'D2_b3_thr_noise_real'
+    assert X._load_d2(tag) is None
+    frames = {}
+    for f in ('on', 'acute_off'):
+        for k in ('responses', 'spike_counts'):
+            df = pd.DataFrame(np.arange(6, dtype=float).reshape(3, 2) + (f == 'on'), columns=['a', 'b'])
+            df.to_parquet(arch / f'{tag}_{f}_{k}.parquet')
+            frames[(f, k)] = df
+    o = X._load_d2(tag)
+    assert o is not None and o['on'][1].equals(frames[('on', 'spike_counts')])
+    assert o['off'][0].equals(frames[('acute_off', 'responses')])
+    # a complete local copy is read first
+    for f in ('on', 'acute_off'):
+        for k in ('responses', 'spike_counts'):
+            (frames[(f, k)] * 2).to_parquet(local / f'{tag}_{f}_{k}.parquet')
+    assert X._load_d2(tag)['on'][1].equals(frames[('on', 'spike_counts')] * 2)

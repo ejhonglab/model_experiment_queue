@@ -1549,15 +1549,25 @@ def _save_d2(tag: str, o: Dict[str, tuple]) -> None:
         o[c][1].to_parquet(d / f'{tag}_{f}_spike_counts.parquet')
 
 
+def _d_archive_dir() -> Path:
+    """The model-output archive's copy of the D runs (archive_tools/archive_model_outputs.py), for hosts that did not
+    run them."""
+    return H.shared_dir() / 'data' / 'model_outputs' / EXPERIMENT / 'D'
+
+
 def _load_d2(tag: str) -> Optional[Dict[str, tuple]]:
-    d = _d_dir()
-    out = {}
-    for c, f in (('on', 'on'), ('off', 'acute_off')):
-        ps = [d / f'{tag}_{f}_{k}.parquet' for k in ('responses', 'spike_counts')]
-        if not all(p.exists() for p in ps):
-            return None
-        out[c] = tuple(pd.read_parquet(p) for p in ps)
-    return out
+    """A D run's (responses, spike counts) with APL on and acute APL off, from this host's outputs/ or, when they are
+    not there, from the model-output archive (the same files); None when neither has all four."""
+    for d in (_d_dir(), _d_archive_dir()):
+        out = {}
+        for c, f in (('on', 'on'), ('off', 'acute_off')):
+            ps = [d / f'{tag}_{f}_{k}.parquet' for k in ('responses', 'spike_counts')]
+            if not all(p.exists() for p in ps):
+                break
+            out[c] = tuple(pd.read_parquet(p) for p in ps)
+        if len(out) == 2:
+            return out
+    return None
 
 
 def part_d2(out: Path, n_workers: int = 16) -> pd.DataFrame:
