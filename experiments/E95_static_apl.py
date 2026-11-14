@@ -2134,6 +2134,9 @@ def part_steps(out: Path, variants: Optional[Sequence[str]] = None) -> Optional[
             st_on = {'E95': load_stage95, 'E94': E94.load_stage94}.get(r.source, lambda t: dict(E94.fit_stage(w, 'on')))(r.tag)
             if st_on is None:
                 raise RuntimeError(f'{r.tag}: no stage matrices')
+            if 'spike_counts' not in st_on:
+                # load_stage95 saves the stages only; E90's reading also needs the run's APL-on responses and counts
+                st_on['responses'], st_on['spike_counts'] = o['on']
             W, _ = E94.wiring_W(w)
             meta = {k: np.asarray(x) for k, x in E92G.units_meta(W).items()}
             rr = E90.read_wiring(w, st_on, dict(E94.fit_stage(w, 'off')), meta,
