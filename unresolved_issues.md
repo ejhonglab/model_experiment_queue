@@ -31,10 +31,17 @@ directory's notes/ and are linked from here.
   - 84 rows are still without odors per KC, and 80 without response rates:
     - E87's and E88's D1 runs: their APL-off run is the family's and is not archived again, so only the APL-on bands are read.
     - E92's 28 rows: its archive has no response matrices for them.
-- **Remains.**
-  - Rerun analyses/apl_effect_metrics.py (raw and calibrated) and compare it with the 2026-11-13 tables. Until then, the
-    numbers in CLAUDE.md stand as computed from the earlier flags.
-  - E92's archive needs its response matrices (hal).
+  - analyses/apl_effect_metrics.py was rerun on raw counts and under the readout, with the corrected flags and the variants
+    added since. The tables are in results/apl_effect_metrics/rerun_2026-11-14/; the shared folder's tables are left as
+    they were.
+    - The variant set changed too (1634 to 1694 distinct on raw counts, 1252 to 1282 of them inside the bands), so the
+      comparison with the earlier tables is not like for like.
+    - Every conclusion of CLAUDE.md's "How the main target is read" holds. On raw counts, all distinct variants, the
+      consistency is: pattern part 0.80 (was 0.80), loss 0.83 (0.83), ρ 0.61 (0.61), Pearson r 0.71 (0.71), amplitude part
+      0.35 (0.35), per-odor part 0.53 (0.54), pair-specific part 0.92 (0.92).
+    - The best variant by ρ differs from the pattern part's in 30 of 59 experiments (was 28 of 57). The numbers quoted
+      in CLAUDE.md come from the first run (86f0d69) and are not rewritten.
+- **Remains.** E92's archive needs its response matrices (hal).
 
 ### pyolfsysm's `get_time_index` placed every step up to one step late, so closed windows read with it lost their end step (found 2026-11-13 12:04, atlas's code subagent for E90; fixed in olfsysm 17cef71)
 - **What.** `pyolfsysm.mb_model.get_time_index` spreads the run's n steps evenly from its first time to `time_end` inclusive
