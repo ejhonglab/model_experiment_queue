@@ -1174,6 +1174,7 @@ Canonical experiment names for summary reports:
 | E93 | the measured input for the glomeruli without ORN input |
 | E94 | the PN boutons' share of APL's inhibition |
 | E95 | APL's inhibition as a static threshold raise per KC |
+| E96 | APL's synapses on the KCs outside the claws |
 
 ## Model-output archive (data/model_outputs/ in the shared directory)
 
