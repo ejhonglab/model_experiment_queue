@@ -435,3 +435,76 @@ def test_the_readings_on_saved_runs(tmp_path):
     assert set(v['choice']) == set(G.HALVES) and 'D_plan' in v
     text = G.comparison_table(tmp_path)
     assert '| B1_offclaw_d1 |' in text and 'Verdict' in text
+
+
+# ---------------------------------------------------------------------------
+# run_point's rows on saved data (no simulation; part 0's cache and the shared directory)
+
+def _saved_model(monkeypatch):
+    """A stand-in for a StaticModel on the real wiring at its fit, from the saved fit, E94's wiring cache and part 0's
+    per-KC tables (no simulator); reading96 replaced by a reading of the saved APL-on run with the fit's stage
+    matrices."""
+    from types import SimpleNamespace
+    E83 = G.E83
+    f = E83.saved_fit('real')
+    W, _ = G.E94.wiring_W('real')
+    kc, claws = G.load_kc_tables96('real')
+    idx = pd.MultiIndex.from_frame(claws[[H.KC_ID_LEVEL, 'claw_id']])
+    wn = pd.Series(claws.wnorm.to_numpy(), index=idx)
+    per_claw = pd.Series(claws.kept.to_numpy(), index=idx)
+    per_kc = kc.set_index(H.KC_ID_LEVEL)[['n_claws', 'kept', 'kept_unassigned', 'dropped_claw', 'no_claw', 'no_claw_nan',
+                                          'peduncle']].sort_index()
+    m = object.__new__(G.E95.StaticModel)
+    m.label, m.folder, m.tag, m.p, m.saved, m.K = 'real', f['folder'], f['tag'], dict(f['p']), f['saved'], f['K']
+    m.target_on, m.target_off, m.W = f['target_on'], f['target_off'], W
+    m.wAPLKC = pd.Series(claws.w_fam.to_numpy(), index=idx)
+    m.rv = SimpleNamespace(kc=SimpleNamespace(thr=np.ones(len(kc))))
+    seen = {}
+
+    def fake_reading(model, pv, wk, label=''):
+        seen[label] = (dict(pv), None if wk is None else wk.copy())
+        params = dict(model.p, wAPLPN_scale=model.p['wAPLPN_scale'] * pv['dose'])
+        return dict(on=f['saved']['on'], off=f['saved']['off'], factor=1.2, at_bound=False, n_sims=3, params=params,
+                    seconds=0.0, history=[], stages=dict(G.E94.fit_stage('real', 'on')),
+                    gain=dict(L=np.zeros(f['saved']['on'][1].shape), row={}), bracket=G.APL_BRACKET, ext=None, whole=False)
+    monkeypatch.setattr(G, 'reading96', fake_reading)
+    monkeypatch.setattr(G, 'wiring_wnorm', lambda w: wn)
+    monkeypatch.setattr(G, 'wiring_counts', lambda w='real': (per_kc, per_claw))
+    monkeypatch.setattr(G.E95, 'd_unit', lambda model, L=None: 3.0)
+    return m, seen, (wn, per_kc, per_claw)
+
+
+@pytest.mark.skipif(not _shared() or not (G.local_dir('W') / 'real_kc.parquet').exists(),
+                    reason="needs the shared directory and part 0's per-KC tables")
+def test_run_point_rows_on_saved_data(monkeypatch):
+    m, seen, (wn, per_kc, per_claw) = _saved_model(monkeypatch)
+    saved = {}
+    monkeypatch.setattr(G, 'save_run96', lambda tag, o, sub='runs', **k: saved.update({tag: k}))
+    vs = [v for a in G.ARMS for v in G.ARMS[a]] + ['U_uniform_d1_pool1', 'B1_offclaw_d1_permclaw1', 'D0', 'D1_uniform_d1']
+    for v in vs:
+        row, _ = G.run_point(m, v, part='test', cc={'queue_commit': 'x'})
+        pv = G.parse_variant(v)
+        tag = f'{v}_real'
+        assert row['variant'] == v and row['tag'] == tag and row['component_unit'] == 3.0
+        assert row['pool'] == pv['pool'] and row['dose'] == pv['dose'] and row['size'] == pv['size']
+        assert all(k in row for k in ('rate_on', 'realism_flag', 'max_count_on', 'K_run', 'bouton_share', 'comp_share'))
+        assert np.isclose(row['aplpn_multiple'], G.E94.aplpn_multiple('real', pv['dose']))
+        rpv, wk = seen[tag]
+        assert rpv['pool'] == pv['pool'] and rpv['dose'] == pv['dose']
+        comp = saved[tag]['component']
+        if pv['size'] > 0:
+            add = wk.to_numpy() - m.wAPLKC.to_numpy()
+            assert np.isclose(add.mean(), pv['size'] * 3.0 * wn.mean())          # d x unit x the connectome's mean
+            assert row['comp_share'] > 0 and np.isclose(comp.component_sum.sum(), add.sum())
+            if pv['mode'] in G.MODES:
+                assert np.isclose(row['synapse_share'], G.synapse_share(pv['mode'], per_kc))
+                a = G.offclaw_counts(pv['mode'], per_kc, pv['permute'], pv['seed'] or G.PERM_SEED)
+                assert np.allclose(comp.set_index(H.KC_ID_LEVEL).a_k.sort_index(), a.sort_index())
+        else:
+            assert wk is None and comp is None and row['comp_share'] == 0
+    # B4's permutations keep each claw count's values; B2 at d = 1 against B4 within a claw count
+    c2 = saved['B2_offclawped_d1_real']['component'].set_index(H.KC_ID_LEVEL)
+    c4 = saved['B4_offclawped_d1_permclaw1_real']['component'].set_index(H.KC_ID_LEVEL)
+    for k, g in c2.groupby('n_claws'):
+        assert sorted(g.a_k) == sorted(c4.loc[g.index, 'a_k'])
+    assert not np.array_equal(c2.a_k.to_numpy(), c4.a_k.to_numpy())

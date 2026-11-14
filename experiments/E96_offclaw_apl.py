@@ -1138,8 +1138,9 @@ def run_point(model: E95.StaticModel, v: str, part: str = '', cc: Optional[dict]
     w = model.label
     tag = run_tag(v, w)
     pv = parse_variant(v)
-    if pv['part'] in (REF, 'e95'):
-        raise ValueError(f'{v}: the saved fits and E95\'s points are not run here')
+    if pv['part'] == REF:
+        raise ValueError('the reference is the saved fit; it is not run')
+    # (E95's settings are run here on T, as part C's rule (v) control; on S they are E95's saved runs)
     cc = H.code_commits() if cc is None else cc
     kc_index = model.saved['on'][1].index
     L = E95.kc_losses(w, kc_index)
