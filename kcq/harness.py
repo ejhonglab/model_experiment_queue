@@ -504,15 +504,26 @@ def report_matrices() -> Dict[str, pd.Series]:
 
 def orn16_consensus_pairs() -> pd.Series:
     """The 16-odor ORN odor-odor distances: 1 - Pearson r across the 36 glomeruli of the
-    model's ORN input, rebuilt from olfdb (datasets 1 and 4) by orn16_distances_from_olfdb.py
-    (shared directory, data/model_outputs/inputs/orn16_corrdist_olfdb_36glom.csv). Within-panel
-    pairs are the mean over flies of per-fly 1 - r (al_util.mean_of_fly_corrs); cross-panel pairs
-    (no fly imaged both panels) use the fly-mean vectors.
+    model's ORN input between the two odors' fly-mean glomerulus vectors (trial means per fly, then
+    the mean over the flies of the odor's panel), the same recipe for all 120 pairs, rebuilt from
+    olfdb (datasets 1 and 4) by data_prep/orn16_distances_from_olfdb.py (shared directory,
+    data/model_outputs/inputs/orn16_corrdist_olfdb_36glom_flymean.csv).
 
-    Since 2026-11-06; before, this returned the report's matrix
-    (`orn16_consensus_pairs_zero_filled()`), which counted glomeruli a panel did not image as
-    zero responses (unresolved_issues.md).
+    Since 2026-11-13 (Tom's decision on Yang's question; unresolved_issues.md, Resolved). From
+    2026-11-06 to 2026-11-13 this returned the mixed recipe, `orn16_consensus_pairs_mixed()`; before
+    that, the report's matrix (`orn16_consensus_pairs_zero_filled()`), which counted glomeruli a
+    panel did not image as zero responses.
     """
+    return pairs_from_square(pd.read_csv(shared_dir() / 'data' / 'model_outputs' / 'inputs' /
+        'orn16_corrdist_olfdb_36glom_flymean.csv', index_col=0
+    ))
+
+
+def orn16_consensus_pairs_mixed() -> pd.Series:
+    """The ORN reference used from 2026-11-06 to 2026-11-13, kept for comparison: the 72 pairs
+    within a panel as the mean over flies of per-fly 1 - r (al_util.mean_of_fly_corrs), the 48
+    across the panels (no fly imaged both) from the fly-mean vectors. A per-fly correlation carries
+    that fly's noise, so the within-panel pairs sit about 0.03 further apart than the rest."""
     return pairs_from_square(pd.read_csv(shared_dir() / 'data' / 'model_outputs' / 'inputs' /
         'orn16_corrdist_olfdb_36glom.csv', index_col=0
     ))

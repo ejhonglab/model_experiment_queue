@@ -12,18 +12,26 @@ it from Tom's ORN data in olfdb (dataset 1, megamat panel, 9 flies; dataset 4, v
 6 flies; http://hal:8080) over the 36 glomeruli both panels imaged, the same set as the model's
 input (`kcq.harness.apl16_orn_deltas()`):
 
-- pairs within a panel (66 megamat x megamat, 6 validation2 x validation2): the mean over flies of
-  each fly's 1 - r, with al_analysis's `al_util.mean_of_fly_corrs` (trial means, one correlation per
-  fly across its ROIs, averaged over flies ignoring NaN);
-- pairs across panels (48): no fly was imaged with both panels, so a per-fly correlation does not
-  exist; these use 1 - r between the two odors' fly-mean glomerulus vectors (trial means, then the
-  mean over flies), labelled in the pairs table.
-A fly-mean-vector version of all 120 pairs is written alongside for comparison.
+- every pair (since 2026-11-13, Tom's decision on Yang's question): 1 - r between the two odors' fly-mean
+  glomerulus vectors (trial means per fly, then the mean over the flies of the odor's panel), the same
+  recipe for the 72 pairs within a panel and the 48 across the panels, and the same vectors the model's
+  input is stitched from.
+Until 2026-11-13 the reference used a mixed recipe, kept for comparison: the pairs within a panel (66
+megamat x megamat, 6 validation2 x validation2) as the mean over flies of each fly's 1 - r, with
+al_analysis's `al_util.mean_of_fly_corrs` (trial means, one correlation per fly across its ROIs, averaged
+over flies ignoring NaN), and the pairs across panels, where no fly was imaged with both panels, from the
+fly-mean vectors. A per-fly correlation carries that fly's noise, so those 72 pairs sat about 0.03 further
+apart than the 48 across the panels (unresolved_issues.md, Resolved).
 
 Outputs (shared directory, data/model_outputs/inputs/; the existing ORN input
 orn_deltas_apl16*.csv files there are not touched):
-  orn16_corrdist_olfdb_36glom.csv        16 x 16, the matrix described above (diagonal 0)
-  orn16_corrdist_olfdb_36glom_pairs.csv  120 pairs: both versions, the method per pair, the old value
+  orn16_corrdist_olfdb_36glom_flymean.csv  16 x 16, the matrix described above (diagonal 0); the reference,
+                                           `kcq.harness.orn16_consensus_pairs()`
+  orn16_corrdist_olfdb_36glom.csv          16 x 16, the mixed recipe used until 2026-11-13,
+                                           `kcq.harness.orn16_consensus_pairs_mixed()`; rewritten only if
+                                           its values change, so that a process reading it keeps them
+  orn16_corrdist_olfdb_36glom_pairs.csv    120 pairs: the reference, the mixed recipe, the method each used,
+                                           and the zero-filled value of the original report
   orn16_corrdist_olfdb_36glom.json       provenance (olfdb dataset ids and sha256, glomeruli, odors,
                                          this repository's and al_analysis's commits)
 Usage: ./venv/bin/python data_prep/orn16_distances_from_olfdb.py
@@ -106,44 +114,52 @@ def main() -> None:
         pb = 'megamat' if b in H.MEGAMAT12 else 'validation2'
         flymean = 1.0 - float(np.corrcoef(V[a], V[b])[0, 1])
         if pa == pb:
-            main_v, method = within[(a, b)], 'mean over flies of per-fly 1 - r (al_util.mean_of_fly_corrs)'
+            mixed, mixed_method = within[(a, b)], 'mean over flies of per-fly 1 - r (al_util.mean_of_fly_corrs)'
         else:
-            main_v, method = flymean, '1 - r of fly-mean vectors (no fly imaged with both panels)'
-        rows.append(dict(odor_a=a, odor_b=b, panel_a=pa, panel_b=pb, distance=main_v, method=method,
-            distance_flymean_vectors=flymean, distance_old_zero_filled=get(old, a, b)))
+            mixed, mixed_method = flymean, '1 - r of fly-mean vectors (no fly imaged with both panels)'
+        rows.append(dict(odor_a=a, odor_b=b, panel_a=pa, panel_b=pb, distance=flymean,
+            method='1 - r of fly-mean vectors', distance_flymean_vectors=flymean,
+            distance_mixed=mixed, method_mixed=mixed_method, distance_old_zero_filled=get(old, a, b)))
     pairs = pd.DataFrame(rows)
-    sq = pd.DataFrame(0.0, index=H.APL16_ODORS, columns=H.APL16_ODORS)
-    for r in pairs.itertuples():
-        sq.loc[r.odor_a, r.odor_b] = sq.loc[r.odor_b, r.odor_a] = r.distance
+
+    def square(col):
+        sq = pd.DataFrame(0.0, index=H.APL16_ODORS, columns=H.APL16_ODORS)
+        for r in pairs.itertuples():
+            sq.loc[r.odor_a, r.odor_b] = sq.loc[r.odor_b, r.odor_a] = getattr(r, col)
+        return sq
     OUT.mkdir(parents=True, exist_ok=True)
-    sq.to_csv(OUT / f'{STEM}.csv')
+    square('distance').to_csv(OUT / f'{STEM}_flymean.csv')
+    mixed_sq, mixed_path = square('distance_mixed'), OUT / f'{STEM}.csv'
+    if not (mixed_path.exists() and np.allclose(pd.read_csv(mixed_path, index_col=0).loc[H.APL16_ODORS, H.APL16_ODORS].to_numpy(),
+                                                mixed_sq.to_numpy(), rtol=0, atol=1e-12)):
+        mixed_sq.to_csv(mixed_path)
     pairs.to_csv(OUT / f'{STEM}_pairs.csv', index=False)
     prov = dict(generated=datetime.now(timezone.utc).isoformat(timespec='seconds'), script='data_prep/orn16_distances_from_olfdb.py',
         **H.code_commits(),
         olfdb=OLFDB, datasets={p: dict(id=DATASETS[p], title=metas[p].get('title'), data_sha256=metas[p].get('data_sha256'), n_flies=int(n_flies[p]))
             for p in DATASETS},
         glomeruli=gloms, odors={o: f'{o} @ {H.ORN_INPUT_CONC[o]:g}' for o in H.APL16_ODORS},
-        within_panel='al_analysis.al_util.mean_of_fly_corrs (trial means; per-fly Pearson r across that fly\'s ROIs among the 36; mean over flies ignoring NaN); distance = 1 - mean r',
-        across_panel='1 - Pearson r between fly-mean glomerulus vectors (36 glomeruli); no fly imaged with both panels',
+        reference=f'{STEM}_flymean.csv: 1 - Pearson r between fly-mean glomerulus vectors (36 glomeruli; trial means per fly, then the mean over the panel\'s flies), all 120 pairs (since 2026-11-13)',
+        mixed=f'{STEM}.csv (until 2026-11-13): within a panel al_analysis.al_util.mean_of_fly_corrs (trial means; per-fly Pearson r across that fly\'s ROIs among the 36; mean over flies ignoring NaN), distance = 1 - mean r; across panels the fly-mean vectors',
         approx_conc_note=H.APPROX_CONC_NOTE)
     (OUT / f'{STEM}.json').write_text(json.dumps(prov, indent=1, default=str) + '\n')
 
     # comparison with the old matrix and the KC data
     pd.set_option('display.width', 200)
     pairs['kind'] = np.where(pairs.panel_a == pairs.panel_b, pairs.panel_a + ' x ' + pairs.panel_b, 'megamat x validation2')
-    s = pairs.assign(d_new_old=(pairs.distance - pairs.distance_old_zero_filled).abs(),
-        d_within_flymean=(pairs.distance - pairs.distance_flymean_vectors).abs())
-    print(s.groupby('kind')[['d_new_old', 'd_within_flymean']].agg(['mean', 'max']).round(4).to_string())
-    new = pairs.set_index(['odor_a', 'odor_b']).distance
-    fmv = pairs.set_index(['odor_a', 'odor_b']).distance_flymean_vectors
+    s = pairs.assign(d_ref_zero_filled=(pairs.distance - pairs.distance_old_zero_filled).abs(),
+        d_mixed_ref=(pairs.distance_mixed - pairs.distance))
+    print(s.groupby('kind')[['d_ref_zero_filled', 'd_mixed_ref']].agg(['mean', 'max']).round(4).to_string())
+    ref = pairs.set_index(['odor_a', 'odor_b']).distance
+    mixed = pairs.set_index(['odor_a', 'odor_b']).distance_mixed
     for g, lab in (('TNT3c', 'KCs, control flies'), ('TNT', 'KCs, APL output blocked (TNT)')):
         kc = H.yang_mean_rdm(g, 'cosine')
         out = []
-        for name, o in (('old (zero-filled)', old), ('new', new), ('new, fly-mean vectors only', fmv)):
+        for name, o in (('zero-filled (original report)', old), ('mixed (until 2026-11-13)', mixed), ('fly-mean vectors (the reference)', ref)):
             a, b = H.align_pairs(kc, o)
             out.append(f'{name} ρ={H.spearman(a, b):.3f}')
         print(f'{lab} vs ORNs: ' + '; '.join(out))
-    print('wrote', OUT / f'{STEM}.csv')
+    print('wrote', OUT / f'{STEM}_flymean.csv')
 
 
 if __name__ == '__main__':

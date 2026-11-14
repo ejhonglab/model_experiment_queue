@@ -5,8 +5,9 @@ pair by pair, and control against APL output blocked (TNT) with the monotone (is
 whose residual defines the fruity x small-ester block. Drawn twice:
 
 - summary_background.png: the KC matrices as cosine distance (the program's primary measure).
-  The ORN matrix is the report's, one minus the Pearson correlation across the 40 glomeruli
-  that respond to at least one of the 16 odors (apl_analysis.py in the shared directory's apl_pair_analysis/), and is
+  The ORN matrix is `kcq.harness.orn16_consensus_pairs()`, one minus the Pearson correlation across the
+  36 glomeruli of the model's ORN input between the two odors' fly-mean vectors, for all 120 pairs (since
+  2026-11-13; before, the pairs within a panel were per-fly correlations averaged over flies), and is
   labelled as such.
 - summary_background_pearson.png: everything as Pearson correlation (r, not distance), the
   matrices in olfdb's blue-white-red Oklab colormap (white at r = 0, symmetric -1..1, diagonal

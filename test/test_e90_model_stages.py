@@ -111,7 +111,8 @@ def test_shared_glomeruli_are_the_notes():
 @needs_shared
 def test_orn_flies_reproduce_consensus():
     m = X.flies_stage_mean('orn')
-    c = X._cs(H.orn16_consensus_pairs()).reindex(X.megamat_pairs())
+    # the per-fly stage equals the mixed recipe's within-panel pairs (the reference until 2026-11-13)
+    c = X._cs(H.orn16_consensus_pairs_mixed()).reindex(X.megamat_pairs())
     assert float((m - c).abs().max()) < 1e-9
 
 

@@ -41,16 +41,20 @@ OUT = H.shared_dir() / 'results' / 'orn_recipe_check'
 
 
 def recipes() -> tuple:
-    """(pairs table, {recipe: pair Series}): 'mixed' (the current matrix) and 'flymean' (fly-mean vectors for all
-    120 pairs), checked against `H.orn16_consensus_pairs()`."""
+    """(pairs table, {recipe: pair Series}): 'mixed' (the reference until 2026-11-13,
+    `H.orn16_consensus_pairs_mixed()`) and 'flymean' (fly-mean vectors for all 120 pairs, the reference since,
+    `H.orn16_consensus_pairs()`), each checked against the harness. The pairs table's columns are
+    distance_mixed and distance_flymean_vectors since 2026-11-13 (before, `distance` was the mixed recipe)."""
     t = pd.read_csv(INPUTS / 'orn16_corrdist_olfdb_36glom_pairs.csv')
     idx = pd.MultiIndex.from_arrays([t.odor_a, t.odor_b], names=['odor_a', 'odor_b'])
-    mixed = H.canonical_pairs(pd.Series(t.distance.to_numpy(), index=idx))
+    mixed_col = 'distance_mixed' if 'distance_mixed' in t else 'distance'
+    mixed = H.canonical_pairs(pd.Series(t[mixed_col].to_numpy(), index=idx))
     flymean = H.canonical_pairs(pd.Series(t.distance_flymean_vectors.to_numpy(), index=idx))
-    cur = H.orn16_consensus_pairs()
-    a, b = H.align_pairs(cur, mixed)
-    if len(a) != 120 or not np.allclose(a.to_numpy(), b.to_numpy(), atol=1e-12):
-        raise RuntimeError('the pairs table does not give harness.orn16_consensus_pairs()')
+    for name, cur, rec in (('orn16_consensus_pairs_mixed', H.orn16_consensus_pairs_mixed(), mixed),
+                           ('orn16_consensus_pairs', H.orn16_consensus_pairs(), flymean)):
+        a, b = H.align_pairs(cur, rec)
+        if len(a) != 120 or not np.allclose(a.to_numpy(), b.to_numpy(), atol=1e-12):
+            raise RuntimeError(f'the pairs table does not give harness.{name}()')
     t['within_panel'] = t.panel_a == t.panel_b
     return t, {'mixed': mixed, 'flymean': flymean}
 
@@ -106,7 +110,7 @@ def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     t, rec = recipes()
     wp = t[t.within_panel]
-    d = wp.distance - wp.distance_flymean_vectors
+    d = (wp.distance_mixed if 'distance_mixed' in wp else wp.distance) - wp.distance_flymean_vectors
     t.to_csv(OUT / 'pairs.csv', index=False)
     ms = matrix_summary(t, rec)
     ms.to_csv(OUT / 'matrix_summary.csv', index=False)

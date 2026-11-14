@@ -1057,8 +1057,10 @@ bare ID ("the per-glomerulus drive normalization sweep (E20)", not "E20").
   blue-white-red Oklab colormap, lightness linear in |value|, white at 0
   (`kcq.harness.oklab_diverging_cmap()`, a port of hong-data's default), on a symmetric
   scale. Note the ORN matrix the program uses everywhere is one minus the Pearson correlation
-  across the 40 responding glomeruli (`orn16_consensus_pairs()`), so in the cosine figure the
-  ORN panel is labelled "Pearson correlation distance".
+  across the 36 glomeruli of the model's ORN input, between fly-mean vectors for all 120 pairs
+  (`orn16_consensus_pairs()`; since 2026-11-13, before which the pairs within a panel were per-fly
+  correlations averaged over flies), so in the cosine figure the ORN panel is labelled "Pearson
+  correlation distance".
 - **Opaque terms and methods.** A technical term the main text needs but should not stop to
   explain (isotonic, ...) gets a hover definition: put a `%%% hover` block (lines
   `term: definition`, closed by `%%%`) anywhere in the markdown and `md_to_artifact.py` wraps

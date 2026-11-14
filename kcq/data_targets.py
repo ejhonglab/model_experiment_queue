@@ -37,7 +37,7 @@ INPUTS = {
     'kc_rdms': YANG / 'rdm_per_recording_long.csv',
     'kc_fractions': YANG / 'response_fraction_per_recording.csv',
     'kc_trialmeans': YANG / 'trialmean_responses_long.parquet',
-    'orn': H.shared_dir() / 'data' / 'model_outputs' / 'inputs' / 'orn16_corrdist_olfdb_36glom.csv',
+    'orn': H.shared_dir() / 'data' / 'model_outputs' / 'inputs' / 'orn16_corrdist_olfdb_36glom_flymean.csv',
     'ref66': H.apl_pair_dir() / 'shared12_pairs.csv',
     'e7_blocks': H.shared_dir() / 'results' / 'E7_confound_controls' / 'B_blocks_graded.csv',
     'kc_trials_ctrl': H.yang_data_dir() / 'TNT3c' / 'dataset_20_long.csv',
