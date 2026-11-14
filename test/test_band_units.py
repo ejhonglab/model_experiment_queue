@@ -155,11 +155,11 @@ def test_archive_opk_both_units(tmp_path, monkeypatch):
 
 
 def test_archive_responses_in_part_subfolders(tmp_path, monkeypatch):
-    """Responses archived in a part subfolder (B/, D/, ...) are found when no other subfolder has the same tag; the
-    root wins over a subfolder, and a tag in two subfolders is ambiguous (None)."""
+    """Responses archived in a part subfolder (B/, D/, from_<host>/B/, ...) are found when no other subfolder has the same
+    tag; the root wins over a subfolder, and a tag in two subfolders is ambiguous (None)."""
     rng = np.random.default_rng(3)
     folder = tmp_path / 'E0_parts'
-    for sub in ('B', 'D'):
+    for sub in ('B', 'D', 'from_host/B'):
         (folder / sub).mkdir(parents=True)
     r = {c: pd.DataFrame((rng.random((500, 16)) < p).astype(float), columns=LABELS)
          for c, p in (('on', 0.07), ('acute_off', 0.15))}
@@ -169,7 +169,9 @@ def test_archive_responses_in_part_subfolders(tmp_path, monkeypatch):
         r[c].to_parquet(folder / 'D' / f'w_{c}_responses.parquet')
         r[c].to_parquet(folder / 'D' / f'x_{c}_responses.parquet')
         r[c].to_parquet(folder / f'x_{c}_responses.parquet')
+        r[c].to_parquet(folder / 'from_host' / 'B' / f'y_{c}_responses.parquet')
     monkeypatch.setattr(S, 'ARCHIVE', tmp_path)
+    assert S.archive_responses(folder, 'y', 'on') == folder / 'from_host' / 'B' / 'y_on_responses.parquet'
     assert S.archive_responses(folder, 'v', 'on') == folder / 'B' / 'v_on_responses.parquet'
     assert S.archive_responses(folder, 'x', 'acute_off') == folder / 'x_acute_off_responses.parquet'
     assert S.archive_responses(folder, 'w', 'on') is None

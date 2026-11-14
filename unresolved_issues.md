@@ -25,12 +25,14 @@ directory's notes/ and are linked from here.
     variants that the fix now flags: E80's three points of the curve, E85's single model flies, and E87's 8 of 40 D1 runs,
     all below the response rate ρ band with APL on.
 - **Done.**
-  - `archive_responses` finds the file in a single part subfolder when it is not at the root (a test was added).
+  - `archive_responses` finds the file anywhere below the archive folder (B/, D/, from_<host>/B/, ...) when it is not at
+    the root and exactly one copy exists (a test was added; first one level deep in 90db837, then any depth).
   - `realism` now says when the response rates themselves were not scored.
-  - by_variant.csv was rescored. 30 variants are newly flagged, all by the response rate ρ with APL on: E85 19, E87 8, E80 3.
-  - 84 rows are still without odors per KC, and 80 without response rates:
+  - by_variant.csv was rescored. 30 variants are newly flagged by the response rate ρ with APL on (E85 19, E87 8, E80 3),
+    and 4 of E92's 16 B1 points (archived in from_viki/B/), as hal's own post of 2026-11-13 22:41 reported them.
+  - 64 rows are still without response rates:
     - E87's and E88's D1 runs: their APL-off run is the family's and is not archived again, so only the APL-on bands are read.
-    - E92's 28 rows: its archive has no response matrices for them.
+    - E92's 12 B2 points: hal's, not archived yet.
   - analyses/apl_effect_metrics.py was rerun on raw counts and under the readout, with the corrected flags and the variants
     added since. The tables are in results/apl_effect_metrics/rerun_2026-11-14/; the shared folder's tables are left as
     they were.
@@ -41,7 +43,7 @@ directory's notes/ and are linked from here.
       0.35 (0.35), per-odor part 0.53 (0.54), pair-specific part 0.92 (0.92).
     - The best variant by ρ differs from the pattern part's in 30 of 59 experiments (was 28 of 57). The numbers quoted
       in CLAUDE.md come from the first run (86f0d69) and are not rewritten.
-- **Remains.** E92's archive needs its response matrices (hal).
+- **Remains.** E92's B2 points are scored once hal archives them (nothing to change).
 
 ### pyolfsysm's `get_time_index` placed every step up to one step late, so closed windows read with it lost their end step (found 2026-11-13 12:04, atlas's code subagent for E90; fixed in olfsysm 17cef71)
 - **What.** `pyolfsysm.mb_model.get_time_index` spreads the run's n steps evenly from its first time to `time_end` inclusive

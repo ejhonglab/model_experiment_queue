@@ -42,6 +42,7 @@ build_summary.py runs it before the progress plot. Usage: ./venv/bin/python kcq/
 from __future__ import annotations
 
 import argparse
+import functools
 import hashlib
 import json
 import re
@@ -130,15 +131,26 @@ def rate_lookup(folder: Path) -> Dict[str, dict]:
     return out
 
 
+@functools.lru_cache(maxsize=None)
+def _archive_index(d: str) -> Dict[str, Tuple[Path, ...]]:
+    """{file name: paths} of every `*_responses.parquet` below the archive folder `d` (one walk per folder)."""
+    out: Dict[str, List[Path]] = {}
+    root = Path(d)
+    if root.is_dir():
+        for p in sorted(root.rglob('*_responses.parquet')):
+            out.setdefault(p.name, []).append(p)
+    return {k: tuple(v) for k, v in out.items()}
+
+
 def archive_responses(folder: Path, tag: str, name: str) -> Optional[Path]:
     """The model-output archive's `<tag>_<name>_responses.parquet` (`name` 'on' or 'acute_off') for a results folder:
-    at the archive folder's root, else in one of its part subfolders (B/, D/, ...; the layout of E85 onward), when
+    at the archive folder's root, else in its subfolders (B/, D/, from_<host>/B/, ...; the layout from E77 on), when
     exactly one has it; None otherwise."""
     d = ARCHIVE / folder.name
     fname = f'{tag}_{name}_responses.parquet'
     if (d / fname).exists():
         return d / fname
-    found = sorted(d.glob(f'*/{fname}')) if d.is_dir() else []
+    found = _archive_index(str(d)).get(fname, ())
     return found[0] if len(found) == 1 else None
 
 
