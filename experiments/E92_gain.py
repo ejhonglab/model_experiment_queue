@@ -2156,6 +2156,9 @@ def figure_f(out: Path) -> Optional[Path]:
     ink, ink2, grid = '#0b0b0b', '#52514e', '#e6e5e1'
     cols = {'C2': '#0b0b0b', 'E91_B1_k2_s1': '#2a78d6', 'E91_refit': '#c2449f', 'E91_B2_k2': '#5b4cc4',
             'E91_B2_k1_s1': '#138a60'}
+    labels = {'C2': "C2's family (clipped)", 'E91_B1_k2_s1': 'summed form, the fits as they are',
+              'E91_refit': 'summed form, the family fitted again', 'E91_B2_k2': "the flies' recruitment base, clipped",
+              'E91_B2_k1_s1': "that base's choice: exponent 1, summed"}
     fig, axes = plt.subplots(1, 2, figsize=(13, 5.5))
     for ax, ro in zip(axes, A.READOUTS):
         ln = A.line(ro)['S']
@@ -2174,7 +2177,7 @@ def figure_f(out: Path) -> Optional[Path]:
             r = lc[(lc.readout == ro) & (lc.population == 'S') & (lc.folder == folder) & (lc.family == lf)]
             if len(r):
                 ax.scatter(r.alcohol_rel, r.ester_rel, s=60, marker='D', facecolors='white', edgecolors=cols[fam], lw=1.6,
-                           label=fam, zorder=5)
+                           label=labels[fam], zorder=5)
         for k, mk in (('trial_mean', '*'), ('noise_removed', 'P')):
             f_ = ln['flies'][f'{k}_all']
             ax.plot(f_['alcohol'], f_['ester'], mk, color=ink if k == 'trial_mean' else ink2, ms=11,
