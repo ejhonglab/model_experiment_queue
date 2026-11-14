@@ -219,7 +219,7 @@ def test_verdict_rows_from_made_up_tables():
 
 def test_line_and_place_on_line():
     a = np.linspace(-0.3, -0.1, 13)
-    e = 0.5 * a - 0.05 + np.array([0.01, -0.01] * 6 + [0.0])
+    e = 0.5 * a - 0.05 + np.array([0.01, -0.01] * 5 + [0.02, -0.02, 0.0])
     ln = X.fit_line(e, a)
     assert ln['n'] == 13 and ln['slope'] == pytest.approx(0.5, abs=0.05) and ln['scatter'] > 0
     fp = {f'{rd}_{h}': dict(ester=0.1, alcohol=-0.25) for rd in X.FLY_READINGS for h in X.FLY_POINTS}
@@ -228,7 +228,14 @@ def test_line_and_place_on_line():
     on_line = X.place_on_line(ln['intercept'] + ln['slope'] * -0.2, -0.2, ln)
     assert abs(on_line['resid']) < 1e-12 and not on_line['off_toward_flies']
     up = X.place_on_line(ln['intercept'] + ln['slope'] * -0.2 + 3 * ln['scatter'], -0.2, ln)
-    assert up['off_toward_flies'] and up['toward_trial_mean_A'] > 0
+    assert up['off_toward_flies'] and up['off_toward_flies_sd'] and up['toward_trial_mean_A'] > 0
+    # beyond the SD but within the extent of the line's own residuals: off only by the SD reading
+    mid = X.place_on_line(ln['intercept'] + ln['slope'] * -0.2 + 0.5 * (ln['scatter'] + ln['max_abs_resid']), -0.2, ln)
+    if ln['max_abs_resid'] > ln['scatter']:
+        assert mid['off_toward_flies_sd'] and not mid['off_toward_flies']
+    # none of the line's own points is off it
+    for (aa, ee) in zip(a, e):
+        assert not X.place_on_line(ee, aa, ln)['off_toward_flies']
     down = X.place_on_line(ln['intercept'] + ln['slope'] * -0.2 - 3 * ln['scatter'], -0.2, ln)
     assert not down['off_toward_flies'] and down['toward_trial_mean_B'] < 0
     # relative to a reference residual

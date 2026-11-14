@@ -48,9 +48,10 @@ Parts (CLI `--part`):
   single runs otherwise; the line fitted through E89's 13 weightings (C1) as S populations (`line`), and one line per S
   wiring through the same weightings for single runs; a variant is off the line toward the flies (`place_on_line`) if
   its residual, signed toward the side of the line the control flies' point lies on, exceeds the weightings' scatter
-  about the line (the residuals' SD), with the flies' point from half A and from half B (cosine trial means, the main
-  target's reading; noise removed beside). On T the residual is taken relative to C2's unchanged population on T (E90's
-  runs), against S's line. Every variant carries its pattern part (calibrated readout, all recordings) and its realism
+  about the line (its extent, the largest absolute residual of the 13 weightings, so that none of them is off its own
+  line; beyond the residuals' SD beside), with the flies' point from half A and from half B (cosine trial means, the
+  main target's reading; noise removed beside). On T, and for single runs, the residual is taken relative to C2's
+  unchanged run on the same wirings (E90's runs), on T against S's line. Every variant carries its pattern part (calibrated readout, all recordings) and its realism
   (E83's `realism`: inside the bands if every member run is); one with an odor silent in both conditions (NaN
   distances, `n_pairs` below 120) is placed but never named. No variant is chosen by this.
 - A: A1, Acheck, A2, A3 and A4 in order, then table; table: comparison_table.md and the figures.
@@ -926,19 +927,20 @@ def _with_flies(ln: dict, fp: Dict[str, Dict[str, float]]) -> dict:
 
 def place_on_line(est_rel: float, alc_rel: float, ln: dict, ref_resid: float = 0.0) -> dict:
     """One variant's place against a line (one of `line(readout)`'s, with its flies' points): its residual (minus
-    `ref_resid`, the residual of the variant's reference where the line was not fitted on its wirings), the residual
-    signed toward each flies' point's side of the line ('toward_<point>'), and whether it is off the line toward the flies
-    by more than the scatter against half A and against half B, in the trial means ('off_toward_flies', the main
-    target's reading) and noise removed ('off_toward_flies_nr'); 'beyond_every_weighting' if also beyond the largest
-    residual of the line's own points."""
+    `ref_resid`, the residual of the variant's reference, C2 unchanged on the same wirings, where the line was not
+    fitted on those wirings as populations), the residual signed toward each flies' point's side of the line
+    ('toward_<point>'), and whether it is off the line toward the flies against half A and against half B, in the trial
+    means (the main target's reading) and noise removed ('_nr'): 'off_toward_flies' beyond the scatter's extent (the
+    largest absolute residual of the line's own 13 weightings, so that none of them, the unchanged family among them, is
+    off its own line), 'off_toward_flies_sd' (beside) beyond the residuals' SD."""
     r = float(est_rel - (ln['intercept'] + ln['slope'] * alc_rel)) - float(ref_resid)
     out = dict(resid=r)
     for k, v in ln['flies'].items():
         out[f'toward_{k}'] = r * float(np.sign(v['resid']))
     for suf, rd in (('', 'trial_mean'), ('_nr', 'noise_removed')):
         tw = [out[f'toward_{rd}_{h}'] for h in ('A', 'B')]
-        out[f'off_toward_flies{suf}'] = bool(all(t > ln['scatter'] for t in tw))
-        out[f'beyond_every_weighting{suf}'] = bool(all(t > ln['max_abs_resid'] for t in tw))
+        out[f'off_toward_flies{suf}'] = bool(all(t > ln['max_abs_resid'] for t in tw))
+        out[f'off_toward_flies_sd{suf}'] = bool(all(t > ln['scatter'] for t in tw))
     return out
 
 
@@ -1150,11 +1152,11 @@ def variant_rows(v: pd.DataFrame, res: Dict[int, dict], lines: Dict[str, Dict[st
                 units.append((folder, fam, w, [i]))
     ref = {}
     refs = ok[ok.family == 'C2_unchanged']
-    for name, need in (('T', T_WIRINGS),) + tuple((w, (w,)) for w in T_WIRINGS):
+    for name, need in (('T', T_WIRINGS),) + tuple((w, (w,)) for w in ALL_WIRINGS):
         idx = [refs.index[refs.wiring == w][0] for w in need]
         for ro in READOUTS:
             e, a = relative_distances(_pop([res[i] for i in idx], f'{ro}_on'))
-            ln = lines[ro]['S']
+            ln = lines[ro][name] if name in S_WIRINGS else lines[ro]['S']
             ref[(ro, name)] = e - (ln['intercept'] + ln['slope'] * a)
     rows = []
     for folder, fam, name, idx in units:
@@ -1172,7 +1174,7 @@ def variant_rows(v: pd.DataFrame, res: Dict[int, dict], lines: Dict[str, Dict[st
             d = {c: _pop(rr, f'{ro}_{c}') for c in CONDS}
             e, a = relative_distances(d['on'])
             if name in S_WIRINGS:
-                ln, rref, basis = lines[ro][name], 0.0, f'the line on {name}'
+                ln, rref, basis = lines[ro][name], ref[(ro, name)], f'the line on {name}, relative to C2 unchanged on {name}'
             elif name == 'S':
                 ln, rref, basis = lines[ro]['S'], 0.0, "S's line"
             else:
@@ -1180,7 +1182,7 @@ def variant_rows(v: pd.DataFrame, res: Dict[int, dict], lines: Dict[str, Dict[st
             pl = place_on_line(e, a, ln, rref)
             n_pairs = int(np.isfinite(d['on'].to_numpy()).sum())
             if n_pairs < len(PAIRS120):
-                pl.update({k: False for k in pl if k.startswith(('off_toward', 'beyond'))})
+                pl.update({k: False for k in pl if k.startswith('off_toward')})
             sc = E83.effect_scores(d, {k: tg[k] for k in ('z8', 'halfA', 'halfB')})
             ef = effect_parts(d['on'], d['off'], tg['z8'])
             rows.append(dict(base, readout=ro, n_pairs=n_pairs, ester_rel=e, alcohol_rel=a, basis=basis, **pl,
@@ -1219,16 +1221,18 @@ def part_a4(workers: int = 8) -> pd.DataFrame:
         lines=lines, errors=errs, n_runs=int(len(inc)), n_variants=int(len(vr) // len(READOUTS)),
         n_in_bands=int(vr[vr.readout == 'raw'].in_bands.sum()),
         counts={ro: {f'{fo}|{k}': dict(n=int(len(x)), off_toward_flies=int(x.off_toward_flies.sum()),
-                                       beyond_every_weighting=int(x.beyond_every_weighting.sum()))
+                                       off_toward_flies_sd=int(x.off_toward_flies_sd.sum()))
                      for (fo, k), x in named[named.readout == ro].groupby(['folder', 'kind'])} for ro in READOUTS},
         off_toward_flies={ro: off[off.readout == ro][['folder', 'family', 'population', 'kind', 'resid',
-                                                       'toward_trial_mean_A', 'toward_trial_mean_B',
-                                                       'beyond_every_weighting', 'pattern', 'loss', 'mean_effect']]
+                                                       'toward_trial_mean_A', 'toward_trial_mean_B', 'basis',
+                                                       'pattern', 'loss', 'mean_effect']]
                           .sort_values('resid', ascending=False).to_dict(orient='records') for ro in READOUTS},
         rule='off the line toward the flies: the residual (ester relative distance minus the line at the variant\'s '
-             'alcohol relative distance), signed toward the side of the line the control flies\' point lies on, above '
-             'the line\'s scatter (the residuals\' SD of its 13 weightings) with the flies\' point from half A and from '
-             'half B (cosine trial means)', seconds=round(time.time() - t0, 1)))
+             'alcohol relative distance; for single runs and for T relative to C2 unchanged on the same wirings), signed '
+             'toward the side of the line the control flies\' point lies on, above the scatter\'s extent (the largest '
+             'absolute residual of the line\'s 13 weightings) with the flies\' point from half A and from half B (cosine '
+             'trial means); beside, above the residuals\' SD (off_toward_flies_sd), under which 2 of the 13 weightings '
+             'and the unchanged family would be off their own line', seconds=round(time.time() - t0, 1)))
     _LINE.clear()
     _LINE.update(lines)
     print(f'A4 in {time.time() - t0:.0f} s; errors {len(errs)}; off the line toward the flies: '
@@ -1319,7 +1323,7 @@ def comparison_table() -> None:
         lc = pd.read_csv(o / 'line.csv')
         off = lc[lc.in_bands & lc.off_toward_flies & (lc.kind != 'line')].sort_values(['readout', 'resid'], ascending=[True, False])
         L += ['', f"Variants: {lj['n_variants']} ({lj['n_in_bands']} inside the bands); off the line toward the flies "
-              '(inside the bands):', '',
+              "(inside the bands; beyond the largest residual of the line's 13 weightings):", '',
               '| readout | experiment | family | wirings | residual | toward the flies (A / B) | pattern part (cal) | loss | '
               'mean APL effect |', '|---|---|---|---|---:|---|---:|---:|---:|']
         for _, r in off.iterrows():
