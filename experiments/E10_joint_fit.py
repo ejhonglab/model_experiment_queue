@@ -319,7 +319,11 @@ def aplpn_hold_tag(hold: Optional[float]) -> str:
     return '' if hold is None else 'aplpnhold_'
 
 
-APLKC_FLAT_KINDS = ('uniform', 'connectome')
+APLKC_FLAT_KINDS = ('uniform', 'connectome', 'offclaw', 'offclaw_ped', 'allsyn')
+# (E96) the components built from the counts of APL's synapses per KC (`aplkc_flat_counts`)
+APLKC_FLAT_COUNT_KINDS = ('offclaw', 'offclaw_ped', 'allsyn')
+APLKC_FLAT_TAGS = {'uniform': 'flatu_', 'connectome': 'flatc_', 'offclaw': 'flato_', 'offclaw_ped': 'flatp_',
+    'allsyn': 'flata_'}
 APLKC_FLAT_MAX = 8.0
 
 
@@ -343,19 +347,88 @@ def aplkc_flat_spec(kind: Optional[str], unit: Optional[float] = None, init: Opt
 
 
 def aplkc_flat_tag(spec: Optional[dict]) -> str:
-    """(E95) The tag part of --aplkc-flat: flatu_ (uniform) or flatc_ (connectome); '' when not given."""
-    return '' if spec is None else f"flat{spec['kind'][0]}_"
+    """(E95) The tag part of --aplkc-flat: flatu_ (uniform) or flatc_ (connectome); (E96) flato_ (offclaw), flatp_
+    (offclaw_ped), flata_ (allsyn); '' when not given."""
+    return '' if spec is None else APLKC_FLAT_TAGS[spec['kind']]
 
 
-def aplkc_flat_component(wAPLKC0: pd.Series, kind: str) -> np.ndarray:
+_FLAT_COUNTS: Dict[tuple, Tuple[pd.DataFrame, pd.Series]] = {}
+
+
+def aplkc_flat_counts(claw_index: pd.MultiIndex) -> Tuple[pd.DataFrame, pd.Series]:
+    """(E96) The APL->KC synapses per KC of a claw wiring (`claw_index`, with kc_id and claw_id levels) and per kept
+    claw, from the table the model reads with its loader's filters (pyolfsysm's `connectome_APL_KC_synapse_counts`:
+    columns n_claws, kept, kept_unassigned, dropped_claw, no_claw, no_claw_nan, peduncle); cached per process."""
+    from pyolfsysm.mb_model import connectome_APL_KC_synapse_counts
+    key = tuple(map(tuple, claw_index.to_frame(index=False)[[H.KC_ID_LEVEL, 'claw_id']].to_numpy().tolist()))
+    if key not in _FLAT_COUNTS:
+        _FLAT_COUNTS[key] = connectome_APL_KC_synapse_counts(claw_index, 'APL>KC')
+    per_kc, per_claw = _FLAT_COUNTS[key]
+    return per_kc.copy(), per_claw.copy()
+
+
+def aplkc_flat_offclaw(kind: str, per_kc: pd.DataFrame) -> pd.Series:
+    """(E96) a_k, KC k's APL->KC synapses on no claw that the component spreads over its claws: 'offclaw' those in the
+    calyx (a^c_k, the counts' no_claw), 'offclaw_ped' and 'allsyn' those in the calyx and the peduncle (a^c_k + a^p_k)."""
+    if kind == 'offclaw':
+        return per_kc['no_claw'].astype(float)
+    if kind in ('offclaw_ped', 'allsyn'):
+        return (per_kc['no_claw'] + per_kc['peduncle']).astype(float)
+    raise ValueError(f'no off-claw count for --aplkc-flat {kind!r}')
+
+
+def aplkc_flat_shape(kind: str, kc_of_claw: np.ndarray, a_kc: pd.Series,
+    kept_claw: Optional[np.ndarray] = None) -> np.ndarray:
+    """(E96) The component's shape per claw, mean 1 over the claws: a_k / n_k on each of KC k's claws (n_k its claws in
+    `kc_of_claw`, a_k from `a_kc`, indexed by KC id); 'allsyn' adds each claw's own count on the kept claws
+    (`kept_claw`, in synapses, the claws' order), in the proportion in which the two are counted. A KC with a_k = 0 (and,
+    for 'allsyn', no synapse on its claws) gets 0."""
+    kc_of_claw = np.asarray(kc_of_claw)
+    n = pd.Series(kc_of_claw).value_counts()
+    a = pd.Series(a_kc, dtype=float)
+    if a.index.has_duplicates or not set(np.unique(kc_of_claw)) <= set(a.index):
+        raise ValueError('a_kc must have one value per KC of the claws')
+    if (a < 0).any() or not np.isfinite(a.to_numpy()).all():
+        raise ValueError('a_kc must be finite and not negative')
+    per_claw = a.reindex(kc_of_claw).to_numpy(dtype=float) / n.reindex(kc_of_claw).to_numpy(dtype=float)
+    if kind == 'allsyn':
+        if kept_claw is None:
+            raise ValueError("'allsyn' needs the kept claws' counts")
+        kc = np.asarray(kept_claw, dtype=float).ravel()
+        if kc.size != per_claw.size or (kc < 0).any():
+            raise ValueError(f'{kc.size} kept counts for {per_claw.size} claws')
+        per_claw = kc + per_claw
+    elif kind not in ('offclaw', 'offclaw_ped'):
+        raise ValueError(f'no count shape for --aplkc-flat {kind!r}')
+    m = float(per_claw.mean())
+    if not m > 0:
+        raise ValueError('the component is zero on every claw')
+    return per_claw / m
+
+
+def aplkc_flat_component(wAPLKC0: pd.Series, kind: str,
+    counts: Optional[Tuple[pd.DataFrame, pd.Series]] = None) -> np.ndarray:
     """(E95) The unweighted component of the APL->KC weights per claw, per unit of size and of `unit`: 'uniform' the
     connectome's mean (unscaled, normalized) weight on every claw, 'connectome' each claw's connectome weight (not
-    weighted by breadth); both have the connectome's mean."""
+    weighted by breadth); (E96) 'offclaw', 'offclaw_ped', 'allsyn' the connectome's mean weight times
+    `aplkc_flat_shape` (a KC's synapses on no claw spread evenly over its claws; with all of APL's synapses on the kept
+    claws added), from `counts` (`aplkc_flat_counts` of `wAPLKC0`'s claws, computed when None). All have the
+    connectome's mean."""
     w = wAPLKC0.to_numpy(dtype=float)
     if kind == 'uniform':
         return np.full(w.size, float(w.mean()))
     if kind == 'connectome':
         return w.copy()
+    if kind in APLKC_FLAT_COUNT_KINDS:
+        per_kc, per_claw = aplkc_flat_counts(wAPLKC0.index) if counts is None else counts
+        if not per_claw.index.equals(wAPLKC0.index):
+            raise ValueError("the counts' claws are not the APL->KC weights' claws")
+        kc_of = np.asarray(wAPLKC0.index.get_level_values(H.KC_ID_LEVEL))
+        n = pd.Series(kc_of).value_counts().reindex(per_kc.index)
+        if not np.array_equal(n.to_numpy(dtype=float), per_kc['n_claws'].to_numpy(dtype=float)):
+            raise ValueError("the counts' claws per KC are not the wiring's")
+        shape = aplkc_flat_shape(kind, kc_of, aplkc_flat_offclaw(kind, per_kc), per_claw.to_numpy(dtype=float))
+        return float(w.mean()) * shape
     raise ValueError(f'unknown --aplkc-flat {kind!r}')
 
 
@@ -1869,7 +1942,10 @@ def main() -> None:
     ap.add_argument('--aplkc-flat', default=None, choices=list(APLKC_FLAT_KINDS),
         help='(E95) add an unweighted component to the APL->KC weights, its size a fitted parameter (aplkc_flat, bounded '
         "[0, --aplkc-flat-max]): 'uniform' the connectome's mean weight on every claw, 'connectome' each claw's connectome "
-        'weight unweighted by breadth, times --aplkc-flat-unit per unit of size; off by default; tag part flatu_ / flatc_')
+        "weight unweighted by breadth; (E96) 'offclaw' each KC's APL synapses on no claw in the calyx, 'offclaw_ped' with "
+        "those in the peduncle, spread evenly over its claws, 'allsyn' those plus the synapses on each kept claw, each "
+        "scaled to the connectome's mean weight; times --aplkc-flat-unit per unit of size; off by default; tag part "
+        'flatu_ / flatc_ / flato_ / flatp_ / flata_')
     ap.add_argument('--aplkc-flat-unit', type=float, default=None, metavar='U',
         help='(E95) with --aplkc-flat: the unscaled weight per unit of size and of the component\'s mean weight')
     ap.add_argument('--aplkc-flat-init', type=float, default=None, metavar='D',
@@ -2474,7 +2550,9 @@ def main() -> None:
             **({} if flat_spec is None else dict(aplkc_flat=dict(flat_spec, size=float(res['extra_params']['aplkc_flat']),
                 note=('E95: every simulation (APL on; APL off has the APL->KC scale 0) has the unscaled APL->KC weight of each '
                 'claw the family\'s breadth-weighted one plus aplkc_flat x unit x the component (uniform: the connectome\'s '
-                'mean normalized weight on every claw; connectome: the claw\'s own connectome weight), aplkc_flat fitted '
+                'mean normalized weight on every claw; connectome: the claw\'s own connectome weight; E96\'s offclaw / '
+                'offclaw_ped / allsyn: each KC\'s APL->KC synapses on no claw in the calyx / also in the peduncle / also '
+                'with each kept claw\'s own, spread evenly over its claws, at the connectome\'s mean), aplkc_flat fitted '
                 'within bounds as a fifth parameter (optimize_mb_model_params extra_params)')))),
             kckc_fixed=args.kckc_fixed, base_params=initial, loss_variant=args.loss, kc_spiking=kc_spiking,
             **(dict(kc_thr_input=dict(exponent=args.kc_thr_input_exp, prepass=prepass_info,
