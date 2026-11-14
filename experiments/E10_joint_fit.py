@@ -804,21 +804,32 @@ def read_orn_input(spec: str, orn: pd.DataFrame) -> pd.DataFrame:
     """`orn` (the lab's 16-odor input, `H.apl16_orn_deltas()`) with its values replaced by those of the
     CSV `spec` (glomeruli x abbreviated odors, the same glomeruli and odors in the same order, e.g.
     E38's results/E38_hallem_input/inputs/hallem_shared_ms.csv; relative to the shared directory
-    unless absolute)."""
+    unless absolute). The CSV may have further glomeruli after the lab's (E93: rows for glomeruli the
+    lab's input lacks, which `fit_mb_model` would otherwise zero-fill); they are appended, in the
+    CSV's order, with the same columns."""
     path = Path(spec)
     if not path.is_absolute():
         path = H.shared_dir() / path
     alt = pd.read_csv(path, index_col=0)
     ab = H.abbrev_columns(orn)
-    if list(alt.index) != list(orn.index) or list(alt.columns) != list(ab.columns):
-        raise ValueError(f'{path}: glomeruli / odors differ from apl16_orn_deltas()')
+    n = len(orn.index)
+    extra = list(alt.index[n:])
+    if (list(alt.index[:n]) != list(orn.index) or list(alt.columns) != list(ab.columns)
+            or set(extra) & set(orn.index) or len(set(extra)) != len(extra)):
+        raise ValueError(f'{path}: glomeruli / odors differ from apl16_orn_deltas() (further glomeruli may follow '
+            "the lab's, each once)")
     # only values that differ beyond the CSV's float round trip are replaced, so the rest stay the lab's exactly
     out = orn.astype(float).copy()
-    a, o = alt.to_numpy(dtype=float), out.to_numpy()
+    a, o = alt.iloc[:n].to_numpy(dtype=float), out.to_numpy()
     mask = np.abs(a - o) > 1e-9
     out[:] = np.where(mask, a, o)
     changed = int(mask.sum())
-    print(f'ORN input from {path} ({changed} of {out.size} values differ from the lab input)', flush=True)
+    if extra:
+        add = pd.DataFrame(alt.iloc[n:].to_numpy(dtype=float), index=pd.Index(extra, name=orn.index.name),
+            columns=orn.columns)
+        out = pd.concat([out, add])
+    print(f'ORN input from {path} ({changed} of {orn.size} values differ from the lab input'
+        + (f'; {len(extra)} further glomeruli: {extra}' if extra else '') + ')', flush=True)
     return out
 
 

@@ -1104,6 +1104,9 @@ Q_SESSION = 3.0 / 25.0
 # the shared glomeruli's boutons / claws, all of them, and those of the 36 glomeruli the model's ORN input has (the
 # wiring's other 18 glomeruli get no ORN input in the model, so their PNs carry only the antennal lobe's lateral signal)
 SUBSETS = ('shared', 'all', 'input')
+# further subsets by name -> their glomeruli (E93 adds the 46 glomeruli of its fuller input); empty here, so E90's readings
+# are SUBSETS only
+EXTRA_SUBSETS: Dict[str, Sequence[str]] = {}
 MODEL_READINGS = ('rate', 'session_z', 'noisy_nr', 'noisy_measured')
 NOISE_FREE = ('rate', 'session_z')
 
@@ -1211,11 +1214,15 @@ def stage_units(st: dict, stage: str) -> pd.DataFrame:
 
 def subset_mask(stage: str, units: pd.Index, meta: Optional[dict], subset: str) -> np.ndarray:
     """The units of `subset`: 'all'; 'shared' (those of the 28 shared glomeruli: a bouton's glomerulus, a claw's
-    (`unit_meta`), a PN's own); 'input' (those of the 36 glomeruli of the model's ORN input)."""
+    (`unit_meta`), a PN's own); 'input' (those of the 36 glomeruli of the model's ORN input); a name of EXTRA_SUBSETS
+    (those of its glomeruli)."""
     if subset == 'all':
         return np.ones(len(units), dtype=bool)
-    sh = list(shared_glomeruli()) if subset == 'shared' else list(H.apl16_orn_deltas().index)
-    if subset not in ('shared', 'input'):
+    if subset in EXTRA_SUBSETS:
+        sh = list(EXTRA_SUBSETS[subset])
+    elif subset in ('shared', 'input'):
+        sh = list(shared_glomeruli()) if subset == 'shared' else list(H.apl16_orn_deltas().index)
+    else:
         raise ValueError(subset)
     if stage == 'bouton':
         return np.isin(meta['bouton_glomerulus'], sh)
@@ -1249,10 +1256,10 @@ def unit_meta(label: str, W: Optional[pd.DataFrame] = None) -> dict:
 
 
 def read_wiring(label: str, st_on: dict, st_off: dict, meta: dict, rng: np.random.Generator,
-                with_noise: bool = True) -> List[dict]:
-    """Every reading of one wiring's bouton and claw stages (APL on and off; SUBSETS; claws in CLAW_SPIKE_SHARES): rows of
-    stage, subset, share, cond, reading, odor_a, odor_b, value (pair distance, 1 - Pearson across units), plus the noise
-    check's truth / estimate pairs ('noisy_*' readings carry their replicate SD as `sd`)."""
+                with_noise: bool = True, subsets: Sequence[str] = SUBSETS) -> List[dict]:
+    """Every reading of one wiring's bouton and claw stages (APL on and off; `subsets`, SUBSETS by default; claws in
+    CLAW_SPIKE_SHARES): rows of stage, subset, share, cond, reading, odor_a, odor_b, value (pair distance, 1 - Pearson
+    across units), plus the noise check's truth / estimate pairs ('noisy_*' readings carry their replicate SD as `sd`)."""
     rows = []
     rel = {st: flies_reliability(st) for st in ('bouton', 'claw')}
     nflies = {'bouton': stage_samples()['bouton_measured'].shape[0], 'claw': stage_samples()['claw_measured'].shape[0]}
@@ -1267,7 +1274,7 @@ def read_wiring(label: str, st_on: dict, st_off: dict, meta: dict, rng: np.rando
     for cond, st in (('on', st_on), ('off', st_off)):
         for stage in ('bouton', 'claw'):
             U = stage_units(st, stage)
-            for subset in SUBSETS:
+            for subset in subsets:
                 m = subset_mask(stage, U.index, meta, subset)
                 for share in (CLAW_SPIKE_SHARES if stage == 'claw' else (0.0,)):
                     V = claw_signal(U, st['spike_counts'], kc_of_claw, share, scales) if stage == 'claw' else U
@@ -1284,16 +1291,16 @@ def read_wiring(label: str, st_on: dict, st_off: dict, meta: dict, rng: np.rando
     return rows
 
 
-def pn_rows(label: str, st: dict, cond: str) -> List[dict]:
-    """The PN stage of a run on the shared glomeruli and on all of the wiring's: pair distances of the glomeruli's rate
-    changes ('change'), of their window rates ('rate') and of the rates minus each glomerulus's lowest over the 16 odors
-    ('minsub')."""
+def pn_rows(label: str, st: dict, cond: str, subsets: Sequence[str] = SUBSETS) -> List[dict]:
+    """The PN stage of a run on the shared glomeruli and on all of the wiring's (`subsets`, SUBSETS by default): pair
+    distances of the glomeruli's rate changes ('change'), of their window rates ('rate') and of the rates minus each
+    glomerulus's lowest over the 16 odors ('minsub')."""
     rows = []
     win = st['pn_win'].copy()
     win.columns = [H.odor_abbrev(c) for c in win.columns]
     pre = st['pn_pre'].copy()
     pre.columns = win.columns
-    for subset in SUBSETS:
+    for subset in subsets:
         m = subset_mask('pn', win.index, None, subset)
         for rd, X in (('change', win - pre), ('rate', win), ('minsub', win.sub(win.min(axis=1), axis=0))):
             X = _drop_silent(X.loc[m])
@@ -1361,11 +1368,11 @@ def _group_table(df: pd.DataFrame, by: Sequence[str]) -> pd.DataFrame:
     return pd.DataFrame(out)
 
 
-def noise_check(mp: pd.DataFrame) -> pd.DataFrame:
+def noise_check(mp: pd.DataFrame, path: Optional[Path] = None) -> pd.DataFrame:
     """The check of the noise removal on the model's known values: per stage, subset, share and condition, the population's
     group mean of the noise-removed estimate ('noisy_nr') against the truth (the noise-free session z reading), and per
     wiring; passes for a stage if within NOISE_CHECK_TOL for every group, subset, share and condition in the population
-    (noise_check.csv)."""
+    (noise_check.csv in this experiment's results, or at `path`)."""
     rows = []
     d = mp[mp.stage.isin(['bouton', 'claw'])]
     for by_wiring in (False, True):
@@ -1386,7 +1393,7 @@ def noise_check(mp: pd.DataFrame) -> pd.DataFrame:
                                  measured=gm[g], error=ge[g] - gt[g], error_measured=gm[g] - gt[g],
                                  within=bool(abs(ge[g] - gt[g]) <= NOISE_CHECK_TOL)))
     df = pd.DataFrame(rows)
-    df.to_csv(out_dir() / 'noise_check.csv', index=False)
+    df.to_csv(out_dir() / 'noise_check.csv' if path is None else path, index=False)
     return df
 
 

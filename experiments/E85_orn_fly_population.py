@@ -569,12 +569,14 @@ def part_a() -> dict:
 # ---------------------------------------------------------------------------
 # B: the model flies
 
-def build(label: str, orn: pd.DataFrame, input_tag: str):
+def build(label: str, orn: pd.DataFrame, input_tag: str, cache_dir: Optional[Path] = None):
     """`E83.build_simulator` with the breadth recomputed for `orn`, its APL-off breadth run cached under this
-    experiment's outputs (by `input_tag`); the wiring and the normalized APL weights must be the lab input's."""
+    experiment's outputs (by `input_tag`; under `cache_dir` instead when given, E93); the wiring and the normalized APL
+    weights must be the lab input's."""
     from experiments import E10_joint_fit as J
     P = E.wiring_parts(label)
-    _, wnorm, W, breadth = J.bouton_base(orn, _local(), None, input_tag=input_tag, **E.wiring_kws(label))
+    _, wnorm, W, breadth = J.bouton_base(orn, _local() if cache_dir is None else cache_dir, None, input_tag=input_tag,
+                                         **E.wiring_kws(label))
     if not W.equals(P['W']):
         raise RuntimeError(f'{label}: the wiring built with input {input_tag} differs from the lab input\'s')
     for k in ('wAPLKC', 'wKCAPL', 'wAPLPN', 'wPNAPL'):
@@ -583,11 +585,11 @@ def build(label: str, orn: pd.DataFrame, input_tag: str):
     return E.build_simulator(label, orn, breadth=breadth)
 
 
-def held_reading(label: str, orn: pd.DataFrame, input_tag: str) -> dict:
-    """E83's `input_reading` (both response rates held) with this experiment's cache."""
+def held_reading(label: str, orn: pd.DataFrame, input_tag: str, cache_dir: Optional[Path] = None) -> dict:
+    """E83's `input_reading` (both response rates held) with this experiment's cache (`cache_dir`'s when given)."""
     from experiments import E77_input_screen as S
     P = E.saved_fit(label)
-    res = S.hold_rates(lambda: build(label, orn, input_tag), target_off=P['target_off'], target_on=P['target_on'],
+    res = S.hold_rates(lambda: build(label, orn, input_tag, cache_dir), target_off=P['target_off'], target_on=P['target_on'],
                        params=P['p'], label=f'{label} {input_tag}')
     res['input_tag'] = input_tag
     return res
