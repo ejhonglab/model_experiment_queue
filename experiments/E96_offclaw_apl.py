@@ -830,8 +830,8 @@ def _within(n: np.ndarray, v: np.ndarray, b: Optional[np.ndarray] = None, counts
         x = v[m]
         if x.mean() > 0:
             cvs.append(x.std() / x.mean())
-        if b is not None:
-            rs.append(E95._corr(x, b[m])[0])
+        if b is not None and np.ptp(x) > 1e-9 * max(abs(float(x.mean())), 1e-300):
+            rs.append(E95._corr(x, b[m])[0])            # (none for a value that is the same within the count)
     rs = [r for r in rs if np.isfinite(r)]
     return dict(within_cv_min=float(min(cvs)) if cvs else np.nan, within_cv_max=float(max(cvs)) if cvs else np.nan,
                 within_cv_median=float(np.median(cvs)) if cvs else np.nan,
