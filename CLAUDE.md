@@ -1170,6 +1170,7 @@ Canonical experiment names for summary reports:
 | E89 | the co-response read with a checked estimate and the breadth weighting inside the models' APL |
 | E90 | the model's stages against the flies' stages |
 | E91 | APL's inhibition on the KC's summed drive |
+| E92 | the claw-to-soma steps read like for like and APL's inhibition as a gain at the claw |
 
 ## Model-output archive (data/model_outputs/ in the shared directory)
 
