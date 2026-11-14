@@ -8,6 +8,32 @@ directory's notes/ and are linked from here.
 
 ## Open
 
+### The 16-odor ORN reference matrix mixes two recipes: per-fly correlations within a panel, fly-mean vectors across the panels (found 2026-11-13, Yang's question to viki)
+- **What.** `kcq.harness.orn16_consensus_pairs()` (data_prep/orn16_distances_from_olfdb.py, since 2026-11-06) gives the 72
+  pairs within a panel (66 megamat x megamat, 6 validation2 x validation2) as the mean over flies of each fly's 1 - Pearson r
+  across the 36 glomeruli, and the 48 pairs across the panels as 1 - r of the two odors' fly-mean vectors (no fly was imaged
+  with both panels). A per-fly correlation carries that fly's measurement noise and so reads larger: on the 72 within-panel
+  pairs the per-fly distance is 0.027 larger on average than the fly-mean one (pair by pair -0.068 to +0.153; paa-B-myr
+  +0.153, euc-B-myr +0.125). The cross-panel pairs therefore sit about 0.03 low against the rest of the matrix, a
+  systematic offset by panel membership. Yang asked why the matrix is not built one way for all 120 pairs, from fly-mean
+  vectors stitched by glomerulus across the panels, which is also what the model receives as input; the script already
+  writes that version (`distance_flymean_vectors` in orn16_corrdist_olfdb_36glom_pairs.csv).
+- **Affects.** Everything that uses the ORN matrix as a reference (as in the zero-filling entry below): the summary's
+  background figure and data table (ORN column), the registry's orn_* and rho_*_orn entries, `compare_on_off`'s ORN
+  statistics in the data and in every stats table (spearman_orn_on / _off, gap_closed, the linear-ORN residual statistics),
+  `compare_model_to_data`'s deviation-from-ORN columns. Not affected: the model's ORN input, the APL-effect loss and its
+  parts, the joint-fit losses, the 66-pair structure-beyond-ORN statistics (Remy's per-fly matrix, `orn_remy`).
+- **Size** (analyses/orn_recipe_check.py, results/orn_recipe_check/; current recipe -> fly-mean vectors for all 120 pairs):
+  ρ on odor-odor distances of the control flies' KC matrix with the ORNs 0.648 -> 0.645, of the APL output blocked (TNT)
+  matrix 0.737 -> 0.732; gap_closed 0.260 -> 0.252; the ORN matrix's mean distance 0.726 -> 0.710, within-group mean 0.346 ->
+  0.292, fruity x small-ester mean 0.563 -> 0.530, smallest distance 0.109 -> 0.050, pairs more than 0.8 apart 52 -> 55. Every
+  saved model variant's ρ on odor-odor distances with the ORNs moves by at most 0.018 (APL on; 0.015 APL off; median 0.006),
+  and the variants' order by it is unchanged (ρ 0.999 between the two recipes over 1723 variants).
+- **Remains.** A decision for Tom (his ORN data and recipe): switch the reference to fly-mean vectors for all 120 pairs
+  (data_prep/orn16_distances_from_olfdb.py's main column, then `build_summary.py --data-targets`, the background figures and
+  the summary's sentence on the recipe), or keep the per-fly recipe within panels and state the cross-panel offset in the
+  summary. Stats tables already written would be annotated, not rerun (changes of at most 0.018).
+
 ### pyolfsysm's `get_time_index` placed every step up to one step late, so closed windows read with it lost their end step (found 2026-11-13 12:04, atlas's code subagent for E90; fixed in olfsysm 17cef71)
 - **What.** `pyolfsysm.mb_model.get_time_index` spreads the run's n steps evenly from its first time to `time_end` inclusive
   (`np.linspace(t0, t1, num=n)`), so step k is labelled t0 + k (t1 - t0) / (n - 1) instead of olfsysm's t0 + k dt: every
