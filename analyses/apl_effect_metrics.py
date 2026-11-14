@@ -11,9 +11,12 @@ flies minus APL output blocked (TNT), each the mean over recordings), and for ev
 kcq/apl_effect.py scores:
 
 - the pattern part split exactly into an amplitude part and a shape part (the Taylor-diagram
-  identity, pattern^2 = (sd_m - sd_d)^2 + 2 sd_m sd_d (1 - r), with sd the spread of each side's
-  per-pair effect over the pairs and r Pearson's): whether a model's pattern error is a spread of
-  its per-pair effects that is too small or too large, or a different shape;
+  identity, pattern^2 = amplitude^2 + shape^2 with amplitude = |sd_m - sd_d| and shape =
+  sqrt(2 sd_m sd_d (1 - r)), sd the spread of each side's per-pair effect over the pairs and r
+  Pearson's; as `kcq.harness.apl_effect_spread_shape` and by_variant.csv give them, not squared,
+  since 2026-11-13 20:10; the tables before then gave both parts squared): whether a model's
+  pattern error is a spread of its per-pair effects that is too small or too large, or a
+  different shape;
 - Kendall's tau beside Spearman's ρ and Pearson's r;
 - the pattern part and Pearson's r weighted by each pair's reliability in the data (inverse of
   the squared standard error of the data's per-pair effect over recordings, both genotypes), so
@@ -164,10 +167,10 @@ def metrics(M: np.ndarray, d: np.ndarray, w: np.ndarray, X: np.ndarray, kendall:
     sd_m = np.sqrt((Mc ** 2).mean(1))
     sd_d = float(np.sqrt((dc ** 2).mean()))
     r = (Mc @ dc) / (n * sd_m * sd_d)
-    amp = (sd_m - sd_d) ** 2
-    shape = 2 * sd_m * sd_d * (1 - r)
-    # (exact: pattern^2 = amplitude + shape)
-    assert np.allclose(pattern ** 2, amp + shape, atol=1e-12)
+    amp = np.abs(sd_m - sd_d)
+    shape = np.sqrt(np.maximum(2 * sd_m * sd_d * (1 - r), 0.0))
+    # (exact: pattern^2 = amplitude^2 + shape^2)
+    assert np.allclose(pattern ** 2, amp ** 2 + shape ** 2, atol=1e-12)
     rho = _rowcorr(_ranks(M), stats.rankdata(d))
     w = w / w.sum()
     Mw = M - (M @ w)[:, None]
@@ -473,7 +476,7 @@ def main() -> None:
     o[uniq & df.realistic.to_numpy()].corr(method='spearman').to_csv(out / f'metric_correlations_realistic{sfx}.csv')
     g = df[df.realistic]
     pd.DataFrame(dict(folder=g.folder, tag=g.tag, mean_share=g.mean_part ** 2 / g.loss ** 2,
-        amplitude_share=g.amplitude_part / g.pattern_part ** 2, per_odor_share=g.per_odor_part ** 2 / g.pattern_part ** 2,
+        amplitude_share=g.amplitude_part ** 2 / g.pattern_part ** 2, per_odor_share=g.per_odor_part ** 2 / g.pattern_part ** 2,
         sd_ratio=g.sd_ratio)).to_csv(out / f'shares{sfx}.csv', index=False)
 
     rel = split_half_reliability(M[uniq], ctrl, tnt, X, a.n_splits, rng)
