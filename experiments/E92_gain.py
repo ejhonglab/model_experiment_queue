@@ -51,7 +51,21 @@ Parts (CLI `--part`):
   on d_start_params.json; the point is run first on a wiring that lacks it; `--d-start exact` starts at the fit's own
   scales instead, as E91's D did), one process at a time; `--pop S` first, `--pop T` only if S's fitted population is
   D_S_GAIN or more below the reference against all recordings. `--part Dscore` scores them (d_scores.csv, .json).
-- E: only on a pass by C or D (a stub). F: the summed form on part A's readings after E91's note is posted (a stub).
+- E: only on a pass by C or D (a stub).
+- F: the summed form (E91, its note posted 2026-11-13 19:38) read as part A read C2's family, on E91's archived runs:
+  E91's refitted family (part D: the four fits on S at s = 1, exponent 2), the summed form on the fits as they are
+  (B1_F_k2_s1, S), its choice on the base with the flies' recruitment (B2_F_k1_s1, S and T) and that base's own family
+  (B2_F_k2: E89's C2 runs on S, E91's on T), with C2's clipped family (E90's runs) as the reference (F_FAMILIES). F1:
+  their somata in part A's A2 readings (`somata_pairs`), compared with the flies by part A's rule (6 of 8 wirings on the
+  side for a population of eight, 3 of 4 for S's population), somata_F.csv and somata_F_means.csv. F2: every one of
+  E91's archived variants (and E89's base runs on S) placed against A4's line (part A's `variant_rows`: S and T
+  populations, the pattern part with its amplitude and shape parts, the spread ratio, Pearson r and ρ), line_F.csv. F3:
+  the refits and the B2 choice on S run again with the stage matrices saved (E90's reading; `claw_inh_pool` 1; the B2
+  choice odor by odor at its per-odor thresholds and APL scales, `FPool`), each reproducing its archived counts and
+  responses exactly (identity_F.json), the matrices under outputs/.../F/ (the counts stay the archived run's). F4: their
+  claws in E90's readings (`read_wiring`) and the two steps like for like (part A's `step_verdict_rows` on S),
+  claws_F.csv and steps_F.csv. Then verdict_F.json, comparison_table_F.md, E92_F_line.png. `--part Ftable` rebuilds the
+  last three.
 - variants: variants.csv and model_pair_distances_long.csv for the archive: `./venv/bin/python
   archive_tools/archive_model_outputs.py E92_steps_like_for_like`, then `./venv/bin/python
   archive_tools/migrate_model_output_params.py --apply`.
@@ -1392,11 +1406,805 @@ def part_e(out: Path) -> None:
     raise NotImplementedError('E92 part E runs only on a pass by part C or part D; not written')
 
 
-def part_f(out: Path) -> None:
-    """Part F (after E91's note is posted, whatever its verdict): the summed form's refits and its chosen setting on the
-    base with the flies' recruitment, read as A2 and A4 read C2; 4 to 8 runs with the stage matrices saved
-    (`claw_inh_pool=1`) for the two steps. Not written: E91's runs are not read before its note is posted."""
-    raise NotImplementedError("E92 part F reads E91's runs only after its note is posted; not written")
+# ---------------------------------------------------------------------------
+# part F: the summed form (E91, posted 2026-11-13 19:38) read as part A read C2's family
+
+F_SOURCE = E91.EXPERIMENT
+F_K, F_POOL = 2.0, E91.D_POOL                       # E91's part D (stage S2): C2's family fitted again at s = 1, exponent 2
+F_B1 = E91.variant_name('B1', REFERENCE, 1.0)       # 'B1_F_k2_s1': s = 1 on the fits as they are, the APL scale re-held
+F_B2_REF = E91.ref_variant('B2')                    # 'B2_F_k2': the base with the flies' recruitment, its own family (s = 0)
+F_B2_CHOICE = E91.variant_name('B2', ('F', 1.0), 1.0)   # 'B2_F_k1_s1': E91's choice on that base (exponent 1, s = 1)
+F_FAMILIES = {
+    'C2': "C2's clipped family, the unchanged fits (E90's runs of them)",
+    'E91_B1_k2_s1': 'the summed form (s = 1) on the fits as they are at exponent 2, the APL scale re-held (E91 B1)',
+    'E91_refit': "C2's family fitted again with the summed form (s = 1, exponent 2; E91's part D)",
+    'E91_B2_k2': "the base with the flies' recruitment at exponent 2, clipped (E89's C2 runs on S, E91's on T)",
+    'E91_B2_k1_s1': "E91's choice on the base with the flies' recruitment: exponent 1, s = 1 (E91 B2 on S, C on T)",
+}
+F_STAGE_FAMILIES = ('E91_refit', 'E91_B2_k1_s1')    # run again on S with the stage matrices saved (E90's reading)
+F_SAME_SIDE_4 = 3                                   # a population of four: 3 of its 4 wirings on the side (part A's D1)
+F_NOISE_SEED = 300                                  # E90's NOISE_SEED + this + the run's index, for the claws' noisy reading
+F_DIR = 'F'
+STAGE_KEYS = ('pn_win', 'pn_pre', 'bouton_win', 'bouton_pre', 'claw_win', 'claw_pre')
+# the line readings of part F beyond E91's own folder: E89's C runs of the base with the flies' recruitment on S
+F_LINE_E89 = ('C2_F_k2', 'C2_F_k1')
+# E91's variants as they appear in line_F.csv (folder, family), per F family
+F_LINE_OF = {'C2': ('E90_model_stages', 'C2_unchanged'), 'E91_B1_k2_s1': (F_SOURCE, F_B1),
+             'E91_refit': (F_SOURCE, 'E91_refit'), 'E91_B2_k2': ((E89.EXPERIMENT, 'C2_F_k2'), (F_SOURCE, F_B2_REF)),
+             'E91_B2_k1_s1': (F_SOURCE, F_B2_CHOICE)}
+
+
+def _A():
+    from experiments import E92_steps_like_for_like as A
+    return A
+
+
+def _f_dir() -> Path:
+    d = H.outputs_dir(EXPERIMENT) / F_DIR
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def f_refit_tags() -> Dict[str, str]:
+    """{E91's part D fit tag: S wiring} (E91's `d_tag` at exponent F_K and s = F_POOL)."""
+    return {E91.d_tag(w, F_K, F_POOL): w for w in E83.S_WIRINGS}
+
+
+def f_runs() -> pd.DataFrame:
+    """The runs part F reads: family (F_FAMILIES), wiring, source ('E90' E90's part B run of C2's fit, 'E91' E91's B / C
+    runs, 'E91fit' E91's part D fits, 'E89' E89's C runs), tag."""
+    rows = [dict(family='C2', wiring=w, source='E90', tag=w) for w in E83.ALL_WIRINGS]
+    for w in E83.S_WIRINGS:
+        rows.append(dict(family='E91_B1_k2_s1', wiring=w, source='E91', tag=E91.run_tag(F_B1, w)))
+    rows += [dict(family='E91_refit', wiring=w, source='E91fit', tag=t) for t, w in f_refit_tags().items()]
+    rows += [dict(family='E91_B2_k2', wiring=w, source='E89', tag=E89.run_tag('C2', REFERENCE, w)) for w in E83.S_WIRINGS]
+    rows += [dict(family='E91_B2_k2', wiring=w, source='E91', tag=E91.run_tag(F_B2_REF, w)) for w in E83.T_WIRINGS]
+    rows += [dict(family='E91_B2_k1_s1', wiring=w, source='E91', tag=E91.run_tag(F_B2_CHOICE, w)) for w in E83.ALL_WIRINGS]
+    return pd.DataFrame(rows)
+
+
+def f_load(source: str, tag: str) -> Dict[str, tuple]:
+    """One of part F's runs ({'on', 'off'}: (responses, spike counts)), from the local outputs or the archive."""
+    from experiments import E72_wiring_population as E72
+    if source == 'E90':
+        return _A().e90_run('B', tag)
+    o = {'E91': E91.load_run, 'E89': E89.load_run, 'E91fit': lambda t: E72.load_fit(F_SOURCE, t)}[source](tag)
+    if o is None:
+        raise RuntimeError(f'no saved run {source}:{tag}')
+    return o
+
+
+# --- F1: the somata in part A's A2 readings
+
+def _f_soma_job(job: tuple) -> pd.DataFrame:
+    """One run's somata in every reading of A2 (part A's `somata_pairs`: the 66 megamat pairs)."""
+    family, wiring, source, tag = job
+    warnings.simplefilter('ignore')
+    o = f_load(source, tag)
+    return _A().somata_pairs(o['on'][1], o['off'][1]).assign(family=family, wiring=wiring, source=source, tag=tag)
+
+
+F_POPULATIONS = (('S', E83.S_WIRINGS), ('T', E83.T_WIRINGS), ('all8', E83.ALL_WIRINGS))
+
+
+def f_soma_means(pairs: pd.DataFrame) -> pd.DataFrame:
+    """Group means (part A's GROUPS) of A2's pair rows per run ('run', wiring) and per population of each family
+    (F_POPULATIONS where all its wirings are present: the mean over its runs of the pair distances, as part A's
+    `somata_model_table`)."""
+    A = _A()
+    runs = A._groups_of_pairs(pairs, ['family', 'wiring', 'cond', 'reading'])
+    runs.insert(0, 'kind', 'run')
+    out = [runs]
+    for fam, g in pairs.groupby('family', sort=False):
+        for name, ws in F_POPULATIONS:
+            sub = g[g.wiring.isin(ws)]
+            if set(sub.wiring) != set(ws):
+                continue
+            p = sub.groupby(['cond', 'reading', 'odor_a', 'odor_b'], sort=False)['value'].mean().reset_index()
+            gm = A._groups_of_pairs(p, ['cond', 'reading'])
+            gm.insert(0, 'kind', 'population')
+            gm.insert(1, 'family', fam)
+            gm.insert(2, 'wiring', name)
+            out.append(gm)
+    return pd.concat(out, ignore_index=True)
+
+
+def _n_same(n_wirings: int) -> int:
+    """The wirings required on the population's side: E90's 6 of 8; 3 of 4 for a population of four."""
+    if n_wirings == len(E83.ALL_WIRINGS):
+        return _A().VERDICT_SAME_SIDE
+    if n_wirings == len(E83.S_WIRINGS):
+        return F_SAME_SIDE_4
+    raise ValueError(f'a population of {n_wirings} wirings')
+
+
+def f_soma_rows(sm: pd.DataFrame, passes: Dict[Tuple[str, str, str], bool], flies=None) -> pd.DataFrame:
+    """Every (family, population, group, condition, reading) comparison of the somata with the flies' (part A's
+    `compare`, `_n_same` wirings on the side): the like-for-like readings (set 'like_for_like'; a noise-removed
+    comparison of a group that failed A1's check is kept with read False) and, beside, raw counts and the calibrated
+    readout against the flies in baseline-noise units (set 'beside'). Populations: all8 where a family has eight
+    wirings, and S."""
+    A = _A()
+    flies = A.flies_group if flies is None else flies
+    comps = [(p, u, fr, ms, 'like_for_like') for p, u, fr, ms in A.like_for_like()]
+    comps += [(ro, 'noise', fr, ms, 'beside') for ro in ('raw', 'cal') for fr in A.FLY_READINGS for ms in A.MEASURES]
+    rows = []
+    pops = sm[sm.kind == 'population']
+    for fam in dict.fromkeys(sm.family):
+        for name, ws in F_POPULATIONS:
+            if name == 'T' or not len(pops[(pops.family == fam) & (pops.wiring == name)]):
+                continue
+            for prefix, u, fr, ms, cset in comps:
+                reading = f'{prefix}_{ms}'
+                for cond in A.CONDS:
+                    x = sm[(sm.family == fam) & (sm.reading == reading) & (sm.cond == cond)]
+                    p = x[(x.kind == 'population') & (x.wiring == name)]
+                    w = x[(x.kind == 'run') & x.wiring.isin(ws)]
+                    if len(p) != 1 or len(w) != len(ws):
+                        raise RuntimeError(f'{fam} {name} {reading} {cond}: {len(p)} population rows, {len(w)} runs')
+                    for r in A.compare(p.iloc[0], w, flies(u, A.GENO[cond], fr, ms), n_same=_n_same(len(ws))):
+                        read = bool(fr != 'noise_removed' or passes.get((r['group'], ms, u), False))
+                        rows.append(dict(family=fam, population=name, element='soma', set=cset, cond=cond, reading=reading,
+                                         flies_units=u, flies_reading=fr, measure=ms, read=read, **r))
+    return pd.DataFrame(rows)
+
+
+def part_f1(out: Path, workers: int = 4) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """F1: somata_F.csv (the comparisons, `f_soma_rows`) and somata_F_means.csv (the group means, `f_soma_means`); the
+    pair rows under outputs/.../F/somata_F_pairs.parquet."""
+    A = _A()
+    t0 = time.time()
+    runs = f_runs()
+    res = A._map(_f_soma_job, [tuple(r) for r in runs[['family', 'wiring', 'source', 'tag']].itertuples(index=False)],
+                 workers)
+    pairs = pd.concat(res, ignore_index=True)
+    pairs.to_parquet(_f_dir() / 'somata_F_pairs.parquet')
+    sm = f_soma_means(pairs)
+    sm.to_csv(out / 'somata_F_means.csv', index=False)
+    rows = f_soma_rows(sm, A.check_passes())
+    rows.to_csv(out / 'somata_F.csv', index=False)
+    print(f'F1 in {time.time() - t0:.0f} s', flush=True)
+    return sm, rows
+
+
+# --- F2: the line
+
+def _f_line_row(folder: str, tag: str, family: str, wiring: str, files: Dict[str, List[Path]]) -> dict:
+    A = _A()
+    paths = files.get(tag, [])
+    path = off = None
+    for f in sorted(paths, key=lambda x: len(x.parts)):
+        o = f.with_name(f'{tag}_acute_off_spike_counts.parquet')
+        if f.with_name(f'{tag}_on_responses.parquet').exists() and o.exists() and A._resp(o).exists():
+            path, off = f, o
+            break
+    reason = '' if path is not None else 'no saved APL-on counts with an APL-off run'
+    return dict(folder=folder, tag=tag, family=family, wiring=wiring, kind='oracle' if 'oracle' in tag else 'variant',
+                path=str(path) if path else '', off_path=str(off) if path else '', off_from='own' if path else '',
+                n_paths=len(paths), included=not reason, reason=reason)
+
+
+def f_line_variants() -> pd.DataFrame:
+    """The archived runs F2 places against A4's line, in part A's `a4_variants` layout: every tag of E91's params.csv
+    (its part D fits as family 'E91_refit' on their S wirings, `f_refit_tags`; the others by part A's `_variant_key`),
+    E89's C runs of F_LINE_E89 on S, and E90's eight runs of C2 (the references for T and single runs)."""
+    A = _A()
+    rows = []
+    p = pd.read_csv(A.ARCHIVE / F_SOURCE / 'params.csv', low_memory=False).drop_duplicates('tag')
+    files = A._find_files(F_SOURCE)
+    refit = f_refit_tags()
+    for tag in p.tag:
+        fam, w = ('E91_refit', refit[tag]) if tag in refit else A._variant_key(F_SOURCE, tag, None)
+        rows.append(_f_line_row(F_SOURCE, tag, fam, w, files))
+    f89 = A._find_files(E89.EXPERIMENT)
+    for fam in F_LINE_E89:
+        for w in E83.S_WIRINGS:
+            rows.append(_f_line_row(E89.EXPERIMENT, f'{fam}_{w}', fam, w, f89))
+    for w in E83.ALL_WIRINGS:
+        d = next(x for x in A._e90_dir('B') if (x / f'{w}_on_spike_counts.parquet').exists())
+        rows.append(dict(folder='E90_model_stages', tag=w, family='C2_unchanged', wiring=w, kind='reference',
+                         path=str(d / f'{w}_on_spike_counts.parquet'), off_path=str(d / f'{w}_acute_off_spike_counts.parquet'),
+                         off_from='own', n_paths=1, included=True, reason=''))
+    return pd.DataFrame(rows)
+
+
+def part_f2(out: Path, workers: int = 4) -> pd.DataFrame:
+    """F2: line_F.csv, part A's `variant_rows` of `f_line_variants` against A4's lines (line.json): per family the S and
+    T populations (single runs otherwise), their relative distances, place against the line, pattern part with its
+    amplitude and shape parts, spread ratio, Pearson r and ρ, the loss, the mean APL effect and the realism."""
+    A = _A()
+    t0 = time.time()
+    v = f_line_variants()
+    inc = v[v.included]
+    res = {r['idx']: r for r in A._map(A._a4_job, list(zip(inc.index, inc.path, inc.off_path)), workers)}
+    errs = {int(k): r['error'] for k, r in res.items() if r['error']}
+    if errs:
+        raise RuntimeError(f'F2: {errs}')
+    lines = {ro: A.line(ro) for ro in A.READOUTS}
+    vr = A.variant_rows(v, res, lines)
+    vr.to_csv(out / 'line_F.csv', index=False)
+    v.to_csv(_f_dir() / 'line_F_variants.csv', index=False)
+    print(f'F2: {len(inc)} runs of {len(v)} in {time.time() - t0:.0f} s', flush=True)
+    return vr
+
+
+# --- F3: the stage runs
+
+def read_stages_odor(mp, rv, W: pd.DataFrame, i: int, window: Tuple[float, float]) -> Dict[str, object]:
+    """E90's `read_stages` of one odor (olfsysm's odor index i) read from olfsysm's per-odor lists directly, so that it
+    holds after a run of that odor alone (`mp.sim_only`), where the other odors' saved variables can be empty: the window
+    and pre-odor means of the PNs (glomeruli), the boutons and the claws (`E90.claw_inputs`: wiring x bouton rate minus
+    the claw's APL weight times APL's activity at the step before, clipped at 0), and APL's ('apl_win', 'apl_pre')."""
+    from experiments import E90_model_stages as E90
+    t = E90.step_times(mp, rv)
+    w = E90._windows(t, window)
+    gl = list(dict.fromkeys(W.columns.get_level_values('glomerulus')))
+    pn = np.asarray(rv.pn.pn_sims[i], dtype=float)
+    bt = np.asarray(rv.pn.bouton_sims[i], dtype=float)
+    a = np.asarray(rv.kc.inh_sims[i], dtype=float).ravel()
+    wk = np.asarray(rv.kc.wAPLKC, dtype=float).ravel()
+    if pn.shape[0] != len(gl) or bt.shape[0] != W.shape[1] or a.size != t.size or wk.size != W.shape[0]:
+        raise RuntimeError(f'odor {i}: PNs {pn.shape}, boutons {bt.shape}, APL {a.shape}, {wk.size} APL>claw weights for '
+                           f'the wiring {W.shape} and {len(gl)} glomeruli, {t.size} steps')
+    Wm = W.to_numpy(dtype=float)
+    out: Dict[str, object] = {}
+    for k in ('win', 'pre'):
+        idx = w[k]
+        out[f'pn_{k}'] = pn[:, idx].mean(axis=1)
+        b = bt[:, idx]
+        if np.isnan(b).any():
+            raise RuntimeError(f'NaN bouton rates in the {k} window')
+        out[f'bouton_{k}'] = b.mean(axis=1)
+        out[f'claw_{k}'] = E90.claw_inputs(Wm, b, a[idx - 1], wk).mean(axis=1)
+    out['apl_win'], out['apl_pre'] = float(a[w['win']].mean()), float(a[w['pre']].mean())
+    return out
+
+
+def stage_frames(per_odor: Sequence[Dict[str, object]], odors: Sequence[str], W: pd.DataFrame) -> dict:
+    """E90's stage dict (`read_stages`' layout: '<stage>_<win|pre>' units x odors, 'apl' odors x {win, pre}) from
+    `read_stages_odor`'s records, one per odor in the order of `odors` (abbreviated)."""
+    gl = list(dict.fromkeys(W.columns.get_level_values('glomerulus')))
+    idx = {'pn': pd.Index(gl, name='glomerulus'), 'bouton': W.columns, 'claw': W.index}
+    st = {k: pd.DataFrame(np.column_stack([np.asarray(r[k], dtype=float) for r in per_odor]), index=idx[k.split('_')[0]],
+                          columns=list(odors)) for k in STAGE_KEYS}
+    st['apl'] = pd.DataFrame({o: dict(win=float(r['apl_win']), pre=float(r['apl_pre'])) for o, r in zip(odors, per_odor)}).T
+    return st
+
+
+def _f_b2_worker(conn, label: str, parts: dict, fit: dict, js: List[int]) -> None:
+    """A worker of `FPool` (E87's WiringPool protocol): wiring `label`'s simulator on the ORN columns `js` (as E91's
+    `_c91_worker`); for each task ({'thr', 'apl': per odor of js; 'wAPLKC': per claw; 'claw_inh_pool'}) each odor alone
+    (`mp.sim_only`) at its threshold factor, APL on at its tied APL scale (E80's `_tied`) and APL off, APL's activity
+    saved: its responses, spike counts and stage matrices (`read_stages_odor`); the weights, the pooled share and the
+    saving reset after each task; until None."""
+    try:
+        from experiments import E80_screen as S80
+        from experiments import E90_model_stages as E90
+        E83._PARTS[label] = parts
+        E83._FITS[label] = fit
+        sim, info = E83.build_simulator(label, orn=parts['orn'].iloc[:, js], breadth=parts['breadth'])
+        cells = info['cells']
+        mp, rv = cells['mp'].cell_contents, cells['rv'].cell_contents
+        order = np.asarray(cells['odor_order'].cell_contents, dtype=int)
+        names = [str(c) for c in cells['odor_index'].cell_contents]
+        kc = cells['wAPLKC_unscaled'].cell_contents
+        kc0 = kc.copy()
+        n_kc = int(fit['saved']['on'][0].shape[0])
+        W, p = info['W'], dict(info['params'])
+        conn.send(('ready', names))
+    except Exception as e:
+        conn.send(('error', repr(e)))
+        return
+    while True:
+        msg = conn.recv()
+        if msg is None:
+            break
+        try:
+            wk = msg.get('wAPLKC')
+            kc[...] = kc0 if wk is None else np.asarray(wk, dtype=float).reshape(kc0.shape)
+            recs = []
+            try:
+                E91.set_pool(mp, float(msg.get('claw_inh_pool', 0.0)))
+                mp.kc.save_inh_sims = True
+                for jj in range(len(order)):
+                    rec = dict(odor=names[jj])
+                    for cond, q in (('on', S80._tied(p, float(msg['apl'][jj]))),
+                                    ('off', dict(p, wAPLKC_scale=0.0, wAPLPN_scale=0.0))):
+                        mp.sim_only = [int(order[jj])]
+                        try:
+                            r, s = sim(q, kc_thr_factor=np.full(n_kc, float(msg['thr'][jj])))
+                        finally:
+                            mp.sim_only = []
+                        rec[cond] = dict(read_stages_odor(mp, rv, W, int(order[jj]), E90.MODEL_WINDOW),
+                                         responses=r.iloc[:, jj].to_numpy(dtype=float),
+                                         counts=s.iloc[:, jj].to_numpy(dtype=float))
+                    recs.append(rec)
+            finally:
+                kc[...] = kc0
+                E91.set_pool(mp, 0.0)
+                mp.kc.save_inh_sims = False
+                mp.sim_only = []
+            conn.send(('ok', recs))
+        except Exception as e:
+            conn.send(('error', repr(e)))
+
+
+class FPool(E87.WiringPool):
+    """E87's WiringPool with `_f_b2_worker`: `run_f(thr, apl, wk, s)` runs every odor alone at its threshold factor
+    and tied APL scale (lists in the saved outputs' column order), with the APL->KC weights `wk` (a per-claw Series, or
+    None for the fit's) and the pooled share s, and returns the per-odor records."""
+
+    _WORKER = staticmethod(_f_b2_worker)
+
+    def run_f(self, thr: Sequence[float], apl: Sequence[float], wk: Optional[pd.Series], s: float) -> List[dict]:
+        arr = None if wk is None else wk.to_numpy(dtype=float)
+        for conn, js in zip(self.conns, self.groups):
+            conn.send(dict(thr=[float(thr[j]) for j in js], apl=[float(apl[j]) for j in js], wAPLKC=arr,
+                           claw_inh_pool=float(s)))
+        recs: List[Optional[dict]] = [None] * len(self.cols)
+        for conn, js in zip(self.conns, self.groups):
+            status, v = conn.recv()
+            if status != 'ok':
+                raise RuntimeError(f'{self.label}: a worker failed: {v}')
+            for j, rec in zip(js, v):
+                if rec['odor'] != self.cols[j]:
+                    raise RuntimeError(f"odor {j}: {rec['odor']} where {self.cols[j]} was expected")
+                recs[j] = rec
+        return recs
+
+
+def b2_odor_params(row: pd.Series, cols: Sequence[str]) -> Tuple[List[float], List[float]]:
+    """The per-odor threshold factors and tied APL scales of one of E91's runs on the base with the flies' recruitment,
+    as run (its row's thr_per_odor and apl_per_odor), in the order of the odor columns `cols`."""
+    thr, apl = json.loads(row['thr_per_odor']), json.loads(row['apl_per_odor'])
+    missing = [c for c in cols if c not in thr or c not in apl]
+    if missing or len(thr) != len(cols) or len(apl) != len(cols):
+        raise RuntimeError(f"{row['tag']}: per-odor parameters for {sorted(thr)}, the run's odors are {list(cols)}")
+    return [float(thr[c]) for c in cols], [float(apl[c]) for c in cols]
+
+
+def e91_run_row(tag: str) -> pd.Series:
+    """E91's runs_*.csv row of a run (the last if repeated)."""
+    for name in ('runs_B2.csv', 'runs_C.csv', 'runs_B1.csv', 'runs_B3.csv'):
+        p = H.results_dir(F_SOURCE) / name
+        if p.exists():
+            d = pd.read_csv(p)
+            d = d[d.tag == tag]
+            if len(d):
+                return d.iloc[-1]
+    raise RuntimeError(f"no row of E91's runs for {tag}")
+
+
+def f_stage_tag(family: str, wiring: str) -> str:
+    return f'F_{family}_{wiring}'
+
+
+def units_meta(W: pd.DataFrame) -> dict:
+    """E90's `unit_meta` of a wiring (not cached): the boutons' and the claws' glomeruli, the claws' KCs."""
+    from experiments import E90_model_stages as E90
+    return dict(bouton_glomerulus=[str(x) for x in W.columns.get_level_values('glomerulus')],
+                claw_glomerulus=[str(x) for x in E90.glomerulus_of_claws(W)],
+                kc_of_claw=[int(x) for x in W.index.get_level_values(H.KC_ID_LEVEL)])
+
+
+def save_stage_f(tag: str, cond: str, st: dict) -> None:
+    """A stage run's matrices under outputs/.../F/ as E90 saves them (<tag>_<on|acute_off>_<stage>_<win|pre>.parquet,
+    _apl.csv), without the responses and counts: they are the archived run's of the source experiment exactly (checked
+    when made; `f_stage_identity`), which `load_stage_f` adds back."""
+    d = _f_dir()
+    cc = 'on' if cond == 'on' else 'acute_off'
+    for k in STAGE_KEYS:
+        x = st[k].copy()
+        x.columns = [str(c) for c in x.columns]
+        if isinstance(x.index, pd.MultiIndex):
+            x.index = x.index.set_names([str(n) for n in x.index.names])
+        x.to_parquet(d / f'{tag}_{cc}_{k}.parquet')
+    st['apl'].to_csv(d / f'{tag}_{cc}_apl.csv')
+
+
+def load_stage_f(tag: str, cond: str, source: Optional[Tuple[str, str]] = None) -> Optional[dict]:
+    """A stage run's matrices (`save_stage_f`; the local outputs, else the archive), with the responses and counts of
+    its source run (`f_load(*source)`) when given; None if absent."""
+    cc = 'on' if cond == 'on' else 'acute_off'
+    for d in (_f_dir(), H.shared_dir() / 'data' / 'model_outputs' / EXPERIMENT / F_DIR):
+        if (d / f'{tag}_{cc}_claw_win.parquet').exists():
+            st = {k: pd.read_parquet(d / f'{tag}_{cc}_{k}.parquet') for k in STAGE_KEYS}
+            st['apl'] = pd.read_csv(d / f'{tag}_{cc}_apl.csv', index_col=0)
+            if source is not None:
+                o = f_load(*source)[cond]
+                st['responses'], st['spike_counts'] = o[0], o[1]
+            return st
+    return None
+
+
+def _identity(got: Tuple[pd.DataFrame, pd.DataFrame], ref: Tuple[pd.DataFrame, pd.DataFrame]) -> dict:
+    nd = int((got[1].to_numpy(dtype=float) != ref[1].to_numpy(dtype=float)).sum())
+    nr = int((got[0].to_numpy(dtype=float) != ref[0].to_numpy(dtype=float)).sum())
+    same_index = bool(got[1].index.equals(ref[1].index) and list(map(str, got[1].columns)) == list(map(str, ref[1].columns)))
+    return dict(counts_differ=nd, responses_differ=nr, index_equal=same_index, exact=bool(nd == 0 and nr == 0 and same_index))
+
+
+def f_stage_refit(w: str) -> Tuple[Dict[str, dict], dict]:
+    """E91's part D fit on wiring w (s = F_POOL, exponent F_K) run again at its parameters (E72's `fitted_params` of
+    E91's fits.csv) on E91's simulator with the pooled share (`build_simulator91`), APL on and off, APL's activity saved;
+    each run's counts and responses must equal the archived fit's exactly; E90's stage matrices (`read_stages`)."""
+    from experiments import E72_wiring_population as E72
+    from experiments import E90_model_stages as E90
+    tag = E91.d_tag(w, F_K, F_POOL)
+    saved = f_load('E91fit', tag)
+    p = E72.fitted_params(F_SOURCE, tag)
+    sim, info = E91.build_simulator91(w, claw_inh_pool=F_POOL)
+    cells = info['cells']
+    mp, rv = cells['mp'].cell_contents, cells['rv'].cell_contents
+    order = np.asarray(cells['odor_order'].cell_contents, dtype=int)
+    if float(mp.kc.claw_inh_pool) != F_POOL:
+        raise RuntimeError(f'{w}: the simulator\'s claw_inh_pool is {mp.kc.claw_inh_pool}')
+    W = info['W']
+    if not np.array_equal(np.asarray(rv.kc.wPNKC, dtype=float), W.to_numpy(dtype=float)):
+        raise RuntimeError(f"{w}: olfsysm's wPNKC differs from the wiring's claw x bouton matrix")
+    mp.kc.save_inh_sims = True
+    out, ident = {}, dict(source=f'E91fit:{tag}', params=p, claw_inh_pool=F_POOL)
+    for c in ('on', 'off'):
+        r, s = sim(p if c == 'on' else dict(p, wAPLKC_scale=0.0, wAPLPN_scale=0.0))
+        ident[c] = _identity((r, s), saved[c])
+        if not ident[c]['exact']:
+            raise RuntimeError(f'{w} refit {c}: the run differs from the archived fit: {ident[c]}')
+        st = E90.read_stages(mp, rv, W, order, [H.odor_abbrev(x) for x in r.columns], E90.MODEL_WINDOW)
+        st.update(responses=r, spike_counts=s)
+        out[c] = st
+    ident['n_steps'] = out['on']['n_steps']
+    return out, ident
+
+
+def f_stage_b2(w: str, n_workers: int = 16) -> Tuple[Dict[str, dict], dict]:
+    """E91's choice on the base with the flies' recruitment (F_B2_CHOICE: exponent 1, s = 1) on wiring w run again odor by
+    odor (`FPool`) at its per-odor threshold factors and APL scales as run (`b2_odor_params` of its runs row), with the
+    weights at exponent 1 (E89's `apl_kc_weights`), APL on and off; the counts and responses must equal the archived
+    run's exactly; E90's stage matrices, odor by odor (`read_stages_odor`)."""
+    tag = E91.run_tag(F_B2_CHOICE, w)
+    saved = f_load('E91', tag)
+    row = e91_run_row(tag)
+    pv = E91.parse_variant(F_B2_CHOICE)
+    parts = E83.wiring_parts(w)
+    wk = E89.apl_kc_weights(parts['wnorm']['wAPLKC'], parts['breadth'], pv['exponent'])
+    if str(row.get('wAPLKC_sha256')) != E89.E80_sha(wk):
+        raise RuntimeError(f'{tag}: the APL->KC weights are not the run\'s')
+    pool = FPool(w, n_workers)
+    try:
+        thr, apl = b2_odor_params(row, pool.cols)
+        recs = pool.run_f(thr, apl, wk, pv['s'])
+    finally:
+        pool.close()
+    odors = [H.odor_abbrev(c) for c in pool.cols]
+    out, ident = {}, dict(source=f'E91:{tag}', thr=dict(zip(pool.cols, thr)), apl=dict(zip(pool.cols, apl)),
+                          claw_inh_pool=pv['s'], exponent=pv['exponent'])
+    for c in ('on', 'off'):
+        like = saved[c]
+        R = pd.DataFrame(np.column_stack([r[c]['responses'] for r in recs]), index=like[0].index, columns=like[0].columns)
+        S = pd.DataFrame(np.column_stack([r[c]['counts'] for r in recs]), index=like[1].index, columns=like[1].columns)
+        ident[c] = _identity((R, S), like)
+        if not ident[c]['exact']:
+            raise RuntimeError(f'{w} {tag} {c}: the run differs from the archived one: {ident[c]}')
+        st = stage_frames([r[c] for r in recs], odors, parts['W'])
+        st.update(responses=R, spike_counts=S)
+        out[c] = st
+    return out, ident
+
+
+F_IDENTITY = 'identity_F.json'
+
+
+def part_f3(out: Path, families: Sequence[str] = F_STAGE_FAMILIES, n_workers: int = 16) -> dict:
+    """F3: the stage runs (F_STAGE_FAMILIES on S, resumable: a run whose matrices exist is skipped), each reproducing its
+    archived run exactly (identity_F.json) before its matrices are saved (`save_stage_f`) with its units' metadata."""
+    import gc
+    path = out / F_IDENTITY
+    ids = json.loads(path.read_text()) if path.exists() else {}
+    cc = None
+    for fam in families:
+        for w in E83.S_WIRINGS:
+            tag = f_stage_tag(fam, w)
+            if load_stage_f(tag, 'on') is not None and load_stage_f(tag, 'off') is not None and tag in ids:
+                continue
+            cc = _commits() if cc is None else cc
+            t0 = time.time()
+            st, ident = f_stage_refit(w) if fam == 'E91_refit' else f_stage_b2(w, n_workers)
+            for c in ('on', 'off'):
+                save_stage_f(tag, c, st[c])
+            (_f_dir() / f'{tag}_units.json').write_text(json.dumps(units_meta(E83.wiring_parts(w)['W'])) + '\n')
+            ids[tag] = dict(ident, family=fam, wiring=w, seconds=round(time.time() - t0, 1), **cc)
+            _write_json(path, ids)
+            print(f'F3 {tag}: exact ({ident["on"]}, {ident["off"]}), {time.time() - t0:.0f} s', flush=True)
+            del st
+            gc.collect()
+    return ids
+
+
+# --- F4: the claws and the two steps
+
+def f_claw_pairs(families: Sequence[str] = F_STAGE_FAMILIES) -> pd.DataFrame:
+    """E90's readings (`read_wiring`) of the stage runs' boutons and claws, every subset and share, APL on and off
+    (outputs/.../F/stage_pairs.parquet); one generator per run (E90's NOISE_SEED + F_NOISE_SEED + its index)."""
+    from experiments import E90_model_stages as E90
+    path = _f_dir() / 'stage_pairs.parquet'
+    rows = []
+    i = 0
+    for fam in families:
+        src = 'E91fit' if fam == 'E91_refit' else 'E91'
+        for w in E83.S_WIRINGS:
+            tag = f_stage_tag(fam, w)
+            stag = E91.d_tag(w, F_K, F_POOL) if fam == 'E91_refit' else E91.run_tag(F_B2_CHOICE, w)
+            st = {c: load_stage_f(tag, c, (src, stag)) for c in ('on', 'off')}
+            if any(v is None for v in st.values()):
+                raise RuntimeError(f'{tag}: no stage matrices (run --part F first)')
+            meta = None
+            for d in (_f_dir(), H.shared_dir() / 'data' / 'model_outputs' / EXPERIMENT / F_DIR):
+                if (d / f'{tag}_units.json').exists():
+                    meta = {k: np.asarray(v) for k, v in json.loads((d / f'{tag}_units.json').read_text()).items()}
+                    break
+            if meta is None:
+                raise RuntimeError(f'{tag}: no units metadata')
+            rr = E90.read_wiring(w, st['on'], st['off'], meta, np.random.default_rng(E90.NOISE_SEED + F_NOISE_SEED + i))
+            rows.append(pd.DataFrame(rr).assign(family=fam, tag=tag))
+            i += 1
+    df = pd.concat(rows, ignore_index=True)
+    df.to_parquet(path)
+    return df
+
+
+def claw_groups(pairs: pd.DataFrame) -> pd.DataFrame:
+    """The claws as part A's steps read them (all claws, the drive alone, APL on; 'session_z' and 'noisy_measured'),
+    group means per family and wiring."""
+    c = pairs[(pairs.stage == 'claw') & (pairs.subset == 'all') & (pairs.share == 0.0) & (pairs.cond == 'on')
+              & pairs.reading.isin(['session_z', 'noisy_measured'])]
+    return _A()._groups_of_pairs(c, ['family', 'wiring', 'reading'])
+
+
+def f_step_rows(sm: pd.DataFrame, claws: pd.DataFrame, passes: Dict[Tuple[str, str, str], bool], claw_ok: bool,
+                flies_step=None) -> pd.DataFrame:
+    """The two steps like for like (part A's `step_verdict_rows` on S's populations): per family with claws (`claws`:
+    family, wiring, reading, groups) and like-for-like reading, the somata (`sm`, S's population and its runs) minus the
+    claws (part A's CLAW_READING: the session z without noise, the noisy reading as measured through it), against the
+    flies' steps (`flies_step(units, genotype, reading, measure, claw reading)`, part A's `flies_step_groups`), 3 of 4
+    wirings on the side; cond 'on' the step with APL on, 'off' the step without APL, both from the claws with APL on. A
+    noise-removed comparison is read if the group passed A1's check and E90's check of the claws' noise removal
+    passed (`claw_ok`)."""
+    A = _A()
+    if flies_step is None:
+        cache: Dict[tuple, pd.DataFrame] = {}
+        fc = A.flies_claws()
+
+        def flies_step(u, g, fr, ms, fcr):
+            k = (u, g, fr, ms, fcr)
+            if k not in cache:
+                cache[k] = A.flies_step_groups(A.flies_samples(u)[(g, fr, ms)], fc[fcr])
+            return cache[k]
+    ws = list(E83.S_WIRINGS)
+    G = list(A.GROUPS)
+    rows = []
+    for fam in dict.fromkeys(claws.family):
+        for prefix, u, fr, ms in A.like_for_like():
+            mcr, fcr = A.CLAW_READING[prefix.split('_')[-1]]
+            reading = f'{prefix}_{ms}'
+            cl = claws[(claws.family == fam) & (claws.reading == mcr)].set_index('wiring')
+            if set(cl.index) != set(ws):
+                raise RuntimeError(f'{fam}: claws on {sorted(cl.index)}')
+            cl = cl.loc[ws, G]
+            for cond in A.CONDS:
+                x = sm[(sm.family == fam) & (sm.reading == reading) & (sm.cond == cond)]
+                p = x[(x.kind == 'population') & (x.wiring == 'S')]
+                wr = x[(x.kind == 'run') & x.wiring.isin(ws)].set_index('wiring')
+                if len(p) != 1 or len(wr) != len(ws):
+                    raise RuntimeError(f'{fam} {reading} {cond}: {len(p)} population rows, {len(wr)} runs')
+                w_step = wr.loc[ws, G] - cl
+                p_step = {g: float(p.iloc[0][g]) - float(cl[g].mean()) for g in G}
+                fl = flies_step(u, A.GENO[cond], fr, ms, fcr)
+                for r in A.compare(p_step, w_step, fl, n_same=F_SAME_SIDE_4):
+                    read = bool(fr != 'noise_removed' or (passes.get((r['group'], ms, u), False) and claw_ok))
+                    rows.append(dict(family=fam, population='S', element='step', set='like_for_like', cond=cond,
+                                     reading=reading, flies_units=u, flies_reading=fr, measure=ms, read=read,
+                                     claws_model=mcr, claws_flies=fcr, claw_model=float(cl[r['group']].mean()), **r))
+    return pd.DataFrame(rows)
+
+
+def part_f4(out: Path, sm: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+    """F4: the claws of the stage runs (`f_claw_pairs`) and C2's on S (E90's, part A's `model_claws`), claws_F.csv;
+    steps_F.csv (`f_step_rows`) for C2's family on S and each stage family."""
+    A = _A()
+    sm = pd.read_csv(out / 'somata_F_means.csv') if sm is None else sm
+    t0 = time.time()
+    path = _f_dir() / 'stage_pairs.parquet'
+    pairs = pd.read_parquet(path) if path.exists() else f_claw_pairs()
+    cl = claw_groups(pairs)
+    c2 = A.model_claws()
+    c2 = c2[c2.wiring.isin(E83.S_WIRINGS)].assign(family='C2')
+    claws = pd.concat([c2, cl], ignore_index=True)
+    claws.to_csv(out / 'claws_F.csv', index=False)
+    e90v = json.loads((H.results_dir('E90_model_stages') / 'verdict.json').read_text())
+    rows = f_step_rows(sm, claws, A.check_passes(), bool(e90v['noise_check_passed']['claw']))
+    rows.to_csv(out / 'steps_F.csv', index=False)
+    print(f'F4 in {time.time() - t0:.0f} s', flush=True)
+    return rows
+
+
+# --- the verdict, the table and the figure
+
+def _cell(e: dict) -> str:
+    sg = ''.join('+' if x > 0 else '-' for x in e['signs'])
+    return f"{e['n_differ']}/{e['n_readings']}" + (f' ({sg})' if sg else '')
+
+
+def verdict_f(out: Path) -> dict:
+    """verdict_F.json: per family and population the somata's verdicts per group (part A's `verdicts` over the
+    like-for-like readings read), per stage family the steps', each family's place against the line and its scores
+    (line_F.csv), the stage runs' identities."""
+    A = _A()
+    so = pd.read_csv(out / 'somata_F.csv')
+    res: dict = dict(families=F_FAMILIES, runs=f_runs().to_dict(orient='records'), somata={}, steps={}, line={})
+    for (fam, pop), x in so[so.set == 'like_for_like'].groupby(['family', 'population'], sort=False):
+        res['somata'][f'{fam}|{pop}'] = {g: dict(verdict=v['verdict'], on=_cell(v['on']), off=_cell(v['off']),
+                                                 mean_diff_on=v['mean_diff_on'], mean_diff_off=v['mean_diff_off'])
+                                         for g, v in A.verdicts(x).items()}
+    if (out / 'steps_F.csv').exists():
+        st = pd.read_csv(out / 'steps_F.csv')
+        for fam, x in st.groupby('family', sort=False):
+            res['steps'][fam] = {g: dict(verdict=v['verdict'], on=_cell(v['on']), off=_cell(v['off']),
+                                         mean_diff_on=v['mean_diff_on'], mean_diff_off=v['mean_diff_off'])
+                                 for g, v in A.verdicts(x).items()}
+    if (out / 'line_F.csv').exists():
+        lc = pd.read_csv(out / 'line_F.csv')
+        # C2's own residual on S (the line's 13 weightings include it): a place relative to C2 on S beside the rule's
+        c2s = {r.readout: float(r.resid) for r in lc[(lc.folder == 'E90_model_stages') & (lc.population == 'S')].itertuples()}
+        for fam, keys in F_LINE_OF.items():
+            keys = keys if isinstance(keys[0], tuple) else (keys,)
+            for folder, lf in keys:
+                for r in lc[(lc.folder == folder) & (lc.family == lf) & lc.population.isin(['S', 'T'])].itertuples():
+                    res['line'][f'{fam}|{r.population}|{r.readout}'] = dict(
+                        folder=folder, family=lf, ester_rel=r.ester_rel, alcohol_rel=r.alcohol_rel, resid=r.resid,
+                        resid_vs_c2=float(r.resid - (c2s.get(r.readout, np.nan) if r.population == 'S' else 0.0)),
+                        off_toward_flies=bool(r.off_toward_flies), pattern=r.pattern, amplitude=r.amplitude, shape=r.shape,
+                        sd_ratio=r.sd_ratio, pearson_r=r.pearson_r, rho=r.rho, loss=r.loss, mean_effect=r.mean_effect,
+                        err_ester=r.err_ester, err_alcohol=r.err_alcohol, in_bands=bool(r.in_bands))
+        off = lc[lc.in_bands & lc.off_toward_flies & (lc.kind != 'line') & (lc.folder == F_SOURCE)]
+        res['e91_off_line'] = off[['readout', 'family', 'population', 'resid', 'pattern', 'loss', 'mean_effect']].to_dict(
+            orient='records')
+    if (out / F_IDENTITY).exists():
+        res['identity'] = {k: {c: v.get(c) for c in ('on', 'off', 'source', 'seconds')}
+                           for k, v in json.loads((out / F_IDENTITY).read_text()).items()}
+    _write_json(out / 'verdict_F.json', res)
+    return res
+
+
+F_TABLE_READINGS = ('saturating_z_none_cosine', 'linear_z_none_cosine', 'saturating_z_none_pearson',
+                    'linear_z_none_pearson')
+
+
+def comparison_table_f(out: Path) -> str:
+    """comparison_table_F.md from part F's tables."""
+    A = _A()
+    v = verdict_f(out)
+    G = A.TABLE_GROUPS
+    L = ["# E92 part F: the summed form (E91) read as part A read C2's family", '',
+         f'Generated by experiments/E92_gain.py at {H.code_commits().get("queue_commit", "")[:7]}.', '',
+         '## Families', '', '| family | what | runs |', '|---|---|---|']
+    runs = f_runs()
+    for fam, what in F_FAMILIES.items():
+        r = runs[runs.family == fam]
+        L.append(f"| {fam} | {what} | {', '.join(r.source + ':' + r.tag)} |")
+    if v['line']:
+        L += ['', '## The main target and the line (S and T populations; calibrated readout and raw counts)', '',
+              '| family | pop. | readout | pattern | amplitude | shape | spread ratio | Pearson r | ρ | mean APL effect | loss | '
+              'ester / alcohol error | ester rel. | alcohol rel. | residual | residual relative to C2 | off toward the flies |',
+              '|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|']
+        for k, x in v['line'].items():
+            fam, pop, ro = k.split('|')
+            L.append(f"| {fam} | {pop} | {ro} | {x['pattern']:.4f} | {x['amplitude']:.4f} | {x['shape']:.4f} | "
+                     f"{x['sd_ratio']:.2f} | {x['pearson_r']:.2f} | {x['rho']:.2f} | {x['mean_effect']:+.3f} | {x['loss']:.4f} | "
+                     f"{x['err_ester']:+.3f} / {x['err_alcohol']:+.3f} | {x['ester_rel']:+.3f} | {x['alcohol_rel']:+.3f} | "
+                     f"{x['resid']:+.3f} | {x['resid_vs_c2']:+.3f} | {x['off_toward_flies']} |")
+        L += ['', f"E91's variants off the line toward the flies (inside the bands): {json.dumps(v.get('e91_off_line', []))}"]
+    L += ['', '## The somata: like-for-like verdicts (differ / read, with the sign)', '',
+          '| family | pop. | ' + ' | '.join(f'{A.TABLE_HEAD[g]}: on | off' for g in G) + ' |',
+          '|---|---|' + '---:|---:|' * len(G)]
+    for k, x in v['somata'].items():
+        fam, pop = k.split('|')
+        L.append(f'| {fam} | {pop} | ' + ' | '.join(f"{x[g]['on']} | {x[g]['off']}" for g in G) + ' |')
+    sm = pd.read_csv(out / 'somata_F_means.csv')
+    so = pd.read_csv(out / 'somata_F.csv')
+    L += ['', "## The somata, S's populations, in four like-for-like readings (the flies' noise-removed values in Yang's z "
+          "beside: the control flies with APL on, APL output blocked (TNT) with APL off)", '',
+          '| APL | reading | family | ' + ' | '.join(A.TABLE_HEAD[g] for g in G) + ' |', '|---|---|---|' + '---:|' * len(G)]
+    for cond in A.CONDS:
+        for rd in F_TABLE_READINGS:
+            fl = so[(so.reading == rd) & (so.cond == cond) & (so.population == 'S') & (so.family == 'C2')].set_index('group')
+            L.append(f'| {cond} | {rd} | flies | ' + ' | '.join(_f(fl.loc[g, 'flies'], '.3f') for g in G) + ' |')
+            for fam in F_FAMILIES:
+                x = sm[(sm.kind == 'population') & (sm.wiring == 'S') & (sm.family == fam) & (sm.reading == rd)
+                       & (sm.cond == cond)]
+                if len(x):
+                    L.append(f'| {cond} | {rd} | {fam} | ' + ' | '.join(_f(x.iloc[0][g], '.3f') for g in G) + ' |')
+    if v['steps']:
+        L += ['', "## The two steps like for like (S's populations, 3 of 4 wirings on the side)", '',
+              '| family | ' + ' | '.join(f'{A.TABLE_HEAD[g]}: with APL on | without APL' for g in G) + ' |',
+              '|---|' + '---:|---:|' * len(G)]
+        for fam, x in v['steps'].items():
+            L.append(f'| {fam} | ' + ' | '.join(f"{x[g]['on']} | {x[g]['off']}" for g in G) + ' |')
+        cl = pd.read_csv(out / 'claws_F.csv')
+        L += ['', "## The claws with APL on (all claws, the drive alone), S's wirings' mean", '',
+              '| family | reading | ' + ' | '.join(A.TABLE_HEAD[g] for g in G) + ' |', '|---|---|' + '---:|' * len(G)]
+        for (fam, rd), x in cl.groupby(['family', 'reading'], sort=False):
+            L.append(f'| {fam} | {rd} | ' + ' | '.join(_f(x[g].mean(), '.3f') for g in G) + ' |')
+    if 'identity' in v:
+        L += ['', '## The stage runs: identities against the archived runs', '', '```',
+              json.dumps(v['identity'], indent=1, default=str), '```']
+    text = '\n'.join(L) + '\n'
+    (out / 'comparison_table_F.md').write_text(text)
+    return text
+
+
+def figure_f(out: Path) -> Optional[Path]:
+    """E92_F_line.png: A4's line (S's line through E89's 13 weightings, with the weightings' largest residual shaded)
+    with C2's family and E91's S populations (the families of F named), and the control flies' points, raw counts and
+    the calibrated readout."""
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    if not (out / 'line_F.csv').exists():
+        return None
+    A = _A()
+    lc = pd.read_csv(out / 'line_F.csv')
+    ink, ink2, grid = '#0b0b0b', '#52514e', '#e6e5e1'
+    cols = {'C2': '#0b0b0b', 'E91_B1_k2_s1': '#2a78d6', 'E91_refit': '#c2449f', 'E91_B2_k2': '#5b4cc4',
+            'E91_B2_k1_s1': '#138a60'}
+    fig, axes = plt.subplots(1, 2, figsize=(13, 5.5))
+    for ax, ro in zip(axes, A.READOUTS):
+        ln = A.line(ro)['S']
+        x = lc[(lc.readout == ro) & (lc.population == 'S') & (lc.folder == F_SOURCE)]
+        ax.scatter(x.alcohol_rel, x.ester_rel, s=14, c='#9aa7b4', label="E91's other S populations", zorder=2)
+        pts = np.array(list(ln['points'].values()))
+        ax.scatter(pts[:, 0], pts[:, 1], s=22, c='#7fb3e8', label="E89's 13 weightings", zorder=3)
+        xs = np.linspace(min(pts[:, 0].min(), x.alcohol_rel.min()) - 0.02, max(pts[:, 0].max(), x.alcohol_rel.max()) + 0.02, 10)
+        ys = ln['intercept'] + ln['slope'] * xs
+        ax.plot(xs, ys, '-', color='#7fb3e8', lw=1)
+        ax.fill_between(xs, ys - ln['max_abs_resid'], ys + ln['max_abs_resid'], color='#7fb3e8', alpha=0.12, lw=0,
+                        label="the weightings' largest residual")
+        for fam, keys in F_LINE_OF.items():
+            keys = keys if isinstance(keys[0], tuple) else (keys,)
+            folder, lf = keys[0]
+            r = lc[(lc.readout == ro) & (lc.population == 'S') & (lc.folder == folder) & (lc.family == lf)]
+            if len(r):
+                ax.scatter(r.alcohol_rel, r.ester_rel, s=60, marker='D', facecolors='white', edgecolors=cols[fam], lw=1.6,
+                           label=fam, zorder=5)
+        for k, mk in (('trial_mean', '*'), ('noise_removed', 'P')):
+            f_ = ln['flies'][f'{k}_all']
+            ax.plot(f_['alcohol'], f_['ester'], mk, color=ink if k == 'trial_mean' else ink2, ms=11,
+                    label=f"control flies, {k.replace('_', ' ')}")
+        ax.set_xlabel("alcohol pairs' APL-on distance minus the mean pair's (cosine)", fontsize=9)
+        ax.set_ylabel("ester pairs' APL-on distance minus the mean pair's (cosine)", fontsize=9)
+        ax.set_title(f"{'raw counts' if ro == 'raw' else 'calibrated readout'}: S's populations", fontsize=10)
+        ax.grid(True, color=grid, lw=0.6)
+        ax.spines[['top', 'right']].set_visible(False)
+    axes[0].legend(fontsize=7, frameon=False)
+    fig.tight_layout()
+    path = out / 'E92_F_line.png'
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+    return path
+
+
+def part_f(out: Path, workers: int = 4, n_workers: int = 16, stages: bool = True) -> dict:
+    """Part F (E91's note posted 2026-11-13 19:38): F1 the somata of E91's families in A2's readings (somata_F.csv), F2
+    their place against A4's line (line_F.csv), F3 the stage runs on S (E91's refits and its choice on the base with the
+    flies' recruitment, each reproducing its archived run exactly), F4 the two steps like for like (steps_F.csv); then
+    verdict_F.json, comparison_table_F.md and E92_F_line.png. With `stages` False, F3 and F4 are skipped."""
+    sm, _ = part_f1(out, workers)
+    part_f2(out, workers)
+    if stages:
+        part_f3(out, n_workers=n_workers)
+        part_f4(out, sm)
+    comparison_table_f(out)
+    figure_f(out)
+    return verdict_f(out)
 
 
 # ---------------------------------------------------------------------------
@@ -1561,21 +2369,26 @@ def provenance(out: Path, part: str, **extra) -> None:
     old = json.loads(path.read_text()) if path.exists() else {}
     rec = dict(time=time.strftime('%Y-%m-%d %H:%M'), **H.code_commits(), **extra,
                olfsysm_build={k: v for k, v in olfsysm.build_info().items() if k not in ('git_diff', 'cpp_diff')})
-    if part in ('B1', 'B2', 'B3', 'smoke', 'C', 'D'):
+    if part in ('B1', 'B2', 'B3', 'smoke', 'C', 'D', 'F'):
         rec['model_provenance'] = H.model_provenance(orn_deltas=H.apl16_orn_deltas())
     runs = old.get('runs', [])
     runs.append(rec)
     _write_json(path, dict(script='experiments/E92_gain.py', part=part,
                            settings=dict(FORMS=FORMS, B1_SETTINGS=B1_SETTINGS, B2_SETTINGS=B2_SETTINGS, PULSE=PULSE,
                                          APL_BRACKET=APL_BRACKET, APL_STEP=APL_STEP, DIVISOR_HIGH=DIVISOR_HIGH,
-                                         CO_CANDIDATE=CO_CANDIDATE, CHOICE_SCREENS=CHOICE_SCREENS, D_MAXFEV=D_MAXFEV),
+                                         CO_CANDIDATE=CO_CANDIDATE, CHOICE_SCREENS=CHOICE_SCREENS, D_MAXFEV=D_MAXFEV,
+                                         **(dict(F_SOURCE=F_SOURCE, F_K=F_K, F_POOL=F_POOL, F_FAMILIES=F_FAMILIES,
+                                                 F_STAGE_FAMILIES=F_STAGE_FAMILIES, F_SAME_SIDE_4=F_SAME_SIDE_4,
+                                                 F_NOISE_SEED=F_NOISE_SEED, F_LINE_E89=F_LINE_E89)
+                                            if part == 'F' else {})),
                            runs=runs))
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('--part', required=True,
-                    choices=('B1', 'B2', 'B3', 'smoke', 'co', 'C', 'score', 'D', 'Dscore', 'E', 'F', 'variants', 'table'))
+                    choices=('B1', 'B2', 'B3', 'smoke', 'co', 'C', 'score', 'D', 'Dscore', 'E', 'F', 'Ftable', 'variants',
+                             'table'))
     ap.add_argument('--wirings', default='S', help="B1 / B2 / B3: 'S', 'T' or a comma-separated list")
     ap.add_argument('--workers', type=int, default=4, help='co / score: processes (4)')
     ap.add_argument('--reference', default='C2', choices=REFERENCE_FAMILIES,
@@ -1586,11 +2399,13 @@ def main() -> None:
     ap.add_argument('--force', action='store_true', help="D: run fits the entry's rules do not allow")
     ap.add_argument('--dry-run', action='store_true', help='D: print the commands only')
     ap.add_argument('--no-co', action='store_true', help='score: skip the co-response readings')
+    ap.add_argument('--f-workers', type=int, default=16, help="F: the B2 stage runs' one-odor worker processes (16)")
+    ap.add_argument('--no-stages', action='store_true', help='F: skip the stage runs and the steps (F3, F4)')
     args = ap.parse_args()
     warnings.simplefilter('ignore', RuntimeWarning)
     out = H.results_dir(EXPERIMENT)
     ws = _wirings(args.wirings)
-    if args.part in ('B1', 'B2', 'B3', 'smoke', 'C', 'D') and not (args.part == 'D' and args.dry_run):
+    if args.part in ('B1', 'B2', 'B3', 'smoke', 'C', 'D', 'F') and not (args.part == 'D' and args.dry_run):
         provenance(out, args.part, wirings=list(ws), reference=args.reference,
                    **(dict(pop=args.pop, k=args.k, d_start=args.d_start) if args.part == 'D' else {}))
     if args.part == 'B1':
@@ -1616,7 +2431,10 @@ def main() -> None:
     elif args.part == 'E':
         part_e(out)
     elif args.part == 'F':
-        part_f(out)
+        part_f(out, args.workers, args.f_workers, stages=not args.no_stages)
+    elif args.part == 'Ftable':
+        comparison_table_f(out)
+        figure_f(out)
     elif args.part == 'variants':
         write_variants(out)
     elif args.part == 'table':

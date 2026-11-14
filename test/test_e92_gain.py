@@ -433,3 +433,198 @@ def test_divisive_form_on_the_real_wiring():
     mk = E91.WiringModel91('real', check=False, apl_inh_divisive=True)
     assert mk.mp.kc.apl_inh_divisive
     assert np.array_equal(mk.run_on(0.3)[1].to_numpy(), on_in[1].to_numpy())
+
+
+# ---------------------------------------------------------------------------
+# part F: the summed form (E91) on part A's readings
+
+def test_f_families_and_the_refits():
+    if not _shared():
+        pytest.skip('needs the shared directory')
+    r = G.f_runs()
+    assert r.groupby('family').size().to_dict() == {'C2': 8, 'E91_B1_k2_s1': 4, 'E91_B2_k1_s1': 8, 'E91_B2_k2': 8,
+                                                    'E91_refit': 4}
+    assert set(G.F_FAMILIES) == set(r.family) and set(G.F_STAGE_FAMILIES) <= set(G.F_FAMILIES)
+    tags = G.f_refit_tags()
+    fits = pd.read_csv(H.results_dir(G.F_SOURCE) / 'fits.csv')
+    assert set(tags) == set(fits.tag) and sorted(tags.values()) == sorted(G.E83.S_WIRINGS)
+    assert (fits.claw_inh_pool == G.F_POOL).all() and (fits.k == G.F_K).all()
+    assert G.F_B1 == 'B1_F_k2_s1' and G.F_B2_REF == 'B2_F_k2' and G.F_B2_CHOICE == 'B2_F_k1_s1'
+    # the base's own family on S is E89's C2 run (E91's reference on S), on T E91's
+    x = r[r.family == 'E91_B2_k2'].set_index('wiring')
+    assert x.loc['real', 'source'] == 'E89' and x.loc['real', 'tag'] == 'C2_F_k2_real' and x.loc['P3', 'tag'] == 'B2_F_k2_P3'
+
+
+def _fake_stage_sim(n_gl=3, n_bt=4, n_odors=3, seed=0):
+    """A made-up olfsysm run: 3 glomeruli, 4 boutons, 5 claws on 2 KCs, 3 odors, 200 steps of 0.01 s from -1 s."""
+    rng = np.random.default_rng(seed)
+    n_steps = 200
+    mp = SimpleNamespace(time_dt=0.01, time_pre_start=-1.0, time_start=-0.5, time_end=1.0)
+    gl = ['DA1', 'DA1', 'VA2', 'DM1'][:n_bt]
+    cols = pd.MultiIndex.from_arrays([gl, [f'b{i}' for i in range(n_bt)]], names=['glomerulus', 'bouton'])
+    idx = pd.MultiIndex.from_arrays([[10, 10, 10, 11, 11], range(5)], names=[H.KC_ID_LEVEL, 'claw'])
+    W = pd.DataFrame(rng.uniform(0, 1, (5, n_bt)) * (rng.uniform(0, 1, (5, n_bt)) > 0.4), index=idx, columns=cols)
+    rv = SimpleNamespace(orn=SimpleNamespace(sims=[np.zeros((2, n_steps))]),
+                         pn=SimpleNamespace(pn_sims=[rng.uniform(0, 50, (n_gl, n_steps)) for _ in range(n_odors)],
+                                            bouton_sims=[rng.uniform(0, 80, (n_bt, n_steps)) for _ in range(n_odors)]),
+                         kc=SimpleNamespace(inh_sims=[rng.uniform(0, 30, (1, n_steps)) for _ in range(n_odors)],
+                                            wAPLKC=rng.uniform(0, 1, (5, 1))))
+    return mp, rv, W
+
+
+def test_read_stages_odor_is_e90s_reading():
+    E90 = pytest.importorskip('experiments.E90_model_stages')
+    mp, rv, W = _fake_stage_sim()
+    odors = ['2h', 'IaA', 'pa']
+    full = E90.read_stages(mp, rv, W, np.arange(3), odors, E90.MODEL_WINDOW)
+    recs = [G.read_stages_odor(mp, rv, W, i, E90.MODEL_WINDOW) for i in range(3)]
+    st = G.stage_frames(recs, odors, W)
+    for k in G.STAGE_KEYS:
+        assert st[k].index.equals(full[k].index) and list(st[k].columns) == odors
+        assert np.array_equal(st[k].to_numpy(), full[k].to_numpy())
+    assert np.allclose(st['apl'].loc[odors, ['win', 'pre']].to_numpy(), full['apl'].loc[odors, ['win', 'pre']].to_numpy())
+    # an odor run alone: the others' saved variables may be empty, and E90's reading of all odors fails where this holds
+    rv.kc.inh_sims[1] = np.zeros((0,))
+    rv.pn.bouton_sims[2] = np.zeros((0, 0))
+    one = G.read_stages_odor(mp, rv, W, 0, E90.MODEL_WINDOW)
+    assert all(np.array_equal(one[k], recs[0][k]) for k in G.STAGE_KEYS)
+    with pytest.raises(Exception):
+        E90.read_stages(mp, rv, W, np.arange(3), odors, E90.MODEL_WINDOW)
+    with pytest.raises(RuntimeError):
+        G.read_stages_odor(mp, rv, W.iloc[:, :3], 0, E90.MODEL_WINDOW)          # the wiring's boutons are not the run's
+
+
+def test_stage_save_and_load(tmp_path, monkeypatch):
+    E90 = pytest.importorskip('experiments.E90_model_stages')
+    mp, rv, W = _fake_stage_sim()
+    st = E90.read_stages(mp, rv, W, np.arange(3), ['2h', 'IaA', 'pa'], E90.MODEL_WINDOW)
+    monkeypatch.setattr(G, '_f_dir', lambda: tmp_path)
+    G.save_stage_f('F_x_real', 'off', st)
+    assert not list(tmp_path.glob('*spike_counts*')) and not list(tmp_path.glob('*responses*'))   # the counts stay the source's
+    got = G.load_stage_f('F_x_real', 'off')
+    for k in G.STAGE_KEYS:
+        assert np.array_equal(got[k].to_numpy(), st[k].to_numpy()) and len(got[k].index) == len(st[k].index)
+    assert np.array_equal(np.asarray(got['claw_win'].index.get_level_values(H.KC_ID_LEVEL)), [10, 10, 10, 11, 11])
+    assert G.load_stage_f('F_x_real', 'on') is None
+    meta = G.units_meta(W)
+    assert meta['kc_of_claw'] == [10, 10, 10, 11, 11] and meta['bouton_glomerulus'] == ['DA1', 'DA1', 'VA2', 'DM1']
+
+
+def test_b2_odor_params_in_the_runs_order():
+    row = pd.Series(dict(tag='B2_F_k1_s1_real', thr_per_odor=json.dumps({'b @ -3': 1.2, 'a @ -3': 0.8}),
+                         apl_per_odor=json.dumps({'a @ -3': 0.5, 'b @ -3': 2.5})))
+    assert G.b2_odor_params(row, ['a @ -3', 'b @ -3']) == ([0.8, 1.2], [0.5, 2.5])
+    with pytest.raises(RuntimeError):
+        G.b2_odor_params(row, ['a @ -3', 'c @ -3'])
+    with pytest.raises(RuntimeError):
+        G.b2_odor_params(row, ['a @ -3'])
+
+
+def test_identity_counts_every_difference():
+    idx = pd.Index([1, 2], name=H.KC_ID_LEVEL)
+    r = pd.DataFrame([[1.0, 0.0], [0.0, 1.0]], index=idx, columns=['x', 'y'])
+    s = pd.DataFrame([[3.0, 1.0], [0.0, 5.0]], index=idx, columns=['x', 'y'])
+    assert G._identity((r, s), (r, s))['exact']
+    d = G._identity((r, s + np.array([[0, 1], [0, 0]])), (r, s))
+    assert d['counts_differ'] == 1 and d['responses_differ'] == 0 and not d['exact']
+    assert not G._identity((r, s.set_axis(['y', 'x'], axis=1)), (r, s))['exact']
+
+
+def _fake_somata(values: dict, readings, wirings_of: dict):
+    """somata_F_means-like rows: per family, reading, condition, the runs (`values[family][wiring]`, one value for every
+    group) and the populations (mean over the wirings) of S and, with eight wirings, all8."""
+    A = G._A()
+    rows = []
+    for fam, ws in wirings_of.items():
+        for rd in readings:
+            for c in A.CONDS:
+                vals = {w: values[fam][w] for w in ws}
+                rows += [dict(kind='run', family=fam, wiring=w, cond=c, reading=rd, **{g: v for g in A.GROUPS})
+                         for w, v in vals.items()]
+                for name, need in G.F_POPULATIONS:
+                    if set(need) <= set(ws) and name != 'T':
+                        m = float(np.mean([vals[w] for w in need]))
+                        rows.append(dict(kind='population', family=fam, wiring=name, cond=c, reading=rd,
+                                         **{g: m for g in A.GROUPS}))
+    return pd.DataFrame(rows)
+
+
+def _flies_groups(mean):
+    A = G._A()
+    return pd.DataFrame({g: dict(mean=mean, lo=mean - 0.02, hi=mean + 0.02) for g in A.GROUPS}).T
+
+
+def test_f_soma_rows_population_rules():
+    A = G._A()
+    readings = [f'{p}_{ms}' for p, _, _, ms in A.like_for_like()] + [f'{r}_{ms}' for r in ('raw', 'cal') for ms in A.MEASURES]
+    S, T = G.E83.S_WIRINGS, G.E83.T_WIRINGS
+    # eight wirings: 6 of them 0.1 below the flies, 2 above -> the population differs by 6 of 8, and on S by 3 of 4
+    eight = {w: 0.4 for w in S[:3] + T[:3]}
+    eight.update({S[3]: 0.55, T[3]: 0.55})
+    # four wirings: 2 of 4 below -> its S population is below by more than 0.05 but does not differ
+    four = {S[0]: 0.2, S[1]: 0.2, S[2]: 0.55, S[3]: 0.55}
+    sm = _fake_somata({'X': eight, 'Y': four}, readings, {'X': S + T, 'Y': S})
+    passes = {(g, m, u): True for g in A.GROUPS for m in A.MEASURES for u in A.UNITS}
+    rows = G.f_soma_rows(sm, passes, flies=lambda u, g, r, m: _flies_groups(0.5))
+    assert set(map(tuple, rows[['family', 'population']].drop_duplicates().to_numpy())) == {('X', 'S'), ('X', 'all8'), ('Y', 'S')}
+    lf = rows[rows.set == 'like_for_like']
+    assert len(lf) == 3 * 16 * 2 * len(A.GROUPS) and len(rows[rows.set == 'beside']) == 3 * 8 * 2 * len(A.GROUPS)
+    assert lf[lf.family == 'X'].differs.all()                        # 6 of 8; 3 of 4
+    y = lf[lf.family == 'Y']
+    assert (y['diff'] < -0.05).all() and not y.differs.any() and (y.n_same_side == 2).all()
+    assert np.allclose(lf[(lf.family == 'X') & (lf.population == 'all8')].model, np.mean(list(eight.values())))
+    with pytest.raises(ValueError):
+        G._n_same(5)
+
+
+def test_f_step_rows_are_somata_minus_claws():
+    A = G._A()
+    readings = [f'{p}_{ms}' for p, _, _, ms in A.like_for_like()]
+    S = G.E83.S_WIRINGS
+    sm = _fake_somata({'Y': {w: 0.6 for w in S}}, readings, {'Y': S})
+    claws = pd.DataFrame([dict(family='Y', wiring=w, reading=rd, **{g: c for g in A.GROUPS})
+                          for w, c in zip(S, (0.3, 0.3, 0.3, 0.5)) for rd in ('session_z', 'noisy_measured')])
+    passes = {(g, m, u): True for g in A.GROUPS for m in A.MEASURES for u in A.UNITS}
+    got = []
+
+    def flies_step(u, g, fr, ms, fcr):
+        got.append((g, fr, fcr))
+        return _flies_groups(0.15)
+    rows = G.f_step_rows(sm, claws, passes, claw_ok=False, flies_step=flies_step)
+    assert len(rows) == 16 * 2 * len(A.GROUPS)
+    assert np.allclose(rows.model, 0.6 - 0.35) and np.allclose(rows.claw_model, 0.35)
+    # three wirings' steps are 0.3, one 0.1: 3 of 4 on the side, 0.1 above the flies' 0.15 -> differs
+    assert rows[rows.read].differs.all() and (rows.n_same_side == 3).all()
+    # the claws as part A reads them: the session z without noise, as measured through it; noise removed is read only
+    # with E90's check of the claws' noise removal
+    assert set(rows.claws_model) == {'session_z', 'noisy_measured'}
+    assert (~rows[rows.flies_reading == 'noise_removed'].read).all() and rows[rows.flies_reading == 'trial_mean'].read.all()
+    assert {fcr for _, fr, fcr in got if fr == 'noise_removed'} == {'noise_removed'}
+    with pytest.raises(RuntimeError):
+        G.f_step_rows(sm, claws[claws.wiring != 'M1'], passes, claw_ok=True, flies_step=flies_step)
+
+
+def test_f_line_rows_name_the_refits(tmp_path, monkeypatch):
+    A = G._A()
+    folder = tmp_path / G.F_SOURCE
+    folder.mkdir()
+    refit = 'rate0.068_aplboth_pool1_k2_cap3'
+    for tag in ('B2_F_k1_s1_real', refit):
+        for c in ('on', 'acute_off'):
+            for k in ('spike_counts', 'responses'):
+                (folder / f'{tag}_{c}_{k}.parquet').write_bytes(b'')
+    (folder / 'base_P3_acute_off_spike_counts.parquet').write_bytes(b'')
+    monkeypatch.setattr(A, 'ARCHIVE', tmp_path)
+    files = A._find_files(G.F_SOURCE)
+    r = G._f_line_row(G.F_SOURCE, refit, 'E91_refit', 'real', files)
+    assert r['included'] and r['path'].endswith(f'{refit}_on_spike_counts.parquet') and r['wiring'] == 'real'
+    assert G._f_line_row(G.F_SOURCE, 'base_P3', 'base', 'P3', files)['reason']
+    assert A._variant_key(G.F_SOURCE, 'B2_F_k1_s1_ctrl_M3', None) == ('B2_F_k1_s1_ctrl', 'M3')
+
+
+@SLOW
+def test_refit_stage_run_reproduces_e91():
+    st, ident = G.f_stage_refit('real')
+    assert ident['on']['exact'] and ident['off']['exact']
+    assert (st['on']['claw_win'].to_numpy() >= 0).all()
+    assert list(st['on']['claw_win'].columns) == [H.odor_abbrev(c) for c in st['on']['spike_counts'].columns]
