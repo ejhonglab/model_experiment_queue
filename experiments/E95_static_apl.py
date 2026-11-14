@@ -69,7 +69,34 @@ Parts (CLI `--part`):
 - variants: variants.csv and model_pair_distances_long.csv for the archive.
 - table: comparison_table.md and the figure.
 
-Deviations from the entry, forced by the code: (filled in as the parts are written)
+- Fcheck: E10_joint_fit.py with and without --aplkc-flat (at size 0) against E94's D1 fit on the real wiring's saved first
+  evaluation (`f_check`: its command with --smoke, 5 evaluations, history into this experiment's results folder);
+  f_check.json. Run once before part F.
+
+Deviations from the entry, forced by the code:
+- Part F's fifth parameter is outside olfsysm's simulator, which optimize_mb_model_params could not fit: pyolfsysm's
+  optimize_mb_model_params gained `extra_params` (olfsysm 1bb4b90, Python only, no C++ change; None, the default, changes
+  nothing), each set through the simulator's closure before every evaluation; E10_joint_fit.py's --aplkc-flat uses it.
+  The size's unit (d = 1: a claw loses the fit's mean loss a claw at the boutons) needs the fit's stage run, which E10 does
+  not read, so E10 takes it as --aplkc-flat-unit (`component_unit`, from part D's runs) with --aplkc-flat-init (default
+  --init-params' 'aplkc_flat') and --aplkc-flat-max (8).
+- "Every APL scale 0" (part C) sets all four (APL->KC, KC->APL, APL->bouton, bouton->APL); part 0 checks that this with a
+  static inhibition of zero is the saved APL-off run (whose two APL output scales are 0) exactly.
+- "The static inhibition against the somatic threshold" is against each KC's threshold as the simulator sets it,
+  fixed_thr + 2 x its spontaneous input (median about 2.5 x fixed_thr); against fixed_thr alone beside (the premise's "about
+  half the threshold" is against fixed_thr).
+- D0 (dose 0.1 without the component, part D's control) on S is E94's saved runs (part 0 reproduces the real wiring's
+  exactly), on T run here.
+- The gate's control of a static setting ('<v>_ctrl', its values permuted over all KCs with seed PERM_SEED) is run as its
+  own point even where it is the same permutation as B4's or C5's.
+- Part F starts each wiring from its own best point of D1 (the lowest pattern part of that wiring under the readout
+  against all recordings; points inside the bands first, none at a bracket's bound).
+- A3's "responses a threshold raise would remove" are read on the window-mean summed drive against each KC's threshold
+  (a count-level description, as the entry says); A2's "against E75's map" is the glomeruli's mean loss a claw at the
+  boutons against E75's ridge profile (E83's `e75_profile('ridge_x1')`); the per-KC reading "under both maps" is E93's
+  (saturating, K calibrated) and the linear map (noise and noise ratio calibrated on E73's targets).
+- olfsysm's odor order is the outputs' column order on these simulators, so the one-odor identity checks the middle column
+  (it would check the column whose olfsysm index differs most otherwise).
 
 Outputs: results/E95_static_apl/; spike counts, responses, stage matrices and static inhibitions under
 outputs/E95_static_apl/ (runs/, W/, F/).
@@ -590,13 +617,14 @@ def _q(v: np.ndarray, prefix: str) -> dict:
 
 
 def static_realism(M: Optional[np.ndarray], thr: np.ndarray, n_claws: np.ndarray, d_off: np.ndarray,
-                   on_counts: Optional[np.ndarray] = None, off_counts: Optional[np.ndarray] = None) -> dict:
+                   on_counts: Optional[np.ndarray] = None, off_counts: Optional[np.ndarray] = None,
+                   fixed_thr: Optional[float] = None) -> dict:
     """The static inhibition (KCs x odors, as run; None: none) per KC (its mean over the odors) as a multiple of the KC's
     somatic threshold `thr` (fixed_thr + 2 x its spontaneous input): 10th percentile, median, 90th, largest, and the median
     by claw class; 'static_over_max_drive' the share of KCs whose static inhibition exceeds their largest summed claw drive
     without APL (`d_off`, window means; any odor); 'silent_by_mean_drive' the share whose largest drive without APL minus
     the static inhibition stays below the threshold for every odor; with the runs' counts, the shares of KCs that respond
-    to no odor with APL on and off (two or more spikes)."""
+    to no odor with APL on and off (two or more spikes); with `fixed_thr`, the median as a multiple of it beside."""
     row = {}
     thr = np.asarray(thr, dtype=float).ravel()
     n = np.asarray(n_claws, dtype=float).ravel()
@@ -604,7 +632,8 @@ def static_realism(M: Optional[np.ndarray], thr: np.ndarray, n_claws: np.ndarray
     if M is None:
         row.update(_q([], 'static_over_thr'))
         row.update({f'static_over_thr_p50_{g}': np.nan for g, _, _ in CLAW_GROUPS})
-        row.update(static_over_max_drive=np.nan, silent_by_mean_drive=np.nan, static_mean=np.nan, static_max=np.nan)
+        row.update(static_over_max_drive=np.nan, silent_by_mean_drive=np.nan, static_mean=np.nan, static_max=np.nan,
+                   static_over_fixed_thr_p50=np.nan)
     else:
         A = np.asarray(M, dtype=float)
         s = A.mean(axis=1)
@@ -617,6 +646,7 @@ def static_realism(M: Optional[np.ndarray], thr: np.ndarray, n_claws: np.ndarray
         row['silent_by_mean_drive'] = float(((D - A).max(axis=1) < thr).mean())
         row['static_mean'] = float(A.mean())
         row['static_max'] = float(A.max())
+        row['static_over_fixed_thr_p50'] = float(np.median(s) / fixed_thr) if fixed_thr else np.nan
     for lab, C in (('on', on_counts), ('off', off_counts)):
         if C is not None:
             row[f'silent_share_{lab}'] = float((~(np.asarray(C, dtype=float) > RAW_CRIT).any(axis=1)).mean())
@@ -1072,7 +1102,8 @@ def a2_per_kc(out: Path) -> Tuple[pd.DataFrame, pd.DataFrame]:
 
 def a3_sizes(out: Path) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """A3 (module docstring): a3_sizes.csv (per wiring and quantity b, c, b + c: per KC as a multiple of its threshold,
-    10th percentile, median, 90th, largest, and the median by claw class) and a3_removed.csv (per wiring, raise (b,
+    fixed_thr + 2 x its spontaneous input, 10th percentile, median, 90th, largest, and the median by claw class; beside, as
+    a multiple of fixed_thr alone, the fits' thresholds the entry's premise quotes) and a3_removed.csv (per wiring, raise (b,
     b + c) and group: the responses without APL, those whose window-mean drive is at or above the threshold, and those of
     them a threshold raise would bring below it; per odor group (E90's ester and alcohol odors, the others) and, for the
     co-responses (KCs responding to both odors of a pair), per group of pairs (E92's part A groups). A count-level
@@ -1087,9 +1118,11 @@ def a3_sizes(out: Path) -> Tuple[pd.DataFrame, pd.DataFrame]:
         n = L['n'].to_numpy()
         grp = _claw_group(n)
         b, c = L['b'].to_numpy(), L['c'].to_numpy()
+        fthr = float(E83.saved_fit(w)['p']['fixed_thr'])
         for q, v in (('b', b), ('c', c), ('b+c', b + c)):
             r = v / thr
-            row = dict(wiring=w, quantity=q, mean_abs=float(v.mean()), thr_median=float(np.median(thr)), **_q(r, 'over_thr'))
+            row = dict(wiring=w, quantity=q, mean_abs=float(v.mean()), thr_median=float(np.median(thr)), fixed_thr=fthr,
+                       **_q(r, 'over_thr'), **_q(v / fthr, 'over_fixed_thr'))
             for g, _, _ in CLAW_GROUPS:
                 row[f'over_thr_p50_{g}'] = float(np.median(r[grp == g])) if (grp == g).any() else np.nan
             srows.append(row)
@@ -1309,7 +1342,7 @@ def run_point(model: StaticModel, v: str, part: str = '', cc: Optional[dict] = N
                **res['gain']['row'], **cc)
     row.update(E94.stage_extras(model.W, w, st))
     row.update(static_realism(res['ext'], thr, L['n'].to_numpy(), L['Doff'].to_numpy(), res['on'][1].to_numpy(),
-                              res['off'][1].to_numpy()))
+                              res['off'][1].to_numpy(), float(p['fixed_thr'])))
     if pv['part'] == 'D':
         w_all = (model.wAPLKC if wk is None else wk).to_numpy(dtype=float) * p['wAPLKC_scale']
         w_fam = model.wAPLKC.to_numpy(dtype=float) * p['wAPLKC_scale']
@@ -2034,7 +2067,13 @@ def f_check(out: Path) -> dict:
                 and not E10_same(h[c].iloc[0], hist94[c].iloc[0])}
         res[name] = dict(tag=tag, n_cols=int(sum(c in h.columns for c in cols)), differs=diff, exact=not diff,
                          flat_first=float(h['aplkc_flat'].iloc[0]) if 'aplkc_flat' in h else None)
-    res['passes'] = bool(res['off']['exact'] and res['flat0']['exact'] and res['flat0']['flat_first'] == 0.0)
+    h_off = pd.read_csv(out / f"history_{res['off']['tag']}.csv")
+    h_flat = pd.read_csv(out / f"history_{res['flat0']['tag']}.csv")
+    both = [c for c in h_off.columns if c in h_flat.columns and c not in ('time_s', 'eval', 'Unnamed: 0')]
+    res['flat0_vs_off'] = {c: [float(h_flat[c].iloc[0]), float(h_off[c].iloc[0])] for c in both
+                           if not E10_same(h_flat[c].iloc[0], h_off[c].iloc[0])}
+    res['passes'] = bool(res['off']['exact'] and res['flat0']['exact'] and res['flat0']['flat_first'] == 0.0
+                         and not res['flat0_vs_off'])
     _write_json(out / 'f_check.json', res)
     print(f'E95 f_check: {json.dumps(res, default=str)[:2000]}', flush=True)
     return res
@@ -2337,7 +2376,7 @@ def main() -> None:
     import warnings
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('--part', required=True, choices=('0', 'A', 'A1', 'A2', 'A3', 'A4', 'A5', 'B', 'C', 'D', 'score', 'E',
-                                                      'F', 'Fscore', 'G', 'steps', 'variants', 'table'))
+                                                      'Fcheck', 'F', 'Fscore', 'G', 'steps', 'variants', 'table'))
     ap.add_argument('--arm', default=None, help='B: B1..B5, C: C1..C6, D: D1..D3 (comma-separated; default all of the part)')
     ap.add_argument('--wirings', default=None, help="'S', 'T', 'all8' or a comma-separated list (0: all8; B / C / D: S)")
     ap.add_argument('--pop', default='S', choices=('S', 'T'), help='F: which fits')
@@ -2372,6 +2411,9 @@ def main() -> None:
     elif a.part == 'E':
         provenance(out, 'E')
         part_e(out)
+    elif a.part == 'Fcheck':
+        provenance(out, 'Fcheck')
+        f_check(out)
     elif a.part == 'F':
         if not a.dry_run:
             provenance(out, 'F', pop=a.pop, wirings=a.wirings, component=a.component)
