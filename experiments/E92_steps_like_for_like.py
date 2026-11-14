@@ -51,7 +51,8 @@ Parts (CLI `--part`):
   about the line (the residuals' SD), with the flies' point from half A and from half B (cosine trial means, the main
   target's reading; noise removed beside). On T the residual is taken relative to C2's unchanged population on T (E90's
   runs), against S's line. Every variant carries its pattern part (calibrated readout, all recordings) and its realism
-  (E83's `realism`: inside the bands if every member run is). No variant is chosen by this.
+  (E83's `realism`: inside the bands if every member run is); one with an odor silent in both conditions (NaN
+  distances, `n_pairs` below 120) is placed but never named. No variant is chosen by this.
 - A: A1, Acheck, A2, A3 and A4 in order, then table; table: comparison_table.md and the figures.
 - B, C, D, E, F: implemented in experiments.E92_gain.
 
@@ -1114,11 +1115,16 @@ def effect_parts(on: pd.Series, off: pd.Series, data: pd.Series) -> Dict[str, fl
     """`H.apl_effect_stats` and `H.apl_effect_spread_shape` of a model's pair distances against the data's per-pair
     effect, every series first put in the harness's pair orientation (`H.canonical_pairs`: the harness aligns pairs by
     orientation and drops those that differ, and E83's / E90's series come in `_cs`'s sorted orientation); raises unless
-    every pair of `on` survives the alignment."""
+    every pair of `on` with a finite distance in both conditions and in the data survives the alignment (a run with an
+    odor silent in both conditions has NaN distances for its pairs)."""
     on, off, data = (H.canonical_pairs(x) for x in (on, off, data))
+    if len(off) != len(on) or len(data) != len(on):
+        raise RuntimeError(f'{len(on)}, {len(off)} and {len(data)} pairs')
+    n_finite = int((np.isfinite(on.to_numpy(dtype=float)) & np.isfinite(off.reindex(on.index).to_numpy(dtype=float))
+                    & np.isfinite(data.reindex(on.index).to_numpy(dtype=float))).sum())
     st = H.apl_effect_stats(on, off, data)
-    if int(st['apl_effect_n_pairs']) != len(on) or len(off) != len(on) or len(data) != len(on):
-        raise RuntimeError(f"{int(st['apl_effect_n_pairs'])} of {len(on)} pairs survive the alignment")
+    if int(st['apl_effect_n_pairs']) != n_finite:
+        raise RuntimeError(f"{int(st['apl_effect_n_pairs'])} of {n_finite} pairs survive the alignment")
     return dict(st, **H.apl_effect_spread_shape(on, off, data))
 
 
@@ -1172,9 +1178,12 @@ def variant_rows(v: pd.DataFrame, res: Dict[int, dict], lines: Dict[str, Dict[st
             else:
                 ln, rref, basis = lines[ro]['S'], ref[(ro, name)], f"S's line, relative to C2 unchanged on {name}"
             pl = place_on_line(e, a, ln, rref)
+            n_pairs = int(np.isfinite(d['on'].to_numpy()).sum())
+            if n_pairs < len(PAIRS120):
+                pl.update({k: False for k in pl if k.startswith(('off_toward', 'beyond'))})
             sc = E83.effect_scores(d, {k: tg[k] for k in ('z8', 'halfA', 'halfB')})
             ef = effect_parts(d['on'], d['off'], tg['z8'])
-            rows.append(dict(base, readout=ro, ester_rel=e, alcohol_rel=a, basis=basis, **pl,
+            rows.append(dict(base, readout=ro, n_pairs=n_pairs, ester_rel=e, alcohol_rel=a, basis=basis, **pl,
                              loss=sc['z8_loss'], pattern=sc['z8_pattern'], pattern_halfA=sc['halfA_pattern'],
                              pattern_halfB=sc['halfB_pattern'], mean_effect=sc['mean_effect'],
                              amplitude=ef['apl_effect_amplitude'], shape=ef['apl_effect_shape'],

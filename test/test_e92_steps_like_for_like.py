@@ -312,3 +312,7 @@ def test_effect_parts_keep_every_pair_in_e83_orientation():
     assert ef['apl_effect_amplitude'] ** 2 + ef['apl_effect_shape'] ** 2 == pytest.approx(sc['t_pattern'] ** 2, abs=1e-12)
     with pytest.raises((RuntimeError, KeyError)):
         X.effect_parts(on, off, data.iloc[:100])
+    # a silent odor's pairs (NaN distances) are left out, and only those
+    on2 = on.copy()
+    on2[[p for p in on2.index if 'ms' in p]] = np.nan
+    assert int(X.effect_parts(on2, off, data)['apl_effect_n_pairs']) == 105
