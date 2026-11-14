@@ -1171,6 +1171,7 @@ Canonical experiment names for summary reports:
 | E90 | the model's stages against the flies' stages |
 | E91 | APL's inhibition on the KC's summed drive |
 | E92 | the claw-to-soma steps read like for like and APL's inhibition as a gain at the claw |
+| E93 | the measured input for the glomeruli without ORN input |
 
 ## Model-output archive (data/model_outputs/ in the shared directory)
 
