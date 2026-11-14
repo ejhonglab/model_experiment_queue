@@ -579,6 +579,12 @@ def kc_tables96(label: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
     return kc, claws
 
 
+def cached_claw_index(label: str = 'real') -> pd.MultiIndex:
+    """The wiring's claws (kc_id, claw_id) from part 0's cache (no simulation, unlike `E83.wiring_parts`)."""
+    _, claws = load_kc_tables96(label)
+    return pd.MultiIndex.from_frame(claws[[H.KC_ID_LEVEL, 'claw_id']])
+
+
 def save_kc_tables96(label: str, kc: pd.DataFrame, claws: pd.DataFrame) -> None:
     kc.to_parquet(_w_dir() / f'{label}_kc.parquet')
     claws.to_parquet(_w_dir() / f'{label}_claw.parquet')
@@ -1018,8 +1024,7 @@ def a2_connectomes(base: Path = A2_DIR) -> Tuple[pd.DataFrame, pd.DataFrame]:
 def a2_distances(out: Path) -> Dict[str, pd.DataFrame]:
     """A2 (module docstring): a2_distances.csv (Pratyush's assignments) and a2_connectomes.csv / a2_connectomes_kc.csv
     (the four connectomes' derived tables)."""
-    wn = E83.wiring_parts('real')['wnorm']['wAPLKC']
-    a = a2_pratyush(wn.index)
+    a = a2_pratyush(cached_claw_index('real'))
     a.to_csv(out / 'a2_distances.csv', index=False)
     s, k = a2_connectomes()
     s.to_csv(out / 'a2_connectomes.csv', index=False)
@@ -1031,8 +1036,7 @@ def a3_kc2apl(out: Path) -> pd.DataFrame:
     """A3 (module docstring): a3_kc2apl.csv, the KC->APL synapses of the same table split the same way (pyolfsysm's
     counts 'KC>APL' on the real wiring's claws), A1's columns, for the record."""
     from pyolfsysm.mb_model import connectome_APL_KC_synapse_counts
-    wn = E83.wiring_parts('real')['wnorm']['wAPLKC']
-    per_kc, _ = connectome_APL_KC_synapse_counts(wn.index, 'KC>APL')
+    per_kc, _ = connectome_APL_KC_synapse_counts(cached_claw_index('real'), 'KC>APL')
     kc, _ = load_kc_tables96('real')
     k2 = per_kc.reindex(kc[H.KC_ID_LEVEL]).reset_index()
     for c in ('b', 'c', H.KC_TYPE_LEVEL):
