@@ -319,6 +319,80 @@ def aplpn_hold_tag(hold: Optional[float]) -> str:
     return '' if hold is None else 'aplpnhold_'
 
 
+APLKC_FLAT_KINDS = ('uniform', 'connectome')
+APLKC_FLAT_MAX = 8.0
+
+
+def aplkc_flat_spec(kind: Optional[str], unit: Optional[float] = None, init: Optional[float] = None,
+    max_size: float = APLKC_FLAT_MAX) -> Optional[dict]:
+    """(E95) --aplkc-flat's settings, checked: None when not given (the fits as before), else {'kind', 'unit' (the
+    unscaled APL->KC weight per unit of the component's size and of its mean weight), 'initial' (the size's start, 1 if
+    not given), 'bounds' ((0, max_size))}."""
+    if kind is None:
+        if unit is not None or init is not None:
+            raise ValueError('--aplkc-flat-unit / --aplkc-flat-init need --aplkc-flat')
+        return None
+    if kind not in APLKC_FLAT_KINDS:
+        raise ValueError(f'--aplkc-flat must be one of {APLKC_FLAT_KINDS} (got {kind!r})')
+    if unit is None or not (np.isfinite(unit) and unit > 0):
+        raise ValueError(f'--aplkc-flat needs --aplkc-flat-unit, finite and positive (got {unit})')
+    d0 = 1.0 if init is None else float(init)
+    if not (np.isfinite(max_size) and max_size > 0 and 0.0 <= d0 <= max_size):
+        raise ValueError(f'--aplkc-flat: the size {d0} must be within [0, {max_size}]')
+    return dict(kind=kind, unit=float(unit), initial=d0, bounds=(0.0, float(max_size)))
+
+
+def aplkc_flat_tag(spec: Optional[dict]) -> str:
+    """(E95) The tag part of --aplkc-flat: flatu_ (uniform) or flatc_ (connectome); '' when not given."""
+    return '' if spec is None else f"flat{spec['kind'][0]}_"
+
+
+def aplkc_flat_component(wAPLKC0: pd.Series, kind: str) -> np.ndarray:
+    """(E95) The unweighted component of the APL->KC weights per claw, per unit of size and of `unit`: 'uniform' the
+    connectome's mean (unscaled, normalized) weight on every claw, 'connectome' each claw's connectome weight (not
+    weighted by breadth); both have the connectome's mean."""
+    w = wAPLKC0.to_numpy(dtype=float)
+    if kind == 'uniform':
+        return np.full(w.size, float(w.mean()))
+    if kind == 'connectome':
+        return w.copy()
+    raise ValueError(f'unknown --aplkc-flat {kind!r}')
+
+
+def aplkc_flat_param(wAPLKC0: pd.Series, wAPLKC: pd.Series, spec: dict) -> dict:
+    """(E95) The `optimize_mb_model_params` extra parameter 'aplkc_flat' of --aplkc-flat: its size d sets the simulator's
+    unscaled APL->KC weights (through the closure of its `simulate`) to the family's `wAPLKC` plus d x unit x
+    `aplkc_flat_component`; d = 0 is the family's weights exactly. The first call checks that the simulator holds
+    `wAPLKC`."""
+    if not wAPLKC0.index.equals(wAPLKC.index):
+        raise ValueError('the connectome APL->KC weights are not indexed as the weighted ones')
+    base = wAPLKC.to_numpy(dtype=float).copy()
+    comp = float(spec['unit']) * aplkc_flat_component(wAPLKC0, spec['kind'])
+    state = {}
+
+    def set_flat(simulate, d):
+        cells = dict(zip(simulate.__code__.co_freevars, simulate.__closure__))
+        w = cells['wAPLKC_unscaled'].cell_contents
+        if 'checked' not in state:
+            if not np.array_equal(np.asarray(w, dtype=float).ravel(), base):
+                raise RuntimeError("--aplkc-flat: the simulator's unscaled APL->KC weights are not the family's")
+            state['checked'] = True
+        w[...] = (base + float(d) * comp).reshape(w.shape)
+    return dict(initial=float(spec['initial']), bounds=tuple(spec['bounds']), set=set_flat)
+
+
+def read_flat_init(spec: Optional[str]) -> Optional[float]:
+    """(E95) The component's starting size from an --init-params 'FILE:KEY' entry's 'aplkc_flat' (None if absent)."""
+    if spec is None:
+        return None
+    path, key = spec.rsplit(':', 1)
+    path = Path(path)
+    if not path.is_absolute():
+        path = H.shared_dir() / path
+    v = json.loads(path.read_text())[key].get('aplkc_flat')
+    return None if v is None else float(v)
+
+
 # (E82) the simulation ends this long after the pulse unless --sim-end says otherwise (E80's 0.25 s, olfsysm's tail)
 PROTOCOL_TAIL = 0.25
 TIMING_KEYS = ('time_stim_end', 'time_end')
@@ -1441,7 +1515,7 @@ def fit_one(k: float, orn, initial, wnorm, breadth, loss_fn, *, kckc0: float, ma
     block_proxy: Optional[dict] = None, kc_spiking: Optional[dict] = None,
     kc_thr_factor_fixed: Optional[np.ndarray] = None, claw_transfer: Optional[dict] = None,
     protocol: Optional[dict] = None, spike_times: bool = False, claw_inh_pool: Optional[float] = None,
-    apl_divisive: bool = False, aplpn_hold: Optional[float] = None):
+    apl_divisive: bool = False, aplpn_hold: Optional[float] = None, aplkc_flat: Optional[dict] = None):
     """One joint fit; `kc_thr_factors` (K x KCs, `jitter_factors`) adds the K jittered runs of
     each condition (`jitter_conditions`) to every evaluation; `init_exact_expect` (not None)
     starts exactly at the `init_from` fit's parameters (`init_from_fit` with exact=True);
@@ -1465,7 +1539,8 @@ def fit_one(k: float, orn, initial, wnorm, breadth, loss_fn, *, kckc0: float, ma
     passed when False); `aplpn_hold` (E94: F, not with `aplpn_fixed` or `aplpn_max`) holds the APL->bouton scale at F x
     `initial`'s and fits the other three, the KC->APL and bouton->APL scales tied to the APL->KC scale as without it (from
     the start's values; `aplpn_fixed` instead fixes the bouton->APL scale at F x `initial`'s and ties the KC->APL scale
-    only)."""
+    only); `aplkc_flat` (E95: `aplkc_flat_spec`) adds the size d of an unweighted component of the APL->KC weights as a
+    fitted parameter ('aplkc_flat', bounded, `aplkc_flat_param`; not passed when None)."""
     from pyolfsysm.mb_model import optimize_mb_model_params
     wAPLKC = breadth_weights(wnorm['wAPLKC'], breadth, k)
     r19 = None if (claw_thr is None or apl_drive != 'claws') else e19_row(claw_thr, k, kckc0)
@@ -1588,6 +1663,12 @@ def fit_one(k: float, orn, initial, wnorm, breadth, loss_fn, *, kckc0: float, ma
     if pool_kws and block_proxy is not None:
         # (the proxy's replays rebuild each KC's drive from the clipped claws)
         raise NotImplementedError('--block-proxy with --claw-inh-pool')
+    # (E95; only when given, so the default path is unchanged)
+    flat_kws = {}
+    if aplkc_flat is not None:
+        if block_proxy is not None:
+            raise NotImplementedError('--block-proxy with --aplkc-flat')
+        flat_kws = dict(extra_params={'aplkc_flat': aplkc_flat_param(wnorm['wAPLKC'], wAPLKC, aplkc_flat)})
     # (E92; only when given, so the default path is unchanged)
     div_kws = apl_divisive_kws(apl_divisive)
     if div_kws and pool_kws:
@@ -1615,7 +1696,7 @@ def fit_one(k: float, orn, initial, wnorm, breadth, loss_fn, *, kckc0: float, ma
             maxfev=maxfev, optimizer_kws=opt_kws, verify=False, verbose=verbose,
             **base_kws(claw_thr, apl_drive, claw_transfer), **wiring_kws, _wAPLKC=wAPLKC, _wKCAPL=wnorm['wKCAPL'],
             _wAPLPN=wnorm['wAPLPN'], _wPNAPL=wnorm['wPNAPL'], kc_kc_inh=kckc0, kc_kc_tau=TAU, **kc_spiking,
-            **protocol, **pool_kws, **div_kws
+            **protocol, **pool_kws, **div_kws, **flat_kws
         )
     return res, init, bounds
 
@@ -1785,6 +1866,16 @@ def main() -> None:
     ap.add_argument('--aplpn-hold', type=float, default=None, metavar='F',
         help='(E94) hold the APL->bouton scale at F x the base\'s tuned value and fit the other three, the KC->APL and '
         'bouton->APL scales tied to the APL->KC scale as without it (unlike --aplpn-fixed); tag prefix aplpnhold_')
+    ap.add_argument('--aplkc-flat', default=None, choices=list(APLKC_FLAT_KINDS),
+        help='(E95) add an unweighted component to the APL->KC weights, its size a fitted parameter (aplkc_flat, bounded '
+        "[0, --aplkc-flat-max]): 'uniform' the connectome's mean weight on every claw, 'connectome' each claw's connectome "
+        'weight unweighted by breadth, times --aplkc-flat-unit per unit of size; off by default; tag part flatu_ / flatc_')
+    ap.add_argument('--aplkc-flat-unit', type=float, default=None, metavar='U',
+        help='(E95) with --aplkc-flat: the unscaled weight per unit of size and of the component\'s mean weight')
+    ap.add_argument('--aplkc-flat-init', type=float, default=None, metavar='D',
+        help="(E95) with --aplkc-flat: the size's start (default: --init-params' aplkc_flat, else 1)")
+    ap.add_argument('--aplkc-flat-max', type=float, default=APLKC_FLAT_MAX, metavar='D',
+        help='(E95) with --aplkc-flat: the upper bound of the size (default 8)')
     ap.add_argument('--aplkc-min', type=float, default=None, metavar='F',
         help='bound the APL->KC scale at >= F x the base\'s tuned value (E31)')
     ap.add_argument('--apl-drive', default='claws', choices=['claws', 'spikes', 'spikes_only'],
@@ -2115,6 +2206,18 @@ def main() -> None:
             aplpn_hold_kws(args.aplpn_hold)
         except ValueError as e:
             ap.error(str(e))
+    # (E95) the unweighted component of the APL->KC weights, its size fitted
+    flat_spec = None
+    if args.aplkc_flat is not None or args.aplkc_flat_unit is not None or args.aplkc_flat_init is not None:
+        try:
+            flat_init = args.aplkc_flat_init
+            if flat_init is None and args.aplkc_flat is not None:
+                flat_init = read_flat_init(args.init_params)
+            flat_spec = aplkc_flat_spec(args.aplkc_flat, args.aplkc_flat_unit, flat_init, args.aplkc_flat_max)
+        except ValueError as e:
+            ap.error(str(e))
+        if args.block_proxy > 0:
+            ap.error('--aplkc-flat with --block-proxy is not supported')
     initial, wnorm, wPNKC, breadth = bouton_base(orn, out_dir, args.claw_thr, gain=gain,
         gain_gloms=args.gain_glomeruli, wiring=args.wiring, wiring_seed=args.wiring_seed,
         apl_drive=args.apl_drive, base_params=args.base_params, info=base_info, input_tag=input_tag,
@@ -2159,7 +2262,7 @@ def main() -> None:
     prefix = zcell_tag + band_tag + {'spikes': 'spk_', 'spikes_only': 'spko_'}.get(args.apl_drive, '') + ('' if args.claw_thr is None else f'thr{args.claw_thr:g}{claw_transfer_tag(claw_transfer)}_') + wiring_tag + (
         '' if gain is None else f'gain{gain:g}_') + rate_tag + block_tag + loss_tag + kckc_tag + kc_tag + thrin_tag + (
         claw_inh_pool_tag(args.claw_inh_pool)) + apl_divisive_tag(args.apl_divisive) + aplpn_hold_tag(args.aplpn_hold) + (
-        proxy_tag) + jit_tag
+        aplkc_flat_tag(flat_spec)) + proxy_tag + jit_tag
     jit_factors, jit_meta = None, {}
     if jit_k > 0:
         jit_factors = jitter_factors(jit_k, len(breadth), jit_sigma, args.jitter_seed, jit_scale)
@@ -2205,7 +2308,8 @@ def main() -> None:
             **({} if not save_spike_times else dict(spike_times=True)),
             **({} if args.claw_inh_pool is None else dict(claw_inh_pool=args.claw_inh_pool)),
             **({} if not args.apl_divisive else dict(apl_divisive=True)),
-            **({} if args.aplpn_hold is None else dict(aplpn_hold=args.aplpn_hold))
+            **({} if args.aplpn_hold is None else dict(aplpn_hold=args.aplpn_hold)),
+            **({} if flat_spec is None else dict(aplkc_flat=flat_spec))
         )
         hist = res['history']
         hist.to_csv(res_dir / f'history_{tag}.csv')
@@ -2284,6 +2388,11 @@ def main() -> None:
             # (E94: the APL->bouton scale held at this multiple of the base's, the bouton->APL scale tied; absent when not
             # given)
             **aplpn_hold_kws(args.aplpn_hold),
+            # (E95: the unweighted component of the APL->KC weights, its kind, unit, bounds, start and fitted size; absent
+            # when not given)
+            **({} if flat_spec is None else dict(aplkc_flat=flat_spec['kind'], aplkc_flat_unit=flat_spec['unit'],
+                aplkc_flat_init=flat_spec['initial'], aplkc_flat_max=flat_spec['bounds'][1],
+                aplkc_flat_size=float(res['extra_params']['aplkc_flat']))),
             # (E73 part C: the per-KC session z-score reading's settings; absent when not used)
             **(dict(rate_criterion=args.rate_criterion, zcell_q=loss_fn.zcell['q'], zcell_map=loss_fn.zcell['amp'],
                 zcell_calibrate=loss_fn.zcell['calibrate'], zcell_drift=loss_fn.zcell['drift'])
@@ -2362,6 +2471,11 @@ def main() -> None:
             wiring_file=args.wiring_file, wiring_tag=args.wiring_tag,
             aplpn_max=args.aplpn_max, aplpn_fixed=args.aplpn_fixed, aplkc_min=args.aplkc_min,
             **aplpn_hold_kws(args.aplpn_hold),
+            **({} if flat_spec is None else dict(aplkc_flat=dict(flat_spec, size=float(res['extra_params']['aplkc_flat']),
+                note=('E95: every simulation (APL on; APL off has the APL->KC scale 0) has the unscaled APL->KC weight of each '
+                'claw the family\'s breadth-weighted one plus aplkc_flat x unit x the component (uniform: the connectome\'s '
+                'mean normalized weight on every claw; connectome: the claw\'s own connectome weight), aplkc_flat fitted '
+                'within bounds as a fifth parameter (optimize_mb_model_params extra_params)')))),
             kckc_fixed=args.kckc_fixed, base_params=initial, loss_variant=args.loss, kc_spiking=kc_spiking,
             **(dict(kc_thr_input=dict(exponent=args.kc_thr_input_exp, prepass=prepass_info,
                 factor_sha256=hashlib.sha256(np.ascontiguousarray(thr_in_factor, dtype='<f8').tobytes()).hexdigest(),

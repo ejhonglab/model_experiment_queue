@@ -399,3 +399,89 @@ def test_a_zero_static_inhibition_is_the_fit_on_the_real_wiring():
     assert np.array_equal(on[1].to_numpy(), m.saved['on'][1].to_numpy())
     assert np.array_equal(off[1].to_numpy(), m.saved['off'][1].to_numpy())
     assert np.asarray(m.rv.kc.ext_inh).size == 0
+
+
+# ---------------------------------------------------------------------------
+# E10_joint_fit.py's --aplkc-flat
+
+def test_e10_aplkc_flat_helpers():
+    import inspect
+    J = pytest.importorskip('experiments.E10_joint_fit')
+    assert J.aplkc_flat_spec(None) is None and J.aplkc_flat_tag(None) == ''
+    s = J.aplkc_flat_spec('uniform', 3.8)
+    assert s == dict(kind='uniform', unit=3.8, initial=1.0, bounds=(0.0, 8.0)) and J.aplkc_flat_tag(s) == 'flatu_'
+    assert J.aplkc_flat_tag(J.aplkc_flat_spec('connectome', 3.8, 0.5)) == 'flatc_'
+    for bad in (dict(kind='flat', unit=1.0), dict(kind='uniform'), dict(kind='uniform', unit=-1.0),
+                dict(kind='uniform', unit=1.0, init=9.0), dict(kind=None, unit=1.0)):
+        with pytest.raises(ValueError):
+            J.aplkc_flat_spec(bad.pop('kind'), **bad)
+    assert inspect.signature(J.fit_one).parameters['aplkc_flat'].default is None
+    src = inspect.getsource(J.main)
+    assert "'--aplkc-flat'" in src and 'aplkc_flat_tag(flat_spec)' in src
+    assert "**({} if flat_spec is None else dict(aplkc_flat=flat_spec))" in src
+
+
+def test_e10_aplkc_flat_sets_the_simulators_weights():
+    J = pytest.importorskip('experiments.E10_joint_fit')
+    idx = pd.MultiIndex.from_arrays([[1, 1, 2, 3], [0, 1, 0, 0]], names=[H.KC_ID_LEVEL, 'claw_id'])
+    w0 = pd.Series([1.0, 3.0, 0.0, 4.0], index=idx)                   # the connectome's normalized weights
+    wk = pd.Series([0.5, 1.5, 0.0, 9.0], index=idx)                   # the family's breadth-weighted weights
+
+    def make_sim(w):
+        wAPLKC_unscaled = w
+
+        def simulate(params):
+            return wAPLKC_unscaled
+        return simulate
+    held = wk.to_numpy().reshape(-1, 1).copy()
+    sim = make_sim(held)
+    p = J.aplkc_flat_param(w0, wk, J.aplkc_flat_spec('uniform', 2.0, 0.0))
+    assert p['initial'] == 0.0 and p['bounds'] == (0.0, 8.0)
+    p['set'](sim, 0.0)
+    assert np.array_equal(held.ravel(), wk.to_numpy())                # size 0: the family's weights exactly
+    p['set'](sim, 1.5)
+    assert np.allclose(held.ravel(), wk.to_numpy() + 1.5 * 2.0 * w0.mean())
+    p['set'](sim, 0.0)
+    assert np.array_equal(held.ravel(), wk.to_numpy())
+    pc = J.aplkc_flat_param(w0, wk, J.aplkc_flat_spec('connectome', 2.0, 1.0))
+    held2 = wk.to_numpy().reshape(-1, 1).copy()
+    pc['set'](make_sim(held2), 0.5)
+    assert np.allclose(held2.ravel(), wk.to_numpy() + 0.5 * 2.0 * w0.to_numpy())
+    # a simulator that does not hold the family's weights is refused (first call)
+    with pytest.raises(RuntimeError):
+        J.aplkc_flat_param(w0, wk, J.aplkc_flat_spec('uniform', 2.0))['set'](make_sim(np.zeros((4, 1))), 1.0)
+    # and the components have the connectome's mean
+    assert np.isclose(J.aplkc_flat_component(w0, 'uniform').mean(), J.aplkc_flat_component(w0, 'connectome').mean())
+
+
+def _fit_one_call(monkeypatch, **kw):
+    """fit_one's call of optimize_mb_model_params (captured, not run) on made-up inputs (as E94's test)."""
+    J = pytest.importorskip('experiments.E10_joint_fit')
+    import pyolfsysm.mb_model as M
+    got = {}
+
+    def fake(orn, **k):
+        got.update(k)
+        return dict(history=pd.DataFrame(), params=dict(k['initial_params']))
+    monkeypatch.setattr(M, 'optimize_mb_model_params', fake)
+    idx = pd.MultiIndex.from_arrays([[1, 1, 2], [0, 1, 0]], names=[H.KC_ID_LEVEL, 'claw_id'])
+    bidx = pd.Index([0, 1], name='bouton_id')
+    wnorm = dict(wAPLKC=pd.Series([1.0, 2.0, 1.0], index=idx), wKCAPL=pd.Series([1.0, 1.0, 1.0], index=idx),
+                 wAPLPN=pd.Series([1.0, 3.0], index=bidx), wPNAPL=pd.Series([1.0, 1.0], index=bidx))
+    breadth = pd.Series([3.0, 5.0], index=pd.Index([1, 2], name=H.KC_ID_LEVEL))
+    initial = dict(fixed_thr=100.0, wAPLKC_scale=0.01, wKCAPL_scale=0.005, wAPLPN_scale=0.13, wPNAPL_scale=0.02)
+    J.fit_one(2.0, pd.DataFrame(), initial, wnorm, breadth, lambda *a, **k: 0.0, kckc0=60.0, maxfev=5,
+              method='Nelder-Mead', thr0_factor=0.7, verbose=False, **kw)
+    return got
+
+
+def test_e10_fit_one_with_and_without_the_component(monkeypatch):
+    J = pytest.importorskip('experiments.E10_joint_fit')
+    got0 = _fit_one_call(monkeypatch, aplpn_hold=0.27)
+    assert 'extra_params' not in got0                                    # off: the call as before
+    got1 = _fit_one_call(monkeypatch, aplpn_hold=0.27, aplkc_flat=J.aplkc_flat_spec('uniform', 3.8, 1.2))
+    assert set(got1) == set(got0) | {'extra_params'} and set(got1['extra_params']) == {'aplkc_flat'}
+    e = got1['extra_params']['aplkc_flat']
+    assert e['initial'] == 1.2 and e['bounds'] == (0.0, 8.0) and callable(e['set'])
+    assert all(got0[k] == got1[k] for k in ('params_to_optimize', 'tie_apl_weights', 'initial_params', 'maxfev'))
+    assert got1['params_to_optimize'] == ['fixed_thr', 'wAPLKC_scale', 'wKCKC_scale']

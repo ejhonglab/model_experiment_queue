@@ -1368,75 +1368,947 @@ def part_points(out: Path, part: str, arms: Optional[Sequence[str]] = None, wiri
 
 
 # ---------------------------------------------------------------------------
-# the readings, part E
+# the references and the runs table
+
+def reference_rows() -> pd.DataFrame:
+    """The references: the unchanged fits ('ref', source 'saved', every wiring, with E90's stage runs' bouton and claw
+    readings) and D0 on S (E94's saved B_sub_k2_d0.1 runs, source 'E94', with E94's rows); realism recomputed from the
+    runs."""
+    if 'refs' in _CACHE:
+        return _CACHE['refs'].copy()
+    rows = []
+    for w in ALL_WIRINGS:
+        f = E83.saved_fit(w)
+        r = dict(part='saved', arm=REF, tag=f"{f['folder']}:{f['tag']}", variant=REF, source='saved', screen=REF, mode=REF,
+                 dose=1.0, wiring=w, fit_folder=f['folder'], fit_tag=f['tag'], factor=1.0, apl_factor=1.0, at_bound=False,
+                 **{k: f['p'][k] for k in E83.PARAM_KEYS}, aplpn_fit_multiple=E94.aplpn_fit_multiple(w),
+                 aplpn_multiple=E94.aplpn_fit_multiple(w), K_run=f['K'], **E83.realism(f['saved']))
+        try:
+            W, _ = E94.wiring_W(w)
+            r.update(E94.stage_extras(W, w, E94.fit_stage(w, 'on')))
+        except Exception as e:                    # (the bouton readings beside; not needed for the scores)
+            r['stage_note'] = repr(e)
+        rows.append(r)
+    p94 = H.results_dir(E94.EXPERIMENT) / 'runs_B1.csv'
+    if p94.exists():
+        d = pd.read_csv(p94).drop_duplicates('tag', keep='last')
+        for q in d[d.variant == E94_D0_TAG].to_dict('records'):
+            o = E94.load_run(q['tag'])
+            if o is None or q['wiring'] not in S_WIRINGS:
+                continue
+            keep = {k: q.get(k) for k in E83.PARAM_KEYS + ('bouton_share', 'bouton_share_removed', 'bouton_zero_share',
+                                                           'aplpn_multiple', 'apl_factor', 'n_sims')}
+            rows.append(dict(part='E94_B1', arm=D0, tag=q['tag'], variant=D0, source='E94', screen='control', mode='kcs',
+                             dose=D_DOSE, size=0.0, wiring=q['wiring'], factor=q.get('apl_factor'), at_bound=_as_bool(q.get('at_bound')),
+                             aplpn_fit_multiple=E94.aplpn_fit_multiple(q['wiring']), K_run=E83.readout_K(o), **keep,
+                             **E83.realism(o)))
+    df = pd.DataFrame(rows)
+    _CACHE['refs'] = df
+    return df.copy()
+
 
 def runs_table(out: Path) -> pd.DataFrame:
-    raise NotImplementedError
+    """Every run of the readings: this experiment's (runs_B / C / D / E.csv, the latest row per tag) first, then the
+    references; with 'flagged', 'at_bound' and the parsed setting."""
+    parts = []
+    for n in RUNS_NAMES.values():
+        if (out / n).exists():
+            try:
+                parts.append(pd.read_csv(out / n).drop_duplicates('tag', keep='last'))
+            except pd.errors.EmptyDataError:
+                pass
+    parts.append(reference_rows())
+    df = pd.concat([p for p in parts if len(p)], ignore_index=True, sort=False)
+    df = df.drop_duplicates(['variant', 'wiring'], keep='first').reset_index(drop=True)
+    pv = pd.DataFrame([parse_variant(v) for v in df.variant])
+    for c in ('arm', 'screen', 'mode', 'static', 'exponent', 'permute', 'component', 'size', 'control', 'equal_kind'):
+        df[c] = pv[c].to_numpy()
+    df['flagged'] = [_flagged(x) for x in df.realism_flag]
+    df['at_bound'] = [_as_bool(x) for x in df.at_bound]
+    return df
 
 
-def readings95(out: Path, runs: Optional[pd.DataFrame] = None, readouts: Sequence[str] = ()) -> pd.DataFrame:
-    raise NotImplementedError
-
-
-def choose95(rd: pd.DataFrame, half: str, runs: Optional[pd.DataFrame] = None) -> dict:
-    """The choice on S against half `half`: the lowest pattern part of S's population under the readout among CHOICE_ARMS'
-    settings (inside the bands on all four wirings, not at a bracket's bound) and the unchanged fits; something to confirm
-    if a setting gains CHOICE_MIN_GAIN or more over the unchanged fits."""
-    raise NotImplementedError
-
-
-def equal_rule95(rd: pd.DataFrame) -> List[dict]:
-    """E94's rule in the three kinds of EQUAL_KINDS."""
-    raise NotImplementedError
-
-
-def part_e(out: Path) -> dict:
-    raise NotImplementedError
-
-
-def score(out: Path, n_workers: int = 4, coresponse: bool = True, zcell: bool = True) -> dict:
-    raise NotImplementedError
+def load_any(source: str, tag: str, wiring: str) -> Dict[str, tuple]:
+    """A run of the readings: 'E95' this experiment's, 'saved' the wiring's fit, 'E94' E94's runs."""
+    if source == 'saved':
+        return E83.saved_fit(wiring)['saved']
+    o = {'E95': load_run95, 'E94': E94.load_run}[source](tag)
+    if o is None:
+        raise RuntimeError(f'no saved run {source}:{tag}')
+    return o
 
 
 # ---------------------------------------------------------------------------
-# part F, part G
+# the readings
 
-def f_condition(rd: pd.DataFrame) -> dict:
-    """Whether part F runs: S's best setting of D1 or D3 within F_COND of UNCHANGED_S['all'] against all recordings;
-    D2's (`--aplkc-flat connectome`) only if a D2 setting is an equal at fixed scales."""
-    raise NotImplementedError
+READOUTS = ('cal', 'calK', 'raw', 'zcell', 'zcell_lin')
 
 
-def f_command(label: str, component: str = 'uniform', maxfev: int = F_MAXFEV) -> List[str]:
-    raise NotImplementedError
+def zcell_distances_map(o: Dict[str, tuple], amp: str = 'saturating') -> Dict[str, pd.Series]:
+    """E73's per-KC reading (the session z-score, graded, noise in expectation) under the saturating map (E93's
+    `zcell_distances`, K calibrated on the run's APL-on counts) or the linear map (only the noise and the noise ratio
+    calibrated, on the same targets): {'on', 'off'} pair distances (canonical order)."""
+    from experiments import E93_missing_glomeruli_input as E93
+    if amp == 'saturating':
+        return E93.zcell_distances(o)
+    from experiments import E73_per_kc_normalization as E73
+    on = H.abbrev_columns(o['on'][1].astype(float))[list(H.APL16_ODORS)].to_numpy()
+    off = H.abbrev_columns(o['off'][1].astype(float))[list(H.APL16_ODORS)].to_numpy()
+    t, q, drift = E73.refs()['targets'], E73.q_values()[0], E73.refs()['drift']
+    cal = H.calibrate_session_zscore(on, q=q, amp='linear', target_rate=t['rate'], target_silent_sd=t['silent_sd'], drift=drift)
+    kw = dict(q=float(q), noise=float(cal['noise']), amp='linear', noise_ratio=float(cal['noise_ratio']), drift=float(drift))
+    return {c: E83._cs(H.zcell_pair_distances(H.session_zscore(x, **kw), 'graded')) for c, x in (('on', on), ('off', off))}
+
+
+def _distances(source: str, tag: str, wiring: str, readouts: Sequence[str] = READOUTS) -> Dict[str, Dict[str, pd.Series]]:
+    key = ('dist', source, tag, wiring)
+    have = _CACHE.setdefault(key, {})
+    need = [r for r in readouts if r not in have]
+    if need:
+        o = load_any(source, tag, wiring)
+        K = E83.saved_fit(wiring)['K']
+        for ro in need:
+            if ro == 'calK':
+                have[ro] = E83.pair_distances(o, 'calK', K)
+            elif ro == 'zcell':
+                have[ro] = zcell_distances_map(o, 'saturating')
+            elif ro == 'zcell_lin':
+                have[ro] = zcell_distances_map(o, 'linear')
+            else:
+                have[ro] = E83.pair_distances(o, ro)
+    return have
+
+
+def readings95(out: Path, runs: Optional[pd.DataFrame] = None, readouts: Sequence[str] = READOUTS) -> pd.DataFrame:
+    """readings.csv: per variant and unit (each wiring; S and T where all four have a run) and readout (READOUTS) E92's
+    `score_row92` against every target of E89's `targets89` with E94's group effects, the runs outside the bands and at a
+    bracket's bound; pairs.csv: each population's per-pair distances and effect under 'cal' and 'raw'."""
+    runs = runs_table(out) if runs is None else runs
+    rows, prs = [], []
+    for variant, g in runs.groupby('variant', sort=False):
+        ds = {r.wiring: _distances(r.source, r.tag, r.wiring, readouts) for r in g.itertuples()}
+        meta = {r.wiring: r for r in g.itertuples()}
+        pv = parse_variant(variant)
+        units = [(w, (w,)) for w in ds] + [(p, ws) for p, ws in (('S', S_WIRINGS), ('T', T_WIRINGS)) if all(w in ds for w in ws)]
+        for unit, ws in units:
+            for ro in readouts:
+                d = ds[unit][ro] if len(ws) == 1 else E83.population([ds[w][ro] for w in ws])
+                rows.append(dict(variant=variant, arm=pv['arm'], screen=pv['screen'], mode=pv['mode'], static=pv['static'],
+                                 exponent=pv['exponent'], permute=pv['permute'], component=pv['component'], size=pv['size'],
+                                 dose=pv['dose'], control=pv['control'], equal_kind=pv['equal_kind'], unit=unit,
+                                 n_wirings=len(ws), readout=ro, n_flagged=int(sum(meta[w].flagged for w in ws)),
+                                 n_at_bound=int(sum(meta[w].at_bound for w in ws)),
+                                 **E92G.score_row92(d), **E94.group_effects(d)))
+                if len(ws) > 1 and ro in ('cal', 'raw'):
+                    me = E83._cs(H.apl_effect(d['on'], d['off']))
+                    prs.append(pd.DataFrame(dict(variant=variant, unit=unit, readout=ro, odor_a=me.index.get_level_values(0),
+                                                 odor_b=me.index.get_level_values(1),
+                                                 on=E83._cs(d['on']).reindex(me.index).to_numpy(),
+                                                 off=E83._cs(d['off']).reindex(me.index).to_numpy(), effect=me.to_numpy())))
+    rd = pd.DataFrame(rows)
+    rd.to_csv(out / 'readings.csv', index=False)
+    if prs:
+        pd.concat(prs, ignore_index=True).to_csv(out / 'pairs.csv', index=False)
+    return rd
+
+
+def line95(out: Path, pr: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+    """line.csv: each population's ester and alcohol groups' APL-on distances relative to the 120 pairs' mean, placed
+    against E92's part A line of S (E94's `line94` with this experiment's reference)."""
+    from experiments import E92_steps_like_for_like as A
+    pr = pd.read_csv(out / 'pairs.csv') if pr is None else pr
+    pts = {}
+    for (v, unit, ro), g in pr.groupby(['variant', 'unit', 'readout'], sort=False):
+        on = pd.Series(g.on.to_numpy(), index=pd.MultiIndex.from_arrays([g.odor_a, g.odor_b]))
+        pts[(v, unit, ro)] = A.relative_distances(on)
+    rows = []
+    for (v, unit, ro), (est, alc) in pts.items():
+        L = A.line(ro)['S']
+        ref = 0.0
+        if unit != 'S' and (REF, unit, ro) in pts:
+            e0, a0 = pts[(REF, unit, ro)]
+            ref = float(e0 - (L['intercept'] + L['slope'] * a0))
+        rows.append(dict(variant=v, unit=unit, readout=ro, ester_rel=est, alcohol_rel=alc, slope=L['slope'],
+                         intercept=L['intercept'], scatter=L['scatter'], max_abs_resid=L['max_abs_resid'], ref_resid=ref,
+                         **A.place_on_line(est, alc, L, ref)))
+    df = pd.DataFrame(rows)
+    df.to_csv(out / 'line.csv', index=False)
+    return df
+
+
+def _co_job95(job: tuple) -> dict:
+    """One run read by E88's readings 1 and 1b and by the geometric mean of E88's two estimates at L1 and L3 (E94's
+    `_co_job94` on this experiment's runs)."""
+    import os
+    import warnings
+    source, tag, wiring, K, cand, rel, gap = job
+    warnings.simplefilter('ignore')
+    for k in ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS'):
+        os.environ.setdefault(k, '1')
+    o = load_any(source, tag, wiring)
+    mr = E89.ModelReading89(o, label=tag, K=K, rel_target=rel, gap_target=gap)
+    res = dict(tag=tag, wiring=wiring, readings={})
+    for rdn in ('r1', 'r1b'):
+        F = mr.mean_factors(rdn)
+        res['readings'][rdn] = {c: dict(s=F[c].s, O=F[c].O, R=F[c].R) for c in E89.CONDS}
+    for level in ('L1', 'L3'):
+        v = {c: mr.level_values(level, c, None)[0] for c in E89.CONDS}
+        F = {c: E89.cand_factors(v[c], cand) for c in E89.CONDS}
+        res['readings'][f'cand_{level}'] = {c: dict(s=F[c].s, O=F[c].O, R=F[c].R) for c in E89.CONDS}
+    return res
+
+
+def coresponse95(out: Path, n_workers: int = 4) -> pd.DataFrame:
+    """coresponse.csv: per S setting (all four S runs) the changes of L (co-response) and R (recruitment) under APL of the
+    four nearest ester pairs, the ester and the alcohol groups on S's population, against the flies' (E94's
+    `coresponse94` on this experiment's runs; jobs cached under outputs/.../coresponse_cache.pkl)."""
+    import multiprocessing
+    import pickle
+    from concurrent.futures import ProcessPoolExecutor
+    from experiments import E88_responder_sets as E88
+    runs = runs_table(out)
+    runs = runs[runs.wiring.isin(S_WIRINGS)]
+    rel = E88.flies_reliability('z')
+    gap = {c: v['thresholded'] for c, v in E89.flies_gap_target('z').items()}
+    cache = local_dir() / 'coresponse_cache.pkl'
+    done = pickle.loads(cache.read_bytes()) if cache.exists() else {}
+    cand = E92G.CO_CANDIDATE
+    full = {v for v, g in runs.groupby('variant') if set(g.wiring) == set(S_WIRINGS)}
+    jobs = [(r.source, r.tag, r.wiring, E83.saved_fit(r.wiring)['K'], cand, rel, gap) for r in runs.itertuples()
+            if (r.source, r.tag) not in done and r.variant in full]
+    if jobs:
+        with ProcessPoolExecutor(max_workers=n_workers, mp_context=multiprocessing.get_context('spawn')) as ex:
+            for res, j in zip(ex.map(_co_job95, jobs), jobs):
+                done[(j[0], j[1])] = res
+                cache.write_bytes(pickle.dumps(done))
+                print(f'E95 coresponse {j[1]}', flush=True)
+    fl = {}
+    fv = E89.flies_values({})
+    for subset in E88.SUBSETS:
+        tnt = E88.flies_subset(subset)
+        rf = E88.flies_factors('z', 'r1', tnt)
+        F = {c: rf[c].mean() for c in E89.CONDS}
+        fl[('r1', subset)] = (E88.log_changes(F, ('L', 'R')), [E88.log_changes(b, ('L', 'R')) for b in E88.flies_boot(rf)])
+        fl[('cand', subset)] = (E88.log_changes(E89.flies_cand(fv, cand, None, tnt), ('L', 'R')),
+                                [E88.log_changes(b, ('L', 'R')) for b in E89.flies_cand_boot(fv, cand, None, tnt)])
+    known = E92G.gm_known_error()
+    rows = []
+    for variant, g in runs.groupby('variant', sort=False):
+        if variant not in full:
+            continue
+        for rdn in ('r1', 'r1b', 'cand_L1', 'cand_L3'):
+            Fs = [done[(r.source, r.tag)]['readings'][rdn] for r in g.itertuples()]
+            Fp = {c: E88.Factors(*(E88._mean_rows(np.stack([f[c][k] for f in Fs])) for k in ('s', 'O', 'R'))) for c in E89.CONDS}
+            ch = E88.log_changes(Fp, ('L', 'R'))
+            for subset in E88.SUBSETS:
+                fch, fb = fl[('r1' if rdn.startswith('r1') else 'cand', subset)]
+                for f in ('L', 'R'):
+                    for grp in ('nearest4', 'ester', 'alcohol'):
+                        k = f'chg_{f}_{grp}'
+                        lo, hi = np.nanpercentile([b[k] for b in fb], E88.INTERVAL)
+                        x = ch[k]
+                        differs = bool(not (lo <= x <= hi) and abs(x - fch[k]) >= np.log(E88.B1_FACTOR))
+                        rows.append(dict(variant=variant, reading=rdn, candidate=cand if rdn.startswith('cand') else '',
+                                         subset=subset, factor=f, group=grp, ratio=float(np.exp(x)), flies_ratio=float(np.exp(fch[k])),
+                                         flies_lo=float(np.exp(lo)), flies_hi=float(np.exp(hi)), differs=differs,
+                                         known_error=known.get(rdn.split('_')[1], np.nan) if rdn.startswith('cand') else np.nan))
+    df = pd.DataFrame(rows)
+    df.to_csv(out / 'coresponse.csv', index=False)
+    return df
+
+
+def c1_groups(out: Path, pr: Optional[pd.DataFrame] = None, variant: str = 'C1_bck') -> pd.DataFrame:
+    """c1_groups.csv: what the feedback adds, read on C1 against the unchanged fits: per readout ('cal', 'raw') and group of
+    pairs (E92's part A groups and the 120), S's mean APL-on distance, mean APL effect and their differences (C1 minus the
+    fits)."""
+    from experiments import E92_steps_like_for_like as A
+    pr = pd.read_csv(out / 'pairs.csv') if pr is None else pr
+    rows = []
+    for ro in ('cal', 'raw'):
+        g = {v: pr[(pr.variant == v) & (pr.unit == 'S') & (pr.readout == ro)] for v in (variant, REF)}
+        if any(x.empty for x in g.values()):
+            continue
+        s = {v: x.set_index(['odor_a', 'odor_b']) for v, x in g.items()}
+        idx = s[REF].index
+        m = A.group_masks(pd.MultiIndex.from_tuples([tuple(sorted(i)) for i in idx]))
+        m['all120'] = np.ones(len(idx), dtype=bool)
+        for grp, mk in m.items():
+            if not mk.any():
+                continue
+            row = dict(readout=ro, group=grp, n_pairs=int(mk.sum()))
+            for c in ('on', 'effect'):
+                a, b = s[variant][c].reindex(idx).to_numpy()[mk], s[REF][c].to_numpy()[mk]
+                row.update({f'{c}_c1': float(np.mean(a)), f'{c}_fits': float(np.mean(b)), f'{c}_diff': float(np.mean(a - b))})
+            rows.append(row)
+    df = pd.DataFrame(rows)
+    df.to_csv(out / 'c1_groups.csv', index=False)
+    return df
+
+
+# ---------------------------------------------------------------------------
+# part E: the choice, the gate, the controls, the equal rule
+
+PARTS_COLS = E92G.PARTS_COLS
+
+
+def _settings95(rd: pd.DataFrame, screens: Sequence[str] = (REF,) + CHOICE_ARMS) -> pd.DataFrame:
+    return rd[(rd.unit == 'S') & (rd.readout == 'cal') & rd.screen.isin(list(screens)) & ~rd.control.astype(bool)]
+
+
+def _pat(rd: pd.DataFrame, variant: str, unit: str, target: str, col: str = 'pattern', readout: str = 'cal') -> float:
+    return E89._pat(rd, variant, unit, target, col, readout)
+
+
+def choose95(rd: pd.DataFrame, half: str, runs: Optional[pd.DataFrame] = None) -> dict:
+    """The choice on S against half `half`: the setting with the lowest pattern part of S's population under the
+    calibrated readout among the unchanged fits and CHOICE_ARMS' settings whose four runs are inside the bands and not at
+    a bracket's bound; something to confirm if it is a setting and gains CHOICE_MIN_GAIN or more over the unchanged fits.
+    The parts of the pattern part beside (the thresholds stay on the pattern part)."""
+    g = _settings95(rd)
+    ok = g[(g.variant == REF) | ((g.n_flagged == 0) & (g.n_at_bound == 0))]
+    if ok.empty or REF not in set(g.variant):
+        return dict(half=half, chosen=None, confirm=False, note='runs missing')
+    best = ok.loc[ok[f'half{half}_pattern'].idxmin()]
+    rr = g[g.variant == REF].iloc[0]
+    gain = float(rr[f'half{half}_pattern']) - float(best[f'half{half}_pattern'])
+    confirm = bool(best.screen in CHOICE_ARMS and gain >= CHOICE_MIN_GAIN)
+    row = dict(half=half, chosen=best.variant, screen=best.screen, mode=best['mode'], pattern=float(best[f'half{half}_pattern']),
+               ref_pattern=float(rr[f'half{half}_pattern']), gain=gain, confirm=confirm, n_eligible=int(len(ok)),
+               n_settings=int(len(g)), excluded=json.dumps(sorted(set(g.variant) - set(ok.variant))),
+               control=control_of(best.variant) if best.variant != REF else '')
+    for c in PARTS_COLS[1:]:
+        row[f'chosen_{c}'] = float(best[f'half{half}_{c}'])
+        row[f'ref_{c}'] = float(rr[f'half{half}_{c}'])
+    return row
+
+
+def plan_e(rd: pd.DataFrame, runs: Optional[pd.DataFrame] = None) -> Dict[str, dict]:
+    return {h: choose95(rd, h, runs) for h in HALVES}
+
+
+def equal_rule95(rd: pd.DataFrame) -> List[dict]:
+    """E94's equal rule in the entry's three kinds (EQUAL_KINDS): a setting of one of those arms is an equal of the
+    unchanged fits if, on S under the readout, its pattern part is within EQUAL_PATTERN of theirs against all recordings
+    and halves A and B, its four runs are inside the bands and none at a bracket's bound, its raw-count loss within
+    EQUAL_RAW and its mean APL effect within EQUAL_MEAN of theirs; 'better' if its pattern part is lower on all three (and
+    the rest holds). The other settings of CHOICE_ARMS are listed with kind None."""
+    g = _settings95(rd)
+    out = []
+    if REF not in set(g.variant):
+        return out
+    me0 = float(g[g.variant == REF].mean_effect.iloc[0])
+    for r in g.itertuples():
+        if r.screen not in CHOICE_ARMS:
+            continue
+        kind = r.equal_kind if isinstance(r.equal_kind, str) and r.equal_kind else None
+        d = {t: _pat(rd, r.variant, 'S', t) - _pat(rd, REF, 'S', t) for t in ('halfA', 'halfB', 'z8')}
+        raw = _pat(rd, r.variant, 'S', 'z8', 'loss', 'raw') - _pat(rd, REF, 'S', 'z8', 'loss', 'raw')
+        me = float(r.mean_effect) - me0
+        rest = bool(int(r.n_flagged) == 0 and int(r.n_at_bound) == 0 and abs(raw) <= EQUAL_RAW and abs(me) <= EQUAL_MEAN)
+        out.append(dict(variant=r.variant, arm=r.arm, screen=r.screen, kind=kind, **{f'd_pattern_{t}': x for t, x in d.items()},
+                        d_raw_loss=raw, d_mean_effect=me, n_flagged=int(r.n_flagged), n_at_bound=int(r.n_at_bound),
+                        equal=bool(kind is not None and all(abs(x) <= EQUAL_PATTERN for x in d.values()) and rest),
+                        better=bool(kind is not None and all(x < 0 for x in d.values()) and rest)))
+    return out
+
+
+def part_e(out: Path) -> dict:
+    """E: the choice per half (choice.csv); each chosen setting with something to confirm run on T (runs_E.csv), then its
+    control (a static setting's values permuted over the KCs on S and T; part D's D0 on T, S's being E94's saved runs);
+    then `score` without the co-response."""
+    runs = runs_table(out)
+    rd = readings95(out, runs, readouts=('cal', 'raw'))
+    plan = plan_e(rd, runs)
+    pd.DataFrame(plan.values()).to_csv(out / 'choice.csv', index=False)
+    chosen = sorted({c['chosen'] for c in plan.values() if c['confirm']})
+    if not chosen:
+        print('E95 E: nothing to confirm', flush=True)
+    for v in chosen:
+        points(out, [v], T_WIRINGS, RUNS_NAMES['E'], 'E')
+    for v in chosen:
+        c = control_of(v)
+        for ws in ((T_WIRINGS,) if c == D0 else (S_WIRINGS, T_WIRINGS)):
+            points(out, [c], ws, RUNS_NAMES['E'], 'E')
+    return score(out, coresponse=False)
+
+
+def f_condition(rd: pd.DataFrame, eqs: Optional[Sequence[dict]] = None) -> dict:
+    """Whether part F runs (the entry): S's best setting of D1 or D3 (the lowest pattern part of S's population under the
+    readout against all recordings) within F_COND of the unchanged fits' UNCHANGED_S['all']; the connectome's own weights
+    (`--aplkc-flat connectome`) only if a setting of D2 is an equal at fixed scales (`equal_rule95`)."""
+    g = _settings95(rd, ('D1', 'D3'))
+    out = dict(cond=F_COND, unchanged=UNCHANGED_S['all'],
+               unchanged_here=_pat(rd, REF, 'S', 'z8') if REF in set(rd.variant) else np.nan)
+    if g.empty:
+        return dict(out, runs=False, note='D1 / D3 not run on S')
+    best = g.loc[g.z8_pattern.idxmin()]
+    eqs = equal_rule95(rd) if eqs is None else eqs
+    d2 = [e['variant'] for e in eqs if e['arm'] == 'D2' and e['equal']]
+    return dict(out, best=best.variant, best_pattern=float(best.z8_pattern), above=float(best.z8_pattern) - UNCHANGED_S['all'],
+                runs=bool(float(best.z8_pattern) - UNCHANGED_S['all'] <= F_COND), connectome=bool(d2), d2_equals=d2)
+
+
+def verdict95(out: Path, rd: Optional[pd.DataFrame] = None, runs: Optional[pd.DataFrame] = None) -> dict:
+    """verdict.json: the choices, the gate in four directions, the equals by kind, S's settings with their parts, part F's
+    condition and scores, the flagged runs and those at a bracket's bound, the alcohol pairs' co-response change."""
+    rd = pd.read_csv(out / 'readings.csv') if rd is None else rd
+    runs = runs_table(out) if runs is None else runs
+    plan = plan_e(rd, runs)
+    pd.DataFrame(plan.values()).to_csv(out / 'choice.csv', index=False)
+    dirs = []
+    for X in HALVES:
+        c = plan[X]
+        chosen = c['chosen'] if c['confirm'] else None
+        dirs.append(E92G.gate_direction92(rd, runs, X, chosen, REF, [control_of(chosen)] if chosen else []))
+    pd.DataFrame(dirs).to_csv(out / 'gate.csv', index=False)
+    gate = E92G.gate92(dirs)
+    eqs = equal_rule95(rd)
+    pd.DataFrame(eqs).to_csv(out / 'equal.csv', index=False)
+    gains_s = any(c['confirm'] for c in plan.values())
+    v = dict(thresholds=dict(CHOICE_MIN_GAIN=CHOICE_MIN_GAIN, GATE_GAIN=E91.GATE_GAIN, GATE_SINGLES_SHARE=E91.GATE_SINGLES_SHARE,
+                             GATE_RAW_SLACK=E91.GATE_RAW_SLACK, GATE_MEAN_SLACK=E91.GATE_MEAN_SLACK, GATE_SQ_ALL=E91.GATE_SQ_ALL,
+                             GATE_SQ_SIX=E91.GATE_SQ_SIX, CONTROL_RATIO=CONTROL_RATIO, EQUAL_PATTERN=EQUAL_PATTERN,
+                             EQUAL_RAW=EQUAL_RAW, EQUAL_MEAN=EQUAL_MEAN, APL_BRACKET=APL_BRACKET, STATIC_BRACKET=STATIC_BRACKET,
+                             F_COND=F_COND),
+             readout="cal (the calibrated readout, K set on each run's APL-on counts; E83's readings and gate)",
+             reference=REF, choice=plan, gate=gate,
+             verdict='passes' if gate['passes'] else ('gains on S, not through the gate' if gains_s else 'level'),
+             equals=eqs, equals_by_kind={k: [e['variant'] for e in eqs if e['equal'] and e['kind'] == k] for k in EQUAL_KINDS})
+    g = rd[(rd.unit == 'S') & (rd.readout == 'cal')]
+    v['S'] = {r.variant: dict(arm=r.arm, screen=r.screen, halfA=r.halfA_pattern, halfB=r.halfB_pattern, halfC=r.halfC_pattern,
+                              halfD=r.halfD_pattern, all=r.z8_pattern, six=r.z6_pattern, loss=r.z8_loss, mean_effect=r.mean_effect,
+                              amplitude=r.z8_amplitude, shape=r.z8_shape, sd_ratio=r.z8_sd_ratio, pearson=r.z8_pearson,
+                              rho=r.z8_rho, err_ester=r.z8_err_ester, err_alcohol=r.z8_err_alcohol, n_flagged=int(r.n_flagged),
+                              n_at_bound=int(r.n_at_bound)) for r in g.itertuples()}
+    v['F_condition'] = f_condition(rd, eqs)
+    if (out / 'f_scores.json').exists():
+        v['F'] = _read_json(out / 'f_scores.json')
+    mine = runs[runs.source == 'E95']
+    v['flagged_runs'] = mine[mine.flagged][['tag', 'realism_flag']].values.tolist()
+    v['at_bound_runs'] = mine[mine.at_bound].tag.tolist()
+    if (out / 'coresponse.csv').exists():
+        try:
+            co = pd.read_csv(out / 'coresponse.csv')
+            reach = co[(co.factor == 'L') & (co.group == 'alcohol')]
+            v['alcohol_coresponse'] = {f'{r.variant}:{r.reading}:{r.subset}': dict(ratio=r.ratio, differs=bool(r.differs))
+                                       for r in reach.itertuples()}
+        except pd.errors.EmptyDataError:
+            pass
+    _write_json(out / 'verdict.json', v)
+    print(f"E95 E: {v['verdict']}; " + '; '.join(f"{h} {plan[h].get('chosen')} (gain {plan[h].get('gain', np.nan):.4f})"
+                                                for h in HALVES)
+          + f"; equals {v['equals_by_kind']}; F {'runs' if v['F_condition'].get('runs') else 'does not run'}", flush=True)
+    return v
+
+
+def score(out: Path, n_workers: int = 4, coresponse: bool = True, zcell: bool = True) -> dict:
+    """readings.csv, pairs.csv, line.csv, c1_groups.csv, coresponse.csv (with `coresponse`), choice.csv, gate.csv,
+    equal.csv, verdict.json, the figure and comparison_table.md."""
+    runs = runs_table(out)
+    rd = readings95(out, runs, readouts=READOUTS if zcell else tuple(r for r in READOUTS if not r.startswith('zcell')))
+    try:
+        line95(out)
+    except Exception as e:                       # (E92 part A's line needs its line.json; reported, not fatal)
+        print(f'E95 score: line.csv left out ({e!r})', flush=True)
+    c1_groups(out)
+    if coresponse:
+        coresponse95(out, n_workers)
+    v = verdict95(out, rd, runs)
+    figure(out)
+    comparison_table(out)
+    return v
+
+
+# ---------------------------------------------------------------------------
+# part F: the family fitted again at the connectome's bouton share with the component
+
+def f_tag(label: str, component: str = 'uniform') -> str:
+    """The tag E10_joint_fit.py gives a part F fit (its prefix rules: the wiring, rate0.068_, aplboth_, aplpnhold_, flatu_ /
+    flatc_, then k2_f1)."""
+    from experiments import E10_joint_fit as J
+    a = E91.d_member(label)['wiring_args']
+    wt = ''
+    if '--wiring' in a:
+        wt = f"wiring-{a[a.index('--wiring') + 1]}-seed{a[a.index('--wiring-seed') + 1]}_"
+    if '--wiring-tag' in a:
+        wt += f"wiring-{a[a.index('--wiring-tag') + 1]}_"
+    return (f"{wt}rate{H.data_target('ctrl_frac'):.3f}_aplboth_{J.aplpn_hold_tag(1.0)}"
+            f"{J.aplkc_flat_tag(dict(kind=component))}k2{F_TAG}")
+
+
+def f_start_key(label: str, component: str = 'uniform') -> str:
+    return f'{label}_f1_{component}'
+
+
+def f_start_params(out: Path, label: str, component: str = 'uniform') -> dict:
+    """Part F's start on a wiring: the absolute parameters of its best point of D1 (D2 for the connectome's component;
+    the lowest pattern part of the wiring under the readout against all recordings, inside the bands where one is, not at
+    a bracket's bound) and that point's size as 'aplkc_flat', written into f_start_params.json under `f_start_key`."""
+    arm = 'D1' if component == 'uniform' else 'D2'
+    rd = pd.read_csv(out / 'readings.csv')
+    runs = runs_table(out)
+    q = runs[(runs.arm == arm) & (runs.wiring == label) & ~runs.at_bound]
+    if q.empty:
+        raise RuntimeError(f'{label}: no {arm} point inside the bracket (run --part D --arm {arm} on this wiring first)')
+    sc = rd[(rd.unit == label) & (rd.readout == 'cal')].set_index('variant').z8_pattern
+    q = q.assign(pattern=q.variant.map(sc), flag_order=q.flagged.astype(int)).sort_values(['flag_order', 'pattern'])
+    r = q.iloc[0]
+    start = {k: float(r[k]) for k in E83.PARAM_KEYS}
+    path = out / F_START_FILE
+    d = _read_json(path)
+    d[f_start_key(label, component)] = dict(start, aplkc_flat=float(r['size']), from_tag=r.tag, pattern=float(r.pattern),
+                                            flagged=bool(r.flagged), component_unit=float(r['component_unit']))
+    _write_json(path, d)
+    return d[f_start_key(label, component)]
+
+
+def f_command(label: str, component: str = 'uniform', maxfev: int = F_MAXFEV, unit: Optional[float] = None) -> List[str]:
+    """The E10_joint_fit.py command of one part F fit: C2's family (`-k 2 --rate-target ctrl_frac --loss apl --apl-readout
+    both`) with the APL->bouton scale held at D_DOSE times the wiring's fitted multiple of E3's base (`--aplpn-hold`, as
+    E94's D1), the unweighted component's size fitted in F_FLAT_BOUNDS (`--aplkc-flat`, its unit the wiring's
+    `component_unit`, from f_start_params.json unless given), into this experiment's folders, from the wiring's best point
+    of D1 (`--init-params`, which also gives the size's start)."""
+    m = E91.d_member(label)
+    F = E94.aplpn_multiple(label, D_DOSE)
+    if unit is None:
+        unit = float(_read_json(out_dir() / F_START_FILE)[f_start_key(label, component)]['component_unit'])
+    return [str(H.HERE / 'venv' / 'bin' / 'python'), '-u', 'experiments/E10_joint_fit.py', '-k', '2', '--aplpn-hold',
+            repr(float(F)), '--aplkc-flat', component, '--aplkc-flat-unit', repr(float(unit)), '--aplkc-flat-max',
+            f'{F_FLAT_BOUNDS[1]:g}', '--rate-target', 'ctrl_frac', '--loss', 'apl', '--apl-readout', 'both', '--tag', F_TAG,
+            '--maxfev', str(int(maxfev)), '--experiment', EXPERIMENT,
+            '--init-params', f'results/{EXPERIMENT}/{F_START_FILE}:{f_start_key(label, component)}'] + m['wiring_args']
+
+
+def _fits(out: Path) -> pd.DataFrame:
+    p = out / 'fits.csv'
+    return pd.read_csv(p) if p.exists() else pd.DataFrame(columns=['tag'])
+
+
+def f_allowed(out: Path, pop: str, component: str = 'uniform') -> Tuple[bool, str]:
+    """S's fits: on part F's condition (`f_condition`; the connectome's component only on a D2 equal). T's: only if S's
+    fitted population is an equal or better by E94's D1 rule (`f_scores`)."""
+    if pop == 'S':
+        rd = pd.read_csv(out / 'readings.csv') if (out / 'readings.csv').exists() else None
+        if rd is None:
+            return False, 'not scored (run --part score)'
+        c = f_condition(rd)
+        ok = bool(c.get('runs')) and (component == 'uniform' or bool(c.get('connectome')))
+        return ok, json.dumps({k: c.get(k) for k in ('best', 'best_pattern', 'above', 'runs', 'connectome')})
+    s = f_scores(out, write=False).get(f'S_{component}')
+    if not s:
+        return False, "S's fits not scored"
+    return bool(s.get('equal') or s.get('better')), f"S's population: equal {s.get('equal')}, better {s.get('better')}"
 
 
 def part_f(out: Path, pop: str = 'S', wirings: Optional[Sequence[str]] = None, component: str = 'uniform',
            force: bool = False, dry_run: bool = False) -> List[str]:
-    raise NotImplementedError
+    """Part F's fits of population `pop` (or `wirings` of it: a lane), one process after another (`f_command`; logs under
+    outputs/.../F/), skipping those in fits.csv; refuses what the entry's rules do not allow unless `force`."""
+    import subprocess
+    ok, why = f_allowed(out, pop, component)
+    print(f'E95 F {pop} {component}: {"allowed" if ok else "not allowed"} ({why})', flush=True)
+    if not ok and not force:
+        return []
+    ws = [w for w in _wirings(pop) if wirings is None or w in wirings]
+    if not dry_run:
+        _commits()
+    logs = local_dir('F')
+    tags = []
+    for w in ws:
+        tag = f_tag(w, component)
+        tags.append(tag)
+        if tag in set(_fits(out).tag):
+            print(f'E95 F {tag}: done', flush=True)
+            continue
+        if not dry_run:
+            f_start_params(out, w, component)
+        try:
+            cmd = f_command(w, component)
+        except KeyError:
+            cmd = f_command(w, component, unit=float('nan'))
+        print('E95 F:', ' '.join(cmd), flush=True)
+        if dry_run:
+            continue
+        with open(logs / f'{tag}.log', 'w') as fh:
+            r = subprocess.run(cmd, cwd=H.HERE, stdout=fh, stderr=subprocess.STDOUT)
+        if r.returncode:
+            raise RuntimeError(f'E95 F {tag}: E10_joint_fit.py exited {r.returncode} (log {logs / (tag + ".log")})')
+        if tag not in set(_fits(out).tag):
+            raise RuntimeError(f'E95 F: the fit wrote no row {tag} (log {logs / (tag + ".log")})')
+    return tags
 
 
 def f_scores(out: Path, write: bool = True) -> dict:
-    raise NotImplementedError
+    """Part F's scores: per wiring and population (S, T, the eight) and component, the readings under the readout and on
+    raw counts against the unchanged fits of the same wirings, with realism; S by E94's D1 rule (`E94.d1_rule`, beside
+    E94's refit at the same bouton share, E94_REFIT_S); the eight against UNCHANGED_8 by the same rule and by E91's part D
+    pass rule. f_scores.csv, f_scores.json."""
+    from experiments import E72_wiring_population as E72
+    fits = _fits(out)
+    rows, res = [], {}
+    for component in COMPONENTS:
+        st = {}
+        for w in ALL_WIRINGS:
+            try:
+                tag = f_tag(w, component)
+            except Exception:
+                continue
+            if tag not in set(fits.tag):
+                continue
+            o = E72.load_fit(EXPERIMENT, tag)
+            if o is None:
+                continue
+            d = {ro: E83.pair_distances(o, ro) for ro in ('cal', 'raw')}
+            d0 = {ro: E83.pair_distances(E83.saved_fit(w)['saved'], ro) for ro in ('cal', 'raw')}
+            sc, sc0 = E92G.score_row92(d['cal']), E92G.score_row92(d0['cal'])
+            raw, raw0 = E83.effect_scores(d['raw'], E89.targets89()), E83.effect_scores(d0['raw'], E89.targets89())
+            fr = fits[fits.tag == tag].iloc[-1]
+            row = dict(component=component, unit=w, tag=tag, **E94._d_row(sc, sc0, raw, raw0),
+                       lower=bool(sc['z8_pattern'] < sc0['z8_pattern']),
+                       **{c: fr.get(c) for c in ('fixed_thr', 'wAPLKC_scale', 'wKCAPL_scale', 'wAPLPN_scale', 'wPNAPL_scale',
+                                                 'kc_kc_inh', 'aplpn_hold', 'aplpn_factor_vs_e3', 'aplkc_flat_size',
+                                                 'aplkc_flat_unit', 'init_params', 'n_evals')},
+                       fit_loss=fr.get('loss'), **E83.realism(o))
+            rows.append(row)
+            st[w] = (d, d0, row)
+        for unit, ws in (('S', S_WIRINGS), ('T', T_WIRINGS), ('all8', ALL_WIRINGS)):
+            if not all(w in st for w in ws):
+                continue
+            dp = {ro: E83.population([st[w][0][ro] for w in ws]) for ro in ('cal', 'raw')}
+            d0 = {ro: E83.population([st[w][1][ro] for w in ws]) for ro in ('cal', 'raw')}
+            sc, sc0 = E92G.score_row92(dp['cal']), E92G.score_row92(d0['cal'])
+            raw, raw0 = E83.effect_scores(dp['raw'], E89.targets89()), E83.effect_scores(d0['raw'], E89.targets89())
+            r = dict(E94._d_row(sc, sc0, raw, raw0), n_lower=int(sum(st[w][2]['lower'] for w in ws)),
+                     n_flagged=int(sum(_flagged(st[w][2].get('realism_flag')) for w in ws)),
+                     sizes=[float(st[w][2].get('aplkc_flat_size', np.nan)) for w in ws])
+            if unit == 'S':
+                r['equal'], r['better'] = E94.d1_rule(r)
+                r['vs_e94_refit'] = float(r['pattern_all'] - E94_REFIT_S)
+            if unit == 'all8':
+                rest = bool(r['n_flagged'] == 0 and abs(r['raw_loss'] - r['raw_loss_unchanged']) <= E94.D_RAW_SLACK
+                            and abs(r['mean_effect'] - FLIES_MEAN) <= E94.D_MEAN_SLACK)
+                r['equal'] = bool(abs(r['pattern_all'] - UNCHANGED_8) <= E94.D_EQUAL and rest)
+                r['passes'] = bool(r['pattern_all'] <= UNCHANGED_8 - E94.D_PASS_GAIN and r['n_lower'] >= E94.D_WIRINGS_LOWER
+                                   and r['n_flagged'] == 0 and r['raw_loss'] <= E94.D_RAW_REF + E94.D_RAW_SLACK
+                                   and abs(r['mean_effect'] - FLIES_MEAN) <= E94.D_MEAN_SLACK)
+            res[f'{unit}_{component}'] = r
+            rows.append(dict(component=component, unit=unit, **{k: x for k, x in r.items() if k != 'sizes'}))
+    if write:
+        pd.DataFrame(rows).to_csv(out / 'f_scores.csv', index=False)
+        _write_json(out / 'f_scores.json', res)
+    return res
+
+
+def f_check(out: Path) -> dict:
+    """E10_joint_fit.py with and without --aplkc-flat against a saved fit's first evaluation: E94's D1 fit on the real
+    wiring (its command, from its own start) run with --smoke (5 evaluations, into this experiment's results folder, tag
+    suffix _e10check), without the option and with it at size 0 (uniform, this wiring's unit); each first evaluation's
+    loss terms must equal E94's history row 0 exactly. f_check.json."""
+    import subprocess
+    hist94 = pd.read_csv(H.results_dir(E94.EXPERIMENT) / f"history_{E94.d1_tag('real')}.csv")
+    start = _read_json(H.results_dir(E94.EXPERIMENT) / E94.D_START_FILE)[E94.d_start_key('real')]
+    m = E91.d_member('real')
+    base = [str(H.HERE / 'venv' / 'bin' / 'python'), '-u', 'experiments/E10_joint_fit.py', '-k', '2', '--aplpn-hold',
+            repr(float(E94.aplpn_multiple('real', float(start['dose'])))), '--rate-target', 'ctrl_frac', '--loss', 'apl',
+            '--apl-readout', 'both', '--maxfev', '5', '--smoke', '--experiment', EXPERIMENT,
+            '--init-params', f'results/{E94.EXPERIMENT}/{E94.D_START_FILE}:{E94.d_start_key("real")}'] + m['wiring_args']
+    L = kc_losses('real')
+    wn = wiring_wnorm('real')
+    unit = component_unit(L['bclaw_mean'], E83.saved_fit('real')['p']['wAPLKC_scale'], L['apl_mean'], float(wn.mean()))
+    runs = {'off': base + ['--tag', '_e10check'],
+            'flat0': base + ['--tag', '_e10check', '--aplkc-flat', 'uniform', '--aplkc-flat-unit', repr(unit),
+                             '--aplkc-flat-init', '0']}
+    res = dict(reference=f"{E94.EXPERIMENT}: history_{E94.d1_tag('real')}.csv row 0", unit=unit)
+    cols = [c for c in hist94.columns if c not in ('time_s', 'eval', 'Unnamed: 0')]
+    for name, cmd in runs.items():
+        log = local_dir('F') / f'f_check_{name}.log'
+        with open(log, 'w') as fh:
+            r = subprocess.run(cmd, cwd=H.HERE, stdout=fh, stderr=subprocess.STDOUT)
+        if r.returncode:
+            raise RuntimeError(f'E95 f_check {name}: E10_joint_fit.py exited {r.returncode} (log {log})')
+        tag = E94.d1_tag('real').replace(E94.D1_TAG, '_e10check')
+        if name == 'flat0':
+            tag = tag.replace('aplpnhold_', 'aplpnhold_flatu_')
+        h = pd.read_csv(out / f'history_{tag}.csv')
+        diff = {c: [float(h[c].iloc[0]), float(hist94[c].iloc[0])] for c in cols if c in h.columns
+                and not E10_same(h[c].iloc[0], hist94[c].iloc[0])}
+        res[name] = dict(tag=tag, n_cols=int(sum(c in h.columns for c in cols)), differs=diff, exact=not diff,
+                         flat_first=float(h['aplkc_flat'].iloc[0]) if 'aplkc_flat' in h else None)
+    res['passes'] = bool(res['off']['exact'] and res['flat0']['exact'] and res['flat0']['flat_first'] == 0.0)
+    _write_json(out / 'f_check.json', res)
+    print(f'E95 f_check: {json.dumps(res, default=str)[:2000]}', flush=True)
+    return res
+
+
+def E10_same(a, b) -> bool:
+    try:
+        fa, fb = float(a), float(b)
+    except (TypeError, ValueError):
+        return str(a) == str(b)
+    return (np.isnan(fa) and np.isnan(fb)) or fa == fb
 
 
 def part_g(out: Path) -> None:
     """Part G (only by the entry's rules): on a pass by (E) or as a fitted family of eight, the firing-ceiling family with
     the response rate with APL on re-held, S at the flies' 2 s pulse with both response rates re-held, and S through the
-    trial noise as E72's part E ran it; on an equal of C1, C1 on S at the flies' 2 s pulse with both response rates
-    re-held (E80's part A). Not written: it runs only by those rules."""
+    trial noise as E72's part E ran it (each holds if the population keeps at least half of its gain); on an equal of C1,
+    C1 on S at the flies' 2 s pulse with both response rates re-held (E80's part A), on raw counts and under the readout,
+    beside E80's readings of the feedback family. Not written: it runs only by those rules."""
+    v = _read_json(out / 'verdict.json')
+    due = dict(passes=bool(v.get('verdict') == 'passes' or v.get('F', {}).get('all8_uniform', {}).get('passes')),
+               c1_equal='C1_bck' in v.get('equals_by_kind', {}).get('whole_static', []))
+    print(f'E95 G: {due}', flush=True)
     raise NotImplementedError('E95 part G runs only by the entry\'s rules (a pass, or an equal of C1); it is not written')
 
 
 # ---------------------------------------------------------------------------
-# the archive, the table
+# the steps from the claws to the somata, for a chosen or equal setting
+
+def steps_variants(out: Path) -> List[str]:
+    v = _read_json(out / 'verdict.json')
+    vs = [c['chosen'] for c in v.get('choice', {}).values() if c.get('confirm')]
+    vs += [e['variant'] for e in v.get('equals', []) if e.get('equal')]
+    return sorted(dict.fromkeys(vs))
+
+
+def part_steps(out: Path, variants: Optional[Sequence[str]] = None) -> Optional[pd.DataFrame]:
+    """The step from the claws to the somata in wild-type flies for `variants` (default every chosen or equal setting)
+    beside C2's family on S (E94's `part_steps` on this experiment's runs): somata_steps.csv, claws_steps.csv, steps.csv."""
+    from experiments import E90_model_stages as E90
+    from experiments import E92_steps_like_for_like as A
+    variants = list(variants) if variants else steps_variants(out)
+    if not variants:
+        print('E95 steps: no chosen or equal setting', flush=True)
+        return None
+    t0 = time.time()
+    runs = runs_table(out)
+    soma, claw = [], []
+    i = 0
+    for v in variants:
+        for w in S_WIRINGS:
+            q = runs[(runs.variant == v) & (runs.wiring == w)]
+            if not len(q):
+                raise RuntimeError(f'{v} has no run on {w}')
+            r = q.iloc[0]
+            o = load_any(r.source, r.tag, w)
+            soma.append(A.somata_pairs(o['on'][1], o['off'][1]).assign(family=v, wiring=w, source=r.source, tag=r.tag))
+            st_on = {'E95': load_stage95, 'E94': E94.load_stage94}.get(r.source, lambda t: dict(E94.fit_stage(w, 'on')))(r.tag)
+            if st_on is None:
+                raise RuntimeError(f'{r.tag}: no stage matrices')
+            W, _ = E94.wiring_W(w)
+            meta = {k: np.asarray(x) for k, x in E92G.units_meta(W).items()}
+            rr = E90.read_wiring(w, st_on, dict(E94.fit_stage(w, 'off')), meta,
+                                 np.random.default_rng(E90.NOISE_SEED + E94.STEPS_NOISE_SEED + 100 + i))
+            claw.append(pd.DataFrame(rr).assign(family=v, tag=r.tag, wiring=w))
+            i += 1
+    for w in S_WIRINGS:
+        o = E83.saved_fit(w)['saved']
+        soma.append(A.somata_pairs(o['on'][1], o['off'][1]).assign(family='C2', wiring=w, source='saved', tag=w))
+    sm = E92G.f_soma_means(pd.concat(soma, ignore_index=True))
+    sm.to_csv(out / 'somata_steps.csv', index=False)
+    cl = E92G.claw_groups(pd.concat(claw, ignore_index=True))
+    c2 = A.model_claws()
+    c2 = c2[c2.wiring.isin(S_WIRINGS)].assign(family='C2')
+    claws = pd.concat([c2, cl], ignore_index=True)
+    claws.to_csv(out / 'claws_steps.csv', index=False)
+    e90v = _read_json(H.results_dir('E90_model_stages') / 'verdict.json')
+    rows = E92G.f_step_rows(sm, claws, A.check_passes(), bool(e90v.get('noise_check_passed', {}).get('claw', False)))
+    rows.to_csv(out / 'steps.csv', index=False)
+    print(f'E95 steps in {time.time() - t0:.0f} s', flush=True)
+    return rows
+
+
+# ---------------------------------------------------------------------------
+# the archive, the figure and the table
 
 def write_variants(out: Path) -> pd.DataFrame:
-    raise NotImplementedError
+    """variants.csv for the model-output archive and model_pair_distances_long.csv for kcq/apl_effect.py (raw spike counts,
+    the harness's primary model RDM): one row per run of this experiment with its absolute parameters, the static
+    inhibition's form and size, the component, realism; part F's fits' distances, which E10_joint_fit.py wrote, are kept."""
+    runs = runs_table(out)
+    runs = runs[runs.source == 'E95']
+    rows, parts = [], []
+    for _, r in runs.iterrows():
+        pv = parse_variant(r.variant)
+        kind = MODE_NAMES[pv['mode']]
+        if pv['static']:
+            kind += f"; static inhibition {STATIC_NAMES[pv['static']]}" + (f" (exponent {pv['exponent']:g})" if pv['static'] == 'nke_b'
+                                                                           else '')
+            if pv['permute']:
+                kind += f"; permuted {'within a claw count' if pv['permute'] == 'claw' else 'over all KCs'} (seed {pv['seed']})"
+        if pv['part'] == 'D':
+            kind += (f"; component {pv['component']}, size {pv['size']:g} (unit {r.get('component_unit'):.6g}), "
+                     f"APL->bouton scale x {pv['dose']:g} of the fit's")
+        kind += "; the APL-off run the fit's"
+        rows.append(dict(tag=r.tag, variant=r.tag, part=r.part, arm=r.arm, kind=kind, config=r.variant, mode=r['mode'],
+                         static=r.static, exponent=r.exponent, permute=r.permute, seed=r.seed, component=r.component,
+                         size=r['size'], dose=r.dose, wiring=r.wiring, ref_experiment=r.fit_folder, ref_fit=r.fit_tag,
+                         fixed_thr=r.fixed_thr, wAPLKC_scale=r.wAPLKC_scale, wKCAPL_scale=r.wKCAPL_scale,
+                         wAPLPN_scale=r.wAPLPN_scale, wPNAPL_scale=r.wPNAPL_scale, wKCKC_scale=r.wKCKC_scale,
+                         factor=r.factor, factor_kind=r.factor_kind, aplpn_multiple=r.aplpn_multiple,
+                         component_unit=r.get('component_unit'), static_mean=r.get('static_mean'),
+                         static_over_thr_p50=r.get('static_over_thr_p50'), rate_on=r.rate_on, rate_off=r.rate_off,
+                         max_count_on=r.max_count_on, max_count_off=r.max_count_off, wAPLKC_sha256=r.wAPLKC_sha256,
+                         control_of=r.control_of, bouton_share=r.get('bouton_share'), realism_flag=r.realism_flag,
+                         host=r.get('host'), subdir='runs'))
+        o = load_run95(r.tag)
+        parts.append(pd.concat({(r.tag, 'on'): H.model_rdms(*o['on'])[H.PRIMARY_MODEL_RDM],
+                                (r.tag, 'acute_off'): H.model_rdms(*o['off'])[H.PRIMARY_MODEL_RDM]},
+                               names=['tag', 'condition', 'odor_a', 'odor_b']).rename('distance').reset_index())
+    df = pd.DataFrame(rows)
+    df.to_csv(out / 'variants.csv', index=False)
+    long_path = out / 'model_pair_distances_long.csv'
+    keep = []
+    if long_path.exists():
+        old = pd.read_csv(long_path)
+        keep = [old[old.tag.isin(set(_fits(out).tag))]]
+    if keep or parts:
+        pd.concat(keep + parts, ignore_index=True).to_csv(long_path, index=False)
+    return df
+
+
+def figure(out: Path) -> Optional[Path]:
+    """E95_settings.png: S's pattern part under the readout against all recordings and halves A and B per setting (the
+    unchanged fits dashed; hollow: a setting with a run outside the bands or at a bracket's bound), parts B, C and D side by
+    side."""
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    if not (out / 'readings.csv').exists():
+        return None
+    rd = pd.read_csv(out / 'readings.csv')
+    g = rd[(rd.unit == 'S') & (rd.readout == 'cal') & (rd.variant != REF)]
+    ref = rd[(rd.unit == 'S') & (rd.readout == 'cal') & (rd.variant == REF)]
+    if g.empty:
+        return None
+    parts = [p for p in ('B', 'C', 'D') if g.arm.astype(str).str.startswith(p).any() or (p == 'D' and (g.variant == D0).any())]
+    fig, axes = plt.subplots(1, max(len(parts), 1), figsize=(5.5 * max(len(parts), 1), 4.8), squeeze=False)
+    cols = {'halfA': '#d1495b', 'halfB': '#2e86ab', 'z8': '0.2'}
+    for ax, part in zip(axes[0], parts):
+        q = g[g.arm.astype(str).str.startswith(part) | ((g.variant == D0) & (part == 'D'))]
+        q = q.sort_values('variant')
+        x = np.arange(len(q))
+        bad = ((q.n_flagged > 0) | (q.n_at_bound > 0)).to_numpy()
+        for t, c in cols.items():
+            ax.scatter(x, q[f'{t}_pattern'], s=26, facecolors=['none' if b else c for b in bad], edgecolors=c,
+                       label='all recordings' if t == 'z8' else f'half {t[-1]}')
+            if len(ref):
+                ax.axhline(float(ref[f'{t}_pattern'].iloc[0]), color=c, ls='--', lw=0.6)
+        ax.set_xticks(x)
+        ax.set_xticklabels(q.variant, rotation=70, ha='right', fontsize=7)
+        ax.set_ylabel('pattern part of the APL-effect loss')
+        ax.set_title(f"part {part}, S's population, calibrated readout\n(dashed: the unchanged fits; hollow: outside the bands "
+                     'or at a bound)', fontsize=8)
+        ax.legend(fontsize=7)
+    fig.tight_layout()
+    path = out / 'E95_settings.png'
+    fig.savefig(path, dpi=130)
+    plt.close(fig)
+    return path
+
+
+def _md(df: pd.DataFrame, fmt: str = '.4f') -> str:
+    return E94._md(df, fmt)
 
 
 def comparison_table(out: Path) -> str:
-    raise NotImplementedError
+    """comparison_table.md from the parts' tables."""
+    L = ["# E95: APL's inhibition as a static threshold raise per KC", '',
+         f'Generated by experiments/E95_static_apl.py at {H.code_commits().get("queue_commit", "")[:7]}.', '']
+    if (out / 'identity.json').exists():
+        s = _read_json(out / 'identity.json')
+        L += ['## Part 0: the identities', '', f"passes: {s.get('passes')}", '']
+        for k, x in s.items():
+            if not isinstance(x, dict) or k == 'commits':
+                continue
+            keep = {kk: x.get(kk) for kk in ('exact', 'passes', 'same_matrix', 'same_weights', 'changed_columns', 'column',
+                                              'odor', 'order_is_identity', 'apl_factor', 'apl_factor_e94', 'factor_rel_diff',
+                                              'ext_reset') if kk in x}
+            for c in ('on', 'off', 'counts'):
+                if isinstance(x.get(c), dict):
+                    keep[f'{c}_counts_differ'] = x[c].get('counts_differ')
+            L.append(f'- {k}: {json.dumps(keep, default=str)}')
+        L.append('')
+    for name, title, fmt in (('a1_split.csv', 'A1: the split of the loss per KC and odor (boutons L^b, claws L^c)', '.3f'),
+                             ('a2_per_kc.csv', 'A2: b_k against the claw count; c_k against the breadth factor', '.3f'),
+                             ('a3_sizes.csv', 'A3: the sizes against each KC\'s threshold', '.3f'),
+                             ('a4_apl.csv', 'A4: APL\'s activity by odor and before the odor', '.3f'),
+                             ('a4_weights.csv', 'A4: the connectome\'s per-claw APL->KC weights', '.3g'),
+                             ('a5_archive.csv', 'A5: the archive\'s static forms', '.4f')):
+        if (out / name).exists():
+            d = pd.read_csv(out / name)
+            if name == 'a3_sizes.csv' and (out / 'a3_removed.csv').exists():
+                rr = pd.read_csv(out / 'a3_removed.csv')
+                rr = rr[rr.group.isin(['all', 'ester', 'alcohol', 'all120'])]
+                L += [f'## {title}', '', _md(d, fmt), '', '### A3: what a threshold raise would remove (window-mean drive; a '
+                      'count-level description)', '', _md(rr, fmt), '']
+                continue
+            L += [f'## {title}', '', _md(d, fmt), '']
+    if (out / 'readings.csv').exists():
+        rd = pd.read_csv(out / 'readings.csv')
+        runs = runs_table(out)
+        g = rd[(rd.unit == 'S') & (rd.readout == 'cal')].sort_values(['arm', 'variant'])
+        graw = rd[(rd.unit == 'S') & (rd.readout == 'raw')].set_index('variant')
+        rr = runs.groupby('variant')
+        L += ["## S's population (calibrated readout; the parts of the pattern part against all recordings)", '',
+              '| setting | pattern, half A | half B | all | six | amplitude | shape | spread ratio | Pearson r | ρ | loss | '
+              'mean APL effect | raw-count loss | ester / alcohol error | factor | static / threshold p50 | share at the '
+              'boutons | flagged / at bound |', '|---|' + '---:|' * 17]
+
+        def rng(q, c, spec='.3g'):
+            if not len(q) or c not in q or not pd.to_numeric(q[c], errors='coerce').notna().any():
+                return '–'
+            v = pd.to_numeric(q[c], errors='coerce')
+            return f"{v.min():{spec}}-{v.max():{spec}}"
+        for r in g.itertuples():
+            q = rr.get_group(r.variant) if r.variant in rr.groups else pd.DataFrame()
+            L.append(f'| {r.variant} | {r.halfA_pattern:.4f} | {r.halfB_pattern:.4f} | {r.z8_pattern:.4f} | {r.z6_pattern:.4f} | '
+                     f'{r.z8_amplitude:.4f} | {r.z8_shape:.4f} | {r.z8_sd_ratio:.2f} | {r.z8_pearson:.2f} | {r.z8_rho:.2f} | '
+                     f'{r.z8_loss:.4f} | {r.mean_effect:+.3f} | {graw.z8_loss.get(r.variant, np.nan):.4f} | '
+                     f'{r.z8_err_ester:+.3f} / {r.z8_err_alcohol:+.3f} | {rng(q, "factor")} | '
+                     f'{rng(q, "static_over_thr_p50", ".3f")} | {rng(q, "bouton_share", ".3f")} | {r.n_flagged} / {r.n_at_bound} |')
+        L.append('')
+        mine = runs[runs.source == 'E95']
+        if len(mine):
+            L += ['## Realism of the runs (rule of 2026-11-10 16:10; the earlier rule beside)', '',
+                  '| run | rate on | rate off | ratio | response rate ρ on | odors per KC TV on / off | largest counts on / off | '
+                  'K | static / threshold p10 / p50 / p90 / max | silent (static > largest drive) | silent on / off | '
+                  'share at the boutons / component / weighted | APL->KC weight p90/p10 over responders | flag | flag '
+                  '(earlier rule) |', '|---|' + '---:|' * 12 + '---|---|']
+            for r in mine.itertuples():
+                sp = ' / '.join(E94._f(getattr(r, f'static_over_thr_{n}', np.nan), '.3f') for n in ('p10', 'p50', 'p90', 'max'))
+                sh = ' / '.join(E94._f(getattr(r, c, np.nan), '.3f') for c in ('bouton_share', 'comp_share', 'weighted_share'))
+                L.append(f'| {r.tag} | {r.rate_on:.4f} | {r.rate_off:.4f} | {r.ratio:.2f} | {r.rate_rho_on:.2f} | '
+                         f'{r.opk_on_tv:.3f} / {r.opk_off_tv:.3f} | {int(r.max_count_on)} / {int(r.max_count_off)} | '
+                         f'{E94._f(getattr(r, "K_run", np.nan), ".3g")} | {sp} | {E94._f(getattr(r, "static_over_max_drive", np.nan), ".3f")} | '
+                         f'{E94._f(getattr(r, "silent_share_on", np.nan), ".3f")} / {E94._f(getattr(r, "silent_share_off", np.nan), ".3f")} | '
+                         f'{sh} | {E94._f(getattr(r, "wkc_all_resp_p90_over_p10", np.nan), ".3g")} | '
+                         f'{r.realism_flag if isinstance(r.realism_flag, str) else ""} | '
+                         f'{r.realism_flag_zcrit if isinstance(r.realism_flag_zcrit, str) else ""} |')
+            L.append('')
+            if (mine.arm.astype(str).str.startswith('D')).any():
+                L += ['Part D: the unweighted component puts an APL->KC weight on claws for which the tables hold no APL synapse '
+                      '(30 % of the claws on the real wiring; a4_weights.csv, zero_share).', '']
+    for name in ('c1_groups.csv', 'line.csv', 'choice.csv', 'gate.csv', 'equal.csv', 'f_scores.csv', 'steps.csv'):
+        if (out / name).exists():
+            try:
+                d = pd.read_csv(out / name)
+            except pd.errors.EmptyDataError:
+                L += [f'## {name}', '', '(none)', '']
+                continue
+            if name == 'line.csv':
+                d = d[[c for c in d.columns if c in ('variant', 'unit', 'readout', 'ester_rel', 'alcohol_rel', 'resid',
+                                                       'off_toward_flies', 'off_toward_flies_nr')]]
+            if name == 'steps.csv' and len(d) > 200 and 'read' in d:
+                d = d[d.read.astype(bool)]
+            L += [f'## {name}', '', _md(d), '']
+    if (out / 'verdict.json').exists():
+        vc = _read_json(out / 'verdict.json')
+        short = {k: vc.get(k) for k in ('verdict', 'gate', 'equals_by_kind', 'F_condition', 'F', 'flagged_runs', 'at_bound_runs')}
+        L += ['## Verdict', '', '```', json.dumps(short, indent=1, default=str)[:12000], '```', '']
+    text = '\n'.join(L) + '\n'
+    (out / 'comparison_table.md').write_text(text)
+    return text
 
 
 def provenance(out: Path, part: str, **extra) -> None:
