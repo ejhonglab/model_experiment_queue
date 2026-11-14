@@ -1387,8 +1387,10 @@ def figures() -> None:
         for ax, ro in zip(axes, READOUTS):
             ln = lj['lines'][ro]['S']
             x = lc[(lc.readout == ro) & (lc.population == 'S')]
-            ax.scatter(x.alcohol_rel, x.ester_rel, s=14, c=np.where(x.in_bands, '#9aa7b4', '#e0d6c8'), label='S populations',
+            ax.scatter(x.alcohol_rel[x.in_bands], x.ester_rel[x.in_bands], s=14, c='#9aa7b4', label='S populations',
                        zorder=2)
+            ax.scatter(x.alcohol_rel[~x.in_bands], x.ester_rel[~x.in_bands], s=14, c='#e0d6c8',
+                       label='S populations outside the bands', zorder=2)
             off = x[x.in_bands & x.off_toward_flies & (x.kind != 'line')]
             ax.scatter(off.alcohol_rel, off.ester_rel, s=30, facecolors='none', edgecolors=magenta, lw=1.2,
                        label='off the line toward the flies', zorder=3)
@@ -1397,7 +1399,8 @@ def figures() -> None:
             xs = np.linspace(min(pts[:, 0].min(), x.alcohol_rel.min()) - 0.02, max(pts[:, 0].max(), x.alcohol_rel.max()) + 0.02, 10)
             ys = ln['intercept'] + ln['slope'] * xs
             ax.plot(xs, ys, '-', color=blue, lw=1)
-            ax.fill_between(xs, ys - ln['scatter'], ys + ln['scatter'], color=blue, alpha=0.08, lw=0)
+            ax.fill_between(xs, ys - ln['max_abs_resid'], ys + ln['max_abs_resid'], color=blue, alpha=0.08, lw=0,
+                            label="the weightings' largest residual")
             for k, mk in (('trial_mean', '*'), ('noise_removed', 'P')):
                 for h in FLY_POINTS:
                     f_ = ln['flies'][f'{k}_{h}']
@@ -1406,7 +1409,7 @@ def figures() -> None:
             ax.set_xlabel('alcohol pairs\' APL-on distance minus the mean pair\'s (cosine)', fontsize=9)
             ax.set_ylabel('ester pairs\' APL-on distance minus the mean pair\'s (cosine)', fontsize=9)
             ax.set_title(f"{'raw counts' if ro == 'raw' else 'calibrated readout'}: slope {ln['slope']:.2f}, "
-                         f"scatter {ln['scatter']:.3f}", fontsize=10)
+                         f"largest residual {ln['max_abs_resid']:.3f}", fontsize=10)
             ax.grid(True, color=grid, lw=0.6)
             ax.spines[['top', 'right']].set_visible(False)
         axes[0].legend(fontsize=7, frameon=False)
