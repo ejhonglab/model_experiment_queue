@@ -130,10 +130,21 @@ def rate_lookup(folder: Path) -> Dict[str, dict]:
     return out
 
 
-def archive_rates(folder: Path, tag: str) -> Optional[dict]:
+def archive_responses(folder: Path, tag: str, name: str) -> Optional[Path]:
+    """The model-output archive's `<tag>_<name>_responses.parquet` (`name` 'on' or 'acute_off') for a results folder:
+    at the archive folder's root, else in one of its part subfolders (B/, D/, ...; the layout of E85 onward), when
+    exactly one has it; None otherwise."""
     d = ARCHIVE / folder.name
-    on, off = d / f'{tag}_on_responses.parquet', d / f'{tag}_acute_off_responses.parquet'
-    if not (on.exists() and off.exists()):
+    fname = f'{tag}_{name}_responses.parquet'
+    if (d / fname).exists():
+        return d / fname
+    found = sorted(d.glob(f'*/{fname}')) if d.is_dir() else []
+    return found[0] if len(found) == 1 else None
+
+
+def archive_rates(folder: Path, tag: str) -> Optional[dict]:
+    on, off = archive_responses(folder, tag, 'on'), archive_responses(folder, tag, 'acute_off')
+    if on is None or off is None:
         return None
     rate = lambda p: float(pd.read_parquet(p).astype(float).mean().mean())
     return dict(rate_on=rate(on), rate_off=rate(off), spearman_rate_on_vs_data=np.nan, source='model-output archive')
@@ -204,8 +215,8 @@ def archive_opk(folder: Path, tag: str) -> dict:
     response rates with the flies' in baseline-noise units); empty where the archive lacks them."""
     out = {}
     for cond, name in (('on', 'on'), ('off', 'acute_off')):
-        p = ARCHIVE / folder.name / f'{tag}_{name}_responses.parquet'
-        if not p.exists():
+        p = archive_responses(folder, tag, name)
+        if p is None:
             continue
         r = pd.read_parquet(p)
         d = odors_per_kc(r)
@@ -265,6 +276,8 @@ def score_all(data: pd.Series) -> pd.DataFrame:
             row['realism'] = 'inside the bands' if not row['realism_flag'] else 'outside: ' + row['realism_flag']
             if missing:
                 row['realism'] += ' (odors per KC and the response rate ρ not scored: no archived responses)'
+            if pd.isna(row['rate_on']) or pd.isna(row['rate_off']):
+                row['realism'] += ' (response rates not scored: none in the results tables or the archive)'
             # the bands until then, against Yang's z units (the response rate ρ from the experiment's own table)
             row['realism_flag_zcrit'] = realism_flag(row['rate_on'], row['rate_off'], row['spearman_rate_on_vs_data'],
                 row.get('opk_on_tv_zcrit', np.nan), row.get('opk_off_tv_zcrit', np.nan), units='z')

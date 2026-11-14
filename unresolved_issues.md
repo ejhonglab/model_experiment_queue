@@ -8,6 +8,34 @@ directory's notes/ and are linked from here.
 
 ## Open
 
+### The APL-effect table did not check the realism of variants archived in part subfolders (found 2026-11-14 00:20, viki, E93's write-up)
+- **What.** `kcq/apl_effect.py` looked for a variant's archived responses (`<tag>_on_responses.parquet`,
+  `<tag>_acute_off_responses.parquet`) only at the root of its archive folder. The experiments that archive their runs in
+  part subfolders (B/, D/, ..., from E77 on) got no response rates from the archive, no odors-per-KC distances and no
+  response rate ρ in results/apl_effect/by_variant.csv. Where their results tables also had no `rate_on` / `rate_off`, no band
+  was checked at all. Still `realism` read "inside the bands" (with "odors per KC and the response rate ρ not scored") and
+  `realism_flag` was empty. On 2026-11-14 that covered 927 rows of 1857 without odors per KC and 889 without response
+  rates, in E77, E78, E80, E82, E83, E85, E86, E87, E88, E89, E91, E92 and E93.
+- **What it affects.**
+  - by_variant.csv's flags, so also the summary's best-models table and the "best inside the bands" columns of
+    best_by_experiment.csv.
+  - The "inside the bands" sets of analyses/apl_effect_metrics.py (1164 of 1546 distinct variants on raw counts) and the
+    numbers that CLAUDE.md's "How the main target is read" quotes from it.
+  - The per-experiment notes are not affected. Their Realism sections read the runs' own tables, and they report the
+    variants that the fix now flags: E80's three points of the curve, E85's single model flies, and E87's 8 of 40 D1 runs,
+    all below the response rate ρ band with APL on.
+- **Done.**
+  - `archive_responses` finds the file in a single part subfolder when it is not at the root (a test was added).
+  - `realism` now says when the response rates themselves were not scored.
+  - by_variant.csv was rescored. 30 variants are newly flagged, all by the response rate ρ with APL on: E85 19, E87 8, E80 3.
+  - 84 rows are still without odors per KC, and 80 without response rates:
+    - E87's and E88's D1 runs: their APL-off run is the family's and is not archived again, so only the APL-on bands are read.
+    - E92's 28 rows: its archive has no response matrices for them.
+- **Remains.**
+  - Rerun analyses/apl_effect_metrics.py (raw and calibrated) and compare it with the 2026-11-13 tables. Until then, the
+    numbers in CLAUDE.md stand as computed from the earlier flags.
+  - E92's archive needs its response matrices (hal).
+
 ### pyolfsysm's `get_time_index` placed every step up to one step late, so closed windows read with it lost their end step (found 2026-11-13 12:04, atlas's code subagent for E90; fixed in olfsysm 17cef71)
 - **What.** `pyolfsysm.mb_model.get_time_index` spreads the run's n steps evenly from its first time to `time_end` inclusive
   (`np.linspace(t0, t1, num=n)`), so step k is labelled t0 + k (t1 - t0) / (n - 1) instead of olfsysm's t0 + k dt: every

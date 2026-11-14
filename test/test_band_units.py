@@ -154,6 +154,33 @@ def test_archive_opk_both_units(tmp_path, monkeypatch):
     assert S.archive_opk(tmp_path / 'E0_none', 'v') == {}
 
 
+def test_archive_responses_in_part_subfolders(tmp_path, monkeypatch):
+    """Responses archived in a part subfolder (B/, D/, ...) are found when no other subfolder has the same tag; the
+    root wins over a subfolder, and a tag in two subfolders is ambiguous (None)."""
+    rng = np.random.default_rng(3)
+    folder = tmp_path / 'E0_parts'
+    for sub in ('B', 'D'):
+        (folder / sub).mkdir(parents=True)
+    r = {c: pd.DataFrame((rng.random((500, 16)) < p).astype(float), columns=LABELS)
+         for c, p in (('on', 0.07), ('acute_off', 0.15))}
+    for c in r:
+        r[c].to_parquet(folder / 'B' / f'v_{c}_responses.parquet')
+        r[c].to_parquet(folder / 'B' / f'w_{c}_responses.parquet')
+        r[c].to_parquet(folder / 'D' / f'w_{c}_responses.parquet')
+        r[c].to_parquet(folder / 'D' / f'x_{c}_responses.parquet')
+        r[c].to_parquet(folder / f'x_{c}_responses.parquet')
+    monkeypatch.setattr(S, 'ARCHIVE', tmp_path)
+    assert S.archive_responses(folder, 'v', 'on') == folder / 'B' / 'v_on_responses.parquet'
+    assert S.archive_responses(folder, 'x', 'acute_off') == folder / 'x_acute_off_responses.parquet'
+    assert S.archive_responses(folder, 'w', 'on') is None
+    assert S.archive_responses(tmp_path / 'E0_none', 'v', 'on') is None
+    rates = S.archive_rates(folder, 'v')
+    assert rates['rate_on'] == pytest.approx(r['on'].mean().mean()) and rates['rate_off'] == pytest.approx(r['acute_off'].mean().mean())
+    out = S.archive_opk(folder, 'v')
+    assert out['opk_on_tv'] == pytest.approx(0.5 * np.abs(S.odors_per_kc(r['on']) - S.opk_data('on', 'noise')).sum(), rel=1e-12)
+    assert S.archive_opk(folder, 'w') == {}
+
+
 # ------------------------------------------------------------------- E73's fixed-unit columns
 def test_e73_fixed_unit_flags(monkeypatch):
     E73 = pytest.importorskip('experiments.E73_per_kc_normalization')
