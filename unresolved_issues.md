@@ -43,7 +43,17 @@ directory's notes/ and are linked from here.
       0.35 (0.35), per-odor part 0.53 (0.54), pair-specific part 0.92 (0.92).
     - The best variant by ρ differs from the pattern part's in 30 of 59 experiments (was 28 of 57). The numbers quoted
       in CLAUDE.md come from the first run (86f0d69) and are not rewritten.
-- **Remains.** E92's B2 points are scored once hal archives them (nothing to change).
+  - The summary's progress plot counts only variants inside the bands in its two APL-effect series, so variants without
+    response rates had been left out of them. With the fix, the running best of ρ on the per-pair APL effect rose from
+    0.60 (the flies' pulse in the model, E82) to 0.75 (summary rebuilt 2026-11-14 00:50).
+    - The new best points are E83's DI_halfB_s0.6_P3 (0.71) and E86's C1_B_P3 (0.75): inputs searched against half B of
+      the recordings, read on one held-out wiring (P3) against all recordings.
+    - The loss series and the best-models table did not change.
+- **Remains.**
+  - E92's B2 points are scored once hal archives them (nothing to change).
+  - Whether searched inputs, read on a single wiring against recordings half of which they were searched on, belong in
+    the progress plot's ρ series is a question for the summary's rules (a Fable host or Tom). ρ is a description and
+    chooses nothing, but the plot now shows a jump that no model as a population makes.
 
 ### pyolfsysm's `get_time_index` placed every step up to one step late, so closed windows read with it lost their end step (found 2026-11-13 12:04, atlas's code subagent for E90; fixed in olfsysm 17cef71)
 - **What.** `pyolfsysm.mb_model.get_time_index` spreads the run's n steps evenly from its first time to `time_end` inclusive
