@@ -1062,8 +1062,9 @@ def run_extras(o: Dict[str, tuple]) -> dict:
 
 def _provenance_add(part: str, tag: str, prov: dict) -> None:
     path = out_dir() / f'provenance_{part}.json'
-    d = _read_json(path) or dict(part=part, script='experiments/E93_missing_glomeruli_input.py', points={})
-    d['points'][tag] = prov
+    d = _read_json(path) or dict(part=part, script='experiments/E93_missing_glomeruli_input.py')
+    # (the file may already hold `provenance`'s dated records, written at the part's start, without 'points')
+    d.setdefault('points', {})[tag] = prov
     _write_json(path, d)
 
 

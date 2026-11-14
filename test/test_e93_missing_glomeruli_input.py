@@ -402,3 +402,16 @@ def test_identity_on_the_real_wiring(tmp_path, monkeypatch):
     on = sim(dict(P['p']))
     off = sim(dict(P['p'], wAPLKC_scale=0.0, wAPLPN_scale=0.0))
     assert E83._same({'on': on, 'off': off}, P['saved']) == (0, 0)
+
+
+def test_point_provenance_added_to_a_parts_record(tmp_path, monkeypatch):
+    """A point's provenance is added to provenance_B.json whether or not the part's dated record (written at its start,
+    without 'points') is already there."""
+    X = pytest.importorskip('experiments.E93_missing_glomeruli_input')
+    import json
+    monkeypatch.setattr(X, 'out_dir', lambda: tmp_path)
+    (tmp_path / 'provenance_B.json').write_text(json.dumps(dict(part='B', runs=[dict(time='t')])))
+    X._provenance_add('B', 'B_F_real', dict(a=1))
+    X._provenance_add('B', 'B_F_P1', dict(a=2))
+    d = json.loads((tmp_path / 'provenance_B.json').read_text())
+    assert d['runs'] == [dict(time='t')] and d['points'] == {'B_F_real': dict(a=1), 'B_F_P1': dict(a=2)}
