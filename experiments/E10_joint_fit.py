@@ -189,6 +189,14 @@ clipped ones, and nothing changes with APL off, so the breadth run is unchanged)
 before, the kwarg not passed); recorded in fits.csv (claw_inh_pool) and the provenance (claw_inh_pool) only when given;
 tag part pool<S>_ after the other model parts (before k<k>); refused with --block-proxy (its replays rebuild the drives
 without it) and --claw-thr (olfsysm refuses a per-claw transfer with it).
+APL's inhibition of the KCs as a gain (E92): `--apl-divisive` sets fit_mb_model's apl_inh_divisive (olfsysm
+mp.kc.apl_inh_divisive) in every simulation of the fit: each claw's PN drive x becomes x / (1 + max(i, 0)), i its APL
+inhibition, in place of x - i (before the clipping at 0 and any per-claw transfer; with APL off x / (1 + 0) = x, so the
+breadth run is unchanged). The bases the *_factor_vs_e3 columns refer to stay subtractive. Off by default (the kwarg not
+passed: the fits as before); recorded in fits.csv (apl_inh_divisive) and the provenance (apl_inh_divisive) only when
+given; tag part div_ after pool<S>_ (before k<k>); refused with --claw-inh-pool (olfsysm refuses the two together) and
+--block-proxy (its replays were validated for the subtractive form only); allowed with --claw-thr (olfsysm divides
+before the per-claw transfer).
 """
 from __future__ import annotations
 
@@ -280,6 +288,17 @@ def claw_inh_pool_kws(pool: Optional[float]) -> dict:
 def claw_inh_pool_tag(pool: Optional[float]) -> str:
     """(E91) The tag part of --claw-inh-pool: pool<S>_; '' for None."""
     return '' if pool is None else f'pool{float(pool):g}_'
+
+
+def apl_divisive_kws(divisive: bool) -> dict:
+    """(E92) fit_mb_model's apl_inh_divisive kwarg, as --apl-divisive sets it: {} when off (not passed, the fits as
+    before), else {'apl_inh_divisive': True}."""
+    return {'apl_inh_divisive': True} if divisive else {}
+
+
+def apl_divisive_tag(divisive: bool) -> str:
+    """(E92) The tag part of --apl-divisive: div_; '' when off."""
+    return 'div_' if divisive else ''
 
 
 # (E82) the simulation ends this long after the pulse unless --sim-end says otherwise (E80's 0.25 s, olfsysm's tail)
@@ -1392,7 +1411,8 @@ def fit_one(k: float, orn, initial, wnorm, breadth, loss_fn, *, kckc0: float, ma
     init_exact_expect: Optional[dict] = None, kckc_fixed: Optional[float] = None,
     block_proxy: Optional[dict] = None, kc_spiking: Optional[dict] = None,
     kc_thr_factor_fixed: Optional[np.ndarray] = None, claw_transfer: Optional[dict] = None,
-    protocol: Optional[dict] = None, spike_times: bool = False, claw_inh_pool: Optional[float] = None):
+    protocol: Optional[dict] = None, spike_times: bool = False, claw_inh_pool: Optional[float] = None,
+    apl_divisive: bool = False):
     """One joint fit; `kc_thr_factors` (K x KCs, `jitter_factors`) adds the K jittered runs of
     each condition (`jitter_conditions`) to every evaluation; `init_exact_expect` (not None)
     starts exactly at the `init_from` fit's parameters (`init_from_fit` with exact=True);
@@ -1412,7 +1432,8 @@ def fit_one(k: float, orn, initial, wnorm, breadth, loss_fn, *, kckc0: float, ma
     condition_spike_times: the loss gets them, e.g. for --count-kernel, and the result has the best
     evaluation's as 'condition_spike_times'); `claw_inh_pool` (E91: `claw_inh_pool_kws`, the pooled share of the
     APL>claw inhibition the claws do not absorb) is a fixed model kwarg of every simulation of the fit (not passed
-    when None)."""
+    when None); `apl_divisive` (E92: `apl_divisive_kws`, APL's inhibition of the claws as a divisor) likewise (not
+    passed when False)."""
     from pyolfsysm.mb_model import optimize_mb_model_params
     wAPLKC = breadth_weights(wnorm['wAPLKC'], breadth, k)
     r19 = None if (claw_thr is None or apl_drive != 'claws') else e19_row(claw_thr, k, kckc0)
@@ -1525,6 +1546,13 @@ def fit_one(k: float, orn, initial, wnorm, breadth, loss_fn, *, kckc0: float, ma
     if pool_kws and block_proxy is not None:
         # (the proxy's replays rebuild each KC's drive from the clipped claws)
         raise NotImplementedError('--block-proxy with --claw-inh-pool')
+    # (E92; only when given, so the default path is unchanged)
+    div_kws = apl_divisive_kws(apl_divisive)
+    if div_kws and pool_kws:
+        raise ValueError('--apl-divisive with --claw-inh-pool (olfsysm refuses apl_inh_divisive with claw_inh_pool)')
+    if div_kws and block_proxy is not None:
+        # (the proxy's replays were validated for the subtractive form only)
+        raise NotImplementedError('--block-proxy with --apl-divisive')
     # (E82; only when asked, so the default path is unchanged)
     if spike_times:
         hook_kws['condition_spike_times'] = ('on', 'off')
@@ -1545,7 +1573,7 @@ def fit_one(k: float, orn, initial, wnorm, breadth, loss_fn, *, kckc0: float, ma
             maxfev=maxfev, optimizer_kws=opt_kws, verify=False, verbose=verbose,
             **base_kws(claw_thr, apl_drive, claw_transfer), **wiring_kws, _wAPLKC=wAPLKC, _wKCAPL=wnorm['wKCAPL'],
             _wAPLPN=wnorm['wAPLPN'], _wPNAPL=wnorm['wPNAPL'], kc_kc_inh=kckc0, kc_kc_tau=TAU, **kc_spiking,
-            **protocol, **pool_kws
+            **protocol, **pool_kws, **div_kws
         )
     return res, init, bounds
 
@@ -1790,6 +1818,10 @@ def main() -> None:
         help="(E91) fit_mb_model's claw_inh_pool in every simulation of the fit: each KC's summed drive is the sum over "
             'its claws of max(x, 0) + S min(x, 0), x the claw\'s PN drive minus APL\'s inhibition (0 to 1; 0 the clipped '
             'form, 1 APL\'s inhibition on the summed drive); off by default; tag part pool<S>_')
+    ap.add_argument('--apl-divisive', action='store_true',
+        help="(E92) fit_mb_model's apl_inh_divisive in every simulation of the fit: each claw's PN drive x becomes "
+            'x / (1 + max(i, 0)), i its APL inhibition, in place of x - i (nothing changes with APL off); off by default; '
+            'tag part div_; not with --claw-inh-pool or --block-proxy')
     ap.add_argument('--smoke', action='store_true', help='time a few evaluations and exit')
     ap.add_argument('--figure-only', action='store_true', help='only redraw the figures from saved results')
     args = ap.parse_args()
@@ -2022,6 +2054,14 @@ def main() -> None:
             ap.error('--claw-inh-pool with --block-proxy is not supported')
         if args.claw_thr is not None:
             ap.error('--claw-inh-pool with --claw-thr is not supported (olfsysm refuses a per-claw transfer with it)')
+    # (E92) APL's inhibition of the claws as a divisor, fixed (olfsysm divides before the clipping and any per-claw
+    # transfer, so --claw-thr is allowed)
+    if args.apl_divisive:
+        if args.claw_inh_pool is not None:
+            ap.error('--apl-divisive with --claw-inh-pool is not supported (olfsysm refuses apl_inh_divisive with claw_inh_pool)')
+        if args.block_proxy > 0:
+            ap.error('--apl-divisive with --block-proxy is not supported (the proxy\'s replays were validated for the '
+                'subtractive form only)')
     initial, wnorm, wPNKC, breadth = bouton_base(orn, out_dir, args.claw_thr, gain=gain,
         gain_gloms=args.gain_glomeruli, wiring=args.wiring, wiring_seed=args.wiring_seed,
         apl_drive=args.apl_drive, base_params=args.base_params, info=base_info, input_tag=input_tag,
@@ -2065,7 +2105,7 @@ def main() -> None:
             + ('dnu' if args.apl_data_units == 'noise' else '') + '_')
     prefix = zcell_tag + band_tag + {'spikes': 'spk_', 'spikes_only': 'spko_'}.get(args.apl_drive, '') + ('' if args.claw_thr is None else f'thr{args.claw_thr:g}{claw_transfer_tag(claw_transfer)}_') + wiring_tag + (
         '' if gain is None else f'gain{gain:g}_') + rate_tag + block_tag + loss_tag + kckc_tag + kc_tag + thrin_tag + (
-        claw_inh_pool_tag(args.claw_inh_pool)) + proxy_tag + jit_tag
+        claw_inh_pool_tag(args.claw_inh_pool)) + apl_divisive_tag(args.apl_divisive) + proxy_tag + jit_tag
     jit_factors, jit_meta = None, {}
     if jit_k > 0:
         jit_factors = jitter_factors(jit_k, len(breadth), jit_sigma, args.jitter_seed, jit_scale)
@@ -2109,7 +2149,8 @@ def main() -> None:
             **({} if not claw_transfer else dict(claw_transfer=claw_transfer)),
             **({} if not protocol else dict(protocol=protocol)),
             **({} if not save_spike_times else dict(spike_times=True)),
-            **({} if args.claw_inh_pool is None else dict(claw_inh_pool=args.claw_inh_pool))
+            **({} if args.claw_inh_pool is None else dict(claw_inh_pool=args.claw_inh_pool)),
+            **({} if not args.apl_divisive else dict(apl_divisive=True))
         )
         hist = res['history']
         hist.to_csv(res_dir / f'history_{tag}.csv')
@@ -2183,6 +2224,8 @@ def main() -> None:
                 else {}),
             # (E91: the pooled share of the APL>claw inhibition the claws do not absorb; absent when not given)
             **claw_inh_pool_kws(args.claw_inh_pool),
+            # (E92: APL's inhibition of the claws as a divisor; absent when not given)
+            **apl_divisive_kws(args.apl_divisive),
             # (E73 part C: the per-KC session z-score reading's settings; absent when not used)
             **(dict(rate_criterion=args.rate_criterion, zcell_q=loss_fn.zcell['q'], zcell_map=loss_fn.zcell['amp'],
                 zcell_calibrate=loss_fn.zcell['calibrate'], zcell_drift=loss_fn.zcell['drift'])
@@ -2295,6 +2338,10 @@ def main() -> None:
                 'x the claw\'s PN drive minus APL\'s inhibition of it (olfsysm mp.kc.claw_inh_pool); the claw states that '
                 'drive APL stay the clipped ones and nothing changes with APL off, so the breadth run (APL off) is the '
                 'base\'s'))) if args.claw_inh_pool is not None else {}),
+            **(dict(apl_inh_divisive=dict(value=True, note=('E92: every simulation (APL on and APL off) has fit_mb_model\'s '
+                'apl_inh_divisive: each claw\'s PN drive x becomes x / (1 + max(i, 0)), i its APL inhibition (olfsysm '
+                'mp.kc.apl_inh_divisive), in place of x - i; with APL off x / (1 + 0) = x, so the breadth run (APL off) is the '
+                'base\'s'))) if args.apl_divisive else {}),
             loss_weights=loss_weights(args.loss),
             block_target=loss_fn.block_target, block_target_spec=args.block_target,
             block_scale=BLOCK_SCALE, rate_target=loss_fn.rate_target, rate_target_spec=args.rate_target,
