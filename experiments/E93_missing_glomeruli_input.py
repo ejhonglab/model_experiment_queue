@@ -1431,32 +1431,29 @@ def apl_free(units: Sequence[Tuple[str, Sequence[str]]] = UNITS) -> pd.DataFrame
 
 def line_reading(rd_pairs: Optional[pd.DataFrame] = None) -> pd.DataFrame:
     """line.csv: each input's populations' ester and alcohol groups' mean APL-on distances relative to the mean over the
-    120 pairs (E92's `relative_distances`), against E92's part A line (results/E92_steps_like_for_like/line.json, fitted
-    on S's populations, under each readout): the residual, signed toward the flies (control flies, all recordings, trial
-    means), and whether it is off the line toward the flies by more than the line's scatter."""
-    from experiments import E90_model_stages as E90
-    p = H.results_dir('E92_steps_like_for_like') / 'line.json'
-    if not p.exists():
-        return pd.DataFrame()
-    ln = json.loads(p.read_text())['lines']
+    120 pairs (E92's `relative_distances`), placed against E92's part A line (`E92.line(readout)['S']`, fitted through
+    E89's 13 weightings as populations of S's four wirings, under each readout) by E92's `place_on_line`: the residual,
+    signed toward each flies' point, and whether it is off the line toward the flies against halves A and B (beyond the
+    weightings' largest residual; beyond their SD beside). On T and the eight, where the line was not fitted, the residual
+    is taken relative to I0's on the same unit (E92's `ref_resid`)."""
+    from experiments import E92_steps_like_for_like as E92
     pr = pd.read_csv(out_dir() / 'pairs.csv') if rd_pairs is None else rd_pairs
-    rows = []
+    pts = {}
     for (name, unit, ro), g in pr.groupby(['input', 'unit', 'readout'], sort=False):
-        if ro not in ln:
+        if ro not in ('raw', 'cal'):
             continue
         on = pd.Series(g.on.to_numpy(), index=pd.MultiIndex.from_arrays([g.odor_a, g.odor_b]))
-        try:
-            from experiments import E92_steps_like_for_like as E92
-            est, alc = E92.relative_distances(on)
-        except (ImportError, NotImplementedError, AttributeError):
-            gm = E90.group_means(on)
-            est, alc = gm['ester'] - float(on.mean()), gm['alcohol'] - float(on.mean())
-        L = ln[ro]['S']
-        resid = est - (L['slope'] * alc + L['intercept'])
-        fl = L['flies']['trial_mean_all']['resid']
-        toward = resid * np.sign(fl)
-        rows.append(dict(input=name, unit=unit, readout=ro, ester_rel=est, alcohol_rel=alc, slope=L['slope'], resid=resid,
-                         flies_resid=fl, toward_flies=toward, scatter=L['scatter'], off_toward_flies=bool(toward > L['scatter'])))
+        pts[(name, unit, ro)] = E92.relative_distances(on)
+    rows = []
+    for (name, unit, ro), (est, alc) in pts.items():
+        L = E92.line(ro)['S']
+        ref = 0.0
+        if unit != 'S' and ('I0', unit, ro) in pts:
+            e0, a0 = pts[('I0', unit, ro)]
+            ref = float(e0 - (L['intercept'] + L['slope'] * a0))
+        rows.append(dict(input=name, unit=unit, readout=ro, ester_rel=est, alcohol_rel=alc, slope=L['slope'],
+                         intercept=L['intercept'], scatter=L['scatter'], max_abs_resid=L['max_abs_resid'], ref_resid=ref,
+                         **E92.place_on_line(est, alc, L, ref)))
     df = pd.DataFrame(rows)
     df.to_csv(out_dir() / 'line.csv', index=False)
     return df
