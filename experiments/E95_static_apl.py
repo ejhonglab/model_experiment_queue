@@ -545,11 +545,12 @@ def reading95(model: StaticModel, pv: dict, M: Optional[pd.DataFrame], wk: Optio
     whole = pv['mode'] == 'whole'
     if whole and M is None:
         raise ValueError('every APL scale 0 needs a static inhibition')
-    E89.set_weights(model, wk)
-    model.dose = 1.0 if whole else float(pv['dose'])
-    model.ext = None if M is None else _as_kc_odor(M, model)
-    E94.set_form94(model.mp, 'sub')
+    ext = None if M is None else _as_kc_odor(M, model)
     try:
+        E89.set_weights(model, wk)
+        model.dose = 1.0 if whole else float(pv['dose'])
+        model.ext = ext
+        E94.set_form94(model.mp, 'sub')
         run, bracket = (model.run_static, STATIC_BRACKET) if whole else (model.run_on, APL_BRACKET)
         x, on, hist, at_bound = E69.bisect_factor(run, model.target_on, model.size, bracket, APL_STEP,
                                                   f"{label} {'static factor' if whole else 'APL scale'}")
@@ -868,9 +869,10 @@ def part_0(out: Path, wirings: Sequence[str] = ALL_WIRINGS) -> dict:
                                       changed_from_fit=_counts_diff(b, m.saved['on'])['counts_differ'],
                                       passes=bool(np.array_equal(A91, Ako) and ds['exact']))
             print(f"E95 0 setter_real: {res['setter_real']}", flush=True)
-            # one odor: the column of the odor whose olfsysm index differs most from its output column
+            # one odor: the column of the odor whose olfsysm index differs most from its output column (the middle
+            # column when the two orders are the same)
             order = np.asarray(m.order, dtype=int)
-            j = int(np.argmax(np.abs(order - np.arange(n_od)))) if (order != np.arange(n_od)).any() else 0
+            j = int(np.argmax(np.abs(order - np.arange(n_od)))) if (order != np.arange(n_od)).any() else n_od // 2
             Mj = np.zeros((len(v), n_od))
             Mj[:, j] = (L['Lb'] + L['Lc']).to_numpy(dtype=float)[:, j]
             m.ext = Mj
