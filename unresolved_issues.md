@@ -30,9 +30,11 @@ directory's notes/ and are linked from here.
   - `realism` now says when the response rates themselves were not scored.
   - by_variant.csv was rescored. 30 variants are newly flagged by the response rate ρ with APL on (E85 19, E87 8, E80 3),
     and 4 of E92's 16 B1 points (archived in from_viki/B/), as hal's own post of 2026-11-13 22:41 reported them.
-  - 64 rows are still without response rates:
-    - E87's and E88's D1 runs: their APL-off run is the family's and is not archived again, so only the APL-on bands are read.
-    - E92's 12 B2 points: hal's, not archived yet.
+  - 52 rows are still without response rates: E87's and E88's D1 runs, whose APL-off run is the family's and is not
+    archived again, so only the APL-on bands are read.
+  - E92's 28 points (B1 and B2) were archived under B/ on 2026-11-14 00:21 (hal), its staging copy from_viki/ removed
+    (byte for byte the same as B/), and by_variant.csv rescored at 00:48: each point appears once, with the response
+    rates, odors-per-KC distances and response rate ρ of runs_B1.csv / runs_B2.csv and their 4 flags.
   - analyses/apl_effect_metrics.py was rerun on raw counts and under the readout, with the corrected flags and the variants
     added since. The tables are in results/apl_effect_metrics/rerun_2026-11-14/; the shared folder's tables are left as
     they were.
@@ -50,7 +52,6 @@ directory's notes/ and are linked from here.
       the recordings, read on one held-out wiring (P3) against all recordings.
     - The loss series and the best-models table did not change.
 - **Remains.**
-  - E92's B2 points are scored once hal archives them (nothing to change).
   - Whether searched inputs, read on a single wiring against recordings half of which they were searched on, belong in
     the progress plot's ρ series is a question for the summary's rules (a Fable host or Tom). ρ is a description and
     chooses nothing, but the plot now shows a jump that no model as a population makes.
