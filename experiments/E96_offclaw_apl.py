@@ -97,13 +97,14 @@ Parts (CLI `--part`):
 
 Deviations from the entry, forced by the code or the data:
 - The counts are read with the loader's filters, both synaptic sites in the ROI (`filter_synapses_to_roi`). The entry's
-  probe (7,479 on no claw, 14,576 on kept claws, 2,820 on dropped claws, 8,713 in the peduncle) appears to have used the
-  presynaptic site alone and to have counted the synapses with claw ID -1 that the loader keeps on the wiring's 62 claws
-  with ID -1 (Pratyush's claw of spatially unclustered synapses from one PN) as on no claw. With the loader's filters the
-  loader keeps 14,808 (14,570 on claws with an ID of 0 or more and 238 with ID -1 on the wiring's -1 claws), drops 7,234
-  on no claw (7,233 with ID -1, 1 without an ID) and 2,816 on claws the wiring drops; 8,701 lie in the peduncle. Part 0
-  reports both; the components use the loader's split (the 238 are in the model's weights already, so they are not
-  added again).
+  probe (7,479 on no claw, 14,576 on kept claws, 2,820 on dropped claws, 8,713 in the peduncle) used the presynaptic
+  site alone and counted the synapses with claw ID -1 that the loader keeps on the wiring's 62 claws with ID -1
+  (Pratyush's claw of spatially unclustered synapses from one PN) as on no claw: read that way (part 0's
+  presynaptic_site_only) the counts give 7,479 and 8,713 exactly, and 14,574 and 2,822 (2 synapses from the probe's).
+  With the loader's filters the loader keeps 14,808 (14,570 on claws with an ID of 0 or more and 238 with ID -1 on the
+  wiring's -1 claws), drops 7,234 on no claw (7,233 with ID -1, 1 without an ID) and 2,816 on claws the wiring drops;
+  8,701 lie in the peduncle. Part 0 reports both; the components use the loader's split (the 238 are in the model's
+  weights already, so they are not added again).
 - The pooled share's rule ("B3 lower than B2 at the same size by 0.0015 or more") is read at the size of the fitted
   mode's best point (B3 has the offclaw_ped counts; with mode offclaw the same comparison is used for the pool).
 - B3_pool1 (s = 1, no component) is B3's reference, not a setting of the choice or of the equal rule.
@@ -139,7 +140,7 @@ Usage (from the repository root; one 16-thread process at a time on viki; check 
     OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ./venv/bin/python -u -m experiments.E96_offclaw_apl --part D \
         --pop S --start e95 > outputs/E96_offclaw_apl/D_e95_hal.log 2>&1
   (its fits.csv rows and histories go to the shared results folder as viki's do; it needs viki's runs_B.csv and
-  readings.csv there, and its own part 0 cache: run --part 0 --wirings real first, about 3 min), then copy its fits'
+  readings.csv there and olfsysm at 9881846 or later, pulled; no rebuild, the change is Python only), then copy its fits'
   outputs: `mkdir -p <shared>/data/model_outputs/E96_offclaw_apl/from_hal && cp outputs/E96_offclaw_apl/*_g1e_*.parquet
   <shared>/data/model_outputs/E96_offclaw_apl/from_hal/` (Dscore and variants read them there).
     ./venv/bin/python -u -m experiments.E96_offclaw_apl --part Dscore
