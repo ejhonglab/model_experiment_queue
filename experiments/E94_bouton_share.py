@@ -1843,7 +1843,7 @@ def part_steps(out: Path, variants: Optional[Sequence[str]] = None) -> Optional[
             r = q.iloc[0]
             o = load_any(r.source, r.tag, w)
             soma.append(A.somata_pairs(o['on'][1], o['off'][1]).assign(family=v, wiring=w, source=r.source, tag=r.tag))
-            st_on = load_stage94(r.tag) if r.source == 'E94' else None
+            st_on = load_stage94(r.tag) if r.source == 'E94' else (dict(fit_stage(w, 'on')) if r.source == 'saved' else None)
             if st_on is None:
                 raise RuntimeError(f'{r.tag}: no stage matrices')
             st_off = dict(fit_stage(w, 'off'))
