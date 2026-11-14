@@ -1439,14 +1439,86 @@ def comparison_table(out: Path) -> str:
     raise NotImplementedError
 
 
+def provenance(out: Path, part: str, **extra) -> None:
+    """provenance_<part>.json's dated records: the commits, olfsysm's build, the model's provenance with the lab's input
+    for the simulation parts, the settings and `extra` (the point lists' per-point records are in its 'points')."""
+    import olfsysm
+    path = out / f'provenance_{part}.json'
+    old = _read_json(path)
+    rec = dict(time=time.strftime('%Y-%m-%d %H:%M'), host=_host(), **H.code_commits(), **extra,
+               olfsysm_build={k: v for k, v in olfsysm.build_info().items() if k not in ('git_diff', 'cpp_diff')})
+    if part in ('0', 'B', 'C', 'D', 'E', 'F'):
+        rec['model_provenance'] = H.model_provenance(orn_deltas=H.apl16_orn_deltas())
+    runs = old.get('runs', [])
+    runs.append(rec)
+    old.update(script='experiments/E95_static_apl.py', part=part, runs=runs,
+               settings=dict(ARMS={k: list(v) for k, v in ARMS.items()}, APL_BRACKET=APL_BRACKET, STATIC_BRACKET=STATIC_BRACKET,
+                             APL_STEP=APL_STEP, B3_EXPONENTS=B3_EXPONENTS, PERM_SEED=PERM_SEED, D_DOSE=D_DOSE, D_SIZES=D_SIZES,
+                             D3_SIZE=D3_SIZE, CHOICE_MIN_GAIN=CHOICE_MIN_GAIN, CONTROL_RATIO=CONTROL_RATIO,
+                             EQUAL=dict(PATTERN=EQUAL_PATTERN, RAW=EQUAL_RAW, MEAN=EQUAL_MEAN), EQUAL_KINDS=EQUAL_KINDS,
+                             F_COND=F_COND, F_FLAT_BOUNDS=F_FLAT_BOUNDS, F_MAXFEV=F_MAXFEV, MODE_NAMES=MODE_NAMES,
+                             STATIC_NAMES=STATIC_NAMES))
+    _write_json(path, old)
+
+
 def main() -> None:
+    import warnings
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
-    ap.add_argument('--part', required=True, choices=('0', 'A', 'B', 'C', 'D', 'score', 'E', 'F', 'Fscore', 'G', 'steps',
-                                                      'variants', 'table'))
+    ap.add_argument('--part', required=True, choices=('0', 'A', 'A1', 'A2', 'A3', 'A4', 'A5', 'B', 'C', 'D', 'score', 'E',
+                                                      'F', 'Fscore', 'G', 'steps', 'variants', 'table'))
     ap.add_argument('--arm', default=None, help='B: B1..B5, C: C1..C6, D: D1..D3 (comma-separated; default all of the part)')
     ap.add_argument('--wirings', default=None, help="'S', 'T', 'all8' or a comma-separated list (0: all8; B / C / D: S)")
+    ap.add_argument('--pop', default='S', choices=('S', 'T'), help='F: which fits')
+    ap.add_argument('--component', default='uniform', choices=COMPONENTS, help="F: the component ('connectome' only on "
+                    "its rule)")
+    ap.add_argument('--force', action='store_true', help="F: run fits the entry's rules do not allow")
+    ap.add_argument('--dry-run', action='store_true', help='F: print the commands only')
+    ap.add_argument('--workers', type=int, default=4, help='score: co-response processes')
+    ap.add_argument('--no-co', action='store_true', help='score: skip the co-response readings')
+    ap.add_argument('--no-zcell', action='store_true', help="score: skip E73's per-KC readings")
+    ap.add_argument('--variants', default=None, help='steps: comma-separated variants (default: chosen and equal settings)')
     a = ap.parse_args()
-    raise NotImplementedError(f'E95 part {a.part}: not written yet')
+    warnings.simplefilter('ignore', RuntimeWarning)
+    out = out_dir()
+    t0 = time.time()
+    if a.part == '0':
+        ws = _wirings(a.wirings or 'all8')
+        provenance(out, '0', wirings=list(ws))
+        part_0(out, ws)
+    elif a.part == 'A':
+        provenance(out, 'A')
+        part_a(out)
+    elif a.part in ('A1', 'A2', 'A3', 'A4', 'A5'):
+        {'A1': a1_split, 'A2': a2_per_kc, 'A3': a3_sizes, 'A4': a4_apl_weights, 'A5': a5_archive}[a.part](out)
+    elif a.part in ('B', 'C', 'D'):
+        ws = _wirings(a.wirings or 'S')
+        arms = [x for x in a.arm.split(',') if x] if a.arm else None
+        provenance(out, a.part, wirings=list(ws), arms=arms)
+        part_points(out, a.part, arms, ws)
+    elif a.part == 'score':
+        score(out, a.workers, coresponse=not a.no_co, zcell=not a.no_zcell)
+    elif a.part == 'E':
+        provenance(out, 'E')
+        part_e(out)
+    elif a.part == 'F':
+        if not a.dry_run:
+            provenance(out, 'F', pop=a.pop, wirings=a.wirings, component=a.component)
+        part_f(out, a.pop, None if a.wirings is None else _wirings(a.wirings), a.component, force=a.force,
+               dry_run=a.dry_run)
+    elif a.part == 'Fscore':
+        f_scores(out)
+        comparison_table(out)
+    elif a.part == 'G':
+        part_g(out)
+    elif a.part == 'steps':
+        part_steps(out, None if a.variants is None else [x for x in a.variants.split(',') if x])
+        comparison_table(out)
+    elif a.part == 'variants':
+        write_variants(out)
+    elif a.part == 'table':
+        figure(out)
+        comparison_table(out)
+    print(f'E95 {a.part} done in {time.time() - t0:.0f}s', flush=True)
 
 
 if __name__ == '__main__':
