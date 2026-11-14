@@ -1880,7 +1880,9 @@ def score_e(write: bool = True, name: str = 'F') -> dict:
     against the wirings' saved fits (I0), with realism; the family as a population of eight by E91's part D rule
     (E_PASS_GAIN below REF_ALL8, at least E_WIRINGS_LOWER of the eight lower, every fit inside the bands, the raw-count
     loss not above E_RAW_REF by more than E_RAW_SLACK, the mean APL effect within E_MEAN_SLACK of the flies').
-    e_scores.csv, e_scores.json."""
+    e_scores.csv, e_scores.json, and e_readings.csv: each population, refitted (fit 'refit') and at the saved fits (fit
+    'I0'), read like part B's populations (`unit_scores` and `spread_rows` against all recordings, on the 120 and the 66
+    megamat pairs, under the readout and on raw counts)."""
     from experiments import E72_wiring_population as E72
     fits = _fits()
     tg = targets93()
@@ -1903,11 +1905,22 @@ def score_e(write: bool = True, name: str = 'F') -> dict:
                          **{c: fr.get(c) for c in ('fixed_thr', 'wAPLKC_scale', 'wKCAPL_scale', 'wAPLPN_scale', 'wPNAPL_scale',
                                                    'kc_kc_inh', 'n_evals')}, fit_loss=fr.get('loss'), **E83.realism(o)))
     by = {r['unit']: r for r in rows}
+    readings = []
     for unit, ws in (('S', S_WIRINGS), ('T', T_WIRINGS), ('all8', ALL_WIRINGS)):
         if not all(w in got for w in ws):
             continue
         dp = {ro: E83.population([E83.pair_distances(got[w][1], ro) for w in ws]) for ro in ('cal', 'raw')}
         d0 = {ro: E83.population([E83.pair_distances(E83.saved_fit(w)['saved'], ro) for w in ws]) for ro in ('cal', 'raw')}
+        for fit, dd in (('refit', dp), ('I0', d0)):
+            for ro in ('cal', 'raw'):
+                us = unit_scores(dd[ro], tg)
+                scal = {k: us[k] for k in ('mean_effect', 'z8_loss', 'z8_pattern', 'z8_rho', 'z8_pattern66', 'z8_err_ester',
+                                           'z8_err_alcohol', 'halfA_pattern', 'halfB_pattern', 'halfC_pattern', 'halfD_pattern',
+                                           'mean_on', 'mean_off', 'effect_15ol_16ol') if k in us}
+                for pairs in ('all', 'megamat'):
+                    for sp in spread_rows(dd[ro], {'z8': tg['z8']}, pairs):
+                        readings.append(dict(input=name if fit == 'refit' else 'I0', fit=fit, unit=unit, readout=ro, **{k: v for k, v in sp.items()
+                                             if k != 'target'}, **scal))
         sc, sc0 = E83.effect_scores(dp['cal'], tg), E83.effect_scores(d0['cal'], tg)
         r = dict(unit=unit, pattern_all=sc['z8_pattern'], pattern_all_I0=sc0['z8_pattern'], mean_effect=sc['mean_effect'],
                  loss=sc['z8_loss'], raw_loss=E83.effect_scores(dp['raw'], tg)['z8_loss'],
@@ -1921,6 +1934,8 @@ def score_e(write: bool = True, name: str = 'F') -> dict:
                                    and e['raw_loss'] <= E_RAW_REF + E_RAW_SLACK and abs(e['mean_effect'] - FLIES_MEAN) <= E_MEAN_SLACK)
     if write:
         pd.DataFrame(rows).to_csv(out_dir() / 'e_scores.csv', index=False)
+        if readings:
+            pd.DataFrame(readings).to_csv(out_dir() / 'e_readings.csv', index=False)
         _write_json(out_dir() / 'e_scores.json', res)
     return res
 
