@@ -1011,16 +1011,19 @@ bare ID ("the per-glomerulus drive normalization sweep (E20)", not "E20").
   applies to a header listing what a column's "a / b / c" values are (`APL→bouton /<br>APL→KC<br>(×
   baseline)`) and to a first-column header listing the table's fixed settings. Headers that
   name statistics stay on one line for now.
-- **The APL effect in the best-models table and the progress plot (Tom, 2026-11-09).** The best-models
-  table carries three rows for the APL effect on odor-odor distances (the APL-effect loss, the mean APL
-  effect, ρ on the per-pair APL effect, all placeholders on results/apl_effect/by_variant.csv) and the
+- **The APL effect in the best-models table and the progress plot (Tom, 2026-11-09; rows added 2026-11-13 16:22).** The
+  best-models table carries seven rows for the APL effect on odor-odor distances (the APL-effect loss, the mean
+  APL effect, the pattern part, its amplitude part / shape part, the model's spread as a multiple of the flies',
+  ρ on the per-pair APL effect and Pearson r on the per-pair APL effect, all placeholders on
+  results/apl_effect/by_variant.csv; "The main goal for new experiments", how the main target is read) and the
   response rates with APL on and off, and ends with a row of buttons, one under every column, written
   `!button[matrices](results/apl_effect/matrices/<results folder>__<tag>.png)` (the KC data column:
   `.../matrices/data.png`). A button opens, full screen like a figure, the column's distance matrices:
   the KC data's APL on (control flies), APL off (APL output blocked (TNT)) and their difference in the
   top row, the model's same three in the bottom row. `kcq/apl_effect.py` draws every figure a button in
   the template names, so a new column needs only its button cell. The progress plot has the APL-effect
-  loss and ρ on the per-pair APL effect as series.
+  loss and ρ on the per-pair APL effect as series, each the running best of its own statistic; the ρ series is
+  a description, and no model is chosen by it.
 - **Natural-source alignment is three numbers (Tom, 2026-11-08).** Every table, comparison
   script and summary analysis that gives the natural-source alignment gives it with APL on,
   with APL off and as the difference (APL on minus APL off), never APL off alone: three rows
@@ -1324,6 +1327,67 @@ So:
 - running experiments (the batched-proxy fit E60 on atlas, the two-ρ fit E63 on viki, the bounded input
   oracle E64 on hal) finish as planned and their write-ups report the APL-effect loss beside their own
   statistics.
+
+**How the main target is read (Yang's recommendations of 2026-11-13, adopted by Tom on 2026-11-13 16:22).** Yang asked
+(2026-11-13 13:41, in viki's terminal) that five recommendations become rules for proposals, gates and
+write-ups. The goal above is unchanged: the APL-effect loss is the quantity to improve, inside the realism bands.
+The evidence is `analyses/apl_effect_metrics.py` (86f0d69; tables in results/apl_effect_metrics/): the per-pair APL
+effect of every saved variant on raw counts (1546 distinct variants, 1164 inside the bands), scored against two
+random halves of the recordings, 200 times. "Consistency" below is the ρ over variants between a measure's values
+against one half and against the other (1: both halves put the variants in the same order).
+
+1. **The pattern part decides; a correlation never does.** Where variants are compared on the pattern of the
+   effect (a choice within an experiment, a gate, "best" in a write-up or a table), the measure is the pattern
+   part of the loss (`apl_effect_rmse_centered`), read with the loss and the mean APL effect beside it, as the
+   gates since the glomerulus profile of APL inhibition (E75) read it. No variant is chosen, gated or called best
+   by ρ on the per-pair APL effect or by any other correlation; ρ is still reported beside every loss. Evidence:
+   consistency 0.82 for the pattern part and 0.84 for the loss against 0.62 for ρ, and the best variant of an
+   experiment by ρ is not the pattern part's in 27 of 56 experiments. ρ sees neither the mean nor the spread of
+   the effect: inside the bands the 25 variants with the highest ρ share 1 with the 25 lowest pattern parts and
+   none with the 25 lowest losses.
+2. **The pattern part is reported with its amplitude part and its shape part.** The split is exact, pattern² =
+   amplitude² + shape² (`kcq.harness.apl_effect_spread_shape`, pyolfsysm's `effect_spread_shape`; columns
+   `spike_counts_cosine__apl_effect_amplitude`, `_shape`, `_sd_model`, `_sd_data`, `_sd_ratio` of
+   results/apl_effect/by_variant.csv). With sd the standard deviation of a per-pair effect over the 120 pairs and r
+   the Pearson correlation of the model's effect with the data's: "the amplitude part" is |sd_model − sd_data|
+   (the model spreads its effect over the pairs too widely or too narrowly), "the shape part" is
+   sqrt(2 sd_model sd_data (1 − r)) (zero when the model's effect is the data's stretched about its mean). A table
+   that gives a pattern part a conclusion rests on gives both parts and the spread ratio (sd_model / sd_data)
+   beside it, for the reading the conclusion is drawn on (raw counts, or the calibrated readout's pair distances
+   through the same function); a proposal says whether its expected gain is in the spread or in the shape; a
+   gate's table carries them, and its thresholds stay on the pattern part. Neither part is a measure to choose
+   by: the amplitude part is the least consistent of all (0.36), and the shape part grows with the model's
+   spread. Evidence: the median variant inside the bands spreads its effect 1.44 times as widely as the flies, and
+   its squared pattern part is 90 % shape and 10 % amplitude; seven of the eight variants with the highest ρ have
+   1.5 to 1.8 times the flies' spread and pattern parts of 0.056 to 0.074 (the lowest of any variant is 0.049),
+   which is where ρ and the pattern part disagree.
+3. **Pairs are not weighted by their reliability.** No loss, fit, gate or table weights the 120 pairs by how well
+   the recordings measure them. Evidence: the pattern part weighted by the inverse squared standard error of each
+   pair's effect follows the unweighted one (ρ 0.97 over the variants inside the bands), is no more consistent
+   (0.81 against 0.82) and changes the best variant in 8 of 56 experiments.
+4. **A correlation is a description.** "ρ on the per-pair APL effect" (`apl_effect_spearman`) stays the
+   correlation that is quoted, with its ceiling. Where the two parts are shown, "Pearson r on the per-pair APL
+   effect" (`apl_effect_pearson`) goes beside it, because the shape part is built from r. Evidence: on raw counts
+   Pearson r is more consistent than ρ (0.71 against 0.62), and it has the same blind spot: neither sees the mean
+   or the spread.
+5. **Per-odor readings of the error are leads.** The per-odor part of the loss and a single odor's share of an
+   error (`kcq.harness.apl_effect_pair_parts`) are reported as leads, with this caution, never as results, and no
+   mechanism is proposed on single odors' shares without a check on halves of the recordings or on held-out data.
+   Evidence: consistency 0.55 for the per-odor part against 0.92 for the pair-specific part; a variant's
+   single-odor shares of its error agree at about 0.4 to 0.6 between halves of the flies, and at 0.1 to 0.4 for
+   the 25 variants with the lowest pattern parts (chat.md, 2026-11-13).
+
+Scope and limits. The rules hold for proposals, gates and write-ups from 2026-11-13 16:22; claimed and running experiments
+keep the gates of their entries (they read the pattern part already and none uses a correlation), and earlier
+notes are not rewritten. The saved tables are of raw counts. A read-only check by hal (2026-11-13, chat.md; 1125
+distinct archived variants inside the bands) agrees under the calibrated readout and adds four things. Within an
+experiment the best variant changes between the halves in 18 of 56 experiments by the pattern part and in 32 by ρ
+(raw counts). Under the readout the mean part is near zero and orders nothing, so the loss is inconsistent (0.44)
+where the pattern part is not (0.81). ρ and the pattern part mostly agree there (their 25 best share 15), the
+models' spread being 1.10 times the flies' at the median, and Pearson r is no more consistent than ρ (0.64, 0.63).
+And no measure names a single best variant reliably: the variant that one half of the recordings calls best by
+pattern part is at about rank 50 to 70 of 1125 by the other half, so a choice between near-ties is confirmed on
+held-out recordings or wirings, as the gates do, and not read off all recordings.
 
 The previous main goal (Tom, 2026-11-09 13:00), kept for the record: ρ on odor-odor distances with APL on
 against the control flies and with APL off against APL output blocked (TNT) (ceilings 0.98 / 0.97; the
