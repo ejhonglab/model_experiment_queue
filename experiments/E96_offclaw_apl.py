@@ -992,7 +992,9 @@ def a2_connectomes(base: Path = A2_DIR) -> Tuple[pd.DataFrame, pd.DataFrame]:
             dist = dist[np.isfinite(dist)]
             q = np.quantile(dist, [0.25, 0.5, 0.75]) if dist.size else [np.nan] * 3
             on = ca.claw_id.notna()
-            srows.append(dict(dataset=ds, apl_id=apl, apl=str(g.apl_instance.iloc[0]) if 'apl_instance' in g else '',
+            inst = g.apl_instance.iloc[0] if 'apl_instance' in g else np.nan
+            side = g.apl_side.iloc[0] if 'apl_side' in g else np.nan
+            srows.append(dict(dataset=ds, apl_id=apl, apl=str(inst) if isinstance(inst, str) else f'APL ({side})',
                               calyx_synapses=int(len(ca)), peduncle_synapses=int(len(ped)), share_within_2um=float(on.mean()),
                               d_p25=q[0], d_p50=q[1], d_p75=q[2]))
             kcs = pd.Index(sorted(set(ca.partner_id) & set(n_claws.index)))
@@ -1003,7 +1005,8 @@ def a2_connectomes(base: Path = A2_DIR) -> Tuple[pd.DataFrame, pd.DataFrame]:
             pc = ped.groupby('partner_id').size().reindex(kcs).fillna(0).to_numpy(dtype=float)
             n = n_claws.reindex(kcs).to_numpy(dtype=float)
             for lab, v in (('calyx_off_claws', off), ('calyx_on_claws', onc), ('peduncle', pc), ('off_claws_and_peduncle', off + pc)):
-                krows.append(dict(dataset=ds, apl_id=apl, kind=lab, n_kcs=int(len(kcs)), synapses=float(v.sum()),
+                krows.append(dict(dataset=ds, apl_id=apl, apl=srows[-1]['apl'], kind=lab, n_kcs=int(len(kcs)),
+                                  synapses=float(v.sum()),
                                   per_kc_mean=float(v.mean()), cv_kcs=float(v.std() / v.mean()) if v.mean() > 0 else np.nan,
                                   kcs_none_share=float((v == 0).mean()), r_n_claws=E95._corr(n, v)[0],
                                   loglog_slope_n=_loglog(n, v), n_claws_mean=float(n.mean()),
