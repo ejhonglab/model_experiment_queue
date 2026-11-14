@@ -1296,6 +1296,69 @@ def _pat(rd: pd.DataFrame, variant: str, unit: str, target: str, col: str = 'pat
     return E89._pat(rd, variant, unit, target, col, readout)
 
 
+SPREAD_KEYS = ('apl_effect_amplitude', 'apl_effect_shape', 'apl_effect_sd_model', 'apl_effect_sd_data', 'apl_effect_sd_ratio')
+
+
+def _spread_rows(d: Dict[str, pd.Series], tg: Dict[str, pd.Series], **meta) -> List[dict]:
+    """Per target of `tg`, the pattern part of a run's or population's distances `d` and its amplitude and shape parts
+    (`H.apl_effect_spread_shape`; the rules of 2026-11-13 16:22: every pattern part a conclusion rests on is given with
+    both parts and the spread ratio), with Pearson's r and ρ on the per-pair APL effect beside."""
+    rows = []
+    me = E83._cs(H.apl_effect(d['on'], d['off']))
+    for t, de0 in tg.items():
+        de = E83._cs(de0).reindex(me.index)
+        # (H's functions pair the data by H's canonical orientation of the pairs, E83's `_cs` by another: the target
+        # goes in H's, or pairs whose orientations differ would be dropped silently)
+        sp = H.apl_effect_spread_shape(d['on'], d['off'], H.canonical_pairs(de))
+        err = (me - me.mean()) - (de - de.mean())
+        pattern = float(np.sqrt(np.mean(err.to_numpy() ** 2)))
+        if not np.isclose(pattern ** 2, sp['apl_effect_amplitude'] ** 2 + sp['apl_effect_shape'] ** 2, rtol=1e-9, atol=1e-12):
+            raise RuntimeError(f'{t}: the amplitude and shape parts do not add up to the pattern part (pairs misaligned?)')
+        rows.append(dict(meta, target=t, pattern=pattern,
+                         amplitude=sp['apl_effect_amplitude'], shape=sp['apl_effect_shape'], sd_model=sp['apl_effect_sd_model'],
+                         sd_data=sp['apl_effect_sd_data'], sd_ratio=sp['apl_effect_sd_ratio'],
+                         pearson=float(np.corrcoef(me.to_numpy(), de.to_numpy())[0, 1]), rho=H.spearman(me, de)))
+    return rows
+
+
+def spread91(out: Path) -> pd.DataFrame:
+    """spread.csv: for every variant of runs_*.csv on S and T (populations, where all four wirings have a run) and for D's
+    fitted populations (each stage's wirings, and their unchanged fits), under the calibrated readout (K set on each
+    run's APL-on counts, the readings' 'cal') and on raw counts, against every target of E89's `targets89`: the pattern
+    part, its amplitude and shape parts, the spread ratio, Pearson's r and ρ on the per-pair APL effect."""
+    from experiments import E72_wiring_population as E72
+    tg = E89.targets89()
+    rows = []
+    runs = runs_table(out)
+    for (arm, variant), g in runs.groupby(['arm', 'variant'], sort=False):
+        ds = {r.wiring: _distances(r.source, r.tag, r.wiring) for r in g.itertuples()}
+        for unit, ws in (('S', E83.S_WIRINGS), ('T', E83.T_WIRINGS)):
+            if not all(w in ds for w in ws):
+                continue
+            for ro in ('cal', 'raw'):
+                d = E83.population([ds[w][ro] for w in ws])
+                rows += _spread_rows(d, tg, kind='run', arm=arm, variant=variant, unit=unit, readout=ro)
+    fits = _fits91(out)
+    for stage, (pop, k) in D_STAGES.items():
+        got = {}
+        for w in _wirings(pop):
+            tag = d_tag(w, k)
+            if not fits.empty and tag in set(fits.tag):
+                o = E72.load_fit(EXPERIMENT, tag)
+                if o is not None:
+                    got[w] = o
+        if len(got) < len(_wirings(pop)):
+            continue
+        for ro in ('cal', 'raw'):
+            d = E83.population([E83.pair_distances(got[w], ro) for w in got])
+            d0 = E83.population([E83.pair_distances(E83.saved_fit(w)['saved'], ro) for w in got])
+            rows += _spread_rows(d, tg, kind='fit', arm='D', variant=f'D_{stage}', unit=pop, readout=ro)
+            rows += _spread_rows(d0, tg, kind='fit', arm='D', variant=f'D_{stage}_unchanged', unit=pop, readout=ro)
+    df = pd.DataFrame(rows)
+    df.to_csv(out / 'spread.csv', index=False)
+    return df
+
+
 # ---------------------------------------------------------------------------
 # part C: the choice, the gate, the control, the equal rule
 
@@ -1744,7 +1807,8 @@ def score_d(out: Path, write: bool = True) -> dict:
                        raw_loss=raw['z8_loss'], raw_loss_unchanged=raw0['z8_loss'], err_ester=sc['z8_err_ester'],
                        err_alcohol=sc['z8_err_alcohol'], lower=bool(sc['z8_pattern'] < sc0['z8_pattern']),
                        **{c: fr.get(c) for c in ('fixed_thr', 'wAPLKC_scale', 'wKCAPL_scale', 'wAPLPN_scale', 'wPNAPL_scale',
-                                                 'kc_kc_inh', 'claw_inh_pool', 'loss', 'n_evals')}, **rl)
+                                                 'kc_kc_inh', 'claw_inh_pool', 'n_evals')},
+                       fit_loss=fr.get('loss'), **rl)
             rows.append(row)
             st[w] = (d, d0, row)
         rs = {}
@@ -2004,7 +2068,8 @@ def provenance(out: Path, part: str, **extra) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('--part', required=True,
-                    choices=('0', 'A', 'Acheck', 'B1', 'B2', 'B3', 'co', 'C', 'score', 'D', 'Dscore', 'E', 'variants', 'table'))
+                    choices=('0', 'A', 'Acheck', 'B1', 'B2', 'B3', 'co', 'C', 'score', 'D', 'Dscore', 'E', 'variants', 'table',
+                             'spread'))
     ap.add_argument('--workers', type=int, default=16, help='B2 / C: one-odor workers (16); co / score: processes (4)')
     ap.add_argument('--wirings', default='S', help="0 / A / B1 / B2 / B3: 'S', 'T' or a comma-separated list")
     ap.add_argument('--stage', default='S2', choices=list(D_STAGES), help='D: which fits')
@@ -2045,6 +2110,8 @@ def main() -> None:
         part_e(out)
     elif args.part == 'variants':
         write_variants(out)
+    elif args.part == 'spread':
+        spread91(out)
     elif args.part == 'table':
         figure(out)
         comparison_table(out)

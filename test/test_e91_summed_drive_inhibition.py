@@ -380,3 +380,20 @@ def test_e89s_c1_point_reproduced():
     assert res['apl_factor'] == float(r89['apl_factor'])
     assert np.array_equal(res['on'][1].to_numpy(), ref['on'][1].to_numpy())
     assert np.isfinite(res['stats']['U']).all() and (res['stats']['U'] >= 0).all()
+
+
+def test_spread_rows_split_the_pattern_part():
+    """`_spread_rows` gives each target's pattern part with its amplitude and shape parts (pattern^2 = amplitude^2 +
+    shape^2), the spread ratio, Pearson's r and ρ, with the metadata passed."""
+    rng = np.random.default_rng(1)
+    idx = pd.MultiIndex.from_tuples([(a, b) for i, a in enumerate(H.APL16_ODORS) for b in H.APL16_ODORS[i + 1:]],
+                                    names=['odor_a', 'odor_b'])
+    on = pd.Series(rng.uniform(0.6, 1.0, len(idx)), index=idx)
+    off = pd.Series(on.to_numpy() - rng.uniform(0.0, 0.3, len(idx)), index=idx)
+    tg = {'t1': pd.Series(rng.normal(0.18, 0.05, len(idx)), index=idx), 't2': (on - off) * 1.5}
+    rows = X._spread_rows({'on': on, 'off': off}, tg, arm='B1', variant='v')
+    assert [r['target'] for r in rows] == ['t1', 't2'] and all(r['arm'] == 'B1' for r in rows)
+    for r in rows:
+        assert np.isclose(r['pattern'] ** 2, r['amplitude'] ** 2 + r['shape'] ** 2, rtol=1e-9)
+        assert np.isclose(r['sd_ratio'], r['sd_model'] / r['sd_data'])
+    assert rows[1]['shape'] < 1e-7 and np.isclose(rows[1]['sd_ratio'], 1 / 1.5)        # the data's effect, stretched
