@@ -43,7 +43,10 @@ matrix by that shuffle (pyolfsysm.wpnkc_shuffles) before any gain; tag prefix wi
 --wiring-file PARQUET --wiring-tag TAG replaces it with a saved matrix instead (a lesioned wiring, E54); tag
 prefix wiring-<TAG>_.
 Bound controls (E31): `--aplpn-max F`, `--aplpn-fixed F`, `--aplkc-min F` bound or fix the APL->bouton /
-APL->KC scales relative to the base's tuned values (use --tag to name the variant).
+APL->KC scales relative to the base's tuned values (use --tag to name the variant). `--aplpn-hold F` (E94) holds the
+APL->bouton scale at F x the base's tuned value while the KC->APL and bouton->APL scales stay tied to the APL->KC scale,
+as in the default fit (`--aplpn-fixed` fixes the bouton->APL scale at F x the base's as well); tag prefix aplpnhold_
+(after the --apl-divisive prefix).
 KC-KC held (the KC-KC-held fits proposed from E51): `--kckc-fixed S` holds the KC-KC scale (kc_kc_inh) at S and fits the other three
 parameters; with --init-from the start is the seed's parameters with its KC-KC replaced by S; tag
 prefix kckc<S>_ (after the block prefix). --loss rho (E63) puts rho<W>_ (W the matrix terms' weight) after the block
@@ -299,6 +302,21 @@ def apl_divisive_kws(divisive: bool) -> dict:
 def apl_divisive_tag(divisive: bool) -> str:
     """(E92) The tag part of --apl-divisive: div_; '' when off."""
     return 'div_' if divisive else ''
+
+
+def aplpn_hold_kws(hold: Optional[float]) -> dict:
+    """(E94) The fits.csv column of --aplpn-hold: {} when not given (the rows as before), else {'aplpn_hold': F}."""
+    if hold is None:
+        return {}
+    f = float(hold)
+    if not (np.isfinite(f) and f >= 0.0):
+        raise ValueError(f'--aplpn-hold must be finite and not negative (got {hold})')
+    return {'aplpn_hold': f}
+
+
+def aplpn_hold_tag(hold: Optional[float]) -> str:
+    """(E94) The tag part of --aplpn-hold: aplpnhold_; '' when not given (the value is in fits.csv's aplpn_hold)."""
+    return '' if hold is None else 'aplpnhold_'
 
 
 # (E82) the simulation ends this long after the pulse unless --sim-end says otherwise (E80's 0.25 s, olfsysm's tail)
@@ -1423,7 +1441,7 @@ def fit_one(k: float, orn, initial, wnorm, breadth, loss_fn, *, kckc0: float, ma
     block_proxy: Optional[dict] = None, kc_spiking: Optional[dict] = None,
     kc_thr_factor_fixed: Optional[np.ndarray] = None, claw_transfer: Optional[dict] = None,
     protocol: Optional[dict] = None, spike_times: bool = False, claw_inh_pool: Optional[float] = None,
-    apl_divisive: bool = False):
+    apl_divisive: bool = False, aplpn_hold: Optional[float] = None):
     """One joint fit; `kc_thr_factors` (K x KCs, `jitter_factors`) adds the K jittered runs of
     each condition (`jitter_conditions`) to every evaluation; `init_exact_expect` (not None)
     starts exactly at the `init_from` fit's parameters (`init_from_fit` with exact=True);
@@ -1444,7 +1462,10 @@ def fit_one(k: float, orn, initial, wnorm, breadth, loss_fn, *, kckc0: float, ma
     evaluation's as 'condition_spike_times'); `claw_inh_pool` (E91: `claw_inh_pool_kws`, the pooled share of the
     APL>claw inhibition the claws do not absorb) is a fixed model kwarg of every simulation of the fit (not passed
     when None); `apl_divisive` (E92: `apl_divisive_kws`, APL's inhibition of the claws as a divisor) likewise (not
-    passed when False)."""
+    passed when False); `aplpn_hold` (E94: F, not with `aplpn_fixed` or `aplpn_max`) holds the APL->bouton scale at F x
+    `initial`'s and fits the other three, the KC->APL and bouton->APL scales tied to the APL->KC scale as without it (from
+    the start's values; `aplpn_fixed` instead fixes the bouton->APL scale at F x `initial`'s and ties the KC->APL scale
+    only)."""
     from pyolfsysm.mb_model import optimize_mb_model_params
     wAPLKC = breadth_weights(wnorm['wAPLKC'], breadth, k)
     r19 = None if (claw_thr is None or apl_drive != 'claws') else e19_row(claw_thr, k, kckc0)
@@ -1501,6 +1522,16 @@ def fit_one(k: float, orn, initial, wnorm, breadth, loss_fn, *, kckc0: float, ma
         # non-optimized bouton scales would be tied to it too and move with it
         tie = ('wKCAPL_scale',)
         print(f'APL->bouton scale fixed at {aplpn_fixed:g}x the base ({init["wAPLPN_scale"]:.4g})', flush=True)
+    elif aplpn_hold is not None:
+        if aplpn_max is not None:
+            raise ValueError('aplpn_hold with aplpn_max')
+        init['wAPLPN_scale'] = initial['wAPLPN_scale'] * float(aplpn_hold)
+        params.remove('wAPLPN_scale'); bounds.pop('wAPLPN_scale')
+        # (E94) the KC->APL and bouton->APL scales stay tied to the APL->KC scale, as with the default tie (True), whose
+        # candidates are these two once the APL->bouton scale is not fitted
+        tie = ('wKCAPL_scale', 'wPNAPL_scale')
+        print(f'APL->bouton scale held at {float(aplpn_hold):g}x the base ({init["wAPLPN_scale"]:.4g}); KC->APL and '
+            'bouton->APL tied to APL->KC', flush=True)
     elif aplpn_max is not None:
         hi = initial['wAPLPN_scale'] * aplpn_max
         init['wAPLPN_scale'] = min(init['wAPLPN_scale'], hi)
@@ -1751,6 +1782,9 @@ def main() -> None:
         help='bound the APL->bouton scale at <= F x the base\'s tuned value (E31)')
     ap.add_argument('--aplpn-fixed', type=float, default=None, metavar='F',
         help='fix the APL->bouton scale at F x the base\'s tuned value and fit the other three (E31)')
+    ap.add_argument('--aplpn-hold', type=float, default=None, metavar='F',
+        help='(E94) hold the APL->bouton scale at F x the base\'s tuned value and fit the other three, the KC->APL and '
+        'bouton->APL scales tied to the APL->KC scale as without it (unlike --aplpn-fixed); tag prefix aplpnhold_')
     ap.add_argument('--aplkc-min', type=float, default=None, metavar='F',
         help='bound the APL->KC scale at >= F x the base\'s tuned value (E31)')
     ap.add_argument('--apl-drive', default='claws', choices=['claws', 'spikes', 'spikes_only'],
@@ -2073,6 +2107,14 @@ def main() -> None:
         if args.block_proxy > 0:
             ap.error('--apl-divisive with --block-proxy is not supported (the proxy\'s replays were validated for the '
                 'subtractive form only)')
+    # (E94) the APL->bouton scale held, the bouton->APL scale tied
+    if args.aplpn_hold is not None:
+        if args.aplpn_fixed is not None or args.aplpn_max is not None:
+            ap.error('--aplpn-hold with --aplpn-fixed or --aplpn-max is not supported')
+        try:
+            aplpn_hold_kws(args.aplpn_hold)
+        except ValueError as e:
+            ap.error(str(e))
     initial, wnorm, wPNKC, breadth = bouton_base(orn, out_dir, args.claw_thr, gain=gain,
         gain_gloms=args.gain_glomeruli, wiring=args.wiring, wiring_seed=args.wiring_seed,
         apl_drive=args.apl_drive, base_params=args.base_params, info=base_info, input_tag=input_tag,
@@ -2116,7 +2158,8 @@ def main() -> None:
             + ('dnu' if args.apl_data_units == 'noise' else '') + '_')
     prefix = zcell_tag + band_tag + {'spikes': 'spk_', 'spikes_only': 'spko_'}.get(args.apl_drive, '') + ('' if args.claw_thr is None else f'thr{args.claw_thr:g}{claw_transfer_tag(claw_transfer)}_') + wiring_tag + (
         '' if gain is None else f'gain{gain:g}_') + rate_tag + block_tag + loss_tag + kckc_tag + kc_tag + thrin_tag + (
-        claw_inh_pool_tag(args.claw_inh_pool)) + apl_divisive_tag(args.apl_divisive) + proxy_tag + jit_tag
+        claw_inh_pool_tag(args.claw_inh_pool)) + apl_divisive_tag(args.apl_divisive) + aplpn_hold_tag(args.aplpn_hold) + (
+        proxy_tag) + jit_tag
     jit_factors, jit_meta = None, {}
     if jit_k > 0:
         jit_factors = jitter_factors(jit_k, len(breadth), jit_sigma, args.jitter_seed, jit_scale)
@@ -2161,7 +2204,8 @@ def main() -> None:
             **({} if not protocol else dict(protocol=protocol)),
             **({} if not save_spike_times else dict(spike_times=True)),
             **({} if args.claw_inh_pool is None else dict(claw_inh_pool=args.claw_inh_pool)),
-            **({} if not args.apl_divisive else dict(apl_divisive=True))
+            **({} if not args.apl_divisive else dict(apl_divisive=True)),
+            **({} if args.aplpn_hold is None else dict(aplpn_hold=args.aplpn_hold))
         )
         hist = res['history']
         hist.to_csv(res_dir / f'history_{tag}.csv')
@@ -2237,6 +2281,9 @@ def main() -> None:
             **claw_inh_pool_kws(args.claw_inh_pool),
             # (E92: APL's inhibition of the claws as a divisor; absent when not given)
             **apl_divisive_kws(args.apl_divisive),
+            # (E94: the APL->bouton scale held at this multiple of the base's, the bouton->APL scale tied; absent when not
+            # given)
+            **aplpn_hold_kws(args.aplpn_hold),
             # (E73 part C: the per-KC session z-score reading's settings; absent when not used)
             **(dict(rate_criterion=args.rate_criterion, zcell_q=loss_fn.zcell['q'], zcell_map=loss_fn.zcell['amp'],
                 zcell_calibrate=loss_fn.zcell['calibrate'], zcell_drift=loss_fn.zcell['drift'])
@@ -2314,6 +2361,7 @@ def main() -> None:
             wiring=args.wiring, wiring_seed=(args.wiring_seed if args.wiring else None), orn_input=args.orn_input,
             wiring_file=args.wiring_file, wiring_tag=args.wiring_tag,
             aplpn_max=args.aplpn_max, aplpn_fixed=args.aplpn_fixed, aplkc_min=args.aplkc_min,
+            **aplpn_hold_kws(args.aplpn_hold),
             kckc_fixed=args.kckc_fixed, base_params=initial, loss_variant=args.loss, kc_spiking=kc_spiking,
             **(dict(kc_thr_input=dict(exponent=args.kc_thr_input_exp, prepass=prepass_info,
                 factor_sha256=hashlib.sha256(np.ascontiguousarray(thr_in_factor, dtype='<f8').tobytes()).hexdigest(),
