@@ -1770,17 +1770,33 @@ def e_member(label: str) -> dict:
     return E91.d_member(label)
 
 
+def e_init_params(name: str = 'F') -> Path:
+    """E/init_params_<name>.json in this experiment's results: per wiring, the absolute parameters of part B's held point
+    with input `name` (runs_B.csv's params_on of B_<name>_<wiring>: the wiring's own fit with the somatic threshold and the
+    tied APL scale re-held for the input), the start of each refit. An exact start at the fit's own parameters
+    (`--init-from-exact`) is refused by E10_joint_fit.py for another input, its base being another (2026-11-13)."""
+    rb = pd.read_csv(out_dir() / 'runs_B.csv')
+    d = {}
+    for r in rb[rb.change == name].itertuples():
+        d[r.wiring] = {k: float(v) for k, v in json.loads(r.params_on).items()}
+    path = out_dir() / 'E' / f'init_params_{name}.json'
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _write_json(path, d)
+    return path
+
+
 def e_command(label: str, name: str = 'F', maxfev: int = E_MAXFEV) -> List[str]:
     """The E10_joint_fit.py command of one refit: C2's family (`-k 2 --aplpn-max 3 --rate-target ctrl_frac --loss apl
-    --apl-readout both --tag _cap3`) with `--orn-input` the input's CSV, into this experiment's folders, from the wiring's
-    own fit's absolute parameters (`--init-from-exact`)."""
+    --apl-readout both --tag _cap3`) with `--orn-input` the input's CSV, into this experiment's folders, from part B's
+    held point of the input on the wiring (`--init-params`, `e_init_params`)."""
     m = e_member(label)
+    init = e_init_params(name)
+    if label not in json.loads(init.read_text()):
+        raise RuntimeError(f'no held point of {name} on {label} in runs_B.csv (run part B first)')
     cmd = [str(H.HERE / 'venv' / 'bin' / 'python'), '-u', 'experiments/E10_joint_fit.py', '-k', '2', '--aplpn-max', '3',
            '--rate-target', 'ctrl_frac', '--loss', 'apl', '--apl-readout', 'both', '--tag', '_cap3', '--maxfev', str(int(maxfev)),
            '--orn-input', str(input_path(name).relative_to(H.shared_dir())), '--experiment', EXPERIMENT,
-           '--init-from', m['tag'], '--init-from-experiment', m['folder']] + m['wiring_args']
-    if float(m['k']) == 2.0:
-        cmd.append('--init-from-exact')
+           '--init-params', f'{init}:{label}'] + m['wiring_args']
     return cmd
 
 

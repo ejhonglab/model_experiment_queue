@@ -415,3 +415,17 @@ def test_point_provenance_added_to_a_parts_record(tmp_path, monkeypatch):
     X._provenance_add('B', 'B_F_P1', dict(a=2))
     d = json.loads((tmp_path / 'provenance_B.json').read_text())
     assert d['runs'] == [dict(time='t')] and d['points'] == {'B_F_real': dict(a=1), 'B_F_P1': dict(a=2)}
+
+
+def test_refit_starts_at_the_held_point(tmp_path, monkeypatch):
+    """Part E's start for each wiring is part B's held point of the input (params_on of B_F_<wiring>)."""
+    X = pytest.importorskip('experiments.E93_missing_glomeruli_input')
+    import json
+    monkeypatch.setattr(X, 'out_dir', lambda: tmp_path)
+    p_real = dict(fixed_thr=100.7, wAPLKC_scale=0.12, wKCAPL_scale=7e-5, wAPLPN_scale=0.376, wPNAPL_scale=8.6e-4, wKCKC_scale=26.4)
+    p_p1 = dict(p_real, fixed_thr=83.0)
+    pd.DataFrame([dict(change='F', wiring='real', params_on=json.dumps(p_real)), dict(change='F', wiring='P1', params_on=json.dumps(p_p1)),
+                  dict(change='L', wiring='real', params_on=json.dumps(dict(p_real, fixed_thr=1.0)))]).to_csv(tmp_path / 'runs_B.csv', index=False)
+    path = X.e_init_params('F')
+    d = json.loads(path.read_text())
+    assert d == {'real': p_real, 'P1': p_p1}
