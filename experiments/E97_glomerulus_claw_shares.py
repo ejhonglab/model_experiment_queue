@@ -1496,6 +1496,9 @@ def run_point(variant: str, wiring: str, rt: Optional[pd.DataFrame] = None, cc: 
                        ratios=json.dumps({g: float(v) for g, v in r.items()}),
                        params_on=json.dumps({k: float(v) for k, v in res['params'].items()}),
                        params_off=json.dumps({k: float(v) for k, v in res['params_off'].items()}), **files)
+    # the commits of the code this process loaded (E83's row stamps them when the row is written)
+    row.update({f'append_{k}': row[k] for k in cc if k in row})
+    row.update(cc)
     row.update({f'process_{k}': v for k, v in cc.items()})
     _append_locked(out_dir() / 'runs_B.csv', row)
     _provenance_add('B', tag, dict(H.model_provenance(orn_deltas=H.apl16_orn_deltas() if orn is None else orn, _wPNKC=W1),
