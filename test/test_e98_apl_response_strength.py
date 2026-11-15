@@ -161,7 +161,7 @@ def test_blank_identity_on_a_made_up_recording():
     assert len(resp) == 3 * len(M.BASELINES) * 2
     assert resp['blank'].iloc[0] > 0.05
     assert M.blank_identity(resp) < 1e-12
-    om = M._reading(resp, M.MAIN_READING).set_index('stimulus')
+    om = M._reading(resp, ('order_matched', True)).set_index('stimulus')
     raw = M._reading(resp, ('order_matched', False)).set_index('stimulus')
     assert np.allclose(om['response'], raw['response'] - raw['blank'])
     assert np.allclose(raw['response'], (raw['rep1'] + raw['rep2']) / 2)
@@ -304,38 +304,88 @@ def _flies(v1a=(0.67, 0.96), v1b=(1.0, 1.27), v2=(0.43, 0.59)):
     return pd.DataFrame(rows)
 
 
-def test_verdict_core_on_made_up_rows():
-    # paa / ms 1.2 (inside the hull 0.67 to 1.27), paa at 10^-5 at 0.5 of paa (inside 0.43 to 0.59): outcome (a)
-    v, comps, rows = M.verdict_core(_flies(), _b1_rows(paa5=0.5))
+def _readings(**over):
+    """The flies' ratios under every reading of READING_SETS, the same unless `over` gives one ({key: _flies(...)})."""
+    return {k: over.get(k, _flies()) for k in M.READING_SETS}
+
+
+def test_held_against_reading_dependent():
+    p = tuple(M.PARTNERS)
+    assert M.held_category(dict(carrying='inside', first_in_block='inside', own_range='inside', without_three='inside',
+                                literal='steeper'), p) == 'inside'                  # the literal reading decides nothing
+    assert M.held_category(dict(carrying='inside', first_in_block='inside', own_range='not decided',
+                                without_three='inside'), p) == 'reading-dependent'
+    assert M.held_category(dict(carrying='not decided', first_in_block='not decided', own_range='not decided',
+                                without_three='not decided'), p) == 'reading-dependent'
+    # V2 has no V1-only partner
+    assert M.held_category(dict(carrying='flatter', first_in_block='flatter', without_three='flatter'),
+                           ('first_in_block', 'without_three')) == 'flatter'
+
+
+def test_v1_rule_over_the_estimates():
+    assert M.v1_from_estimates({'a': 'reading-dependent', 'b': 'inside'}) == 'inside'
+    assert M.v1_from_estimates({'a': 'steeper', 'b': 'steeper'}) == 'steeper'
+    assert M.v1_from_estimates({'a': 'steeper', 'b': 'flatter'}) == 'outside, mixed'
+    assert M.v1_from_estimates({'a': 'steeper', 'b': 'reading-dependent'}) == 'not decided'
+
+
+def test_verdict_core_held_and_outcomes():
+    # paa / ms 1.2 (inside the hull 0.67 to 1.27 under every reading), paa at 10^-5 at 0.5 of paa: outcome (a)
+    v, comps, rows = M.verdict_core(_readings(), _b1_rows(paa5=0.5))
     assert v['V1'] == 'inside' and v['V2'] == 'inside' and v['outcomes'] == ['a']
-    assert v['V1_flies_hull'] == [0.67, 1.27] and len(rows) > 0
-    # paa at 10^-5 at 0.85 of paa: flatter at every n (both forms push it further from the interval or keep it above)
-    v, comps, _ = M.verdict_core(_flies(), _b1_rows(paa5=0.85))
-    assert v['V2'] == 'flatter' and 'b' in v['outcomes'] and 'a' not in v['outcomes']
-    # paa at 10^-5 at 0.3 of paa: steeper
-    v, _, _ = M.verdict_core(_flies(), _b1_rows(paa5=0.3))
-    assert v['V2'] == 'steeper' and 'c' in v['outcomes']
-    # every estimate of ms's input weak (paa / ms 2.4 to 3): V1 steeper under all, outcome (d)
-    v, _, _ = M.verdict_core(_flies(), _b1_rows(paa5=0.5, ms_scale=(0.5, 0.45, 0.4, 0.5, 0.42)))
+    assert v['V1_lines']['megamat/megamat (the panel)']['carrying'] == 'inside (8 of 8)'
+    assert list(v['V1_lines'])[0] == 'megamat/megamat (the panel)'
+    assert set(comps['reading_set']) == set(M.READING_SETS) and 'linear_minus_nearer_end' in rows.columns
+    # a partner whose interval excludes the model: V1 reading-dependent under every estimate, not decided, outcome (e)
+    v, _, _ = M.verdict_core(_readings(own_range=_flies(v1a=(0.6, 0.9), v1b=(0.9, 1.1))), _b1_rows(paa5=0.5))
+    assert set(v['V1_held_per_estimate'].values()) == {'reading-dependent'} and v['V1'] == 'not decided'
+    assert 'e' in v['outcomes'] and 'a' not in v['outcomes']
+    # the V1-only partner does not touch V2; one estimate held inside is enough for V1
+    v, _, _ = M.verdict_core(_readings(own_range=_flies(v2=(0.9, 1.0))), _b1_rows(paa5=0.5, ms_scale=(1.0, 0.4, 0.4, 0.4, 0.4)))
+    assert v['V2'] == 'inside' and v['V1'] == 'inside'
+    assert v['V1_held_per_estimate']['megamat/diag'] == 'steeper'
+    # V2 flatter held: (b); V2 flatter under the carrying reading only: reading-dependent, (e)
+    v, _, _ = M.verdict_core(_readings(), _b1_rows(paa5=0.85))
+    assert v['V2'] == 'flatter' and 'b' in v['outcomes']
+    v, _, _ = M.verdict_core(_readings(first_in_block=_flies(v2=(0.43, 0.90))), _b1_rows(paa5=0.85))
+    assert v['V2_held'] == 'reading-dependent' and v['V2'] == 'not decided' and 'e' in v['outcomes']
+    # every estimate held steeper: V1 outside, (d)
+    v, _, _ = M.verdict_core(_readings(), _b1_rows(paa5=0.5, ms_scale=(0.5, 0.45, 0.4, 0.5, 0.42)))
     assert v['V1'] == 'steeper' and 'd' in v['outcomes']
-    # one estimate inside is enough
-    v, _, _ = M.verdict_core(_flies(), _b1_rows(paa5=0.5, ms_scale=(0.5, 0.45, 1.0, 0.5, 0.42)))
-    assert v['V1'] == 'inside'
-    assert v['V1_per_estimate']['validation2/diag'] == 'inside'
+    # the order factor: the nearer end over the model's nearest ratio
+    assert v['V2_order_factor']['factor'] == 1.0
 
 
 def test_verdict_core_pulse_and_blank():
-    pulse = {'pulse_1s': _flies(v2=(0.43, 0.59)), 'pulse_0.5s': _flies(v2=(0.7, 0.9))}
-    v, _, _ = M.verdict_core(_flies(), _b1_rows(paa5=0.5), pulse, solvent=dict(ctrl=0.012, tnt=0.007))
-    assert v['V2_by_pulse'] == {'pulse_1s': 'inside', 'pulse_0.5s': 'steeper'} and 'e' in v['outcomes']
-    assert 'h' not in v['outcomes'] and v['blank_response_rate']['acute_off']['median'] == pytest.approx(0.002)
-    v, _, _ = M.verdict_core(_flies(), _b1_rows(paa5=0.5), solvent=dict(ctrl=0.012, tnt=0.001))
+    pulse = {'V1_paa-4': dict(disagree=False), 'V1_paa-2.954': dict(disagree=False), 'V2': dict(disagree=True)}
+    v, _, _ = M.verdict_core(_readings(), _b1_rows(paa5=0.5), pulse, solvent=dict(ctrl=0.012, tnt=0.007))
+    assert v['V2'] == 'not decided' and v['V1'] == 'inside' and 'e' in v['outcomes'] and 'h' not in v['outcomes']
+    assert v['blank_response_rate']['acute_off']['median'] == pytest.approx(0.002)
+    pulse['V1_paa-2.954'] = dict(disagree=True)
+    v, _, _ = M.verdict_core(_readings(), _b1_rows(paa5=0.5), pulse)
+    assert v['V1'] == 'not decided'
+    v, _, _ = M.verdict_core(_readings(), _b1_rows(paa5=0.5), solvent=dict(ctrl=0.012, tnt=0.001))
     assert 'h' in v['outcomes']
-    # fewer than six wirings agree: not decided, outcome (e)
+    # fewer than six wirings agree: not decided under the carrying reading, so not held
     b = _b1_rows(paa5=0.5)
     b.loc[(b['stimulus'] == M.V2_NUM) & b['wiring'].isin(M.ALL_WIRINGS[:3]), 'win'] = 8.0 + 12.0 * 0.85
-    v, _, _ = M.verdict_core(_flies(), b)
+    v, _, _ = M.verdict_core(_readings(), b)
     assert v['V2'] == 'not decided' and 'e' in v['outcomes']
+
+
+def test_pulse_permutation_count():
+    from math import comb
+    flies = [f'f{i}' for i in range(8)]
+    x = pd.Series([0.0, 0.1, -0.1, 0.05, -0.05, 1.0, 1.1, 0.9], index=flies)   # the last three far from the first five
+    r = M.pulse_permutation(x, flies[5:])
+    assert r['n_splits'] == comb(8, 3) == 56 and r['n_short'] == 3
+    assert r['n_as_large'] == 1 and r['share'] == pytest.approx(1 / 56) and r['disagree']
+    y = pd.Series([0.0, 0.1, -0.1, 0.05, -0.05, 0.02, 0.08, -0.03], index=flies)
+    r = M.pulse_permutation(y, flies[5:])
+    assert r['n_as_large'] >= 6 and not r['disagree']
+    # a fly without a value is left out: 7 flies, 2 short, C(7, 2) splits
+    r = M.pulse_permutation(x.drop('f7'), flies[5:])
+    assert r['n_splits'] == comb(7, 2) == 21
 
 
 def test_stimulus_classes_refuses_different_pre_odor_levels():

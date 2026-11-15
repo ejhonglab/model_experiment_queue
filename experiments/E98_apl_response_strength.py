@@ -12,12 +12,14 @@ directory; 12 recordings, 8 flies; GCaMP6f in APL; pa, paa and ms as concentrati
 pulse, 5 with 0.5 s), read with E79's reader, baselines, blank and fly bootstrap (experiments/E79_apl_calyx_constraints.py).
 
 Definitions (the entry's, fixed before any reading):
-- A recording's response to a stimulus: the calyx-mean peak dF/F inside the outline under E79's order-matched baseline,
-  the mean of the two presentations, with the recording's position-matched blank subtracted (MAIN_READING). A recording
-  enters a ratio only if both responses exceed MIN_RESPONSE (0.02).
+- A recording's response to a stimulus (the carrying reading, MAIN_READING; the entry's (C) as amended 2026-11-15 15:24,
+  which struck "with the recording's position-matched blank subtracted"): the calyx-mean peak dF/F inside the outline
+  under E79's order-matched baseline, the mean of the two presentations, nothing further subtracted. A recording enters
+  a ratio only if both responses exceed MIN_RESPONSE (0.02).
 - A concentration that was not imaged: linear interpolation of the response on log10 concentration between its two
-  imaged neighbours, inside the imaged range only; outside it, the nearest imaged concentration stands in when it is
-  within MATCH_LOG_UNITS (1, inclusive; Tom's rule) of the one asked for (`value_at`).
+  imaged neighbours, each recording inside its own imaged range only; for a concentration that no recording brackets
+  (V3 to V5), the nearest imaged concentration stands in when it is within MATCH_LOG_UNITS (1, inclusive; Tom's rule)
+  of the one asked for (`value_at`). 20210805_3FRfun1 and 20210823_4FRfun2 (no ms at 10^-2) are therefore out of V1.
 - The flies' ratio for two stimuli: the geometric mean over the 8 flies (a fly's recordings averaged on the log scale),
   with a 90 % interval from N_BOOT (10,000) bootstrap draws of flies (E79's `fly_bootstrap`, seed SEED).
 - The model's APL for a stimulus: the mean of APL's activity in the odor window (a; E90's MODEL_WINDOW, 0-0.5 s) and its
@@ -52,34 +54,53 @@ Parts (CLI `--part`):
   odors, E90's tables), E37's saved table for the spike-driven fits (a5_alternatives.csv); A6 the power table: for every
   pair of panel odors the ratio by the family's APL and by a proportional APL, and the number of flies that separates the
   two (a6_power.csv, the five that need the fewest in a_summary.json). a_summary.json.
-- B (simulations at fixed parameters, APL on and acutely off, each saved with its counts, responses and APL means; phase
-  2): B1 the extended input on the eight wirings (the real wiring first), restricted to the input's 36 glomeruli, 40
-  stimuli (B1_STIMULI): the 16 panel odors; paa at 10^-5 from the validation2 session's diagnostics, with the megamat and
-  natural-mixture sessions' beside; the other sessions' ms at 10^-3; 2h, t2h, 2-but and 1-6ol at 10^-6 and 2h at 10^-5;
-  ma at 10^-7 and ea at 10^-8 (E49's stimuli); Hallem's pa and ms at 10^-2, -4, -6 and -8 and paa at 10^-2 (drosolf's
-  table, E38's conversion); a blank. With B1 the KCs' response rate to the blank, APL on and off, against the flies'
-  solvent. B2 (real wiring): the 1 s pulse; the fuller input of E93; E95's refit at the connectome's bouton share. B3
-  (real wiring): E36's KC-spike-driven fit and E37's spike-only fit at 40 Hz with the gain. B4 (real wiring): E77's
-  screen settings with weaker PN normalization (pn_inhadd 1000 and 3141) at their held readings.
-- C (no simulations; phase 2): the verdict, fixed here: V1 (paa over ms near 10^-3, the lab's input, the hull of the two
-  readings of paa's concentration, the model under each estimate of ms's input; `v1_verdict`) and V2 (paa at 10^-5 over
-  paa at 10^-4); V3 to V5 (Hallem's input), B2 to B4 and the pulse-matched readings described beside (verdict.json).
+- B (simulations at fixed parameters, APL on and acutely off, each saved with its counts, responses, APL means and PN
+  stage; `--root` puts the runs under another folder, e.g. the archive's from_hal/ for hal's lane):
+  - B1 (`run_b1`, `b1_specs`, `b1_input`): the extended input on the eight wirings (the real wiring first; each run checked
+    by part 0's run identities), on the input's 36 glomeruli, 52 stimuli with fixed labels: the 16 panel odors; paa at
+    10^-5 from the validation2 session's diagnostics (V2), the megamat and kiwi-control sessions' beside; ms at 10^-3
+    from the three sessions' diagnostics and the control panel (V1's other estimates of ms's input); 2h, t2h, 2-but and
+    1-6ol at 10^-6, 2h at 10^-5, ma at 10^-7 and ea at 10^-8 from the kiwi-control session (LOW_SESSION, E49's source);
+    E100's 12 (4h-ol at 10^-6 and farn at 10^-2 from all three sessions, 2h and 2-but at 10^-6 and ma at 10^-7 from
+    the other two; read by none of E98's parts); Hallem's pa and ms at 10^-2, -4, -6 and -8 and paa at 10^-2 (drosolf's
+    10^-2 table as E38 reads it, on the glomeruli it shares with the input; the lower rows plug in through
+    `hallem_rows` and enter only with `include_hallem_lower`, so the first B1 runs carry 46 stimuli and list the six
+    left out in b1_stimuli.csv); the blank. The saved layout and its reader, `load_b1` (which E100 uses), are described
+    in B1_LAYOUT. With B1 the KCs' response rate to the blank, APL on and off, against the flies' solvent.
+  - B2 to B4 on the real wiring (`run_point_b`, `point_spec`, POINT_NAMES), each on B1's stimuli and checked on the 16
+    panel odors against its source's saved run (0 differences): B2 C2 with the 1 s pulse (E80's C2_pulse1_fixed; APL's
+    mean also over 0-1 s, 'win_pulse'), E93's fuller input F at its held point B_F_real (`e93_input`: B1's stimuli on
+    46 glomeruli), E95's refit at the connectome's bouton share with the uniform component (f1); B3 E36's KC-spike-driven
+    fit and E37's spike-only point at 40 Hz with the gain; B4 E77's screen points S1_inhadd1000 and S1_inhadd3141 (weaker
+    PN normalization) at their held readings.
+- C (no simulations; the entry's (C) as amended 2026-11-15 15:24; `verdict_core`): every comparison read under the
+  carrying reading, its three partners (PARTNERS: the first-in-block baseline with no blank; the two recordings without
+  ms at 10^-2 read at ms 10^-3.431, V1 only; without the two recordings with a large blank and 20210805_3FRfun1) and
+  the entry's literal reading (the blank removed twice, decides nothing); a category is held when the carrying reading
+  and every partner give it (`held_category`), otherwise reading-dependent (not decided). V1 (paa over ms near 10^-3,
+  the lab's input, the hull of the two readings of paa's concentration, under each estimate of ms's input, V1_ESTIMATES,
+  the panel's own first; `v1_from_estimates`) and V2 (paa at 10^-5 over paa at 10^-4, in the series as recorded); the
+  pulse sets' permutation test (`pulse_permutation`, the 56 splits of the 8 flies into 3 and 5; disagreeing sets leave
+  the comparison not decided); V2's descriptions (the order factor, the shuffled recording, the pa 10^-6.771 repeat, the
+  paraffin oil drift; no gate); the pulse-matched readings; V3 to V5 (Hallem's input) described; the outcomes (a) to
+  (e) and (h) (verdict.json, c_comparisons.csv, c_wirings.csv with each wiring's distance from the nearer end).
 - table: comparison_table.md and the figures.
 
 Deviations from the entry (each also in the note):
-- MAIN_READING subtracts the position-matched blank from the order-matched responses, as the entry defines. That blank is
-  the paraffin oil block's 2nd and 3rd presentations minus the first-in-block ones, and the order-matched baseline
-  already subtracts the paraffin oil block's presentation at the same position, so the first-in-block baseline with the
-  blank subtracted equals the order-matched baseline without it exactly (`blank_identity`): the main reading removes the
-  position effect twice. Every ratio is therefore also given under the other five readings (a3_ratios.csv), the
-  order-matched one without the blank (the entry's probes) first among them.
-- The one-log-unit rule (`value_at`) stands in a recording's nearest imaged concentration only for a concentration
-  outside the series' design range (the union of the recordings' ranges); one inside it that a recording did not image
-  (ms at 10^-2 in 20210805_3FRfun1 and 20210823_4FRfun2) leaves that recording out of readings that need it, rather than
-  reading those two recordings at another concentration than the other ten. A3's subset 'all_recording_ranges' gives the
-  other reading (the rule on each recording's own range; ms at 10^-3 is then read at 10^-3.431 in those two).
+- Resolved by the entry's amendment (2026-11-15 15:24): the first version's main reading subtracted the position-matched
+  blank from the order-matched responses, removing the position effect twice (the first-in-block baseline with the blank
+  subtracted equals the order-matched baseline without it, `blank_identity`); the carrying reading is now the
+  order-matched one without it, and the literal reading is shown beside and decides nothing. The one-log rule on the
+  series' design range only (two recordings out of V1) is now the entry's rule; A3's subset 'all_recording_ranges' is
+  one of the partners.
 - E79's reader leaves out the doubled pa 10^-6.771 block of 20210805_3FRfun1 and 20210823_4FRfun2 (Yang, 2026-11-13: both
   are pa 10^-6.771 repeats); kept out here so that the reader reproduces E79, and no ratio of the fixed list reads it.
+- B1's low-concentration stimuli come from the kiwi-control session's diagnostics (E49's source for ma and ea), with the
+  other sessions' beside where the entry asks for them; paa at 10^-5 from validation2's, as the entry says.
+- Hallem's conversion: the 10^-2 rows on the 16 glomeruli Hallem and the input share, 0 on the other 20 (E38's
+  'hallem_only'); the lower rows wait on a source (drosolf's concentration series is not read here).
+- E93's F input is read from its saved file (inputs/F.csv, both hashes checked): E93's `input_of('F')` now rebuilds it
+  within 1.4e-14, not exactly, and the identity against B_F_real needs the exact input.
 - E37's saved APL table has no pre-odor level and is the mean (and peak) over the whole time after odor onset, not over
   0-0.5 s, so its ratios in A5 are of the window values, not of the evoked activity.
 
@@ -90,8 +111,15 @@ data/model_outputs/E98_apl_response_strength/.
 Usage (from the repository root):
     ./venv/bin/python -u -m experiments.E98_apl_response_strength --part 0 --no-runs
     ./venv/bin/python -u -m experiments.E98_apl_response_strength --part A
-    OMP_NUM_THREADS=4 OMP_THREAD_LIMIT=4 PYTHONUNBUFFERED=1 nice -n 10 ./venv/bin/python -u \\
-        -m experiments.E98_apl_response_strength --part B --arm B1 --wirings real --threads 4
+    env OMP_NUM_THREADS=4 OMP_THREAD_LIMIT=4 PYTHONUNBUFFERED=1 nice -n 10 ./venv/bin/python -u \\
+        -m experiments.E98_apl_response_strength --part 0 --wirings real --threads 4      # B1 on the real wiring
+    env OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 PYTHONUNBUFFERED=1 nice -n 10 ./venv/bin/python -u \\
+        -m experiments.E98_apl_response_strength --part B --arm B1 --wirings P1,P2,M1,P3,P4,M2,M3 --threads 16 \\
+        --root <shared>/data/model_outputs/E98_apl_response_strength/from_hal                # another host's lane
+    env OMP_NUM_THREADS=4 OMP_THREAD_LIMIT=4 PYTHONUNBUFFERED=1 nice -n 10 ./venv/bin/python -u \\
+        -m experiments.E98_apl_response_strength --part B --arm B2,B3,B4 --threads 4
+    ./venv/bin/python -u -m experiments.E98_apl_response_strength --part 0 --wirings all8 --threads 1 ... (reads saved runs)
+    ./venv/bin/python -u -m experiments.E98_apl_response_strength --part C --reading <reading> --subset <all|all_recording_ranges>
 """
 from __future__ import annotations
 
@@ -123,9 +151,9 @@ INDICATOR_NS = tuple(float(x) for x in np.arange(1.0, 2.5 + 1e-9, 0.25))
 FORMS = ('baseline', 'evoked')
 VERDICT_MIN_WIRINGS = 6                # of the 8 wirings
 BASELINES = ('order_matched', 'first_in_block', 'all_pfo')          # E79's three
-MAIN_READING = ('order_matched', True)                             # (baseline, blank subtracted)
-READINGS = (MAIN_READING, ('order_matched', False), ('first_in_block', True), ('first_in_block', False),
-            ('all_pfo', True), ('all_pfo', False))
+MAIN_READING = ('order_matched', False)            # (baseline, blank subtracted): the carrying reading (amended 15:24)
+READINGS = (MAIN_READING, ('order_matched', True), ('first_in_block', False), ('first_in_block', True),
+            ('all_pfo', False), ('all_pfo', True))
 LARGE_BLANK = 0.05                     # a recording's blank calyx mean above this is large (E79: 0.09 and 0.18, the rest ~0)
 NOT_IN_18UM_LIST = ('20210805_3FRfun1',)
 SUBSETS = ('all', 'pulse_1s', 'pulse_0.5s', 'without_large_blank_and_3FRfun1', 'all_recording_ranges')
@@ -180,6 +208,20 @@ def _write_json(path: Path, obj) -> None:
 
 def _read_json(path: Path) -> Optional[dict]:
     return json.loads(path.read_text()) if path.exists() else None
+
+
+_PROCESS_COMMITS: Dict[str, object] = {}
+
+
+def process_commits(strict: bool = False) -> Dict[str, object]:
+    """The commits of the code this process loaded, read once (`main` reads them before any work), so that a run's rows
+    carry them even if the checkout moves while it runs; `strict` refuses a dirty checkout of this repository or of
+    pyolfsysm (part B's runs)."""
+    if not _PROCESS_COMMITS:
+        _PROCESS_COMMITS.update({k: v for k, v in H.code_commits().items() if not isinstance(v, (dict, list))})
+    if strict and any(_PROCESS_COMMITS.get(k) for k in ('queue_dirty', 'pyolfsysm_dirty')):
+        raise RuntimeError(f'part B runs from clean checkouts only: {_PROCESS_COMMITS}')
+    return dict(_PROCESS_COMMITS)
 
 
 def provenance(part: str, **extra) -> None:
@@ -1039,7 +1081,7 @@ def run_b1(label: str, root: Optional[Path] = None, force: bool = False) -> Dict
     orn, table = b1_input()
     table.to_csv(d / 'b1_stimuli.csv', index=False)
     er = ExtendedRun(label, orn)
-    commits = dict(H.code_commits())
+    commits = process_commits()
     for c, ct in CONDS:
         t1 = time.time()
         o = er.run(c)
@@ -1251,20 +1293,32 @@ def point_spec(name: str, orn: Optional[pd.DataFrame] = None) -> dict:
 
 
 def _breadth_sha(b: pd.Series) -> str:
-    """E77's breadth hash (`E77_input_screen.series_sha256` when it has one, else the values' bytes)."""
-    from experiments import E77_input_screen as S
-    for fn in ('series_sha256', 'breadth_sha256', 'frame_sha256'):
-        f = getattr(S, fn, None)
-        if f is not None:
-            try:
-                return f(b)
-            except Exception:
-                continue
+    """The breadth's sha256 as E77's `hold_rates` records it (the values as little-endian float64)."""
     import hashlib
-    return hashlib.sha256(np.ascontiguousarray(b.to_numpy(dtype=float)).tobytes()).hexdigest()
+    return hashlib.sha256(np.ascontiguousarray(b.to_numpy(dtype=float), dtype='<f8').tobytes()).hexdigest()
 
 
 E93_TAG = 'E93_F_fe8e7367feec'
+
+
+def e93_f_frame() -> pd.DataFrame:
+    """E93's F input as its B_F_real ran it: read from results/E93_missing_glomeruli_input/inputs/F.csv (its file's sha256
+    checked against runs_B.csv) with the lab input's columns, its frame sha256 checked too. (E93's `input_of('F')`
+    rebuilds it within 1.4e-14 of these values, not exactly, so the saved file is read.)"""
+    import hashlib
+    from experiments.E77_input_screen import frame_sha256
+    rb = pd.read_csv(H.shared_dir() / 'results' / 'E93_missing_glomeruli_input' / 'runs_B.csv').set_index('tag').loc['B_F_real']
+    f = H.shared_dir() / 'results' / 'E93_missing_glomeruli_input' / 'inputs' / 'F.csv'
+    if hashlib.sha256(f.read_bytes()).hexdigest() != rb['input_file_sha256']:
+        raise RuntimeError(f'{f}: not the file B_F_real ran')
+    t = pd.read_csv(f, index_col=0, float_precision='round_trip')
+    lab = H.apl16_orn_deltas()
+    if list(t.columns) != [H.odor_abbrev(c) for c in lab.columns]:
+        raise RuntimeError(f"{f}: columns are not the lab input's odors")
+    F = pd.DataFrame(t.to_numpy(dtype=float), index=pd.Index([str(g) for g in t.index], name=lab.index.name), columns=lab.columns)
+    if frame_sha256(F) != rb['input_frame_sha256']:
+        raise RuntimeError("E93's F input differs from the one its B_F_real ran")
+    return F
 
 
 def e93_input(orn: pd.DataFrame) -> Tuple[pd.DataFrame, List[str]]:
@@ -1272,12 +1326,7 @@ def e93_input(orn: pd.DataFrame) -> Tuple[pd.DataFrame, List[str]]:
     runs_B.csv); the added stimuli B1's 36 rows and, on the ten added glomeruli, the session's own value where its table
     has that glomerulus (as F's lab rows), Hallem's where Hallem has it (unscaled: the stimulus is Hallem's), else 0.
     Returns the input and the added glomeruli."""
-    from experiments import E93_missing_glomeruli_input as E93
-    F = E93.input_of('F')
-    rb = pd.read_csv(H.shared_dir() / 'results' / 'E93_missing_glomeruli_input' / 'runs_B.csv').set_index('tag').loc['B_F_real']
-    from experiments.E77_input_screen import frame_sha256
-    if frame_sha256(F) != rb['input_frame_sha256']:
-        raise RuntimeError("E93's F input differs from the one its B_F_real ran")
+    F = e93_f_frame()
     added = [g for g in F.index if g not in orn.index]
     labels = input_labels(orn)
     sess = session_inputs()
@@ -1309,14 +1358,13 @@ def e93_spec(orn: pd.DataFrame) -> dict:
     import shutil
     from experiments import E10_joint_fit as J
     from experiments import E83_cross_wiring_fit as E83
-    from experiments import E93_missing_glomeruli_input as E93
     rb = pd.read_csv(H.shared_dir() / 'results' / 'E93_missing_glomeruli_input' / 'runs_B.csv').set_index('tag').loc['B_F_real']
     cache = local_dir('cache')
     for kind in ('responses', 'spike_counts'):
         f = f'input-{E93_TAG}_base_acute_off_{kind}.parquet'
         if not (cache / f).exists() and (_archive('E93_missing_glomeruli_input') / f).exists():
             shutil.copy2(_archive('E93_missing_glomeruli_input') / f, cache / f)
-    F = E93.input_of('F')
+    F = e93_f_frame()
     _, wnorm, W, breadth = J.bouton_base(F, cache, None, input_tag=E93_TAG)
     P = E83.wiring_parts('real')
     if not W.equals(P['W']):
@@ -1349,7 +1397,7 @@ def run_point_b(arm: str, name: str, root: Optional[Path] = None, force: bool = 
     gl = pd.Index([str(g) for g in orn.index], name='glomerulus')
     sim = spec['build']()
     mp, rv, order = _sim_cells(sim)
-    commits = dict(H.code_commits())
+    commits = process_commits()
     ident = dict(arm=arm, point=name, name=POINT_NAMES[name], record=spec['record'])
     for c, ct in CONDS:
         t1 = time.time()
@@ -1685,7 +1733,7 @@ def part_a() -> dict:
     alt.to_csv(out / 'a5_alternatives.csv', index=False)
     print(f'A5 done ({time.time() - t0:.0f} s)', flush=True)
     main = a3[(a3['reading'] == reading_label(MAIN_READING)) & (a3['subset'] == 'all')]
-    probe_rd = a3[(a3['reading'] == reading_label(('order_matched', False))) & (a3['subset'] == 'all')]
+    literal = a3[(a3['reading'] == reading_label(('order_matched', True))) & (a3['subset'] == 'all')]
     sds = power_sds(main)
     power = power_table(apl, {k: v for k, v in sds.items() if k in ('median', 'max')})
     power.to_csv(out / 'a6_power.csv', index=False)
@@ -1697,7 +1745,7 @@ def part_a() -> dict:
         blank_identity_max_abs_diff=blank_identity(resp),
         large_blank_recordings=sorted(resp.loc[resp['blank'] > LARGE_BLANK, 'recording'].unique()),
         a3_main=_records(main if len(main) else a3[a3['reading'] == reading_label(MAIN_READING)], ratio_cols),
-        a3_order_matched_no_blank=_records(probe_rd, ratio_cols),
+        a3_literal_blank_twice=_records(literal, ratio_cols),
         a4_profile=_records(prof, ['wiring', 'a_mean', 'a_cv', 'a0_share', 'evoked_mean', 'evoked_cv', 'evoked_min_odor',
                                    'evoked_max_odor', 'ms_over_mean', 'spearman_evoked_input_total',
                                    'spearman_evoked_pn_total', 'spearman_evoked_kc_rate_off']),
@@ -1736,15 +1784,31 @@ HALLEM_COMPARISONS: Dict[str, Tuple[str, str]] = {
     'V5_-4': (hallem_label('pa', -4), hallem_label('ms', -4)), 'V5_-6': (hallem_label('pa', -6), hallem_label('ms', -6)),
     'V5_paa-2': (hallem_label('paa', -2), hallem_label('ms', -2))}
 FLIES_SOLVENT_RATE = {'on': ('ctrl', 'control flies'), 'off': ('tnt', 'APL output blocked (TNT)')}
-OUTCOMES = {'a': 'V1 and V2 inside', 'b': 'V2 flatter', 'c': 'V2 steeper', 'd': 'V1 outside under every estimate of ms\'s input',
-            'e': 'V2 not decided, or the 0.5 s and 1 s recordings disagree', 'h': 'the blank\'s response rate with APL off above '
-            'the flies\' solvent rate with APL output blocked (TNT)'}
+OUTCOMES = {'a': 'V1 and V2 inside', 'b': 'V2 flatter (in ascending series)', 'c': 'V2 steeper (in ascending series)',
+            'd': "V1 outside under every estimate of ms's input",
+            'e': 'V1 or V2 not decided (reading-dependent, short of 6 of 8, or the 0.5 s and 1 s recordings disagree)',
+            'h': "the blank's response rate with APL off above the flies' solvent rate with APL output blocked (TNT)"}
+# the flies' readings (the amendment of 2026-11-15 15:24): the carrying reading, its partners, the entry's literal reading
+CARRYING = (('order_matched', False), 'all')
+PARTNERS: Dict[str, Tuple[Tuple[str, bool], str]] = {
+    'first_in_block': (('first_in_block', False), 'all'),              # the other baseline, no blank removed
+    'own_range': (('order_matched', False), 'all_recording_ranges'),     # ms at 10^-3.431 in the two recordings; V1 only
+    'without_three': (('order_matched', False), 'without_large_blank_and_3FRfun1')}
+V1_ONLY_PARTNERS = ('own_range',)
+LITERAL = (('order_matched', True), 'all')                               # the blank removed twice: decides nothing
+READING_SETS = dict(carrying=CARRYING, **PARTNERS, literal=LITERAL)
+CATEGORIES = ('inside', 'flatter', 'steeper')
+PULSE_SHARE = 0.1                    # the pulse sets disagree when fewer than this share of the splits are as large
+REPEAT_RECORDINGS = ('20210805_3FRfun1', '20210823_4FRfun2')     # pa at 10^-6.771 delivered twice
+SHUFFLED_RECORDING = '20210827_3FRfun4'                          # the one recording with shuffled order
 
 
 def stimulus_classes(on: pd.DataFrame, num: str, den: str, lo: float, hi: float) -> pd.DataFrame:
     """Per wiring the model's ratio of stimulus `num` over stimulus `den` (rows of `on`: wiring, stimulus, win, pre; APL
     on) through the indicator family (INDICATOR_NS x FORMS), its range, the linear reading (n 1, evoked), the class of
-    the set and of the linear reading against [lo, hi] (`classify`). The pre-odor level must be the same for both."""
+    the set and of the linear reading against [lo, hi] (`classify`), and the distance from the nearer end of the
+    interval: of the linear reading (signed, the linear ratio minus that end) and of the set (0 if any of it is
+    inside). The pre-odor level must be the same for both stimuli."""
     rows = []
     for w, g in on.groupby('wiring', sort=False):
         g = g.set_index('stimulus')
@@ -1756,78 +1820,158 @@ def stimulus_classes(on: pd.DataFrame, num: str, den: str, lo: float, hi: float)
             raise RuntimeError(f'{w}: the pre-odor levels of {num} and {den} differ ({p1}, {p2})')
         rs = model_ratio_set(a1, a2, p2)
         lin = float(indicator_ratio(a1, a2, p2, 1.0, 'evoked'))
+        end = lo if abs(lin - lo) <= abs(lin - hi) else hi
+        x = rs['ratio'].to_numpy(float)
+        inside = (x >= lo) & (x <= hi)
         rows.append(dict(wiring=w, numerator=num, denominator=den, a_num=a1, a_den=a2, a0=p2, ratio_linear=lin,
-                         ratio_min=float(rs['ratio'].min()), ratio_max=float(rs['ratio'].max()),
-                         cls=classify(rs['ratio'], lo, hi), cls_linear=classify([lin], lo, hi)))
+                         ratio_min=float(x.min()), ratio_max=float(x.max()), flies_lo90=lo, flies_hi90=hi,
+                         nearer_end='lo' if end == lo else 'hi', linear_minus_nearer_end=lin - end,
+                         set_distance=0.0 if inside.any() else float(np.min(np.minimum(np.abs(x - lo), np.abs(x - hi)))),
+                         nearest_ratio=float(x[np.argmin(np.minimum(np.abs(np.log(x / lo)), np.abs(np.log(x / hi))))]),
+                         cls=classify(x, lo, hi), cls_linear=classify([lin], lo, hi)))
     return pd.DataFrame(rows)
 
 
-def _comparison(name: str, on: pd.DataFrame, num: str, den: str, lo: float, hi: float, decides: bool) -> Tuple[dict, pd.DataFrame]:
-    wc = stimulus_classes(on, num, den, lo, hi)
-    if wc.empty:
-        return dict(comparison=name, numerator=num, denominator=den, flies_lo90=lo, flies_hi90=hi, n_wirings=0,
-                    verdict='not run', verdict_linear='not run', decides=decides), wc
-    wc.insert(0, 'comparison', name)
-    return dict(comparison=name, numerator=num, denominator=den, flies_lo90=lo, flies_hi90=hi, n_wirings=int(len(wc)),
-                verdict=comparison_verdict(wc['cls']), verdict_linear=comparison_verdict(wc['cls_linear']),
-                **{f'n_{c}': int((wc['cls'] == c).sum()) for c in ('inside', 'flatter', 'steeper', 'mixed')},
-                model_linear_min=float(wc['ratio_linear'].min()), model_linear_max=float(wc['ratio_linear'].max()),
-                model_min=float(wc['ratio_min'].min()), model_max=float(wc['ratio_max'].max()), decides=decides), wc
+def held_category(categories: Dict[str, str], partners: Sequence[str]) -> str:
+    """'inside', 'flatter' or 'steeper' when the carrying reading ('carrying') and every partner in `partners` give that
+    category (each by the 6-of-8 rule); otherwise 'reading-dependent'."""
+    c = categories['carrying']
+    if c in CATEGORIES and all(categories[k] == c for k in partners):
+        return c
+    return 'reading-dependent'
 
 
-def verdict_core(flies: pd.DataFrame, b1: pd.DataFrame, flies_pulse: Optional[Dict[str, pd.DataFrame]] = None,
-                 solvent: Optional[Dict[str, float]] = None) -> Tuple[dict, pd.DataFrame, pd.DataFrame]:
-    """Part C's verdict from the flies' ratios under one reading (`flies`: rows of `flies_ratios`, indexed or with a
-    column 'ratio_id'; lo90 and hi90), B1's runs (`b1`: `load_b1` rows; APL on is read) and, for outcome (e), the flies'
-    ratios of the 1 s and the 0.5 s recordings (`flies_pulse`: {'pulse_1s': ..., 'pulse_0.5s': ...}, same reading). V1:
-    paa (the lab's input at 10^-4) over each estimate of ms's input at 10^-3 (V1_ESTIMATES) against the hull of the flies'
-    two readings of paa's concentration, combined by `v1_verdict`; V2: paa at 10^-5 (PAA5_SESSION's diagnostics) over the
-    panel's paa against the flies' V2 interval, the other sessions' estimates beside; V3 to V5 on Hallem's stimuli where
-    B1 has them (described). `solvent`: the flies' solvent response rates ({'ctrl', 'tnt'}) for outcome (h). Returns
-    (verdict, the comparisons, the per-wiring rows)."""
+def v1_from_estimates(held: Dict[str, str]) -> str:
+    """V1 from the held category under each estimate of ms's input: 'inside' if inside is held under at least one;
+    'flatter' / 'steeper' if that is held under every one ('outside, mixed' if each is held flatter or steeper but not
+    all the same); otherwise 'not decided'."""
+    v = list(held.values())
+    if not v:
+        raise ValueError("no estimate of ms's input")
+    if 'inside' in v:
+        return 'inside'
+    if all(x in ('flatter', 'steeper') for x in v):
+        return v[0] if len(set(v)) == 1 else 'outside, mixed'
+    return 'not decided'
+
+
+def pulse_permutation(per_fly: pd.Series, short: Sequence[str]) -> dict:
+    """Whether the 0.5 s and the 1 s recordings disagree on a ratio: `per_fly` the flies' mean log ratios, `short` the
+    flies of the 0.5 s set; over every split of the flies into sets of the same sizes (56 for 3 and 5), the share whose
+    difference of mean log ratios is at least as large (absolute) as the observed one; they disagree when that share is
+    below PULSE_SHARE."""
+    from itertools import combinations
+    x = per_fly.dropna()
+    flies = list(x.index)
+    k = sum(f in set(short) for f in flies)
+    if k == 0 or k == len(flies):
+        return dict(n_flies=len(flies), n_short=k, n_splits=0, n_as_large=0, share=np.nan, observed=np.nan, disagree=False)
+    v = x.to_numpy(float)
+    obs = abs(np.mean([x[f] for f in flies if f in set(short)]) - np.mean([x[f] for f in flies if f not in set(short)]))
+    n, n_as = 0, 0
+    for idx in combinations(range(len(flies)), k):
+        m = np.zeros(len(flies), bool)
+        m[list(idx)] = True
+        d = abs(v[m].mean() - v[~m].mean())
+        n += 1
+        n_as += int(d >= obs - 1e-12)
+    return dict(n_flies=len(flies), n_short=k, n_splits=n, n_as_large=n_as, share=n_as / n, observed=float(obs),
+                ratio_short=float(np.exp(np.mean([x[f] for f in flies if f in set(short)]))),
+                ratio_long=float(np.exp(np.mean([x[f] for f in flies if f not in set(short)]))),
+                disagree=bool(n_as / n < PULSE_SHARE))
+
+
+def _intervals(flies: pd.DataFrame, ids: Sequence[str]) -> Optional[Tuple[float, float]]:
     f = flies.set_index('ratio_id') if 'ratio_id' in flies.columns else flies
+    if any(i not in f.index for i in ids):
+        return None
+    iv = [(float(f.loc[i, 'lo90']), float(f.loc[i, 'hi90'])) for i in ids]
+    if any(not (np.isfinite(a) and np.isfinite(b)) for a, b in iv):
+        return None
+    return hull(iv)
+
+
+def verdict_core(flies: Dict[str, pd.DataFrame], b1: pd.DataFrame, pulse: Optional[Dict[str, dict]] = None,
+                 solvent: Optional[Dict[str, float]] = None) -> Tuple[dict, pd.DataFrame, pd.DataFrame]:
+    """Part C's verdict (the entry's (C) as amended 2026-11-15 15:24). `flies`: the flies' ratios (rows of `flies_ratios`)
+    under every reading of READING_SETS ('carrying', the partners, 'literal'); `b1`: `load_b1` rows (APL on is read);
+    `pulse`: `pulse_permutation` results for 'V1_paa-4', 'V1_paa-2.954' and 'V2' (carrying reading); `solvent`: the
+    flies' solvent response rates ({'ctrl', 'tnt'}) for outcome (h).
+    - Each comparison is read under every reading (the 6-of-8 rule on the same model rows); its category is held when
+      the carrying reading and every partner give it (`held_category`; V2 without the V1-only partner), otherwise
+      reading-dependent (not decided). The literal reading is shown and decides nothing.
+    - V1: paa (the lab's input at 10^-4) over each estimate of ms's input at 10^-3 (V1_ESTIMATES, the panel's own first)
+      against the hull of the flies' two readings of paa's concentration; `v1_from_estimates` over the held categories.
+    - V2: paa at 10^-5 (PAA5_SESSION's diagnostics) over the panel's paa; the other sessions' estimates beside.
+    - A comparison on which the pulse sets disagree is not decided (V1 if either of its ratios disagrees).
+    - V3 to V5 on Hallem's stimuli where B1 has them, under the carrying reading (described).
+    Returns (verdict, one row per comparison and reading, the per-wiring rows of every comparison and reading)."""
     on = b1[b1['cond'] == 'on'][['wiring', 'stimulus', 'win', 'pre']]
     comps, rows = [], []
 
-    def add(name, num, den, lo, hi, decides):
-        c, wc = _comparison(name, on, num, den, lo, hi, decides)
-        comps.append(c)
-        rows.append(wc)
-        return c
+    def read(name, num, den, ids, readings, decides):
+        out = {}
+        for rk in readings:
+            iv = _intervals(flies[rk], ids)
+            if iv is None:
+                continue
+            wc = stimulus_classes(on, num, den, *iv)
+            if wc.empty:
+                continue
+            wc.insert(0, 'reading_set', rk)
+            wc.insert(0, 'comparison', name)
+            rows.append(wc)
+            c = dict(comparison=name, reading_set=rk, reading=reading_label(READING_SETS[rk][0]), subset=READING_SETS[rk][1],
+                     numerator=num, denominator=den, flies_lo90=iv[0], flies_hi90=iv[1], n_wirings=int(len(wc)),
+                     category=comparison_verdict(wc['cls']), category_linear=comparison_verdict(wc['cls_linear']),
+                     **{f'n_{k}': int((wc['cls'] == k).sum()) for k in CATEGORIES + ('mixed',)},
+                     model_linear_min=float(wc['ratio_linear'].min()), model_linear_max=float(wc['ratio_linear'].max()),
+                     model_min=float(wc['ratio_min'].min()), model_max=float(wc['ratio_max'].max()), decides=decides)
+            comps.append(c)
+            out[rk] = c
+        return out
 
-    lo1, hi1 = hull([(f.loc[i, 'lo90'], f.loc[i, 'hi90']) for i in ('V1_paa-4', 'V1_paa-2.954')])
-    v1_per = {}
+    v1_partners = tuple(PARTNERS)
+    v2_partners = tuple(k for k in PARTNERS if k not in V1_ONLY_PARTNERS)
+    v1_ids = ('V1_paa-4', 'V1_paa-2.954')
+    v1_held, v1_lines = {}, {}
     for est, lab in V1_ESTIMATES.items():
-        v1_per[est] = add(f'V1, ms\'s input from {est}', V1_NUM, lab, lo1, hi1, True)['verdict']
-    v1_ran = {k: v for k, v in v1_per.items() if v != 'not run'}
-    v1 = v1_verdict(v1_ran) if v1_ran else 'not run'
-    v1_lin = v1_verdict({k: comps[i]['verdict_linear'] for i, k in enumerate(V1_ESTIMATES) if v1_per[k] != 'not run'}) \
-        if v1_ran else 'not run'
-    lo2, hi2 = float(f.loc['V2', 'lo90']), float(f.loc['V2', 'hi90'])
-    c2 = add(f'V2, paa at 10^-5 from {PAA5_SESSION}/diag', V2_NUM, V2_DEN, lo2, hi2, True)
+        r = read(f"V1, ms's input from {est}", V1_NUM, lab, v1_ids, ('carrying',) + v1_partners + ('literal',), True)
+        if 'carrying' not in r or any(k not in r for k in v1_partners):
+            continue
+        cats = {k: r[k]['category'] for k in r}
+        v1_held[est] = held_category(cats, v1_partners)
+        v1_lines[est] = _line(r, v1_partners, v1_held[est])
+    r2 = read(f'V2, paa at 10^-5 from {PAA5_SESSION}/diag', V2_NUM, V2_DEN, ('V2',), ('carrying',) + v2_partners + ('literal',), True)
     for sn, lab in V2_BESIDE.items():
-        add(f'V2 beside, paa at 10^-5 from {sn}/diag', lab, V2_DEN, lo2, hi2, False)
+        read(f'V2 beside, paa at 10^-5 from {sn}/diag', lab, V2_DEN, ('V2',), ('carrying',) + v2_partners + ('literal',), False)
     for rid, (num, den) in HALLEM_COMPARISONS.items():
-        if rid in f.index and np.isfinite(f.loc[rid, 'lo90']) and np.isfinite(f.loc[rid, 'hi90']):
-            add(f'{rid} (Hallem\'s input)', num, den, float(f.loc[rid, 'lo90']), float(f.loc[rid, 'hi90']), False)
-    pulse = {}
-    for sub, fp in (flies_pulse or {}).items():
-        fp = fp.set_index('ratio_id') if 'ratio_id' in fp.columns else fp
-        if np.isfinite(fp.loc['V2', 'lo90']):
-            pulse[sub] = _comparison(f'V2 ({sub})', on, V2_NUM, V2_DEN, float(fp.loc['V2', 'lo90']),
-                                     float(fp.loc['V2', 'hi90']), False)[0]['verdict']
-    out = dict(V1=v1, V1_linear=v1_lin, V1_per_estimate=v1_per, V1_flies_hull=[lo1, hi1], V2=c2['verdict'],
-               V2_linear=c2['verdict_linear'], V2_flies=[lo2, hi2], V2_by_pulse=pulse)
+        read(f"{rid} (Hallem's input)", num, den, (rid,), ('carrying',), False)
+    pulse = pulse or {}
+    v1_pulse = any(pulse.get(i, {}).get('disagree') for i in v1_ids)
+    v2_pulse = bool(pulse.get('V2', {}).get('disagree'))
+    v1 = v1_from_estimates(v1_held) if v1_held else 'not run'
+    if v1_pulse and v1 != 'not run':
+        v1 = 'not decided'
+    if 'carrying' in r2 and all(k in r2 for k in v2_partners):
+        v2_held = held_category({k: r2[k]['category'] for k in r2}, v2_partners)
+        v2 = 'not decided' if (v2_pulse or v2_held == 'reading-dependent') else v2_held
+        v2_line = _line(r2, v2_partners, v2_held)
+    else:
+        v2_held, v2, v2_line = 'not run', 'not run', {}
+    out = dict(V1=v1, V1_held_per_estimate=v1_held, V1_lines=v1_lines, V1_pulse_disagree=v1_pulse, V2=v2, V2_held=v2_held,
+               V2_line=v2_line, V2_pulse_disagree=v2_pulse, pulse=pulse,
+               V2_note='V2 is read in the series as recorded, in which concentration rises with block (11 of 12 recordings)')
     oc = []
-    if v1 == 'inside' and c2['verdict'] == 'inside':
+    if v1 == 'inside' and v2 == 'inside':
         oc.append('a')
-    if c2['verdict'] == 'flatter':
+    if v2 == 'flatter':
         oc.append('b')
-    if c2['verdict'] == 'steeper':
+    if v2 == 'steeper':
         oc.append('c')
-    if v1 in ('flatter', 'steeper'):
+    if v1 in ('flatter', 'steeper', 'outside, mixed'):
         oc.append('d')
-    if c2['verdict'] == 'not decided' or len(set(pulse.values())) > 1:
+    if v1 in ('not decided',) or v2 in ('not decided',) or v1_pulse or v2_pulse:
         oc.append('e')
     blank = b1[b1['stimulus'] == BLANK_LABEL]
     if len(blank):
@@ -1839,36 +1983,137 @@ def verdict_core(flies: pd.DataFrame, b1: pd.DataFrame, flies_pulse: Optional[Di
                 oc.append('h')
     out['outcomes'] = oc
     out['outcome_names'] = {k: OUTCOMES[k] for k in oc}
-    return out, pd.DataFrame(comps), pd.concat([r for r in rows if len(r)], ignore_index=True) if any(len(r) for r in rows) \
-        else pd.DataFrame()
+    allrows = pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
+    if len(allrows):
+        c2 = allrows[(allrows['comparison'].str.startswith('V2, ')) & (allrows['reading_set'] == 'carrying')]
+        if len(c2):
+            out['V2_order_factor'] = order_factor(c2)
+    return out, pd.DataFrame(comps), allrows
 
 
-def part_c(reading: Tuple[str, bool], subset: str, wirings: Sequence[str] = ALL_WIRINGS, allow_missing: bool = False) -> dict:
-    """Part C (module docstring): the verdict under one reading of the flies (`reading`, one of READINGS, and `subset`,
-    'all' or 'all_recording_ranges': the one-log rule on the series' range or each recording's), both required: the
-    reading that carries V1 and V2 is a planning decision. Reads B1's runs (`load_b1`; all eight wirings unless
-    `allow_missing`), recomputes the flies' ratios (`flies_ratios`, and the pulse subsets for outcome (e)), writes
-    c_comparisons_<tag>.csv, c_wirings_<tag>.csv and verdict_<tag>.json (tag: the reading and subset)."""
-    if tuple(reading) not in READINGS:
-        raise ValueError(f'unknown reading {reading}')
-    if subset not in ('all', 'all_recording_ranges'):
-        raise ValueError(f'part C reads subset all or all_recording_ranges, not {subset!r}')
+def _line(r: Dict[str, dict], partners: Sequence[str], held: str) -> dict:
+    """A verdict line: the carrying reading's category with its wiring count, each partner's, the literal reading's, and
+    the held category."""
+    def cell(c):
+        return f"{c['category']} ({c.get('n_' + c['category'], 0) if c['category'] in CATEGORIES else max(c[f'n_{k}'] for k in CATEGORIES)} of {c['n_wirings']})"
+    line = dict(carrying=cell(r['carrying']), **{k: cell(r[k]) for k in partners if k in r})
+    if 'literal' in r:
+        line['literal (decides nothing)'] = cell(r['literal'])
+    line['held'] = held
+    return line
+
+
+def order_factor(rows: pd.DataFrame) -> dict:
+    """V2's order description: the factor between the nearer end of the flies' interval and the model's nearest ratio
+    over the wirings and the indicator family (1 when a wiring is inside): the order effect that would be needed."""
+    lo, hi = float(rows['flies_lo90'].iloc[0]), float(rows['flies_hi90'].iloc[0])
+    if (rows['set_distance'] == 0).any():
+        return dict(factor=1.0, note='a wiring is inside')
+    x = rows['nearest_ratio'].to_numpy(float)
+    i = int(np.argmin(np.minimum(np.abs(np.log(x / lo)), np.abs(np.log(x / hi)))))
+    end = lo if abs(np.log(x[i] / lo)) <= abs(np.log(x[i] / hi)) else hi
+    return dict(factor=float(end / x[i]), nearest_model_ratio=float(x[i]), nearer_end=float(end),
+                wiring=str(rows['wiring'].iloc[i]))
+
+
+def pa_repeat(recs) -> pd.DataFrame:
+    """V2's description: pa at 10^-6.771 delivered twice (REPEAT_RECORDINGS), the later block's response over the
+    earlier's under the carrying baseline (each presentation minus the paraffin oil block's at the same position, the
+    calyx mean, the mean of the two presentations)."""
+    from experiments import E79_apl_calyx_constraints as E79
+    rows = []
+    for rec in recs:
+        if rec.name not in REPEAT_RECORDINGS:
+            continue
+        fr, st, mask = rec.frames, rec.stack, rec.mask
+        b = E79.blank_frames(fr)
+        by_pos = {2: st[b['pfo_pos2'][0]], 3: st[b['pfo_pos3'][0]]}
+        g = fr[(fr['odor'] == 'pa') & np.isclose(fr['log10_conc'].astype(float), -6.771)]
+        resp = {int(blk): float(np.mean([(st[i] - by_pos[int(pos)])[mask].mean() for i, pos in zip(gg.index, gg['position'])]))
+                for blk, gg in g.groupby('block')}
+        if len(resp) != 2:
+            continue
+        (b0, r0), (b1_, r1) = sorted(resp.items())
+        rows.append(dict(recording=rec.name, earlier_block=b0, later_block=b1_, earlier=r0, later=r1, later_over_earlier=r1 / r0))
+    return pd.DataFrame(rows)
+
+
+def v2_descriptions(per_recording: pd.DataFrame, recs, drift: pd.DataFrame) -> dict:
+    """V2's descriptions beside the verdict (no gate): SHUFFLED_RECORDING's V2 ratio alone against the geometric mean
+    and range of the other recordings' (carrying reading, `per_recording`: `flies_ratios`' rows of V2); the pa 10^-6.771
+    repeat (`pa_repeat`); the first-in-block paraffin oil drift (A1's summary: recordings up and down, the median
+    slope). The order factor is `order_factor`, from the model's rows."""
+    v = per_recording[(per_recording['ratio_id'] == 'V2') & per_recording['entered']].set_index('recording')['log_ratio']
+    out = {}
+    if SHUFFLED_RECORDING in v.index:
+        others = v.drop(SHUFFLED_RECORDING)
+        out['shuffled_recording'] = dict(recording=SHUFFLED_RECORDING, ratio=float(np.exp(v[SHUFFLED_RECORDING])),
+                                         others_geomean=float(np.exp(others.mean())), others_min=float(np.exp(others.min())),
+                                         others_max=float(np.exp(others.max())), n_others=int(len(others)))
+    rep = pa_repeat(recs)
+    out['pa_repeat'] = rep.to_dict('records')
+    out['pfo_drift'] = dict(n_up=int((drift['slope_per_block'] > 0).sum()), n_down=int((drift['slope_per_block'] < 0).sum()),
+                            median_slope_per_block=float(drift['slope_per_block'].median()))
+    return out
+
+
+def pulse_matched(b1: pd.DataFrame, flies_short: pd.DataFrame, flies_long: pd.DataFrame, root: Optional[Path] = None) -> dict:
+    """The pulse-matched readings (described): V1 under the megamat estimate of ms's input, the 0.5 s recordings' hull
+    against the family's eight wirings, and the 1 s recordings' hull against B2's 1 s run on the real wiring (APL's
+    mean over 0-0.5 s and over 0-1 s) when it exists."""
+    on = b1[b1['cond'] == 'on'][['wiring', 'stimulus', 'win', 'pre']]
+    out = {}
+    iv = _intervals(flies_short, ('V1_paa-4', 'V1_paa-2.954'))
+    if iv is not None:
+        wc = stimulus_classes(on, V1_NUM, 'ms', *iv)
+        out['short_vs_family'] = dict(flies=list(iv), n_inside=int((wc['cls'] == 'inside').sum()), n_wirings=int(len(wc)),
+                                      category=comparison_verdict(wc['cls']))
+    iv = _intervals(flies_long, ('V1_paa-4', 'V1_paa-2.954'))
+    d = b_root(root) / 'B2'
+    if iv is not None and (d / 'pulse1_on_apl.csv').exists():
+        a = pd.read_csv(d / 'pulse1_on_apl.csv', index_col=0)
+        res = dict(flies=list(iv))
+        for col in ('win', 'win_pulse'):
+            rs = model_ratio_set(a.loc[V1_NUM, col], a.loc['ms', col], a.loc['ms', 'pre'])
+            res[col] = dict(ratio_linear=float(rs['ratio'].iloc[0]), ratio_min=float(rs['ratio'].min()),
+                            ratio_max=float(rs['ratio'].max()), cls=classify(rs['ratio'], *iv))
+        out['long_vs_b2_pulse1'] = res
+    return out
+
+
+def part_c(wirings: Sequence[str] = ALL_WIRINGS, allow_missing: bool = False) -> dict:
+    """Part C (module docstring; the entry's (C) as amended 2026-11-15 15:24): reads B1's runs (`load_b1`; all eight
+    wirings unless `allow_missing`), the flies' ratios under every reading of READING_SETS (`flies_ratios`), the pulse
+    sets' permutation test on V1's two ratios and V2 (carrying reading), V2's descriptions and the pulse-matched
+    readings; writes c_comparisons.csv, c_wirings.csv and verdict.json."""
     b1 = load_b1(wirings)
     missing = b1.attrs.get('missing') or []
     if missing and not allow_missing:
         raise RuntimeError(f'B1 runs missing: {missing}')
-    resp = stimulus_responses(load_recordings())
-    flies = flies_ratios(resp, reading, subset)[0]
-    pulse = {sub: flies_ratios(resp, reading, sub)[0] for sub in ('pulse_1s', 'pulse_0.5s')}
+    recs = load_recordings()
+    resp = stimulus_responses(recs)
+    flies, per = {}, {}
+    for k, (rd, sub) in READING_SETS.items():
+        flies[k], per[k] = flies_ratios(resp, rd, sub)
+    short = sorted(resp.loc[np.isclose(resp['pulse_s'], 0.5), 'fly'].unique())
+    pulse = {}
+    pc = per['carrying']
+    for rid in ('V1_paa-4', 'V1_paa-2.954', 'V2'):
+        d = pc[(pc['ratio_id'] == rid) & pc['entered']]
+        pulse[rid] = pulse_permutation(d.groupby('fly')['log_ratio'].mean(), short)
     k = kc_rates('z1')
     verdict, comps, rows = verdict_core(flies, b1, pulse, solvent=dict(ctrl=float(k.loc['pfo', 'ctrl']), tnt=float(k.loc['pfo', 'tnt'])))
-    tag = f'{reading_label(reading)}__{subset}'
+    drift = a1_tables(recs, resp)['drift_summary']
+    verdict['V2_descriptions'] = v2_descriptions(pc, recs, drift)
+    rd = CARRYING[0]
+    verdict['pulse_matched'] = pulse_matched(b1, flies_ratios(resp, rd, 'pulse_0.5s')[0], flies_ratios(resp, rd, 'pulse_1s')[0])
     out = out_dir()
-    comps.to_csv(out / f'c_comparisons_{tag}.csv', index=False)
-    rows.to_csv(out / f'c_wirings_{tag}.csv', index=False)
-    verdict.update(reading=reading_label(reading), subset=subset, wirings=sorted(set(b1['wiring'])), missing_runs=missing,
-                   time=time.strftime('%Y-%m-%d %H:%M'), host=_host(), commits=dict(H.code_commits()))
-    _write_json(out / f'verdict_{tag}.json', verdict)
+    comps.to_csv(out / 'c_comparisons.csv', index=False)
+    rows.to_csv(out / 'c_wirings.csv', index=False)
+    verdict.update(reading_sets={k: dict(reading=reading_label(v[0]), subset=v[1]) for k, v in READING_SETS.items()},
+                   wirings=sorted(set(b1['wiring'])), missing_runs=missing, time=time.strftime('%Y-%m-%d %H:%M'),
+                   host=_host(), commits=dict(H.code_commits()))
+    _write_json(out / 'verdict.json', verdict)
     return verdict
 
 
@@ -1895,14 +2140,12 @@ def main() -> None:
     ap.add_argument('--threads', type=int, default=4,
                     help='part B (and part 0 with runs): OMP threads (OMP_NUM_THREADS and OMP_THREAD_LIMIT must match)')
     ap.add_argument('--no-runs', action='store_true', help="part 0: the reader's identities only")
-    ap.add_argument('--reading', default=None, help="part C: the flies' reading (e.g. order_matched_blank, order_matched)")
-    ap.add_argument('--subset', default=None, choices=['all', 'all_recording_ranges'],
-                    help="part C: the one-log rule on the series' range ('all') or on each recording's")
     ap.add_argument('--allow-missing', action='store_true', help='part C: read the B1 runs there are')
     ap.add_argument('--root', default=None,
                     help="part B: the folder its runs go under (<root>/B/B1/...; default outputs/E98_apl_response_strength), "
                          "e.g. the archive's from_hal/ for another host's lane")
     a = ap.parse_args()
+    process_commits(strict=a.part == 'B' or (a.part == '0' and not a.no_runs))
     ws = _wirings(a.wirings)
     if a.part in ('B',) or (a.part == '0' and not a.no_runs):
         for v in ('OMP_NUM_THREADS', 'OMP_THREAD_LIMIT'):
@@ -1921,13 +2164,8 @@ def main() -> None:
             provenance('B', arms=list(arms), wirings=list(ws), threads=a.threads)
         part_b(arms, ws, None if a.root is None else Path(a.root))
     elif a.part == 'C':
-        if a.reading is None or a.subset is None:
-            ap.error('part C needs --reading and --subset (which reading carries V1 and V2 is a planning decision)')
-        rd = next((r for r in READINGS if reading_label(r) == a.reading), None)
-        if rd is None:
-            ap.error(f'--reading must be one of {[reading_label(r) for r in READINGS]}')
-        provenance('C', reading=a.reading, subset=a.subset)
-        print(json.dumps(part_c(rd, a.subset, ws, allow_missing=a.allow_missing), indent=1, default=float), flush=True)
+        provenance('C', allow_missing=a.allow_missing)
+        print(json.dumps(part_c(ws, allow_missing=a.allow_missing), indent=1, default=float), flush=True)
     elif a.part == 'table':
         print(comparison_table(), flush=True)
 
