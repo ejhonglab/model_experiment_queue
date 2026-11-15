@@ -338,6 +338,19 @@ def test_part0_reader_identity_2021():
 @pytest.mark.skipif(_shared() is None or not (_shared() / 'results' / M.EXPERIMENT / 'a3_pn_rates.csv').exists(),
                     reason="A3's PN-stage run not there")
 def test_part0_pn_identity():
-    rates = pd.read_csv(_shared() / 'results' / M.EXPERIMENT / 'a3_pn_rates.csv', index_col=0)
-    res = M.pn_identity(rates)
-    assert res['passed'], res
+    res = M.pn_identity()
+    assert res['window_vs_e90_hz'] <= 1e-9, res
+    if 'legacy_evoked_vs_e79_cache_hz' in res:
+        assert res['passed'], res
+
+
+def test_scaled_reliability():
+    assert M.scaled_reliability(0.6, 1.0) == pytest.approx(0.6)
+    r = M.scaled_reliability(0.59, 0.5)
+    assert r == pytest.approx(0.25 * 0.59 / (0.25 * 0.59 + 0.41))
+    # the same noise on half the signal: two presentations of it agree at r
+    rng = np.random.default_rng(2)
+    sig = rng.normal(size=200000)
+    sd = M.noise_sd(sig, 0.59, n_presentations=1)
+    a, b = 0.5 * sig + rng.normal(0, sd, sig.size), 0.5 * sig + rng.normal(0, sd, sig.size)
+    assert np.corrcoef(a, b)[0, 1] == pytest.approx(r, abs=0.01)

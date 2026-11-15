@@ -43,8 +43,9 @@ Definitions (the entry's, fixed before any reading; E98's hold where not changed
 
 Parts (CLI `--part`):
 - 0, the identities; a failure stops the experiment and is reported (identity.json). Those that need no new recording,
-  run now (`part_0 --no-recordings`): the PN stage on the extended input reproduces E79's cached panel PN rates
-  (connectome_pn_rates.csv) exactly; the 1-log matcher reproduces data/yang_weak_odor_kc/orn_input_availability.csv's
+  run now (`part_0 --no-recordings`): the PN stage on the extended input reproduces, for the 16 panel odors, E90's saved
+  real-wiring PN window means exactly and, read with the step times pyolfsysm used before olfsysm 17cef71, E79's cached
+  panel PN rates (connectome_pn_rates.csv) exactly (`pn_identity`); the 1-log matcher reproduces data/yang_weak_odor_kc/orn_input_availability.csv's
   statuses; the calyx-response reader reproduces E79's calyx means on one 2021 recording (E79_maps_across_baselines.csv).
   After viki's copy: the reader reproduces Yang's calyx-response tables from her maps and outlines; each recording's pixel
   size and channel list come from its Experiment.xml. E98's own part 0 checks that B1 reproduces E90's saved runs.
@@ -79,7 +80,19 @@ Deviations from the entry (each also in the note):
   connectome_measured.csv: 0.59 to 0.69), the scored map being the mean of A4_N_PRESENTATIONS (2) presentations as in 2021.
   Power is the share of simulated recordings, pooled over scored calyces, truths and draws, whose best score over slabs,
   blurs and D_FLIPS exceeds the null's 95th percentile of the permutations' maxima over the same search; the lower end of
-  the reliability range decides (a4_power.csv gives both, and the share per scored calyx).
+  the reliability range decides (a4_power.csv gives both, and the share per scored calyx). Beside, as a sensitivity that
+  decides nothing: the reliability of a map with half the response at the same noise (`scaled_reliability`), since set
+  W's calyx responses are 0.13 to 0.64 of paa at 10^-3 (the planner's probes). Truth and prediction take the
+  same session's input estimate, and a pair's power is its lowest over the three sessions' estimates (the entry fixes no
+  rule over estimates for W3; part D will score each estimate apart, and W3 passes or fails only if it does so under
+  every estimate, otherwise it is not decided, as W1's outside classes).
+- A3 reads the PN stage with pyolfsysm's current step times (olfsysm 17cef71 on), as E90 does; E79's cached panel rates
+  were read with the earlier ones, which put the 0-0.5 s window a fraction of a step later, so its evoked rates differ
+  from A3's by up to 0.021 Hz (0.3 %); part 0 checks both readings.
+- Each session's estimate is a column of that session's table at the concentration nearest the stimulus's; where a
+  session holds that concentration in two panels (megamat's ms at 10^-3 in the diagnostics and in its own panel), both
+  are kept as separate estimates. The PN stage runs on the 36 glomeruli of the panel's input, as everywhere; the weak
+  odors' most-driven glomeruli (VM5d, DM4, VM2, DC3, VM5v, VM7d) are among them.
 - A3's "contrast against the label-permuted null": per calyx, pair and session estimate, the SD over grid cells of the
   predicted difference map (each odor's map over its mean inside the outline, as E79) and the agreement between calyces of
   the predicted difference maps (mean Pearson r over calyx pairs, the left calyces mirrored), each against the same in
@@ -157,6 +170,8 @@ A4_POWER_MIN = 0.8
 A4_N_DRAWS = 20                          # noise draws per (scored calyx, truth calyx, reliability)
 A4_N_PRESENTATIONS = 2                   # presentations averaged in a scored map (the 2021 set's)
 A4_PLANE_DEPTHS_UM = (12.0, 15.0, 18.0, 21.0, 24.0)    # set W's planes (the inventory)
+A4_RESPONSE_SCALE = 0.5                # A4's sensitivity (described, decides nothing): the reliability of a map whose
+                                       # response is this fraction of the 2021 maps' at the same noise
 W3_NULL_PCT = 95.0
 W3_PASS_SHARE = 0.5
 W3_FAIL_SHARE = 0.25
@@ -781,7 +796,14 @@ def pn_rates_extended(stims: Optional[Sequence[Stim]] = None, rebuild: bool = Fa
     labels = _column_labels(r)
     total = pd.DataFrame(tot, index=pd.Index(gl, name='glomerulus'), columns=labels)
     evoked = pd.DataFrame(tot - base, index=total.index, columns=labels)
+    # the same run read with the step times pyolfsysm's get_time_index gave before 2026-11-13 (olfsysm 17cef71), which
+    # E79's cached connectome_pn_rates.csv was read with (part 0's identity)
+    tl = np.asarray(get_time_index(mp, rv, legacy_linspace=True))
+    wl, pl = (tl >= S.PN_WINDOW[0]) & (tl <= S.PN_WINDOW[1]), (tl >= -0.5) & (tl < 0.0)
+    legacy = pd.DataFrame(np.stack([np.asarray(pn[int(j)])[:, wl].mean(axis=1) - np.asarray(pn[int(j)])[:, pl].mean(axis=1)
+                                    for j in order], axis=1), index=total.index, columns=labels)
     total.to_csv(out_dir() / 'a3_pn_rates_total.csv')
+    legacy.to_csv(out_dir() / 'a3_pn_rates_legacy_time.csv')
     evoked.to_csv(path)
     table.to_csv(ipath, index=False)
     orn.to_csv(local_dir('A3') / 'orn_extended.csv')
@@ -795,15 +817,32 @@ def pn_rates_extended(stims: Optional[Sequence[Stim]] = None, rebuild: bool = Fa
     return evoked, table
 
 
-def pn_identity(rates: pd.DataFrame) -> dict:
-    """Part 0: the 16 panel odors' evoked PN rates of the extended run equal E79's connectome_pn_rates.csv (largest
-    absolute difference, Hz)."""
+def pn_identity(rates: Optional[pd.DataFrame] = None) -> dict:
+    """Part 0: the 16 panel odors' PN stage in the extended run against the saved ones: (a) its 0-0.5 s window means equal
+    E90's saved real-wiring stage runs (`real_on_pn_win.parquet`, the same family on the 16-odor input with the current
+    code); (b) read with the legacy step times (a3_pn_rates_legacy_time.csv), its evoked rates equal E79's cached
+    connectome_pn_rates.csv. Each the largest absolute difference (Hz), passed at 1e-9; and, for the record, the
+    difference between the evoked rates A3 uses (current step times) and E79's cache."""
     CM, _ = _e79()
+    rates = pd.read_csv(out_dir() / 'a3_pn_rates.csv', index_col=0) if rates is None else rates
     ref = pd.read_csv(CM.OUT / 'connectome_pn_rates.csv', index_col=0)
-    got = rates.reindex(index=ref.index, columns=ref.columns)
-    diff = float(np.nanmax(np.abs(got.to_numpy(dtype=float) - ref.to_numpy(dtype=float))))
-    return dict(passed=bool(diff <= 1e-9 and not got.isna().any().any()), max_abs_diff_hz=diff,
-                n_glomeruli=int(ref.shape[0]), n_odors=int(ref.shape[1]))
+
+    def maxdiff(a, b):
+        a = a.reindex(index=b.index, columns=b.columns)
+        return float(np.abs(a.to_numpy(dtype=float) - b.to_numpy(dtype=float)).max()) if not a.isna().any().any() \
+            else np.inf
+    out = dict(n_glomeruli=int(ref.shape[0]), n_odors=int(ref.shape[1]),
+               evoked_vs_e79_cache_hz=maxdiff(rates, ref))
+    e90 = H.shared_dir() / 'data' / 'model_outputs' / 'E90_model_stages' / 'B' / 'real_on_pn_win.parquet'
+    tot = out_dir() / 'a3_pn_rates_total.csv'
+    if e90.exists() and tot.exists():
+        out['window_vs_e90_hz'] = maxdiff(pd.read_csv(tot, index_col=0), pd.read_parquet(e90))
+    leg = out_dir() / 'a3_pn_rates_legacy_time.csv'
+    if leg.exists():
+        out['legacy_evoked_vs_e79_cache_hz'] = maxdiff(pd.read_csv(leg, index_col=0), ref)
+    checks = [out.get('window_vs_e90_hz', np.inf), out.get('legacy_evoked_vs_e79_cache_hz', np.inf)]
+    out['passed'] = bool(all(x <= 1e-9 for x in checks))
+    return out
 
 
 def pair_maps(Wt: np.ndarray, perms: np.ndarray, G: np.ndarray, inside: np.ndarray) -> np.ndarray:
@@ -1002,6 +1041,12 @@ def noise_sd(signal: np.ndarray, reliability: float, n_presentations: int = A4_N
     return float(np.std(signal) * np.sqrt((1.0 - r) / r / n_presentations))
 
 
+def scaled_reliability(r: float, f: float) -> float:
+    """The split-half reliability of a map whose response is `f` times that of a map with reliability `r`, at the same
+    noise (the signal's variance scales with f^2): f^2 r / (f^2 r + 1 - r)."""
+    return float(f * f * r / (f * f * r + 1.0 - r))
+
+
 def detect(pred: Dict[Tuple[float, float], np.ndarray], inside: Dict[Tuple[float, float], np.ndarray], meas: np.ndarray,
            meas_inside: np.ndarray, flips: Sequence[str] = D_FLIPS) -> Tuple[float, float, bool]:
     """One recording against one calyx: `pred` maps (slab depth, blur) to the predicted grids (row 0 the true labels, the
@@ -1093,10 +1138,11 @@ def part_a4(state: Optional[dict] = None, n_draws: int = A4_N_DRAWS) -> dict:
     state = load_a3_inputs() if state is None else state
     rel = measured_reliability()
     rels = sorted(rel.values())
+    weak = scaled_reliability(rels[0], A4_RESPONSE_SCALE)
     t0 = time.time()
     draws = []
     for (pair, sess) in sorted(state['columns']):
-        draws.append(power(pair, sess, state, rels, n_draws))
+        draws.append(power(pair, sess, state, rels + [weak], n_draws))
         print(f'{time.strftime("%H:%M:%S")} A4 {pair} [{sess}]: share exceeding '
               f'{draws[-1].groupby("reliability")["exceeds"].mean().round(3).to_dict()} ({time.time() - t0:.0f} s)',
               flush=True)
@@ -1110,6 +1156,10 @@ def part_a4(state: Optional[dict] = None, n_draws: int = A4_N_DRAWS) -> dict:
     cnt = by_cal.groupby(['pair', 'session', 'reliability'])['share']
     pw = pw.merge(cnt.apply(lambda x: int((x > W3_PASS_SHARE).sum())).rename('n_calyces_over_half').reset_index())
     pw = pw.merge(cnt.apply(lambda x: int((x > W3_FAIL_SHARE).sum())).rename('n_calyces_over_quarter').reset_index())
+    role = {rels[0]: 'decisive (2021, paa minus ms)', rels[1]: 'beside (2021, pa minus ms)',
+            weak: f'sensitivity: response x {A4_RESPONSE_SCALE:g}'}
+    for t_ in (by_cal, pw):
+        t_.insert(3, 'role', t_['reliability'].map(role))
     out = out_dir()
     D.to_csv(out / 'a4_power_draws.csv.gz', index=False)
     by_cal.to_csv(out / 'a4_power_by_calyx.csv', index=False)
@@ -1117,7 +1167,9 @@ def part_a4(state: Optional[dict] = None, n_draws: int = A4_N_DRAWS) -> dict:
     low = pw[pw['reliability'] == rels[0]]
     decisive = low.groupby('pair')['power'].min()
     kept = [p for p in decisive.index if decisive[p] >= A4_POWER_MIN]
-    res = dict(reliabilities=rel, decisive_reliability=rels[0], n_draws=int(n_draws), n_presentations=A4_N_PRESENTATIONS,
+    sens = pw[pw['reliability'] == weak].groupby('pair')['power'].min()
+    res = dict(reliabilities=rel, decisive_reliability=rels[0], sensitivity_reliability=weak,
+               sensitivity_power={p: round(float(v), 4) for p, v in sens.items()}, n_draws=int(n_draws), n_presentations=A4_N_PRESENTATIONS,
                plane_depths_um=list(A4_PLANE_DEPTHS_UM), slab_within_um=D_SLAB_WITHIN_UM, flips=list(D_FLIPS),
                power_min=A4_POWER_MIN, decisive_power={p: round(float(v), 4) for p, v in decisive.items()},
                kept=kept, left_out=[p for p in decisive.index if p not in kept],
