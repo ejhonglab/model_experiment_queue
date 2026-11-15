@@ -319,11 +319,14 @@ def aplpn_hold_tag(hold: Optional[float]) -> str:
     return '' if hold is None else 'aplpnhold_'
 
 
-APLKC_FLAT_KINDS = ('uniform', 'connectome', 'offclaw', 'offclaw_ped', 'allsyn')
-# (E96) the components built from the counts of APL's synapses per KC (`aplkc_flat_counts`)
-APLKC_FLAT_COUNT_KINDS = ('offclaw', 'offclaw_ped', 'allsyn')
+APLKC_FLAT_KINDS = ('uniform', 'connectome', 'offclaw', 'offclaw_ped', 'allsyn', 'allsyn_even', 'allsyn_even_calyx')
+# (E96) the components built from the counts of APL's synapses per KC (`aplkc_flat_counts`); (E99) 'allsyn_even' (T1)
+# each KC's count of all of APL's synapses (on its kept claws, on no claw in the calyx, in the peduncle) and
+# 'allsyn_even_calyx' (T2) the same without the peduncle's, spread evenly over its claws
+APLKC_FLAT_COUNT_KINDS = ('offclaw', 'offclaw_ped', 'allsyn', 'allsyn_even', 'allsyn_even_calyx')
+APLKC_FLAT_EVEN_KINDS = ('offclaw', 'offclaw_ped', 'allsyn_even', 'allsyn_even_calyx')   # a per-KC amount spread evenly
 APLKC_FLAT_TAGS = {'uniform': 'flatu_', 'connectome': 'flatc_', 'offclaw': 'flato_', 'offclaw_ped': 'flatp_',
-    'allsyn': 'flata_'}
+    'allsyn': 'flata_', 'allsyn_even': 'flatt1_', 'allsyn_even_calyx': 'flatt2_'}
 APLKC_FLAT_MAX = 8.0
 
 
@@ -348,7 +351,7 @@ def aplkc_flat_spec(kind: Optional[str], unit: Optional[float] = None, init: Opt
 
 def aplkc_flat_tag(spec: Optional[dict]) -> str:
     """(E95) The tag part of --aplkc-flat: flatu_ (uniform) or flatc_ (connectome); (E96) flato_ (offclaw), flatp_
-    (offclaw_ped), flata_ (allsyn); '' when not given."""
+    (offclaw_ped), flata_ (allsyn); (E99) flatt1_ (allsyn_even), flatt2_ (allsyn_even_calyx); '' when not given."""
     return '' if spec is None else APLKC_FLAT_TAGS[spec['kind']]
 
 
@@ -377,12 +380,26 @@ def aplkc_flat_offclaw(kind: str, per_kc: pd.DataFrame) -> pd.Series:
     raise ValueError(f'no off-claw count for --aplkc-flat {kind!r}')
 
 
+def aplkc_flat_per_kc(kind: str, per_kc: pd.DataFrame) -> pd.Series:
+    """The amount per KC that a count component spreads evenly over the KC's claws: the off-claw count a_k
+    (`aplkc_flat_offclaw`) for 'offclaw', 'offclaw_ped' and 'allsyn' (which adds each kept claw's own count where it
+    lies); (E99) for 'allsyn_even' all of the KC's counted synapses, those on its kept claws (the counts' kept), on no
+    claw in the calyx and in the peduncle (c_k + a^c_k + a^p_k, T1), and for 'allsyn_even_calyx' the same without the
+    peduncle's (c_k + a^c_k, T2)."""
+    if kind == 'allsyn_even':
+        return (per_kc['kept'] + per_kc['no_claw'] + per_kc['peduncle']).astype(float)
+    if kind == 'allsyn_even_calyx':
+        return (per_kc['kept'] + per_kc['no_claw']).astype(float)
+    return aplkc_flat_offclaw(kind, per_kc)
+
+
 def aplkc_flat_shape(kind: str, kc_of_claw: np.ndarray, a_kc: pd.Series,
     kept_claw: Optional[np.ndarray] = None) -> np.ndarray:
     """(E96) The component's shape per claw, mean 1 over the claws: a_k / n_k on each of KC k's claws (n_k its claws in
     `kc_of_claw`, a_k from `a_kc`, indexed by KC id); 'allsyn' adds each claw's own count on the kept claws
     (`kept_claw`, in synapses, the claws' order), in the proportion in which the two are counted. A KC with a_k = 0 (and,
-    for 'allsyn', no synapse on its claws) gets 0."""
+    for 'allsyn', no synapse on its claws) gets 0. (E99) 'allsyn_even' and 'allsyn_even_calyx' spread a_k, then the
+    KC's whole count (`aplkc_flat_per_kc`), evenly as 'offclaw' does."""
     kc_of_claw = np.asarray(kc_of_claw)
     n = pd.Series(kc_of_claw).value_counts()
     a = pd.Series(a_kc, dtype=float)
@@ -398,7 +415,7 @@ def aplkc_flat_shape(kind: str, kc_of_claw: np.ndarray, a_kc: pd.Series,
         if kc.size != per_claw.size or (kc < 0).any():
             raise ValueError(f'{kc.size} kept counts for {per_claw.size} claws')
         per_claw = kc + per_claw
-    elif kind not in ('offclaw', 'offclaw_ped'):
+    elif kind not in APLKC_FLAT_EVEN_KINDS:
         raise ValueError(f'no count shape for --aplkc-flat {kind!r}')
     m = float(per_claw.mean())
     if not m > 0:
@@ -412,8 +429,9 @@ def aplkc_flat_component(wAPLKC0: pd.Series, kind: str,
     connectome's mean (unscaled, normalized) weight on every claw, 'connectome' each claw's connectome weight (not
     weighted by breadth); (E96) 'offclaw', 'offclaw_ped', 'allsyn' the connectome's mean weight times
     `aplkc_flat_shape` (a KC's synapses on no claw spread evenly over its claws; with all of APL's synapses on the kept
-    claws added), from `counts` (`aplkc_flat_counts` of `wAPLKC0`'s claws, computed when None). All have the
-    connectome's mean."""
+    claws added), from `counts` (`aplkc_flat_counts` of `wAPLKC0`'s claws, computed when None); (E99) 'allsyn_even',
+    'allsyn_even_calyx' the same with each KC's count of all of APL's synapses (with / without the peduncle's) spread
+    evenly over its claws. All have the connectome's mean."""
     w = wAPLKC0.to_numpy(dtype=float)
     if kind == 'uniform':
         return np.full(w.size, float(w.mean()))
@@ -427,7 +445,7 @@ def aplkc_flat_component(wAPLKC0: pd.Series, kind: str,
         n = pd.Series(kc_of).value_counts().reindex(per_kc.index)
         if not np.array_equal(n.to_numpy(dtype=float), per_kc['n_claws'].to_numpy(dtype=float)):
             raise ValueError("the counts' claws per KC are not the wiring's")
-        shape = aplkc_flat_shape(kind, kc_of, aplkc_flat_offclaw(kind, per_kc), per_claw.to_numpy(dtype=float))
+        shape = aplkc_flat_shape(kind, kc_of, aplkc_flat_per_kc(kind, per_kc), per_claw.to_numpy(dtype=float))
         return float(w.mean()) * shape
     raise ValueError(f'unknown --aplkc-flat {kind!r}')
 
@@ -1943,9 +1961,11 @@ def main() -> None:
         help='(E95) add an unweighted component to the APL->KC weights, its size a fitted parameter (aplkc_flat, bounded '
         "[0, --aplkc-flat-max]): 'uniform' the connectome's mean weight on every claw, 'connectome' each claw's connectome "
         "weight unweighted by breadth; (E96) 'offclaw' each KC's APL synapses on no claw in the calyx, 'offclaw_ped' with "
-        "those in the peduncle, spread evenly over its claws, 'allsyn' those plus the synapses on each kept claw, each "
-        "scaled to the connectome's mean weight; times --aplkc-flat-unit per unit of size; off by default; tag part "
-        'flatu_ / flatc_ / flato_ / flatp_ / flata_')
+        "those in the peduncle, spread evenly over its claws, 'allsyn' those plus the synapses on each kept claw; (E99) "
+        "'allsyn_even' each KC's count of all of APL's synapses (kept claws, no claw, peduncle) and 'allsyn_even_calyx' "
+        "the same without the peduncle's, spread evenly over its claws; each scaled to the connectome's mean weight; "
+        "times --aplkc-flat-unit per unit of size; off by default; tag part flatu_ / flatc_ / flato_ / flatp_ / flata_ / "
+        'flatt1_ / flatt2_')
     ap.add_argument('--aplkc-flat-unit', type=float, default=None, metavar='U',
         help='(E95) with --aplkc-flat: the unscaled weight per unit of size and of the component\'s mean weight')
     ap.add_argument('--aplkc-flat-init', type=float, default=None, metavar='D',
@@ -2552,7 +2572,9 @@ def main() -> None:
                 'claw the family\'s breadth-weighted one plus aplkc_flat x unit x the component (uniform: the connectome\'s '
                 'mean normalized weight on every claw; connectome: the claw\'s own connectome weight; E96\'s offclaw / '
                 'offclaw_ped / allsyn: each KC\'s APL->KC synapses on no claw in the calyx / also in the peduncle / also '
-                'with each kept claw\'s own, spread evenly over its claws, at the connectome\'s mean), aplkc_flat fitted '
+                'with each kept claw\'s own, spread evenly over its claws, at the connectome\'s mean; E99\'s allsyn_even / '
+                'allsyn_even_calyx: each KC\'s count of all of APL\'s synapses, with / without the peduncle\'s, spread '
+                'evenly over its claws), aplkc_flat fitted '
                 'within bounds as a fifth parameter (optimize_mb_model_params extra_params)')))),
             kckc_fixed=args.kckc_fixed, base_params=initial, loss_variant=args.loss, kc_spiking=kc_spiking,
             **(dict(kc_thr_input=dict(exponent=args.kc_thr_input_exp, prepass=prepass_info,
