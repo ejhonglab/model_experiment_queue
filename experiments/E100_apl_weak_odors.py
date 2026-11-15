@@ -425,7 +425,18 @@ def read_recordings(sets: Optional[Sequence[str]] = E100_SETS) -> pd.DataFrame:
     r['folder'] = [str(H.shared_dir() / sp) if isinstance(sp, str) else '' for sp in r['shared_path']]
     rel = set(released_2021())
     r['released'] = [bool(YANG_RELEASED or st in rel) for st in r['stem']]
+    r['usable'] = [usable_row(x) for x in r.to_dict('records')]
     return r.reset_index(drop=True)
+
+
+def usable_row(row) -> bool:
+    """Whether a row of viki's recordings.csv may be used at all: only recordings with Yang's processed products, by the
+    rule of 2026-11-15 15:28 (viki's terminal; "don't use any data that is raw-only until further notice"), read from
+    the copy's `use_until_further_notice` column. A copy without the column predates the rule: every row is usable."""
+    v = row.get('use_until_further_notice') if hasattr(row, 'get') else None
+    if v is None or (isinstance(v, float) and np.isnan(v)):
+        return True
+    return str(v).startswith('processed')
 
 
 def released_2021() -> List[str]:
@@ -500,6 +511,9 @@ def read_recording(row, maps: bool = False) -> dict:
     pixel size and channels (`experiment_xml`), and with `maps` the stack. Refuses a recording Yang has not released
     (`YANG_RELEASED`)."""
     import tifffile
+    if not usable_row(row):
+        raise PermissionError(f"{row['stem']}: raw only, not used until further notice (rule of 2026-11-15 15:28, "
+                              "recordings.csv's use_until_further_notice)")
     if not (YANG_RELEASED or row['stem'] in released_2021()):
         raise PermissionError(f"{row['stem']}: Yang has not released this recording (E100's entry, Requires); set "
                               "YANG_RELEASED after her answer")

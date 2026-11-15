@@ -405,6 +405,19 @@ def test_read_recording_refuses_unreleased():
         M.read_recording(row)
 
 
+def test_raw_only_rows_refused():
+    raw = "raw only: not used until further notice (request in viki's terminal 2026-11-15 15:28)"
+    ok = "processed: usable (Yang's processed products only)"
+    assert not M.usable_row(dict(use_until_further_notice=raw))
+    assert M.usable_row(dict(use_until_further_notice=ok))
+    assert M.usable_row(dict(stem='x'))  # a copy from before the rule
+    assert M.usable_row(dict(use_until_further_notice=float('nan')))
+    # refused for being raw only even if the recording were released
+    row = dict(stem=M.released_2021()[0], use_until_further_notice=raw)
+    with pytest.raises(PermissionError, match='raw only'):
+        M.read_recording(row)
+
+
 def test_recording_table_and_flies_ratios():
     t = M.recording_table(_resp())
     assert t['solvent'] == pytest.approx(0.3) and t['n_blocks'] == 3
