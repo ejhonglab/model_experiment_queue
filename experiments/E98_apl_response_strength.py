@@ -896,34 +896,53 @@ class ExtendedRun:
         return dict(self.p) if cond == 'on' else dict(self.p, wAPLKC_scale=0.0, wAPLPN_scale=0.0)
 
     def run(self, cond: str) -> dict:
-        from experiments import E90_model_stages as E90
-        from pyolfsysm.mb_model import get_sim_var
         r, s = self.sim(self.params(cond))
-        if r.shape[1] != len(self.labels) or s.shape[1] != len(self.labels):
-            raise RuntimeError(f'{r.shape[1]} output columns for {len(self.labels)} stimuli')
-        out_lab = [c[-1] if isinstance(c, tuple) and c[0] == ADDED_PANEL else H.odor_abbrev(c) for c in s.columns]
-        if out_lab != self.labels:
-            raise RuntimeError(f"the outputs' columns are not the input's: {out_lab} / {self.labels}")
-        r, s = r.copy(), s.copy()
-        r.columns = s.columns = pd.Index(self.labels, name='stimulus')
-        t = E90.step_times(self.mp, self.rv)
-        w = E90._windows(t, E90.MODEL_WINDOW)
-        inh = get_sim_var(self.rv.kc, 'inh_sims')
-        pn = get_sim_var(self.rv.pn, 'pn_sims')
-        apl, pw, pp = {}, {}, {}
-        for j, lab in enumerate(self.labels):
-            i = int(self.order[j])
-            a = np.asarray(inh[i], dtype=float).ravel()
-            apl[lab] = dict(win=float(a[w['win']].mean()), pre=float(a[w['pre']].mean()))
-            x = np.asarray(pn[i], dtype=float)
-            pw[lab], pp[lab] = x[:, w['win']].mean(axis=1), x[:, w['pre']].mean(axis=1)
         gl = pd.Index(list(dict.fromkeys(self.W.columns.get_level_values('glomerulus'))), name='glomerulus')
-        if len(gl) != len(next(iter(pw.values()))):
-            raise RuntimeError('PN rows are not the wiring\'s glomeruli')
-        apl = pd.DataFrame(apl).T
-        apl.index.name = 'stimulus'
-        return dict(responses=r, spike_counts=s, apl=apl, pn_win=pd.DataFrame(pw, index=gl), pn_pre=pd.DataFrame(pp, index=gl),
-                    n_steps=dict(win=int(len(w['win'])), pre=int(len(w['pre'])), dt=float(t[1] - t[0])))
+        return dict(read_apl_pn(self.mp, self.rv, self.order, self.labels, gl), **relabel(r, s, self.labels))
+
+
+def relabel(r: pd.DataFrame, s: pd.DataFrame, labels: Sequence[str]) -> dict:
+    """The simulator's responses and spike counts with the stimulus labels as columns (the outputs' columns must be the
+    input's, in its order)."""
+    if r.shape[1] != len(labels) or s.shape[1] != len(labels):
+        raise RuntimeError(f'{r.shape[1]} output columns for {len(labels)} stimuli')
+    raw = [str(c[-1]) if isinstance(c, tuple) else str(c) for c in s.columns]
+    out_lab = [x if x == lab else H.odor_abbrev(x) for x, lab in zip(raw, labels)]
+    if out_lab != list(labels):
+        raise RuntimeError(f"the outputs' columns are not the input's: {out_lab} / {list(labels)}")
+    r, s = r.copy(), s.copy()
+    r.columns = s.columns = pd.Index(list(labels), name='stimulus')
+    return dict(responses=r, spike_counts=s)
+
+
+def read_apl_pn(mp, rv, order: np.ndarray, labels: Sequence[str], glomeruli: pd.Index,
+                pulse_window: Optional[Tuple[float, float]] = None) -> dict:
+    """APL's activity and the PN stage of the last simulation (olfsysm's variables; the simulator's output column j is
+    olfsysm's odor order[j]): 'apl' (index the stimulus labels; 'win' the mean over E90's MODEL_WINDOW, 0-0.5 s, 'pre'
+    over E90's PRE_WINDOW, and 'win_pulse' over `pulse_window` when given, e.g. 0-1 s for a 1 s pulse) and 'pn_win' /
+    'pn_pre' (glomeruli x stimuli, the PN rates' window and pre-odor means)."""
+    from experiments import E90_model_stages as E90
+    from pyolfsysm.mb_model import get_sim_var
+    t = E90.step_times(mp, rv)
+    w = E90._windows(t, E90.MODEL_WINDOW)
+    wp = E90._windows(t, pulse_window)['win'] if pulse_window is not None else None
+    inh = get_sim_var(rv.kc, 'inh_sims')
+    pn = get_sim_var(rv.pn, 'pn_sims')
+    apl, pw, pp = {}, {}, {}
+    for j, lab in enumerate(labels):
+        i = int(order[j])
+        a = np.asarray(inh[i], dtype=float).ravel()
+        apl[lab] = dict(win=float(a[w['win']].mean()), pre=float(a[w['pre']].mean()))
+        if wp is not None:
+            apl[lab]['win_pulse'] = float(a[wp].mean())
+        x = np.asarray(pn[i], dtype=float)
+        pw[lab], pp[lab] = x[:, w['win']].mean(axis=1), x[:, w['pre']].mean(axis=1)
+    if len(glomeruli) != len(next(iter(pw.values()))):
+        raise RuntimeError("PN rows are not the wiring's glomeruli")
+    apl = pd.DataFrame(apl).T
+    apl.index.name = 'stimulus'
+    return dict(apl=apl, pn_win=pd.DataFrame(pw, index=glomeruli), pn_pre=pd.DataFrame(pp, index=glomeruli),
+                n_steps=dict(win=int(len(w['win'])), pre=int(len(w['pre'])), dt=float(t[1] - t[0])))
 
 
 def b_root(root: Optional[Path] = None) -> Path:
@@ -1109,16 +1128,283 @@ def part_b(arms: Sequence[str], wirings: Sequence[str], root: Optional[Path] = N
             raise ValueError(f'unknown arm {arm!r}')
 
 
+# B2 to B4: the real wiring's other models at fixed parameters, on B1's stimuli
+ARCHIVE = ('data', 'model_outputs')
+PULSE_B2 = 1.0
+B_POINTS = {'B2': ('pulse1', 'E93_F', 'E95_f1'), 'B3': ('E36_spk40', 'E37_spko40'), 'B4': ('E77_inhadd1000', 'E77_inhadd3141')}
+POINT_NAMES = {
+    'pulse1': "C2 with the flies' 1 s pulse (E80's C2_pulse1_fixed: C2's parameters and APL->KC weights, the simulation "
+              "ending 0.25 s after the pulse)",
+    'E93_F': "C2 with E93's fuller input F (46 glomeruli) at E93's held point B_F_real (its breadth recomputed for F)",
+    'E95_f1': "E95's refit of the family at the connectome's bouton share with the unweighted APL->KC component "
+              "(rate0.068_aplboth_aplpnhold_flatu_k2_f1)",
+    'E36_spk40': "E36's KC-spike-driven fit at 40 Hz with the gain (spk_thr40_gain1.5_k2_cap3_s2; older base, 5 %, "
+                 "structure loss)",
+    'E37_spko40': "E37's spike-only APL at that fit (the bouton->APL input off, threshold re-tuned; "
+                  "spk_thr40_gain1.5_k2_cap3_s2_nopnapl)",
+    'E77_inhadd1000': "C2 with E77's weaker PN normalization pn_inhadd 1000 at its held reading (S1_inhadd1000)",
+    'E77_inhadd3141': "C2 with E77's weaker PN normalization pn_inhadd 3141 at its held reading (S1_inhadd3141)"}
+
+
+def _archive(*parts) -> Path:
+    return H.shared_dir().joinpath(*ARCHIVE, *parts)
+
+
+def _saved_pair(d: Path, tag: str) -> Optional[Dict[str, Tuple[pd.DataFrame, pd.DataFrame]]]:
+    """{'on', 'off'}: (responses, spike counts) saved as <tag>_<on|acute_off>_<kind>.parquet in `d`, or None."""
+    out = {}
+    for c, ct in CONDS:
+        fr, fs = d / f'{tag}_{ct}_responses.parquet', d / f'{tag}_{ct}_spike_counts.parquet'
+        if not (fr.exists() and fs.exists()):
+            return None
+        out[c] = (pd.read_parquet(fr), pd.read_parquet(fs))
+    return out
+
+
+def _sim_cells(sim) -> Tuple[object, object, np.ndarray]:
+    cells = dict(zip(sim.__code__.co_freevars, sim.__closure__))
+    mp, rv = cells['mp'].cell_contents, cells['rv'].cell_contents
+    mp.kc.save_inh_sims = True
+    return mp, rv, np.asarray(cells['odor_order'].cell_contents, dtype=int)
+
+
+def _off(p: Dict[str, float]) -> Dict[str, float]:
+    return dict(p, wAPLKC_scale=0.0, wAPLPN_scale=0.0)
+
+
+def _json_params(x) -> Dict[str, float]:
+    return {k: float(v) for k, v in (json.loads(x) if isinstance(x, str) else x).items()}
+
+
+def point_spec(name: str, orn: Optional[pd.DataFrame] = None) -> dict:
+    """One B2 to B4 point (POINT_NAMES): 'build' (a function of nothing returning the simulator on B1's stimuli, or on
+    E93's 46-row version of them for E93_F), 'params' ({'on', 'off'}: absolute parameters, as the source ran them),
+    'saved' (the source's saved outputs for the identity on the 16 panel odors, or None), 'pulse_window', 'orn', 'record'
+    (the source)."""
+    from experiments import E83_cross_wiring_fit as E83
+    from experiments import E77_input_screen as S
+    orn = b1_input()[0] if orn is None else orn
+    if name == 'pulse1':
+        from experiments import E80_pulse as E80
+        P = S.c2_parts()
+        p = dict(P['p'])
+        kws = E80.timing_kws(PULSE_B2)
+        return dict(build=lambda: S.build_c2_simulator(kws, orn=orn, breadth=P['breadth'], params=p)[0],
+                    params={'on': p, 'off': _off(p)}, saved=_saved_pair(_archive('E80_remaining_candidates', 'pulse'),
+                    'C2_pulse1_fixed'), pulse_window=(0.0, PULSE_B2), orn=orn, record=dict(source='E80 C2_pulse1_fixed', kws=kws))
+    if name == 'E93_F':
+        return e93_spec(orn)
+    if name == 'E95_f1':
+        r = pd.read_csv(H.shared_dir() / 'results' / 'E95_static_apl' / 'fits.csv', float_precision='round_trip')
+        r = r.set_index('tag').loc['rate0.068_aplboth_aplpnhold_flatu_k2_f1']
+        p = {k: float(r[k]) for k in ('fixed_thr', 'wAPLKC_scale', 'wKCAPL_scale', 'wAPLPN_scale', 'wPNAPL_scale')}
+        p['wKCKC_scale'] = float(r['kc_kc_inh'])
+        size, unit = float(r['aplkc_flat_size']), float(r['aplkc_flat_unit'])
+        if str(r['aplkc_flat']) != 'uniform' or not np.isclose(float(r['k']), 2.0):
+            raise RuntimeError(f"E95's f1 refit is not the uniform component at breadth 2: {r['aplkc_flat']}, k {r['k']}")
+
+        def build():
+            from experiments import E10_joint_fit as J
+            P = E83.wiring_parts('real')
+            sim, info = E83.build_simulator('real', orn=orn, breadth=P['breadth'], params=p)
+            w = info['cells']['wAPLKC_unscaled'].cell_contents
+            comp = unit * J.aplkc_flat_component(P['wnorm']['wAPLKC'], 'uniform')
+            w[...] = (info['wAPLKC'].to_numpy(dtype=float) + size * comp).reshape(w.shape)
+            return sim
+        return dict(build=build, params={'on': p, 'off': _off(p)}, saved=_saved_pair(_archive('E95_static_apl'),
+                    'rate0.068_aplboth_aplpnhold_flatu_k2_f1'), pulse_window=None, orn=orn,
+                    record=dict(source='E95 fits.csv rate0.068_aplboth_aplpnhold_flatu_k2_f1', aplkc_flat='uniform',
+                                aplkc_flat_size=size, aplkc_flat_unit=unit, aplpn_hold=float(r['aplpn_hold'])))
+    if name in ('E36_spk40', 'E37_spko40'):
+        from experiments import E37_spike_only_apl as E37
+        from pyolfsysm.mb_model import make_fixed_param_kc_simulator
+        fit = 'spk_thr40_gain1.5_k2_cap3_s2'
+        row = E37.fit_row(fit)
+        setup = E37.setup_fit(H.apl16_orn_deltas(), local_dir('cache'), row)
+        if name == 'E36_spk40':
+            p = dict(setup['params'])
+            saved = _saved_pair(_archive('E36_spike_apl_jointfit'), fit)
+        else:
+            tp = json.loads((H.shared_dir() / 'results' / 'E37_spike_only_apl' / 'tuned_params.json').read_text())
+            p = _json_params(tp[f'{fit}_nopnapl'])
+            if p.get('wPNAPL_scale', 1.0) != 0.0:
+                raise RuntimeError(f"E37's spike-only point has wPNAPL_scale {p.get('wPNAPL_scale')}")
+            saved = _saved_pair(_archive('E37_spike_only_apl'), f'{fit}_nopnapl')
+        kws = setup['kws']
+        return dict(build=lambda: make_fixed_param_kc_simulator(orn, initial_params=p, **kws)[0],
+                    params={'on': p, 'off': dict(p, **E37.OFF)}, saved=saved, pulse_window=None, orn=orn,
+                    record=dict(source=f"{'E36_spike_apl_jointfit' if name == 'E36_spk40' else 'E37 tuned_params'} {fit}",
+                                claw_thr=setup['claw_thr'], gain=setup['gain'], gloms=setup['gloms'], k=setup['k']))
+    if name in ('E77_inhadd1000', 'E77_inhadd3141'):
+        pid = 'S1_' + name.split('_')[1]
+        sp = json.loads((H.shared_dir() / 'results' / 'E77_input_side_common_error' / 'screen_params.json').read_text())[pid]
+        kws = {k: float(v) for k, v in sp['kws'].items()}
+        breadth = S.handle_breadth(kws)
+        bsha = _breadth_sha(breadth)
+        if bsha != sp['breadth_sha256']:
+            raise RuntimeError(f"{pid}: the breadth's sha256 {bsha} is not E77's {sp['breadth_sha256']}")
+        p, poff = _json_params(sp['params']), _json_params(sp['params_off'])
+        return dict(build=lambda: S.build_c2_simulator(kws, orn=orn, breadth=breadth, params=p)[0],
+                    params={'on': p, 'off': poff}, saved=_saved_pair(_archive('E77_input_side_common_error', 'screen'), f'C2_{pid}'),
+                    pulse_window=None, orn=orn, record=dict(source=f'E77 screen_params.json {pid}', kws=kws, breadth_sha256=bsha))
+    raise ValueError(f'unknown point {name!r}')
+
+
+def _breadth_sha(b: pd.Series) -> str:
+    """E77's breadth hash (`E77_input_screen.series_sha256` when it has one, else the values' bytes)."""
+    from experiments import E77_input_screen as S
+    for fn in ('series_sha256', 'breadth_sha256', 'frame_sha256'):
+        f = getattr(S, fn, None)
+        if f is not None:
+            try:
+                return f(b)
+            except Exception:
+                continue
+    import hashlib
+    return hashlib.sha256(np.ascontiguousarray(b.to_numpy(dtype=float)).tobytes()).hexdigest()
+
+
+E93_TAG = 'E93_F_fe8e7367feec'
+
+
+def e93_input(orn: pd.DataFrame) -> Tuple[pd.DataFrame, List[str]]:
+    """B1's stimuli on E93's 46 glomeruli: the 16 panel odors E93's F input (its file, sha256 checked against E93's
+    runs_B.csv); the added stimuli B1's 36 rows and, on the ten added glomeruli, the session's own value where its table
+    has that glomerulus (as F's lab rows), Hallem's where Hallem has it (unscaled: the stimulus is Hallem's), else 0.
+    Returns the input and the added glomeruli."""
+    from experiments import E93_missing_glomeruli_input as E93
+    F = E93.input_of('F')
+    rb = pd.read_csv(H.shared_dir() / 'results' / 'E93_missing_glomeruli_input' / 'runs_B.csv').set_index('tag').loc['B_F_real']
+    from experiments.E77_input_screen import frame_sha256
+    if frame_sha256(F) != rb['input_frame_sha256']:
+        raise RuntimeError("E93's F input differs from the one its B_F_real ran")
+    added = [g for g in F.index if g not in orn.index]
+    labels = input_labels(orn)
+    sess = session_inputs()
+    hal = hallem_rows(lower=False)
+    specs = {x['label']: x for x in b1_specs()}
+    extra = {}
+    for c, lab in zip(orn.columns[16:], labels[16:]):
+        sp = specs[lab]
+        v = pd.Series(0.0, index=F.index)
+        v.loc[orn.index] = orn[c].to_numpy(dtype=float)
+        for g in added:
+            if sp['source'] not in ('panel', 'blank', 'hallem'):
+                t = sess[sp['session']]
+                col = (sp['panel'], sp['column'])
+                if g in t.index and pd.notna(t.loc[g, col]):
+                    v[g] = float(t.loc[g, col])
+            elif sp['source'] == 'hallem' and (sp['odor'], sp['conc']) in hal.columns and g in hal.index:
+                v[g] = float(hal.loc[g, (sp['odor'], sp['conc'])])
+        extra[c] = v
+    out = pd.concat([F.astype(float), pd.DataFrame(extra, index=F.index)], axis='columns')
+    out.index.name = F.index.name
+    return out, added
+
+
+def e93_spec(orn: pd.DataFrame) -> dict:
+    """E93_F's point: C2 (the real wiring's fit) on `e93_input`, the breadth of F's base run (E93's archived run copied
+    into this experiment's cache, so nothing is simulated for it; its sha256 checked against runs_B.csv), E93's held
+    parameters for B_F_real (APL on and off as recorded)."""
+    import shutil
+    from experiments import E10_joint_fit as J
+    from experiments import E83_cross_wiring_fit as E83
+    from experiments import E93_missing_glomeruli_input as E93
+    rb = pd.read_csv(H.shared_dir() / 'results' / 'E93_missing_glomeruli_input' / 'runs_B.csv').set_index('tag').loc['B_F_real']
+    cache = local_dir('cache')
+    for kind in ('responses', 'spike_counts'):
+        f = f'input-{E93_TAG}_base_acute_off_{kind}.parquet'
+        if not (cache / f).exists() and (_archive('E93_missing_glomeruli_input') / f).exists():
+            shutil.copy2(_archive('E93_missing_glomeruli_input') / f, cache / f)
+    F = E93.input_of('F')
+    _, wnorm, W, breadth = J.bouton_base(F, cache, None, input_tag=E93_TAG)
+    P = E83.wiring_parts('real')
+    if not W.equals(P['W']):
+        raise RuntimeError("E93's F wiring is not the lab input's")
+    bsha = _breadth_sha(breadth)
+    if bsha != rb['breadth_sha256']:
+        raise RuntimeError(f"F's breadth sha256 {bsha} is not E93's {rb['breadth_sha256']}")
+    ext, added = e93_input(orn)
+    p, poff = _json_params(rb['params_on']), _json_params(rb['params_off'])
+    return dict(build=lambda: E83.build_simulator('real', orn=ext, breadth=breadth, params=p)[0],
+                params={'on': p, 'off': poff}, saved=_saved_pair(_archive('E93_missing_glomeruli_input', 'B'), 'B_F_real'),
+                pulse_window=None, orn=ext, record=dict(source='E93 runs_B.csv B_F_real', added_glomeruli=added,
+                                                        breadth_sha256=bsha))
+
+
+def run_point_b(arm: str, name: str, root: Optional[Path] = None, force: bool = False) -> dict:
+    """One B2 to B4 point on the real wiring (`point_spec`): APL on and off at the source's parameters, the outputs and
+    APL's means saved under `b_root(root)`/<arm>/ (B1_LAYOUT's files, tag the point's name), a runs.csv row per
+    condition and <name>_identity.json (the 16 panel odors' counts and responses against the source's saved run, 0
+    differences required; the run stops otherwise). Skipped when saved (unless `force`)."""
+    import gc
+    d = b_root(root) / arm
+    d.mkdir(parents=True, exist_ok=True)
+    if not force and all((d / f'{name}_{ct}_apl.csv').exists() for _, ct in CONDS):
+        return _read_json(d / f'{name}_identity.json') or {}
+    t0 = time.time()
+    spec = point_spec(name)
+    orn = spec['orn']
+    labels = input_labels(orn)
+    gl = pd.Index([str(g) for g in orn.index], name='glomerulus')
+    sim = spec['build']()
+    mp, rv, order = _sim_cells(sim)
+    commits = dict(H.code_commits())
+    ident = dict(arm=arm, point=name, name=POINT_NAMES[name], record=spec['record'])
+    for c, ct in CONDS:
+        t1 = time.time()
+        r, s = sim(spec['params'][c])
+        o = relabel(r, s, labels)
+        pnr = read_apl_pn(mp, rv, order, labels, _pn_index(rv, gl), spec['pulse_window'])
+        o.update(pnr)
+        save_b1(d, name, ct, o)
+        if spec['saved'] is not None:
+            rs, ss = (H.abbrev_columns(x.astype(float)) for x in spec['saved'][c])
+            s16, r16 = o['spike_counts'][list(H.APL16_ODORS)], o['responses'][list(H.APL16_ODORS)]
+            ok = len(s16) == len(ss) and np.array_equal(np.asarray(s16.index), np.asarray(ss.index))
+            ident[c] = dict(index_equal=bool(ok),
+                            counts_differ=int((s16.to_numpy(float) != ss[list(H.APL16_ODORS)].to_numpy(float)).sum()) if ok else -1,
+                            responses_differ=int((r16.to_numpy(float) != rs[list(H.APL16_ODORS)].to_numpy(float)).sum()) if ok else -1)
+        else:
+            ident[c] = dict(index_equal=None, counts_differ=None, responses_differ=None, note='no saved run found')
+        ident[c].update(n_stimuli=len(labels), blank_evoked=float(o['apl'].loc[BLANK_LABEL, 'win'] - o['apl'].loc[BLANK_LABEL, 'pre']))
+        _append_csv(d / 'runs.csv', dict(arm=arm, point=name, cond=ct, n_stimuli=len(labels), host=_host(),
+                                         time=time.strftime('%Y-%m-%d %H:%M'), runtime_s=time.time() - t1,
+                                         threads=os.environ.get('OMP_NUM_THREADS'), input_sha256=_frame_sha(orn),
+                                         **{f'param_{k}': v for k, v in spec['params'][c].items()},
+                                         **{k: v for k, v in commits.items() if not isinstance(v, (dict, list))}))
+        print(f'{arm} {name} {ct}: {time.time() - t1:.0f} s, identity {ident[c]}', flush=True)
+        del o, r, s
+    ident['exact'] = bool(all(ident[c].get('counts_differ') == 0 and ident[c].get('responses_differ') == 0 for c, _ in CONDS))
+    _write_json(d / f'{name}_identity.json', ident)
+    del sim, mp, rv
+    gc.collect()
+    if spec['saved'] is not None and not ident['exact']:
+        raise RuntimeError(f'{arm} {name}: the run differs from its source on the panel: {ident}')
+    print(f'{arm} {name}: done in {time.time() - t0:.0f} s', flush=True)
+    return ident
+
+
+def _pn_index(rv, gl: pd.Index) -> pd.Index:
+    """The PN stage's glomeruli: the input's when olfsysm's PN rows are as many, else the wiring's (E90's)."""
+    from pyolfsysm.mb_model import get_sim_var
+    n = np.asarray(get_sim_var(rv.pn, 'pn_sims')[0]).shape[0]
+    return gl if n == len(gl) else pd.RangeIndex(n, name='pn_row')
+
+
 def run_b2(root: Optional[Path] = None) -> None:
-    raise NotImplementedError
+    for name in B_POINTS['B2']:
+        run_point_b('B2', name, root)
 
 
 def run_b3(root: Optional[Path] = None) -> None:
-    raise NotImplementedError
+    for name in B_POINTS['B3']:
+        run_point_b('B3', name, root)
 
 
 def run_b4(root: Optional[Path] = None) -> None:
-    raise NotImplementedError
+    for name in B_POINTS['B4']:
+        run_point_b('B4', name, root)
 
 
 # ---------------------------------------------------------------------------
@@ -1434,9 +1720,156 @@ def part_a() -> dict:
     return summ
 
 
-def part_c() -> dict:
-    """Part C (module docstring): verdict.json."""
-    raise NotImplementedError
+# the verdict's comparisons on B1's stimuli (the model's labels)
+V1_NUM = 'paa'                                   # the lab's input, paa at 10^-4 (validation2's panel)
+V1_ESTIMATES: Dict[str, str] = {                 # the estimates of ms's input at 10^-3: name -> B1 label
+    'megamat/megamat (the panel)': 'ms', 'megamat/diag': session_label('ms', -3, 'megamat', DIAG),
+    'validation2/diag': session_label('ms', -3, 'validation2', DIAG),
+    'kiwi-control/diag': session_label('ms', -3, 'kiwi-control', DIAG),
+    'kiwi-control/control': session_label('ms', -3, 'kiwi-control', 'control')}
+V2_NUM, V2_DEN = session_label('paa', -5, PAA5_SESSION, DIAG), 'paa'
+V2_BESIDE = {sn: session_label('paa', -5, sn, DIAG) for sn in SESSIONS if sn != PAA5_SESSION}
+# V3 to V5 with Hallem's input (described, decide nothing): ratio id of RATIOS -> (numerator, denominator) B1 labels
+HALLEM_COMPARISONS: Dict[str, Tuple[str, str]] = {
+    'V3_ms-4': (hallem_label('ms', -4), hallem_label('ms', -2)), 'V3_ms-6': (hallem_label('ms', -6), hallem_label('ms', -2)),
+    'V3_ms-8': (hallem_label('ms', -8), hallem_label('ms', -2)), 'V4': (hallem_label('pa', -6), hallem_label('pa', -4)),
+    'V5_-4': (hallem_label('pa', -4), hallem_label('ms', -4)), 'V5_-6': (hallem_label('pa', -6), hallem_label('ms', -6)),
+    'V5_paa-2': (hallem_label('paa', -2), hallem_label('ms', -2))}
+FLIES_SOLVENT_RATE = {'on': ('ctrl', 'control flies'), 'off': ('tnt', 'APL output blocked (TNT)')}
+OUTCOMES = {'a': 'V1 and V2 inside', 'b': 'V2 flatter', 'c': 'V2 steeper', 'd': 'V1 outside under every estimate of ms\'s input',
+            'e': 'V2 not decided, or the 0.5 s and 1 s recordings disagree', 'h': 'the blank\'s response rate with APL off above '
+            'the flies\' solvent rate with APL output blocked (TNT)'}
+
+
+def stimulus_classes(on: pd.DataFrame, num: str, den: str, lo: float, hi: float) -> pd.DataFrame:
+    """Per wiring the model's ratio of stimulus `num` over stimulus `den` (rows of `on`: wiring, stimulus, win, pre; APL
+    on) through the indicator family (INDICATOR_NS x FORMS), its range, the linear reading (n 1, evoked), the class of
+    the set and of the linear reading against [lo, hi] (`classify`). The pre-odor level must be the same for both."""
+    rows = []
+    for w, g in on.groupby('wiring', sort=False):
+        g = g.set_index('stimulus')
+        if num not in g.index or den not in g.index:
+            continue
+        a1, a2 = float(g.loc[num, 'win']), float(g.loc[den, 'win'])
+        p1, p2 = float(g.loc[num, 'pre']), float(g.loc[den, 'pre'])
+        if not np.isclose(p1, p2, rtol=1e-9, atol=1e-9):
+            raise RuntimeError(f'{w}: the pre-odor levels of {num} and {den} differ ({p1}, {p2})')
+        rs = model_ratio_set(a1, a2, p2)
+        lin = float(indicator_ratio(a1, a2, p2, 1.0, 'evoked'))
+        rows.append(dict(wiring=w, numerator=num, denominator=den, a_num=a1, a_den=a2, a0=p2, ratio_linear=lin,
+                         ratio_min=float(rs['ratio'].min()), ratio_max=float(rs['ratio'].max()),
+                         cls=classify(rs['ratio'], lo, hi), cls_linear=classify([lin], lo, hi)))
+    return pd.DataFrame(rows)
+
+
+def _comparison(name: str, on: pd.DataFrame, num: str, den: str, lo: float, hi: float, decides: bool) -> Tuple[dict, pd.DataFrame]:
+    wc = stimulus_classes(on, num, den, lo, hi)
+    if wc.empty:
+        return dict(comparison=name, numerator=num, denominator=den, flies_lo90=lo, flies_hi90=hi, n_wirings=0,
+                    verdict='not run', verdict_linear='not run', decides=decides), wc
+    wc.insert(0, 'comparison', name)
+    return dict(comparison=name, numerator=num, denominator=den, flies_lo90=lo, flies_hi90=hi, n_wirings=int(len(wc)),
+                verdict=comparison_verdict(wc['cls']), verdict_linear=comparison_verdict(wc['cls_linear']),
+                **{f'n_{c}': int((wc['cls'] == c).sum()) for c in ('inside', 'flatter', 'steeper', 'mixed')},
+                model_linear_min=float(wc['ratio_linear'].min()), model_linear_max=float(wc['ratio_linear'].max()),
+                model_min=float(wc['ratio_min'].min()), model_max=float(wc['ratio_max'].max()), decides=decides), wc
+
+
+def verdict_core(flies: pd.DataFrame, b1: pd.DataFrame, flies_pulse: Optional[Dict[str, pd.DataFrame]] = None,
+                 solvent: Optional[Dict[str, float]] = None) -> Tuple[dict, pd.DataFrame, pd.DataFrame]:
+    """Part C's verdict from the flies' ratios under one reading (`flies`: rows of `flies_ratios`, indexed or with a
+    column 'ratio_id'; lo90 and hi90), B1's runs (`b1`: `load_b1` rows; APL on is read) and, for outcome (e), the flies'
+    ratios of the 1 s and the 0.5 s recordings (`flies_pulse`: {'pulse_1s': ..., 'pulse_0.5s': ...}, same reading). V1:
+    paa (the lab's input at 10^-4) over each estimate of ms's input at 10^-3 (V1_ESTIMATES) against the hull of the flies'
+    two readings of paa's concentration, combined by `v1_verdict`; V2: paa at 10^-5 (PAA5_SESSION's diagnostics) over the
+    panel's paa against the flies' V2 interval, the other sessions' estimates beside; V3 to V5 on Hallem's stimuli where
+    B1 has them (described). `solvent`: the flies' solvent response rates ({'ctrl', 'tnt'}) for outcome (h). Returns
+    (verdict, the comparisons, the per-wiring rows)."""
+    f = flies.set_index('ratio_id') if 'ratio_id' in flies.columns else flies
+    on = b1[b1['cond'] == 'on'][['wiring', 'stimulus', 'win', 'pre']]
+    comps, rows = [], []
+
+    def add(name, num, den, lo, hi, decides):
+        c, wc = _comparison(name, on, num, den, lo, hi, decides)
+        comps.append(c)
+        rows.append(wc)
+        return c
+
+    lo1, hi1 = hull([(f.loc[i, 'lo90'], f.loc[i, 'hi90']) for i in ('V1_paa-4', 'V1_paa-2.954')])
+    v1_per = {}
+    for est, lab in V1_ESTIMATES.items():
+        v1_per[est] = add(f'V1, ms\'s input from {est}', V1_NUM, lab, lo1, hi1, True)['verdict']
+    v1_ran = {k: v for k, v in v1_per.items() if v != 'not run'}
+    v1 = v1_verdict(v1_ran) if v1_ran else 'not run'
+    v1_lin = v1_verdict({k: comps[i]['verdict_linear'] for i, k in enumerate(V1_ESTIMATES) if v1_per[k] != 'not run'}) \
+        if v1_ran else 'not run'
+    lo2, hi2 = float(f.loc['V2', 'lo90']), float(f.loc['V2', 'hi90'])
+    c2 = add(f'V2, paa at 10^-5 from {PAA5_SESSION}/diag', V2_NUM, V2_DEN, lo2, hi2, True)
+    for sn, lab in V2_BESIDE.items():
+        add(f'V2 beside, paa at 10^-5 from {sn}/diag', lab, V2_DEN, lo2, hi2, False)
+    for rid, (num, den) in HALLEM_COMPARISONS.items():
+        if rid in f.index and np.isfinite(f.loc[rid, 'lo90']) and np.isfinite(f.loc[rid, 'hi90']):
+            add(f'{rid} (Hallem\'s input)', num, den, float(f.loc[rid, 'lo90']), float(f.loc[rid, 'hi90']), False)
+    pulse = {}
+    for sub, fp in (flies_pulse or {}).items():
+        fp = fp.set_index('ratio_id') if 'ratio_id' in fp.columns else fp
+        if np.isfinite(fp.loc['V2', 'lo90']):
+            pulse[sub] = _comparison(f'V2 ({sub})', on, V2_NUM, V2_DEN, float(fp.loc['V2', 'lo90']),
+                                     float(fp.loc['V2', 'hi90']), False)[0]['verdict']
+    out = dict(V1=v1, V1_linear=v1_lin, V1_per_estimate=v1_per, V1_flies_hull=[lo1, hi1], V2=c2['verdict'],
+               V2_linear=c2['verdict_linear'], V2_flies=[lo2, hi2], V2_by_pulse=pulse)
+    oc = []
+    if v1 == 'inside' and c2['verdict'] == 'inside':
+        oc.append('a')
+    if c2['verdict'] == 'flatter':
+        oc.append('b')
+    if c2['verdict'] == 'steeper':
+        oc.append('c')
+    if v1 in ('flatter', 'steeper'):
+        oc.append('d')
+    if c2['verdict'] == 'not decided' or len(set(pulse.values())) > 1:
+        oc.append('e')
+    blank = b1[b1['stimulus'] == BLANK_LABEL]
+    if len(blank):
+        rates = blank.groupby('cond')['response_rate'].agg(['min', 'median', 'max'])
+        out['blank_response_rate'] = {c: rates.loc[c].to_dict() for c in rates.index}
+        if solvent is not None:
+            out['flies_solvent_rate'] = dict(solvent)
+            if 'acute_off' in rates.index and rates.loc['acute_off', 'median'] > solvent['tnt']:
+                oc.append('h')
+    out['outcomes'] = oc
+    out['outcome_names'] = {k: OUTCOMES[k] for k in oc}
+    return out, pd.DataFrame(comps), pd.concat([r for r in rows if len(r)], ignore_index=True) if any(len(r) for r in rows) \
+        else pd.DataFrame()
+
+
+def part_c(reading: Tuple[str, bool], subset: str, wirings: Sequence[str] = ALL_WIRINGS, allow_missing: bool = False) -> dict:
+    """Part C (module docstring): the verdict under one reading of the flies (`reading`, one of READINGS, and `subset`,
+    'all' or 'all_recording_ranges': the one-log rule on the series' range or each recording's), both required: the
+    reading that carries V1 and V2 is a planning decision. Reads B1's runs (`load_b1`; all eight wirings unless
+    `allow_missing`), recomputes the flies' ratios (`flies_ratios`, and the pulse subsets for outcome (e)), writes
+    c_comparisons_<tag>.csv, c_wirings_<tag>.csv and verdict_<tag>.json (tag: the reading and subset)."""
+    if tuple(reading) not in READINGS:
+        raise ValueError(f'unknown reading {reading}')
+    if subset not in ('all', 'all_recording_ranges'):
+        raise ValueError(f'part C reads subset all or all_recording_ranges, not {subset!r}')
+    b1 = load_b1(wirings)
+    missing = b1.attrs.get('missing') or []
+    if missing and not allow_missing:
+        raise RuntimeError(f'B1 runs missing: {missing}')
+    resp = stimulus_responses(load_recordings())
+    flies = flies_ratios(resp, reading, subset)[0]
+    pulse = {sub: flies_ratios(resp, reading, sub)[0] for sub in ('pulse_1s', 'pulse_0.5s')}
+    k = kc_rates('z1')
+    verdict, comps, rows = verdict_core(flies, b1, pulse, solvent=dict(ctrl=float(k.loc['pfo', 'ctrl']), tnt=float(k.loc['pfo', 'tnt'])))
+    tag = f'{reading_label(reading)}__{subset}'
+    out = out_dir()
+    comps.to_csv(out / f'c_comparisons_{tag}.csv', index=False)
+    rows.to_csv(out / f'c_wirings_{tag}.csv', index=False)
+    verdict.update(reading=reading_label(reading), subset=subset, wirings=sorted(set(b1['wiring'])), missing_runs=missing,
+                   time=time.strftime('%Y-%m-%d %H:%M'), host=_host(), commits=dict(H.code_commits()))
+    _write_json(out / f'verdict_{tag}.json', verdict)
+    return verdict
 
 
 def comparison_table() -> str:
@@ -1462,6 +1895,10 @@ def main() -> None:
     ap.add_argument('--threads', type=int, default=4,
                     help='part B (and part 0 with runs): OMP threads (OMP_NUM_THREADS and OMP_THREAD_LIMIT must match)')
     ap.add_argument('--no-runs', action='store_true', help="part 0: the reader's identities only")
+    ap.add_argument('--reading', default=None, help="part C: the flies' reading (e.g. order_matched_blank, order_matched)")
+    ap.add_argument('--subset', default=None, choices=['all', 'all_recording_ranges'],
+                    help="part C: the one-log rule on the series' range ('all') or on each recording's")
+    ap.add_argument('--allow-missing', action='store_true', help='part C: read the B1 runs there are')
     ap.add_argument('--root', default=None,
                     help="part B: the folder its runs go under (<root>/B/B1/...; default outputs/E98_apl_response_strength), "
                          "e.g. the archive's from_hal/ for another host's lane")
@@ -1484,8 +1921,13 @@ def main() -> None:
             provenance('B', arms=list(arms), wirings=list(ws), threads=a.threads)
         part_b(arms, ws, None if a.root is None else Path(a.root))
     elif a.part == 'C':
-        provenance('C')
-        print(json.dumps(part_c(), indent=1, default=float), flush=True)
+        if a.reading is None or a.subset is None:
+            ap.error('part C needs --reading and --subset (which reading carries V1 and V2 is a planning decision)')
+        rd = next((r for r in READINGS if reading_label(r) == a.reading), None)
+        if rd is None:
+            ap.error(f'--reading must be one of {[reading_label(r) for r in READINGS]}')
+        provenance('C', reading=a.reading, subset=a.subset)
+        print(json.dumps(part_c(rd, a.subset, ws, allow_missing=a.allow_missing), indent=1, default=float), flush=True)
     elif a.part == 'table':
         print(comparison_table(), flush=True)
 

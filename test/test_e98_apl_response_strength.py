@@ -259,3 +259,123 @@ def test_reader_reproduces_e79():
     res = M.reader_identity()
     assert res['exact'], res
     assert res['maps_order_matched']['n'] == 190
+
+
+# ---------------------------------------------------------------------------
+# part B1: the stimuli, their labels and the saved layout
+
+def test_b1_specs_and_labels():
+    from experiments import E100_apl_weak_odors as E100
+    sp = M.b1_specs()
+    labels = [x['label'] for x in sp]
+    assert len(sp) == 52 and len(set(labels)) == 52
+    assert labels[:16] == list(H.APL16_ODORS)
+    roles = pd.Series([x['role'] for x in sp]).value_counts().to_dict()
+    assert roles == {'panel': 16, 'V1': 4, 'V2': 1, 'beside': 9, 'E100': 12, 'hallem': 9, 'blank': 1}
+    assert M.V2_NUM in labels and all(v in labels for v in M.V1_ESTIMATES.values())
+    for x in sp:
+        lab = E100.parse_b1_label(x['label'])
+        if x['source'] not in ('panel', 'blank'):
+            assert lab['odor'] == x['odor'] and lab['conc'] == pytest.approx(x['conc']) and lab['source'] == x['source']
+        if x['role'] == 'E100' or x['role'] == 'V2':
+            assert x['session'] in lab['source']                          # E100's match_b1 matches on the session's name
+    assert M.session_label('paa', -5, 'validation2', M.DIAG) == E100.estimate_label(('paa', -5.0), 'validation2', M.DIAG)
+    e100 = [x for x in sp if x['role'] == 'E100']
+    assert {(x['odor'], x['conc']) for x in e100} == {('4h-ol', -6.0), ('farn', -2.0), ('2h', -6.0), ('2-but', -6.0), ('ma', -7.0)}
+
+
+def _b1_rows(paa5=0.8, ms_scale=(1.0, 1.0, 1.0, 1.0, 1.0), pre=8.0, n=8):
+    """Made-up B1 rows (`load_b1`'s columns) on n wirings: paa's evoked 12, each ms estimate's 10 x its scale, paa at
+    10^-5 `paa5` x paa's evoked, the blank zero."""
+    rows = []
+    for i in range(n):
+        w = M.ALL_WIRINGS[i]
+        ev = {M.V1_NUM: 12.0, M.V2_NUM: 12.0 * paa5, **{lab: 10.0 * sc for lab, sc in zip(M.V1_ESTIMATES.values(), ms_scale)},
+              **{lab: 12.0 * paa5 for lab in M.V2_BESIDE.values()}, M.BLANK_LABEL: 0.0}
+        for st, e in ev.items():
+            for cond, rate in (('on', 0.001), ('acute_off', 0.002)):
+                rows.append(dict(wiring=w, cond=cond, stimulus=st, win=pre + e, pre=pre, evoked=e, response_rate=rate))
+    return pd.DataFrame(rows)
+
+
+def _flies(v1a=(0.67, 0.96), v1b=(1.0, 1.27), v2=(0.43, 0.59)):
+    rows = [dict(ratio_id='V1_paa-4', lo90=v1a[0], hi90=v1a[1]), dict(ratio_id='V1_paa-2.954', lo90=v1b[0], hi90=v1b[1]),
+            dict(ratio_id='V2', lo90=v2[0], hi90=v2[1])]
+    return pd.DataFrame(rows)
+
+
+def test_verdict_core_on_made_up_rows():
+    # paa / ms 1.2 (inside the hull 0.67 to 1.27), paa at 10^-5 at 0.5 of paa (inside 0.43 to 0.59): outcome (a)
+    v, comps, rows = M.verdict_core(_flies(), _b1_rows(paa5=0.5))
+    assert v['V1'] == 'inside' and v['V2'] == 'inside' and v['outcomes'] == ['a']
+    assert v['V1_flies_hull'] == [0.67, 1.27] and len(rows) > 0
+    # paa at 10^-5 at 0.85 of paa: flatter at every n (both forms push it further from the interval or keep it above)
+    v, comps, _ = M.verdict_core(_flies(), _b1_rows(paa5=0.85))
+    assert v['V2'] == 'flatter' and 'b' in v['outcomes'] and 'a' not in v['outcomes']
+    # paa at 10^-5 at 0.3 of paa: steeper
+    v, _, _ = M.verdict_core(_flies(), _b1_rows(paa5=0.3))
+    assert v['V2'] == 'steeper' and 'c' in v['outcomes']
+    # every estimate of ms's input weak (paa / ms 2.4 to 3): V1 steeper under all, outcome (d)
+    v, _, _ = M.verdict_core(_flies(), _b1_rows(paa5=0.5, ms_scale=(0.5, 0.45, 0.4, 0.5, 0.42)))
+    assert v['V1'] == 'steeper' and 'd' in v['outcomes']
+    # one estimate inside is enough
+    v, _, _ = M.verdict_core(_flies(), _b1_rows(paa5=0.5, ms_scale=(0.5, 0.45, 1.0, 0.5, 0.42)))
+    assert v['V1'] == 'inside'
+    assert v['V1_per_estimate']['validation2/diag'] == 'inside'
+
+
+def test_verdict_core_pulse_and_blank():
+    pulse = {'pulse_1s': _flies(v2=(0.43, 0.59)), 'pulse_0.5s': _flies(v2=(0.7, 0.9))}
+    v, _, _ = M.verdict_core(_flies(), _b1_rows(paa5=0.5), pulse, solvent=dict(ctrl=0.012, tnt=0.007))
+    assert v['V2_by_pulse'] == {'pulse_1s': 'inside', 'pulse_0.5s': 'steeper'} and 'e' in v['outcomes']
+    assert 'h' not in v['outcomes'] and v['blank_response_rate']['acute_off']['median'] == pytest.approx(0.002)
+    v, _, _ = M.verdict_core(_flies(), _b1_rows(paa5=0.5), solvent=dict(ctrl=0.012, tnt=0.001))
+    assert 'h' in v['outcomes']
+    # fewer than six wirings agree: not decided, outcome (e)
+    b = _b1_rows(paa5=0.5)
+    b.loc[(b['stimulus'] == M.V2_NUM) & b['wiring'].isin(M.ALL_WIRINGS[:3]), 'win'] = 8.0 + 12.0 * 0.85
+    v, _, _ = M.verdict_core(_flies(), b)
+    assert v['V2'] == 'not decided' and 'e' in v['outcomes']
+
+
+def test_stimulus_classes_refuses_different_pre_odor_levels():
+    b = _b1_rows()
+    b.loc[b['stimulus'] == M.V2_NUM, 'pre'] = 9.0
+    with pytest.raises(RuntimeError):
+        M.stimulus_classes(b[b['cond'] == 'on'], M.V2_NUM, M.V2_DEN, 0.4, 0.6)
+
+
+def test_b1_save_and_load_round_trip(tmp_path):
+    labels = list(H.APL16_ODORS) + [M.V2_NUM, M.BLANK_LABEL]
+    kc = pd.Index(np.arange(5), name='kc_id')
+    gl = pd.Index(['DL1', 'DM1'], name='glomerulus')
+    for ct in ('on', 'acute_off'):
+        o = dict(responses=pd.DataFrame(np.eye(5, len(labels)), index=kc, columns=labels),
+                 spike_counts=pd.DataFrame(2 * np.eye(5, len(labels)), index=kc, columns=labels),
+                 pn_win=pd.DataFrame(1.0, index=gl, columns=labels), pn_pre=pd.DataFrame(0.5, index=gl, columns=labels),
+                 apl=pd.DataFrame(dict(win=np.arange(len(labels)) + 8.0, pre=8.0), index=pd.Index(labels, name='stimulus')))
+        M.save_b1(tmp_path, 'real', ct, o)
+    run = M.load_b1_run('real', [tmp_path])
+    assert set(run) == {'on', 'acute_off'} and list(run['on']['apl'].index) == labels
+    df = M.load_b1(['real', 'P1'], roots=[tmp_path])
+    assert set(df['cond']) == {'on', 'acute_off'} and len(df) == 2 * len(labels)
+    assert df.attrs['missing'] == [('P1', 'acute_off'), ('P1', 'on')]
+    r = df[(df['stimulus'] == M.V2_NUM) & (df['cond'] == 'on')].iloc[0]
+    assert (r['b1_odor'], r['b1_conc'], r['b1_source']) == ('paa', -5.0, 'validation2/diag')
+    assert df[(df['stimulus'] == '2h') & (df['cond'] == 'on')]['response_rate'].iloc[0] == pytest.approx(0.2)
+    # E100's own reader reads the same folder the same way
+    from experiments import E100_apl_weak_odors as E100
+    e = E100.read_e98_b1(['real'], dirs=[tmp_path])
+    assert len(e) == 2 * len(labels) and set(e['stimulus']) == set(labels)
+
+
+@pytest.mark.skipif(not _shared(), reason='shared directory not available')
+def test_b1_input_structure():
+    orn, t = M.b1_input()
+    panel = H.apl16_orn_deltas()
+    assert orn.shape == (36, 46) and orn.index.equals(panel.index)
+    assert orn.iloc[:, :16].equals(panel.astype(float))
+    assert list(t.loc[t['included'], 'label']) == M.input_labels(orn)
+    left = t.loc[~t['included'], 'label'].tolist()
+    assert left == [M.hallem_label(o, c) for o, c in M.HALLEM_STIMULI if c != -2.0]
+    assert (orn[(M.ADDED_PANEL, M.BLANK_LABEL)] == 0).all()
