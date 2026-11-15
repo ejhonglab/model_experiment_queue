@@ -336,3 +336,27 @@ def test_the_lock(tmp_path):
     G._append_locked(p, dict(tag='a', x=1))
     G._append_locked(p, dict(tag='b', x=2))
     assert pd.read_csv(p).tag.tolist() == ['a', 'b']
+
+
+def test_brain_decomposition_on_made_up_effects(monkeypatch, tmp_path):
+    """The decomposition's terms add up to the total variance of the per-pair effect over the grid, and the SDs of the
+    pattern part are taken within a wiring and over the wirings as they are."""
+    rng = np.random.default_rng(0)
+    pairs = pd.MultiIndex.from_tuples([(f'a{i}', f'b{i}') for i in range(30)], names=['odor_a', 'odor_b'])
+    tg = pd.Series(rng.normal(0.18, 0.05, 30), index=pairs)
+    vs = [G.REF] + [f'B1_{m}' for m in G.OTHER_MBS]
+    eff = {(v, w): pd.Series(tg.to_numpy() + rng.normal(0, 0.03, 30), index=pairs) for v in vs for w in G.ALL_WIRINGS}
+    runs = pd.DataFrame([dict(variant=v, wiring=w) for v, w in eff])
+    monkeypatch.setattr(G, 'runs_table', lambda: runs)
+    monkeypatch.setattr(G, 'targets', lambda: {'z8': tg})
+    monkeypatch.setattr(G, '_dist', lambda v, w, ro: {'on': eff[(v, w)], 'off': pd.Series(0.0, index=pairs)})
+    monkeypatch.setattr(G, '_effect', lambda d: d['on'] - d['off'])
+    monkeypatch.setattr(G, 'out_dir', lambda: tmp_path)
+    df = G.brain_decomposition()
+    e = np.stack([[eff[(v, w)].to_numpy() for v in vs] for w in G.ALL_WIRINGS])
+    tot = float(((e - e.mean(axis=(0, 1))) ** 2).mean())
+    r = df.iloc[0]
+    assert r.var_wiring + r.var_brain + r.var_interaction == pytest.approx(tot)
+    assert (tmp_path / 'brain_decomposition.csv').exists()
+    monkeypatch.setattr(G, 'runs_table', lambda: runs.iloc[1:])
+    assert G.brain_decomposition() is None

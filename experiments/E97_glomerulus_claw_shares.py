@@ -95,8 +95,12 @@ Deviations from the entry, forced by the code or the data, or readings the entry
   0.0015); the other conditions of "moves" are in verdict.json beside it. (f)'s "another raises it" is read as any
   other body's pattern part above the reference's on the eight. R2 "not above the reference" is R2's pattern part at or
   below the eight wirings' as they are. The bootstrap resamples each genotype's recordings with replacement (BOOT_N).
-- The brain term is given beside the move's own draw term (B2 against B4 on S) and the draw term between the eight
-  wirings as they are, computed the same way here, as well as beside E72's and E85's 0.006.
+- The brain term: E72's and E85's 0.006 are SDs of a single run's pattern part (over wirings, over input flies), not
+  root mean square differences of the per-pair effect (between two of the eight wirings as they are that difference is
+  0.047 under the readout), so the entry's term (brain_term.csv) is given beside the same difference between the move's
+  two draws (B2 against B4 on S) and between the eight wirings, and brain_decomposition.csv gives the brain term in E85's
+  forms (the variance of the per-pair effect over the grid of wirings by bodies split into wiring, brain and interaction
+  terms; the SD over the five bodies of a single run's pattern part within a wiring).
 - The co-response readings (E89's) are of the reference, B2 and the first permuted and the inverted controls only.
 - Part D starts each fit from B2's held point (`--init-params`, as E93's part E): E10_joint_fit.py's exact start checks
   the wiring arguments of the base, which a moved wiring does not have.
@@ -1824,6 +1828,44 @@ def brain_term(readout: str = 'cal') -> pd.DataFrame:
     df = pd.concat([df, pd.DataFrame(summ)], ignore_index=True)
     df['readout'] = readout
     df.to_csv(out_dir() / 'brain_term.csv', index=False)
+    brain_decomposition(readout)
+    return df
+
+
+def brain_decomposition(readout: str = 'cal') -> Optional[pd.DataFrame]:
+    """brain_decomposition.csv, the brain term in the forms of E85's draw terms (draw_terms.csv there): over the grid of
+    the eight wirings by the five mushroom bodies (the hemibrain's the wiring as it is, B1's four), the variance of the
+    per-pair APL effect split into the wiring term, the brain term and their interaction (raw, and with each run's mean
+    removed: E85's 0.00064 wiring and input-fly terms under the readout); the SD over the five bodies of a single run's
+    pattern part against all recordings within a wiring (beside E85's input-draw term 0.0053) and the SD over the eight
+    wirings as they are (E85's wiring-draw term 0.0050, E72's 0.006); the mean of a body's single run minus its wiring as
+    it is. None until B1 has run on all eight wirings."""
+    runs = runs_table()
+    have = set(zip(runs.variant, runs.wiring))
+    vs = [REF] + [f'B1_{m}' for m in OTHER_MBS]
+    if not all((v, w) in have for v in vs for w in ALL_WIRINGS):
+        return None
+    tg = E83._cs(targets()['z8'])
+    eff = np.stack([[_effect(_dist(v, w, readout)).reindex(tg.index).to_numpy() for v in vs] for w in ALL_WIRINGS])
+    de = tg.to_numpy() - tg.to_numpy().mean()
+    pat = np.sqrt((((eff - eff.mean(axis=2, keepdims=True)) - de[None, None, :]) ** 2).mean(axis=2))   # wirings x bodies
+    rows = []
+    for centred in (False, True):
+        e = eff - eff.mean(axis=2, keepdims=True) if centred else eff
+        gm = e.mean(axis=(0, 1))
+        wm = e.mean(axis=1) - gm
+        bm = e.mean(axis=0) - gm
+        inter = e - gm - wm[:, None, :] - bm[None, :, :]
+        rows.append(dict(readout=readout, effect='pattern (each run\'s mean removed)' if centred else 'per-pair APL effect',
+                         var_wiring=float((wm ** 2).mean()), var_brain=float((bm ** 2).mean()),
+                         var_interaction=float((inter ** 2).mean()),
+                         sd_single_pattern_within_wiring=float(np.sqrt(pat.var(axis=1, ddof=1).mean())),
+                         sd_single_pattern_over_wirings_ref=float(pat[:, 0].std(ddof=1)),
+                         mean_single_minus_ref=float((pat[:, 1:] - pat[:, :1]).mean()),
+                         e85_var_wiring=0.00064, e85_var_input_fly=0.00064, e85_sd_input_draw=0.0053,
+                         e85_sd_wiring_draw=0.0050, e72_draw_term=DRAW_TERM))
+    df = pd.DataFrame(rows)
+    df.to_csv(out_dir() / 'brain_decomposition.csv', index=False)
     return df
 
 
