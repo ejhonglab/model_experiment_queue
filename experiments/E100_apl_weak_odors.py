@@ -18,7 +18,9 @@ Two dependencies on other hosts' work (not duplicated here):
 - viki's copy of Yang's processed APL recordings to data/yang_apl_recordings/ in the shared directory (recordings.csv,
   raw_index.csv, README.md). Parts B to E read only that copy (never Yang's folders) and only after Yang has answered
   hal's questions (the entry's Requires). Until the copy's README is in place, their readers follow the interface below
-  (`STIM_TABLE_COLUMNS`, `RECORDING_COLUMNS`), tested on made-up data only.
+  (README.md and recordings.csv there; `read_recordings`, `recording_paths`, `yaml_stimuli`, `read_recording`), tested on
+  made-up data shaped like it and on the 12 recordings Yang released (data/yang_apl_calyx_maps/); `read_recording` refuses
+  every other recording until YANG_RELEASED is set after her answer.
 
 Definitions (the entry's, fixed before any reading; E98's hold where not changed here):
 - A recording's calyx response to a presentation: the calyx-mean peak dF/F inside the outline (Yang's peak maps,
@@ -86,6 +88,8 @@ Deviations from the entry (each also in the note):
   same session's input estimate, and a pair's power is its lowest over the three sessions' estimates (the entry fixes no
   rule over estimates for W3; part D will score each estimate apart, and W3 passes or fails only if it does so under
   every estimate, otherwise it is not decided, as W1's outside classes).
+  As a control that decides nothing, each calyx is also scored against
+  its own prediction plus noise (`power_own_calyx`): the power if every fly's calyx were wired like the scored one.
 - A3 reads the PN stage with pyolfsysm's current step times (olfsysm 17cef71 on), as E90 does; E79's cached panel rates
   were read with the earlier ones, which put the 0-0.5 s window a fraction of a step later, so its evoked rates differ
   from A3's by up to 0.021 Hz (0.3 %); part 0 checks both readings.
@@ -180,10 +184,20 @@ W3_MIN_PAIRS = 3
 D_FLIPS = ('none', 'horizontal')         # posterior view, dorsal up; both medial edges until Yang answers
 D_SLAB_WITHIN_UM = 6.0
 
-# the interface assumed for viki's copy until its README is in place (one row per presentation / per recording)
+# viki's copy (data/yang_apl_recordings/, README.md there): recordings.csv (one row per recording; set, stem, plane_depth_um,
+# pulse_s, nblock, nstim, peak_map_copied, shared_path, ...) and per recording `<stem>.yaml` (odor_pin, odor_stim_seq, nblock,
+# nstim), `<stem>[_C1]_<reg>_dff_peak5frames_ave.tif` (one peak dF/F map per presentation in odor_stim_seq order), `<stem>*.roi`,
+# `<stem>*_roi_peak_dff.csv` (Yang's calyx peak per presentation) and `<stem>_Experiment.xml`
 STIM_TABLE_COLUMNS = ('recording', 'frame', 'block', 'odor', 'log10_conc')
-RECORDING_COLUMNS = ('recording', 'set', 'date', 'fly', 'side', 'plane_um', 'pulse_s', 'peak_maps', 'roi', 'stimuli',
-                     'experiment_xml')
+E100_SETS = ('W', 'S', 'H')
+# Yang has not released the recordings beyond the 12 of data/yang_apl_calyx_maps/ (hal's questions, the entry's Requires):
+# `read_recording` refuses any other recording until this is set True, after her answer
+YANG_RELEASED = False
+SOLVENT_PIN = 37
+# Yang's odor names (her yaml odor_pin / odor_pin_full) -> abbreviations
+ODOR_ABBREV = {'paraffin oil': SOLVENT, 'pfo': SOLVENT, 'phenylacetaldehyde': 'paa', 'pentyl acetate': 'pa',
+               'methyl salicylate': 'ms', '2-heptanone': '2h', 'methyl acetate': 'ma', 'farnesol': 'farn',
+               '4-heptanol': '4h-ol', '2-butanone': '2-but', 'geranyl acetate': 'ga'}
 COPY_DIR_NAME = 'yang_apl_recordings'
 
 
@@ -399,18 +413,171 @@ def availability_identity() -> dict:
 # ---------------------------------------------------------------------------
 # the flies: the stimulus table, the shuffled blocks, the solvent, the ratios (parts B to E; viki's copy)
 
-def read_stim_table(path: Optional[Path] = None) -> pd.DataFrame:
-    """The presentations of every recording of viki's copy (STIM_TABLE_COLUMNS; `path` default the copy's frames.csv),
-    solvent labels (SOLVENT_LABELS) mapped to SOLVENT. Raises NotImplementedError while the copy is not in place."""
-    path = copy_dir() / 'frames.csv' if path is None else Path(path)
+def read_recordings(sets: Optional[Sequence[str]] = E100_SETS) -> pd.DataFrame:
+    """viki's recordings.csv (`sets` None: every set), with `folder` (the recording's copied folder, absolute) and
+    `released` (one of the 12 recordings of data/yang_apl_calyx_maps/, or YANG_RELEASED)."""
+    path = copy_dir() / 'recordings.csv'
     if not path.exists():
-        raise NotImplementedError(f"viki's copy of Yang's APL recordings is not in place ({path} missing); parts B to E "
-                                  "wait for it and for Yang's answer")
+        raise NotImplementedError(f"viki's copy of Yang's APL recordings is not in place ({path} missing)")
+    r = pd.read_csv(path)
+    if sets is not None:
+        r = r[r['set'].isin(sets)].copy()
+    r['folder'] = [str(H.shared_dir() / sp) if isinstance(sp, str) else '' for sp in r['shared_path']]
+    rel = set(released_2021())
+    r['released'] = [bool(YANG_RELEASED or st in rel) for st in r['stem']]
+    return r.reset_index(drop=True)
+
+
+def released_2021() -> List[str]:
+    """The stems of the 12 recordings Yang released (data/yang_apl_calyx_maps/2021_APL_18um/recordings.csv)."""
+    _, DS = _e79()
+    return [f.split('_moco')[0] for f in pd.read_csv(DS.DATA / 'recordings.csv')['file']]
+
+
+def odor_abbrev_yang(name: str) -> Tuple[str, float]:
+    """One of Yang's odor_pin entries ('phenylacetaldehyde(-6.294)', '2h(-7)', 'PFO', 'paraffin oil') as (abbreviation,
+    log10 concentration); the solvent as (SOLVENT, NaN); an unknown name is kept as written."""
+    import re
+    n = ' '.join(str(name).split())
+    m = re.fullmatch(r'(?P<o>.+?)\s*\((?P<c>[-+0-9.eE]+)\)', n)
+    odor, conc = (m.group('o'), float(m.group('c'))) if m else (n, np.nan)
+    key = odor.strip().lower()
+    if key in ('paraffin oil', 'pfo', 'solvent'):
+        return SOLVENT, np.nan
+    return ODOR_ABBREV.get(key, odor.strip()), conc
+
+
+def yaml_stimuli(path: Path, recording: Optional[str] = None) -> pd.DataFrame:
+    """The presentations of one recording from Yang's stimulus yaml: frame k is the k-th entry of odor_stim_seq (viki's
+    README; the peak-map stack has one frame per presentation in that order), block k // nstim, position in the block
+    k % nstim + 1; with the pin, Yang's odor name (odor_pin, 1-based pins), the abbreviation and log10 concentration
+    (`odor_abbrev_yang`; the solvent as SOLVENT). Columns STIM_TABLE_COLUMNS plus position, pin, odor_name."""
+    import yaml
+    y = yaml.safe_load(Path(path).read_text())
+    pins = list(y['odor_pin'])
+    seq = [int(x) for x in y['odor_stim_seq']]
+    nstim = int(y['nstim'])
+    if len(seq) != int(y['nblock']) * nstim:
+        raise ValueError(f"{path}: {len(seq)} presentations for nblock x nstim = {y['nblock']} x {nstim}")
+    rows = []
+    for k, pin in enumerate(seq):
+        name = pins[pin - 1]
+        odor, conc = odor_abbrev_yang(name)
+        rows.append(dict(recording=recording or Path(path).stem.replace('_copy', ''), frame=k, block=k // nstim,
+                         position=k % nstim + 1, pin=pin, odor_name=' '.join(str(name).split()), odor=odor,
+                         log10_conc=conc))
+    return pd.DataFrame(rows)
+
+
+def recording_paths(row) -> dict:
+    """One recording's files in viki's copy (the 12 released 2021 recordings' peak maps, outlines and yaml from
+    data/yang_apl_calyx_maps/): the yaml, the APL peak-map stack (channel C1 or a single channel; the copied variant), the
+    calyx outline matching the map's registration tag ('<stem>_<tag>.roi', else '<stem>.roi'), Yang's ROI table for the
+    same tag, the Experiment.xml. Missing files are None."""
+    stem, folder = row['stem'], Path(row['folder'])
+    _, DS = _e79()
+    if stem in released_2021():
+        maps = sorted(DS.DATA.glob(f'{stem}_*dff_peak5frames_ave.tif'))
+        yml = DS.DATA / f'{stem}.yaml'
+        rois = [DS.DATA / f'{stem}_moco.roi']
+    else:
+        maps = sorted(f for f in folder.glob(f'{stem}_*dff_peak5frames_ave.tif') if '_C2' not in f.name)
+        yml = next((f for f in (folder / f'{stem}.yaml', folder / f'{stem}_copy.yaml') if f.exists()), None)
+        rois = []
+    pm = maps[0] if maps else None
+    tag = pm.name[len(stem) + 1:].split('_dff_peak5frames_ave')[0] if pm is not None else ''
+    rois += [folder / f'{stem}_{tag}.roi', folder / f'{stem}.roi']
+    roi = next((f for f in rois if f.exists()), None)
+    tab = next((f for f in (folder / f'{stem}_{tag}_roi_peak_dff.csv',) if f.exists()), None)
+    xml = next(iter(sorted(folder.glob(f'{stem}*Experiment.xml'))), None)
+    return dict(yaml=yml, peak_maps=pm, tag=tag, roi=roi, roi_table=tab, experiment_xml=xml)
+
+
+def read_recording(row, maps: bool = False) -> dict:
+    """One recording read for parts B to D: its presentations (`yaml_stimuli`, `shuffled_blocks`' flags where the design
+    has the solvent last) with each presentation's calyx response (`calyx_responses` of the APL peak maps inside the
+    outline) and Yang's own value beside (`yang_peak`, from her ROI table, in presentation order), the outline mask, the
+    pixel size and channels (`experiment_xml`), and with `maps` the stack. Refuses a recording Yang has not released
+    (`YANG_RELEASED`)."""
+    import tifffile
+    if not (YANG_RELEASED or row['stem'] in released_2021()):
+        raise PermissionError(f"{row['stem']}: Yang has not released this recording (E100's entry, Requires); set "
+                              "YANG_RELEASED after her answer")
+    _, DS = _e79()
+    f = recording_paths(row)
+    if f['peak_maps'] is None or f['yaml'] is None or f['roi'] is None:
+        raise FileNotFoundError(f"{row['stem']}: peak maps, yaml or outline missing ({f})")
+    stack = tifffile.imread(f['peak_maps']).astype(float)
+    frames = yaml_stimuli(f['yaml'], row['stem'])
+    if len(frames) != stack.shape[0]:
+        raise ValueError(f"{row['stem']}: {stack.shape[0]} peak maps for {len(frames)} presentations")
+    mask = DS.ACM.roi_mask(DS.ACM.read_imagej_polygon(f['roi']), stack.shape[1:])
+    frames['response'] = calyx_responses(stack, mask)
+    frames['is_solvent'] = frames['odor'] == SOLVENT
+    frames['stim'] = [SOLVENT if sv else stim_label((o, c)) for sv, o, c in
+                      zip(frames['is_solvent'], frames['odor'], frames['log10_conc'])]
+    if f['roi_table'] is not None:
+        t = pd.read_csv(f['roi_table'])
+        if len(t) == len(frames):
+            frames['yang_peak'] = t['roi_peak_dff'].to_numpy(dtype=float)
+    out = dict(stem=row['stem'], set=row['set'], fly=f"{row['date']}_{row['fly']}", side=row['hemisphere'],
+               plane_um=row['plane_depth_um'], pulse_s=row['pulse_s'], frames=frames, mask=mask, files=f,
+               xml=experiment_xml(f['experiment_xml']) if f['experiment_xml'] is not None else None)
+    if maps:
+        out['stack'] = stack
+    return out
+
+
+def yang_table_identity(stems: Optional[Sequence[str]] = None) -> dict:
+    """Part 0: on the released 2021 recordings (default all 12), the calyx-mean of each peak map inside the outline
+    against Yang's ROI table (roi_peak_dff), per presentation: the largest absolute difference, the largest at odor and at
+    solvent presentations, and Pearson r; passed when the largest difference is at most 1e-6 dF/F."""
+    recs = read_recordings(sets=None)
+    stems = released_2021() if stems is None else list(stems)
+    rows = []
+    for _, row in recs[recs['stem'].isin(stems)].iterrows():
+        rec = read_recording(row)
+        fr = rec['frames']
+        if 'yang_peak' not in fr:
+            rows.append(dict(recording=row['stem'], n=0))
+            continue
+        d = (fr['response'] - fr['yang_peak']).abs()
+        rows.append(dict(recording=row['stem'], n=len(fr), max_abs_diff=float(d.max()),
+                         max_abs_diff_odor=float(d[~fr['is_solvent']].max()),
+                         max_abs_diff_solvent=float(d[fr['is_solvent']].max()),
+                         pearson_r=float(np.corrcoef(fr['response'], fr['yang_peak'])[0, 1]),
+                         median_ratio=float((fr['response'] / fr['yang_peak']).median())))
+    df = pd.DataFrame(rows)
+    worst = float(df['max_abs_diff'].max()) if 'max_abs_diff' in df else np.inf
+    return dict(passed=bool(worst <= 1e-6), n_recordings=int(df['n'].gt(0).sum()), max_abs_diff_dff=worst,
+                min_pearson_r=float(df['pearson_r'].min()) if 'pearson_r' in df else np.nan,
+                per_recording=df.to_dict('records'))
+
+
+def xml_identity(stems: Optional[Sequence[str]] = None) -> dict:
+    """Part 0: each released 2021 recording's pixel size and channel list read from its Experiment.xml equal
+    recordings.csv's (pixel_size_um, channels_xml)."""
+    recs = read_recordings(sets=None)
+    stems = released_2021() if stems is None else list(stems)
+    rows = []
+    for _, row in recs[recs['stem'].isin(stems)].iterrows():
+        f = recording_paths(row)
+        if f['experiment_xml'] is None:
+            rows.append(dict(recording=row['stem'], ok=False, why='no Experiment.xml'))
+            continue
+        x = experiment_xml(f['experiment_xml'])
+        ok = (abs(x['pixel_um'] - float(row['pixel_size_um'])) < 1e-6
+              and '+'.join(x['channels']) == str(row['channels_xml']))
+        rows.append(dict(recording=row['stem'], ok=bool(ok), pixel_um=x['pixel_um'], channels='+'.join(x['channels'])))
+    return dict(passed=bool(rows and all(r['ok'] for r in rows)), per_recording=rows)
+
+
+def read_stim_table(path: Optional[Path] = None) -> pd.DataFrame:
+    """A table of presentations (STIM_TABLE_COLUMNS, e.g. the 2021 set's frames.csv), solvent labels mapped to SOLVENT;
+    the copy's own stimulus tables are read per recording by `yaml_stimuli`."""
+    _, DS = _e79()
+    path = DS.DATA / 'frames.csv' if path is None else Path(path)
     t = pd.read_csv(path)
-    missing = [c for c in STIM_TABLE_COLUMNS if c not in t.columns and c != 'block']
-    if missing:
-        raise NotImplementedError(f'{path}: columns {missing} missing; the reader follows the interface of the stub '
-                                  f'({STIM_TABLE_COLUMNS}) until the copy\'s README is read')
     t['odor'] = t['odor'].astype(str).str.strip()
     t.loc[t['odor'].str.lower().isin(SOLVENT_LABELS), 'odor'] = SOLVENT
     return t
@@ -1074,12 +1241,13 @@ def _depth_slabs(slabs: dict, nominal: float, within: float = D_SLAB_WITHIN_UM) 
 
 
 def power(pair: str, session: str, state: dict, reliabilities: Sequence[float], n_draws: int = A4_N_DRAWS,
-          seed: int = SEED) -> pd.DataFrame:
+          seed: int = SEED, self_truth: bool = False) -> pd.DataFrame:
     """A4 for one pair under one session's input estimate: simulated recordings (a truth calyx's predicted map at a slab
     within D_SLAB_WITHIN_UM of a nominal plane depth from A4_PLANE_DEPTHS_UM and a blur from E79's, plus noise at each
     reliability, `noise_sd`) scored against every other calyx's prediction over its slabs within D_SLAB_WITHIN_UM of the
     nominal depth, E79's blurs and D_FLIPS (`detect`, the scored calyx mirrored into the truth's side); one row per scored
-    calyx, truth calyx, reliability and draw."""
+    calyx, truth calyx, reliability and draw. With `self_truth`, each calyx is also scored against its own truth (a
+    control, flagged `self_truth`: the power without any difference between flies' calyces)."""
     CM, _ = _e79()
     rates, grids = state['rates'], state['grids']
     cols = state['columns'][(pair, session)]
@@ -1111,7 +1279,7 @@ def power(pair: str, session: str, state: dict, reliabilities: Sequence[float], 
                 sig = truth[ins_t]
                 meas = truth + rng.normal(0.0, noise_sd(sig, rel), size=truth.shape)
                 for c in CALYCES:
-                    if c == t or {c, t} == DUPLICATE_CALYCES:
+                    if (c == t and not self_truth) or {c, t} == DUPLICATE_CALYCES:
                         continue
                     mirror = grids[c]['side'] != t_side
                     pred, ins = {}, {}
@@ -1123,7 +1291,8 @@ def power(pair: str, session: str, state: dict, reliabilities: Sequence[float], 
                     if not pred:
                         continue
                     best, p95, ex = detect(pred, ins, meas, ins_t)
-                    rows.append(dict(pair=pair, session=session, scored_calyx=c, truth_calyx=t, reliability=rel,
+                    rows.append(dict(pair=pair, session=session, scored_calyx=c, truth_calyx=t, self_truth=c == t,
+                                     reliability=rel,
                                      draw=k, nominal_depth_um=nominal, truth_depth_um=d_t, truth_blur_um=b_t,
                                      best_r=best, null_p95=p95, exceeds=ex))
     return pd.DataFrame(rows)
@@ -1142,11 +1311,16 @@ def part_a4(state: Optional[dict] = None, n_draws: int = A4_N_DRAWS) -> dict:
     t0 = time.time()
     draws = []
     for (pair, sess) in sorted(state['columns']):
-        draws.append(power(pair, sess, state, rels + [weak], n_draws))
+        draws.append(power(pair, sess, state, rels + [weak], n_draws, self_truth=True))
+        x = draws[-1]
         print(f'{time.strftime("%H:%M:%S")} A4 {pair} [{sess}]: share exceeding '
-              f'{draws[-1].groupby("reliability")["exceeds"].mean().round(3).to_dict()} ({time.time() - t0:.0f} s)',
+              f'{x[~x.self_truth].groupby("reliability")["exceeds"].mean().round(3).to_dict()}, own calyx as truth '
+              f'{x[x.self_truth].groupby("reliability")["exceeds"].mean().round(3).to_dict()} ({time.time() - t0:.0f} s)',
               flush=True)
-    D = pd.concat(draws, ignore_index=True)
+    D_all = pd.concat(draws, ignore_index=True)
+    selfp = (D_all[D_all['self_truth']].groupby(['pair', 'session', 'reliability'])
+             .agg(power_own_calyx=('exceeds', 'mean')).reset_index())
+    D = D_all[~D_all['self_truth']]
     by_cal = (D.groupby(['pair', 'session', 'reliability', 'scored_calyx'])
               .agg(share=('exceeds', 'mean'), n=('exceeds', 'size'), median_best_r=('best_r', 'median'),
                    median_null_p95=('null_p95', 'median')).reset_index())
@@ -1156,12 +1330,13 @@ def part_a4(state: Optional[dict] = None, n_draws: int = A4_N_DRAWS) -> dict:
     cnt = by_cal.groupby(['pair', 'session', 'reliability'])['share']
     pw = pw.merge(cnt.apply(lambda x: int((x > W3_PASS_SHARE).sum())).rename('n_calyces_over_half').reset_index())
     pw = pw.merge(cnt.apply(lambda x: int((x > W3_FAIL_SHARE).sum())).rename('n_calyces_over_quarter').reset_index())
+    pw = pw.merge(selfp, how='left')
     role = {rels[0]: 'decisive (2021, paa minus ms)', rels[1]: 'beside (2021, pa minus ms)',
             weak: f'sensitivity: response x {A4_RESPONSE_SCALE:g}'}
     for t_ in (by_cal, pw):
         t_.insert(3, 'role', t_['reliability'].map(role))
     out = out_dir()
-    D.to_csv(out / 'a4_power_draws.csv.gz', index=False)
+    D_all.to_csv(out / 'a4_power_draws.csv.gz', index=False)
     by_cal.to_csv(out / 'a4_power_by_calyx.csv', index=False)
     pw.to_csv(out / 'a4_power.csv', index=False)
     low = pw[pw['reliability'] == rels[0]]
@@ -1169,7 +1344,10 @@ def part_a4(state: Optional[dict] = None, n_draws: int = A4_N_DRAWS) -> dict:
     kept = [p for p in decisive.index if decisive[p] >= A4_POWER_MIN]
     sens = pw[pw['reliability'] == weak].groupby('pair')['power'].min()
     res = dict(reliabilities=rel, decisive_reliability=rels[0], sensitivity_reliability=weak,
-               sensitivity_power={p: round(float(v), 4) for p, v in sens.items()}, n_draws=int(n_draws), n_presentations=A4_N_PRESENTATIONS,
+               sensitivity_power={p: round(float(v), 4) for p, v in sens.items()},
+               own_calyx_power={p: round(float(v), 4) for p, v in
+                                pw[pw['reliability'] == rels[0]].groupby('pair')['power_own_calyx'].min().items()},
+               n_draws=int(n_draws), n_presentations=A4_N_PRESENTATIONS,
                plane_depths_um=list(A4_PLANE_DEPTHS_UM), slab_within_um=D_SLAB_WITHIN_UM, flips=list(D_FLIPS),
                power_min=A4_POWER_MIN, decisive_power={p: round(float(v), 4) for p, v in decisive.items()},
                kept=kept, left_out=[p for p in decisive.index if p not in kept],
@@ -1187,8 +1365,9 @@ def part_0(recordings: bool = False) -> dict:
     rates, _ = pn_rates_extended()
     res = dict(pn_stage=pn_identity(rates), availability=availability_identity(), reader_2021=reader_identity_2021())
     if recordings:
-        res['yang_tables'] = dict(passed=None, status="waits on viki's copy and Yang's answer")
-        res['experiment_xml'] = dict(passed=None, status="waits on viki's copy and Yang's answer")
+        # on the 12 released 2021 recordings only, until Yang releases the others (YANG_RELEASED)
+        res['yang_tables'] = yang_table_identity()
+        res['experiment_xml'] = xml_identity()
     res['passed'] = all(v['passed'] for v in res.values() if isinstance(v, dict) and v.get('passed') is not None)
     path = out_dir() / 'identity.json'
     old = _read_json(path) or {}
@@ -1199,22 +1378,151 @@ def part_0(recordings: bool = False) -> dict:
 
 def _waiting(part: str) -> None:
     raise NotImplementedError(
-        f"part {part} reads Yang's recordings from viki's copy ({copy_dir()}) and only after Yang has answered hal's "
-        "questions (the entry's Requires); not written yet")
+        f"part {part} reads Yang's recordings from viki's copy ({copy_dir()}) only after Yang has answered hal's "
+        "questions (the entry's Requires; YANG_RELEASED); its readers are written and tested on made-up data and the 12 "
+        "released 2021 recordings")
+
+
+YANG_L_IS_FLY_RIGHT = True    # the entry: posterior view, dorsal up, "L" files the fly's right (until Yang answers)
+
+
+def recording_table(frames: pd.DataFrame) -> dict:
+    """Part B for one recording (`read_recording`'s frames, or made-up ones with block, is_solvent, stim, response):
+    per presentation and per stimulus the responses raw, minus the recording's solvent and minus the block's solvent
+    (`solvent_subtracted`); the recording's solvent response and whether it is large (`large_solvent`); the agreement
+    between blocks (the mean over pairs of blocks of the Pearson r of their odor responses, raw); the drift (the slope per
+    block of the solvent's response and of the mean odor response)."""
+    per, stim = solvent_subtracted(frames)
+    piv = per.pivot_table(index='stim', columns='block', values='raw')
+    rs = [piv[a].corr(piv[b]) for i, a in enumerate(piv.columns) for b in piv.columns[i + 1:]]
+    sol = frames[frames['is_solvent']].groupby('block')['response'].mean()
+    odor = per.groupby('block')['raw'].mean()
+
+    def slope(x):
+        return float(np.polyfit(x.index.to_numpy(dtype=float), x.to_numpy(dtype=float), 1)[0]) if len(x) >= 2 else np.nan
+    return dict(per_presentation=per, per_stim=stim, solvent=recording_solvent(frames), large_solvent=large_solvent(frames),
+                block_agreement_r=float(np.nanmean(rs)) if rs else np.nan, n_blocks=int(frames['block'].nunique()),
+                solvent_drift_per_block=slope(sol), odor_drift_per_block=slope(odor))
+
+
+def flies_ratios(per_stim: pd.DataFrame, numerators: Sequence[Stim], denominator: Stim,
+                 reading: str = 'minus_recording', n_boot: int = N_BOOT) -> pd.DataFrame:
+    """The flies' ratios of each numerator over `denominator` from per-recording stimulus means (columns recording, fly,
+    stim and `reading`; `recording_table`'s per_stim with the recording and fly added): per recording the two responses,
+    then `fly_ratio_w` over flies; one row per numerator with the reading, the mean used and the counts."""
+    rows = []
+    den_lab = stim_label(denominator)
+    for num in numerators:
+        lab = stim_label(num)
+        d = per_stim.pivot_table(index=['fly', 'recording'], columns='stim', values=reading)
+        if lab not in d or den_lab not in d:
+            rows.append(dict(numerator=lab, denominator=den_lab, reading=reading, n_flies=0))
+            continue
+        pr = d[[lab, den_lab]].dropna().reset_index().rename(columns={lab: 'num', den_lab: 'den'})
+        rows.append(dict(numerator=lab, denominator=den_lab, reading=reading, **fly_ratio_w(pr, n_boot=n_boot)))
+    return pd.DataFrame(rows)
+
+
+def measured_pair_grid(stack: np.ndarray, frames: pd.DataFrame, mask: np.ndarray, a: str, b: str,
+                       solvent: str = 'recording') -> Optional[dict]:
+    """Part D's measured map of a pair (stimulus labels `a`, `b`) in one recording: each stimulus's mean peak map minus the
+    solvent's map (the mean of the recording's solvent presentations, or with `solvent` 'block' each presentation minus its
+    block's own), over its calyx mean, blurred E79's MEAS_BLUR_PX, on E79's 12 x 12 grid over the outline's bounding box,
+    a minus b (image axes as recorded); with the inside cells, the calyx means and the split-half r (the pair's map from
+    the even blocks against the odd blocks'). None when a stimulus is missing."""
+    from scipy.ndimage import gaussian_filter
+    CM, _ = _e79()
+    f = frames.reset_index(drop=True)
+    if not ((f['stim'] == a).any() and (f['stim'] == b).any()):
+        return None
+    sol = f[f['is_solvent']]
+    rec_sol = stack[sol.index].mean(axis=0)
+    blk_sol = {bk: stack[g.index].mean(axis=0) for bk, g in sol.groupby('block')}
+    M_, inside = CM.cell_matrix(mask)
+
+    def stim_map(lab, blocks=None):
+        g = f[(f['stim'] == lab) & (True if blocks is None else f['block'].isin(blocks))]
+        if g.empty:
+            return None, np.nan
+        reps = [stack[i] - (rec_sol if solvent == 'recording' else blk_sol.get(bk, rec_sol)) for i, bk in
+                zip(g.index, g['block'])]
+        m = np.mean(reps, axis=0)
+        return m, float(m[mask].mean())
+
+    def grid(lab, blocks=None):
+        m, mean = stim_map(lab, blocks)
+        if m is None or not mean:
+            return None, mean
+        return np.asarray(M_.T @ (gaussian_filter(m, CM.MEAS_BLUR_PX) / mean).ravel()).ravel(), mean
+    ga, ma = grid(a)
+    gb, mb = grid(b)
+    if ga is None or gb is None:
+        return None
+    blocks = sorted(f['block'].unique())
+    halves = [blocks[0::2], blocks[1::2]]
+    hg = []
+    for hb in halves:
+        x, _ = grid(a, hb)
+        y, _ = grid(b, hb)
+        hg.append(None if x is None or y is None else x - y)
+    sh = (_masked_r(hg[0], hg[1], inside) if all(h is not None for h in hg) else np.nan)
+    return dict(grid=ga - gb, inside=inside, mean_a=ma, mean_b=mb, split_half_r=sh)
+
+
+def score_recording(meas: dict, side: str, plane_um: float, pair: str, session: str, state: dict) -> pd.DataFrame:
+    """Part D for one recording and pair under one session's estimate: per calyx (E79's eight), the best r over its slabs
+    within D_SLAB_WITHIN_UM of the plane's nominal depth, E79's blurs and D_FLIPS, against the label-permuted null's 95th
+    percentile over the same search (`detect`); the calyx's prediction mirrored into the recording's hemisphere (Yang's
+    "L" read as the fly's right while YANG_L_IS_FLY_RIGHT). One row per calyx with W3's `exceeds`."""
+    CM, _ = _e79()
+    rates, grids = state['rates'], state['grids']
+    cols = state['columns'][(pair, session)]
+    fly_side = side
+    if YANG_L_IS_FLY_RIGHT:
+        fly_side = {'L': 'R', 'R': 'L'}.get(side, side)
+    rows = []
+    for c in CALYCES:
+        g = grids[c]
+        Wt = _wt(rates, g['names'], cols)
+        mirror = g['side'] != fly_side
+        pred, ins = {}, {}
+        for d in _depth_slabs(g['slabs'], float(plane_um)):
+            sl = g['slabs'][d]
+            for blur, G in sl['G'].items():
+                pr = pair_maps(Wt, g['perms'], G, sl['inside'])
+                pred[(d, blur)] = CM.flip_grid(pr, 'horizontal') if mirror else pr
+                ins[(d, blur)] = CM.flip_grid(sl['inside'], 'horizontal') if mirror else sl['inside']
+        best, p95, ex = detect(pred, ins, meas['grid'], meas['inside']) if pred else (np.nan, np.nan, False)
+        rows.append(dict(calyx=c, pair=pair, session=session, n_slabs=len({k[0] for k in pred}), best_r=best,
+                         null_p95=p95, exceeds=ex))
+    return pd.DataFrame(rows)
+
+
+def w3_over_estimates(per_estimate: Dict[str, str]) -> str:
+    """W3 over the session estimates: 'passes' or 'fails' only if so under every estimate, otherwise 'not decided'."""
+    v = list(per_estimate.values())
+    for k in ('passes', 'fails'):
+        if v and all(x == k for x in v):
+            return k
+    return 'not decided'
 
 
 def part_b() -> dict:
-    """Part B (module docstring), from viki's copy, after Yang's answer."""
-    _waiting('B')
+    """Part B (module docstring), from viki's copy, after Yang's answer (`recording_table` per recording,
+    `flies_ratios` for W1)."""
+    if not YANG_RELEASED:
+        _waiting('B')
+    raise NotImplementedError('part B: the run over sets W, S and H is written after Yang answers')
 
 
 def part_c() -> dict:
-    """Part C (module docstring), from viki's copy, after Yang's answer."""
+    """Part C (module docstring), from viki's copy, after Yang's answer (E79's analyses 1 to 3 on the stimulus maps)."""
     _waiting('C')
 
 
 def part_d() -> dict:
-    """Part D (module docstring), from viki's copy, after Yang's answer."""
+    """Part D (module docstring), from viki's copy, after Yang's answer (`measured_pair_grid`, `score_recording`,
+    `w3_verdict` per estimate, `w3_over_estimates`)."""
     _waiting('D')
 
 

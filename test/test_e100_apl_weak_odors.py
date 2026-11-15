@@ -354,3 +354,130 @@ def test_scaled_reliability():
     sd = M.noise_sd(sig, 0.59, n_presentations=1)
     a, b = 0.5 * sig + rng.normal(0, sd, sig.size), 0.5 * sig + rng.normal(0, sd, sig.size)
     assert np.corrcoef(a, b)[0, 1] == pytest.approx(r, abs=0.01)
+
+
+# ---------------------------------------------------------------------------
+# the readers of viki's copy (made-up data shaped like it, and the 12 released 2021 recordings)
+
+def test_odor_abbrev_yang():
+    assert M.odor_abbrev_yang('phenylacetaldehyde(-6.294)') == ('paa', -6.294)
+    assert M.odor_abbrev_yang('2h(-7)') == ('2h', -7.0)
+    assert M.odor_abbrev_yang('4-heptanol(-6)') == ('4h-ol', -6.0)
+    assert M.odor_abbrev_yang('ms(-5.5)') == ('ms', -5.5)
+    s, c = M.odor_abbrev_yang('PFO')
+    assert s == M.SOLVENT and np.isnan(c)
+    assert M.odor_abbrev_yang('paraffin\n  oil')[0] == M.SOLVENT
+
+
+W_YAML = """nblock: 3 # total number of blocks
+nstim: 4 # number of odor stimuli in EACH block
+odorPulseLen : 1
+odor_pin: ['NA','NA','NA','NA','NA','NA','NA','NA','NA','NA','NA','NA',
+  'NA','NA','NA','NA','NA','NA','NA','NA','NA','NA','NA','NA',
+  'NA','NA','NA','NA','NA','NA','NA','NA','NA','NA','NA','NA', 'PFO',
+'2h(-7)','NA','farn(-3)','paa(-3)']
+odor_stim_seq: [38, 40, 41, 37,
+41, 38, 40, 37,
+40, 41, 38, 37]
+"""
+
+
+def test_yaml_stimuli_shuffled_blocks(tmp_path):
+    y = tmp_path / '20250199_1FRfun1.yaml'
+    y.write_text(W_YAML)
+    f = M.yaml_stimuli(y)
+    assert len(f) == 12 and list(f['block']) == [0] * 4 + [1] * 4 + [2] * 4
+    assert list(f['odor'][:4]) == ['2h', 'farn', 'paa', M.SOLVENT] and list(f['log10_conc'][:3]) == [-7.0, -3.0, -3.0]
+    # the yaml's blocks agree with the blocks inferred from the solvent, and the design flags hold
+    b = M.shuffled_blocks(f.drop(columns='block'))
+    assert list(b['block']) == list(f['block']) and b['solvent_last'].all() and b['complete'].all()
+    y.write_text(W_YAML.replace('nblock: 3', 'nblock: 2'))
+    with pytest.raises(ValueError):
+        M.yaml_stimuli(y)
+
+
+def test_read_recording_refuses_unreleased():
+    row = dict(stem='20250115_1FRfun1', folder='/nonexistent', set='W', date='2025-01-15', fly=1, hemisphere='R',
+               plane_depth_um=15, pulse_s=1.0)
+    with pytest.raises(PermissionError):
+        M.read_recording(row)
+
+
+def test_recording_table_and_flies_ratios():
+    t = M.recording_table(_resp())
+    assert t['solvent'] == pytest.approx(0.3) and t['n_blocks'] == 3
+    assert t['solvent_drift_per_block'] == pytest.approx(0.1) and t['odor_drift_per_block'] == pytest.approx(0.1)
+    assert t['block_agreement_r'] == pytest.approx(1.0)
+    # two flies, three recordings: 2h over ma minus the solvent
+    rows = []
+    for fly, rec, k in (('a', 'r1', 1.0), ('a', 'r2', 1.0), ('b', 'r3', 2.0)):
+        ps = t['per_stim'].reset_index().assign(fly=fly, recording=rec)
+        ps.loc[ps['stim'] == '2h @ -6', 'minus_recording'] *= k
+        rows.append(ps)
+    ps = pd.concat(rows)
+    r = M.flies_ratios(ps, [('2h', -6.0)], ('ma', -7.0), n_boot=100)
+    # per fly 0.8 / 0.3 and 1.6 / 0.3, geometric mean over the two flies
+    assert r['ratio'].iloc[0] == pytest.approx(np.sqrt((0.8 / 0.3) * (1.6 / 0.3)))
+    assert r['n_flies'].iloc[0] == 2 and r['mean'].iloc[0] == 'geometric'
+
+
+def test_measured_pair_grid_made_up():
+    rng = np.random.default_rng(0)
+    fr = M.shuffled_blocks(_frames())
+    fr['response'] = 0.0
+    mask = np.zeros((48, 48), bool)
+    mask[4:44, 4:44] = True
+    yy, xx = np.mgrid[:48, :48]
+    blob_a = np.exp(-((yy - 12) ** 2 + (xx - 12) ** 2) / 50.0)
+    blob_b = np.exp(-((yy - 36) ** 2 + (xx - 36) ** 2) / 50.0)
+    # the solvent's map is the baseline 0.5; each odor adds 0.2 everywhere and its own blob
+    stack = np.stack([0.5 + (0.2 + blob_a if s == '2h @ -6' else 0.2 + blob_b if s == 'ma @ -7' else 0)
+                      + rng.normal(0, 0.01, (48, 48)) for s in fr['stim']])
+    g = M.measured_pair_grid(stack, fr, mask, '2h @ -6', 'ma @ -7')
+    G = g['grid'].reshape(12, 12)
+    assert G[2, 2] > 0 > G[9, 9]                   # 2h's blob top left, ma's bottom right (image axes)
+    assert g['split_half_r'] > 0.9
+    assert g['mean_a'] == pytest.approx((0.2 + blob_a)[mask].mean(), abs=0.01)
+    assert M.measured_pair_grid(stack, fr, mask, '2h @ -6', 'farn @ -2') is None
+
+
+def test_score_recording_planted():
+    st = _planted_state()
+    g = st['grids']['flywire_R']
+    Wt = M._wt(st['rates'], g['names'], ['A [s]', 'B [s]'])
+    sl = g['slabs'][18.0]
+    truth = M.pair_maps(Wt, g['perms'][:1], sl['G'][2.0], sl['inside'])[0]
+    # a fly's right calyx, which Yang's files call "L" (the entry's orientation)
+    d = M.score_recording(dict(grid=truth, inside=sl['inside']), 'L', 18.0, 'A - B', 's', st)
+    assert len(d) == 8 and d.set_index('calyx').loc['flywire_R', 'exceeds']
+    assert d['exceeds'].mean() > 0.7                # the other calyces share the layout
+
+
+def test_w3_over_estimates():
+    assert M.w3_over_estimates({'a': 'passes', 'b': 'passes'}) == 'passes'
+    assert M.w3_over_estimates({'a': 'passes', 'b': 'not decided'}) == 'not decided'
+    assert M.w3_over_estimates({'a': 'fails', 'b': 'fails', 'c': 'fails'}) == 'fails'
+    assert M.w3_over_estimates({}) == 'not decided'
+
+
+@pytest.mark.skipif(_shared() is None or not (_shared() / 'data' / 'yang_apl_recordings' / 'recordings.csv').exists(),
+                    reason="viki's copy not there")
+def test_readers_on_released_2021():
+    recs = M.read_recordings(sets=None)
+    assert recs['released'].sum() == 12 or M.YANG_RELEASED
+    row = recs[recs['stem'] == '20210714_2FRfun1'].iloc[0]
+    rec = M.read_recording(row, maps=True)
+    fr = rec['frames']
+    # the yaml reader reproduces the 2021 frames.csv (built from the same yaml)
+    ref = M.read_stim_table().query("recording == '20210714_2FRfun1'").reset_index(drop=True)
+    assert (ref['odor'].to_numpy() == fr['odor'].to_numpy()).all()
+    assert np.allclose(ref['log10_conc'].fillna(0), fr['log10_conc'].fillna(0))
+    assert (ref['block'].to_numpy() == fr['block'].to_numpy()).all()
+    assert rec['xml']['pixel_um'] == pytest.approx(float(row['pixel_size_um']))
+    # the pair map with the recording's solvent subtracted is E79's measured pa minus ms (all paraffin oil baseline)
+    CM, _ = M._e79()
+    meas = CM.measured_maps('all_pfo')['20210714_2FRfun1']
+    c = meas['concs']['pa-ms']
+    g = M.measured_pair_grid(rec['stack'], fr, rec['mask'], M.stim_label(('pa', c['pa'])), M.stim_label(('ms', c['ms'])))
+    assert np.allclose(g['grid'], meas['grid']['pa-ms'], atol=1e-9)
+    assert (g['inside'] == meas['inside']).all()
