@@ -323,3 +323,16 @@ def test_an_incomplete_part_b_gives_no_verdict(tmp_path, monkeypatch):
     rd = rd[~((rd.variant == G.R2) & (rd.unit == 'all8'))]
     v = G.verdict97(rd, _boot(-0.001))
     assert v['outcome'] == 'incomplete' and 'R2' in v['missing'] and not v['needs_draw2']
+
+
+def test_the_lock(tmp_path):
+    p = tmp_path / 'runs_B.csv'
+    with G._Lock(p):
+        assert (tmp_path / 'runs_B.csv.lock').is_dir()
+        with pytest.raises(TimeoutError):
+            with G._Lock(p, timeout=0.6):
+                pass
+    assert not (tmp_path / 'runs_B.csv.lock').exists()
+    G._append_locked(p, dict(tag='a', x=1))
+    G._append_locked(p, dict(tag='b', x=2))
+    assert pd.read_csv(p).tag.tolist() == ['a', 'b']

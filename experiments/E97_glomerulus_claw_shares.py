@@ -1407,11 +1407,51 @@ def zero_input_share(W: pd.DataFrame, orn_glomeruli: Sequence[str]) -> float:
     return float((~t.glomerulus.isin(set(orn_glomeruli))).mean())
 
 
+class _Lock:
+    """A lock on a shared file for its read-modify-write (two lanes append to runs_B.csv and provenance_B.json): a
+    directory next to it, made with mkdir (atomic on NFS), removed on exit; one older than `stale` seconds is taken to be
+    left over and removed."""
+
+    def __init__(self, path: Path, timeout: float = 600.0, stale: float = 600.0):
+        self.dir = path.with_name(path.name + '.lock')
+        self.timeout, self.stale = timeout, stale
+
+    def __enter__(self):
+        t0 = time.time()
+        while True:
+            try:
+                self.dir.mkdir()
+                return self
+            except FileExistsError:
+                try:
+                    if time.time() - self.dir.stat().st_mtime > self.stale:
+                        self.dir.rmdir()
+                        continue
+                except OSError:
+                    pass
+                if time.time() - t0 > self.timeout:
+                    raise TimeoutError(f'{self.dir} held for more than {self.timeout:.0f} s')
+                time.sleep(0.5)
+
+    def __exit__(self, *exc):
+        try:
+            self.dir.rmdir()
+        except OSError:
+            pass
+        return False
+
+
+def _append_locked(path: Path, row: dict) -> None:
+    with _Lock(path):
+        E83._append_row(path, row)
+
+
 def _provenance_add(part: str, tag: str, prov: dict) -> None:
     path = out_dir() / f'provenance_{part}.json'
-    d = _read_json(path) or dict(part=part, script='experiments/E97_glomerulus_claw_shares.py', points={})
-    d.setdefault('points', {})[tag] = prov
-    _write_json(path, d)
+    with _Lock(path):
+        d = _read_json(path) or dict(part=part, script='experiments/E97_glomerulus_claw_shares.py', points={})
+        d.setdefault('points', {})[tag] = prov
+        _write_json(path, d)
 
 
 def run_point(variant: str, wiring: str, rt: Optional[pd.DataFrame] = None, cc: Optional[dict] = None,
@@ -1457,7 +1497,7 @@ def run_point(variant: str, wiring: str, rt: Optional[pd.DataFrame] = None, cc: 
                        params_on=json.dumps({k: float(v) for k, v in res['params'].items()}),
                        params_off=json.dumps({k: float(v) for k, v in res['params_off'].items()}), **files)
     row.update({f'process_{k}': v for k, v in cc.items()})
-    E83._append_row(out_dir() / 'runs_B.csv', row)
+    _append_locked(out_dir() / 'runs_B.csv', row)
     _provenance_add('B', tag, dict(H.model_provenance(orn_deltas=H.apl16_orn_deltas() if orn is None else orn, _wPNKC=W1),
                                    wiring_sha256=sha, ratios_sha256=_sha(r.to_frame()), host=_host()))
     tgts = targets()
@@ -2307,10 +2347,11 @@ def comparison_table() -> str:
 def provenance(part: str, **extra) -> None:
     """provenance_<part>.json: the part's run record (commits, host, time, settings), points kept."""
     path = out_dir() / f'provenance_{part}.json'
-    d = _read_json(path) or dict(part=part, script='experiments/E97_glomerulus_claw_shares.py', points={})
-    d.setdefault('runs', []).append(dict(commits=dict(H.code_commits()), host=_host(), time=time.strftime('%Y-%m-%d %H:%M'),
-                                         **extra))
-    _write_json(path, d)
+    with _Lock(path):
+        d = _read_json(path) or dict(part=part, script='experiments/E97_glomerulus_claw_shares.py', points={})
+        d.setdefault('runs', []).append(dict(commits=dict(H.code_commits()), host=_host(),
+                                             time=time.strftime('%Y-%m-%d %H:%M'), **extra))
+        _write_json(path, d)
 
 
 def main() -> None:
