@@ -770,7 +770,8 @@ def w3_pair_calyces(exceed: pd.DataFrame, share: float) -> int:
 def w3_verdict(exceed: pd.DataFrame, pairs: Optional[Sequence[str]] = None) -> dict:
     """W3 from one row per pair, calyx and recording (columns pair, calyx, recording, exceeds) on the pairs A4 kept
     (`pairs`, default every pair in `exceed`): 'passes' if at least W3_MIN_PAIRS pairs pass at W3_PASS_SHARE in at least
-    W3_MIN_CALYCES calyces, 'fails' if no pair does at W3_FAIL_SHARE, else 'not decided'; with the per-pair counts."""
+    W3_MIN_CALYCES calyces, 'fails' if no pair does at W3_FAIL_SHARE, else 'not decided' ('no pair' when A4 kept none);
+    with the per-pair counts."""
     pairs = sorted(exceed['pair'].unique()) if pairs is None else list(pairs)
     rows = []
     for p in pairs:
@@ -779,7 +780,10 @@ def w3_verdict(exceed: pd.DataFrame, pairs: Optional[Sequence[str]] = None) -> d
                          n_calyces_over_quarter=w3_pair_calyces(e, W3_FAIL_SHARE)))
     n_pass = sum(r['n_calyces_over_half'] >= W3_MIN_CALYCES for r in rows)
     n_quarter = sum(r['n_calyces_over_quarter'] >= W3_MIN_CALYCES for r in rows)
-    verdict = 'passes' if n_pass >= W3_MIN_PAIRS else 'fails' if n_quarter == 0 else 'not decided'
+    if not pairs:
+        verdict = 'no pair'           # A4 left every pair out: W3 can neither pass nor fail
+    else:
+        verdict = 'passes' if n_pass >= W3_MIN_PAIRS else 'fails' if n_quarter == 0 else 'not decided'
     return dict(verdict=verdict, n_pairs=len(pairs), n_pairs_pass=int(n_pass), n_pairs_over_quarter=int(n_quarter),
                 pairs=rows)
 

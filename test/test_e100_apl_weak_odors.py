@@ -208,6 +208,8 @@ def test_w3_pass_fail_not_decided():
     # only the pairs A4 kept count
     v = M.w3_verdict(_exceed(dict(a=strong, b=strong, c=strong, d=none)), pairs=['a', 'b', 'd'])
     assert v['verdict'] == 'not decided' and v['n_pairs'] == 3 and v['n_pairs_pass'] == 2
+    # A4 kept no pair: W3 neither passes nor fails
+    assert M.w3_verdict(_exceed(dict(a=none)), pairs=[])['verdict'] == 'no pair'
 
 
 # ---------------------------------------------------------------------------
