@@ -429,3 +429,19 @@ def test_b1_input_structure():
     left = t.loc[~t['included'], 'label'].tolist()
     assert left == [M.hallem_label(o, c) for o, c in M.HALLEM_STIMULI if c != -2.0]
     assert (orn[(M.ADDED_PANEL, M.BLANK_LABEL)] == 0).all()
+
+
+def test_with_a0_definitions():
+    b = _b1_rows(paa5=0.5)
+    b['pre_settled'] = b['pre'] + 0.5
+    b.loc[b['stimulus'] == M.BLANK_LABEL, 'win'] = 8.0 + 0.5                 # the blank's window: the settled level
+    e = M.with_a0(b, 'e90')
+    assert np.allclose(e['pre'], b['pre'])
+    st = M.with_a0(b, 'settled')
+    assert np.allclose(st['pre'], 8.5) and np.allclose(st.loc[st['stimulus'] == M.BLANK_LABEL, 'evoked'], 0.0)
+    bl = M.with_a0(b, 'blank')
+    assert np.allclose(bl['pre'], 8.5) and np.allclose(bl.loc[bl['stimulus'] == M.BLANK_LABEL, 'evoked'], 0.0)
+    with pytest.raises(ValueError):
+        M.with_a0(b, 'other')
+    with pytest.raises(RuntimeError):
+        M.with_a0(b.assign(pre_settled=np.nan), 'settled')

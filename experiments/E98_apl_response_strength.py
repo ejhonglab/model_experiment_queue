@@ -758,6 +758,8 @@ HALLEM_STIMULI: Tuple[Stim, ...] = (('pa', -2.0), ('pa', -4.0), ('pa', -6.0), ('
                                     ('ms', -6.0), ('ms', -8.0), ('paa', -2.0))
 HALLEM_CONC_ENV = 'KC_HALLEM_CONC_CSV'   # a table of Hallem's lower-concentration rows, when one is available
 APL_TOL = 1e-9                   # part 0: APL's means against E90's, and the blank's evoked activity (absolute)
+SETTLED_PRE_WINDOW = (-0.25, 0.0)    # APL's pre-odor level after the KC layer's start-up (it starts at time_start, -0.5 s)
+A0_DEFINITIONS = ('e90', 'settled', 'blank')   # part C's pre-odor level: E90's pre-odor mean, 'pre_settled', the blank's window
 
 
 def session_label(odor: str, conc: float, session: str, panel: str) -> str:
@@ -961,29 +963,38 @@ def read_apl_pn(mp, rv, order: np.ndarray, labels: Sequence[str], glomeruli: pd.
                 pulse_window: Optional[Tuple[float, float]] = None) -> dict:
     """APL's activity and the PN stage of the last simulation (olfsysm's variables; the simulator's output column j is
     olfsysm's odor order[j]): 'apl' (index the stimulus labels; 'win' the mean over E90's MODEL_WINDOW, 0-0.5 s, 'pre'
-    over E90's PRE_WINDOW, and 'win_pulse' over `pulse_window` when given, e.g. 0-1 s for a 1 s pulse) and 'pn_win' /
-    'pn_pre' (glomeruli x stimuli, the PN rates' window and pre-odor means)."""
+    over E90's PRE_WINDOW, 'pre_settled' over SETTLED_PRE_WINDOW, and 'win_pulse' over `pulse_window` when given, e.g.
+    0-1 s for a 1 s pulse), 'apl_trace' (APL's activity at every step from olfsysm's time_start, steps x stimuli) and
+    'pn_win' / 'pn_pre' (glomeruli x stimuli, the PN rates' window and pre-odor means).
+
+    olfsysm's KC layer (and so APL) starts from zero at time_start (-0.5 s) and reaches its spontaneous level about 0.2 s
+    later, so E90's pre-odor mean over -0.5 to 0 s includes that start-up (on the real wiring 8.27 against a settled
+    8.79); 'pre_settled' leaves it out."""
     from experiments import E90_model_stages as E90
     from pyolfsysm.mb_model import get_sim_var
     t = E90.step_times(mp, rv)
     w = E90._windows(t, E90.MODEL_WINDOW)
     wp = E90._windows(t, pulse_window)['win'] if pulse_window is not None else None
+    ws = np.flatnonzero((t >= SETTLED_PRE_WINDOW[0] - 1e-9) & (t < SETTLED_PRE_WINDOW[1] - 1e-9))
+    kept = np.flatnonzero(t >= float(mp.time_start) - 1e-9)
     inh = get_sim_var(rv.kc, 'inh_sims')
     pn = get_sim_var(rv.pn, 'pn_sims')
-    apl, pw, pp = {}, {}, {}
+    apl, pw, pp, trace = {}, {}, {}, {}
     for j, lab in enumerate(labels):
         i = int(order[j])
         a = np.asarray(inh[i], dtype=float).ravel()
-        apl[lab] = dict(win=float(a[w['win']].mean()), pre=float(a[w['pre']].mean()))
+        apl[lab] = dict(win=float(a[w['win']].mean()), pre=float(a[w['pre']].mean()), pre_settled=float(a[ws].mean()))
         if wp is not None:
             apl[lab]['win_pulse'] = float(a[wp].mean())
+        trace[lab] = a[kept]
         x = np.asarray(pn[i], dtype=float)
         pw[lab], pp[lab] = x[:, w['win']].mean(axis=1), x[:, w['pre']].mean(axis=1)
     if len(glomeruli) != len(next(iter(pw.values()))):
         raise RuntimeError("PN rows are not the wiring's glomeruli")
     apl = pd.DataFrame(apl).T
     apl.index.name = 'stimulus'
-    return dict(apl=apl, pn_win=pd.DataFrame(pw, index=glomeruli), pn_pre=pd.DataFrame(pp, index=glomeruli),
+    tr = pd.DataFrame(trace, index=pd.Index(np.round(t[kept], 6), name='time_s'))
+    return dict(apl=apl, apl_trace=tr, pn_win=pd.DataFrame(pw, index=glomeruli), pn_pre=pd.DataFrame(pp, index=glomeruli),
                 n_steps=dict(win=int(len(w['win'])), pre=int(len(w['pre'])), dt=float(t[1] - t[0])))
 
 
@@ -1005,7 +1016,8 @@ B1_LAYOUT = """B1's output layout (what E100's `read_e98_b1` and this module's `
 (`b1_roots`: outputs/E98_apl_response_strength/B/B1/, data/model_outputs/E98_apl_response_strength/B/B1/,
 data/model_outputs/E98_apl_response_strength/from_hal/B/B1/), per wiring w and condition c ('on', 'acute_off'):
 - <w>_<c>_apl.csv: index 'stimulus' (the B1 label), columns win and pre (APL's mean over 0-0.5 s and over the
-  0.5 s before the odor);
+  0.5 s before the odor, E90's windows) and pre_settled (over SETTLED_PRE_WINDOW, after the KC layer's start-up);
+- <w>_<c>_apl_trace.parquet: APL's activity at every step from olfsysm's time_start (index time_s) x stimuli;
 - <w>_<c>_responses.parquet, <w>_<c>_spike_counts.parquet: KCs x stimuli, columns the B1 labels;
 - <w>_<c>_pn_win.parquet, <w>_<c>_pn_pre.parquet: glomeruli x stimuli, the PN stage's window and pre-odor means;
 - <w>_identity.json: part 0's run identities of that wiring's run;
@@ -1018,7 +1030,9 @@ diagnostics, else the panel's name), as E100's `estimate_label`; Hallem's '<odor
 
 
 def save_b1(d: Path, label: str, cond_tag: str, o: dict) -> None:
-    for k in ('responses', 'spike_counts', 'pn_win', 'pn_pre'):
+    for k in ('responses', 'spike_counts', 'pn_win', 'pn_pre', 'apl_trace'):
+        if k not in o:
+            continue
         x = o[k].copy()
         x.columns = [str(c) for c in x.columns]
         x.to_parquet(d / f'{label}_{cond_tag}_{k}.parquet')
@@ -1058,7 +1072,8 @@ def load_b1(wirings: Sequence[str] = ALL_WIRINGS, roots: Optional[Sequence[Path]
                 lab = E100.parse_b1_label(stim)
                 rows.append(dict(wiring=w, cond=ct, stimulus=str(stim), win=float(a['win']), pre=float(a['pre']),
                                  evoked=float(a['win'] - a['pre']), response_rate=float(rate.get(str(stim), np.nan)),
-                                 file=o['dir'], b1_odor=lab['odor'], b1_conc=lab['conc'], b1_source=lab['source']))
+                                 file=o['dir'], b1_odor=lab['odor'], b1_conc=lab['conc'], b1_source=lab['source'],
+                                 pre_settled=float(a['pre_settled']) if 'pre_settled' in a.index else np.nan))
             found.add((w, ct))
     if not rows:
         raise NotImplementedError("E98's B1 runs are not there yet (" + ', '.join(str(d) for d in (roots or b1_roots())) + ')')
@@ -1097,7 +1112,8 @@ def run_b1(label: str, root: Optional[Path] = None, force: bool = False) -> Dict
     gc.collect()
     ident = b1_identity(label, [d])
     _write_json(d / f'{label}_identity.json', ident)
-    print(f'{label}: B1 done in {time.time() - t0:.0f} s; identities exact: {ident["exact"]}', flush=True)
+    print(f'{label}: B1 done in {time.time() - t0:.0f} s; reproduces the saved fit and E90: {ident["reproduces"]}; '
+          f'blank evoked {ident["on"]["blank_evoked"]:.4f} (settled pre {ident["on"].get("blank_evoked_settled")})', flush=True)
     return ident
 
 
@@ -1139,11 +1155,15 @@ def b1_identity(label: str, roots: Optional[Sequence[Path]] = None) -> dict:
                       apl_pre_max_abs_diff=dpre, apl_mean_win=float(a['win'].mean()),
                       apl_pre_share=float(a['pre'].mean() / a['win'].mean()),
                       blank_evoked=float(b['win'] - b['pre']), blank_pre=float(b['pre']),
+                      blank_evoked_settled=float(b['win'] - b['pre_settled']) if 'pre_settled' in b.index else None,
+                      blank_pre_settled=float(b['pre_settled']) if 'pre_settled' in b.index else None,
                       blank_response_rate=float(o['responses'][BLANK_LABEL].astype(float).mean()),
                       n_stimuli=int(o['apl'].shape[0]))
-    res['exact'] = bool(all(res[c]['counts_differ'] == 0 and res[c]['responses_differ'] == 0
-                            and res[c]['apl_win_max_abs_diff'] <= APL_TOL and res[c]['apl_pre_max_abs_diff'] <= APL_TOL
-                            for c, _ in CONDS) and abs(res['on']['blank_evoked']) <= APL_TOL)
+    res['reproduces'] = bool(all(res[c]['counts_differ'] == 0 and res[c]['responses_differ'] == 0
+                                 and res[c]['apl_win_max_abs_diff'] <= APL_TOL and res[c]['apl_pre_max_abs_diff'] <= APL_TOL
+                                 for c, _ in CONDS))
+    res['blank_zero'] = bool(abs(res['on']['blank_evoked']) <= APL_TOL)
+    res['exact'] = bool(res['reproduces'] and res['blank_zero'])
     return res
 
 
@@ -1162,8 +1182,12 @@ def part_b(arms: Sequence[str], wirings: Sequence[str], root: Optional[Path] = N
         if arm == 'B1':
             for w in wirings:
                 ident = run_b1(w, root)
-                if not ident['exact']:
-                    raise RuntimeError(f'{w}: B1\'s run identities fail: {ident}')
+                if not ident.get('reproduces'):
+                    raise RuntimeError(f'{w}: B1\'s run does not reproduce the saved fit and E90\'s APL means: {ident}')
+                if not ident.get('blank_zero'):
+                    print(f"{w}: the blank's evoked APL is {ident['on']['blank_evoked']:.4f} with E90's pre-odor window "
+                          f"(KC layer start-up), {ident['on'].get('blank_evoked_settled')} with SETTLED_PRE_WINDOW; "
+                          'recorded, part C waits on the definition', flush=True)
         elif arm in ('B2', 'B3', 'B4'):
             {'B2': run_b2, 'B3': run_b3, 'B4': run_b4}[arm](root)
         else:
@@ -2081,15 +2105,37 @@ def pulse_matched(b1: pd.DataFrame, flies_short: pd.DataFrame, flies_long: pd.Da
     return out
 
 
-def part_c(wirings: Sequence[str] = ALL_WIRINGS, allow_missing: bool = False) -> dict:
+def with_a0(b1: pd.DataFrame, how: str) -> pd.DataFrame:
+    """B1's rows with the pre-odor level ('pre', and 'evoked') set by `how` (A0_DEFINITIONS): 'e90' E90's pre-odor mean
+    over -0.5 to 0 s (as saved; it includes the KC layer's start-up); 'settled' the mean over SETTLED_PRE_WINDOW; 'blank'
+    the blank stimulus's window mean in the same wiring and condition (the model's paraffin oil)."""
+    if how not in A0_DEFINITIONS:
+        raise ValueError(f'unknown pre-odor level {how!r}')
+    b = b1.copy()
+    if how == 'settled':
+        if b['pre_settled'].isna().any():
+            raise RuntimeError('runs without pre_settled (saved before it was added): re-run them')
+        b['pre'] = b['pre_settled']
+    elif how == 'blank':
+        bl = b[b['stimulus'] == BLANK_LABEL].set_index(['wiring', 'cond'])['win']
+        b['pre'] = [bl[(w, c)] for w, c in zip(b['wiring'], b['cond'])]
+    b['evoked'] = b['win'] - b['pre']
+    return b
+
+
+def part_c(wirings: Sequence[str] = ALL_WIRINGS, allow_missing: bool = False, a0: Optional[str] = None) -> dict:
     """Part C (module docstring; the entry's (C) as amended 2026-11-15 15:24): reads B1's runs (`load_b1`; all eight
     wirings unless `allow_missing`), the flies' ratios under every reading of READING_SETS (`flies_ratios`), the pulse
     sets' permutation test on V1's two ratios and V2 (carrying reading), V2's descriptions and the pulse-matched
     readings; writes c_comparisons.csv, c_wirings.csv and verdict.json."""
+    if a0 is None:
+        raise RuntimeError("part C needs the definition of the model's pre-odor level (--a0 e90|settled|blank): the blank "
+                           "identity fails with E90's window (the KC layer's start-up), so the definition waits on a decision")
     b1 = load_b1(wirings)
     missing = b1.attrs.get('missing') or []
     if missing and not allow_missing:
         raise RuntimeError(f'B1 runs missing: {missing}')
+    b1 = with_a0(b1, a0)
     recs = load_recordings()
     resp = stimulus_responses(recs)
     flies, per = {}, {}
@@ -2110,7 +2156,7 @@ def part_c(wirings: Sequence[str] = ALL_WIRINGS, allow_missing: bool = False) ->
     out = out_dir()
     comps.to_csv(out / 'c_comparisons.csv', index=False)
     rows.to_csv(out / 'c_wirings.csv', index=False)
-    verdict.update(reading_sets={k: dict(reading=reading_label(v[0]), subset=v[1]) for k, v in READING_SETS.items()},
+    verdict.update(a0=a0, reading_sets={k: dict(reading=reading_label(v[0]), subset=v[1]) for k, v in READING_SETS.items()},
                    wirings=sorted(set(b1['wiring'])), missing_runs=missing, time=time.strftime('%Y-%m-%d %H:%M'),
                    host=_host(), commits=dict(H.code_commits()))
     _write_json(out / 'verdict.json', verdict)
@@ -2141,6 +2187,7 @@ def main() -> None:
                     help='part B (and part 0 with runs): OMP threads (OMP_NUM_THREADS and OMP_THREAD_LIMIT must match)')
     ap.add_argument('--no-runs', action='store_true', help="part 0: the reader's identities only")
     ap.add_argument('--allow-missing', action='store_true', help='part C: read the B1 runs there are')
+    ap.add_argument('--a0', default=None, choices=list(A0_DEFINITIONS), help="part C: the model's pre-odor level (with_a0)")
     ap.add_argument('--root', default=None,
                     help="part B: the folder its runs go under (<root>/B/B1/...; default outputs/E98_apl_response_strength), "
                          "e.g. the archive's from_hal/ for another host's lane")
@@ -2164,8 +2211,8 @@ def main() -> None:
             provenance('B', arms=list(arms), wirings=list(ws), threads=a.threads)
         part_b(arms, ws, None if a.root is None else Path(a.root))
     elif a.part == 'C':
-        provenance('C', allow_missing=a.allow_missing)
-        print(json.dumps(part_c(ws, allow_missing=a.allow_missing), indent=1, default=float), flush=True)
+        provenance('C', allow_missing=a.allow_missing, a0=a.a0)
+        print(json.dumps(part_c(ws, allow_missing=a.allow_missing, a0=a.a0), indent=1, default=float), flush=True)
     elif a.part == 'table':
         print(comparison_table(), flush=True)
 
