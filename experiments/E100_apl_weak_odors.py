@@ -17,8 +17,8 @@ Two dependencies on other hosts' work (not duplicated here):
   its own for A2. Until B1's outputs exist, A2 raises NotImplementedError naming E98's B1.
 - viki's copy of Yang's processed APL recordings to data/yang_apl_recordings/ in the shared directory (recordings.csv,
   raw_index.csv, README.md). Parts B to E read only that copy (never Yang's folders) and only after Yang has answered
-  hal's questions (the entry's Requires). Until the copy's README is in place, their readers follow the interface below
-  (README.md and recordings.csv there; `read_recordings`, `recording_paths`, `yaml_stimuli`, `read_recording`), tested on
+  hal's questions (the entry's Requires). Their readers follow the copy's layout (its README.md and recordings.csv;
+  `read_recordings`, `recording_paths`, `yaml_stimuli`, `read_recording`), tested on
   made-up data shaped like it and on the 12 recordings Yang released (data/yang_apl_calyx_maps/); `read_recording` refuses
   every other recording until YANG_RELEASED is set after her answer.
 
