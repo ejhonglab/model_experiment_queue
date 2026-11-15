@@ -1175,6 +1175,7 @@ Canonical experiment names for summary reports:
 | E94 | the PN boutons' share of APL's inhibition |
 | E95 | APL's inhibition as a static threshold raise per KC |
 | E96 | APL's synapses on the KCs outside the claws |
+| E97 | the glomeruli's shares of the claws in other connectomes |
 
 ## Model-output archive (data/model_outputs/ in the shared directory)
 
