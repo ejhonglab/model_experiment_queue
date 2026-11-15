@@ -1371,7 +1371,10 @@ def e93_input(orn: pd.DataFrame) -> Tuple[pd.DataFrame, List[str]]:
                 v[g] = float(hal.loc[g, (sp['odor'], sp['conc'])])
         extra[c] = v
     out = pd.concat([F.astype(float), pd.DataFrame(extra, index=F.index)], axis='columns')
+    out.columns = pd.MultiIndex.from_tuples(list(out.columns), names=orn.columns.names)
     out.index.name = F.index.name
+    if input_labels(out) != input_labels(orn):
+        raise RuntimeError("E93's extended input's stimuli are not B1's")
     return out, added
 
 
