@@ -315,3 +315,11 @@ def test_verdicts(tmp_path, monkeypatch):
     v = G.verdict97(_rows(mbs=(0.004, -0.001, 0.0, 0.0), b6=0.002), _boot(0.0))
     assert v['disagree'] and v['B6_differs']
     assert (tmp_path / 'verdict.json').exists()
+
+
+def test_an_incomplete_part_b_gives_no_verdict(tmp_path, monkeypatch):
+    monkeypatch.setattr(G, 'out_dir', lambda: tmp_path)
+    rd = _rows(b2=0.004)
+    rd = rd[~((rd.variant == G.R2) & (rd.unit == 'all8'))]
+    v = G.verdict97(rd, _boot(-0.001))
+    assert v['outcome'] == 'incomplete' and 'R2' in v['missing'] and not v['needs_draw2']

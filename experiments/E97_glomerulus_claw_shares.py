@@ -1997,6 +1997,10 @@ def verdict97(rd: pd.DataFrame, bt: pd.DataFrame, runs: Optional[pd.DataFrame] =
     else:
         res['draw2'] = None
         res['holds_on_draw2'] = None
+    missing = [k for k, x in (('B2 on the eight', g8), ('the permuted controls', min(perm.values())), ('the inverted', inv),
+                              ('R2', r2), ('R2 permuted', r2p)) if not np.isfinite(x)]
+    if missing:
+        res.update(outcome='incomplete', missing=missing)
     res['needs_draw2'] = bool(res['outcome'] in ('a part', 'moves'))
     res['final'] = (res['outcome'] if not res['needs_draw2'] else
                     (res['outcome'] if res['holds_on_draw2'] else ('pending: C2' if res['holds_on_draw2'] is None
