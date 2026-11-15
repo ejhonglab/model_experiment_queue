@@ -1177,6 +1177,7 @@ Canonical experiment names for summary reports:
 | E96 | APL's synapses on the KCs outside the claws |
 | E97 | the glomeruli's shares of the claws in other connectomes |
 | E98 | the strength of APL's response in the flies against the model's APL |
+| E99 | the evenness of APL's weights among KCs and over a KC's claws |
 
 ## Model-output archive (data/model_outputs/ in the shared directory)
 
