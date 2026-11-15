@@ -704,40 +704,420 @@ def power_table(apl: pd.DataFrame, sd_log2: Dict[str, float]) -> pd.DataFrame:
 # part B: the extended input and its runs (phase 2)
 
 B_ARMS = ('B1', 'B2', 'B3', 'B4')
+CONDS = (('on', 'on'), ('off', 'acute_off'))    # (condition, its file tag; E90's)
+SESSIONS = ('kiwi-control', 'megamat', 'validation2')    # the lab's three ORN sessions (E100's SESSIONS)
+LOW_SESSION = 'kiwi-control'     # the session whose diagnostics carry B1's low-concentration stimuli (E49's: ma, ea)
+PAA5_SESSION = 'validation2'     # paa at 10^-5: the diagnostics of the flies of paa at 10^-4 (the entry)
+DIAG = 'glomeruli_diagnostics'
+ADDED_PANEL = 'E98'
+BLANK_LABEL = 'blank @ 0'
+HALLEM_NAMES = {'pa': 'pentyl acetate', 'ms': 'methyl salicylate', 'paa': 'phenylacetaldehyde'}
+HALLEM_STIMULI: Tuple[Stim, ...] = (('pa', -2.0), ('pa', -4.0), ('pa', -6.0), ('pa', -8.0), ('ms', -2.0), ('ms', -4.0),
+                                    ('ms', -6.0), ('ms', -8.0), ('paa', -2.0))
+HALLEM_CONC_ENV = 'KC_HALLEM_CONC_CSV'   # a table of Hallem's lower-concentration rows, when one is available
+APL_TOL = 1e-9                   # part 0: APL's means against E90's, and the blank's evoked activity (absolute)
 
 
-def b1_input(label: str = 'real') -> Tuple[pd.DataFrame, dict]:
-    """B1's extended input (the lab's 16 odors, then the added stimuli, on the input's 36 glomeruli) and its record
-    (every added stimulus's source session, its column and the glomeruli filled with 0)."""
-    raise NotImplementedError
+def session_label(odor: str, conc: float, session: str, panel: str) -> str:
+    """A session column's B1 label, E100's `estimate_label` form: '<odor> [<session>/<panel>] @ <conc>' ('diag' for the
+    diagnostics), one ' @ ' as fit_mb_model's odor-name parsing wants."""
+    return f"{odor} [{session}/{'diag' if panel == DIAG else panel}] @ {float(conc):g}"
 
 
-def hallem_columns(glomeruli: Sequence[str]) -> pd.DataFrame:
-    """Hallem's pa and ms at 10^-2, -4, -6 and -8 and paa at 10^-2 from drosolf's concentration rows, onto the input's
-    glomeruli by E38's conversion (glomeruli neither has filled with 0)."""
-    raise NotImplementedError
+def hallem_label(odor: str, conc: float) -> str:
+    return f'{odor} [hallem] @ {float(conc):g}'
+
+
+def b1_specs() -> List[dict]:
+    """B1's 52 stimuli in their fixed order: label, odor, log10 concentration, source ('panel', '<session>/<panel>',
+    'hallem', 'blank'), role, and for session columns the session, panel and column. Roles: 'panel' (the 16 odors of the
+    lab's input), 'V1' (the estimates of ms's input at 10^-3 besides the panel's), 'V2' (paa at 10^-5 from PAA5_SESSION),
+    'beside' (the other estimates of paa at 10^-5; 2h, t2h, 2-but and 1-6ol at 10^-6 and 2h at 10^-5; ma at 10^-7 and ea
+    at 10^-8, from LOW_SESSION), 'E100' (4h-ol at 10^-6 and farn at 10^-2 from all three sessions, and the other two
+    sessions' 2h and 2-but at 10^-6 and ma at 10^-7: E100's model side, read by none of E98's parts), 'hallem' (V3 to V5,
+    descriptive), 'blank'."""
+    specs = [dict(label=o, odor=o, conc=float(H.ORN_INPUT_CONC[o]), source='panel', role='panel') for o in H.APL16_ODORS]
+
+    def ses(odor, conc, session, panel, role):
+        specs.append(dict(label=session_label(odor, conc, session, panel), odor=odor, conc=float(conc),
+                          source=f"{session}/{'diag' if panel == DIAG else panel}", role=role, session=session, panel=panel,
+                          column=f'{odor} @ {conc:g}'))
+
+    ses('paa', -5, PAA5_SESSION, DIAG, 'V2')
+    for sn in SESSIONS:
+        if sn != PAA5_SESSION:
+            ses('paa', -5, sn, DIAG, 'beside')
+    for sn in SESSIONS:
+        ses('ms', -3, sn, DIAG, 'V1')
+    ses('ms', -3, 'kiwi-control', 'control', 'V1')
+    for o in ('2h', 't2h', '2-but', '1-6ol'):
+        ses(o, -6, LOW_SESSION, DIAG, 'beside')
+    ses('2h', -5, 'kiwi-control', 'control', 'beside')
+    ses('ma', -7, LOW_SESSION, DIAG, 'beside')
+    ses('ea', -8, LOW_SESSION, DIAG, 'beside')
+    for o, c in (('4h-ol', -6), ('farn', -2)):
+        ses(o, c, LOW_SESSION, DIAG, 'E100')
+        for sn in SESSIONS:
+            if sn != LOW_SESSION:
+                ses(o, c, sn, DIAG, 'E100')
+    for o, c in (('2h', -6), ('2-but', -6), ('ma', -7)):
+        for sn in SESSIONS:
+            if sn != LOW_SESSION:
+                ses(o, c, sn, DIAG, 'E100')
+    specs += [dict(label=hallem_label(o, c), odor=o, conc=float(c), source='hallem', role='hallem') for o, c in HALLEM_STIMULI]
+    specs.append(dict(label=BLANK_LABEL, odor='blank', conc=0.0, source='blank', role='blank'))
+    labels = [x['label'] for x in specs]
+    assert len(set(labels)) == len(labels) == 52, labels
+    return specs
+
+
+def session_inputs() -> Dict[str, pd.DataFrame]:
+    """The lab's three ORN sessions' spike deltas (E100's `session_inputs`: olfsysm's
+    pyolfsysm/data/internal/<session>_mean_est_spike_deltas.csv, glomerulus x (panel, 'odor @ conc'))."""
+    from experiments import E100_apl_weak_odors as E100
+    return E100.session_inputs(SESSIONS)
+
+
+def hallem_rows(path: Optional[Path] = None, lower: bool = True) -> pd.DataFrame:
+    """Hallem's spike deltas (glomerulus x (odor, log10 concentration)) for HALLEM_STIMULI where a source has them: the
+    10^-2 rows from drosolf's table as E38 reads it (`orns.orns(add_sfr=False, drop_sfr=False, columns='glomerulus')`,
+    multiglomerular receptors dropped); the lower-concentration rows from `path` (default the environment variable
+    HALLEM_CONC_ENV) when given: a CSV with columns 'odor' (Hallem's name, HALLEM_NAMES), 'log10_conc' and one column per
+    glomerulus (drosolf's glomerulus names), spike deltas without the spontaneous rate (`lower` False: the 10^-2 rows
+    only). Stimuli no source has are left out (and listed by `b1_input`)."""
+    from drosolf import orns
+    d = orns.orns(add_sfr=False, drop_sfr=False, columns='glomerulus')
+    d = d.loc[:, [g for g in d.columns if '+' not in g]].astype(float)
+    cols = {}
+    for o, c in HALLEM_STIMULI:
+        if abs(c + 2.0) < CONC_TOL and HALLEM_NAMES[o] in d.index:
+            cols[(o, c)] = d.loc[HALLEM_NAMES[o]]
+    path = Path(path) if path is not None else (Path(os.environ[HALLEM_CONC_ENV]) if os.environ.get(HALLEM_CONC_ENV) else None)
+    if lower and path is not None:
+        t = pd.read_csv(path)
+        names = {v: k for k, v in HALLEM_NAMES.items()}
+        for _, r in t.iterrows():
+            o, c = names.get(str(r['odor'])), float(r['log10_conc'])
+            if o is None or (o, c) not in set(HALLEM_STIMULI) or (o, c) in cols:
+                continue
+            cols[(o, c)] = r.drop(['odor', 'log10_conc']).astype(float)
+    out = pd.DataFrame(cols)
+    out.index.name = 'glomerulus'
+    return out
+
+
+def b1_input(include_hallem_lower: bool = False, hallem_path: Optional[Path] = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """B1's extended input: the lab's 16 odors (H.apl16_orn_deltas, unchanged and first), then the added stimuli of
+    `b1_specs` (panel ADDED_PANEL, odor the stimulus label), on the input's 36 glomeruli; a session's glomeruli outside
+    them dropped and the ones it lacks filled with 0; Hallem's stimuli on the glomeruli Hallem and the input share, 0
+    elsewhere (E38's 'hallem_only'); the blank all 0. Returns (input, table): the table has one row per B1 stimulus
+    (`b1_specs`' fields, 'included', why not, the glomeruli filled with 0 and dropped, the input total and its positive
+    part) and the input vector of every included stimulus (columns orn_<glomerulus>). Hallem's rows below 10^-2 enter
+    only with `include_hallem_lower` (and a source, `hallem_rows`), so that every wiring's first B1 run has the same 46
+    stimuli; the left-out ones are listed ('included' False, with the reason)."""
+    panel = H.apl16_orn_deltas()
+    gl = list(panel.index)
+    sess = session_inputs()
+    hal = hallem_rows(hallem_path, lower=include_hallem_lower)
+    cols, rows = {}, []
+    for sp in b1_specs():
+        row = dict(sp, included=True, reason='', glomeruli_filled_0='', glomeruli_dropped='')
+        if sp['source'] == 'panel':
+            v = panel[[c for c in panel.columns if H.odor_abbrev(c) == sp['odor']][0]].astype(float)
+        elif sp['source'] == 'blank':
+            v = pd.Series(0.0, index=gl)
+        elif sp['source'] == 'hallem':
+            key = (sp['odor'], sp['conc'])
+            if key not in hal.columns:
+                row.update(included=False, reason=("left out of the first B1 runs (the lower rows enter with "
+                           "include_hallem_lower / --hallem-lower)" if not include_hallem_lower else
+                           "no source for Hallem's row at this concentration (drosolf's table gives 10^-2 only; the lower "
+                           f"rows plug in through hallem_rows, {HALLEM_CONC_ENV} or --hallem-csv)"))
+                rows.append(row)
+                continue
+            h = hal[key]
+            shared = [g for g in gl if g in h.index]
+            v = pd.Series(0.0, index=gl)
+            v.loc[shared] = h.loc[shared].to_numpy(float)
+            row.update(glomeruli_filled_0=';'.join(g for g in gl if g not in shared),
+                       glomeruli_dropped=';'.join(sorted(set(h.index) - set(gl))))
+        else:
+            src = sess[sp['session']]
+            col = (sp['panel'], sp['column'])
+            if col not in src.columns:
+                raise RuntimeError(f"{sp['label']}: {col} not in the {sp['session']} session's table")
+            raw = src[col]
+            v = raw.reindex(gl)
+            row.update(glomeruli_filled_0=';'.join(g for g in gl if g not in raw.index or pd.isna(raw.get(g))),
+                       glomeruli_dropped=';'.join(sorted(set(raw.index) - set(gl))))
+            v = v.fillna(0.0).astype(float)
+        cols[sp['label']] = v.to_numpy(float)
+        row.update(input_total=float(v.sum()), input_total_pos=float(v.clip(lower=0).sum()),
+                   **{f'orn_{g}': float(x) for g, x in zip(gl, v.to_numpy(float))})
+        rows.append(row)
+    extra_labels = [k for k in cols if k not in H.APL16_ODORS]
+    extra = pd.DataFrame({k: cols[k] for k in extra_labels}, index=panel.index)
+    extra.columns = pd.MultiIndex.from_tuples([(ADDED_PANEL, k) for k in extra_labels], names=panel.columns.names)
+    orn = pd.concat([panel.astype(float), extra], axis='columns')
+    orn.index.name = panel.index.name
+    for o, c in zip(H.APL16_ODORS, panel.columns):
+        if not np.array_equal(orn[c].to_numpy(float), panel[c].to_numpy(float)):
+            raise RuntimeError(f'{o}: the panel column changed')
+    return orn, pd.DataFrame(rows)
+
+
+def input_labels(orn: pd.DataFrame) -> List[str]:
+    """B1 labels of an extended input's columns: the panel odors' abbreviations, the added stimuli's labels."""
+    return [c[-1] if c[0] == ADDED_PANEL else H.odor_abbrev(c) for c in orn.columns]
 
 
 class ExtendedRun:
-    """One wiring at its fit (E83's `build_simulator`, breadth held at the lab input's) on B1's extended input, APL's
-    activity saved; `run(cond)` simulates APL on or acutely off and returns the outputs and APL's window and pre-odor
-    means per stimulus."""
+    """One wiring at its fit (E83's `build_simulator`, breadth held at the lab input's, so the APL->KC weights are the
+    fit's) on an extended input (default B1's), APL's activity saved (`mp.kc.save_inh_sims`); `run(cond)` simulates APL
+    on ('on') or acutely off ('off': the APL->KC and APL->bouton scales 0, as E90's StageRun) at the fit's parameters
+    and returns the responses and spike counts (columns the stimulus labels, in the input's order), APL's window and
+    pre-odor means per stimulus ('apl', E90's MODEL_WINDOW and PRE_WINDOW) and the PN stage's window and pre-odor means
+    ('pn_win', 'pn_pre', glomeruli x stimuli)."""
 
-    def __init__(self, label: str):
-        raise NotImplementedError
+    def __init__(self, label: str, orn: Optional[pd.DataFrame] = None, params: Optional[Dict[str, float]] = None):
+        from experiments import E83_cross_wiring_fit as E83
+        P = E83.wiring_parts(label)
+        self.label, self.W, self.saved = label, P['W'], P['saved']
+        self.p = dict(P['p'] if params is None else params)
+        self.orn = b1_input()[0] if orn is None else orn
+        self.labels = input_labels(self.orn)
+        self.sim, self.info = E83.build_simulator(label, orn=self.orn, breadth=P['breadth'], params=self.p)
+        cells = self.info['cells']
+        self.mp, self.rv = cells['mp'].cell_contents, cells['rv'].cell_contents
+        self.order = np.asarray(cells['odor_order'].cell_contents, dtype=int)
+        self.mp.kc.save_inh_sims = True
+
+    def params(self, cond: str) -> Dict[str, float]:
+        return dict(self.p) if cond == 'on' else dict(self.p, wAPLKC_scale=0.0, wAPLPN_scale=0.0)
 
     def run(self, cond: str) -> dict:
-        raise NotImplementedError
+        from experiments import E90_model_stages as E90
+        from pyolfsysm.mb_model import get_sim_var
+        r, s = self.sim(self.params(cond))
+        if r.shape[1] != len(self.labels) or s.shape[1] != len(self.labels):
+            raise RuntimeError(f'{r.shape[1]} output columns for {len(self.labels)} stimuli')
+        out_lab = [c[-1] if isinstance(c, tuple) and c[0] == ADDED_PANEL else H.odor_abbrev(c) for c in s.columns]
+        if out_lab != self.labels:
+            raise RuntimeError(f"the outputs' columns are not the input's: {out_lab} / {self.labels}")
+        r, s = r.copy(), s.copy()
+        r.columns = s.columns = pd.Index(self.labels, name='stimulus')
+        t = E90.step_times(self.mp, self.rv)
+        w = E90._windows(t, E90.MODEL_WINDOW)
+        inh = get_sim_var(self.rv.kc, 'inh_sims')
+        pn = get_sim_var(self.rv.pn, 'pn_sims')
+        apl, pw, pp = {}, {}, {}
+        for j, lab in enumerate(self.labels):
+            i = int(self.order[j])
+            a = np.asarray(inh[i], dtype=float).ravel()
+            apl[lab] = dict(win=float(a[w['win']].mean()), pre=float(a[w['pre']].mean()))
+            x = np.asarray(pn[i], dtype=float)
+            pw[lab], pp[lab] = x[:, w['win']].mean(axis=1), x[:, w['pre']].mean(axis=1)
+        gl = pd.Index(list(dict.fromkeys(self.W.columns.get_level_values('glomerulus'))), name='glomerulus')
+        if len(gl) != len(next(iter(pw.values()))):
+            raise RuntimeError('PN rows are not the wiring\'s glomeruli')
+        apl = pd.DataFrame(apl).T
+        apl.index.name = 'stimulus'
+        return dict(responses=r, spike_counts=s, apl=apl, pn_win=pd.DataFrame(pw, index=gl), pn_pre=pd.DataFrame(pp, index=gl),
+                    n_steps=dict(win=int(len(w['win'])), pre=int(len(w['pre'])), dt=float(t[1] - t[0])))
+
+
+def b_root(root: Optional[Path] = None) -> Path:
+    """The folder of part B's runs: `root`/B (default outputs/E98_apl_response_strength/B)."""
+    d = (Path(root) if root is not None else H.outputs_dir(EXPERIMENT)) / 'B'
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def b1_roots() -> List[Path]:
+    """Where B1's runs may be, searched in this order: the local outputs, the model-output archive, and hal's runs in
+    the archive (from_hal/)."""
+    arc = H.shared_dir() / 'data' / 'model_outputs' / EXPERIMENT
+    return [H.HERE / 'outputs' / EXPERIMENT / 'B' / 'B1', arc / 'B' / 'B1', arc / 'from_hal' / 'B' / 'B1']
+
+
+B1_LAYOUT = """B1's output layout (what E100's `read_e98_b1` and this module's `load_b1` read). One folder per root
+(`b1_roots`: outputs/E98_apl_response_strength/B/B1/, data/model_outputs/E98_apl_response_strength/B/B1/,
+data/model_outputs/E98_apl_response_strength/from_hal/B/B1/), per wiring w and condition c ('on', 'acute_off'):
+- <w>_<c>_apl.csv: index 'stimulus' (the B1 label), columns win and pre (APL's mean over 0-0.5 s and over the
+  0.5 s before the odor);
+- <w>_<c>_responses.parquet, <w>_<c>_spike_counts.parquet: KCs x stimuli, columns the B1 labels;
+- <w>_<c>_pn_win.parquet, <w>_<c>_pn_pre.parquet: glomeruli x stimuli, the PN stage's window and pre-odor means;
+- <w>_identity.json: part 0's run identities of that wiring's run;
+and once per folder b1_stimuli.csv (`b1_input`'s table: the labels, odors, concentrations, sources, roles, the input
+vectors) and runs.csv (one row per wiring and condition: the absolute parameters, the commits, host, time).
+Labels: a panel odor by its abbreviation (its input at the lab's concentration, H.ORN_INPUT_CONC); a session's column
+'<odor> [<session>/<panel>] @ <conc>' (sessions 'kiwi-control', 'megamat', 'validation2'; panel 'diag' for the
+diagnostics, else the panel's name), as E100's `estimate_label`; Hallem's '<odor> [hallem] @ <conc>'; the blank
+'blank @ 0'. The labels and their order are fixed (`b1_specs`); a Hallem stimulus without a source is absent."""
+
+
+def save_b1(d: Path, label: str, cond_tag: str, o: dict) -> None:
+    for k in ('responses', 'spike_counts', 'pn_win', 'pn_pre'):
+        x = o[k].copy()
+        x.columns = [str(c) for c in x.columns]
+        x.to_parquet(d / f'{label}_{cond_tag}_{k}.parquet')
+    o['apl'].to_csv(d / f'{label}_{cond_tag}_apl.csv')
+
+
+def load_b1_run(label: str, roots: Optional[Sequence[Path]] = None) -> Optional[Dict[str, dict]]:
+    """One wiring's saved B1 run ({cond_tag: {'apl', 'responses', 'spike_counts', 'pn_win', 'pn_pre', 'dir'}}) from the
+    first root holding both conditions, or None."""
+    for d in (roots or b1_roots()):
+        d = Path(d)
+        if all((d / f'{label}_{ct}_apl.csv').exists() for _, ct in CONDS):
+            out = {}
+            for _, ct in CONDS:
+                o = {k: pd.read_parquet(d / f'{label}_{ct}_{k}.parquet') for k in ('responses', 'spike_counts', 'pn_win', 'pn_pre')}
+                o['apl'] = pd.read_csv(d / f'{label}_{ct}_apl.csv', index_col=0)
+                o['dir'] = str(d)
+                out[ct] = o
+            return out
+    return None
+
+
+def load_b1(wirings: Sequence[str] = ALL_WIRINGS, roots: Optional[Sequence[Path]] = None) -> pd.DataFrame:
+    """B1's saved runs as E100's `read_e98_b1` gives them: one row per wiring, condition ('on', 'acute_off') and stimulus,
+    with APL's window mean ('win'), pre-odor mean ('pre'), evoked activity ('evoked'), the KCs' response rate
+    ('response_rate', two or more spikes), the folder ('file') and the label parsed (b1_odor, b1_conc, b1_source; E100's
+    `parse_b1_label`); attrs['missing'] the (wiring, condition) pairs not found. See B1_LAYOUT."""
+    from experiments import E100_apl_weak_odors as E100
+    rows, found = [], set()
+    for w in wirings:
+        run = load_b1_run(w, roots)
+        if run is None:
+            continue
+        for ct, o in run.items():
+            rate = o['responses'].astype(float).mean(axis=0)
+            for stim, a in o['apl'].iterrows():
+                lab = E100.parse_b1_label(stim)
+                rows.append(dict(wiring=w, cond=ct, stimulus=str(stim), win=float(a['win']), pre=float(a['pre']),
+                                 evoked=float(a['win'] - a['pre']), response_rate=float(rate.get(str(stim), np.nan)),
+                                 file=o['dir'], b1_odor=lab['odor'], b1_conc=lab['conc'], b1_source=lab['source']))
+            found.add((w, ct))
+    if not rows:
+        raise NotImplementedError("E98's B1 runs are not there yet (" + ', '.join(str(d) for d in (roots or b1_roots())) + ')')
+    df = pd.DataFrame(rows)
+    df.attrs['missing'] = sorted(set((w, ct) for w in wirings for _, ct in CONDS) - found)
+    return df
+
+
+def run_b1(label: str, root: Optional[Path] = None, force: bool = False) -> Dict[str, dict]:
+    """B1 on one wiring: build the extended input (`b1_input`), run APL on and acutely off (`ExtendedRun`), save the
+    outputs under `b_root(root)`/B1/ (B1_LAYOUT) with b1_stimuli.csv and a runs.csv row per condition, and the run's
+    identities (`b1_identity`, <wiring>_identity.json). Skipped when the wiring's run exists in that folder (unless
+    `force`). Returns the identities."""
+    import gc
+    d = b_root(root) / 'B1'
+    d.mkdir(parents=True, exist_ok=True)
+    if not force and all((d / f'{label}_{ct}_apl.csv').exists() for _, ct in CONDS):
+        return _read_json(d / f'{label}_identity.json') or b1_identity(label, [d])
+    t0 = time.time()
+    orn, table = b1_input()
+    table.to_csv(d / 'b1_stimuli.csv', index=False)
+    er = ExtendedRun(label, orn)
+    commits = dict(H.code_commits())
+    for c, ct in CONDS:
+        t1 = time.time()
+        o = er.run(c)
+        save_b1(d, label, ct, o)
+        row = dict(wiring=label, cond=ct, n_stimuli=len(er.labels), host=_host(), time=time.strftime('%Y-%m-%d %H:%M'),
+                   runtime_s=time.time() - t1, threads=os.environ.get('OMP_NUM_THREADS'),
+                   input_sha256=_frame_sha(orn), **{f'param_{k}': v for k, v in er.params(c).items()},
+                   **{k: v for k, v in commits.items() if not isinstance(v, (dict, list))})
+        _append_csv(d / 'runs.csv', row)
+        print(f'{label} {ct}: {time.time() - t1:.0f} s', flush=True)
+        del o
+    del er
+    gc.collect()
+    ident = b1_identity(label, [d])
+    _write_json(d / f'{label}_identity.json', ident)
+    print(f'{label}: B1 done in {time.time() - t0:.0f} s; identities exact: {ident["exact"]}', flush=True)
+    return ident
+
+
+def _frame_sha(df: pd.DataFrame) -> str:
+    from experiments.E77_input_screen import frame_sha256
+    return frame_sha256(df)
+
+
+def _append_csv(path: Path, row: dict) -> None:
+    df = pd.DataFrame([row])
+    df.to_csv(path, mode='a', header=not path.exists(), index=False)
+
+
+def b1_identity(label: str, roots: Optional[Sequence[Path]] = None) -> dict:
+    """Part 0's run identities of one wiring's saved B1 run: on the 16 panel odors the spike counts and responses equal
+    the saved fit's (E83's `saved_fit`, APL on and off; 0 differences), APL's window and pre-odor means equal E90's saved
+    stage runs' (within APL_TOL), and the blank's evoked activity (window minus pre-odor mean) is zero within APL_TOL;
+    beside, the blank's KC response rates with APL on and off."""
+    from experiments import E83_cross_wiring_fit as E83
+    run = load_b1_run(label, roots)
+    if run is None:
+        raise RuntimeError(f'{label}: no saved B1 run')
+    saved = E83.saved_fit(label)['saved']
+    res = dict(wiring=label, dir=run['on']['dir'])
+    for c, ct in CONDS:
+        o = run[ct]
+        rs, ss = (H.abbrev_columns(x.astype(float)) for x in saved[c])
+        s16 = o['spike_counts'][list(H.APL16_ODORS)].astype(float)
+        r16 = o['responses'][list(H.APL16_ODORS)].astype(float)
+        idx_ok = bool(np.array_equal(np.asarray(s16.index), np.asarray(ss.index)) if len(s16) == len(ss) else False)
+        nd = int((s16.to_numpy() != ss[list(H.APL16_ODORS)].to_numpy()).sum()) if idx_ok else -1
+        nr = int((r16.to_numpy() != rs[list(H.APL16_ODORS)].to_numpy()).sum()) if idx_ok else -1
+        e90 = pd.read_csv(e90_dir(f'{label}_{ct}') / f'{label}_{ct}_apl.csv', index_col=0)
+        a = o['apl'].loc[list(H.APL16_ODORS)]
+        dwin = float((a['win'] - e90.loc[list(H.APL16_ODORS), 'win']).abs().max())
+        dpre = float((a['pre'] - e90.loc[list(H.APL16_ODORS), 'pre']).abs().max())
+        b = o['apl'].loc[BLANK_LABEL]
+        res[c] = dict(index_equal=idx_ok, counts_differ=nd, responses_differ=nr, apl_win_max_abs_diff=dwin,
+                      apl_pre_max_abs_diff=dpre, apl_mean_win=float(a['win'].mean()),
+                      apl_pre_share=float(a['pre'].mean() / a['win'].mean()),
+                      blank_evoked=float(b['win'] - b['pre']), blank_pre=float(b['pre']),
+                      blank_response_rate=float(o['responses'][BLANK_LABEL].astype(float).mean()),
+                      n_stimuli=int(o['apl'].shape[0]))
+    res['exact'] = bool(all(res[c]['counts_differ'] == 0 and res[c]['responses_differ'] == 0
+                            and res[c]['apl_win_max_abs_diff'] <= APL_TOL and res[c]['apl_pre_max_abs_diff'] <= APL_TOL
+                            for c, _ in CONDS) and abs(res['on']['blank_evoked']) <= APL_TOL)
+    return res
 
 
 def run_identity(label: str) -> dict:
-    """Part 0's run identities on one wiring: the 16 panel odors' counts equal the saved fit's (APL on and off), APL's
-    window and pre-odor means E90's saved ones, the blank's evoked APL zero."""
+    """Part 0's run identities on one wiring (`b1_identity`) from its saved B1 run, run here first (`run_b1`, the local
+    outputs) when no root holds it."""
+    if load_b1_run(label) is None:
+        run_b1(label)
+    return b1_identity(label)
+
+
+def part_b(arms: Sequence[str], wirings: Sequence[str], root: Optional[Path] = None) -> None:
+    """Part B's runs (resumable), saved under `b_root(root)` (default outputs/E98_apl_response_strength/B/): B1 on
+    `wirings` (each with its identities); B2 to B4 on the real wiring (`run_b2`, `run_b3`, `run_b4`)."""
+    for arm in arms:
+        if arm == 'B1':
+            for w in wirings:
+                ident = run_b1(w, root)
+                if not ident['exact']:
+                    raise RuntimeError(f'{w}: B1\'s run identities fail: {ident}')
+        elif arm in ('B2', 'B3', 'B4'):
+            {'B2': run_b2, 'B3': run_b3, 'B4': run_b4}[arm](root)
+        else:
+            raise ValueError(f'unknown arm {arm!r}')
+
+
+def run_b2(root: Optional[Path] = None) -> None:
     raise NotImplementedError
 
 
-def part_b(arms: Sequence[str], wirings: Sequence[str]) -> None:
-    """Part B's runs (resumable), saved under outputs/E98_apl_response_strength/B/."""
+def run_b3(root: Optional[Path] = None) -> None:
+    raise NotImplementedError
+
+
+def run_b4(root: Optional[Path] = None) -> None:
     raise NotImplementedError
 
 
@@ -1082,6 +1462,9 @@ def main() -> None:
     ap.add_argument('--threads', type=int, default=4,
                     help='part B (and part 0 with runs): OMP threads (OMP_NUM_THREADS and OMP_THREAD_LIMIT must match)')
     ap.add_argument('--no-runs', action='store_true', help="part 0: the reader's identities only")
+    ap.add_argument('--root', default=None,
+                    help="part B: the folder its runs go under (<root>/B/B1/...; default outputs/E98_apl_response_strength), "
+                         "e.g. the archive's from_hal/ for another host's lane")
     a = ap.parse_args()
     ws = _wirings(a.wirings)
     if a.part in ('B',) or (a.part == '0' and not a.no_runs):
@@ -1097,8 +1480,9 @@ def main() -> None:
         print(json.dumps(part_a(), indent=1, default=float), flush=True)
     elif a.part == 'B':
         arms = tuple(x for x in a.arm.split(',') if x)
-        provenance('B', arms=list(arms), wirings=list(ws), threads=a.threads)
-        part_b(arms, ws)
+        if a.root is None:
+            provenance('B', arms=list(arms), wirings=list(ws), threads=a.threads)
+        part_b(arms, ws, None if a.root is None else Path(a.root))
     elif a.part == 'C':
         provenance('C')
         print(json.dumps(part_c(), indent=1, default=float), flush=True)
