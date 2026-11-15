@@ -735,10 +735,12 @@ def evenness_bound(U: float, O: float, K2: float, K3: float, cv_O: float, cv_K3:
 
 
 def by_wiring(classes: Dict[str, str], s_class: str, min_same: int = BY_WIRING_MIN) -> dict:
-    """The class holds by wiring if at least `min_same` of S's wirings give S's class from their own values."""
+    """The class holds by wiring if at least `min_same` of S's wirings give S's class from their own values (never when
+    S's class is not one of the four: 'not read', 'no gap')."""
     same = [w for w, c in classes.items() if c == s_class]
-    return dict(per_wiring=dict(classes), n_same=len(same), holds_by_wiring=bool(len(same) >= min_same),
-                reported_as='by wiring' if len(same) >= min_same else "S's alone")
+    holds = bool(len(same) >= min_same and s_class not in ('not read', 'no gap'))
+    return dict(per_wiring=dict(classes), n_same=len(same), holds_by_wiring=holds,
+                reported_as='by wiring' if holds else "S's alone")
 
 
 def _e96_readings() -> pd.DataFrame:

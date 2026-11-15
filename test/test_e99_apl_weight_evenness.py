@@ -325,6 +325,7 @@ def test_the_rule_by_wiring():
     assert b['holds_by_wiring'] and b['n_same'] == 3 and b['reported_as'] == 'by wiring'
     b = G.by_wiring({'real': 'inequality', 'P1': 'both', 'P2': 'both', 'M1': 'inequality'}, 'inequality')
     assert not b['holds_by_wiring'] and b['reported_as'] == "S's alone"
+    assert not G.by_wiring({w: 'not read' for w in ('real', 'P1', 'P2', 'M1')}, 'not read')['holds_by_wiring']
 
 
 def test_the_bound_and_the_kcs_with_none():
@@ -572,3 +573,115 @@ def test_the_e96_start():
     assert s['aplkc_flat'] == float(r['aplkc_flat_size']) and s['wKCKC_scale'] == float(r['kc_kc_inh']) and s['start'] == 'e96'
     with pytest.raises(RuntimeError):
         G.e96_start('real', float(r['aplkc_flat_unit']) * 1.01)               # another unit is refused
+
+
+# ---------------------------------------------------------------------------
+# the runner's rows on saved data (no simulation; E96's part 0 cache and the shared directory)
+
+def _saved_model(monkeypatch):
+    """A stand-in for a StaticModel on the real wiring at its fit (E96's test's), with E96's `reading96` replaced by a
+    reading of the saved APL-on run with the fit's stage matrices, the counts from E96's cache."""
+    from types import SimpleNamespace
+    E83 = G.E83
+    f = E83.saved_fit('real')
+    W, _ = G.E94.wiring_W('real')
+    kc, claws = G.cached_tables('real')
+    idx = pd.MultiIndex.from_frame(claws[[KC, 'claw_id']])
+    wn = pd.Series(claws.wnorm.to_numpy(), index=idx)
+    per_claw = pd.Series(claws.kept.to_numpy(), index=idx)
+    per_kc = kc.set_index(KC)[['n_claws', 'kept', 'kept_unassigned', 'dropped_claw', 'no_claw', 'no_claw_nan',
+                               'peduncle']].sort_index()
+    m = object.__new__(G.E95.StaticModel)
+    m.label, m.folder, m.tag, m.p, m.saved, m.K = 'real', f['folder'], f['tag'], dict(f['p']), f['saved'], f['K']
+    m.target_on, m.target_off, m.W = f['target_on'], f['target_off'], W
+    m.wAPLKC = pd.Series(claws.w_fam.to_numpy(), index=idx)
+    m.rv = SimpleNamespace(kc=SimpleNamespace(thr=np.ones(len(kc))))
+    seen = {}
+
+    def fake_reading(model, pv, wk, label=''):
+        seen[label] = (dict(pv), None if wk is None else wk.copy())
+        params = dict(model.p, wAPLPN_scale=model.p['wAPLPN_scale'] * pv['dose'])
+        return dict(on=f['saved']['on'], off=f['saved']['off'], factor=1.2, at_bound=False, n_sims=3, params=params,
+                    seconds=0.0, history=[], stages=dict(G.E94.fit_stage('real', 'on')),
+                    gain=dict(L=np.zeros(f['saved']['on'][1].shape), row={}), bracket=G.APL_BRACKET, ext=None, whole=False)
+    key = tuple(map(tuple, idx.to_frame(index=False)[[KC, 'claw_id']].to_numpy().tolist()))
+    J._FLAT_COUNTS[key] = (per_kc, per_claw)
+    monkeypatch.setattr(G.E96, 'reading96', fake_reading)
+    monkeypatch.setattr(G.E96, 'wiring_wnorm', lambda w: wn)
+    monkeypatch.setattr(G.E96, 'wiring_counts', lambda w='real': (per_kc, per_claw))
+    monkeypatch.setattr(G.E95, 'd_unit', lambda model, L=None: 3.0)
+    return m, seen, (wn, per_kc, per_claw, kc, claws)
+
+
+@pytest.mark.skipif(not _shared() or not _cache(), reason="needs the shared directory and E96's per-KC tables")
+def test_run_point_rows_on_saved_data(monkeypatch):
+    m, seen, (wn, per_kc, per_claw, kc, claws) = _saved_model(monkeypatch)
+    saved = {}
+    monkeypatch.setattr(G, 'save_run99', lambda tag, o, sub='runs', **k: saved.update({tag: k}))
+    try:
+        vs = [v for b in G.BLOCKS.values() for v in b] + ['D1_uniform_d1', 'D2_connectome_d1', 'B1_offclaw_d1',
+                                                          'B6_allsyn_d1']
+        for v in vs:
+            row, _ = G.run_point99(m, v, part='test', cc={'queue_commit': 'x'})
+            pv = G.parse_variant(v)
+            tag = f'{v}_real'
+            assert row['variant'] == v and row['tag'] == tag and row['component_unit'] == 3.0 and row['source'] == 'E99'
+            assert row['dose'] == 0.1 and row['size'] == pv['size'] and row['shape'] == pv['shape']
+            assert all(k in row for k in ('rate_on', 'realism_flag', 'max_count_on', 'K_run', 'bouton_share', 'comp_share'))
+            rpv, wk = seen[tag]
+            assert rpv['pool'] == 0.0 and rpv['dose'] == 0.1
+            add = wk.to_numpy() - m.wAPLKC.to_numpy()
+            assert np.isclose(add.mean(), pv['size'] * 3.0 * wn.mean())          # d x unit x the connectome's mean
+            sh = saved[tag]['component_claw']['shape'].to_numpy()
+            assert np.allclose(add, pv['size'] * 3.0 * wn.mean() * sh, rtol=1e-10)
+            comp = saved[tag]['component']
+            assert np.isclose(comp.component_sum.sum(), add.sum())
+            if pv['part'] == 'B':
+                assert np.allclose(sh, G.setting_shape(v, kc, claws), rtol=1e-12)    # the live counts are the cache's
+        # the saved corners through this path are E96's components
+        for v, mode in (('B1_offclaw_d1', 'offclaw'), ('B6_allsyn_d1', 'allsyn'), ('D2_connectome_d1', 'connectome')):
+            assert np.allclose(saved[f'{v}_real']['component_claw']['shape'].to_numpy(), claws[f'comp_{mode}'].to_numpy(),
+                               rtol=1e-12)
+    finally:
+        J._FLAT_COUNTS.clear()
+
+
+# ---------------------------------------------------------------------------
+# the scoring path on saved runs (no simulation)
+
+@pytest.mark.skipif(QUICK or not _shared() or not (H.outputs_dir('E95_static_apl') / 'runs').exists(),
+                    reason="needs E95's and E96's saved runs (viki's outputs) and the shared directory; not with QUICK=1")
+def test_the_readings_on_saved_runs(tmp_path):
+    """The scoring path on E95's and E96's saved runs standing in for this experiment's points on S."""
+    stand = {'K1_offclaw_d1': ('E95', 'D1_uniform_d1'), 'T1_d1': ('E96', 'B6_allsyn_d1')}
+    rows = []
+    for v, (src, e) in stand.items():
+        for w in G.S_WIRINGS:
+            rows.append(dict(tag=f'{e}_{w}', variant=v, wiring=w, source=src, at_bound=False, realism_flag='', factor=1.0))
+    pd.DataFrame(rows).to_csv(tmp_path / 'runs_B.csv', index=False)
+    rd = G.readings99(tmp_path, readouts=('cal', 'raw'))
+    s = rd[(rd.unit == 'S') & (rd.readout == 'cal')].set_index('variant')
+    assert set(s.index) >= {G.REF, G.D0, 'K1_offclaw_d1', 'T1_d1'} | set(G.CORNERS['E95']) | set(G.CORNERS['E96'])
+    assert np.isclose(s.loc[G.REF, 'z8_pattern'], G.UNCHANGED_S['all'], atol=5e-5)
+    e96 = pd.read_csv(H.results_dir('E96_offclaw_apl') / 'readings.csv')
+    e96 = e96[(e96.unit == 'S') & (e96.readout == 'cal')].drop_duplicates('variant').set_index('variant')
+    for v in G.CORNERS['E95'] + G.CORNERS['E96']:
+        assert np.isclose(s.loc[v, 'mean_effect'], e96.loc[v, 'mean_effect'], rtol=1e-9), v
+    assert np.isclose(s.loc['T1_d1', 'z8_pattern'], e96.loc['B6_allsyn_d1', 'z8_pattern'], rtol=1e-9)
+    cv, _ = G.c_verdicts(rd, out=tmp_path)
+    b = cv['between_calyx_d1']['S']
+    assert np.isclose(b['U'], e96.loc['D1_uniform_d1', 'mean_effect']) and np.isclose(b['gap'], 0.0348, atol=0.001)
+    assert np.isclose(b['slope_share'], 1.0)                                  # K1 stands in with the uniform's runs
+    v = G.verdict99(tmp_path, rd)
+    assert set(v['choice']) == set(G.HALVES) and 'D_rule' in v and not v['D_rule']['runs']
+    assert v['classes']['between'] == 'not read' and not v['classes']['between_by_wiring']      # K2 has no stand-in
+    text = G.comparison_table(tmp_path)
+    assert '| K1_offclaw_d1 |' in text and 'Verdict' in text and "Part C" in text
+
+
+def test_the_figure_on_made_up_readings(tmp_path):
+    vs = {G.REF: 0.050, 'D1_uniform_d1': 0.0545, 'B1_offclaw_d1': 0.0541, 'K1_offclaw_d1': 0.054, 'T1_d1': 0.053, 'D0': 0.055}
+    _fake_readings(vs, mean={'D1_uniform_d1': 0.181, 'B1_offclaw_d1': 0.147}, at_bound=('T1_d1',)).to_csv(
+        tmp_path / 'readings.csv', index=False)
+    p = G.figure(tmp_path)
+    assert p is not None and p.exists() and p.stat().st_size > 1000
