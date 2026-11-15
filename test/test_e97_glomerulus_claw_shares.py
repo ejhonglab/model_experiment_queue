@@ -255,3 +255,63 @@ def test_variant_ratios_on_a_made_up_table():
     W = made_up_wiring()
     W1, mv, tg = G.move_claws(W, G.variant_ratios('B2_mean', rt).to_dict(), [1, 0])
     assert G.check_built(W, W1, mv, tg)['passes']
+
+
+# ---------------------------------------------------------------------------
+# part C's verdict on made-up rows
+
+def _rows(b2=0.0, b2_s=None, b2_t=None, perm=(0.0, 0.0), inv=0.0, r2=0.0, r2p=0.0, six=None, flagged=0, raw=0.0,
+          mean=0.178, mbs=(0.0, 0.0, 0.0, 0.0), b6=0.0):
+    """readings rows: each variant's pattern part as the reference's (0.0500 on S, 0.0486 on T, 0.0482 on the eight)
+    minus the given gain."""
+    ref = {'S': G.REF_S, 'T': G.REF_T, 'all8': G.REF_8}
+    gains = {G.REF: (0, 0, 0), 'B2_mean': (b2_s if b2_s is not None else b2, b2_t if b2_t is not None else b2, b2),
+             'B3_permmean_s1': (perm[0],) * 3, 'B3_permmean_s2': (perm[1],) * 3, 'B3_invmean': (inv,) * 3,
+             G.R2: (r2,) * 3, G.R2_PERM: (r2p,) * 3, f'B6_mean_{G.B6_INPUT}': (b2 + b6,) * 3}
+    for m, g in zip(G.OTHER_MBS, mbs):
+        gains[f'B1_{m}'] = (g,) * 3
+    rows = []
+    for v, gs in gains.items():
+        for unit, g in zip(('S', 'T', 'all8'), gs):
+            sx = (six if six is not None else g) if v == 'B2_mean' else g
+            rows.append(dict(variant=v, unit=unit, readout='cal', z8_pattern=ref[unit] - g, z6_pattern=0.05 - sx,
+                             mean_effect=mean if v == 'B2_mean' else 0.177, n_flagged=flagged if v == 'B2_mean' else 0))
+            rows.append(dict(variant=v, unit=unit, readout='raw', z8_loss=0.073 + (raw if v == 'B2_mean' else 0.0),
+                             n_flagged=0))
+    return pd.DataFrame(rows)
+
+
+def _boot(hi):
+    return pd.DataFrame([dict(variant='B2_mean', unit='all8', ref_variant=G.REF, diff_hi=hi)])
+
+
+def test_verdicts(tmp_path, monkeypatch):
+    monkeypatch.setattr(G, 'out_dir', lambda: tmp_path)
+    v = G.verdict97(_rows(b2=0.001, r2=-0.0005), _boot(0.001))
+    assert v['outcome'] == 'no move' and v['final'] == 'no move' and not v['needs_draw2']
+    v = G.verdict97(_rows(b2=0.004, perm=(0.001, 0.0005), inv=-0.001, r2=0.002, r2p=0.0005), _boot(-0.001))
+    assert v['outcome'] == 'moves' and v['needs_draw2'] and v['final'] == 'pending: C2'
+    assert v['conditions']['interval_below_zero'] and v['conditions']['controls_perm']
+    # the same gain without the interval below zero: not 'moves', but 'a part' needs a gain under 0.003
+    v = G.verdict97(_rows(b2=0.004, perm=(0.001, 0.0005), inv=-0.001, r2=0.002), _boot(0.0002))
+    assert not v['moves'] and v['outcome'] == "none of the entry's"
+    v = G.verdict97(_rows(b2=0.002, perm=(0.0005, 0.0), inv=0.0), _boot(-0.0001))
+    assert v['outcome'] == 'a part'
+    # a control that gains as much fails both
+    v = G.verdict97(_rows(b2=0.004, perm=(0.003, 0.0), inv=0.0, r2=0.002), _boot(-0.001))
+    assert not v['moves'] and not v['a_part']
+    v = G.verdict97(_rows(b2=-0.002), _boot(0.003))
+    assert v['outcome'] == 'worse'
+    v = G.verdict97(_rows(b2=0.0005, r2=0.002, r2p=0.0015), _boot(0.001))
+    assert v['outcome'] == 'averaging' and not v['no_move']
+    # S or T alone below 0.0015: not 'moves'
+    v = G.verdict97(_rows(b2=0.004, b2_t=0.001, perm=(0.0, 0.0), inv=0.0, r2=0.002), _boot(-0.001))
+    assert not v['moves']
+    # the bands, the raw-count loss and the mean APL effect
+    for kw in (dict(flagged=1), dict(raw=0.006), dict(mean=0.165), dict(six=0.001)):
+        v = G.verdict97(_rows(b2=0.004, perm=(0.0, 0.0), inv=0.0, r2=0.002, **kw), _boot(-0.001))
+        assert not v['moves'], kw
+    # (f) and (h)
+    v = G.verdict97(_rows(mbs=(0.004, -0.001, 0.0, 0.0), b6=0.002), _boot(0.0))
+    assert v['disagree'] and v['B6_differs']
+    assert (tmp_path / 'verdict.json').exists()

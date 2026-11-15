@@ -1306,17 +1306,975 @@ def part_a() -> dict:
     return summ
 
 
+
+
 # ---------------------------------------------------------------------------
-# part B (written after parts 0 and A)
+# part B: the held readings
 
-def part_b(arms: Sequence[str] = ARMS, wirings: Sequence[str] = ALL_WIRINGS, dry_run: bool = False) -> pd.DataFrame:
-    """Part B's points of `arms` on `wirings` (each arm on its own wirings, ARMS_ON); resumable (runs_B.csv)."""
-    raise NotImplementedError
+def _done(path: Path) -> set:
+    return set(pd.read_csv(path).tag) if path.exists() else set()
 
 
-def score(coresponse: bool = True, zcell: bool = True) -> dict:
-    """The readings, part C's verdict and the tables (module docstring, score)."""
-    raise NotImplementedError
+def runs_b() -> pd.DataFrame:
+    p = out_dir() / 'runs_B.csv'
+    return pd.read_csv(p) if p.exists() else pd.DataFrame(columns=['tag', 'variant', 'wiring'])
+
+
+def _run_dirs(sub: str = 'runs') -> List[Path]:
+    arc = H.shared_dir() / 'data' / 'model_outputs' / EXPERIMENT
+    return [H.outputs_dir(EXPERIMENT) / sub, arc / sub, arc / 'from_viki' / sub, arc / 'from_hal' / sub]
+
+
+def save_run(tag: str, o: Dict[str, tuple], W: pd.DataFrame, moved: pd.DataFrame, targets: pd.DataFrame,
+             sub: str = 'runs') -> Dict[str, str]:
+    """A run's outputs (APL on and off: responses, spike counts), its wiring matrix, its moved claws and its targets per
+    type and glomerulus, under outputs/E97_glomerulus_claw_shares/<sub>/. Returns the files' names."""
+    d = local_dir(sub)
+    for c, cc in (('on', 'on'), ('off', 'acute_off')):
+        o[c][0].to_parquet(d / f'{tag}_{cc}_responses.parquet')
+        o[c][1].to_parquet(d / f'{tag}_{cc}_spike_counts.parquet')
+    W.to_parquet(d / f'{tag}_wPNKC.parquet')
+    moved.to_csv(d / f'{tag}_moved.csv', index=False)
+    targets.to_csv(d / f'{tag}_targets.csv', index=False)
+    return dict(wiring_file=f'{tag}_wPNKC.parquet', moved_file=f'{tag}_moved.csv', targets_file=f'{tag}_targets.csv')
+
+
+def load_run(tag: str, sub: str = 'runs') -> Optional[Dict[str, tuple]]:
+    """A saved run ({'on', 'off'}): this host's outputs, else the model-output archive (with viki's or hal's lane)."""
+    for d in _run_dirs(sub):
+        o = E83._load_pair(d, tag)
+        if o is not None:
+            return o
+    return None
+
+
+def wiring_file(tag: str, sub: str = 'runs') -> Optional[Path]:
+    for d in _run_dirs(sub):
+        p = d / f'{tag}_wPNKC.parquet'
+        if p.exists():
+            return p
+    return None
+
+
+def fuller_input() -> Tuple[pd.DataFrame, str, dict]:
+    """E93's fuller input F (`E93.input_of('F')`), its cache tag, and the record of E93's saved file (results/E93_.../
+    inputs/F.csv, its sha256), checked against the frame."""
+    from experiments import E93_missing_glomeruli_input as E93
+    orn = E93.input_of(B6_INPUT)
+    rec = _read_json(H.results_dir(E93.EXPERIMENT) / 'inputs' / 'sha256.json').get(B6_INPUT, {})
+    sha = _sha(orn)
+    if rec and rec.get('frame_sha256') != sha:
+        raise RuntimeError(f"E93's input {B6_INPUT} differs from its saved record ({rec.get('frame_sha256')} vs {sha})")
+    return orn, E83.input_tag_for(orn, f'E97_{B6_INPUT}'), dict(rec, frame_sha256=sha)
+
+
+def zero_input_share(W: pd.DataFrame, orn_glomeruli: Sequence[str]) -> float:
+    """The share of a wiring's claws on glomeruli without ORN input (17 % in the model's wiring with the lab's input)."""
+    t = claw_table(W)
+    t = t[t.col >= 0]
+    return float((~t.glomerulus.isin(set(orn_glomeruli))).mean())
+
+
+def _provenance_add(part: str, tag: str, prov: dict) -> None:
+    path = out_dir() / f'provenance_{part}.json'
+    d = _read_json(path) or dict(part=part, script='experiments/E97_glomerulus_claw_shares.py', points={})
+    d.setdefault('points', {})[tag] = prov
+    _write_json(path, d)
+
+
+def run_point(variant: str, wiring: str, rt: Optional[pd.DataFrame] = None, cc: Optional[dict] = None,
+              built: Optional[dict] = None, part: str = 'B') -> dict:
+    """One point: the variant's wiring built (its sha256 checked against part 0's record and its invariants again),
+    the held reading (`held97`, with E93's fuller input for B6), the run saved with its matrix, moved claws and targets
+    (`save_run`), its row appended to runs_B.csv (absolute parameters, factors, realism, the moved share, the share of
+    claws without input, the ratios, the commits) and its provenance to provenance_B.json. Returns the row."""
+    import gc
+    rt = ratios_table() if rt is None else rt
+    built = built_records() if built is None else built
+    cc = H.code_commits() if cc is None else cc
+    tag = run_tag(variant, wiring)
+    pv = parse_variant(variant)
+    W0 = base_wiring(wiring)
+    W1, mv, tg, wtag = built_wiring(variant, wiring, rt)
+    sha = _sha(W1)
+    rec = built.get(tag)
+    if rec is None or rec.get('sha256') != sha:
+        raise RuntimeError(f"{tag}: the built matrix ({sha[:12]}) is not part 0's record ({(rec or {}).get('sha256', '')[:12]}); "
+                           'run --part 0 again')
+    chk = check_built(W0, W1, mv, tg)
+    if not chk['passes']:
+        raise RuntimeError(f'{tag}: the built wiring fails its invariants: {chk}')
+    if pv['input'] == 'lab':
+        orn, itag, irec = None, None, dict(file='lab', frame_sha256=_sha(H.apl16_orn_deltas()))
+        gl_in = list(H.apl16_orn_deltas().index)
+    else:
+        orn, itag, irec = fuller_input()
+        gl_in = list(orn.index)
+    res = held97(wiring, W1, wtag, orn, itag)
+    o = {'on': res['on'], 'off': res['off']}
+    files = save_run(tag, o, W1, mv, tg)
+    r = variant_ratios(variant, rt)
+    n_claws = int((W0.to_numpy().astype(int).sum(axis=1) > 0).sum())
+    row = E83._run_row(part, variant, wiring, tag, res, o, variant=variant, arm=pv['arm'], proportions=pv['proportions'],
+                       control=pv['control'] or '', perm_seed=pv['seed'], scale=pv['scale'], draw=pv['draw'],
+                       draw_seed=json.dumps(draw_seed(variant, wiring)), input=pv['input'], input_tag=itag or '',
+                       input_record=json.dumps(irec), wiring_tag=wtag, wiring_sha256=sha, n_moved=int(len(mv)),
+                       moved_share=len(mv) / n_claws, zero_input_share=zero_input_share(W1, gl_in),
+                       zero_input_share_base=zero_input_share(W0, gl_in), breadth_equal_fit=res.get('breadth_equal_fit'),
+                       ratios=json.dumps({g: float(v) for g, v in r.items()}),
+                       params_on=json.dumps({k: float(v) for k, v in res['params'].items()}),
+                       params_off=json.dumps({k: float(v) for k, v in res['params_off'].items()}), **files)
+    row.update({f'process_{k}': v for k, v in cc.items()})
+    E83._append_row(out_dir() / 'runs_B.csv', row)
+    _provenance_add('B', tag, dict(H.model_provenance(orn_deltas=H.apl16_orn_deltas() if orn is None else orn, _wPNKC=W1),
+                                   wiring_sha256=sha, ratios_sha256=_sha(r.to_frame()), host=_host()))
+    tgts = targets()
+    p0 = _rms(E83.pattern_error(E83.pair_distances(E83.saved_fit(wiring)['saved'], 'cal'), tgts['z8']).to_numpy())
+    p1 = _rms(E83.pattern_error(E83.pair_distances(o, 'cal'), tgts['z8']).to_numpy())
+    print(f"E97 {part} {tag}: {len(mv)} claws moved ({row['moved_share']:.3f}); thr x{res['thr_factor']:.4f}, "
+          f"APL x{res['apl_factor']:.4f} ({res['n_on']}/{res['target_on']} on, {res['n_off']}/{res['target_off']} off); "
+          f"pattern part (readout, all recordings) {p0:.4f} -> {p1:.4f}; flag '{row.get('realism_flag') or ''}'; "
+          f"{res['seconds']:.0f}s", flush=True)
+    del res, o
+    gc.collect()
+    return row
+
+
+def part_b(arms: Sequence[str] = ARMS, wirings: Sequence[str] = ALL_WIRINGS, dry_run: bool = False,
+           max_points: Optional[int] = None) -> pd.DataFrame:
+    """Part B's points of `arms` on `wirings` (each arm on its own wirings, ARMS_ON; `plan`), resumable (runs_B.csv);
+    needs part 0 to have passed (its built records). `max_points` stops after that many new points (the smoke test)."""
+    todo = [(v, w) for v, w in plan(arms, wirings) if run_tag(v, w) not in _done(out_dir() / 'runs_B.csv')]
+    print(f'E97 B: {len(todo)} points to run: ' + ', '.join(run_tag(v, w) for v, w in todo), flush=True)
+    if dry_run:
+        return runs_b()
+    if not identity_passed():
+        raise RuntimeError('run --part 0 (after --part A) first: the identities must hold before any scored point')
+    cc = _commits_clean()
+    rt, built = ratios_table(), built_records()
+    for i, (v, w) in enumerate(todo):
+        if max_points is not None and i >= max_points:
+            break
+        run_point(v, w, rt, cc, built, part='B' if not v.startswith('C2') else 'C2')
+    return runs_b()
+
+
+# ---------------------------------------------------------------------------
+# scoring: the runs, the distances, the targets
+
+READOUTS = ('cal', 'raw', 'zcell', 'zcell_lin')
+REF = 'ref'                                         # the wirings as they are (their saved fits)
+E93F = 'E93_F'                                      # E93's held points with the fuller input on the unmoved wirings
+R2 = 'R2_mbs40'                                     # the 40 model flies: the eight wirings by the five mushroom bodies
+R2_PERM = 'R2_perm40'                               # their permuted control: the eight as they are and B3's 32
+D2 = 'draw2'                                        # the mean proportions with the second draw (B4 on S, C2 on T)
+UNITS = (('S', S_WIRINGS), ('T', T_WIRINGS), ('all8', ALL_WIRINGS))
+
+
+def targets() -> Dict[str, pd.Series]:
+    """E89's `targets89`: halves A to D, all recordings (z8, the main target), the six typical (z6), the noise-free
+    effect, baseline-noise units."""
+    from experiments import E89_apl_breadth_weighting as E89
+    return E89.targets89()
+
+
+def runs_table() -> pd.DataFrame:
+    """Every run of the readings: the eight saved fits ('ref', with their realism), E93's fuller-input points on the
+    unmoved wirings ('E93_F', where saved) and part B's / C2's (runs_B.csv), with 'flagged' and 'at_bound'."""
+    from experiments import E93_missing_glomeruli_input as E93
+    rows = []
+    for w in ALL_WIRINGS:
+        P = E83.saved_fit(w)
+        rows.append(dict(tag=f'{REF}_{w}', variant=REF, wiring=w, source='saved', at_bound_thr=False, at_bound_apl=False,
+                         thr_factor=1.0, apl_factor=1.0, fit_folder=P['folder'], fit_tag=P['tag'], **E83.realism(P['saved'])))
+    try:
+        e93 = pd.read_csv(H.results_dir(E93.EXPERIMENT) / 'runs_B.csv')
+        e93 = e93[e93.input == B6_INPUT] if 'input' in e93 else e93.iloc[:0]
+        for r in e93.drop_duplicates('wiring', keep='last').itertuples():
+            rows.append(dict(tag=r.tag, variant=E93F, wiring=r.wiring, source='E93', at_bound_thr=r.at_bound_thr,
+                             at_bound_apl=r.at_bound_apl, thr_factor=r.thr_factor, apl_factor=r.apl_factor,
+                             realism_flag=r.realism_flag, rate_on=r.rate_on, rate_off=r.rate_off))
+    except OSError:
+        pass
+    df = pd.DataFrame(rows)
+    rb = runs_b()
+    if len(rb):
+        rb = rb.assign(source='B')
+        df = pd.concat([df, rb], ignore_index=True, sort=False)
+    df = df.drop_duplicates(['variant', 'wiring'], keep='last').reset_index(drop=True)
+    df['flagged'] = df.realism_flag.fillna('').astype(str).str.strip() != ''
+    df['at_bound'] = df.at_bound_thr.fillna(False).astype(bool) | df.at_bound_apl.fillna(False).astype(bool)
+    return df
+
+
+def run_outputs(variant: str, wiring: str) -> Dict[str, tuple]:
+    """A run of the readings: 'ref' the wiring's saved fit, 'E93_F' E93's saved point, else this experiment's."""
+    if variant == REF:
+        return E83.saved_fit(wiring)['saved']
+    if variant == E93F:
+        from experiments import E93_missing_glomeruli_input as E93
+        o = E93.load_run(E93.run_tag(B6_INPUT, wiring))
+    else:
+        o = load_run(run_tag(variant, wiring))
+    if o is None:
+        raise RuntimeError(f'no saved run {variant} on {wiring}')
+    return o
+
+
+def distances(o: Dict[str, tuple], readout: str) -> Dict[str, pd.Series]:
+    """A run's pair distances: 'cal' (E83's calibrated readout, K set on the run's APL-on counts), 'raw', 'zcell' /
+    'zcell_lin' (E73's per-KC reading under the saturating and the linear map, E95's `zcell_distances_map`)."""
+    if readout in ('zcell', 'zcell_lin'):
+        from experiments import E95_static_apl as E95
+        return E95.zcell_distances_map(o, 'saturating' if readout == 'zcell' else 'linear')
+    return E83.pair_distances(o, readout)
+
+
+def _dist(variant: str, wiring: str, readout: str) -> Dict[str, pd.Series]:
+    """`distances` of a run, cached in this process and in outputs/.../distances_cache.pkl (by the sha256 of the run's
+    spike counts and the readout)."""
+    import pickle
+    mem = _CACHE.setdefault('dist_mem', {})
+    key = (variant, wiring, readout)
+    if key in mem:
+        return mem[key]
+    path = local_dir() / 'distances_cache.pkl'
+    if 'dist_store' not in _CACHE:
+        _CACHE['dist_store'] = pickle.loads(path.read_bytes()) if path.exists() else {}
+    store = _CACHE['dist_store']
+    o = run_outputs(variant, wiring)
+    skey = (_sha(o['on'][1]), _sha(o['off'][1]), readout)
+    if skey not in store:
+        store[skey] = distances(o, readout)
+        _CACHE['dist_dirty'] = True
+    mem[key] = store[skey]
+    return mem[key]
+
+
+def _flush_dist_cache() -> None:
+    import pickle
+    if _CACHE.get('dist_dirty'):
+        try:
+            (local_dir() / 'distances_cache.pkl').write_bytes(pickle.dumps(_CACHE['dist_store']))
+        except OSError:
+            pass
+        _CACHE['dist_dirty'] = False
+
+
+def populations(runs: pd.DataFrame) -> List[Tuple[str, str, List[Tuple[str, str]]]]:
+    """[(variant, unit, [(variant, wiring), ...])] of every reading: each run alone; per variant S, T and the eight where
+    it has all their runs; R2's 40 model flies (the eight as they are and B1's four bodies) and their permuted control
+    (the eight as they are and B3's four permuted bodies) on the eight and on S and T (20 each); the second draw of the
+    mean proportions (B4 on S, C2 on T)."""
+    have = set(zip(runs.variant, runs.wiring))
+    out = []
+    for v, g in runs.groupby('variant', sort=False):
+        for w in g.wiring:
+            out.append((v, w, [(v, w)]))
+        for unit, ws in UNITS:
+            if all((v, w) in have for w in ws):
+                out.append((v, unit, [(v, w) for w in ws]))
+    for name, vs in ((R2, [REF] + [f'B1_{m}' for m in OTHER_MBS]),
+                     (R2_PERM, [REF] + [f'B3_perm_{m}_s{PERM_SEEDS[0]}' for m in OTHER_MBS])):
+        for unit, ws in UNITS:
+            mem = [(v, w) for v in vs for w in ws]
+            if all(m in have for m in mem):
+                out.append((name, unit, mem))
+    d2 = {w: (f'B4_mean_d{DRAW_SEEDS[1]}' if w in S_WIRINGS else f'C2_mean_d{DRAW_SEEDS[1]}') for w in ALL_WIRINGS}
+    for unit, ws in UNITS:
+        mem = [(d2[w], w) for w in ws]
+        if all(m in have for m in mem):
+            out.append((D2, unit, mem))
+    return out
+
+
+def _effect(d: Dict[str, pd.Series]) -> pd.Series:
+    return E83._cs(H.apl_effect(d['on'], d['off']))
+
+
+def score_row(d: Dict[str, pd.Series]) -> dict:
+    """E92's `score_row92` (E83's `effect_scores` against every target of `targets89`, the amplitude and shape parts, the
+    spread ratio and Pearson r on the per-pair APL effect, checked to add up) plus, against all recordings, the mean
+    and RMS pattern error over each of E92's groups (the six near pairs among them) and the mean distances."""
+    from experiments import E92_gain as E92G
+    from experiments import E92_steps_like_for_like as E92
+    row = E92G.score_row92(d)
+    me = _effect(d)
+    de = E83._cs(targets()['z8']).reindex(me.index)
+    err = (me - me.mean()) - (de - de.mean())
+    m = E92.group_masks(me.index)
+    for g in E92.TABLE_GROUPS:
+        if g in m and m[g].any():
+            row[f'z8_err_{g}_mean'] = float(err[m[g]].mean())
+            row[f'z8_err_{g}_rms'] = _rms(err[m[g]].to_numpy())
+            row[f'effect_{g}'] = float(me[m[g]].mean())
+    row['mean_on'] = float(E83._cs(d['on']).mean())
+    row['mean_off'] = float(E83._cs(d['off']).mean())
+    return row
+
+
+def boot_targets(n: int = BOOT_N, seed: int = BOOT_SEED) -> Tuple[pd.MultiIndex, np.ndarray]:
+    """The per-pair APL effect of `n` resamples of the recordings (each genotype's recordings with replacement; Yang's z,
+    all recordings), pairs in E83's canonical order, checked against the main target at the full sample."""
+    key = ('boot', n, seed)
+    if key in _CACHE:
+        return _CACHE[key]
+    mats = {}
+    for g in ('TNT3c', 'TNT'):
+        x = H.yang_recording_rdms_values(g, 'graded')
+        x = x.copy()
+        x.columns = pd.MultiIndex.from_tuples([tuple(sorted(map(str, c))) for c in x.columns], names=['odor_a', 'odor_b'])
+        mats[g] = x.sort_index(axis=1)
+    if not mats['TNT3c'].columns.equals(mats['TNT'].columns):
+        raise RuntimeError('the two genotypes\' recordings have different pairs')
+    pairs = mats['TNT3c'].columns
+    full = mats['TNT3c'].to_numpy().mean(axis=0) - mats['TNT'].to_numpy().mean(axis=0)
+    z8 = E83._cs(targets()['z8']).reindex(pairs).to_numpy()
+    if not np.allclose(full, z8, atol=1e-10):
+        raise RuntimeError('the resampling\'s full sample is not the main target')
+    rng = np.random.default_rng(seed)
+    C, T = mats['TNT3c'].to_numpy(), mats['TNT'].to_numpy()
+    B = np.empty((n, len(pairs)))
+    for b in range(n):
+        B[b] = C[rng.integers(0, len(C), len(C))].mean(axis=0) - T[rng.integers(0, len(T), len(T))].mean(axis=0)
+    _CACHE[key] = (pairs, B)
+    return pairs, B
+
+
+def boot_patterns(me: pd.Series, pairs: pd.MultiIndex, B: np.ndarray) -> np.ndarray:
+    """The pattern part of a per-pair effect against each resampled target (rows of B)."""
+    m = E83._cs(me).reindex(pairs).to_numpy()
+    m = m - m.mean()
+    Bc = B - B.mean(axis=1, keepdims=True)
+    return np.sqrt(np.mean((m[None, :] - Bc) ** 2, axis=1))
+
+
+def readings(readouts: Sequence[str] = READOUTS) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """readings.csv (per variant, unit and readout `score_row`, the runs outside the bands and at a bracket's bound, the
+    change against 'ref' on the same unit and readout as 'd_<column>'), pairs.csv (each population's per-pair distances
+    and effect under 'cal' and 'raw') and boot.csv (per population under the readout against all recordings: the
+    difference of its pattern part from the reference's on the same unit, and a few other pairs, with the 90 % interval
+    of a paired bootstrap over the recordings)."""
+    out = out_dir()
+    runs = runs_table()
+    meta = {(r.variant, r.wiring): r for r in runs.itertuples()}
+    rows, prs, eff = [], [], {}
+    for v, unit, mem in populations(runs):
+        for ro in readouts:
+            ds = [_dist(mv, mw, ro) for mv, mw in mem]
+            d = ds[0] if len(ds) == 1 else E83.population(ds)
+            rows.append(dict(variant=v, unit=unit, kind='wiring' if len(mem) == 1 else 'population', n_runs=len(mem),
+                             readout=ro, n_flagged=int(sum(meta[m].flagged for m in mem)),
+                             n_at_bound=int(sum(meta[m].at_bound for m in mem)), **score_row(d)))
+            if ro in ('cal', 'raw'):
+                me = _effect(d)
+                eff[(v, unit, ro)] = me
+                if len(mem) > 1:
+                    prs.append(pd.DataFrame(dict(variant=v, unit=unit, readout=ro, odor_a=me.index.get_level_values(0),
+                                                 odor_b=me.index.get_level_values(1),
+                                                 on=E83._cs(d['on']).reindex(me.index).to_numpy(),
+                                                 off=E83._cs(d['off']).reindex(me.index).to_numpy(), effect=me.to_numpy())))
+    _flush_dist_cache()
+    rd = pd.DataFrame(rows)
+    base = rd[rd.variant == REF].set_index(['unit', 'readout'])
+    cols = [c for c in rd.columns if c.endswith(('_loss', '_pattern', '_rho', '_amplitude', '_shape', '_sd_ratio', '_pearson'))
+            or c in ('mean_effect', 'mean_on', 'mean_off')]
+    for c in cols:
+        rd[f'd_{c}'] = [v - base[c].get((u, ro), np.nan) if (u, ro) in base.index else np.nan
+                        for u, ro, v in zip(rd.unit, rd.readout, rd[c])]
+    rd.to_csv(out / 'readings.csv', index=False)
+    if prs:
+        pd.concat(prs, ignore_index=True).to_csv(out / 'pairs.csv', index=False)
+    # the paired bootstrap over the recordings
+    pairs, B = boot_targets()
+    bp = {k: boot_patterns(me, pairs, B) for k, me in eff.items() if k[2] == 'cal'}
+    brows = []
+
+    def add(a, b):
+        if a in bp and b in bp:
+            dlt = bp[a] - bp[b]
+            brows.append(dict(variant=a[0], unit=a[1], ref_variant=b[0], ref_unit=b[1], readout='cal',
+                              diff_median=float(np.median(dlt)), diff_lo=float(np.quantile(dlt, 0.05)),
+                              diff_hi=float(np.quantile(dlt, 0.95)), share_below_zero=float((dlt < 0).mean()), n_boot=len(dlt)))
+    for (v, unit, ro) in bp:
+        if v != REF and unit in ('S', 'T', 'all8'):
+            add((v, unit, ro), (REF, unit, 'cal'))
+    for unit in ('S', 'T', 'all8'):
+        add((f'B6_mean_{B6_INPUT}', unit, 'cal'), (E93F, unit, 'cal'))
+        add((f'B6_mean_{B6_INPUT}', unit, 'cal'), ('B2_mean', unit, 'cal'))
+        add((R2_PERM, unit, 'cal'), (R2, unit, 'cal'))
+        add((D2, unit, 'cal'), ('B2_mean', unit, 'cal'))
+    add((f'B4_mean_d{DRAW_SEEDS[1]}', 'S', 'cal'), ('B2_mean', 'S', 'cal'))
+    bt = pd.DataFrame(brows)
+    bt.to_csv(out / 'boot.csv', index=False)
+    return rd, pd.concat(prs, ignore_index=True) if prs else pd.DataFrame(), bt
+
+
+def brain_term(readout: str = 'cal') -> pd.DataFrame:
+    """brain_term.csv: on each wiring, the root mean square difference of the per-pair APL effect between two mushroom
+    bodies' proportions (the hemibrain's the wiring as it is; B1's four), raw and with both means removed; beside it the
+    same between the move's two draws at the mean proportions (B2 and B4 on S) and between the eight wirings as they are
+    (the draw term computed the same way); the summary rows 'brain_term', 'move_draw_term', 'wiring_draw_term' are the
+    root mean square over their pairs."""
+    runs = runs_table()
+    have = set(zip(runs.variant, runs.wiring))
+    rows = []
+
+    def diff(a, b):
+        ea, eb = _effect(_dist(*a, readout)), _effect(_dist(*b, readout))
+        x = (ea - eb.reindex(ea.index)).to_numpy()
+        return _rms(x), _rms(x - x.mean())
+    mbs = ['hemibrain'] + list(OTHER_MBS)
+    vof = {'hemibrain': REF, **{m: f'B1_{m}' for m in OTHER_MBS}}
+    for w in ALL_WIRINGS:
+        for a, b in combinations(mbs, 2):
+            if (vof[a], w) in have and (vof[b], w) in have:
+                raw, cen = diff((vof[a], w), (vof[b], w))
+                rows.append(dict(kind='brain', wiring=w, a=a, b=b, rms=raw, rms_centered=cen))
+        d2 = f'B4_mean_d{DRAW_SEEDS[1]}' if w in S_WIRINGS else f'C2_mean_d{DRAW_SEEDS[1]}'
+        if ('B2_mean', w) in have and (d2, w) in have:
+            raw, cen = diff(('B2_mean', w), (d2, w))
+            rows.append(dict(kind='move_draw', wiring=w, a='B2_mean', b=d2, rms=raw, rms_centered=cen))
+    for a, b in combinations(ALL_WIRINGS, 2):
+        raw, cen = diff((REF, a), (REF, b))
+        rows.append(dict(kind='wiring_draw', wiring=f'{a}-{b}', a=a, b=b, rms=raw, rms_centered=cen))
+    df = pd.DataFrame(rows)
+    _flush_dist_cache()
+    summ = []
+    for k in ('brain', 'move_draw', 'wiring_draw'):
+        g = df[df.kind == k]
+        if len(g):
+            summ.append(dict(kind=f'{k}_term', wiring='', a='', b='', rms=_rms(g.rms), rms_centered=_rms(g.rms_centered),
+                             n=len(g)))
+    df = pd.concat([df, pd.DataFrame(summ)], ignore_index=True)
+    df['readout'] = readout
+    df.to_csv(out_dir() / 'brain_term.csv', index=False)
+    return df
+
+
+def line_reading(pr: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+    """line.csv: each population's ester and alcohol groups' mean APL-on distances relative to the mean over the 120
+    pairs (E92's `relative_distances`), placed against E92's part A line (`E92.line(readout)['S']`) by E92's
+    `place_on_line`; on T and the eight the residual is taken relative to the reference's on the same unit (E93's
+    `line_reading`)."""
+    from experiments import E92_steps_like_for_like as E92
+    pr = pd.read_csv(out_dir() / 'pairs.csv') if pr is None else pr
+    pts = {}
+    for (v, unit, ro), g in pr.groupby(['variant', 'unit', 'readout'], sort=False):
+        on = pd.Series(g.on.to_numpy(), index=pd.MultiIndex.from_arrays([g.odor_a, g.odor_b]))
+        pts[(v, unit, ro)] = E92.relative_distances(on)
+    rows = []
+    for (v, unit, ro), (est, alc) in pts.items():
+        L = E92.line(ro)['S']
+        ref = 0.0
+        if unit != 'S' and (REF, unit, ro) in pts:
+            e0, a0 = pts[(REF, unit, ro)]
+            ref = float(e0 - (L['intercept'] + L['slope'] * a0))
+        rows.append(dict(variant=v, unit=unit, readout=ro, ester_rel=est, alcohol_rel=alc, slope=L['slope'],
+                         intercept=L['intercept'], ref_resid=ref, **E92.place_on_line(est, alc, L, ref)))
+    df = pd.DataFrame(rows)
+    df.to_csv(out_dir() / 'line.csv', index=False)
+    return df
+
+
+CO_VARIANTS = (REF, 'B2_mean', f'B3_permmean_s{PERM_SEEDS[0]}', 'B3_invmean')
+CO_CANDIDATE = 'gm'
+
+
+def _co_job97(job: tuple) -> dict:
+    """One run read by E88's readings 1 and 1b and by the geometric mean of E88's two estimates at L1 and L3 (E93's
+    `_co_job93` on this experiment's runs)."""
+    import os
+    import warnings
+    from experiments import E89_apl_breadth_weighting as E89
+    variant, wiring, K, cand, rel, gap = job
+    warnings.simplefilter('ignore')
+    for k in ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS'):
+        os.environ.setdefault(k, '1')
+    o = run_outputs(variant, wiring)
+    mr = E89.ModelReading89(o, label=f'{variant}_{wiring}', K=K, rel_target=rel, gap_target=gap)
+    res = dict(variant=variant, wiring=wiring, readings={})
+    for rdn in ('r1', 'r1b'):
+        F = mr.mean_factors(rdn)
+        res['readings'][rdn] = {c: dict(s=F[c].s, O=F[c].O, R=F[c].R) for c in E89.CONDS}
+    for level in ('L1', 'L3'):
+        v = {c: mr.level_values(level, c, None)[0] for c in E89.CONDS}
+        F = {c: E89.cand_factors(v[c], cand) for c in E89.CONDS}
+        res['readings'][f'cand_{level}'] = {c: dict(s=F[c].s, O=F[c].O, R=F[c].R) for c in E89.CONDS}
+    return res
+
+
+def coresponse97(n_workers: int = 4, variants: Sequence[str] = CO_VARIANTS) -> pd.DataFrame:
+    """coresponse.csv: per variant (CO_VARIANTS) and population (S, T) the changes of L (co-response) and R
+    (recruitment) under APL of the four nearest ester pairs, the ester and the alcohol groups (E88's `log_changes`) in
+    readings 1 and 1b and with the geometric mean of E88's two estimates at L1 and L3, against the flies' (90 %
+    intervals over resampled recordings), as E93's `coresponse93`. Jobs cached in outputs/.../coresponse_cache.pkl."""
+    import multiprocessing
+    import pickle
+    from concurrent.futures import ProcessPoolExecutor
+    from experiments import E88_responder_sets as E88
+    from experiments import E89_apl_breadth_weighting as E89
+    runs = runs_table()
+    runs = runs[runs.variant.isin(list(variants))]
+    rel = E88.flies_reliability('z')
+    gap = {c: v['thresholded'] for c, v in E89.flies_gap_target('z').items()}
+    cache = local_dir() / 'coresponse_cache.pkl'
+    done = pickle.loads(cache.read_bytes()) if cache.exists() else {}
+    units = {n: [(u, wu) for u, wu in UNITS[:2] if set(wu) <= set(g.wiring)] for n, g in runs.groupby('variant')}
+    jobs = [(r.variant, r.wiring, E83.saved_fit(r.wiring)['K'], CO_CANDIDATE, rel, gap) for r in runs.itertuples()
+            if (r.variant, r.wiring) not in done and any(r.wiring in wu for _, wu in units[r.variant])]
+    if jobs:
+        with ProcessPoolExecutor(max_workers=n_workers, mp_context=multiprocessing.get_context('spawn')) as ex:
+            for res, j in zip(ex.map(_co_job97, jobs), jobs):
+                done[(j[0], j[1])] = res
+                cache.write_bytes(pickle.dumps(done))
+                print(f'E97 coresponse {j[0]} {j[1]}', flush=True)
+    fl = {}
+    fv = E89.flies_values({})
+    for subset in E88.SUBSETS:
+        tnt = E88.flies_subset(subset)
+        rf = E88.flies_factors('z', 'r1', tnt)
+        F = {c: rf[c].mean() for c in E89.CONDS}
+        fl[('r1', subset)] = (E88.log_changes(F, ('L', 'R')), [E88.log_changes(b, ('L', 'R')) for b in E88.flies_boot(rf)])
+        fl[('cand', subset)] = (E88.log_changes(E89.flies_cand(fv, CO_CANDIDATE, None, tnt), ('L', 'R')),
+                                [E88.log_changes(b, ('L', 'R')) for b in E89.flies_cand_boot(fv, CO_CANDIDATE, None, tnt)])
+    rows = []
+    for name, us in units.items():
+        for unit, wu in us:
+            for rdn in ('r1', 'r1b', 'cand_L1', 'cand_L3'):
+                Fs = [done[(name, w)]['readings'][rdn] for w in wu]
+                Fp = {c: E88.Factors(*(E88._mean_rows(np.stack([f[c][k] for f in Fs])) for k in ('s', 'O', 'R')))
+                      for c in E89.CONDS}
+                ch = E88.log_changes(Fp, ('L', 'R'))
+                for subset in E88.SUBSETS:
+                    fch, fb = fl[('r1' if rdn.startswith('r1') else 'cand', subset)]
+                    for f in ('L', 'R'):
+                        for grp in ('nearest4', 'ester', 'alcohol'):
+                            k = f'chg_{f}_{grp}'
+                            lo, hi = np.nanpercentile([b[k] for b in fb], E88.INTERVAL)
+                            x = ch[k]
+                            differs = bool(not (lo <= x <= hi) and abs(x - fch[k]) >= np.log(E89.B1_FACTOR))
+                            rows.append(dict(variant=name, unit=unit, reading=rdn,
+                                             candidate=CO_CANDIDATE if rdn.startswith('cand') else '', subset=subset,
+                                             factor=f, group=grp, ratio=float(np.exp(x)), flies_ratio=float(np.exp(fch[k])),
+                                             flies_lo=float(np.exp(lo)), flies_hi=float(np.exp(hi)), differs=differs))
+    df = pd.DataFrame(rows)
+    df.to_csv(out_dir() / 'coresponse.csv', index=False)
+    return df
+
+
+# ---------------------------------------------------------------------------
+# part C: the verdict
+
+def _val(rd: pd.DataFrame, variant: str, unit: str, col: str, readout: str = 'cal') -> float:
+    r = rd[(rd.variant == variant) & (rd.unit == unit) & (rd.readout == readout)]
+    return float(r[col].iloc[0]) if len(r) and col in r.columns else np.nan
+
+
+def _gain(rd: pd.DataFrame, variant: str, unit: str = 'all8', target: str = 'z8', readout: str = 'cal') -> float:
+    """The reference's pattern part minus the variant's on the same unit (positive: the variant is lower, better)."""
+    return _val(rd, REF, unit, f'{target}_pattern', readout) - _val(rd, variant, unit, f'{target}_pattern', readout)
+
+
+def _boot_hi(bt: pd.DataFrame, variant: str, unit: str, ref: str = REF) -> float:
+    r = bt[(bt.variant == variant) & (bt.unit == unit) & (bt.ref_variant == ref)] if len(bt) else bt
+    return float(r.diff_hi.iloc[0]) if len(r) else np.nan
+
+
+def classify(gain8: float, gain_s: float, gain_t: float, controls_ok: bool, others_ok: bool, r2_gain: float,
+             perm40_gain: float) -> dict:
+    """Part C's categories from the gains (reference minus variant, on the pattern part; positive is lower): 'moves'
+    (MOVE_8 or more on the eight, MOVE_ST on S and T, the controls and every other condition), 'a part' (PART_LO to
+    MOVE_8 on the eight with the controls' conditions), 'worse' (WORSE or more higher), 'no move' (R1 and R2 within
+    NO_MOVE), 'averaging' (R2 gains AVERAGING and its permuted control at least CONTROL_RATIO of that); 'outcome' the
+    first that holds in that order, else 'none of the entry's'."""
+    flags = dict(
+        moves=bool(gain8 >= MOVE_8 and gain_s >= MOVE_ST and gain_t >= MOVE_ST and controls_ok and others_ok),
+        a_part=bool(PART_LO <= gain8 < MOVE_8 and controls_ok),
+        worse=bool(gain8 <= -WORSE),
+        no_move=bool(abs(gain8) < NO_MOVE and (not np.isfinite(r2_gain) or abs(r2_gain) < NO_MOVE)),
+        averaging=bool(np.isfinite(r2_gain) and r2_gain >= AVERAGING and np.isfinite(perm40_gain)
+                       and perm40_gain >= CONTROL_RATIO * r2_gain))
+    names = {'moves': 'moves', 'a_part': 'a part', 'worse': 'worse', 'no_move': 'no move', 'averaging': 'averaging'}
+    outcome = next((names[k] for k in ('moves', 'a_part', 'worse', 'no_move', 'averaging') if flags[k]),
+                   "none of the entry's")
+    return dict(flags, outcome=outcome)
+
+
+def verdict97(rd: pd.DataFrame, bt: pd.DataFrame, runs: Optional[pd.DataFrame] = None) -> dict:
+    """Part C's verdict, fixed in the entry, on the pattern part under the calibrated readout against all recordings
+    (R1: B2_mean on the eight, S and T; R2: the 40 model flies), with the controls (B3's permuted mean proportions on
+    both seeds, the inverted ones), the six typical recordings, the bands, the raw-count loss, the mean APL effect and
+    the bootstrap interval; outcome (f) (one body lowers the eight by DISAGREE or more, another raises it), (h) (B6
+    against B2 on the eight); and, where the second draw exists (B4 on S, C2 on T), the same reading on it ('a part' and
+    'moves' must hold there). verdict.json."""
+    v = 'B2_mean'
+    g8, gs, gt = _gain(rd, v, 'all8'), _gain(rd, v, 'S'), _gain(rd, v, 'T')
+    perm = {s: _gain(rd, f'B3_permmean_s{s}', 'all8') for s in PERM_SEEDS}
+    inv = _gain(rd, 'B3_invmean', 'all8')
+    r2, r2p = _gain(rd, R2, 'all8'), _gain(rd, R2_PERM, 'all8')
+    six = _gain(rd, v, 'all8', 'z6')
+    n_flag = _val(rd, v, 'all8', 'n_flagged')
+    raw = _val(rd, v, 'all8', 'z8_loss', 'raw') - _val(rd, REF, 'all8', 'z8_loss', 'raw')
+    mean = _val(rd, v, 'all8', 'mean_effect')
+    hi = _boot_hi(bt, v, 'all8')
+
+    def conds(gain8):
+        c = dict(controls_perm=bool(all(np.isfinite(p) and p < CONTROL_RATIO * gain8 for p in perm.values())),
+                 controls_inv=bool(np.isfinite(inv) and inv < INVERTED_MAX),
+                 r2_not_above=bool(np.isfinite(r2) and r2 >= 0),
+                 six_keeps=bool(np.isfinite(six) and six >= SIX_KEEP * gain8),
+                 bands=bool(n_flag == 0), raw_loss=bool(raw <= RAW_SLACK), mean_effect=bool(abs(mean - FLIES_MEAN) <= MEAN_SLACK),
+                 interval_below_zero=bool(np.isfinite(hi) and hi < 0))
+        return c, bool(c['controls_perm'] and c['controls_inv']), bool(all(c[k] for k in (
+            'r2_not_above', 'six_keeps', 'bands', 'raw_loss', 'mean_effect', 'interval_below_zero')))
+    c1, ctl, oth = conds(g8)
+    cls = classify(g8, gs, gt, ctl, oth, r2, r2p)
+    res = dict(variant=v, readout='cal', target='z8', gain8=g8, gainS=gs, gainT=gt,
+               ref8=_val(rd, REF, 'all8', 'z8_pattern'), refS=_val(rd, REF, 'S', 'z8_pattern'),
+               refT=_val(rd, REF, 'T', 'z8_pattern'), R1_8=_val(rd, v, 'all8', 'z8_pattern'),
+               R1_S=_val(rd, v, 'S', 'z8_pattern'), R1_T=_val(rd, v, 'T', 'z8_pattern'),
+               R2=_val(rd, R2, 'all8', 'z8_pattern'), R2_gain=r2, R2_perm=_val(rd, R2_PERM, 'all8', 'z8_pattern'),
+               R2_perm_gain=r2p, perm_gain=perm, inv_gain=inv, six_gain=six, n_flagged=n_flag, raw_loss_change=raw,
+               mean_effect=mean, boot_hi=hi, conditions=c1, **cls)
+    # the parts of the pattern part beside it (the reading the verdict is drawn on)
+    for k in ('amplitude', 'shape', 'sd_ratio', 'pearson', 'rho', 'loss'):
+        res[f'R1_8_{k}'] = _val(rd, v, 'all8', f'z8_{k}')
+        res[f'ref8_{k}'] = _val(rd, REF, 'all8', f'z8_{k}')
+    # (f): the bodies alone on the eight
+    mbg = {m: _gain(rd, f'B1_{m}', 'all8') for m in OTHER_MBS}
+    res['mb_gain'] = mbg
+    fin = [x for x in mbg.values() if np.isfinite(x)]
+    res['disagree'] = bool(fin and max(fin) >= DISAGREE and min(fin) < 0)
+    # (h): B6 against B2 on the eight
+    b6 = _val(rd, f'B6_mean_{B6_INPUT}', 'all8', 'z8_pattern')
+    res['B6_8'] = b6
+    res['B6_minus_B2'] = b6 - res['R1_8'] if np.isfinite(b6) else np.nan
+    res['B6_minus_E93F'] = b6 - _val(rd, E93F, 'all8', 'z8_pattern') if np.isfinite(b6) else np.nan
+    res['B6_differs'] = bool(np.isfinite(res['B6_minus_B2']) and abs(res['B6_minus_B2']) >= B6_DIFF)
+    # B5: graded with the size of the change
+    res['B5'] = {f'x{s:g}': _gain(rd, f'B5_mean_x{s:g}', 'S') for s in B5_SCALES}
+    res['B5']['x1'] = gs
+    # the second draw
+    if np.isfinite(_val(rd, D2, 'all8', 'z8_pattern')):
+        d8, ds_, dt = _gain(rd, D2, 'all8'), _gain(rd, D2, 'S'), _gain(rd, D2, 'T')
+        c2, ctl2, oth2 = conds(d8)
+        cls2 = classify(d8, ds_, dt, ctl2, oth2, r2, r2p)
+        res['draw2'] = dict(gain8=d8, gainS=ds_, gainT=dt, conditions=c2, **cls2)
+        res['holds_on_draw2'] = bool(cls2['outcome'] == res['outcome'] or (res['outcome'] == 'a part' and cls2['moves']))
+    else:
+        res['draw2'] = None
+        res['holds_on_draw2'] = None
+    res['needs_draw2'] = bool(res['outcome'] in ('a part', 'moves'))
+    res['final'] = (res['outcome'] if not res['needs_draw2'] else
+                    (res['outcome'] if res['holds_on_draw2'] else ('pending: C2' if res['holds_on_draw2'] is None
+                                                                   else f"{res['outcome']} on the first draw only")))
+    _write_json(out_dir() / 'verdict.json', res)
+    return res
+
+
+def score(coresponse: bool = True, zcell: bool = True, n_workers: int = 4) -> dict:
+    """The readings (`readings`, `brain_term`, `line_reading`, `coresponse97`), part C's verdict and part D's plan,
+    the archive tables and comparison_table.md."""
+    ro = READOUTS if zcell else ('cal', 'raw')
+    rd, pr, bt = readings(ro)
+    brain_term()
+    if len(pr):
+        line_reading(pr)
+    if coresponse:
+        coresponse97(n_workers)
+    v = verdict97(rd, bt)
+    print(json.dumps({k: v[k] for k in ('outcome', 'final', 'gain8', 'gainS', 'gainT', 'R1_8', 'ref8', 'R2', 'perm_gain',
+                                        'inv_gain', 'mb_gain', 'disagree', 'B6_minus_B2')}, indent=1, default=float),
+          flush=True)
+    write_variants()
+    comparison_table()
+    return v
+
+
+def part_c2(dry_run: bool = False, force: bool = False) -> pd.DataFrame:
+    """The second draw on T (C2_mean_d2), only on a verdict of "a part" or "moves" (verdict.json), then `score` is run
+    again."""
+    v = _read_json(out_dir() / 'verdict.json')
+    ok = v.get('outcome') in ('a part', 'moves')
+    print(f"E97 C2: verdict {v.get('outcome')!r}: {'run' if ok else 'not run'}", flush=True)
+    if not ok and not force:
+        return runs_b()
+    return part_b(('C2',), T_WIRINGS, dry_run=dry_run)
+
+
+# ---------------------------------------------------------------------------
+# part D: the family fitted again at the mean proportions (only on "a part" or "moves")
+
+D_VARIANT = 'B2_mean'
+
+
+def d_member(label: str) -> dict:
+    """A wiring's fit of C2's family (E91's `d_member`)."""
+    from experiments import E91_summed_drive_inhibition as E91
+    return E91.d_member(label)
+
+
+def d_wiring_tag(label: str) -> str:
+    return f'e97mean-{label}'
+
+
+def d_tag(label: str) -> str:
+    """The tag E10_joint_fit.py gives a part D fit (its prefix rules: wiring-<tag>_, rate0.068_, aplboth_, then
+    k2_cap3)."""
+    return f"wiring-{d_wiring_tag(label)}_rate{H.data_target('ctrl_frac'):.3f}_aplboth_k2_cap3"
+
+
+def d_init_params() -> Path:
+    """D/init_params_mean.json in this experiment's results: per wiring the absolute parameters of B2's held point (the
+    wiring's own fit with the somatic threshold and the tied APL scale re-held at the mean proportions), the start of each
+    refit (an exact start at the fit's own parameters is refused by E10_joint_fit.py on another wiring's base)."""
+    rb = runs_b()
+    d = {r.wiring: {k: float(x) for k, x in json.loads(r.params_on).items()} for r in rb[rb.variant == D_VARIANT].itertuples()}
+    path = out_dir() / 'D' / 'init_params_mean.json'
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _write_json(path, d)
+    return path
+
+
+def d_command(label: str, maxfev: int = D_MAXFEV) -> List[str]:
+    """E10_joint_fit.py's command for wiring `label`'s fit at the mean proportions: C2's family (`-k 2 --aplpn-max 3
+    --rate-target ctrl_frac --loss apl --apl-readout both --tag _cap3`), B2's matrix as --wiring-file (it holds the
+    wiring's own re-drawing, so no --wiring), from B2's held point (`--init-params`, `d_init_params`)."""
+    wf = wiring_file(run_tag(D_VARIANT, label))
+    if wf is None:
+        raise RuntimeError(f'no matrix of {D_VARIANT} on {label} (run part B first)')
+    init = d_init_params()
+    if label not in json.loads(init.read_text()):
+        raise RuntimeError(f'no held point of {D_VARIANT} on {label} in runs_B.csv')
+    return [str(H.HERE / 'venv' / 'bin' / 'python'), '-u', 'experiments/E10_joint_fit.py', '-k', '2', '--aplpn-max', '3',
+            '--rate-target', 'ctrl_frac', '--loss', 'apl', '--apl-readout', 'both', '--tag', '_cap3', '--maxfev',
+            str(int(maxfev)), '--experiment', EXPERIMENT, '--init-params', f'{init}:{label}', '--wiring-file', str(wf),
+            '--wiring-tag', d_wiring_tag(label)]
+
+
+def _fits() -> pd.DataFrame:
+    p = out_dir() / 'fits.csv'
+    return pd.read_csv(p) if p.exists() else pd.DataFrame(columns=['tag'])
+
+
+def d_allowed(pop: str = 'S') -> Tuple[bool, str]:
+    """The entry's rules for part D: S only on "a part" or "moves" that held on the second draw; T only if S's fitted
+    population holds (`score_d`)."""
+    v = _read_json(out_dir() / 'verdict.json')
+    if not v:
+        return False, 'no verdict (run --part score)'
+    if pop == 'S':
+        ok = v.get('outcome') in ('a part', 'moves') and bool(v.get('holds_on_draw2'))
+        return ok, f"verdict {v.get('outcome')!r}, second draw {'holds' if v.get('holds_on_draw2') else 'not read / fails'}"
+    sd = score_d(write=False)
+    return bool(sd.get('S_holds')), f"S's fitted population {'holds' if sd.get('S_holds') else 'does not hold'}"
+
+
+def part_d(pop: str = 'S', wirings: Optional[Sequence[str]] = None, dry_run: bool = False, force: bool = False
+           ) -> List[str]:
+    """Part D's fits, one process each (`d_command`; logs under outputs/.../D/), skipping those in fits.csv; refuses
+    unless `d_allowed` (or `force`)."""
+    import subprocess
+    ok, why = d_allowed(pop)
+    print(f'E97 D {pop}: {"allowed" if ok else "not allowed"} ({why})', flush=True)
+    if not ok and not force:
+        return []
+    ws = [w for w in (S_WIRINGS if pop == 'S' else T_WIRINGS) if wirings is None or w in wirings]
+    logs = local_dir('D')
+    tags = []
+    for w in ws:
+        tag = d_tag(w)
+        tags.append(tag)
+        if tag in set(_fits().tag):
+            print(f'E97 D {tag}: done', flush=True)
+            continue
+        cmd = d_command(w)
+        print('E97 D:', ' '.join(cmd), flush=True)
+        if dry_run:
+            continue
+        _commits_clean()
+        with open(logs / f'{tag}.log', 'w') as fh:
+            r = subprocess.run(cmd, cwd=H.HERE, stdout=fh, stderr=subprocess.STDOUT)
+        if r.returncode:
+            raise RuntimeError(f'E97 D {tag}: E10_joint_fit.py exited {r.returncode} (log {logs / (tag + ".log")})')
+    return tags
+
+
+def score_d(write: bool = True) -> dict:
+    """Part D's scores: per wiring and population (S, T, the eight) the pattern part under the readout against all
+    recordings, refitted against the saved fits; S holds if its fitted population keeps at least D_HOLD of R1's gain on S
+    against REF_S with every fit inside the bands; the eight by E91's rule (D_PASS_GAIN below REF_8, at least
+    D_WIRINGS_LOWER lower, every fit inside the bands, the raw-count loss not above D_RAW_REF by more than RAW_SLACK, the
+    mean APL effect within MEAN_SLACK of the flies'). d_scores.csv, d_scores.json."""
+    from experiments import E72_wiring_population as E72
+    fits = _fits()
+    tg = targets()
+    got, rows, res = {}, [], {}
+    for w in ALL_WIRINGS:
+        tag = d_tag(w)
+        if tag in set(fits.tag):
+            o = E72.load_fit(EXPERIMENT, tag)
+            if o is not None:
+                got[w] = o
+    for w, o in got.items():
+        sc = E83.effect_scores(E83.pair_distances(o, 'cal'), tg)
+        sc0 = E83.effect_scores(E83.pair_distances(E83.saved_fit(w)['saved'], 'cal'), tg)
+        rows.append(dict(unit=w, pattern=sc['z8_pattern'], pattern_ref=sc0['z8_pattern'], mean_effect=sc['mean_effect'],
+                         raw_loss=E83.effect_scores(E83.pair_distances(o, 'raw'), tg)['z8_loss'],
+                         lower=bool(sc['z8_pattern'] < sc0['z8_pattern']), **E83.realism(o)))
+    by = {r['unit']: r for r in rows}
+    for unit, ws in UNITS:
+        if not all(w in got for w in ws):
+            continue
+        dp = {ro: E83.population([E83.pair_distances(got[w], ro) for w in ws]) for ro in ('cal', 'raw')}
+        sc = E83.effect_scores(dp['cal'], tg)
+        r = dict(unit=unit, pattern=sc['z8_pattern'], mean_effect=sc['mean_effect'],
+                 raw_loss=E83.effect_scores(dp['raw'], tg)['z8_loss'], n_lower=int(sum(by[w]['lower'] for w in ws)),
+                 n_flagged=int(sum(bool(str(by[w].get('realism_flag') or '').strip()) for w in ws)))
+        rows.append(r)
+        res[unit] = r
+    v = _read_json(out_dir() / 'verdict.json')
+    if 'S' in res and v:
+        gain_r1 = float(v.get('gainS', np.nan))
+        res['S_holds'] = bool(np.isfinite(gain_r1) and REF_S - res['S']['pattern'] >= D_HOLD * gain_r1
+                              and res['S']['n_flagged'] == 0)
+    if 'all8' in res:
+        e = res['all8']
+        res['eight_passes'] = bool(e['pattern'] <= REF_8 - D_PASS_GAIN and e['n_lower'] >= D_WIRINGS_LOWER
+                                   and e['n_flagged'] == 0 and e['raw_loss'] <= D_RAW_REF + RAW_SLACK
+                                   and abs(e['mean_effect'] - FLIES_MEAN) <= MEAN_SLACK)
+    if write:
+        pd.DataFrame(rows).to_csv(out_dir() / 'd_scores.csv', index=False)
+        _write_json(out_dir() / 'd_scores.json', res)
+    return res
+
+
+def part_e() -> None:
+    """Part E (only on a pass by D): the firing-ceiling family at the flies' 2 s pulse with both response rates re-held
+    and S through the trial noise as E72's part E ran it, and the mean proportions in E95's refit of the family at the
+    connectome's bouton share (S). Not written: the entry runs it only on a pass by D."""
+    raise NotImplementedError("part E runs only on a pass by part D (d_scores.json's 'eight_passes'); not written")
+
+
+# ---------------------------------------------------------------------------
+# the archive tables and the comparison table
+
+def write_variants() -> pd.DataFrame:
+    """variants.csv for the model-output archive and model_pair_distances_long.csv for kcq/apl_effect.py (raw spike
+    counts, the harness's primary model RDM): one row per part B / C2 run with its absolute parameters, the variant's
+    proportions, its wiring file and sha256, the factors and realism; part D's fits (fits.csv rows, whose distances
+    E10_joint_fit.py wrote) are kept."""
+    out = out_dir()
+    rb = runs_b()
+    rows, parts = [], []
+    for _, r in rb.drop_duplicates('tag', keep='last').iterrows():
+        pv = parse_variant(r.variant)
+        what = {None: '', 'perm': ' permuted within strata (seed %s)' % pv['seed'], 'inv': ' inverted'}[pv['control']]
+        rows.append(dict(tag=r.tag, variant=r.tag, part=r.part, arm=r.arm, base='bouton', k=E83.BREADTH_K,
+                         breadth_k=E83.BREADTH_K,
+                         kind=(f"C2's family on {r.wiring} with the claws moved between glomeruli to the "
+                               f"{pv['proportions']} proportions{what}" + (f", log ratios x{pv['scale']:g}" if pv['scale'] not in (1.0, -1.0) else '')
+                               + f" (draw {pv['draw']}); input {pv['input']}; breadth recomputed for the wiring; the somatic "
+                               "threshold and the tied APL scale re-held at the fit's APL-off and APL-on counts"),
+                         config=r.variant, wiring=r.wiring, ref_experiment=r.fit_folder, ref_fit=r.fit_tag,
+                         wiring_file=f'runs/{r.wiring_file}', wiring_sha256=r.wiring_sha256, n_moved=r.n_moved,
+                         moved_share=r.moved_share, fixed_thr=r.fixed_thr, wAPLKC_scale=r.wAPLKC_scale,
+                         wKCAPL_scale=r.wKCAPL_scale, wAPLPN_scale=r.wAPLPN_scale, wPNAPL_scale=r.wPNAPL_scale,
+                         wKCKC_scale=r.wKCKC_scale, kc_kc_inh=r.wKCKC_scale, thr_factor=r.thr_factor,
+                         apl_factor=r.apl_factor, rate_on=r.rate_on, rate_off=r.rate_off, max_count_on=r.max_count_on,
+                         max_count_off=r.max_count_off, realism_flag=r.realism_flag, subdir='runs'))
+        o = load_run(r.tag)
+        if o is None:
+            continue
+        parts.append(pd.concat({(r.tag, 'on'): H.model_rdms(*o['on'])[H.PRIMARY_MODEL_RDM],
+                                (r.tag, 'acute_off'): H.model_rdms(*o['off'])[H.PRIMARY_MODEL_RDM]},
+                               names=['tag', 'condition', 'odor_a', 'odor_b']).rename('distance').reset_index())
+    df = pd.DataFrame(rows)
+    df.to_csv(out / 'variants.csv', index=False)
+    long_path = out / 'model_pair_distances_long.csv'
+    keep = []
+    if long_path.exists():
+        old = pd.read_csv(long_path)
+        keep = [old[old.tag.isin(set(_fits().tag))]]
+    if keep or parts:
+        pd.concat(keep + parts, ignore_index=True).to_csv(long_path, index=False)
+    return df
+
+
+def _f(x, spec: str = '.4f') -> str:
+    try:
+        return format(float(x), spec) if np.isfinite(float(x)) else '-'
+    except (TypeError, ValueError):
+        return '-'
+
+
+VARIANT_NAMES = {REF: 'the eight wirings as they are (the hemibrain\'s proportions)',
+                 'B2_mean': 'the mean proportions of the three brains', D2: 'the mean proportions, second draw',
+                 R2: 'the 40 model flies (eight wirings by five mushroom bodies)', R2_PERM: 'their permuted control',
+                 'B3_permmean_s1': 'the mean proportions permuted (seed 1)', 'B3_permmean_s2': 'the mean proportions permuted (seed 2)',
+                 'B3_invmean': 'the mean proportions inverted', f'B6_mean_{B6_INPUT}': "the mean proportions with E93's fuller input",
+                 E93F: "E93's fuller input on the wirings as they are"}
+
+
+def comparison_table() -> str:
+    """comparison_table.md: part A's key numbers and, where part B has run, the populations under the calibrated readout
+    against all recordings (pattern part with its amplitude and shape parts, spread ratio, Pearson r and ρ on the per-pair
+    APL effect, the mean APL effect, the raw-count loss, the response rates and the runs outside the bands) and the
+    verdict."""
+    out = out_dir()
+    lines = ['# E97: the glomeruli\'s shares of the claws in other connectomes', '',
+             'What stays the hemibrain\'s or the model\'s: only the glomeruli\'s claw totals per KC type are another '
+             'brain\'s; which KC samples which glomerulus, the KCs, their types and each KC\'s number of claws are the '
+             'model\'s wiring\'s; a moved claw keeps its own APL weights and takes the APL->bouton weight of its new bouton.', '']
+    a = _read_json(out / 'a_summary.json')
+    if a:
+        r = a['a1_rule']
+        lines += ['## Part A', '',
+                  f"A1's rule: SD of log2(derived hemibrain share / model share) over {r['n_glomeruli']} glomeruli with "
+                  f"{A1_RULE_MIN_CLAWS} or more claws = {_f(r['sd'], '.3f')} (stops above {A1_RULE_SD}): "
+                  f"{'stops' if r['stops'] else 'passes'}. ROI versions: " +
+                  ', '.join(f'{k} {v}' for k, v in a['roi_choice'].items()) + '.', '']
+        s = a['a2']
+        lines += [f"A2: the mean proportions' ratios, SD of log2 {_f(s['mean_sd_log2'], '.3f')}, 5th to 95th percentile "
+                  f"{_f(s['mean_q05'], '.2f')} to {_f(s['mean_q95'], '.2f')}; two sides of a brain SD {_f(s['within_brain_sd'], '.3f')}, "
+                  f"two brains {_f(s['between_brain_sd'], '.3f')}.", '']
+        lines += ['| A3 subset | glomeruli | sign agreement | null 5th / 95th | ρ | rule |', '|---|---:|---:|---:|---:|---|']
+        for k, x in a['a3'].items():
+            lines.append(f"| {k} | {x['n']} | {_f(x['sign_agreement'], '.2f')} | {_f(x['null_p05'], '.2f')} / "
+                         f"{_f(x['null_p95'], '.2f')} | {_f(x['rho'], '.2f')} | {x['rule']} |")
+        lines.append('')
+    rp = out / 'readings.csv'
+    if rp.exists():
+        rd = pd.read_csv(rp)
+        rd = rd[(rd.readout == 'cal') & rd.unit.isin(['S', 'T', 'all8'])]
+        lines += ['## Part B: populations, calibrated readout, all recordings', '',
+                  '| variant | unit | pattern part | amplitude | shape | spread ratio | Pearson r | ρ | mean APL effect | runs outside the bands |',
+                  '|---|---|---:|---:|---:|---:|---:|---:|---:|---:|']
+        for r in rd.itertuples():
+            lines.append(f"| {VARIANT_NAMES.get(r.variant, r.variant)} | {r.unit} | {_f(r.z8_pattern)} | {_f(r.z8_amplitude)} | "
+                         f"{_f(r.z8_shape)} | {_f(r.z8_sd_ratio, '.2f')} | {_f(r.z8_pearson, '.2f')} | {_f(r.z8_rho, '.2f')} | "
+                         f"{_f(r.mean_effect, '+.3f')} | {int(r.n_flagged)} |")
+        lines.append('')
+        lines.append('KC data: the floor of the pattern part 0.029, the flies\' mean APL effect +0.178.')
+        lines.append('')
+    v = _read_json(out / 'verdict.json')
+    if v:
+        lines += ['## Part C: the verdict', '', f"Outcome: {v['outcome']} (final: {v['final']}).", '',
+                  f"R1 on the eight {_f(v['R1_8'])} against {_f(v['ref8'])}; on S {_f(v['R1_S'])} against {_f(v['refS'])}; "
+                  f"on T {_f(v['R1_T'])} against {_f(v['refT'])}; R2 {_f(v['R2'])}.", '']
+    text = '\n'.join(lines) + '\n'
+    (out / 'comparison_table.md').write_text(text)
+    return text
+
+
+def provenance(part: str, **extra) -> None:
+    """provenance_<part>.json: the part's run record (commits, host, time, settings), points kept."""
+    path = out_dir() / f'provenance_{part}.json'
+    d = _read_json(path) or dict(part=part, script='experiments/E97_glomerulus_claw_shares.py', points={})
+    d.setdefault('runs', []).append(dict(commits=dict(H.code_commits()), host=_host(), time=time.strftime('%Y-%m-%d %H:%M'),
+                                         **extra))
+    _write_json(path, d)
 
 
 def main() -> None:
@@ -1326,19 +2284,40 @@ def main() -> None:
     ap.add_argument('--arm', default='all', help="part B's arms, comma-separated (B1..B6) or 'all'")
     ap.add_argument('--wirings', default='all8', help="S, T, all8 or a comma-separated list of wiring labels")
     ap.add_argument('--pop', default='S', choices=['S', 'T'], help="part D's population")
+    ap.add_argument('--max-points', type=int, default=None, help='part B: stop after this many new points')
     ap.add_argument('--dry-run', action='store_true', help='print the plan (and the commands) without running')
-    ap.add_argument('--force', action='store_true', help="part D without its condition")
-    ap.add_argument('--no-held', action='store_true', help="part 0 without the held reading of the real wiring")
-    ap.add_argument('--no-co', action='store_true', help="score without the co-response readings")
+    ap.add_argument('--force', action='store_true', help='part C2 / D without their condition')
+    ap.add_argument('--no-held', action='store_true', help='part 0 without the held reading of the real wiring')
+    ap.add_argument('--no-co', action='store_true', help='score without the co-response readings')
     ap.add_argument('--no-zcell', action='store_true', help="score without E73's per-KC reading")
+    ap.add_argument('--workers', type=int, default=4, help='score: processes for the co-response readings')
     a = ap.parse_args()
     ws = _wirings(a.wirings)
+    arms = ARMS if a.arm == 'all' else tuple(x for x in a.arm.split(',') if x)
     if a.part == '0':
+        provenance('0', wirings=list(ws))
         part_0(ws, held=not a.no_held)
     elif a.part == 'A':
+        provenance('A')
         part_a()
-    else:
-        raise NotImplementedError(a.part)
+    elif a.part == 'B':
+        if not a.dry_run:
+            provenance('B', arms=list(arms), wirings=list(ws), max_points=a.max_points)
+        part_b(arms, ws, dry_run=a.dry_run, max_points=a.max_points)
+    elif a.part == 'score':
+        score(coresponse=not a.no_co, zcell=not a.no_zcell, n_workers=a.workers)
+    elif a.part == 'C2':
+        part_c2(dry_run=a.dry_run, force=a.force)
+    elif a.part == 'D':
+        part_d(a.pop, None if a.wirings == 'all8' else ws, dry_run=a.dry_run, force=a.force)
+    elif a.part == 'Dscore':
+        print(json.dumps(score_d(), indent=1, default=float), flush=True)
+    elif a.part == 'E':
+        part_e()
+    elif a.part == 'variants':
+        write_variants()
+    elif a.part == 'table':
+        print(comparison_table(), flush=True)
 
 
 if __name__ == '__main__':
