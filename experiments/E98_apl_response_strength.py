@@ -935,6 +935,36 @@ def a4_preview(apl: pd.DataFrame, a3: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def _sha256(path: Path) -> str:
+    import hashlib
+    h = hashlib.sha256()
+    with open(path, 'rb') as f:
+        for chunk in iter(lambda: f.read(1 << 20), b''):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def input_files(wirings: Sequence[str] = ALL_WIRINGS) -> Dict[str, str]:
+    """Part A's inputs (path relative to the shared directory or the repository root -> sha256): the calyx maps (TIFFs,
+    ROIs, recordings.csv, frames.csv), E79's tables the reader is checked against, E90's stage files read, E37's APL
+    table and the data-target registry."""
+    from experiments import E79_apl_calyx_constraints as E79
+    sh = H.shared_dir()
+    files = sorted(E79.DATA.glob('*.tif')) + sorted(E79.DATA.glob('*.roi')) + [E79.DATA / 'recordings.csv', E79.DATA / 'frames.csv']
+    e79 = sh.joinpath(*E79_RESULTS)
+    files += [e79 / f for f in ('E79_maps_across_baselines.csv', 'E79_baseline_noise.csv', 'E79_blank_vs_odor_maps.csv')]
+    for w in wirings:
+        files += [e90_dir(f'{w}_on') / f'{w}_on_{k}' for k in ('apl.csv', 'pn_win.parquet', 'pn_pre.parquet', 'responses.parquet')]
+        files.append(e90_dir(f'{w}_acute_off') / f'{w}_acute_off_responses.parquet')
+    files += [sh / 'results' / E37_TABLE[0] / E37_TABLE[1], H.data_targets_path()]
+    out = {}
+    for f in files:
+        f = Path(f)
+        key = str(f.relative_to(sh)) if f.is_relative_to(sh) else str(f.relative_to(H.HERE)) if f.is_relative_to(H.HERE) else str(f)
+        out[key] = _sha256(f)
+    return out
+
+
 def _records(df: pd.DataFrame, cols: Sequence[str]) -> List[dict]:
     return [{c: (r[c] if not isinstance(r[c], (np.floating, np.integer)) else r[c].item()) for c in cols} for _, r in df.iterrows()]
 
@@ -1015,6 +1045,12 @@ def part_a() -> dict:
             median=int((power['flies_needed_sd_median'] <= 3).sum()), max=int((power['flies_needed_sd_max'] <= 3).sum())),
         runtime_s=time.time() - t0)
     _write_json(out / 'a_summary.json', summ)
+    _write_json(out / 'provenance.json', dict(experiment=EXPERIMENT, script=H.script_path(__file__), parts=['0', 'A'],
+        host=_host(), time=time.strftime('%Y-%m-%d %H:%M'), commits=dict(H.code_commits()), inputs=input_files(),
+        settings=dict(MIN_RESPONSE=MIN_RESPONSE, MATCH_LOG_UNITS=MATCH_LOG_UNITS, N_BOOT=N_BOOT, SEED=SEED, CI=CI,
+                      INDICATOR_NS=INDICATOR_NS, FORMS=FORMS, VERDICT_MIN_WIRINGS=VERDICT_MIN_WIRINGS,
+                      MAIN_READING=MAIN_READING, LARGE_BLANK=LARGE_BLANK, POWER_Z=POWER_Z, POWER_MIN_CONC=POWER_MIN_CONC,
+                      RATIOS=[list(r) for r in RATIOS])))
     return summ
 
 
