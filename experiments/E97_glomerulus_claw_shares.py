@@ -70,6 +70,38 @@ Parts (CLI `--part`):
   at the mean proportions (E10_joint_fit.py with B2's matrix as --wiring-file).
 - Dscore, E (documented stubs), variants, table.
 
+Deviations from the entry, forced by the code or the data, or readings the entry leaves open:
+- Names: the model has 54 glomeruli because olfsysm's loader merges the hemibrain's VC3l and VC3m into VC3; the derived
+  tables are read the same way (the hemibrain's VC3l and VC3m, FlyWire's VC3 and VC5, are VC3; FlyWire's VM6 is the
+  model's VC5). The shares are over the claws on the model's 54 glomeruli (the planning probe's over all uniglomerular
+  labels; the builder's rescaling within each type makes the targets independent of that choice).
+- Sides: a KC's mushroom body is the majority side of the APL it makes synapses with; the 30 to 52 BANC KCs per side
+  without an APL synapse take the side of the largest gap in the KCs' mean claw x (both rules and the KC's own side
+  label agree on every KC that has all three; a1_sides.csv).
+- ROI versions: the rule "a mushroom body whose two ROI versions differ by more than that enters with the outside-ROI
+  version" is read per mushroom body, as the SD over the glomeruli with A1_RULE_MIN_CLAWS model claws of log2 of the
+  share with the outside synapses over the official one (a1_roi.csv); the male CNS's left side enters outside, its right
+  side official.
+- The mean proportions average a brain's two sides on log2 (a geometric mean, as the outer one). The small rule is
+  applied per mushroom body; the mean proportions are 1 by rule only where all four other bodies are small (DA3, DA4m,
+  VP4), and B3's permutations keep those (and, for one body's permutation, that body's small glomeruli) in place.
+- B3's strata: ORN input (the lab's 36) or not, then thirds of the real wiring's claw total within that class.
+- The moved claw's bouton is drawn in proportion to the boutons' claw counts within the claw's KC type in the base
+  wiring (all types where a glomerulus has none in that type, which does not happen at these targets).
+- A3: glomeruli whose mean-proportion ratio is 1 by rule are left out (none of the 36); for the nine glomeruli the
+  permutations are of the labels over the 36, read on the nine.
+- A4 is over the 66 megamat pairs (E93's `weighted_distances`; the groups are the megamat groups).
+- Part C: "a part" requires the controls' conditions (both permuted seeds below half the gain, the inverted below
+  0.0015); the other conditions of "moves" are in verdict.json beside it. (f)'s "another raises it" is read as any
+  other body's pattern part above the reference's on the eight. R2 "not above the reference" is R2's pattern part at or
+  below the eight wirings' as they are. The bootstrap resamples each genotype's recordings with replacement (BOOT_N).
+- The brain term is given beside the move's own draw term (B2 against B4 on S) and the draw term between the eight
+  wirings as they are, computed the same way here, as well as beside E72's and E85's 0.006.
+- The co-response readings (E89's) are of the reference, B2 and the first permuted and the inverted controls only.
+- Part D starts each fit from B2's held point (`--init-params`, as E93's part E): E10_joint_fit.py's exact start checks
+  the wiring arguments of the base, which a moved wiring does not have.
+- The builder is in this module, not in pyolfsysm.wpnkc_shuffles (the entry makes that optional).
+
 Outputs: results/E97_glomerulus_claw_shares/ (shared); spike counts, responses, wiring matrices, moved-claw lists and
 targets under outputs/E97_glomerulus_claw_shares/ (runs/, W/, breadth/).
 
