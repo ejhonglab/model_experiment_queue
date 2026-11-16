@@ -687,6 +687,20 @@ def test_parts_b_to_e_and_score_on_made_up_recordings(tmp_path, monkeypatch):
     assert v['sensitivity']['X3']['held'] == 'follows' and set(v['sensitivity']['planes']) == {'15 um'}
     assert v['V0']['n_flies'] == 0 and v['V0']['not_repeated'] == [] and v['V0']['not_decided_in_v0']
     assert 'pixel for pixel' in v['alignment']['note'] and v['alignment']['set_l_not_registered_together'] == []
+    assert v['cross_check_rule'] is None
+    # B1's cross-check failed: X1 and X2's claws and Q at b_G not decided, so not held; APL's X2 untouched; no 'follows'
+    bl = json.loads((tmp_path / 'b_leak.json').read_text())
+    (tmp_path / 'b_leak.json').write_text(json.dumps(dict(bl, cross_check_passed=False)))
+    w = M.score(model_sets=_made_up_model_sets())
+    assert w['X1']['held'] == 'not decided' and w['X1']['held_if_slope_carried'] == 'one function'
+    assert all(x == 'not decided' for kk, x in w['X1']['by_reading'].items() if kk.endswith('b1'))
+    for a0 in M.A0_CHOICES:
+        assert w['X2']['by_baseline'][a0]['APL']['held'] == v['X2']['by_baseline'][a0]['APL']['held']
+        for q in M.KC_QUANTITIES:
+            assert w['X2']['by_baseline'][a0][q]['held'] == 'not decided'
+            assert w['X2']['held_by_baseline_if_slope_carried'][q][a0] == v['X2']['by_baseline'][a0][q]['held']
+    assert w['X3']['held'] != 'follows' and w['cross_check_rule']
+    assert w['sensitivity']['X1']['held'] == 'not decided'
 
 
 def test_a3_apl_tables_made_up(tmp_path, monkeypatch):

@@ -78,6 +78,9 @@ The verdicts (fixed here, on set L with flies as units; `x1_verdict`, `x2_quanti
   otherwise not decided. r1 and r2 under each estimate of ms's input: inside if inside under any, outside only if outside
   under all (E98's V1). The model's Q is read over every combination of the two indicator families, their forms and the
   three claw versions; a wiring is inside if any combination lies in the flies' interval.
+- B1's cross-check: if it fails, the slope does not carry between flies, and every KC quantity at b_G (X1; X2's claws and
+  Q) is not decided (`bg_undecided`), so none of them is held; X3's "follows" needs the cross-check passed. The classes as
+  computed at b_G are reported beside (if_slope_carried), deciding nothing.
 - X3. A fly passes at b if its A(b) (mean over its recordings) is at least X3_PASS_A (0.3) and above the mean of its
   recordings' null percentiles; it fails if A(b) is below X3_FAIL_A (0.15) or below that percentile while both channels'
   repeat r is at least X3_FAIL_MIN_REPEAT_R (0.5). "Follows" if B1's cross-check passed and at least X3_MIN_FLIES (5) of
@@ -2659,12 +2662,23 @@ def x2_model_classes(sets: pd.DataFrame, rid: str, quantity: str, lo: float, hi:
     return dict(cls=cls, per_estimate=per_est, per_wiring=per_wiring)
 
 
-def x2_score(sets: pd.DataFrame, flies: pd.DataFrame, a0: str,
-             keys: Sequence[Tuple[str, float]]) -> Tuple[dict, List[dict]]:
+KC_QUANTITIES = ('claws', 'Q')           # X2's quantities that read the KC channel (K_b); APL's does not
+
+
+def bg_undecided(cls: str, b_mult: float, reads_kc: bool, cross_check_passed: bool) -> str:
+    """B1's rule: if the cross-check failed, the slope does not carry between flies and every KC quantity at b_G is not
+    decided (the entry's B1); other classes pass unchanged."""
+    return 'not decided' if (not cross_check_passed and reads_kc and float(b_mult) == 1.0) else cls
+
+
+def x2_score(sets: pd.DataFrame, flies: pd.DataFrame, a0: str, keys: Sequence[Tuple[str, float]],
+             cross_check_passed: bool = True) -> Tuple[dict, List[dict]]:
     """X2 under one pre-odor level of the model `a0`: per quantity, reading and b (`keys`), each ratio's class
     (`x2_model_classes` against the flies' hull of c_x2_flies.csv) for set L and for its unprobed flies, the quantity's
     class (`x2_quantity_verdict`), and the class held over the readings, b and the unprobed flies (`held_class`; at least
-    HELD_X12_MIN of them remaining). Returns {quantity: {held, by_reading}} and the long rows of score_x2.csv."""
+    HELD_X12_MIN of them remaining). With B1's cross-check failed the claws' and Q's classes at b_G are not decided
+    (`bg_undecided`; the class as computed is kept in the rows as cls_if_slope_carried). Returns {quantity: {held,
+    by_reading}} and the long rows of score_x2.csv."""
     x2, rows = {}, []
     for q in X2_QUANTITIES:
         by, by_un = {}, {}
@@ -2683,9 +2697,9 @@ def x2_score(sets: pd.DataFrame, flies: pd.DataFrame, a0: str,
                         continue
                     lo, hi = float(row['lo'].iloc[0]), float(row['hi'].iloc[0])
                     mc = x2_model_classes(sets, rid, q, lo, hi, a0)
-                    rc[rid] = mc['cls']
+                    rc[rid] = bg_undecided(mc['cls'], bm, q in KC_QUANTITIES, cross_check_passed)
                     rows.append(dict(a0=a0, quantity=q, flies=who, reading=rd, b_mult=bm, ratio_id=rid, lo=lo, hi=hi,
-                                     n_flies=int(row['n_flies'].iloc[0]), cls=mc['cls'],
+                                     n_flies=int(row['n_flies'].iloc[0]), cls=rc[rid], cls_if_slope_carried=mc['cls'],
                                      per_estimate='; '.join(f'{e}: {c}' for e, c in mc['per_estimate'].items()),
                                      per_wiring='; '.join(f"{w['wiring']}/{w['estimate']}: {w['cls']}"
                                                           for w in mc['per_wiring'])))
@@ -2721,20 +2735,28 @@ def score(a0s: Sequence[str] = A0_CHOICES, model_sets: Optional[pd.DataFrame] = 
                a0_levels=list(a0s), a0_carrying=A0_CARRYING, a0_carrying_note=A0_CARRYING_NOTE, b_G=bl['b_G'],
                outcome_h=bl['outcome_h'], cross_check_passed=bl['cross_check_passed'], b_g_alone=rule['b_g_alone'])
     k = lambda rd, bm: f'{rd} b{bm:g}'
-    x1_cls = {kk: x1['all'][k(*kk)]['verdict'] for kk in keys if k(*kk) in x1['all']}
-    x1_un = {kk: x1['unprobed'][k(*kk)]['verdict'] for kk in keys if k(*kk) in x1['unprobed']}
+    cross = bool(bl['cross_check_passed'])
+    res['cross_check_rule'] = (None if cross else
+                               "B1's cross-check failed: the slope does not carry between flies, so every KC quantity at "
+                               "b_G (X1; X2's claws and Q) is not decided, and X3's 'follows' cannot be given (the entry's "
+                               "B1 and X3); the classes as computed at b_G are kept beside (if_slope_carried)")
+    x1_raw = {kk: x1['all'][k(*kk)]['verdict'] for kk in keys if k(*kk) in x1['all']}
+    x1_cls = {kk: bg_undecided(v, kk[1], True, cross) for kk, v in x1_raw.items()}
+    x1_un = {kk: bg_undecided(x1['unprobed'][k(*kk)]['verdict'], kk[1], True, cross) for kk in keys
+             if k(*kk) in x1['unprobed']}
     un = set(x1_un.values())
     n_un = min((int(v['n_flies']) for kk in keys if k(*kk) in x1['unprobed']
                 for v in x1['unprobed'][k(*kk)]['pairs'].values()), default=0)
     res['X1'] = dict(held=held_class(x1_cls, un.pop() if len(un) == 1 else 'not decided', n_un, HELD_X12_MIN),
                      unprobed_classes=sorted(set(x1_un.values())), n_unprobed_flies_min=n_un,
                      by_reading={f'{a} b{b:g}': v for (a, b), v in x1_cls.items()},
+                     by_reading_if_slope_carried={f'{a} b{b:g}': v for (a, b), v in x1_raw.items()},
                      by_reading_unprobed={f'{a} b{b:g}': v for (a, b), v in x1_un.items()})
     sets = load_model_x2() if model_sets is None else model_sets
     flies = pd.read_csv(out / 'c_x2_flies.csv')
     x2_all, x2_rows = {}, []
     for a0 in a0s:
-        x2_all[a0], rows = x2_score(sets, flies, a0, keys)
+        x2_all[a0], rows = x2_score(sets, flies, a0, keys, cross)
         x2_rows += rows
     t = pd.DataFrame(x2_rows)
     t.insert(0, 'carrying_baseline', A0_CARRYING_NOTE if A0_CARRYING is None else A0_CARRYING)
@@ -2756,7 +2778,14 @@ def score(a0s: Sequence[str] = A0_CHOICES, model_sets: Optional[pd.DataFrame] = 
                      by_reading={rd: {kk: v for kk, v in r.items() if kk != 'flies'} for rd, r in x3.items()})
     fl = [dict(f, reading=rd) for rd, r in x3.items() for f in r['flies']]
     pd.DataFrame(fl).to_csv(out / 'score_x3_flies.csv', index=False)
-    res.update(beside(sets, a0s, keys, bool(bl['cross_check_passed']), bool(rule['b_g_alone']), res))
+    if not cross:
+        # the X1 and X2 classes as they would be held were the slope to carry (described, deciding nothing)
+        x1u_raw = {x1['unprobed'][k(*kk)]['verdict'] for kk in keys if k(*kk) in x1['unprobed']}
+        res['X1']['held_if_slope_carried'] = held_class(x1_raw, x1u_raw.pop() if len(x1u_raw) == 1 else 'not decided',
+                                                        n_un, HELD_X12_MIN)
+        res['X2']['held_by_baseline_if_slope_carried'] = {
+            q: {a0: x2_score(sets, flies, a0, keys, True)[0][q]['held'] for a0 in a0s} for q in KC_QUANTITIES}
+    res.update(beside(sets, a0s, keys, cross, bool(rule['b_g_alone']), res))
     _write_json(out / 'verdict.json', res)
     return res
 
@@ -2774,11 +2803,12 @@ ALIGNMENT_NOTE = (
 
 
 def _x1_classes(c: pd.DataFrame, flies: Optional[Sequence[str]] = None, min_flies: int = X1_MIN_FLIES,
-                n_boot: int = N_BOOT) -> Tuple[dict, dict]:
-    """X1's class per reading and b in (0, b_G) on the response rows `c` (`x1_table`), and the pairs' summaries."""
+                n_boot: int = N_BOOT, cross: bool = True) -> Tuple[dict, dict]:
+    """X1's class per reading and b in (0, b_G) on the response rows `c` (`x1_table`; `bg_undecided` with B1's
+    cross-check `cross`), and the pairs' summaries."""
     _, x1 = x1_table(c, flies=flies, min_flies=min_flies, n_boot=n_boot)
     keep = {k: v for k, v in x1.items() if k[1] in (0.0, 1.0)}
-    return ({f'{rd} b{bm:g}': v['verdict'] for (rd, bm), v in keep.items()},
+    return ({f'{rd} b{bm:g}': bg_undecided(v['verdict'], bm, True, cross) for (rd, bm), v in keep.items()},
             {f'{rd} b{bm:g}': v['pairs'] for (rd, bm), v in keep.items()})
 
 
@@ -2787,12 +2817,14 @@ def _x3_classes(d: pd.DataFrame, cross: bool, b_g_alone: bool, unprobed: Sequenc
     return {rd: x3_verdict(fly_x3(g), cross, b_g_alone, unprobed) for rd, g in d.groupby('reading', sort=False)}
 
 
-def _x2_held(sets: pd.DataFrame, flies: pd.DataFrame, a0s: Sequence[str], keys, unprobed: bool) -> dict:
+def _x2_held(sets: pd.DataFrame, flies: pd.DataFrame, a0s: Sequence[str], keys, unprobed: bool,
+             cross: bool = True) -> dict:
     """X2's class per baseline and quantity on a flies' table (rows 'L', and 'L unprobed' when `unprobed`): held over
-    the readings and b, with the unprobed flies' rule when `unprobed`, without it otherwise."""
+    the readings and b, with the unprobed flies' rule when `unprobed`, without it otherwise (`x2_score` with B1's
+    cross-check `cross`)."""
     out = {}
     for a0 in a0s:
-        x2, _ = x2_score(sets, flies, a0, keys)
+        x2, _ = x2_score(sets, flies, a0, keys, cross)
         out[a0] = {q: (v['held'] if unprobed else
                        held_class({k: r['cls'] for k, r in v['by_reading'].items()}, None, 0, 0))
                    for q, v in x2.items()}
@@ -2813,8 +2845,8 @@ def beside(sets: pd.DataFrame, a0s: Sequence[str], keys, cross: bool, b_g_alone:
     cL, dL = c[c['group'] == 'L'], d_all[(d_all['group'] == 'L') & (d_all['cell_um'] == CELL_UM)]
     # sensitivity: without the warped and 925 nm runs
     cs, ds = cL[~cL['recording'].isin(outs)], dL[~dL['recording'].isin(outs)]
-    x1s, _ = _x1_classes(cs)
-    x1su, _ = _x1_classes(cs, flies=UNPROBED_X12, min_flies=HELD_X12_MIN)
+    x1s, _ = _x1_classes(cs, cross=cross)
+    x1su, _ = _x1_classes(cs, flies=UNPROBED_X12, min_flies=HELD_X12_MIN, cross=cross)
     un = set(x1su.values())
     fs = pd.concat([x2_flies(cs).assign(flies='L'), x2_flies(cs, flies=UNPROBED_X12).assign(flies='L unprobed')],
                    ignore_index=True)
@@ -2823,7 +2855,7 @@ def beside(sets: pd.DataFrame, a0s: Sequence[str], keys, cross: bool, b_g_alone:
                 left_out_flies=sorted({fly_of(x) for x in outs & set(cL['recording'])}),
                 X1=dict(by_reading=x1s, held=held_class(x1s, un.pop() if len(un) == 1 else 'not decided', HELD_X12_MIN,
                                                          HELD_X12_MIN)),
-                X2=_x2_held(sets, fs, a0s, keys, True),
+                X2=_x2_held(sets, fs, a0s, keys, True, cross),
                 X3=dict(by_reading={rd: v['verdict'] for rd, v in x3s.items()},
                         held=held_class({rd: v['verdict'] for rd, v in x3s.items()} if len(x3s) == len(READINGS)
                                         else {'missing': 'not decided'}, None, 0, 0)))
@@ -2832,7 +2864,7 @@ def beside(sets: pd.DataFrame, a0s: Sequence[str], keys, cross: bool, b_g_alone:
     for pl in sorted(pd.to_numeric(cL['plane_um'], errors='coerce').dropna().unique()):
         cp = cL[pd.to_numeric(cL['plane_um'], errors='coerce') == pl]
         dp = dL[(pd.to_numeric(dL['plane_um'], errors='coerce') == pl) & (dL['reading'] == CARRYING)]
-        x1p, pairs = _x1_classes(cp[cp['reading'] == CARRYING])
+        x1p, pairs = _x1_classes(cp[cp['reading'] == CARRYING], cross=cross)
         fx = fly_x3(dp) if len(dp) else pd.DataFrame(columns=['fly', 'b_mult', 'cls'])
         n_pass = (len(set(fx[(fx['b_mult'] == 0.0) & (fx['cls'] == 'pass')]['fly'])
                       & set(fx[(fx['b_mult'] == 1.0) & (fx['cls'] == 'pass')]['fly'])) if len(fx) else 0)
@@ -2845,13 +2877,13 @@ def beside(sets: pd.DataFrame, a0s: Sequence[str], keys, cross: bool, b_g_alone:
     cV = c[c['group'] == 'V0']
     dV = d_all[(d_all['group'] == 'V0') & (d_all['cell_um'] == CELL_UM)]
     v0_flies = sorted(cV['fly'].unique())
-    x1v, x1v_pairs = _x1_classes(cV)
+    x1v, x1v_pairs = _x1_classes(cV, cross=cross)
     fv = pd.read_csv(out / 'c_x2_flies.csv')
     fv = fv[fv['flies'] == 'V0'].assign(flies='L')
     x3v = _x3_classes(dV, cross, b_g_alone, v0_flies)
     v0 = dict(n_flies=len(v0_flies), n_recordings=int(cV['recording'].nunique()),
               X1=dict(by_reading=x1v, held=held_class(x1v, None, 0, 0), pairs=x1v_pairs),
-              X2=_x2_held(sets, fv, a0s, keys, False) if len(fv) else {},
+              X2=_x2_held(sets, fv, a0s, keys, False, cross) if len(fv) else {},
               X3=dict(by_reading={rd: v['verdict'] for rd, v in x3v.items()},
                       held=held_class({rd: v['verdict'] for rd, v in x3v.items()} if len(x3v) == len(READINGS)
                                       else {'missing': 'not decided'}, None, 0, 0)))
