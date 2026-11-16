@@ -398,7 +398,8 @@ def test_yaml_stimuli_shuffled_blocks(tmp_path):
         M.yaml_stimuli(y)
 
 
-def test_read_recording_refuses_unreleased():
+def test_read_recording_refuses_unreleased(monkeypatch):
+    monkeypatch.setattr(M, 'YANG_RELEASED', False)  # the mechanism, whatever the module's current release state
     row = dict(stem='20250115_1FRfun1', folder='/nonexistent', set='W', date='2025-01-15', fly=1, hemisphere='R',
                plane_depth_um=15, pulse_s=1.0)
     with pytest.raises(PermissionError):

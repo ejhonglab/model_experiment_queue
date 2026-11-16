@@ -190,9 +190,10 @@ D_SLAB_WITHIN_UM = 6.0
 # `<stem>*_roi_peak_dff.csv` (Yang's calyx peak per presentation) and `<stem>_Experiment.xml`
 STIM_TABLE_COLUMNS = ('recording', 'frame', 'block', 'odor', 'log10_conc')
 E100_SETS = ('W', 'S', 'H')
-# Yang has not released the recordings beyond the 12 of data/yang_apl_calyx_maps/ (hal's questions, the entry's Requires):
-# `read_recording` refuses any other recording until this is set True, after her answer
-YANG_RELEASED = False
+# Yang released her processed APL recordings on 2026-11-15 17:12 and 17:13 (questions for Yang, question 1: "yes, all";
+# questions_for_yang/answers_2026-11-15_1614__2026-11-15_171204.txt and __171352.txt in the shared directory). Raw-only
+# recordings stay refused (`usable_row`, the rule of 2026-11-15 15:28).
+YANG_RELEASED = True
 SOLVENT_PIN = 37
 # Yang's odor names (her yaml odor_pin / odor_pin_full) -> abbreviations
 ODOR_ABBREV = {'paraffin oil': SOLVENT, 'pfo': SOLVENT, 'phenylacetaldehyde': 'paa', 'pentyl acetate': 'pa',

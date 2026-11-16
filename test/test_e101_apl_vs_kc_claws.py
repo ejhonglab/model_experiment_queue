@@ -422,8 +422,10 @@ OK = "processed: usable (Yang's processed products only)"
 
 
 @pytest.mark.skipif(_shared() is None, reason='shared directory not mounted')
-def test_refusals():
-    assert not M.YANG_RELEASED and not M.CHANNELS_CONFIRMED
+def test_refusals(monkeypatch):
+    # the mechanism, whatever the module's current release state
+    monkeypatch.setattr(M, 'YANG_RELEASED', False)
+    monkeypatch.setattr(M, 'CHANNELS_CONFIRMED', False)
     row = dict(stem='20221207_1FLfun2', use_until_further_notice=OK, folder='/nonexistent')
     with pytest.raises(PermissionError, match='not released'):
         M.check_readable(row)

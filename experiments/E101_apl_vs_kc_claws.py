@@ -293,7 +293,7 @@ A4_POWER_MIN = 0.8
 A4_SMOOTH_CELLS = 1.5                    # the spatial scale of the made-up patterns (Gaussian SD, cells)
 
 # Yang's release and her answers (questions 2 and 13 to 18): parts B to E read nothing until these are set
-YANG_RELEASED = False                    # question 13: her agreement to the use of the dual-colour recordings, both channels
+YANG_RELEASED = True                     # question 13: "yes, all" (2026-11-15 17:13, questions_for_yang/answers_2026-11-15_1614__2026-11-15_171352.txt)
 CHANNELS_CONFIRMED = False               # question 2: C1 = APL (green), C2 = KCs (red)
 RELEASED_STEMS: Tuple[str, ...] = ()     # if she releases only some recordings: their stems (empty: all, once released)
 
