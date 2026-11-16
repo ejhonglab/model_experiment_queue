@@ -8,6 +8,28 @@ directory's notes/ and are linked from here.
 
 ## Open
 
+### The model's pre-odor window starts with the KC layer's start-up, so pre-odor means of the claws and APL read low (found 2026-11-15 17:48, atlas's code subagent for E98)
+- **What.** olfsysm's KC layer, and with it APL, starts from zero at time_start (-0.5 s) and reaches its spontaneous level
+  about 0.2 to 0.3 s later. On the real wiring of the breadth-2 APL-effect fit, APL reads 0.30 at -0.499 s, 7.10 at -0.45 s,
+  8.46 at -0.40 s and 8.79 from -0.3 s on. E90's pre-odor window (`PRE_WINDOW`, -0.5 to 0 s) therefore averages the
+  start-up: APL's pre-odor mean is 8.27 there against a settled 8.79 (-0.25 to 0 s). A blank stimulus "evokes" 0.49 to 0.56
+  of APL on the eight wirings when its window mean is taken minus E90's pre-odor mean (real wiring 0.508 with APL on, 1.47
+  acutely off), and -0.014 to -0.018 minus the settled level, a slow drift. E98's part 0 identity "a blank evokes zero" fails
+  for that reason. Spike counts in the odor window are not affected (the layer has settled long before the odor), and the
+  KCs' response rate to the blank is 0 with APL on and off on every wiring.
+- **What it affects (known so far).** Readings of the claw stage and of APL as a window mean minus E90's pre-odor mean:
+  - E90's claw stage and APL readings (its stage matrices' changes, `PRE_WINDOW`);
+  - E95's part A4: "41 to 42 % of APL's odor-window mean is there before the odor" is about 45 % against the settled level;
+  - E98's premise (which quotes E95's share) and the model's pre-odor level in its part C (`--a0`);
+  - E101's claw stage on E98's input: about -4.5 % of the blank's summed claw drive.
+  To check: E92, E93 and E94, which read E90's stage runs or pre-odor windows, and whether the ORN, PN and bouton stages
+  start earlier (at time_pre_start) and so are not affected.
+- **Done.** E98 saves APL's settled pre-odor level and traces (5053e86) and makes the model's pre-odor level an explicit
+  choice in part C (e90, settled, or the blank's window mean); on the real wiring the choice moves its ratios by about 0.02
+  and changes no class. Which level carries E98's verdict is with a planning subagent from atlas.
+- **Remains.** The check of E92 to E94 above; dated lines in the notes whose numbers move (E90, E95 at least) once sized; and
+  E98's choice of level.
+
 ### The APL-effect table did not check the realism of variants archived in part subfolders (found 2026-11-14 00:20, viki, E93's write-up)
 - **What.** `kcq/apl_effect.py` looked for a variant's archived responses (`<tag>_on_responses.parquet`,
   `<tag>_acute_off_responses.parquet`) only at the root of its archive folder. The experiments that archive their runs in
