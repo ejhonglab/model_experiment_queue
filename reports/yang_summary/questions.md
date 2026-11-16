@@ -153,3 +153,19 @@ All nine block pairs sit below the monotone fit, but only three of them do so st
 **Ranks.** The largest consistent falls in rank are the same three block pairs, then pa / ep (rank {{yang_pair_deviations/pairs.csv:odor_a=pa;odor_b=ep:rank_tnt ~ .0f}} to {{yang_pair_deviations/pairs.csv:odor_a=pa;odor_b=ep:rank_ctrl ~ .0f}}), pa / ms, eb / 6al and pa / eb ({{yang_pair_deviations/pairs.csv:odor_a=pa;odor_b=eb:rank_tnt ~ .0f}} to {{yang_pair_deviations/pairs.csv:odor_a=pa;odor_b=eb:rank_ctrl ~ .0f}}). The largest rises are 2-but / euc, then 6al / euc ({{yang_pair_deviations/pairs.csv:odor_a=6al;odor_b=euc:rank_tnt ~ .0f}} to {{yang_pair_deviations/pairs.csv:odor_a=6al;odor_b=euc:rank_ctrl ~ .0f}}), 1-6ol / euc, 2-but / 6al, 1-8ol / euc and t2h / ms. A change of rank is a weaker measure than the deviation: IaA / eb deviates as much as 2h / eb and moves only from rank {{yang_pair_deviations/pairs.csv:odor_a=IaA;odor_b=eb:rank_tnt ~ .0f}} to {{yang_pair_deviations/pairs.csv:odor_a=IaA;odor_b=eb:rank_ctrl ~ .0f}}, because few pairs are that correlated.
 
 **Cautions.** The fit is poorly held at the top of the range: 1-8ol / 1-5ol has the largest deviation of all ({{yang_pair_deviations/pairs.csv:odor_a=1-8ol;odor_b=1-5ol:iso_resid ~ +.3f}}) with an interval of {{yang_pair_deviations/pairs.csv:odor_a=1-8ol;odor_b=1-5ol:resid_lo ~ +.3f}} to {{yang_pair_deviations/pairs.csv:odor_a=1-8ol;odor_b=1-5ol:resid_hi ~ +.3f}}. The two genotypes are different flies, so consistency is across resampled groups of recordings, not within a fly. The split into odor effects and a pair-specific part is a description made for this answer, not one of the page's statistics. Script: `analyses/yang_pair_deviations.py`.
+
+## blocking-apl-uniform-sparsening
+asked: 2026-11-16
+sentence: What blocking APL output does, mostly: a uniform sparsening.
+sentence_main: What blocking APL output does, mostly: a uniform sparsening.
+question: This sounds opposite? The function of inhibition is to decorrelate odor pairs?
+
+The heading is worded the wrong way round, and the reading in the question is the right one. Blocking APL output sparsens nothing: with APL output blocked (TNT) twice as many KCs respond to each odor ({{data:tnt_frac ~ .3f}} of the KCs against {{data:ctrl_frac ~ .3f}}) and the mean pair correlation rises from {{inv:data:ctrl_mean_dist ~ .2f}} to {{inv:data:tnt_mean_dist ~ .2f}}. What the heading names is what APL's output does in the intact fly, which is what blocking it takes away.
+
+**In control flies APL sparsens and decorrelates.** Fewer KCs respond to each odor, and every one of the 120 pairs is less correlated than it is with APL output blocked (TNT): the per-pair APL effect runs from {{data:apl_effect_min ~ +.2f}} to {{data:apl_effect_max ~ +.2f}}, {{data:apl_effect_mean ~ +.2f}} on average. The two are not opposites. With fewer KCs responding, two odors share fewer KCs, so the sparsening is the way the inhibition decorrelates.
+
+**What "uniform" adds.** It does not say that every pair is decorrelated by the same amount. It says that one rule holds for all pairs: how much APL decorrelates a pair depends only on how correlated the pair is without APL, not on which two odors they are. That is what the monotone fit of the next sentence tests (isotonic R² {{data:iso_r2 ~ .2f}}).
+
+**What "mostly" leaves out.** The nine fruity × small-ester pairs, which APL decorrelates more than that rule gives: the block of the paragraph after next ([which pairs deviate from the fit, and how consistently](#yq-pairs-off-the-monotone-fit)).
+
+A heading that says what is meant would be "What APL output does, mostly: a uniform sparsening, which blocking it removes".
