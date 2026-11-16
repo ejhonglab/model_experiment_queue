@@ -198,7 +198,8 @@ python3.14 -m venv venv
 The files are in folders by role, each a package (pyproject.toml): experiments/ (the E<n>_*.py
 scripts), kcq/ (the library they import, with the harness in kcq/harness.py), data_prep/ (scripts
 that build the shared data sets), analyses/ (one-off analyses), reports/ (the summary and report
-pages and their tools), archive_tools/ (the model-output archive) and coordination/ (chat, hooks,
+pages and their tools), archive_tools/ (the model-output archive, and rebuild archives of fitted
+models for running them elsewhere, rebuild_archive.py) and coordination/ (chat, hooks,
 setup and key scripts, and the queue monitor in coordination/monitor/). Scripts import each other
 absolutely (`from kcq import harness as H`) and run from the root, by path
 (`./venv/bin/python experiments/E83_searches.py`) or with -m (`./venv/bin/python -m

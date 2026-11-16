@@ -230,6 +230,7 @@ def update_index(rows: list) -> None:
         'written), `provenance.json` (script, commit hashes, base kwargs, sweep settings), the run logs and a README listing '
         'the variants. `inputs/` holds what all experiments share: the ORN input matrix and the standard PN->KC wiring matrices. '
         'File and folder names are ASCII only. Add or refresh a folder with `archive_tools/archive_model_outputs.py` from the repository root.\n\n'
+        + REBUILD_README + '\n\n'
         '| experiment | host | files | variants | conditions | copied |\n|---|---|---|---|---|---|\n')
     existing = {}
     if idx.exists():
@@ -238,7 +239,46 @@ def update_index(rows: list) -> None:
                 existing[line.split('|')[1].strip()] = line
     for r in rows:
         existing[r['name']] = f"| {r['name']} | {r['host']} | {r['n_files']} | {r['n_variants']} | {r['conditions']} | {datetime.now():%Y-%m-%d %H:%M} |"
-    idx.write_text(head + '\n'.join(existing[k] for k in sorted(existing, key=lambda s: (len(s.split('_')[0]), s))) + '\n')
+    idx.write_text(head + '\n'.join(existing[k] for k in sorted(existing, key=lambda s: (len(s.split('_')[0]), s))) + '\n'
+        + rebuild_table())
+
+
+# the rebuild archives (archive_tools/rebuild_archive.py, pyolfsysm.rebuild), described in the index's head
+REBUILD_README = (
+    '`<experiment>/rebuild/<tag>/` (some fits; listed at the end): a rebuild archive of one fitted model, enough to run '
+    'it on any ORN input without the model_experiment_queue repository or the rest of this directory, with olfsysm\'s '
+    '`pyolfsysm.rebuild` (`load_archive`; `simulate_at` or `simulate_archive` to run it as fitted, returning '
+    '`fit_mb_model`\'s outputs; `make_simulator` with `tune_threshold` or `pyolfsysm.tuning.hold_rates` to re-tune it). '
+    'Files: `rebuild.json` (format `pyolfsysm.rebuild/1`; `params`: the fitted threshold and APL / KC-KC scales as '
+    'absolute values; `model_kws`: the scalar `fit_mb_model` kwargs; `apl_off`: the acute APL-off condition; '
+    '`response_criterion`: two or more spikes; `files`: each file with its sha256; `wiring` (hemibrain, or the shuffle '
+    'and seed, or the re-drawn matrix it came from), `gain` (gain and glomeruli), `breadth` (exponent, base parameters, '
+    'definition), `aplpn_cap`, `operating_point`, `fit` (its fits.csv row and provenance, with the olfsysm commit it ran '
+    'at), `built_by`, `checks`), `wPNKC.parquet` (the claw x bouton wiring as fitted, any gain applied), '
+    '`wAPLKC.parquet`, `wKCAPL.parquet`, `wAPLPN.parquet`, `wPNAPL.parquet` (the unscaled APL weights as fitted, APL->KC '
+    'breadth-weighted; absolute weight = the column times `params[\'<name>_scale\']`), `orn_deltas.parquet` (the fit\'s '
+    'ORN input), `breadth.parquet`, and `expected_<responses|spike_counts>_<on|acute_off>.parquet` (the fit\'s saved '
+    'outputs). Written by `archive_tools/rebuild_archive.py`, which keeps an archive only if its own rebuild reproduces '
+    'every saved spike count and response with APL on and off (`--check` re-checks; each check is appended to '
+    '`checks`).')
+
+
+def rebuild_table() -> str:
+    """The index's list of rebuild archives (`<experiment>/rebuild/<tag>/rebuild.json`), with their last check."""
+    rows = []
+    for js in sorted(ARCHIVE.glob('E*/rebuild/*/rebuild.json')):
+        try:
+            rec = json.loads(js.read_text())
+        except (OSError, ValueError):
+            continue
+        ch = (rec.get('checks') or [{}])[-1]
+        diffs = [ch.get(r, {}).get(c, {}).get('spike_count_diffs') for r in ('fit_mb_model', 'simulator') for c in ('on', 'off')]
+        rows.append(f"| `{js.parent.relative_to(ARCHIVE).as_posix()}` | {'yes' if ch.get('ok') else 'NO'} | "
+            f"{' / '.join('-' if d is None else str(d) for d in diffs)} | {str(ch.get('time', ''))[:16].replace('T', ' ')} |")
+    if not rows:
+        return ''
+    return ('\n## Rebuild archives\n\n| archive | reproduces the fit | differing spike counts (fit_mb_model on / off, '
+        'simulator on / off) | last checked (UTC) |\n|---|---|---|---|\n' + '\n'.join(rows) + '\n')
 
 
 def main() -> None:

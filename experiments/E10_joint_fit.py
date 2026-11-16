@@ -220,6 +220,8 @@ from scipy import stats
 
 from kcq import harness as H
 from experiments.E3_drive_dependent_gain import BOUTON, per_odor_extras, rate
+# (moved to pyolfsysm.rebuild, 2026-11-16, for rebuilding fits outside the queue; re-exported here)
+from pyolfsysm.rebuild import breadth_weights
 from experiments.E4_substrate import score, kc_by_glomerulus
 from experiments.E12_breadth_apl import e3_bouton_params, density_excess
 
@@ -1058,12 +1060,6 @@ def read_orn_input(spec: str, orn: pd.DataFrame) -> pd.DataFrame:
     print(f'ORN input from {path} ({changed} of {orn.size} values differ from the lab input'
         + (f'; {len(extra)} further glomeruli: {extra}' if extra else '') + ')', flush=True)
     return out
-
-
-def breadth_weights(wAPLKC0: pd.Series, breadth: pd.Series, k: float) -> pd.Series:
-    bp1 = breadth + 1.0
-    f = ((bp1 / bp1.mean()) ** k).reindex(wAPLKC0.index.get_level_values(H.KC_ID_LEVEL))
-    return wAPLKC0 * f.fillna(1.0).to_numpy()
 
 
 STRUCTURE_WEIGHTS = dict(wt_dev=1.0, vcf_off=1.0, excess_on=0.5)

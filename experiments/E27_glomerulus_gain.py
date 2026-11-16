@@ -41,6 +41,7 @@ from experiments.E12_breadth_apl import density_excess, e3_bouton_params
 from experiments.E16_claw_saturation import spearman_with_refs
 from experiments.E18_bouton_depletion import all_refs
 from experiments.E26_claw_power import sharing_deficit, deficit_table, WEAK
+from pyolfsysm.rebuild import glomerulus_gain
 
 EXPERIMENT = 'E27_glomerulus_gain'
 TOP_GLOMS = {'ms': ['VA7m', 'DL1', 'D'], 'paa': ['DM1'], 'B-myr': ['DM1'], 'euc': ['DP1m', 'VC1'], '-aPine': ['VC1'], '1-8ol': ['DC2', 'DM5']}
@@ -48,11 +49,8 @@ ORACLE = sorted({g for gs in TOP_GLOMS.values() for g in gs})
 PARAM_KEYS = ('fixed_thr', 'wAPLKC_scale', 'wKCAPL_scale', 'wAPLPN_scale', 'wPNAPL_scale')
 
 
-def gained(wPNKC: pd.DataFrame, gloms, g: float) -> pd.DataFrame:
-    col = wPNKC.columns.get_level_values('glomerulus').isin(gloms)
-    out = wPNKC.astype(float).copy()
-    out.loc[:, col] = out.loc[:, col] * g
-    return out
+# (moved to pyolfsysm.rebuild as glomerulus_gain, 2026-11-16, for rebuilding fits outside the queue)
+gained = glomerulus_gain
 
 
 def synapse_weighted_wPNKC(orn: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
