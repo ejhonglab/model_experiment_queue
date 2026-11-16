@@ -33,6 +33,25 @@ directory's notes/ and are linked from here.
   level, so they have no level partner; E101's part 0 blank item is replaced by E98's amended identity. E92 (hal): its part A
   and verdicts rest on spike counts and are not affected; its part F (E92_gain, F3) reads E90's stages as window minus
   pre-odor mean and is to be sized.
+- **Checked by viki (2026-11-15 17:49 to 18:20, an Opus subagent of viki's session; scripts and outputs in the shared
+  results/preodor_startup_check_viki/).**
+  - When each stage starts (olfsysm.cpp): the ORN layer integrates from time_pre_start at its spontaneous rate (constant
+    before the odor; unaffected); the LN and PN layers also from time_pre_start but start away from their fixed point (the PN
+    pre-odor mean over E90's window and the settled one differ by 0.018 Hz at most, 0.22 %); the boutons exist from time_start
+    and with APL on inherit APL's start-up (real wiring 11.220 Hz over E90's window against 11.007 settled); claws, KCs and
+    APL start from zero at time_start. The KC thresholds' spontaneous input is read over -0.25 to 0 s and is unaffected.
+  - E94: part A1's spontaneous rates 14.3 / 10.9 to 11.7 Hz become 14.3 / 10.7 to 11.5; part A3's evoked-distance changes
+    move by 0.003 or less and its reading holds; the steps of the equal (half the fitted dose) are no longer larger than the
+    fitted family's (settled −0.013 to +0.006 with APL on), so "further from the flies" no longer holds.
+  - E95: part A4's 41 to 42 % becomes 43 to 45 %; the equal B5's step 0.40 / 0.35 becomes 0.361 / 0.316 (APL on; the flies
+    0.138), its excess unchanged.
+  - E93: part D with F, all claws, ester with alcohol goes from "upstream" (9 of 9) to "not resolved" (7 of 9; on the margin,
+    0.687 against 0.686); on the lab's input it stays "upstream" (9 of 9), read with E93's scoring path. A2 is unchanged.
+  - E96 and E99: nothing reported reads a pre-odor window (their part_steps did not run).
+  - The fits' claw readings (C2 on S, session z, group means) rise by 0.014 to 0.042 settled, and 355 to 481 of 9,867 claws
+    become silent; the fits' steps shrink by as much (all 66 with APL on 0.355 to 0.316). This bears on E90 and E92 (not
+    viki's; E90's own verdict pipeline was not rerun).
+  - Dated lines added to E93, E94 and E95 (2026-11-15 18:23); their pages rebuilt and saved.
 - **Remains.** The check of E92 to E94 above; dated lines in the notes whose numbers move (E90, E95 at least) once sized; and
   E98's choice of level.
 
