@@ -15,6 +15,9 @@ README.md listing the variants. The top-level README.md gets one row per experim
     ./venv/bin/python archive_tools/archive_model_outputs.py --all          # every outputs/E* folder
     ./venv/bin/python archive_tools/archive_model_outputs.py --inputs       # ORN input + base wirings
     ./venv/bin/python archive_tools/archive_model_outputs.py --all --params-only   # rebuild every params.csv
+    ./venv/bin/python archive_tools/archive_model_outputs.py E98_apl_response_strength --exclude tmp,cache,B/old_46stim
+        # leave out folders under outputs/<name>/ that hold no model outputs of the experiment (pytest temp
+        # folders, caches of other experiments' runs, superseded runs)
 
 File and folder names are ASCII only (CLAUDE.md); names with other characters are rejected.
 """
@@ -94,12 +97,14 @@ def ascii_only(name: str) -> None:
         raise ValueError(f'non-ASCII name: {name!r}')
 
 
-def archive_experiment(name: str, host: str, params_only: bool = False, force_hand_built: bool = False) -> dict:
+def archive_experiment(name: str, host: str, params_only: bool = False, force_hand_built: bool = False,
+                       exclude: tuple = ()) -> dict:
     """Copies outputs/<name>/ to the archive and (re)builds its params.csv and README.
 
     With `params_only`, only params.csv and the provenance files are refreshed (from the shared
     results/ tables and the tables already in the archive folder), so it works for experiments
-    whose local outputs are on another host; the README row is left as it is.
+    whose local outputs are on another host; the README row is left as it is. `exclude`: paths relative to
+    outputs/<name>/ (folders or files) that are not copied.
     """
     src = H.HERE / 'outputs' / name
     res = H.results_dir(name) if (H.shared_dir() / 'results' / name).exists() else None
@@ -121,6 +126,8 @@ def archive_experiment(name: str, host: str, params_only: bool = False, force_ha
         if not p.is_file() or p.suffix in ('.pyc', '.html'):
             continue   # .html: artifact pages live in reports/, not here
         rel = p.relative_to(src)
+        if any(rel.as_posix() == x or rel.as_posix().startswith(x.rstrip('/') + '/') for x in exclude):
+            continue
         ascii_only(rel.as_posix())
         target = dst / rel
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -241,6 +248,8 @@ def main() -> None:
     ap.add_argument('--inputs', action='store_true')
     ap.add_argument('--params-only', action='store_true',
         help='only rebuild params.csv from the shared results tables (works for any host\'s experiments)')
+    ap.add_argument('--exclude', default='',
+        help='comma-separated paths under outputs/<name>/ not to copy (e.g. tmp,cache: pytest temp folders, caches)')
     ap.add_argument('--force-hand-built', action='store_true',
         help=f'also re-archive the folders whose params.csv was rebuilt by hand ({", ".join(HAND_BUILT)}), overwriting it')
     args = ap.parse_args()
@@ -253,7 +262,8 @@ def main() -> None:
         names = sorted(p.name for p in where.glob('E*') if p.is_dir())
     rows = []
     for n in names:
-        r = archive_experiment(n, host, params_only=args.params_only, force_hand_built=args.force_hand_built)
+        r = archive_experiment(n, host, params_only=args.params_only, force_hand_built=args.force_hand_built,
+                               exclude=tuple(x.strip() for x in args.exclude.split(',') if x.strip()))
         if r.get('skipped'):
             continue
         rows.append(r)
