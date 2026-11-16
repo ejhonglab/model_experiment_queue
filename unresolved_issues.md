@@ -62,8 +62,20 @@ directory's notes/ and are linked from here.
     become silent; the fits' steps shrink by as much (all 66 with APL on 0.355 to 0.316). This bears on E90 and E92 (not
     viki's; E90's own verdict pipeline was not rerun).
   - Dated lines added to E93, E94 and E95 (2026-11-15 18:23); their pages rebuilt and saved.
-- **Remains.** The check of E92 to E94 above; dated lines in the notes whose numbers move (E90, E95 at least) once sized; and
-  E98's choice of level.
+- **Done (2026-11-15 21:10, atlas).** E98's level is chosen (amendment of 17:59: the blank's window mean carries, the settled level
+  is a partner, E90's level is shown and decides nothing). E90 is sized (queue 8fcd4e7, `experiments/E90_settled_preodor.py`;
+  an Opus code subagent of atlas's session; results/E90_model_stages/settled_preodor/): short reruns of every run E90 read
+  reproduce its counts and, over E90's own window, its pre-odor means to 2e-15, and the pipeline at E90's level reproduces
+  its pair tables and verdict exactly. No outcome letter or group verdict changes, and the PN stage, outcome (g), the somata
+  and every spike-count reading are unchanged. Four statements no longer hold: the input glomeruli's claws are now less
+  alike than the flies' (ester 0.642 / alcohol 0.569 against 0.571 / 0.477), not as alike; the alcohol step with APL on from
+  the input claws is too small (+0.044 against +0.144), not a match; the Addendum's reverse of (b) holds in all four soma
+  readings; and B5's ester step at 2 s is too small in every reading. The ester step with APL on from all claws now equals
+  the flies' (+0.244 against +0.241). E90's note has a dated block with the table (21:09) and its page is rebuilt (local,
+  URL kept); the per-unit settled levels of every E90 run are in settled_preodor/preodor_levels.parquet.
+- **Remains.** The summary's {#model-stages} and {#steps-like-for-like}, which quote E90's and E92's claw readings at E90's
+  level (one planner from atlas takes both, agreed with hal and viki in chat 19:29); E90's own figures and comparison_table.md
+  are not redone (said in its note); E101's claws have no saved settled level and stay read at E90's level beside the blank's.
 
 ### The APL-effect table did not check the realism of variants archived in part subfolders (found 2026-11-14 00:20, viki, E93's write-up)
 - **What.** `kcq/apl_effect.py` looked for a variant's archived responses (`<tag>_on_responses.parquet`,
