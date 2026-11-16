@@ -497,3 +497,222 @@ def test_readers_on_released_2021():
     g = M.measured_pair_grid(rec['stack'], fr, rec['mask'], M.stim_label(('pa', c['pa'])), M.stim_label(('ms', c['ms'])))
     assert np.allclose(g['grid'], meas['grid']['pa-ms'], atol=1e-9)
     assert (g['inside'] == meas['inside']).all()
+
+
+# ---------------------------------------------------------------------------
+# part B: the calyx response, the readings, the ratios; the score's classes (made-up data)
+
+def _design(blocks, value_of):
+    """Frames from a list of blocks (each a list of (odor, log10 conc), 'pfo' the solvent), with `value_of(odor, block,
+    position)` as the calyx response."""
+    rows = []
+    for b, blk in enumerate(blocks):
+        for p, (o, c) in enumerate(blk, start=1):
+            sv = o == 'pfo'
+            rows.append(dict(frame=len(rows), block=b, position=p, odor=M.SOLVENT if sv else o,
+                             log10_conc=np.nan if sv else c, is_solvent=sv,
+                             stim=M.SOLVENT if sv else M.stim_label((o, c)), response=value_of(o, b, p)))
+    return pd.DataFrame(rows)
+
+
+def test_calyx_response_is_yangs_table():
+    assert M.CALYX_RESPONSE == 'yang_table'          # Tom, 2026-11-15 17:33
+    f = pd.DataFrame(dict(response=[1.0, 2.0], yang_peak=[1.1, 2.2]))
+    assert M.calyx_values(f).tolist() == [1.1, 2.2]
+    assert M.calyx_values(f, 'maps').tolist() == [1.0, 2.0]
+    with pytest.raises(KeyError):
+        M.calyx_values(f.drop(columns='yang_peak'))
+    with pytest.raises(ValueError):
+        M.calyx_values(f, 'peak')
+
+
+def test_presentation_readings_solvent_last_and_first():
+    # set W's design: the solvent last in each block; block offsets 0, 0.1, 0.2
+    w = _design([[('2h', -6), ('ma', -7), ('pfo', 0)]] * 3,
+                lambda o, b, p: (0.3 if o == 'pfo' else 1.0 if o == '2h' else 0.5) + 0.1 * b)
+    o = M.presentation_readings(w, 'response').set_index(['stim', 'block'])
+    assert o.loc[('2h @ -6', 1), 'raw'] == pytest.approx(1.1)
+    assert o.loc[('2h @ -6', 1), 'minus_recording'] == pytest.approx(1.1 - 0.4)
+    assert o.loc[('2h @ -6', 2), 'minus_block'] == pytest.approx(0.7)
+    assert o['order_matched'].isna().all()            # no block of only solvent
+    assert M.block_design(w) == 'solvent last'
+    # set S's design: two blocks of only solvent (first and last), odor blocks solvent first then three presentations;
+    # the solvent's response depends on the position (1: 0.1, 2: 0.2, 3: 0.3, 4: 0.4) and on the block (+0.01 b)
+    s = _design([[('pfo', 0)] * 4, [('pfo', 0)] + [('pa', -3)] * 3, [('pfo', 0)] + [('ms', -3)] * 3, [('pfo', 0)] * 4],
+                lambda o, b, p: 0.1 * p + 0.01 * b + (0.0 if o == 'pfo' else 1.0 if o == 'pa' else 0.6))
+    o = M.presentation_readings(s, 'response')
+    # order matched: minus the two solvent blocks' mean at the same position (0.1 p + 0.01 * 1.5)
+    pa = o[o['stim'] == 'pa @ -3']
+    assert np.allclose(pa['order_matched'], 1.0 + 0.01 * 1 - 0.015)
+    assert np.allclose(pa['minus_block'], 1.0 + 0.1 * pa['position'] - 0.1)
+    assert list(pa['rep']) == [0, 1, 2]
+    assert M.block_design(s) == 'solvent first'
+
+
+def test_recording_b_made_up():
+    w = _design([[('2h', -6), ('ma', -7), ('paa', -3), ('pfo', 0)]] * 3,
+                lambda o, b, p: {'2h': 1.0, 'ma': 0.5, 'paa': 2.0, 'pfo': 0.3}[o] + 0.05 * b)
+    w['yang_peak'] = w['response']
+    w['response'] = 0.95 * w['yang_peak']             # the map-based mean 5 % lower
+    rec = dict(stem='r1', set='W', fly='d_1', side='R', plane_um=15.0, pulse_s=1.0, frames=w, yang_table='ok',
+               pixel_um=0.27)
+    per, st, row = M.recording_b(rec)
+    st = st.set_index('stim')
+    assert st.loc['2h @ -6', 'yang_minus_recording'] == pytest.approx(1.0 - 0.3)
+    assert st.loc['2h @ -6', 'map_minus_recording'] == pytest.approx(0.95 * 0.7)
+    assert st['map_over_yang_raw'].tolist() == pytest.approx([0.95] * 3)
+    assert row['calyx_response'] == 'yang_table' and row['solvent'] == pytest.approx(0.35)
+    assert row['largest_stimulus'] == pytest.approx(2.05) and not row['large_solvent']
+    assert row['solvent_drift_per_block'] == pytest.approx(0.05) and row['repeat_agreement_r'] == pytest.approx(1.0)
+    assert row['map_over_yang_median'] == pytest.approx(0.95) and row['design'] == 'solvent last'
+    assert len(per) == 9 and set(per['rep']) == {0, 1, 2}
+
+
+def test_fly_ratio_e98_and_set_ratios():
+    pr = pd.DataFrame(dict(fly=['a', 'a', 'b', 'c'], num=[0.5, 0.5, 0.25, 0.01], den=[1.0, 1.0, 1.0, 1.0]))
+    r = M.fly_ratio_e98(pr, n_boot=200)
+    # c's numerator is not above MIN_RESPONSE: left out (E98's rule), geometric over a and b
+    assert r['n_flies'] == 2 and r['n_left_out'] == 1 and r['mean'] == 'geometric'
+    assert r['ratio'] == pytest.approx(np.sqrt(0.5 * 0.25))
+    ps = pd.DataFrame(dict(fly=['a', 'a', 'b', 'b'], recording=['r1', 'r1', 'r2', 'r2'],
+                           stim=['ms @ -3', 'pa @ -3'] * 2, v=[0.5, 1.0, 0.2, 1.0]))
+    t = M.set_ratios(ps, [('ms', -3.0), ('paa', -3.0)], ('pa', -3.0), 'v', 'e98', n_boot=100).set_index('numerator')
+    assert t.loc['ms @ -3', 'ratio'] == pytest.approx(np.sqrt(0.5 * 0.2)) and t.loc['paa @ -3', 'n_flies'] == 0
+
+
+def test_classify_linear_agrees_with_e98_and_takes_zero():
+    from experiments import E98_apl_response_strength as E98
+    rng = np.random.default_rng(1)
+    for _ in range(300):
+        lo, hi = np.sort(np.exp(rng.normal(0, 1, 2)))
+        r = np.exp(rng.normal(0, 1, rng.integers(1, 5)))
+        assert M.classify_linear(r, lo, hi) == E98.classify(r, lo, hi)
+    # an interval reaching below 0 (an arithmetic mean over flies)
+    assert M.classify_linear([0.5], -0.03, 0.28) == 'flatter'
+    assert M.classify_linear([0.2, 0.5], -0.03, 0.28) == 'inside'
+    assert M.classify_linear([1.5], -0.2, 1.2) == 'steeper'
+    assert M.classify_linear([0.4], -0.5, -0.1) == 'flatter'
+    with pytest.raises(ValueError):
+        M.classify_linear([np.nan], 0.1, 0.2)
+
+
+def _b1_on(win_num, pre=10.0, n=8, extra=None):
+    rows = []
+    for k in range(n):
+        w = f'w{k}'
+        rows += [dict(wiring=w, stimulus='paa', win=20.0, pre=pre), dict(wiring=w, stimulus='2h [s1/diag] @ -6',
+                                                                         win=win_num(k), pre=pre)]
+        if extra:
+            rows.append(dict(wiring=w, stimulus='2h [s2/diag] @ -6', win=extra(k), pre=pre))
+    return pd.DataFrame(rows)
+
+
+def test_model_classes_and_read_ratio():
+    # the family's evoked ratio 0.8 on every wiring; the flies' 0.3 to 0.6: every wiring flatter at n 1 ...
+    on = _b1_on(lambda k: 18.0)
+    wc = M.model_classes(on, '2h [s1/diag] @ -6', 'paa', 0.3, 0.6)
+    assert len(wc) == 8 and np.allclose(wc['ratio_linear'], 0.8) and (wc['cls_linear'] == 'flatter').all()
+    # ... and through the indicator family (n up to 2.5) the steepest is 0.8^2.5 = 0.57: inside
+    assert (wc['cls'] == 'inside').all() and wc['ratio_min'].min() == pytest.approx(0.8 ** 2.5)
+    res, rows = M.read_ratio(on, 0.3, 0.6, {'s1/diag': '2h [s1/diag] @ -6'}, 'paa')
+    assert res['cls'] == 'inside' and res['cls_linear'] == 'flatter' and len(rows) == 8
+    # two estimates: inside under one is inside; flatter only if flatter under both
+    on = _b1_on(lambda k: 19.9, extra=lambda k: 12.0)            # 0.99 (flatter for all n) and 0.2 (inside at n 1)
+    res, _ = M.read_ratio(on, 0.15, 0.3, {'s1': '2h [s1/diag] @ -6', 's2': '2h [s2/diag] @ -6'}, 'paa')
+    assert res['per_estimate'] == {'s1': 'flatter', 's2': 'inside'} and res['cls'] == 'inside'
+    res, _ = M.read_ratio(on, 0.15, 0.3, {'s1': '2h [s1/diag] @ -6'}, 'paa')
+    assert res['cls'] == 'flatter'
+    # fewer than six of eight wirings agreeing: not decided
+    on = _b1_on(lambda k: 19.9 if k < 5 else 12.0)
+    res, _ = M.read_ratio(on, 0.15, 0.3, {'s1': '2h [s1/diag] @ -6'}, 'paa')
+    assert res['per_estimate'] == {'s1': 'not decided'} and res['cls'] == 'not decided'
+
+
+def test_match_b1_by_session_and_panel():
+    inputs = {
+        'kiwi-control': _session([('glomeruli_diagnostics', 'ms @ -3'), ('control', 'ms @ -3')]),
+        'megamat': _session([('glomeruli_diagnostics', 'ms @ -3'), ('megamat', 'ms @ -3')]),
+    }
+    labels = ['ms', 'ms [kiwi-control/diag] @ -3', 'ms [kiwi-control/control] @ -3', 'ms [megamat/diag] @ -3']
+    b1 = pd.DataFrame([dict(stimulus=x, **{f'b1_{k}': v for k, v in M.parse_b1_label(x).items() if k != 'label'})
+                       for x in labels])
+    m = M.match_b1(b1, [('ms', -3.0)], inputs)
+    got = {(r.session, r.panel_name): r.b1_stimulus for r in m.itertuples()}
+    assert got == {('kiwi-control', 'glomeruli_diagnostics'): 'ms [kiwi-control/diag] @ -3',
+                   ('kiwi-control', 'control'): 'ms [kiwi-control/control] @ -3',
+                   ('megamat', 'glomeruli_diagnostics'): 'ms [megamat/diag] @ -3', ('megamat', 'megamat'): 'ms'}
+    assert M.estimate_labels(m, ('ms', -3.0))['megamat/megamat'] == 'ms'
+
+
+def test_kc_data_rates_made_up(tmp_path):
+    p = tmp_path / 'f.csv'
+    pd.DataFrame([dict(panel='diag_mix', group='control', odor='2h @ -7', n_recordings=16, frac=0.06, sem=0, union=np.nan),
+                  dict(panel='diag_mix', group='apl_output_blocked', odor='2h @ -7', n_recordings=3, frac=0.17, sem=0,
+                       union=np.nan),
+                  dict(panel='natmix_dilute', group='control', odor='2h @ -5', n_recordings=4, frac=0.068, sem=0,
+                       union=np.nan),
+                  dict(panel='diag_mix', group='control', odor='2h @ -7 + ma @ -7', n_recordings=16, frac=0.09, sem=0,
+                       union=0.1)]).to_csv(p, index=False)
+    r = M.kc_data_rates(('2h', -6.0), p)            # -7 and -5 are both one log unit away: the higher, -5
+    assert r['kc_data_conc'] == -5.0 and r['kc_ctrl_natmix'] == pytest.approx(0.068) and np.isnan(r['kc_ctrl'])
+    assert '2h @ -7 diag_mix control: 0.060' in r['kc_data_all'] and '+' not in r['kc_data_all']
+    r = M.kc_data_rates(('2h', -7.0), p)
+    assert r['kc_ctrl'] == pytest.approx(0.06) and r['kc_tnt'] == pytest.approx(0.17) and r['kc_tnt_n'] == 3
+    assert M.kc_data_rates(('4h-ol', -6.0), p)['kc_data_conc'] is None
+
+
+# ---------------------------------------------------------------------------
+# part C on planted maps
+
+def _planted_recording(solvent_is_common=True, seed=0):
+    rng = np.random.default_rng(seed)
+    yy, xx = np.mgrid[:40, :40]
+    mask = (yy - 20) ** 2 + (xx - 20) ** 2 < 17 ** 2
+    common = 1.0 + 0.8 * np.exp(-((yy - 12) ** 2 + (xx - 20) ** 2) / 60.0)
+    spec = {'2h': np.exp(-((yy - 26) ** 2 + (xx - 12) ** 2) / 30.0), 'ma': np.exp(-((yy - 26) ** 2 + (xx - 28) ** 2) / 30.0),
+            'paa': np.exp(-((yy - 20) ** 2 + (xx - 20) ** 2) / 30.0)}
+    other = np.exp(-((yy - 30) ** 2 + (xx - 20) ** 2) / 40.0)
+    amp = {'2h': 0.6, 'ma': 0.3, 'paa': 1.5}
+    blocks = [[('2h', -6.0), ('ma', -7.0), ('paa', -3.0), ('pfo', 0.0)]] * 4
+    fr = _design(blocks, lambda o, b, p: 0.0)
+    sol = 0.4 * (common if solvent_is_common else other)
+    stack = np.stack([sol + (0 if o == M.SOLVENT else amp[o] * common + 0.3 * spec[o]) + rng.normal(0, 0.02, mask.shape)
+                      for o in fr['odor']])
+    fr['response'] = stack[:, mask].mean(axis=1)
+    return dict(stem='r1', set='W', fly='d_1', side='R', plane_um=15.0, pulse_s=1.0, frames=fr, mask=mask,
+                stack=stack, pixel_um=0.3)
+
+
+def test_stimulus_class():
+    assert M.stimulus_class('W', ('paa', -3.0)) == 'panel' and M.stimulus_class('W', ('farn', -2.0)) == 'weak'
+    assert M.stimulus_class('S', ('pa', -4.0)) == 'panel' and M.stimulus_class('S', ('pa', -4.5)) == 'between'
+    assert M.stimulus_class('S', ('ms', -5.0)) == 'weak' and M.stimulus_class('H', ('ma', -2.954)) == 'between'
+
+
+def test_recording_c_planted():
+    rec = _planted_recording(True)
+    maps = M.stimulus_maps_b(rec['stack'], rec['frames'], 'minus_recording')
+    assert set(maps) == {('2h', -6.0), ('ma', -7.0), ('paa', -3.0)} and len(maps[('2h', -6.0)][1]) == 4
+    res = M.recording_c(rec, 'minus_recording')
+    s = res['stimuli'].set_index('stim')
+    assert (s['repeat_r'] > 0.9).all() and (s['reliability_mean_map'] > 0.9).all()
+    # the strongest map is mostly the common map; the weak ones less so
+    assert s.loc['paa @ -3', 'r2_common'] > s.loc['ma @ -7', 'r2_common']
+    assert s.loc['paa @ -3', 'cls'] == 'panel' and s.loc['ma @ -7', 'cls'] == 'weak'
+    assert res['solvent']['solvent_like_common'] and res['solvent']['r_solvent_common'] > 0.9
+    sh = res['shared']
+    assert set(sh['blur_px']) == set(M.C_BLURS_PX) and (sh['share_first_sv'] > 0.5).all()
+    res2 = M.recording_c(_planted_recording(False), 'minus_recording')
+    assert not res2['solvent']['solvent_like_common']
+
+
+def test_centroid_offsets_planted():
+    rows = []
+    for rec, fly in (('r1', 'a'), ('r2', 'b')):
+        for o, off in (('paa', 0.0), ('2h', 0.1), ('ma', -0.05)):
+            for m in (0.2, 0.5, 1.0):
+                rows.append(dict(recording=rec, set='W', fly=fly, odor=o, calyx_mean=m, repeat_r=0.8,
+                                 centroid_y=0.5 + off + 0.03 * np.log(m)))
+    c = M.centroid_offsets(pd.DataFrame(rows), 'paa')
+    assert len(c) == 2 and np.allclose(c['offset_2h'], 0.1) and np.allclose(c['offset_ma'], -0.05)
+    assert np.allclose(c['slope_per_log_mean'], 0.03)

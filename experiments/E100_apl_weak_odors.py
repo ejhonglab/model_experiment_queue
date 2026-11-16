@@ -24,7 +24,8 @@ Two dependencies on other hosts' work (not duplicated here):
 
 Definitions (the entry's, fixed before any reading; E98's hold where not changed here):
 - A recording's calyx response to a presentation: the calyx-mean peak dF/F inside the outline (Yang's peak maps,
-  `*_dff_peak5frames_ave.tif`, the same product as the 2021 set's). Set W's two changes to E98's definitions: the
+  `*_dff_peak5frames_ave.tif`, the same product as the 2021 set's); in part B, Yang's own roi_peak_dff in its place
+  (CALYX_RESPONSE, Deviations), the map-based mean beside. Set W's two changes to E98's definitions: the
   solvent's response is the mean of the recording's own solvent presentations (one per block, last in the block;
   `recording_solvent`), and part B gives every response raw, minus the recording's solvent and minus its block's solvent
   (`block_solvent`); where a response can be at or below the solvent's, the mean over flies is arithmetic, and the table
@@ -59,21 +60,56 @@ Parts (CLI `--part`):
   label-permuted controls (a3_pn_rates.csv, a3_inputs.csv, a3_maps.csv, a3_agreement.csv, a3_anatomy.csv); A4, the power
   of W3 from the 2021 maps' reliability (a4_power.csv, a4_power_by_calyx.csv; a pair under A4_POWER_MIN leaves W3's list,
   a4_w3_pairs.json).
-- B (after Yang's answer): per recording and stimulus the calyx response raw, minus the recording's solvent and minus the
-  block's solvent; block-to-block agreement; drift; sensitivity (the planes apart; without recordings whose solvent
-  response exceeds SOLVENT_LARGE_SHARE of their largest response); E98's saturating indicator beside the family for set
-  S; the table per weak odor (the flies' APL, the family's APL, the flies' KCs, the family's KCs with APL on and off).
-- C (after Yang's answer): E79's analyses 1 to 3 on sets W, S and H (repeat reliability; the common map's share; the
-  remainder's reliability and length; whether the solvent's map is the common map; the dorsal-ventral centroid at
-  matched magnitude; the common map's share at the weak odors against the panel's concentrations).
+- B (`part_b`; Yang released her processed recordings 2026-11-15 17:12): per recording and stimulus the calyx response
+  (CALYX_RESPONSE: Yang's own roi_peak_dff; the calyx mean of her peak map inside the outline beside) raw, minus the
+  recording's solvent, minus the block's solvent and, where the design has blocks of only solvent (sets S and H), E98's
+  order-matched baseline (`presentation_readings`); the agreement between repeats; the drift of the solvent per block;
+  the flies' ratios of every stimulus over its set's reference (SET_REFERENCE; set W also over farn at 10^-2) by
+  calyx response, reading and subset (all; without recordings whose solvent response exceeds SOLVENT_LARGE_SHARE of
+  their largest response; the 1 s pulses; the planes apart) (b_*.csv). Set H's fly whose note says its APL label is
+  absent or unsure (LABEL_UNSURE) is read and listed but enters no ratio.
+- C (`part_c`): E79's analyses 1 to 3 on sets W, S and H, each set's maps under its carrying reading's baseline
+  (`recording_c`): analysis 2 at E79's four blurs (the common map's share, the remainder's repeat r, between-odor r and
+  length); per stimulus its repeat reliability and the common map's share of its map (raw and over its reliability);
+  whether the solvent's map is the common map (its r with the common map against the odors' maps'); the image-y
+  centroid at matched magnitude (`centroid_offsets`); the common map's share at the weak stimuli against the panel's
+  concentrations (`stimulus_class`), per fly with E79's bootstrap (c_*.csv, c_summary.json).
 - D (after Yang's answer): E79's analysis 4 on A3's pairs (A4's list), the orientation fixed as far as Yang has given it
   (posterior view, dorsal up, "L" the fly's right; both medial edges until she answers: D_FLIPS), slabs within
   D_SLAB_WITHIN_UM of the plane's nominal depth; set S's pa minus ms at 10^-3 beside.
 - E (only if Yang has set P processed or agrees to its processing): APL's calyx response to each of the 16 panel odors in
   one fly against the family's profile and E98's proportional alternatives. A lead, no verdict.
-- score: the verdict (W1, W2, W3; verdict.json), fixed above.
+- score (`score`): the verdict (W1, W2, W3; verdict.json), fixed above, from part B and B1's runs on the eight wirings
+  (score_*.csv); W3 waits on part D.
 
 Deviations from the entry (each also in the note):
+- Part B's calyx strengths (Tom, 2026-11-15 17:33, hal's terminal): part 0's check of the map-based calyx mean against
+  Yang's own roi_peak_dff failed (2 to 8 % lower, r >= 0.999, on the 12 released 2021 recordings) and her question 10 on
+  how that table is computed is open, so part B reads her table (CALYX_RESPONSE = 'yang_table') and gives the map-based
+  calyx mean beside ('maps', with the gap per recording and stimulus); the peak maps carry part C (and D). W1 under the
+  map-based reading is reported beside and decides nothing. A recording whose table does not match its yaml's
+  presentations (rows or pins) would have no Yang value and enter no ratio (none of sets W, S and H).
+- E98's carrying reading for sets S and H: E98's order-matched baseline assumes one block of only paraffin oil; set S has
+  two (the first and the last), so each presentation is read minus the mean of those blocks' presentations at its
+  position (`presentation_readings`; on a 2021 recording it reproduces E79's means, `readings_identity_2021`).
+- The classes of a ratio (`classify_linear`): E98's `classify` takes logarithms and so refuses an interval that reaches
+  0, which set W's arithmetic means can give (the entry's own rule); the same rules on the ratios themselves, which
+  agree with E98's for positive values (tested).
+- The model's pre-odor level: E98's definition as written (E90's saved pre-odor mean, 'e90') carries W1 and W2; E98's
+  other two (`with_a0`: 'settled', 'blank'), an open decision of E98's part C, are read beside, and verdict.json says
+  whether W1 is the same under all three.
+- W2's rule over input estimates is W1's (`ratio_over_estimates`; the entry fixes none for W2). E98's saturating
+  indicator reading beside the family for set S is E98's indicator family itself; a saturating form would need a
+  saturation constant that the entry does not fix, so none is added.
+- Part C's choices the entry does not fix: the common map is the first singular vector of the stimulus maps (E79's
+  analysis 2, 2 px blur for per-stimulus statistics); a map's share of it is its r^2 with it (means removed) and, beside,
+  that over the map's reliability (Spearman-Brown of the mean r between presentations), since weak maps are noisier;
+  the stimulus classes (`stimulus_class`: set W's paa at 10^-3 'panel', the rest of set W 'weak'; in sets S and H the
+  panel's odors within one log unit of 10^-3 'panel' and stimuli at 10^-5 or below 'weak'); the solvent's map counts as
+  the common map in a recording when its r with the common map is at least the median of the odors' maps'
+  (`recording_c`, described); the centroid offsets are against paa (sets W and H) or ms (set S, E79's).
+- `match_b1` matched B1 labels by session alone until 2026-11-15 18:00, which gave kiwi-control's control panel and
+  megamat's own panel the diagnostics' column (A2 had not run).
 - A2 runs nothing: it reads E98's B1 (the entry allows either; the task given to this script says so).
 - A4's "true wiring-based map" is another calyx's predicted map (the seven other calyces; the model's own hemibrain boutons
   and hemibrain R are not truths for each other), at a slab within D_SLAB_WITHIN_UM of a nominal plane depth drawn from
@@ -108,8 +144,10 @@ CLI (from the repository root):
     OMP_NUM_THREADS=8 OMP_THREAD_LIMIT=8 PYTHONUNBUFFERED=1 nice -n 10 ./venv/bin/python -u \\
         -m experiments.E100_apl_weak_odors --part A3
     ./venv/bin/python -u -m experiments.E100_apl_weak_odors --part A4
-    ./venv/bin/python -u -m experiments.E100_apl_weak_odors --part A2     # after E98's B1
-    ./venv/bin/python -u -m experiments.E100_apl_weak_odors --part B      # after Yang's answer and viki's copy
+    ./venv/bin/python -u -m experiments.E100_apl_weak_odors --part A2     # E98's B1 (and E101's A3) on eight wirings
+    ./venv/bin/python -u -m experiments.E100_apl_weak_odors --part B
+    ./venv/bin/python -u -m experiments.E100_apl_weak_odors --part C
+    ./venv/bin/python -u -m experiments.E100_apl_weak_odors --part score  # after B (and C, for its descriptions)
     --dry-run lists what a part would read and write, and exits.
 
 Outputs: results/E100_apl_weak_odors/ in the shared directory (the tables above, identity.json, verdict.json,
@@ -238,28 +276,42 @@ def provenance(part: str, **extra) -> None:
     _write_json(path, d)
 
 
-def _e79():
-    """E79's two modules (E79_connectome_maps, E79_apl_calyx_constraints), with their shared-directory paths repointed to
-    `H.shared_dir()` (and Yang's Claude's connectome tables beside it, Tom/claude_APL_modeling_YZ4TC) on hosts where the
-    tensor mount is not /mnt/tensor, the path they were written with (hal mounts it at /local/tensor)."""
+def _repoint(mod, names: Sequence[str], shared: Path) -> Optional[Path]:
+    """Repoints a module's shared-directory paths (`names` and SHARED) from the path it was written with (/mnt/tensor)
+    to `shared` on hosts where that path is not there; returns the old SHARED when it did."""
+    old = Path(mod.SHARED)
+    if old == shared or old.exists():
+        return None
+    for n in names:
+        x = Path(getattr(mod, n))
+        setattr(mod, n, shared / x.relative_to(old) if x.is_relative_to(old) else x)
+    mod.SHARED = shared
+    return old
+
+
+def _ds():
+    """E79's data-side module (E79_apl_calyx_constraints, with its reader data_prep/apl_calyx_maps), its paths repointed
+    to `H.shared_dir()`. Parts 0, B and C read the recordings through this only: unlike `_e79`, it does not import
+    E79_connectome_maps or touch Yang's Claude's connectome tables, which are on hold (rule of 2026-11-15 15:35)."""
     from data_prep import apl_calyx_maps as ACM
     from experiments import E79_apl_calyx_constraints as DS
-    from experiments import E79_connectome_maps as CM
     shared = H.shared_dir()
-    if not Path(ACM.SHARED).exists() and Path(ACM.SHARED) != shared:
-        old = Path(ACM.SHARED)
+    for mod in (ACM, DS):
+        _repoint(mod, ('DATA', 'OUT'), shared)
+    return DS
 
-        def re(x):
-            x = Path(x)
-            return shared / x.relative_to(old) if x.is_relative_to(old) else x
-        for mod, names in ((ACM, ('DATA', 'OUT')), (DS, ('DATA', 'OUT')),
-                           (CM, ('OUT', 'C2_ON_COUNTS', 'COMMON_ERROR', 'ORN_INPUT'))):
-            for n in names:
-                setattr(mod, n, re(getattr(mod, n)))
-            mod.SHARED = shared
-        yang_apl = shared.parent / Path(CM.YANG_APL).relative_to(old.parent)
-        if yang_apl.exists():
-            CM.YANG_APL = yang_apl
+
+def _e79():
+    """E79's two modules (E79_connectome_maps, E79_apl_calyx_constraints), with their shared-directory paths repointed to
+    `H.shared_dir()` on hosts where the tensor mount is not /mnt/tensor, the path they were written with (hal mounts it
+    at /local/tensor); Yang's Claude's connectome tables (Tom/claude_APL_modeling_YZ4TC, beside the shared directory)
+    repointed the same way, without looking at them (parts A3, A4 and D only; on hold since 2026-11-15 15:35)."""
+    from experiments import E79_connectome_maps as CM
+    DS = _ds()
+    shared = H.shared_dir()
+    old = _repoint(CM, ('OUT', 'C2_ON_COUNTS', 'COMMON_ERROR', 'ORN_INPUT'), shared)
+    if old is not None:
+        CM.YANG_APL = shared.parent / Path(CM.YANG_APL).relative_to(old.parent)
     return CM, DS
 
 
@@ -442,7 +494,7 @@ def usable_row(row) -> bool:
 
 def released_2021() -> List[str]:
     """The stems of the 12 recordings Yang released (data/yang_apl_calyx_maps/2021_APL_18um/recordings.csv)."""
-    _, DS = _e79()
+    DS = _ds()
     return [f.split('_moco')[0] for f in pd.read_csv(DS.DATA / 'recordings.csv')['file']]
 
 
@@ -487,7 +539,7 @@ def recording_paths(row) -> dict:
     calyx outline matching the map's registration tag ('<stem>_<tag>.roi', else '<stem>.roi'), Yang's ROI table for the
     same tag, the Experiment.xml. Missing files are None."""
     stem, folder = row['stem'], Path(row['folder'])
-    _, DS = _e79()
+    DS = _ds()
     if stem in released_2021():
         maps = sorted(DS.DATA.glob(f'{stem}_*dff_peak5frames_ave.tif'))
         yml = DS.DATA / f'{stem}.yaml'
@@ -507,10 +559,12 @@ def recording_paths(row) -> dict:
 
 def read_recording(row, maps: bool = False) -> dict:
     """One recording read for parts B to D: its presentations (`yaml_stimuli`, `shuffled_blocks`' flags where the design
-    has the solvent last) with each presentation's calyx response (`calyx_responses` of the APL peak maps inside the
-    outline) and Yang's own value beside (`yang_peak`, from her ROI table, in presentation order), the outline mask, the
-    pixel size and channels (`experiment_xml`), and with `maps` the stack. Refuses a recording Yang has not released
-    (`YANG_RELEASED`)."""
+    has the solvent last) with each presentation's map-based calyx response ('response', `calyx_responses` of the APL
+    peak maps inside the outline) and Yang's own value beside ('yang_peak', from her ROI table, in presentation order;
+    left out, with `yang_table` saying why, when the table's rows or pins do not match the yaml's presentations), the
+    outline mask, the pixel size ('pixel_um', recordings.csv's) and channels (`experiment_xml`), and with `maps` the
+    stack. Part B's calyx strengths are chosen from the two by `calyx_values` (CALYX_RESPONSE). Refuses a recording Yang
+    has not released (`YANG_RELEASED`)."""
     import tifffile
     if not usable_row(row):
         raise PermissionError(f"{row['stem']}: raw only, not used until further notice (rule of 2026-11-15 15:28, "
@@ -518,7 +572,7 @@ def read_recording(row, maps: bool = False) -> dict:
     if not (YANG_RELEASED or row['stem'] in released_2021()):
         raise PermissionError(f"{row['stem']}: Yang has not released this recording (E100's entry, Requires); set "
                               "YANG_RELEASED after her answer")
-    _, DS = _e79()
+    DS = _ds()
     f = recording_paths(row)
     if f['peak_maps'] is None or f['yaml'] is None or f['roi'] is None:
         raise FileNotFoundError(f"{row['stem']}: peak maps, yaml or outline missing ({f})")
@@ -531,12 +585,20 @@ def read_recording(row, maps: bool = False) -> dict:
     frames['is_solvent'] = frames['odor'] == SOLVENT
     frames['stim'] = [SOLVENT if sv else stim_label((o, c)) for sv, o, c in
                       zip(frames['is_solvent'], frames['odor'], frames['log10_conc'])]
+    yang_table = 'missing'
     if f['roi_table'] is not None:
         t = pd.read_csv(f['roi_table'])
-        if len(t) == len(frames):
+        if len(t) != len(frames):
+            yang_table = f'{len(t)} rows for {len(frames)} presentations'
+        elif 'pin_n' in t and not (t['pin_n'].to_numpy(dtype=int) == frames['pin'].to_numpy(dtype=int)).all():
+            yang_table = "pins differ from the yaml's sequence"
+        else:
             frames['yang_peak'] = t['roi_peak_dff'].to_numpy(dtype=float)
+            yang_table = 'ok'
+    px = row.get('pixel_size_um') if hasattr(row, 'get') else None
     out = dict(stem=row['stem'], set=row['set'], fly=f"{row['date']}_{row['fly']}", side=row['hemisphere'],
                plane_um=row['plane_depth_um'], pulse_s=row['pulse_s'], frames=frames, mask=mask, files=f,
+               yang_table=yang_table, pixel_um=float(px) if px is not None and pd.notna(px) else np.nan,
                xml=experiment_xml(f['experiment_xml']) if f['experiment_xml'] is not None else None)
     if maps:
         out['stack'] = stack
@@ -590,7 +652,7 @@ def xml_identity(stems: Optional[Sequence[str]] = None) -> dict:
 def read_stim_table(path: Optional[Path] = None) -> pd.DataFrame:
     """A table of presentations (STIM_TABLE_COLUMNS, e.g. the 2021 set's frames.csv), solvent labels mapped to SOLVENT;
     the copy's own stimulus tables are read per recording by `yaml_stimuli`."""
-    _, DS = _e79()
+    DS = _ds()
     path = DS.DATA / 'frames.csv' if path is None else Path(path)
     t = pd.read_csv(path)
     t['odor'] = t['odor'].astype(str).str.strip()
@@ -714,7 +776,7 @@ def reader_identity_2021(recording: Optional[str] = None) -> dict:
     order-matched, first-in-block and all-paraffin-oil baselines reproduce E79's E79_maps_across_baselines.csv (the
     per-stimulus mean of the presentations' calyx means, each presentation minus its baseline map's calyx mean)."""
     import tifffile
-    _, DS = _e79()
+    DS = _ds()
     recs = pd.read_csv(DS.DATA / 'recordings.csv')
     rec = recs.iloc[0] if recording is None else recs[recs['file'].str.startswith(recording)].iloc[0]
     name = rec['file'].split('_moco')[0]
@@ -840,12 +902,14 @@ def read_e98_b1(wirings: Sequence[str] = ALL_WIRINGS, dirs: Optional[Sequence[Pa
     fraction of KCs responding) and the parsed label (`parse_b1_label`). Read from outputs/E98_apl_response_strength/B/
     or its archive (data/model_outputs/E98_apl_response_strength/B/; `dirs` overrides), files `<wiring>_<cond>_apl.csv`
     (index stimulus, columns win, pre; E90's `_save_stage` layout, which E98's stub names as its source; a 'B1_' prefix
-    is accepted) and `<wiring>_<cond>_responses.parquet` (KC x stimulus). E98's own loader (`load_b1`) is used instead once
-    it has one. Raises NotImplementedError naming E98's B1 while they are not there."""
+    is accepted) and `<wiring>_<cond>_responses.parquet` (KC x stimulus). E98's own loader is used instead when it has
+    one: `load_b1_all` (E98's runs where they exist, the other wirings from E101's archived part A3, checked equal to E98's
+    on every wiring both have; attrs 'sources' and 'e101' say which), else `load_b1`. Raises NotImplementedError naming
+    E98's B1 while they are not there."""
     if dirs is None:
         try:
             from experiments import E98_apl_response_strength as E98M
-            loader = getattr(E98M, 'load_b1', None)
+            loader = getattr(E98M, 'load_b1_all', None) or getattr(E98M, 'load_b1', None)
         except ImportError:
             loader = None
         if loader is not None:
@@ -892,20 +956,30 @@ def a2_stimuli() -> Tuple[Stim, ...]:
     return tuple(out)
 
 
-def match_b1(b1: pd.DataFrame, stims: Sequence[Stim]) -> pd.DataFrame:
-    """Per stimulus with ORN input (`input_estimates`) and estimate, the B1 stimulus with the same odor and source
-    concentration and the same source (the session, or the panel for the APL16 input's own columns: megamat's megamat
-    panel and validation2's validation2 panel); one row per stimulus, estimate and B1 stimulus (none: b1_stimulus NaN)."""
+PANEL_OWN = (('megamat', 'megamat'), ('validation2', 'validation2'))    # the APL16 input's own columns
+
+
+def b1_source(session: str, panel: str) -> str:
+    """The B1 label's source of one session column: 'panel' for the APL16 input's own columns (megamat's megamat panel
+    and validation2's validation2 panel), else '<session>/<panel>' ('diag' for the diagnostics), as E98's
+    `session_label` writes it."""
+    if (session, panel) in PANEL_OWN:
+        return 'panel'
+    return f"{session}/{'diag' if panel == DIAG_PANEL else panel}"
+
+
+def match_b1(b1: pd.DataFrame, stims: Sequence[Stim], inputs: Optional[Dict[str, pd.DataFrame]] = None) -> pd.DataFrame:
+    """Per stimulus with ORN input (`input_estimates`) and estimate, the B1 stimulus with the same odor, source
+    concentration and source (`b1_source`: the session and panel, or the panel's own input); one row per stimulus and
+    estimate (no B1 stimulus: b1_stimulus NaN). (Until 2026-11-15 18:00 the source was matched on the session alone, which
+    gave kiwi-control's control panel and megamat's own panel the diagnostics' column.)"""
     lab = b1.drop_duplicates('stimulus')[['stimulus', 'b1_odor', 'b1_conc', 'b1_source']]
     rows = []
-    inputs = session_inputs()
+    inputs = session_inputs() if inputs is None else inputs
     for st in stims:
         for e in input_estimates(st, inputs).to_dict('records'):
-            panel_own = (e['session'], e['panel_name']) in (('megamat', 'megamat'), ('validation2', 'validation2'))
             cand = lab[(lab['b1_odor'] == st[0]) & np.isclose(lab['b1_conc'].astype(float), e['input_conc'])]
-            hit = cand[cand['b1_source'].astype(str).str.contains(e['session'], regex=False)]
-            if hit.empty and panel_own:
-                hit = cand[cand['b1_source'] == 'panel']
+            hit = cand[cand['b1_source'].astype(str) == b1_source(e['session'], e['panel_name'])]
             rows.append(dict(e, b1_stimulus=hit['stimulus'].iloc[0] if len(hit) else np.nan))
     return pd.DataFrame(rows)
 
@@ -1526,17 +1600,578 @@ def w3_over_estimates(per_estimate: Dict[str, str]) -> str:
     return 'not decided'
 
 
-def part_b() -> dict:
-    """Part B (module docstring), from viki's copy, after Yang's answer (`recording_table` per recording,
-    `flies_ratios` for W1)."""
+# ---------------------------------------------------------------------------
+# part B: how strongly, in the flies
+
+# Tom's decision of 2026-11-15 17:33 (hal's terminal), while Yang's question 10 (how roi_peak_dff is computed) is open:
+# part B's calyx strengths are Yang's own roi_peak_dff; the calyx mean of her peak map inside the outline ('maps', 2 to
+# 8 % lower on the 12 released 2021 recordings, r >= 0.999) is reported beside; the peak maps carry parts C and D
+CALYX_RESPONSE = 'yang_table'
+CALYX_RESPONSES = ('yang_table', 'maps')
+CALYX_COLUMNS = {'yang_table': 'yang_peak', 'maps': 'response'}
+SOURCE_PREFIX = {'yang_table': 'yang', 'maps': 'map'}
+READINGS_B = ('raw', 'minus_recording', 'minus_block', 'order_matched')
+# the reading each set's ratios are carried by: set W's change to E98's definitions (the recording's own solvent
+# presentations, one per block, last in the block); sets S and H keep E98's carrying reading (its order-matched baseline)
+CARRYING_READING = {'W': 'minus_recording', 'S': 'order_matched', 'H': 'order_matched'}
+RATIO_RULE = {'W': 'w', 'S': 'e98', 'H': 'e98'}       # `fly_ratio_w` for set W, E98's rule (`fly_ratio_e98`) otherwise
+SET_REFERENCE: Dict[str, Stim] = {'W': ('paa', -3.0), 'S': ('pa', -3.0), 'H': ('paa', -3.431)}
+LABEL_UNSURE = 'label absent or unsure'    # recordings.csv's content for set H's fly without APL label (a control)
+A0_DEFINITIONS = ('e90', 'settled', 'blank')    # E98's definitions of the model's pre-odor level (its open decision)
+KC_DATA_FRACTIONS = ('results', 'E72_wiring_population', 'low_conc', 'data_fractions.csv')
+APL16_IN_SETS = ('pa', 'paa', 'ms', '2h', '2-but')     # the APL16 panel's odors among sets W, S and H (all at 10^-3)
+PANEL_CONC = -3.0
+WEAK_MAX_CONC = -5.0                                   # part C, sets S and H: a stimulus at or below this is weak
+
+
+def calyx_values(frames: pd.DataFrame, how: str = CALYX_RESPONSE) -> pd.Series:
+    """Each presentation's calyx response as part B reads it (`how`, CALYX_RESPONSES): 'yang_table', Yang's own
+    roi_peak_dff ('yang_peak'; CALYX_RESPONSE, Tom's decision of 2026-11-15 17:33 while her question 10 is open); 'maps',
+    the calyx mean of her peak map inside the outline ('response'). Raises KeyError when that column is absent (Yang's
+    table missing or not matching the presentations)."""
+    if how not in CALYX_COLUMNS:
+        raise ValueError(f'unknown calyx response {how!r}; one of {CALYX_RESPONSES}')
+    col = CALYX_COLUMNS[how]
+    if col not in frames:
+        raise KeyError(f'{col} not read for this recording ({how})')
+    return frames[col].astype(float)
+
+
+def presentation_readings(frames: pd.DataFrame, value: str) -> pd.DataFrame:
+    """One recording's odor presentations (`frames` with block, position, is_solvent, stim and the column `value`) with
+    part B's readings of `value` (READINGS_B): 'raw'; 'minus_recording', minus the mean of all its solvent presentations
+    (set W's solvent); 'minus_block', minus the mean of its block's solvent presentations (NaN for a block without one);
+    'order_matched', E98's carrying baseline for a design with blocks of only solvent (sets S and H, the 2021 set): minus
+    the mean of those blocks' presentations at the same position in the block (NaN where there is none, as in set W).
+    Also 'rep', the presentation's index among its stimulus's."""
+    f = frames.copy()
+    v = f[value].astype(float)
+    sv = f['is_solvent'].astype(bool)
+    rec_sol = float(v[sv].mean()) if sv.any() else np.nan
+    blk_sol = v[sv].groupby(f.loc[sv, 'block']).mean()
+    all_sol = sv.groupby(f['block']).transform('all').astype(bool)
+    pos_sol = v[sv & all_sol].groupby(f.loc[sv & all_sol, 'position']).mean()
+    o = f[~sv].copy()
+    vo = v[~sv]
+    o['raw'] = vo
+    o['minus_recording'] = vo - rec_sol
+    o['minus_block'] = vo - o['block'].map(blk_sol).astype(float)
+    o['order_matched'] = vo - o['position'].map(pos_sol).astype(float)
+    o['rep'] = o.groupby('stim').cumcount()
+    return o
+
+
+def block_design(frames: pd.DataFrame) -> str:
+    """'solvent last' (every block ends with its one solvent presentation, set W), 'solvent first' (every block that is
+    not all solvent starts with its one, sets S and H, the 2021 set) or 'other'."""
+    last, first = [], []
+    for _, g in frames.groupby('block', sort=True):
+        sv = g['is_solvent'].to_numpy(bool)
+        if sv.all():
+            continue
+        last.append(bool(sv[-1] and sv.sum() == 1))
+        first.append(bool(sv[0] and sv.sum() == 1))
+    if last and all(last):
+        return 'solvent last'
+    if first and all(first):
+        return 'solvent first'
+    return 'other'
+
+
+def repeat_agreement(o: pd.DataFrame, col: str = 'raw') -> float:
+    """The agreement between repeats: over pairs of repeat indices (`rep`), the Pearson r across stimuli of their
+    responses (`col`), averaged; in set W a repeat is a block (each stimulus once per block), in sets S and H a
+    stimulus's k-th presentation in its block. NaN with fewer than three stimuli in common."""
+    piv = o.pivot_table(index='stim', columns='rep', values=col)
+    rs = []
+    for i, a in enumerate(piv.columns):
+        for b in piv.columns[i + 1:]:
+            d = piv[[a, b]].dropna()
+            if len(d) >= 3 and d[a].std() > 0 and d[b].std() > 0:
+                rs.append(float(np.corrcoef(d[a], d[b])[0, 1]))
+    return float(np.mean(rs)) if rs else np.nan
+
+
+def _slope(x: pd.Series) -> float:
+    x = x.dropna()
+    return float(np.polyfit(x.index.to_numpy(dtype=float), x.to_numpy(dtype=float), 1)[0]) if len(x) >= 2 else np.nan
+
+
+def recording_b(rec: dict) -> Tuple[pd.DataFrame, pd.DataFrame, dict]:
+    """Part B for one recording (`read_recording`'s output): (per presentation, per stimulus, the recording's row).
+    Per presentation and per stimulus (the mean over presentations) every reading of READINGS_B under each calyx response
+    read (columns '<yang|map>_<reading>'); per stimulus also the SD over presentations of the raw response and the map's
+    raw over Yang's raw. The recording's row: the design, Yang's table status, the solvent's response (CALYX_RESPONSE's
+    reading and the map's), the largest stimulus response, whether the solvent is large (more than SOLVENT_LARGE_SHARE of
+    it), the agreement between repeats, the drift per block of the solvent's response (and of the mean odor response
+    where blocks hold several odors), and the map-based calyx mean against Yang's table (Pearson r, median ratio,
+    largest difference)."""
+    fr = rec['frames'].copy()
+    srcs = [s for s in CALYX_RESPONSES if CALYX_COLUMNS[s] in fr]
+    meta = dict(recording=rec['stem'], set=rec['set'], fly=rec['fly'], side=rec['side'], plane_um=rec['plane_um'],
+                pulse_s=rec['pulse_s'])
+    readings = {s: presentation_readings(fr, CALYX_COLUMNS[s]) for s in srcs}
+    base = readings[srcs[0]]
+    per = base[['frame', 'block', 'position', 'rep', 'stim', 'odor', 'log10_conc']].copy()
+    for s in srcs:
+        for rd in READINGS_B:
+            per[f'{SOURCE_PREFIX[s]}_{rd}'] = readings[s][rd]
+    g = base.groupby('stim', sort=False)
+    st = pd.DataFrame(dict(odor=g['odor'].first(), conc=g['log10_conc'].first(), n_presentations=g.size(),
+                           first_block=g['block'].min()))
+    for s in srcs:
+        gs = readings[s].groupby('stim', sort=False)
+        for rd in READINGS_B:
+            st[f'{SOURCE_PREFIX[s]}_{rd}'] = gs[rd].mean()
+        st[f'{SOURCE_PREFIX[s]}_sd_presentations'] = gs['raw'].std(ddof=1)
+    if len(srcs) == 2:
+        st['map_over_yang_raw'] = st['map_raw'] / st['yang_raw']
+    st = st.reset_index().assign(**meta)
+    per = per.assign(**meta)
+    main = CALYX_RESPONSE if CALYX_RESPONSE in srcs else srcs[0]
+    v = calyx_values(fr, main)
+    sv = fr['is_solvent'].astype(bool)
+    o = readings[main]
+    largest = float(o.groupby('stim')['raw'].mean().max())
+    solvent = float(v[sv].mean()) if sv.any() else np.nan
+    sol_blk = v[sv].groupby(fr.loc[sv, 'block']).mean()
+    several = bool(o.groupby('block')['stim'].nunique().min() > 1)
+    row = dict(meta, design=block_design(fr), n_presentations=int(len(fr)), n_blocks=int(fr['block'].nunique()),
+               n_solvent=int(sv.sum()), n_stimuli=int(o['stim'].nunique()), yang_table=rec.get('yang_table'),
+               calyx_response=main, solvent=solvent, largest_stimulus=largest,
+               solvent_share_of_largest=solvent / largest if largest else np.nan,
+               large_solvent=bool(solvent > SOLVENT_LARGE_SHARE * largest),
+               repeat_agreement_r=repeat_agreement(o), solvent_drift_per_block=_slope(sol_blk),
+               odor_drift_per_block=_slope(o.groupby('block')['raw'].mean()) if several else np.nan,
+               pixel_um=rec.get('pixel_um', np.nan))
+    if 'maps' in srcs:
+        row['solvent_map'] = float(fr.loc[sv, 'response'].mean()) if sv.any() else np.nan
+    if len(srcs) == 2:
+        a, b = fr['response'].astype(float), fr['yang_peak'].astype(float)
+        row.update(map_vs_yang_r=float(np.corrcoef(a, b)[0, 1]), map_over_yang_median=float((a / b).median()),
+                   map_minus_yang_max_abs=float((a - b).abs().max()))
+    return per, st, row
+
+
+def fly_ratio_e98(per_recording: pd.DataFrame, n_boot: int = N_BOOT, seed: int = SEED) -> dict:
+    """E98's rule for a ratio (sets S and H; E98's definitions hold there): from per-recording numerator and denominator
+    responses (columns fly, num, den) a recording enters only if both exceed MIN_RESPONSE; the geometric mean over
+    flies (a fly's recordings on the log scale) with its 90 % interval from `n_boot` bootstrap draws of flies (E98's
+    `fly_ratio`). `fly_ratio_w`'s keys."""
+    from experiments import E98_apl_response_strength as E98
+    d = per_recording.copy()
+    ent = (d['num'] > MIN_RESPONSE) & (d['den'] > MIN_RESPONSE)
+    d = d[ent].copy()
+    d['log_ratio'] = np.log(d['num'] / d['den'])
+    r = E98.fly_ratio(d, n_boot=n_boot, seed=seed)
+    return dict(ratio=r['ratio'], lo=r['lo90'], hi=r['hi90'], mean='geometric' if r['n_flies'] else 'none',
+                n_flies=r['n_flies'], n_recordings=r['n_recordings'], n_left_out=int((~ent).sum()))
+
+
+def set_ratios(per_stim: pd.DataFrame, numerators: Sequence[Stim], denominator: Stim, value: str, rule: str,
+               n_boot: int = N_BOOT) -> pd.DataFrame:
+    """The flies' ratio of each numerator over `denominator` from per-recording stimulus means (columns fly, recording,
+    stim and `value`), by `rule` ('w': `fly_ratio_w`, 'e98': `fly_ratio_e98`); one row per numerator (ratio, lo90, hi90,
+    mean, counts). A recording enters a ratio only if it has both stimuli."""
+    piv = per_stim.pivot_table(index=['fly', 'recording'], columns='stim', values=value)
+    den = stim_label(denominator)
+    fn = fly_ratio_w if rule == 'w' else fly_ratio_e98
+    rows = []
+    for num in numerators:
+        lab = stim_label(num)
+        row = dict(numerator=lab, denominator=den, value=value, rule=rule)
+        if lab not in piv or den not in piv:
+            rows.append(dict(row, n_flies=0, n_recordings=0))
+            continue
+        pr = piv[[lab, den]].dropna().reset_index().rename(columns={lab: 'num', den: 'den'})
+        r = fn(pr, n_boot=n_boot)
+        rows.append(dict(row, ratio=r['ratio'], lo90=r['lo'], hi90=r['hi'], mean=r['mean'], n_flies=r['n_flies'],
+                         n_recordings=r['n_recordings'], n_left_out=r['n_left_out']))
+    return pd.DataFrame(rows)
+
+
+def subset_recordings_b(recs: pd.DataFrame, subset: str) -> List[str]:
+    """The recordings of one set in a subset: 'all'; 'without_large_solvent' (the entry's sensitivity: recordings whose
+    solvent response exceeds SOLVENT_LARGE_SHARE of their largest response left out); 'pulse_1s' (the 1 s pulses only;
+    set W has one 3 s recording); 'plane_<depth>' (one imaging plane, the planes apart)."""
+    if subset == 'all':
+        keep = recs
+    elif subset == 'without_large_solvent':
+        keep = recs[~recs['large_solvent'].astype(bool)]
+    elif subset == 'pulse_1s':
+        keep = recs[np.isclose(recs['pulse_s'].astype(float), 1.0)]
+    elif subset.startswith('plane_'):
+        keep = recs[np.isclose(recs['plane_um'].astype(float), float(subset.split('_', 1)[1]))]
+    else:
+        raise ValueError(f'unknown subset {subset!r}')
+    return sorted(keep['recording'])
+
+
+def b_subsets(recs: pd.DataFrame) -> List[str]:
+    """The subsets read for one set: all, without the large solvents, the 1 s pulses where the set has another pulse,
+    and each plane."""
+    out = ['all', 'without_large_solvent']
+    if not np.allclose(recs['pulse_s'].astype(float), 1.0) and np.isclose(recs['pulse_s'].astype(float), 1.0).any():
+        out.append('pulse_1s')
+    out += [f'plane_{d:g}' for d in sorted(recs['plane_um'].astype(float).unique())]
+    return out
+
+
+def all_b_ratios(per_stim: pd.DataFrame, recs: pd.DataFrame, n_boot: int = N_BOOT) -> pd.DataFrame:
+    """b_ratios.csv: per set (W, S, H), subset (`b_subsets`), calyx response (CALYX_RESPONSES) and reading (READINGS_B
+    that the set's design gives), every stimulus over the set's reference (SET_REFERENCE; set W also over farn at 10^-2,
+    W1's beside), by the set's rule (RATIO_RULE); the set's carrying reading and CALYX_RESPONSE marked."""
+    out = []
+    for set_, ref in SET_REFERENCE.items():
+        r_ = recs[(recs['set'] == set_) & ~recs['label_unsure']]
+        if r_.empty:
+            continue
+        ps = per_stim[per_stim['recording'].isin(r_['recording'])]
+        stims = sorted({(o, float(c)) for o, c in zip(ps['odor'], ps['conc'])}, key=lambda s: (s[0], s[1]))
+        dens = [ref] + ([W1_BESIDE_DENOMINATOR] if set_ == 'W' else [])
+        for subset in b_subsets(r_):
+            keep = set(subset_recordings_b(r_, subset))
+            pss = ps[ps['recording'].isin(keep)]
+            for src in CALYX_RESPONSES:
+                for rd in READINGS_B:
+                    col = f'{SOURCE_PREFIX[src]}_{rd}'
+                    if col not in pss or pss[col].isna().all():
+                        continue
+                    for den in dens:
+                        t = set_ratios(pss, [s for s in stims if s != den], den, col, RATIO_RULE[set_], n_boot)
+                        out.append(t.assign(set=set_, subset=subset, calyx_response=src, reading=rd,
+                                            carrying=bool(rd == CARRYING_READING[set_] and src == CALYX_RESPONSE),
+                                            n_recordings_in_subset=len(keep)))
+    cols = ['set', 'subset', 'calyx_response', 'reading', 'carrying', 'numerator', 'denominator', 'ratio', 'lo90', 'hi90',
+            'mean', 'n_flies', 'n_recordings', 'n_left_out', 'n_recordings_in_subset', 'rule', 'value']
+    df = pd.concat(out, ignore_index=True)
+    return df[[c for c in cols if c in df.columns]]
+
+
+def _sha256(path: Path) -> str:
+    import hashlib
+    h = hashlib.sha256()
+    with open(path, 'rb') as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b''):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def readings_identity_2021(stem: Optional[str] = None) -> dict:
+    """Part B's identity on one released 2021 recording (default the first): `presentation_readings` of the map-based
+    calyx means, averaged per stimulus, reproduce E79's per-stimulus calyx means under its order-matched and all-paraffin
+    oil baselines (E79_maps_across_baselines.csv, read by E98 as its carrying reading), on the stimuli E79 keeps (no
+    doubtful presentation); passed at 1e-9 dF/F."""
+    DS = _ds()
+    recs = read_recordings(sets=None)
+    stem = released_2021()[0] if stem is None else stem
+    rec = read_recording(recs[recs['stem'] == stem].iloc[0])
+    o = presentation_readings(rec['frames'], 'response')
+    ref = pd.read_csv(DS.OUT / 'E79_maps_across_baselines.csv').query('recording == @stem')
+    ref = ref.assign(stim=[stim_label((x.split(' ')[0], float(x.split(' ')[1]))) for x in ref['stimulus']])
+    ref = ref.set_index('stim')
+    dup = set(o.groupby('stim')['block'].nunique().loc[lambda x: x > 1].index)
+    got = o[~o['stim'].isin(dup)].groupby('stim')[['order_matched', 'minus_recording']].mean()
+    common = [s for s in got.index if s in ref.index]
+    d_om = float((got.loc[common, 'order_matched'] - ref.loc[common, 'mean_order_matched']).abs().max())
+    d_all = float((got.loc[common, 'minus_recording'] - ref.loc[common, 'mean_all_pfo']).abs().max())
+    return dict(passed=bool(common and max(d_om, d_all) <= 1e-9), recording=stem, n_stimuli=len(common),
+                order_matched_max_abs_diff=d_om, minus_recording_vs_all_pfo_max_abs_diff=d_all)
+
+
+def part_b(sets: Sequence[str] = E100_SETS, n_boot: int = N_BOOT) -> dict:
+    """Part B: every usable recording of `sets` (`read_recordings`, raw-only rows left out) read with `read_recording`
+    and `recording_b`; writes b_presentations.csv, b_per_stimulus.csv, b_recordings.csv, b_ratios.csv
+    (`all_b_ratios`), b_inputs.csv (every file read, with its sha256) and b_summary.json, and adds part B's identity
+    (`readings_identity_2021`) to identity.json. The family is joined in `score`."""
     if not YANG_RELEASED:
         _waiting('B')
-    raise NotImplementedError('part B: the run over sets W, S and H is written after Yang answers')
+    recs = read_recordings(sets)
+    recs = recs[recs['usable']]
+    pres, per_stim, rows, files = [], [], [], []
+    t0 = time.time()
+    for _, row in recs.iterrows():
+        rec = read_recording(row)
+        p, s, r = recording_b(rec)
+        r['content'] = row['content']
+        r['label_unsure'] = LABEL_UNSURE in str(row['content'])
+        pres.append(p)
+        per_stim.append(s)
+        rows.append(r)
+        for k in ('yaml', 'peak_maps', 'roi', 'roi_table', 'experiment_xml'):
+            if rec['files'].get(k) is not None:
+                files.append(dict(recording=row['stem'], kind=k, path=str(rec['files'][k]), sha256=_sha256(rec['files'][k])))
+        print(f"{time.strftime('%H:%M:%S')} {row['stem']} ({row['set']}): {len(rec['frames'])} presentations, "
+              f"Yang's table {rec['yang_table']} ({time.time() - t0:.0f} s)", flush=True)
+    R = pd.DataFrame(rows)
+    S = pd.concat(per_stim, ignore_index=True).merge(R[['recording', 'label_unsure']], on='recording')
+    P = pd.concat(pres, ignore_index=True)
+    ratios = all_b_ratios(S, R, n_boot)
+    out = out_dir()
+    P.to_csv(out / 'b_presentations.csv', index=False)
+    S.to_csv(out / 'b_per_stimulus.csv', index=False)
+    R.to_csv(out / 'b_recordings.csv', index=False)
+    ratios.to_csv(out / 'b_ratios.csv', index=False)
+    pd.DataFrame(files).to_csv(out / 'b_inputs.csv', index=False)
+    ident = readings_identity_2021()
+    old = _read_json(out / 'identity.json') or {}
+    old['readings_2021'] = ident
+    _write_json(out / 'identity.json', old)
+    summ = dict(calyx_response=CALYX_RESPONSE, carrying_reading=CARRYING_READING, references=
+                {k: stim_label(v) for k, v in SET_REFERENCE.items()}, identity_readings_2021=ident,
+                n_recordings=R.groupby('set').size().to_dict(),
+                n_flies=R[~R['label_unsure']].groupby('set')['fly'].nunique().to_dict(),
+                n_label_unsure=int(R['label_unsure'].sum()), yang_table=R['yang_table'].value_counts().to_dict(),
+                designs=R.groupby('set')['design'].agg(lambda x: sorted(set(x))).to_dict(),
+                large_solvent=R.groupby('set')['large_solvent'].sum().astype(int).to_dict(),
+                map_over_yang_median=R.groupby('set')['map_over_yang_median'].median().round(4).to_dict(),
+                map_over_yang_range={k: [round(float(g.min()), 4), round(float(g.max()), 4)]
+                                     for k, g in R.groupby('set')['map_over_yang_median']},
+                map_vs_yang_r_min=R.groupby('set')['map_vs_yang_r'].min().round(5).to_dict(),
+                seconds=round(time.time() - t0, 1))
+    _write_json(out / 'b_summary.json', summ)
+    return summ
 
 
-def part_c() -> dict:
-    """Part C (module docstring), from viki's copy, after Yang's answer (E79's analyses 1 to 3 on the stimulus maps)."""
-    _waiting('C')
+# ---------------------------------------------------------------------------
+# part C: where, in the flies (E79's analyses 1 to 3 on sets W, S and H)
+
+C_BLURS_PX = (2.0, 5.0, 10.0, 20.0)          # E79's BLURS_PX
+C_BLUR_PX = 2.0                               # E79's CORR_BLUR_PX: per-stimulus statistics
+C_MIN_RELIABILITY = 0.5                       # E79's MIN_MATCH_RELIABILITY: maps entering the centroid fit
+C_MIN_SB_RELIABILITY = 0.1                    # a map's share is corrected for its noise only above this reliability
+CENTROID_REFERENCE = {'W': 'paa', 'S': 'ms', 'H': 'paa'}
+
+
+def stimulus_maps_b(stack: np.ndarray, frames: pd.DataFrame, baseline: str
+                    ) -> Dict[Stim, Tuple[np.ndarray, List[np.ndarray]]]:
+    """Per odor stimulus (odor, log10 concentration): the mean map and the per-presentation maps, each presentation minus
+    its baseline map, `presentation_readings`' baselines as maps: 'minus_recording' (the mean of the recording's solvent
+    maps), 'minus_block' (of its block's), 'order_matched' (of the all-solvent blocks' maps at its position). A
+    presentation without its baseline is left out. `frames` in stack order (frame k is stack[k])."""
+    f = frames.reset_index(drop=True)
+    sv = f['is_solvent'].to_numpy(bool)
+    if baseline not in ('minus_recording', 'minus_block', 'order_matched'):
+        raise ValueError(f'unknown baseline {baseline!r}')
+    rec = stack[np.flatnonzero(sv)].mean(axis=0) if sv.any() else None
+    blk = {b: stack[g.index].mean(axis=0) for b, g in f[sv].groupby('block')}
+    all_sol = f.groupby('block')['is_solvent'].transform('all').to_numpy(bool)
+    pos = {p: stack[g.index].mean(axis=0) for p, g in f[sv & all_sol].groupby('position')}
+    out = {}
+    for (o, c), g in f[~sv].groupby(['odor', 'log10_conc']):
+        reps = []
+        for i, b, p in zip(g.index, g['block'], g['position']):
+            base = rec if baseline == 'minus_recording' else blk.get(b) if baseline == 'minus_block' else pos.get(p)
+            if base is not None:
+                reps.append(stack[i] - base)
+        if reps:
+            out[(o, float(c))] = (np.mean(reps, axis=0), reps)
+    return dict(sorted(out.items()))
+
+
+def spearman_brown(r: float, k: int) -> float:
+    """The reliability of the mean of `k` presentations from the mean r between two: k r / (1 + (k - 1) r)."""
+    return float(k * r / (1.0 + (k - 1) * r)) if np.isfinite(r) and k >= 1 else np.nan
+
+
+def mean_pair_r(reps: Sequence[np.ndarray], mask: np.ndarray, blur: float = C_BLUR_PX) -> float:
+    """The mean over pairs of presentations of their Pearson r inside the calyx after a Gaussian blur (E79's
+    `blurred_corr`); NaN with one presentation."""
+    DS = _ds()
+    rs = [DS.blurred_corr(reps[i], reps[j], mask, blur) for i in range(len(reps)) for j in range(i + 1, len(reps))]
+    return float(np.mean(rs)) if rs else np.nan
+
+
+def stimulus_class(set_: str, s: Stim) -> str:
+    """Part C's class of a stimulus for the common map's share: set W's paa at 10^-3 'panel' and its other stimuli 'weak'
+    (the weak-odor set); in sets S and H 'panel' for the APL16 panel's odors within MATCH_LOG_UNITS of 10^-3, 'weak' at or
+    below WEAK_MAX_CONC, 'between' otherwise (left out of the comparison)."""
+    o, c = s
+    if set_ == 'W':
+        return 'panel' if (o, float(c)) == W1_DENOMINATOR else 'weak'
+    if o in APL16_IN_SETS and abs(float(c) - PANEL_CONC) <= MATCH_LOG_UNITS + 1e-9:
+        return 'panel'
+    return 'weak' if float(c) <= WEAK_MAX_CONC + 1e-9 else 'between'
+
+
+def _top_two(stims: Sequence[Stim]) -> List[Stim]:
+    by = {}
+    for o, c in stims:
+        by.setdefault(o, []).append(c)
+    return [(o, c) for o in sorted(by) for c in sorted(by[o])[-2:]]
+
+
+def recording_c(rec: dict, baseline: str) -> Dict[str, object]:
+    """Part C for one recording (`read_recording(..., maps=True)`), its stimulus maps under `baseline`
+    (`stimulus_maps_b`):
+    - 'shared': E79's analysis 2 (`shared_stats`) at each of C_BLURS_PX, over all stimuli, the remainder's statistics over
+      each odor's two highest concentrations (E79's choice), lengths in um (recordings.csv's pixel size);
+    - 'stimuli': per stimulus the calyx mean, the repeat r of its first two presentations (E79's) and the mean over all
+      pairs, the reliability of the mean map (Spearman-Brown), the common map's share of it (cos^2 with the first singular
+      vector, means kept; r^2 with it, means removed; that r^2 over the reliability, a share corrected for noise), the
+      response-weighted centroid (E79's `centroid_grid`, 0-1 in the outline's box, image axes as recorded) and the class;
+    - 'solvent': the solvent's map (the mean of its presentations, as recorded) against the common map (means kept), beside
+      the odors' maps' r with it, its split-half r (even against odd presentations), its calyx mean and its share of the
+      largest stimulus's raw calyx mean."""
+    from scipy.ndimage import gaussian_filter
+    DS = _ds()
+    st, fr, mask = rec['stack'], rec['frames'].reset_index(drop=True), rec['mask']
+    maps = stimulus_maps_b(st, fr, baseline)
+    meta = dict(recording=rec['stem'], set=rec['set'], fly=rec['fly'], side=rec['side'], plane_um=rec['plane_um'],
+                baseline=baseline)
+    if len(maps) < 2:
+        return dict(shared=pd.DataFrame(), stimuli=pd.DataFrame(), solvent=dict(meta, n_stimuli=len(maps)))
+    stims = list(maps)
+    px = rec.get('pixel_um', np.nan)
+    px = float(px) if np.isfinite(px) else 1.0
+    shared = []
+    for blur in C_BLURS_PX:
+        for r in DS.shared_stats(maps, mask, blur, _top_two(stims), stims, px_um=px):
+            shared.append(dict(meta, pixel_um=px, **r))
+    bl = {k: gaussian_filter(maps[k][0], C_BLUR_PX)[mask] for k in stims}
+    X = np.stack([bl[k] for k in stims])
+    _, vk = DS.svd_shared(X, False)
+    vk = vk if vk.sum() >= 0 else -vk
+    _, vr = DS.svd_shared(X, True)
+    rows = []
+    for k in stims:
+        x, reps = bl[k], maps[k][1]
+        xr = x - x.mean()
+        rel = mean_pair_r(reps, mask)
+        sb = spearman_brown(rel, len(reps))
+        r2 = float((xr @ vr) ** 2 / (xr @ xr)) if (xr @ xr) > 0 else np.nan
+        cg = DS.centroid_grid(maps[k][0], mask)
+        rows.append(dict(meta, odor=k[0], conc=k[1], stim=stim_label(k), cls=stimulus_class(rec['set'], k),
+                         n_presentations=len(reps), calyx_mean=float(maps[k][0][mask].mean()),
+                         repeat_r=DS.blurred_corr(reps[0], reps[1], mask) if len(reps) >= 2 else np.nan,
+                         reliability_pairs=rel, reliability_mean_map=sb,
+                         cos2_common=float((x @ vk) ** 2 / (x @ x)) if (x @ x) > 0 else np.nan,
+                         r2_common=r2, r_common_kept=float(np.corrcoef(x, vk)[0, 1]),
+                         r2_common_corrected=r2 / sb if np.isfinite(sb) and sb > C_MIN_SB_RELIABILITY else np.nan,
+                         centroid_y=cg['cy'] if cg else np.nan, centroid_x=cg['cx'] if cg else np.nan))
+    S = pd.DataFrame(rows)
+    sidx = np.flatnonzero(fr['is_solvent'].to_numpy(bool))
+    sol = dict(meta, n_stimuli=len(stims), n_solvent=int(len(sidx)))
+    if len(sidx):
+        sm = st[sidx].mean(axis=0)
+        xs = gaussian_filter(sm, C_BLUR_PX)[mask]
+        raw_largest = float(fr[~fr['is_solvent']].groupby('stim')['response'].mean().max())
+        rs = S['r_common_kept']
+        sol.update(solvent_calyx_mean=float(sm[mask].mean()), largest_stimulus_calyx_mean=raw_largest,
+                   solvent_share_of_largest=float(sm[mask].mean()) / raw_largest if raw_largest else np.nan,
+                   r_solvent_common=float(np.corrcoef(xs, vk)[0, 1]), r_odors_common_median=float(rs.median()),
+                   r_odors_common_min=float(rs.min()), r_odors_common_max=float(rs.max()),
+                   solvent_split_half_r=DS.blurred_corr(st[sidx[0::2]].mean(axis=0), st[sidx[1::2]].mean(axis=0), mask)
+                   if len(sidx) >= 2 else np.nan)
+        sol['solvent_like_common'] = bool(sol['r_solvent_common'] >= sol['r_odors_common_median'])
+    return dict(shared=pd.DataFrame(shared), stimuli=S, solvent=sol)
+
+
+def centroid_offsets(stimuli: pd.DataFrame, ref_odor: str) -> pd.DataFrame:
+    """E79's dorsal-ventral centroid at matched magnitude (`centroid_vs_magnitude`), for any odors: per recording, least
+    squares of the image-y centroid on the log calyx mean and one offset per odor against `ref_odor`, over the maps with a
+    positive mean and repeat r at least C_MIN_RELIABILITY; recordings without `ref_odor`, without a second odor or with
+    too few maps are left out. One row per recording (slope, offset_<odor>)."""
+    rows = []
+    p = stimuli[(stimuli['calyx_mean'] > 0) & (stimuli['repeat_r'] >= C_MIN_RELIABILITY) & stimuli['centroid_y'].notna()]
+    for rec, g in p.groupby('recording'):
+        odors = sorted(set(g['odor']) - {ref_odor})
+        if ref_odor not in set(g['odor']) or not odors or len(g) < len(odors) + 3:
+            continue
+        X = np.c_[np.ones(len(g)), np.log(g['calyx_mean'].to_numpy(float)),
+                  np.stack([(g['odor'] == o).to_numpy(float) for o in odors], axis=1)]
+        beta = np.linalg.lstsq(X, g['centroid_y'].to_numpy(float), rcond=None)[0]
+        rows.append(dict(recording=rec, set=g['set'].iloc[0], fly=g['fly'].iloc[0], n_maps=len(g), reference=ref_odor,
+                         slope_per_log_mean=float(beta[1]), **{f'offset_{o}': float(b) for o, b in zip(odors, beta[2:])}))
+    return pd.DataFrame(rows)
+
+
+def c_summaries(shared: pd.DataFrame, stimuli: pd.DataFrame, solvent: pd.DataFrame, cent: pd.DataFrame) -> dict:
+    """Per set: the medians over recordings of analysis 2 at each blur and mode (the common map's share, the remainder's
+    repeat r, between-odor r and lengths); the per-stimulus reliability by class; the solvent against the common map; the
+    centroid offsets per fly with E79's bootstrap over flies; and the common map's share at the weak stimuli against the
+    panel's concentrations, per fly (recordings averaged) with the bootstrap 90 % interval of the difference (panel minus
+    weak), raw and corrected for each map's reliability."""
+    DS = _ds()
+    out = {}
+    for set_ in sorted(set(stimuli['set'])):
+        d = {}
+        sh = shared[shared['set'] == set_]
+        if len(sh):
+            cols = ['share_first_sv', 'resid_repeat_r_median', 'resid_between_odor_r_median', 'resid_crossrep_len',
+                    'resid_autocorr_len', 'noise_floor_len']
+            d['shared_medians'] = sh.groupby(['mode', 'blur_px'])[cols].median().round(4).reset_index().to_dict('records')
+        s = stimuli[stimuli['set'] == set_]
+        d['reliability_by_class'] = s.groupby('cls')[['repeat_r', 'reliability_mean_map', 'calyx_mean']].median() \
+            .round(4).to_dict('index')
+        sv = solvent[solvent['set'] == set_]
+        if 'r_solvent_common' in sv:
+            sv = sv.dropna(subset=['r_solvent_common'])
+            d['solvent'] = dict(n_recordings=int(len(sv)), r_solvent_common_median=float(sv['r_solvent_common'].median()),
+                                r_odors_common_median=float(sv['r_odors_common_median'].median()),
+                                n_solvent_like_common=int(sv['solvent_like_common'].sum()),
+                                solvent_share_of_largest_median=float(sv['solvent_share_of_largest'].median()),
+                                solvent_split_half_r_median=float(sv['solvent_split_half_r'].median()))
+        c = cent[cent['set'] == set_] if len(cent) else cent
+        offs = {}
+        for col in [x for x in c.columns if x.startswith('offset_') or x == 'slope_per_log_mean']:
+            pf = c.groupby('fly')[col].mean().dropna()
+            if len(pf) >= 2:
+                m, lo, hi = DS.fly_bootstrap(pf.to_numpy())
+                offs[col] = dict(mean=float(m[0]), lo90=float(lo[0]), hi90=float(hi[0]), n_flies=int(len(pf)),
+                                 n_flies_positive=int((pf > 0).sum()))
+        d['centroid_y_offsets'] = dict(reference=CENTROID_REFERENCE.get(set_), offsets=offs)
+        wp = {}
+        for col in ('r2_common', 'r2_common_corrected', 'cos2_common'):
+            per = s[s['cls'].isin(['weak', 'panel'])].groupby(['fly', 'recording', 'cls'])[col].mean().unstack('cls')
+            if not {'weak', 'panel'} <= set(per.columns):
+                continue
+            pf = per.dropna().groupby('fly').mean()
+            if len(pf) < 2:
+                continue
+            diff = (pf['panel'] - pf['weak']).to_numpy()
+            m, lo, hi = DS.fly_bootstrap(diff)
+            wp[col] = dict(weak_mean=float(pf['weak'].mean()), panel_mean=float(pf['panel'].mean()),
+                           panel_minus_weak=float(m[0]), lo90=float(lo[0]), hi90=float(hi[0]), n_flies=int(len(pf)),
+                           n_flies_panel_higher=int((diff > 0).sum()))
+        d['common_share_weak_vs_panel'] = wp
+        out[set_] = d
+    return out
+
+
+def part_c(sets: Sequence[str] = E100_SETS) -> dict:
+    """Part C: E79's analyses 1 to 3 on every usable recording of `sets` with an APL label (set H's fly without one left
+    out), each set's maps under its carrying reading's baseline (CARRYING_READING): `recording_c`, `centroid_offsets`
+    (reference odor CENTROID_REFERENCE), `c_summaries`; writes c_shared.csv, c_stimuli.csv, c_solvent.csv,
+    c_centroid.csv and c_summary.json."""
+    if not YANG_RELEASED:
+        _waiting('C')
+    recs = read_recordings(sets)
+    recs = recs[recs['usable'] & ~recs['content'].astype(str).str.contains(LABEL_UNSURE, regex=False)]
+    sh, sti, sol = [], [], []
+    t0 = time.time()
+    for _, row in recs.iterrows():
+        rec = read_recording(row, maps=True)
+        res = recording_c(rec, CARRYING_READING[row['set']])
+        sh.append(res['shared'])
+        sti.append(res['stimuli'])
+        sol.append(res['solvent'])
+        print(f"{time.strftime('%H:%M:%S')} C {row['stem']} ({row['set']}): {len(res['stimuli'])} stimuli "
+              f"({time.time() - t0:.0f} s)", flush=True)
+    shared = pd.concat(sh, ignore_index=True)
+    stimuli = pd.concat(sti, ignore_index=True)
+    solvent = pd.DataFrame(sol)
+    cent = pd.concat([centroid_offsets(stimuli[stimuli['set'] == s_], CENTROID_REFERENCE[s_])
+                      for s_ in sorted(set(stimuli['set']))], ignore_index=True)
+    out = out_dir()
+    shared.to_csv(out / 'c_shared.csv', index=False)
+    stimuli.to_csv(out / 'c_stimuli.csv', index=False)
+    solvent.to_csv(out / 'c_solvent.csv', index=False)
+    cent.to_csv(out / 'c_centroid.csv', index=False)
+    summ = dict(baselines=CARRYING_READING, blurs_px=list(C_BLURS_PX), n_recordings=recs.groupby('set').size().to_dict(),
+                per_set=c_summaries(shared, stimuli, solvent, cent), seconds=round(time.time() - t0, 1))
+    _write_json(out / 'c_summary.json', summ)
+    return summ
 
 
 def part_d() -> dict:
@@ -1550,9 +2185,320 @@ def part_e() -> dict:
     _waiting('E')
 
 
-def score() -> dict:
-    """The verdict (W1, W2, W3) from parts A2, A4, B and D: verdict.json."""
-    _waiting('score')
+def classify_linear(ratios: Sequence[float], lo: float, hi: float) -> str:
+    """E98's `classify` read on the ratios themselves instead of their logarithms: the same class for positive ratios
+    and an interval above 0, and it also takes an interval that reaches 0 or below (set W's arithmetic means, where a
+    response can be at or below the solvent's) and non-positive model ratios. 'inside' if any ratio is in [lo, hi]; for an
+    interval above 1, 'flatter' if all are below it and 'steeper' if all are above it; for one below 1, 'flatter' if all
+    are above it and 'steeper' if all are below it; for one holding 1 (no 'flatter'), 'steeper' if all are on one side of
+    it; 'mixed' otherwise."""
+    r = np.asarray(ratios, dtype=float)
+    if r.size == 0 or not np.all(np.isfinite(r)):
+        raise ValueError(f'ratios must be finite and not empty: {ratios}')
+    lo, hi = float(lo), float(hi)
+    if not lo <= hi:
+        raise ValueError(f'empty interval [{lo}, {hi}]')
+    if np.any((r >= lo) & (r <= hi)):
+        return 'inside'
+    if lo > 1:
+        return 'flatter' if np.all(r < lo) else 'steeper' if np.all(r > hi) else 'mixed'
+    if hi < 1:
+        return 'flatter' if np.all(r > hi) else 'steeper' if np.all(r < lo) else 'mixed'
+    return 'steeper' if (np.all(r > hi) or np.all(r < lo)) else 'mixed'
+
+
+def family_on(b1: pd.DataFrame, a0: str) -> pd.DataFrame:
+    """B1's APL-on rows (wiring, stimulus, win, pre) with the model's pre-odor level `a0` (E98's `with_a0`, one of
+    A0_DEFINITIONS: 'e90' E90's pre-odor mean as saved, E98's definition as written; 'settled'; 'blank')."""
+    from experiments import E98_apl_response_strength as E98
+    b = E98.with_a0(b1, a0)
+    return b[b['cond'] == 'on'][['wiring', 'stimulus', 'win', 'pre']]
+
+
+def model_classes(on: pd.DataFrame, num: str, den: str, lo: float, hi: float) -> pd.DataFrame:
+    """Per wiring, the family's ratio of B1 stimulus `num` over `den` (rows of `on`: wiring, stimulus, win, pre) through
+    E98's indicator family (`model_ratio_set`: n 1 to 2.5, the two forms), the linear reading (n 1, evoked) and their
+    classes against the flies' [lo, hi] (`classify_linear`; E98's `stimulus_classes` with that classifier). Ratios that
+    are not finite (an evoked part below 0 raised to a fractional power) are left out of the set and counted."""
+    from experiments import E98_apl_response_strength as E98
+    rows = []
+    ok = bool(np.isfinite(lo) and np.isfinite(hi))
+    for w, g in on.groupby('wiring', sort=False):
+        g = g.set_index('stimulus')
+        if num not in g.index or den not in g.index:
+            continue
+        a1, a2 = float(g.loc[num, 'win']), float(g.loc[den, 'win'])
+        p1, p2 = float(g.loc[num, 'pre']), float(g.loc[den, 'pre'])
+        if not np.isclose(p1, p2, rtol=1e-9, atol=1e-9):
+            raise RuntimeError(f'{w}: the pre-odor levels of {num} and {den} differ ({p1}, {p2})')
+        with np.errstate(invalid='ignore', divide='ignore'):
+            rs = E98.model_ratio_set(a1, a2, p2)['ratio'].to_numpy(float)
+            lin = float(E98.indicator_ratio(a1, a2, p2, 1.0, 'evoked'))
+        fin = rs[np.isfinite(rs)]
+        rows.append(dict(wiring=w, numerator=num, denominator=den, a_num=a1, a_den=a2, a0=p2, ratio_linear=lin,
+                         ratio_min=float(fin.min()) if fin.size else np.nan,
+                         ratio_max=float(fin.max()) if fin.size else np.nan, n_nonfinite=int(rs.size - fin.size),
+                         flies_lo90=lo, flies_hi90=hi,
+                         cls=classify_linear(fin, lo, hi) if ok and fin.size else 'not read',
+                         cls_linear=classify_linear([lin], lo, hi) if ok and np.isfinite(lin) else 'not read'))
+    return pd.DataFrame(rows)
+
+
+def estimate_name(session: str, panel: str) -> str:
+    return f"{session}/{'diag' if panel == DIAG_PANEL else panel}"
+
+
+def estimate_labels(matched: pd.DataFrame, stim: Stim) -> Dict[str, str]:
+    """{estimate ('<session>/<panel>'): B1 label} of one stimulus (`match_b1`'s rows), the estimates B1 carries."""
+    m = matched[(matched['stimulus'] == stim_label(stim)) & matched['b1_stimulus'].notna()]
+    return {estimate_name(r.session, r.panel_name): str(r.b1_stimulus) for r in m.itertuples()}
+
+
+def read_ratio(on: pd.DataFrame, lo: float, hi: float, nums: Dict[str, str], den) -> Tuple[dict, pd.DataFrame]:
+    """One ratio against the family under each input estimate (`nums`: estimate -> the numerator's B1 label; `den` the
+    denominator's B1 label, or estimate -> label for a denominator from the same session): per estimate the wirings'
+    classes (`model_classes`) and E98's comparison verdict (6 of 8 wirings, `comparison_verdict`), of the set and of the
+    linear reading; the ratio's class over the estimates (`ratio_over_estimates`: inside if inside under any, flatter or
+    steeper only if so under all)."""
+    from experiments import E98_apl_response_strength as E98
+    per, lin, rows = {}, {}, []
+    for est, num in nums.items():
+        d = den.get(est) if isinstance(den, dict) else den
+        if d is None:
+            continue
+        wc = model_classes(on, num, d, lo, hi)
+        if wc.empty:
+            continue
+        per[est] = E98.comparison_verdict(wc['cls']) if (wc['cls'] != 'not read').all() else 'not read'
+        lin[est] = E98.comparison_verdict(wc['cls_linear']) if (wc['cls_linear'] != 'not read').all() else 'not read'
+        rows.append(wc.assign(estimate=est))
+    res = dict(cls=ratio_over_estimates(per) if per and 'not read' not in per.values() else 'not read',
+               per_estimate=per, cls_linear=ratio_over_estimates(lin) if lin and 'not read' not in lin.values()
+               else 'not read', linear_per_estimate=lin, flies_lo90=lo, flies_hi90=hi)
+    return res, (pd.concat(rows, ignore_index=True) if rows else pd.DataFrame())
+
+
+def kc_data_rates(stim: Stim, path: Optional[Path] = None) -> dict:
+    """The flies' KC response rates at a weak stimulus (E72's part F table of Yang's weak-odor KC data,
+    results/E72_wiring_population/low_conc/data_fractions.csv: trial-mean above 1, mean over recordings): at the KC data's
+    concentration nearest the stimulus's within MATCH_LOG_UNITS (`concentration_match`: a tie goes to the higher), the
+    control flies' and APL output blocked (TNT) rates of the diag_mix panel and the control flies' of natmix_dilute, with
+    the number of recordings; and every KC data value within the rule as text."""
+    d = pd.read_csv(H.shared_dir().joinpath(*KC_DATA_FRACTIONS) if path is None else path)
+    d = d[~d['odor'].astype(str).str.contains(r' \+ ') & d['odor'].astype(str).str.contains(' @ ')].copy()
+    d['o'] = [parse_stim(x)[0] for x in d['odor']]
+    d['c'] = [parse_stim(x)[1] for x in d['odor']]
+    d = d[d['o'] == stim[0]]
+    c = concentration_match(stim[1], d['c'])
+    out = dict(kc_data_conc=c, kc_ctrl=np.nan, kc_ctrl_n=0, kc_tnt=np.nan, kc_tnt_n=0, kc_ctrl_natmix=np.nan,
+               kc_ctrl_natmix_n=0, kc_data_all='')
+    if c is None:
+        return out
+    near = d[(d['c'] - float(stim[1])).abs() <= MATCH_LOG_UNITS + 1e-9]
+    out['kc_data_all'] = '; '.join(f"{r.odor} {r.panel} {r.group}: {r.frac:.3f} (n {r.n_recordings})"
+                                   for r in near.sort_values(['c', 'panel', 'group']).itertuples())
+    m = d[np.isclose(d['c'], c)]
+    for key, panel, group in (('kc_ctrl', 'diag_mix', 'control'), ('kc_tnt', 'diag_mix', 'apl_output_blocked'),
+                              ('kc_ctrl_natmix', 'natmix_dilute', 'control')):
+        x = m[(m['panel'] == panel) & (m['group'] == group)]
+        if len(x):
+            out[key], out[f'{key}_n'] = float(x['frac'].iloc[0]), int(x['n_recordings'].iloc[0])
+    return out
+
+
+def family_kc_rates(b1: pd.DataFrame, labels: Sequence[str]) -> dict:
+    """The family's KC response rates (two or more spikes) at B1 stimuli `labels`, APL on and acutely off: the range over
+    the wirings and the labels (input estimates), and the median."""
+    out = {}
+    for cond, k in (('on', 'on'), ('acute_off', 'off')):
+        x = b1[(b1['cond'] == cond) & b1['stimulus'].isin(list(labels))]['response_rate']
+        out.update({f'family_kc_{k}_min': float(x.min()) if len(x) else np.nan,
+                    f'family_kc_{k}_median': float(x.median()) if len(x) else np.nan,
+                    f'family_kc_{k}_max': float(x.max()) if len(x) else np.nan})
+    return out
+
+
+def _flies_row(ratios: pd.DataFrame, set_: str, num: Stim, den: Stim, src: str = CALYX_RESPONSE,
+               reading: Optional[str] = None, subset: str = 'all') -> Optional[pd.Series]:
+    reading = CARRYING_READING[set_] if reading is None else reading
+    r = ratios[(ratios['set'] == set_) & (ratios['subset'] == subset) & (ratios['calyx_response'] == src)
+               & (ratios['reading'] == reading) & (ratios['numerator'] == stim_label(num))
+               & (ratios['denominator'] == stim_label(den))]
+    return r.iloc[0] if len(r) and r['n_flies'].iloc[0] > 0 else None
+
+
+def score(a0s: Sequence[str] = A0_DEFINITIONS) -> dict:
+    """The verdict as far as parts A2 and B allow (W1 and W2; W3 waits on part D, on hold with the connectome tables):
+    reads part B's tables and B1's runs on the eight wirings (`read_e98_b1`), and writes
+    - score_family_ratios.csv: per set, stimulus with B1 input and its set's reference, calyx response, pre-odor level
+      (`a0s`, E98's three definitions) and input estimate, each wiring's ratio through E98's indicator family and its
+      class against the flies' interval under the set's carrying reading (all recordings);
+    - score_ratio_classes.csv: per set, stimulus, calyx response and pre-odor level the class over estimates;
+    - score_weak_table.csv: per stimulus of set W (and set S's W2 stimuli) the flies' ratio over the set's reference
+      (Yang's table, the carrying reading; the map-based reading, the block's solvent and farn at 10^-2 beside), the
+      family's ratios (linear and through the indicator family, over wirings and estimates), the family's KC response
+      rates with APL on and off, and the flies' KC response rates (`kc_data_rates`);
+    - verdict.json: W1 (under each pre-odor level; E98's definition as written, 'e90', first), W1 under the map-based
+      reading beside (decides nothing), W2 (described: `w2_verdict`), W3 (waits), the outcomes reached and part C's
+      descriptions (f) and (g) when c_summary.json is there."""
+    from experiments import E98_apl_response_strength as E98
+    out = out_dir()
+    ratios = pd.read_csv(out / 'b_ratios.csv')
+    per_stim = pd.read_csv(out / 'b_per_stimulus.csv')
+    recs_b = pd.read_csv(out / 'b_recordings.csv')
+    b1 = read_e98_b1()
+    sources, e101 = b1.attrs.get('sources'), b1.attrs.get('e101')
+    stims = sorted({(o, float(c)) for o, c in zip(per_stim['odor'], per_stim['conc'])})
+    inputs = session_inputs()
+    matched = match_b1(b1, stims, inputs)
+    fam_rows, cls_rows, weak_rows = [], [], []
+    results: Dict[Tuple[str, str, str, str, str], dict] = {}
+    for a0 in a0s:
+        on = family_on(b1, a0)
+        for set_, ref in SET_REFERENCE.items():
+            den = estimate_labels(matched, ref)
+            for src in CALYX_RESPONSES:
+                for st in stims:
+                    f = _flies_row(ratios, set_, st, ref, src)
+                    nums = estimate_labels(matched, st)
+                    if f is None or not nums or not den:
+                        continue
+                    # the reference's input is the APL16 panel's own where it is one (paa at 10^-3 -> 10^-4, pa at 10^-3)
+                    d = den.get(next((k for k, v in den.items() if v in H.APL16_ODORS), None)) or next(iter(den.values()))
+                    res, rows = read_ratio(on, float(f['lo90']), float(f['hi90']), nums, d)
+                    results[(a0, set_, src, stim_label(st), stim_label(ref))] = res
+                    fam_rows.append(rows.assign(set=set_, a0_definition=a0, calyx_response=src, stimulus=stim_label(st),
+                                                reference=stim_label(ref), flies_ratio=float(f['ratio'])))
+                    cls_rows.append(dict(set=set_, a0_definition=a0, calyx_response=src, stimulus=stim_label(st),
+                                         reference=stim_label(ref), flies_ratio=float(f['ratio']),
+                                         flies_lo90=float(f['lo90']), flies_hi90=float(f['hi90']), flies_mean=f['mean'],
+                                         n_flies=int(f['n_flies']), cls=res['cls'], cls_linear=res['cls_linear'],
+                                         per_estimate=json.dumps(res['per_estimate']),
+                                         linear_per_estimate=json.dumps(res['linear_per_estimate']),
+                                         linear_min=float(rows['ratio_linear'].min()),
+                                         linear_max=float(rows['ratio_linear'].max()),
+                                         family_min=float(rows['ratio_min'].min()),
+                                         family_max=float(rows['ratio_max'].max())))
+            if set_ == 'W':   # W1's beside: over farn at 10^-2, each estimate over the same session's farn
+                fden = estimate_labels(matched, W1_BESIDE_DENOMINATOR)
+                for st in W1_RATIOS:
+                    f = _flies_row(ratios, 'W', st, W1_BESIDE_DENOMINATOR)
+                    if st == W1_BESIDE_DENOMINATOR or f is None:
+                        continue
+                    res, rows = read_ratio(on, float(f['lo90']), float(f['hi90']), estimate_labels(matched, st), fden)
+                    results[(a0, 'W', CALYX_RESPONSE, stim_label(st), stim_label(W1_BESIDE_DENOMINATOR))] = res
+                    if len(rows):
+                        fam_rows.append(rows.assign(set='W', a0_definition=a0, calyx_response=CALYX_RESPONSE,
+                                                    stimulus=stim_label(st), reference=stim_label(W1_BESIDE_DENOMINATOR),
+                                                    flies_ratio=float(f['ratio'])))
+                    cls_rows.append(dict(set='W', a0_definition=a0, calyx_response=CALYX_RESPONSE, stimulus=stim_label(st),
+                                         reference=stim_label(W1_BESIDE_DENOMINATOR), flies_ratio=float(f['ratio']),
+                                         flies_lo90=float(f['lo90']), flies_hi90=float(f['hi90']), flies_mean=f['mean'],
+                                         n_flies=int(f['n_flies']), cls=res['cls'], cls_linear=res['cls_linear'],
+                                         per_estimate=json.dumps(res['per_estimate']),
+                                         linear_per_estimate=json.dumps(res['linear_per_estimate'])))
+    fam = pd.concat(fam_rows, ignore_index=True)
+    cls = pd.DataFrame(cls_rows)
+    fam.to_csv(out / 'score_family_ratios.csv', index=False)
+    cls.to_csv(out / 'score_ratio_classes.csv', index=False)
+
+    def c_(a0, set_, src, num, den):
+        return results.get((a0, set_, src, stim_label(num), stim_label(den)), {}).get('cls', 'not read')
+
+    w1 = {}
+    for a0 in a0s:
+        for src in CALYX_RESPONSES:
+            classes = {stim_label(s): c_(a0, 'W', src, s, W1_DENOMINATOR) for s in W1_RATIOS}
+            w1[(a0, src)] = dict(W1=w1_verdict(classes), classes=classes)
+    w1_main = {a0: w1[(a0, CALYX_RESPONSE)]['W1'] for a0 in a0s}
+    agree = len(set(w1_main.values())) == 1
+    w2 = {}
+    for a0 in a0s:
+        d = {}
+        for name, num, den in W2_RATIOS:
+            f = _flies_row(ratios, 'S', num, den)
+            comp = c_(a0, 'S', CALYX_RESPONSE, num, den)
+            d[name] = dict(comparison=comp, n_flies=int(f['n_flies']) if f is not None else 0,
+                           verdict=w2_verdict(comp, int(f['n_flies']) if f is not None else 0),
+                           flies=[float(f['ratio']), float(f['lo90']), float(f['hi90'])] if f is not None else None)
+        w2[a0] = d
+    # the weak table: set W's stimuli over paa at 10^-3, set S's W2 stimuli over pa at 10^-3
+    for set_, ref, todo in (('W', W1_DENOMINATOR, [s for s in SET_W_STIMULI if s != W1_DENOMINATOR] + [W1_DENOMINATOR]),
+                            ('S', ('pa', -3.0), [('ms', -3.0), ('paa', -3.0), ('pa', -3.0)])):
+        for st in todo:
+            row = dict(set=set_, stimulus=stim_label(st), reference=stim_label(ref), w1=bool(set_ == 'W' and st in W1_RATIOS),
+                       input=';'.join(sorted({f"{estimate_name(r.session, r.panel_name)} {r.status}"
+                                              for r in matched[matched['stimulus'] == stim_label(st)].itertuples()})))
+            if st != ref:
+                for tag, src, rd in (('', CALYX_RESPONSE, None), ('map_', 'maps', None),
+                                     ('minus_block_', CALYX_RESPONSE, 'minus_block')):
+                    f = _flies_row(ratios, set_, st, ref, src, rd)
+                    if f is not None:
+                        row.update({f'{tag}flies_ratio': f['ratio'], f'{tag}flies_lo90': f['lo90'],
+                                    f'{tag}flies_hi90': f['hi90']})
+                        if not tag:
+                            row.update(flies_mean=f['mean'], n_flies=int(f['n_flies']), n_recordings=int(f['n_recordings']))
+                if set_ == 'W' and st != W1_BESIDE_DENOMINATOR:
+                    f = _flies_row(ratios, 'W', st, W1_BESIDE_DENOMINATOR)
+                    if f is not None:
+                        row.update(over_farn2_ratio=f['ratio'], over_farn2_lo90=f['lo90'], over_farn2_hi90=f['hi90'])
+                for a0 in a0s:
+                    x = cls[(cls['set'] == set_) & (cls['a0_definition'] == a0) & (cls['calyx_response'] == CALYX_RESPONSE)
+                            & (cls['stimulus'] == stim_label(st)) & (cls['reference'] == stim_label(ref))]
+                    if len(x):
+                        row.update({f'family_linear_min_{a0}': x['linear_min'].iloc[0],
+                                    f'family_linear_max_{a0}': x['linear_max'].iloc[0],
+                                    f'family_min_{a0}': x['family_min'].iloc[0], f'family_max_{a0}': x['family_max'].iloc[0],
+                                    f'cls_{a0}': x['cls'].iloc[0]})
+            ps = per_stim[(per_stim['set'] == set_) & (per_stim['stim'] == stim_label(st)) & ~per_stim['label_unsure']]
+            row.update(yang_raw_median=float(ps['yang_raw'].median()) if len(ps) else np.nan,
+                       map_over_yang_median=float(ps['map_over_yang_raw'].median()) if len(ps) else np.nan,
+                       map_over_yang_min=float(ps['map_over_yang_raw'].min()) if len(ps) else np.nan,
+                       map_over_yang_max=float(ps['map_over_yang_raw'].max()) if len(ps) else np.nan)
+            labs = list(estimate_labels(matched, st).values())
+            row.update(family_kc_rates(b1, labs))
+            win = b1[(b1['cond'] == 'on') & b1['stimulus'].isin(labs)]
+            row.update(family_apl_win_min=float(win['win'].min()) if len(win) else np.nan,
+                       family_apl_win_max=float(win['win'].max()) if len(win) else np.nan)
+            row.update(kc_data_rates(st))
+            weak_rows.append(row)
+    weak = pd.DataFrame(weak_rows)
+    weak.to_csv(out / 'score_weak_table.csv', index=False)
+    rw = recs_b[(recs_b['set'] == 'W') & ~recs_b['label_unsure']]
+    verdict = dict(
+        calyx_response=CALYX_RESPONSE, carrying_reading=CARRYING_READING, a0_definitions=list(a0s),
+        W1=w1_main['e90'] if 'e90' in w1_main else None, W1_by_a0=w1_main, W1_agrees_over_a0=agree,
+        W1_classes={a0: w1[(a0, CALYX_RESPONSE)]['classes'] for a0 in a0s},
+        W1_maps_beside={a0: w1[(a0, 'maps')] for a0 in a0s},
+        W1_over_farn2_described={a0: {stim_label(s): c_(a0, 'W', CALYX_RESPONSE, s, W1_BESIDE_DENOMINATOR)
+                                      for s in W1_RATIOS if s != W1_BESIDE_DENOMINATOR} for a0 in a0s},
+        W2=w2, W3='waits: part D is on hold with the connectome tables (rule of 2026-11-15 15:35)',
+        set_w_solvent=dict(yang_median=float(rw['solvent'].median()), yang_min=float(rw['solvent'].min()),
+                           yang_max=float(rw['solvent'].max()), n_large=int(rw['large_solvent'].sum()),
+                           n_recordings=int(len(rw))),
+        b1_sources=sources, b1_e101=e101, time=time.strftime('%Y-%m-%d %H:%M'), host=_host(),
+        commits=dict(H.code_commits()))
+    oc = []
+    if verdict['W1'] == 'inside' and all(v['verdict'] == 'inside' for v in w2.get('e90', {}).values()):
+        oc.append('a')
+    if verdict['W1'] == 'flatter':
+        oc.append('b')
+    if any(v['verdict'] == 'flatter' for v in w2.get('e90', {}).values()):
+        oc.append('c')
+    csum = _read_json(out / 'c_summary.json')
+    if csum is not None:
+        f_, g_ = {}, {}
+        for set_, d in csum.get('per_set', {}).items():
+            wp = d.get('common_share_weak_vs_panel', {}).get('r2_common_corrected')
+            if wp:
+                f_[set_] = dict(wp, lower_at_weak=bool(wp['lo90'] > 0))
+            if 'solvent' in d:
+                g_[set_] = d['solvent']
+        verdict['f_common_share_weak_vs_panel'] = f_
+        verdict['g_solvent_vs_common'] = g_
+    verdict['outcomes'] = oc
+    _write_json(out / 'verdict.json', verdict)
+    return {k: verdict[k] for k in ('W1', 'W1_by_a0', 'W1_classes', 'W2', 'W3', 'outcomes')}
 
 
 PARTS = ('0', 'A2', 'A3', 'A4', 'B', 'C', 'D', 'E', 'score')
@@ -1563,9 +2509,18 @@ READS = {
     'A3': "C2's simulator (E77's build_c2_simulator) on the extended input, E79's calyces (Yang's Claude's connectome "
           "tables in Tom/claude_APL_modeling_YZ4TC and Pratyush's boutons)",
     'A4': "A3's inputs (rebuilt in the process), E79's connectome_measured.csv",
+    'B': "viki's copy of Yang's processed recordings (data/yang_apl_recordings/; sets W, S, H; raw-only rows refused): "
+         "yaml, peak maps, outlines, Yang's roi_peak_dff tables, Experiment.xml; E79's E79_maps_across_baselines.csv",
+    'C': "viki's copy (sets W, S, H): yaml, peak maps, outlines",
+    'score': "part B's tables, E98's B1 on the eight wirings (E98's archive and E101's archived A3, through E98's "
+             "load_b1_all), the lab's three ORN sessions, E72's low_conc/data_fractions.csv, part C's c_summary.json",
 }
 WRITES = {
     '0': 'identity.json', 'A2': 'a2_family.csv, a2_unmatched.csv',
+    'B': 'b_presentations.csv, b_per_stimulus.csv, b_recordings.csv, b_ratios.csv, b_inputs.csv, b_summary.json, '
+         'identity.json (readings_2021)',
+    'C': 'c_shared.csv, c_stimuli.csv, c_solvent.csv, c_centroid.csv, c_summary.json',
+    'score': 'score_family_ratios.csv, score_ratio_classes.csv, score_weak_table.csv, verdict.json',
     'A3': 'a3_pn_rates.csv, a3_pn_rates_total.csv, a3_inputs.csv, a3_maps.csv, a3_agreement.csv, a3_anatomy.csv, '
           'a3_sessions.csv, a3_pred_grids.npz, a3_summary.json; outputs/E100_apl_weak_odors/A3/orn_extended.csv',
     'A4': 'a4_power_draws.csv.gz, a4_power.csv, a4_power_by_calyx.csv, a4_w3_pairs.json',
@@ -1604,8 +2559,17 @@ def main() -> None:
         if 'A4' in parts:
             provenance('A4', n_perm=a.n_perm, n_draws=a.n_draws)
             print(json.dumps(part_a4(state, a.n_draws), indent=1, default=float), flush=True)
+    elif a.part == 'B':
+        provenance('B', calyx_response=CALYX_RESPONSE, carrying_reading=CARRYING_READING, n_boot=N_BOOT)
+        print(json.dumps(part_b(), indent=1, default=float), flush=True)
+    elif a.part == 'C':
+        provenance('C', baselines=CARRYING_READING, blurs_px=list(C_BLURS_PX))
+        print(json.dumps(part_c(), indent=1, default=float), flush=True)
+    elif a.part == 'score':
+        provenance('score', calyx_response=CALYX_RESPONSE, a0_definitions=list(A0_DEFINITIONS))
+        print(json.dumps(score(), indent=1, default=float), flush=True)
     else:
-        {'B': part_b, 'C': part_c, 'D': part_d, 'E': part_e, 'score': score}[a.part]()
+        {'D': part_d, 'E': part_e}[a.part]()
 
 
 if __name__ == '__main__':
