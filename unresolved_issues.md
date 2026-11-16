@@ -8,75 +8,6 @@ directory's notes/ and are linked from here.
 
 ## Open
 
-### The model's pre-odor window starts with the KC layer's start-up, so pre-odor means of the claws and APL read low (found 2026-11-15 17:48, atlas's code subagent for E98)
-- **What.** olfsysm's KC layer, and with it APL, starts from zero at time_start (-0.5 s) and reaches its spontaneous level
-  about 0.2 to 0.3 s later. On the real wiring of the breadth-2 APL-effect fit, APL reads 0.30 at -0.499 s, 7.10 at -0.45 s,
-  8.46 at -0.40 s and 8.79 from -0.3 s on. E90's pre-odor window (`PRE_WINDOW`, -0.5 to 0 s) therefore averages the
-  start-up: APL's pre-odor mean is 8.27 there against a settled 8.79 (-0.25 to 0 s). A blank stimulus "evokes" 0.49 to 0.56
-  of APL on the eight wirings when its window mean is taken minus E90's pre-odor mean (real wiring 0.508 with APL on, 1.47
-  acutely off), and -0.014 to -0.018 minus the settled level, a slow drift. E98's part 0 identity "a blank evokes zero" fails
-  for that reason. Spike counts in the odor window are not affected (the layer has settled long before the odor), and the
-  KCs' response rate to the blank is 0 with APL on and off on every wiring.
-- **What it affects (known so far).** Readings of the claw stage and of APL as a window mean minus E90's pre-odor mean:
-  - E90's claw stage and APL readings (its stage matrices' changes, `PRE_WINDOW`);
-  - E95's part A4: "41 to 42 % of APL's odor-window mean is there before the odor" is about 45 % against the settled level;
-  - E98's premise (which quotes E95's share) and the model's pre-odor level in its part C (`--a0`);
-  - E101's claw stage on E98's input: about -4.5 % of the blank's summed claw drive.
-  To check: E92, E93 and E94, which read E90's stage runs or pre-odor windows, and whether the ORN, PN and bouton stages
-  start earlier (at time_pre_start) and so are not affected.
-- **Done.** E98 saves APL's settled pre-odor level and traces (5053e86) and makes the model's pre-odor level an explicit
-  choice in part C (e90, settled, or the blank's window mean); on the real wiring the choice moves its ratios by about 0.02
-  and changes no class. Which level carries E98's verdict is with a planning subagent from atlas.
-  2026-11-15 18:08 (hal): E100's model side and E101's X2 take the same rule as E98's amendment of 17:59, fixed before the
-  flies' values were seen (planned by a Fable subagent from hal 18:01; amendments in both entries): the blank's window mean
-  carries, APL's settled level is the partner, E90's level is shown and decides nothing. E101's claws have no saved settled
-  level, so they have no level partner; E101's part 0 blank item is replaced by E98's amended identity. E92 (hal): its part A
-  and verdicts rest on spike counts and are not affected; its part F (E92_gain, F3) reads E90's stages as window minus
-  pre-odor mean and is to be sized.
-  2026-11-15 19:30 (hal): E92 sized (part F5, queue 80d8376; an Opus code subagent of hal's session). The claws' pre-odor
-  level with APL on was simulated again at each run's parameters: 16 reruns (C2 on the eight wirings, E91's refits and its
-  choice on the base with the flies' recruitment on S), each reproducing its counts and E90's pre-odor means exactly; C2's
-  settled claws equal atlas's settled E90 tables. All claws (session z, APL on) become less alike by 0.026 to 0.047 for C2 and
-  the refits, but by only 0.004 to 0.011 on the oracle base, whose pre-odor level already differs by odor; the steps shrink by
-  as much. Part A3: the model's claws are 0.14 to 0.15 more alike than Remy's noise-removed claws (was 0.17 to 0.18), and the
-  ester group's step with APL on differs in 10 of 16 readings (was 15); no verdict class changes. Part F: the summed form still
-  reads as the clipped family (claws within 0.003, steps within 0.007), and the oracle base's difference from C2 in claws and
-  steps falls from 0.03-0.05 to 0.01-0.02. The somata, A4's line and every place on it, and part B read spike counts and do
-  not move. Dated lines are in E92's note (A3, F, Summary, Interpretation) and the page is rebuilt. E92 is done for this issue.
-- **Checked by viki (2026-11-15 17:49 to 18:20, an Opus subagent of viki's session; scripts and outputs in the shared
-  results/preodor_startup_check_viki/).**
-  - When each stage starts (olfsysm.cpp): the ORN layer integrates from time_pre_start at its spontaneous rate (constant
-    before the odor; unaffected); the LN and PN layers also from time_pre_start but start away from their fixed point (the PN
-    pre-odor mean over E90's window and the settled one differ by 0.018 Hz at most, 0.22 %); the boutons exist from time_start
-    and with APL on inherit APL's start-up (real wiring 11.220 Hz over E90's window against 11.007 settled); claws, KCs and
-    APL start from zero at time_start. The KC thresholds' spontaneous input is read over -0.25 to 0 s and is unaffected.
-  - E94: part A1's spontaneous rates 14.3 / 10.9 to 11.7 Hz become 14.3 / 10.7 to 11.5; part A3's evoked-distance changes
-    move by 0.003 or less and its reading holds; the steps of the equal (half the fitted dose) are no longer larger than the
-    fitted family's (settled −0.013 to +0.006 with APL on), so "further from the flies" no longer holds.
-  - E95: part A4's 41 to 42 % becomes 43 to 45 %; the equal B5's step 0.40 / 0.35 becomes 0.361 / 0.316 (APL on; the flies
-    0.138), its excess unchanged.
-  - E93: part D with F, all claws, ester with alcohol goes from "upstream" (9 of 9) to "not resolved" (7 of 9; on the margin,
-    0.687 against 0.686); on the lab's input it stays "upstream" (9 of 9), read with E93's scoring path. A2 is unchanged.
-  - E96 and E99: nothing reported reads a pre-odor window (their part_steps did not run).
-  - The fits' claw readings (C2 on S, session z, group means) rise by 0.014 to 0.042 settled, and 355 to 481 of 9,867 claws
-    become silent; the fits' steps shrink by as much (all 66 with APL on 0.355 to 0.316). This bears on E90 and E92 (not
-    viki's; E90's own verdict pipeline was not rerun).
-  - Dated lines added to E93, E94 and E95 (2026-11-15 18:23); their pages rebuilt and saved.
-- **Done (2026-11-15 21:10, atlas).** E98's level is chosen (amendment of 17:59: the blank's window mean carries, the settled level
-  is a partner, E90's level is shown and decides nothing). E90 is sized (queue 8fcd4e7, `experiments/E90_settled_preodor.py`;
-  an Opus code subagent of atlas's session; results/E90_model_stages/settled_preodor/): short reruns of every run E90 read
-  reproduce its counts and, over E90's own window, its pre-odor means to 2e-15, and the pipeline at E90's level reproduces
-  its pair tables and verdict exactly. No outcome letter or group verdict changes, and the PN stage, outcome (g), the somata
-  and every spike-count reading are unchanged. Four statements no longer hold: the input glomeruli's claws are now less
-  alike than the flies' (ester 0.642 / alcohol 0.569 against 0.571 / 0.477), not as alike; the alcohol step with APL on from
-  the input claws is too small (+0.044 against +0.144), not a match; the Addendum's reverse of (b) holds in all four soma
-  readings; and B5's ester step at 2 s is too small in every reading. The ester step with APL on from all claws now equals
-  the flies' (+0.244 against +0.241). E90's note has a dated block with the table (21:09) and its page is rebuilt (local,
-  URL kept); the per-unit settled levels of every E90 run are in settled_preodor/preodor_levels.parquet.
-- **Remains.** The summary's {#model-stages} and {#steps-like-for-like}, which quote E90's and E92's claw readings at E90's
-  level (one planner from atlas takes both, agreed with hal and viki in chat 19:29); E90's own figures and comparison_table.md
-  are not redone (said in its note); E101's claws have no saved settled level and stay read at E90's level beside the blank's.
-
 ### The APL-effect table did not check the realism of variants archived in part subfolders (found 2026-11-14 00:20, viki, E93's write-up)
 - **What.** `kcq/apl_effect.py` looked for a variant's archived responses (`<tag>_on_responses.parquet`,
   `<tag>_acute_off_responses.parquet`) only at the root of its archive folder. The experiments that archive their runs in
@@ -292,6 +223,80 @@ directory's notes/ and are linked from here.
   against their sources); the per-experiment notes keep their hand-typed values.
 
 ## Resolved
+
+### The model's pre-odor window starts with the KC layer's start-up, so pre-odor means of the claws and APL read low (found 2026-11-15 17:48, atlas's code subagent for E98; resolved 2026-11-15 21:45)
+- **What.** olfsysm's KC layer, and with it APL, starts from zero at time_start (-0.5 s) and reaches its spontaneous level
+  about 0.2 to 0.3 s later. On the real wiring of the breadth-2 APL-effect fit, APL reads 0.30 at -0.499 s, 7.10 at -0.45 s,
+  8.46 at -0.40 s and 8.79 from -0.3 s on. E90's pre-odor window (`PRE_WINDOW`, -0.5 to 0 s) therefore averages the
+  start-up: APL's pre-odor mean is 8.27 there against a settled 8.79 (-0.25 to 0 s). A blank stimulus "evokes" 0.49 to 0.56
+  of APL on the eight wirings when its window mean is taken minus E90's pre-odor mean (real wiring 0.508 with APL on, 1.47
+  acutely off), and -0.014 to -0.018 minus the settled level, a slow drift. E98's part 0 identity "a blank evokes zero" fails
+  for that reason. Spike counts in the odor window are not affected (the layer has settled long before the odor), and the
+  KCs' response rate to the blank is 0 with APL on and off on every wiring.
+- **What it affects (known so far).** Readings of the claw stage and of APL as a window mean minus E90's pre-odor mean:
+  - E90's claw stage and APL readings (its stage matrices' changes, `PRE_WINDOW`);
+  - E95's part A4: "41 to 42 % of APL's odor-window mean is there before the odor" is about 45 % against the settled level;
+  - E98's premise (which quotes E95's share) and the model's pre-odor level in its part C (`--a0`);
+  - E101's claw stage on E98's input: about -4.5 % of the blank's summed claw drive.
+  To check: E92, E93 and E94, which read E90's stage runs or pre-odor windows, and whether the ORN, PN and bouton stages
+  start earlier (at time_pre_start) and so are not affected.
+- **Done.** E98 saves APL's settled pre-odor level and traces (5053e86) and makes the model's pre-odor level an explicit
+  choice in part C (e90, settled, or the blank's window mean); on the real wiring the choice moves its ratios by about 0.02
+  and changes no class. Which level carries E98's verdict is with a planning subagent from atlas.
+  2026-11-15 18:08 (hal): E100's model side and E101's X2 take the same rule as E98's amendment of 17:59, fixed before the
+  flies' values were seen (planned by a Fable subagent from hal 18:01; amendments in both entries): the blank's window mean
+  carries, APL's settled level is the partner, E90's level is shown and decides nothing. E101's claws have no saved settled
+  level, so they have no level partner; E101's part 0 blank item is replaced by E98's amended identity. E92 (hal): its part A
+  and verdicts rest on spike counts and are not affected; its part F (E92_gain, F3) reads E90's stages as window minus
+  pre-odor mean and is to be sized.
+  2026-11-15 19:30 (hal): E92 sized (part F5, queue 80d8376; an Opus code subagent of hal's session). The claws' pre-odor
+  level with APL on was simulated again at each run's parameters: 16 reruns (C2 on the eight wirings, E91's refits and its
+  choice on the base with the flies' recruitment on S), each reproducing its counts and E90's pre-odor means exactly; C2's
+  settled claws equal atlas's settled E90 tables. All claws (session z, APL on) become less alike by 0.026 to 0.047 for C2 and
+  the refits, but by only 0.004 to 0.011 on the oracle base, whose pre-odor level already differs by odor; the steps shrink by
+  as much. Part A3: the model's claws are 0.14 to 0.15 more alike than Remy's noise-removed claws (was 0.17 to 0.18), and the
+  ester group's step with APL on differs in 10 of 16 readings (was 15); no verdict class changes. Part F: the summed form still
+  reads as the clipped family (claws within 0.003, steps within 0.007), and the oracle base's difference from C2 in claws and
+  steps falls from 0.03-0.05 to 0.01-0.02. The somata, A4's line and every place on it, and part B read spike counts and do
+  not move. Dated lines are in E92's note (A3, F, Summary, Interpretation) and the page is rebuilt. E92 is done for this issue.
+- **Checked by viki (2026-11-15 17:49 to 18:20, an Opus subagent of viki's session; scripts and outputs in the shared
+  results/preodor_startup_check_viki/).**
+  - When each stage starts (olfsysm.cpp): the ORN layer integrates from time_pre_start at its spontaneous rate (constant
+    before the odor; unaffected); the LN and PN layers also from time_pre_start but start away from their fixed point (the PN
+    pre-odor mean over E90's window and the settled one differ by 0.018 Hz at most, 0.22 %); the boutons exist from time_start
+    and with APL on inherit APL's start-up (real wiring 11.220 Hz over E90's window against 11.007 settled); claws, KCs and
+    APL start from zero at time_start. The KC thresholds' spontaneous input is read over -0.25 to 0 s and is unaffected.
+  - E94: part A1's spontaneous rates 14.3 / 10.9 to 11.7 Hz become 14.3 / 10.7 to 11.5; part A3's evoked-distance changes
+    move by 0.003 or less and its reading holds; the steps of the equal (half the fitted dose) are no longer larger than the
+    fitted family's (settled −0.013 to +0.006 with APL on), so "further from the flies" no longer holds.
+  - E95: part A4's 41 to 42 % becomes 43 to 45 %; the equal B5's step 0.40 / 0.35 becomes 0.361 / 0.316 (APL on; the flies
+    0.138), its excess unchanged.
+  - E93: part D with F, all claws, ester with alcohol goes from "upstream" (9 of 9) to "not resolved" (7 of 9; on the margin,
+    0.687 against 0.686); on the lab's input it stays "upstream" (9 of 9), read with E93's scoring path. A2 is unchanged.
+  - E96 and E99: nothing reported reads a pre-odor window (their part_steps did not run).
+  - The fits' claw readings (C2 on S, session z, group means) rise by 0.014 to 0.042 settled, and 355 to 481 of 9,867 claws
+    become silent; the fits' steps shrink by as much (all 66 with APL on 0.355 to 0.316). This bears on E90 and E92 (not
+    viki's; E90's own verdict pipeline was not rerun).
+  - Dated lines added to E93, E94 and E95 (2026-11-15 18:23); their pages rebuilt and saved.
+- **Done (2026-11-15 21:10, atlas).** E98's level is chosen (amendment of 17:59: the blank's window mean carries, the settled level
+  is a partner, E90's level is shown and decides nothing). E90 is sized (queue 8fcd4e7, `experiments/E90_settled_preodor.py`;
+  an Opus code subagent of atlas's session; results/E90_model_stages/settled_preodor/): short reruns of every run E90 read
+  reproduce its counts and, over E90's own window, its pre-odor means to 2e-15, and the pipeline at E90's level reproduces
+  its pair tables and verdict exactly. No outcome letter or group verdict changes, and the PN stage, outcome (g), the somata
+  and every spike-count reading are unchanged. Four statements no longer hold: the input glomeruli's claws are now less
+  alike than the flies' (ester 0.642 / alcohol 0.569 against 0.571 / 0.477), not as alike; the alcohol step with APL on from
+  the input claws is too small (+0.044 against +0.144), not a match; the Addendum's reverse of (b) holds in all four soma
+  readings; and B5's ester step at 2 s is too small in every reading. The ester step with APL on from all claws now equals
+  the flies' (+0.244 against +0.241). E90's note has a dated block with the table (21:09) and its page is rebuilt (local,
+  URL kept); the per-unit settled levels of every E90 run are in settled_preodor/preodor_levels.parquet.
+- **Remains (until 2026-11-15 21:45).** The summary's {#model-stages} and {#steps-like-for-like}, which quoted E90's and E92's
+  claw readings at E90's level; E90's own figures and comparison_table.md, not redone (said in its note's dated block);
+  E101's claws, which have no saved settled level and are read at E90's level beside the blank's (said in E101's entry).
+- **Resolved (2026-11-15 21:45, atlas).** The summary reads every claw, bouton and step number of the stage comparison and the
+  steps read like for like at the settled level (c84ed6b; 36 CHANGE blocks planned by a Fable subagent from atlas 21:10), with
+  a footnote {#fn-preodor-startup}; {#missing-glomeruli} and {#static-threshold} follow. Every affected output is now regenerated
+  or annotated: E90, E92, E93, E94 and E95 have dated lines, E98, E100, E101 and E102 read the model's APL against the blank
+  with the settled level as partner, and the remaining two (E90's figures, E101's claws) are annotated where they appear.
 
 ### pyolfsysm's `get_time_index` placed every step up to one step late, so closed windows read with it lost their end step (found 2026-11-13 12:04, atlas's code subagent for E90; fixed in olfsysm 17cef71; resolved 2026-11-15)
 - **What.** `pyolfsysm.mb_model.get_time_index` spreads the run's n steps evenly from its first time to `time_end` inclusive
