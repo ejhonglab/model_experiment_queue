@@ -59,8 +59,9 @@ The levels (part C; `levels`, fixed here):
 - L_lin: the smallest at which V2's linear reading (n 1, evoked; carrying reading and level) lies in the flies' interval
   on at least LEVEL_MIN_WIRINGS (6) of the 8 wirings.
 - L_free: the largest that is an equal at fixed scales on S by E94's rule (`equal_rule`).
-- A step with a flagged point (any of its eight runs outside the realism bands) is not a level. Any of the three may not
-  exist. If L_apl does not exist, the refit runs at the last unflagged step (`refit_levels`).
+- A step with a flagged point (any of its eight runs outside the realism bands) is not a level, nor is a step with a
+  point at which an odor is silent (Deviations). Any of the three may not exist. If L_apl does not exist, the refit runs
+  at the last step that is neither (`refit_levels`).
 
 The classes (part D; `refit_class`, fixed here), against the unchanged fits on S (BASE_PATTERN, recomputed in part 0):
 - an equal (E94's rule): the pattern part within EQUAL_PATTERN (0.003) against all recordings and against halves A and B,
@@ -101,10 +102,38 @@ Parts (CLI `--part`):
   outputs and parameters saved, then the extended run (`run_extended`), under outputs/E102_antennal_lobe_normalization/B/
   <step>/ in E98's B1 layout plus <wiring>_family.csv (E101's family table) and <wiring>_point.json.
 - score (no simulations; from part B's saved runs): every step's readings (b_readings.csv per unit and readout and
-  target; b_points.csv per wiring; b_apl.csv E98's, E100's and E101's comparisons per step; b_low_conc.csv; b_pn.csv) and
-  part C's levels (levels.json).
+  target, with 'n_pairs', 'silent_odors' and 'pairs'; b_realism.csv per run, with its silent odors; b_e98.csv,
+  b_e98_wirings.csv, b_e100.csv, b_e101.csv, b_e101_summary.csv: E98's, E100's and E101's comparisons per step;
+  b_low_conc.csv; b_pn.csv; each with 'silent_odors_16odor'), b_steps.csv (one row per step) and part C's levels
+  (levels.json).
 - D (the refits): the commands of `E10_joint_fit.py` with C2's options at each level (`refit_commands`; printed, not run),
   and their classes once fitted (`--score-refits`).
+
+Deviations (2026-11-16, after part B; the entry did not foresee them):
+- A silent odor. At the fixed gain on M1 no KC fires a spike to B-myr with APL on (B-myr is the odor the weaker
+  normalization starves first: 0 to 6 KCs with APL on at the fixed gain on the eight wirings, 4 to 14 at 10000; E32 saw
+  the same on older bases), so its 15 pairs have no cosine distance. The score reads such a point as the queue reads
+  one elsewhere: its statistics are over the pairs it defines (`H.apl_effect_stats` drops undefined pairs and counts
+  them; kcq/apl_effect.py scores the archive's 25 variants with 105 pairs, among them E32's and E3's weaker
+  normalizations, and records `apl_effect_n_pairs`; E16 compares on "the pairs both models define"; E92 places such a
+  variant and never names it). A population is read on the pairs every member run defines (as E92's populations; E83's
+  mean would average the silent odor's pairs over the other members alone, so that one population's pairs would rest
+  on different wirings), and its changes against the unchanged fits are read on the same pairs (`score_runs`). Every
+  table marks it ('n_pairs', 'silent_odors', 'pairs' in b_readings.csv; 'silent_on', 'silent_off', 'n_pairs_defined'
+  in b_realism.csv; 'silent', 'silent_odors', 'n_pairs_S' in b_steps.csv; 'silent_odors_16odor' in the others;
+  'silent' and 'silent_odors' in levels.json). A pair missing for any other reason still raises (`check_pairs`, the
+  check of 00b7bb3 against pairs dropped by an ordering fault, now with its exception made explicit).
+- The level rules on it. The entry says that a step with a flagged point is not a level, so that no level is set where
+  the model is not a fly's mushroom body. A point at which an odor recruits no KC is read here the same way, although
+  the bands do not flag it (the fixed gain's eight runs are inside them: the response rate ρ ranks the odors, and
+  B-myr is the control flies' second-weakest, 0.041 of their KCs with APL on, so a rate of 0 costs it little): its
+  pattern part is over 105 pairs, so it cannot be
+  compared with the unchanged fits' 0.0500 on the same footing as the other steps, and a population of flies in which
+  one odor recruits no KC is not what the refit is meant to fit. So a step with a silent odor in any run is not a
+  level (`levels`), and the refit's fallback, the last unflagged step, skips it too (`refit_levels`). On part B's
+  ladder this rule decides L_lin: the fixed gain is the only step at which V2's linear reading is inside (on all eight
+  wirings), so without the rule it would be L_lin, a second refit level; levels.json records the levels without the
+  rule beside ('beside_without_silent_rule').
 
 Outputs: results/E102_antennal_lobe_normalization/ (the tables above, identity.json, provenance_<part>.json); counts,
 responses, APL and PN means of part B under outputs/E102_antennal_lobe_normalization/, archived to
@@ -1308,8 +1337,13 @@ def equal_rule(d_pattern: Mapping[str, float], d_raw_loss: float, d_mean: float,
     return dict(equal=eq, lower_on_all=bool(all(float(d_pattern[t]) < 0 for t in EQUAL_TARGETS) and rest), rest=rest)
 
 
+def _excluded(steps: pd.DataFrame) -> pd.Series:
+    """The steps that are never a level: a run outside the bands ('flagged') or with a silent odor ('silent')."""
+    return steps['flagged'].astype(bool) | steps['silent'].astype(bool)
+
+
 def _first(steps: pd.DataFrame, mask: pd.Series, largest: bool = False) -> Optional[float]:
-    x = steps.loc[mask & ~steps['flagged'].astype(bool), 'value']
+    x = steps.loc[mask & ~_excluded(steps), 'value']
     if x.empty:
         return None
     return float(x.max() if largest else x.min())
@@ -1317,26 +1351,40 @@ def _first(steps: pd.DataFrame, mask: pd.Series, largest: bool = False) -> Optio
 
 def levels(steps: pd.DataFrame) -> dict:
     """Part C's levels from one row per ladder step (value pn_inhadd; 'v2' E98's held V2 verdict; 'v2_linear' the
-    carrying reading's linear category; 'equal_S' the step's equal on S; 'flagged' any of its runs outside the bands):
-    L_apl, L_lin, L_free (None where none exists; a flagged step is never a level), and the flagged steps."""
+    carrying reading's linear category; 'equal_S' the step's equal on S; 'flagged' any of its runs outside the bands;
+    'silent' any of its runs with a silent odor, `silent_odors`): L_apl, L_lin, L_free (None where none exists; a
+    flagged step and a step with a silent odor are never a level), the flagged steps and the steps with a silent odor."""
     s = steps.copy()
-    for c in ('value', 'v2', 'v2_linear', 'equal_S', 'flagged'):
+    for c in ('value', 'v2', 'v2_linear', 'equal_S', 'flagged', 'silent'):
         if c not in s.columns:
             raise ValueError(f'levels: column {c!r} missing')
     s = s[s['value'].astype(float) > PN_INHADD_DEFAULT]
     return dict(L_apl=_first(s, s['v2'] == 'inside'), L_lin=_first(s, s['v2_linear'] == 'inside'),
                 L_free=_first(s, s['equal_S'].astype(bool), largest=True),
-                flagged=[float(v) for v in s.loc[s['flagged'].astype(bool), 'value']])
+                flagged=[float(v) for v in s.loc[s['flagged'].astype(bool), 'value']],
+                silent=[float(v) for v in s.loc[s['silent'].astype(bool), 'value']])
+
+
+def mark_silent(df: pd.DataFrame, step_silent: Mapping[str, str]) -> pd.DataFrame:
+    """A step table with the column 'silent_odors_16odor': the odors silent in the step's 16-odor runs (`silent_label`
+    over its wirings; '' when none), so that every table marks a step that is never a level, also the tables read from
+    the extended input, which the silence does not touch. The step is the 'step' column, or 'setting' (the
+    low-concentration table's)."""
+    col = next((c for c in ('step', 'setting') if c in df.columns), None)
+    if col is None:
+        raise ValueError("mark_silent: no 'step' or 'setting' column")
+    return df.assign(silent_odors_16odor=[step_silent.get(t, '') for t in df[col]])
 
 
 def refit_levels(lv: Mapping, steps: pd.DataFrame) -> List[float]:
-    """The levels the refits run at: L_apl, or the last (largest) unflagged step when it does not exist (the note then
-    says the ladder does not reach the flies' APL), and L_lin if it exists and differs."""
+    """The levels the refits run at: L_apl, or the last (largest) step that is neither flagged nor has a silent odor when
+    it does not exist (the note then says the ladder does not reach the flies' APL), and L_lin if it exists and
+    differs."""
     out = []
     if lv.get('L_apl') is not None:
         out.append(float(lv['L_apl']))
     else:
-        s = steps[(steps['value'].astype(float) > PN_INHADD_DEFAULT) & ~steps['flagged'].astype(bool)]
+        s = steps[(steps['value'].astype(float) > PN_INHADD_DEFAULT) & ~_excluded(steps)]
         if len(s):
             out.append(float(s['value'].max()))
     if lv.get('L_lin') is not None and float(lv['L_lin']) not in out:
@@ -1391,48 +1439,239 @@ def low_conc_class(model: float, flies: float, model_c2: float, factor: float = 
     return 'about the same'
 
 
-def _effect_parts(pairs: pd.DataFrame, tg: Mapping[str, pd.Series]) -> pd.DataFrame:
-    """Per (change, unit, readout) of E83's `score_runs` pairs and per target: the pattern part's amplitude and shape
-    parts, the spread ratio and Pearson r on the per-pair APL effect (`H.apl_effect_spread_shape`, `H.apl_effect_stats`).
-    The targets are put in the APL16 panel's canonical pair order first (`H.canonical_pairs`): pyolfsysm's effects
-    canonicalize the model's side only, and E83's targets are in sorted pair order, so without it the pairs whose two
-    orders differ would drop out; every reading must have 120 pairs."""
+# ---------------------------------------------------------------------------
+# odors silent in a run (no KC fires a spike): their pairs' cosine distances are undefined
+
+ALL_PAIRS = frozenset(frozenset(p) for p in H.PAIRS16)
+COND_LABEL = {'on': 'APL on', 'off': 'APL off'}
+
+
+def silent_odors(o: Mapping[str, tuple]) -> Dict[str, List[str]]:
+    """Per condition ('on', 'off'), the APL16 odors (panel order) to which no KC of a run ({'on', 'off'}: (responses,
+    spike counts)) fires a spike. Their population vector is all zero under every readout of the counts read here (raw
+    counts; the saturating map sends 0 to 0), so the cosine distances of their 15 pairs are undefined (NaN,
+    `hong2p.rdm.pair_distances`) and every per-pair statistic is over the other pairs (`H.apl_effect_stats` drops them)."""
+    out = {}
+    for c in ('on', 'off'):
+        x = H.abbrev_columns(o[c][1].astype(float))
+        tot = x.reindex(columns=list(H.APL16_ODORS)).abs().sum(axis=0, min_count=1)
+        out[c] = [od for od in H.APL16_ODORS if not float(tot[od]) > 0]
+    return out
+
+
+def silent_pairs(odors) -> frozenset:
+    """The pairs (as frozensets) with an odor of `odors`."""
+    s = set(odors)
+    return frozenset(p for p in ALL_PAIRS if p & s)
+
+
+def silent_label(by_run: Mapping[str, Mapping[str, Sequence[str]]]) -> str:
+    """'B-myr (M1, APL on)' for {wiring: {'on': [...], 'off': [...]}}: per odor (panel order) the wirings and
+    conditions in which it is silent ('B-myr (M1, APL on; P2, APL on and off)'); '' when none is."""
+    where: Dict[str, List[str]] = {}
+    for w, s in by_run.items():
+        for od in H.APL16_ODORS:
+            cs = [COND_LABEL[c] for c in ('on', 'off') if od in s.get(c, ())]
+            if cs:
+                where.setdefault(od, []).append(f"{w}, {cs[0] if len(cs) == 1 else 'APL on and off'}")
+    return '; '.join(f"{od} ({'; '.join(where[od])})" for od in H.APL16_ODORS if od in where)
+
+
+def unit_silence(silent: Mapping[Tuple[str, str], Mapping[str, Sequence[str]]], change: str, members: Sequence[str]
+                 ) -> dict:
+    """A reading's silent odors: for the runs (change, w) of `members` (one wiring, or a population's), the pairs a
+    reading on the pairs every member run defines leaves out ('undefined': the pairs of an odor silent in any member, in
+    either condition), their number left ('n_pairs'), the label ('silent_odors', `silent_label`) and the odors."""
+    by = {w: silent[(change, w)] for w in members if any(silent[(change, w)].get(c) for c in ('on', 'off'))}
+    odors = sorted({od for s in by.values() for c in ('on', 'off') for od in s.get(c, ())}, key=list(H.APL16_ODORS).index)
+    und = silent_pairs(odors)
+    return dict(undefined=und, n_pairs=len(ALL_PAIRS) - len(und), silent_odors=silent_label(by), odors=odors)
+
+
+def pairs_note(n_pairs: int, label: str, kind: str = 'wiring', readout: str = 'cal') -> str:
+    """The `pairs` column of a reading: what its statistics are over."""
+    if not label:
+        return 'all 120'
+    if readout in ('zcell', 'zcell_lin'):
+        return f'all 120 (the per-KC reading\'s noise defines the silent odors\' pairs; silent: {label})'
+    who = 'the pairs every member run defines' if kind == 'population' else 'the pairs the run defines'
+    return (f'{n_pairs} of 120, {who} (silent: {label}); the changes (d_) against the unchanged fits on the same '
+            'pairs; never a level')
+
+
+def mask_pairs(d: Mapping[str, pd.Series], undefined) -> Dict[str, pd.Series]:
+    """{'on', 'off'} pair distances with the pairs of `undefined` (frozensets) set to NaN, so that every statistic is
+    over the other pairs (the reading on the pairs every member run defines)."""
+    out = {}
+    for c in ('on', 'off'):
+        s = d[c].astype(float)
+        out[c] = s.where(~np.array([frozenset(p) in undefined for p in s.index], dtype=bool))
+    return out
+
+
+def check_pairs(on: pd.Series, off: pd.Series, data: pd.Series, undefined, where: str) -> int:
+    """The number of pairs a reading's statistics are over (`H.apl_effect_stats` of the model's distances `on`, `off`
+    against the data's per-pair effect `data`), after checking that the only pairs missing from it are those of its
+    silent odors. Raises (a) if a pair appears twice in `on` or `off`, or the data's effect is not defined on all 120
+    pairs; (b) if the pairs missing from the model's side (absent, or NaN in either condition) are not exactly
+    `undefined` (frozensets: the pairs of the odors silent in a member run, `unit_silence`): a pair missing with no
+    silent odor behind it, or a silent odor's pair with a distance; (c) if the statistics are over fewer pairs than the
+    defined ones, i.e. pairs dropped by a pair-ordering or alignment fault (the check of 00b7bb3: pyolfsysm's effects
+    put the model's side in the panel's canonical order only, so data in another orientation lose those pairs)."""
+    def pset(idx):
+        return [frozenset(p) for p in idx]
+    for name, s in (('on', on), ('off', off), ('data', data)):
+        ps = pset(s.index)
+        if len(ps) != len(set(ps)) or not set(ps) <= ALL_PAIRS:
+            raise RuntimeError(f'{where}: the {name} side has repeated pairs or pairs outside the panel')
+    dv = dict(zip(pset(data.index), data.to_numpy(dtype=float)))
+    if set(dv) != ALL_PAIRS or not np.all(np.isfinite(list(dv.values()))):
+        raise RuntimeError(f"{where}: the data's per-pair effect is not defined on all 120 pairs")
+    vo = dict(zip(pset(on.index), on.to_numpy(dtype=float)))
+    vf = dict(zip(pset(off.index), off.to_numpy(dtype=float)))
+    defined = {p for p in ALL_PAIRS if np.isfinite(vo.get(p, np.nan)) and np.isfinite(vf.get(p, np.nan))}
+    missing = ALL_PAIRS - defined
+    undefined = frozenset(undefined)
+    if missing != undefined:
+        extra = sorted(tuple(sorted(p)) for p in missing - undefined)
+        kept = sorted(tuple(sorted(p)) for p in undefined - missing)
+        raise RuntimeError(f'{where}: {len(missing)} pairs missing from the model\'s side, not the {len(undefined)} of '
+                           f'its silent odors (missing with no silent odor behind them: {extra[:6]}; silent odors\' pairs '
+                           f'with a distance: {kept[:6]})')
+    n = int(H.apl_effect_stats(on, off, data)['apl_effect_n_pairs'])
+    if n != len(defined):
+        raise RuntimeError(f'{where}: {n} pairs scored, not the {len(defined)} defined (a pair-ordering or alignment '
+                           'fault)')
+    return n
+
+
+def score_runs(runs: Mapping[Tuple[str, str], Dict[str, tuple]], change_meta: Mapping[str, dict],
+               tg: Mapping[str, pd.Series]) -> Tuple[pd.DataFrame, pd.DataFrame, Dict[Tuple[str, str], dict]]:
+    """E83's `score_runs` (readings and per-pair rows per change, unit and readout), with every reading whose unit has a
+    run with a silent odor (`silent_odors`) read on the pairs every member run defines (`mask_pairs`; E83's population
+    mean would average the silent odor's pairs over the other members alone) and its changes (d_) against the unchanged
+    fits read on the same pairs. Returns (readings, pairs, silence) with silence[(change, unit)] = `unit_silence`;
+    the readings carry 'n_pairs', 'silent_odors' and 'pairs' (`pairs_note`). Raises if an unchanged fit has a silent
+    odor."""
+    from experiments import E83_cross_wiring_fit as E83
+    rd, pairs = E83.score_runs(runs, change_meta, tg=tg)
+    allruns = dict(runs)
+    for w in ALL_WIRINGS:
+        allruns.setdefault(('none', w), E83.saved_fit(w)['saved'])
+    silent = {k: silent_odors(o) for k, o in allruns.items()}
+    bad = [w for (ch, w), s in silent.items() if ch == 'none' and (s['on'] or s['off'])]
+    if bad:
+        raise RuntimeError(f'the unchanged fits of {bad} have silent odors')
+    units = rd[['change', 'unit', 'kind']].drop_duplicates()
+    silence = {}
+    for ch, unit, kind in units.itertuples(index=False):
+        ws = (unit,) if kind == 'wiring' else E83.POPULATIONS[unit]
+        silence[(ch, unit)] = dict(unit_silence(silent, ch, ws), members=tuple(ws), kind=kind)
+    cache: Dict[tuple, Dict[str, pd.Series]] = {}
+
+    def dist(ch, w, ro):
+        if (ch, w, ro) not in cache:
+            o = allruns[(ch, w)]
+            cache[(ch, w, ro)] = E83.pair_distances(o, ro, E83.saved_fit(w)['K'] if ro == 'calK' else None)
+        return cache[(ch, w, ro)]
+
+    score_cols = [c for c in rd.columns if (c.endswith(('_loss', '_pattern', '_rho')) or c == 'mean_effect')
+                  and not c.startswith('d_')]
+    rd = rd.reset_index(drop=True)
+    pos = {k: i for i, k in enumerate(zip(rd['change'], rd['unit'], rd['readout']))}
+    if len(pos) != len(rd):
+        raise RuntimeError('E83 readings repeat a (change, unit, readout)')
+    redo = []
+    for (ch, unit), s in silence.items():
+        if not s['undefined']:
+            continue
+        for ro in ('cal', 'calK', 'raw'):
+            def read(c):
+                ds = [dist(c, w, ro) for w in s['members']]
+                return mask_pairs(ds[0] if s['kind'] == 'wiring' else E83.population(ds), s['undefined'])
+            d, b = read(ch), read('none')
+            sc, sb = E83.effect_scores(d, tg), E83.effect_scores(b, tg)
+            i = pos[(ch, unit, ro)]
+            for k, v in sc.items():
+                rd.loc[i, k] = v
+            for c in score_cols:
+                rd.loc[i, f'd_{c}'] = sc[c] - sb[c]
+            me = E83._cs(H.apl_effect(d['on'], d['off']))
+            redo.append(pd.DataFrame(dict(change=ch, unit=unit, readout=ro, odor_a=me.index.get_level_values(0),
+                                          odor_b=me.index.get_level_values(1),
+                                          on=E83._cs(d['on']).reindex(me.index).to_numpy(),
+                                          off=E83._cs(d['off']).reindex(me.index).to_numpy(), effect=me.to_numpy())))
+    if redo:
+        key = set(tuple(x) for df in redo for x in df[['change', 'unit', 'readout']].drop_duplicates().to_numpy())
+        drop = [tuple(x) in key for x in pairs[['change', 'unit', 'readout']].to_numpy()]
+        pairs = pd.concat([pairs[~np.asarray(drop)]] + redo, ignore_index=True)
+    rd['silent_odors'] = [silence[(c, u)]['silent_odors'] for c, u in zip(rd['change'], rd['unit'])]
+    return rd, pairs, silence
+
+
+def _effect_parts(pairs: pd.DataFrame, tg: Mapping[str, pd.Series],
+                  undefined: Optional[Mapping[Tuple[str, str], frozenset]] = None) -> pd.DataFrame:
+    """Per (change, unit, readout) of the per-pair rows (`score_runs`) and per target: the pattern part's amplitude and
+    shape parts, the spread ratio and Pearson r on the per-pair APL effect (`H.apl_effect_spread_shape`,
+    `H.apl_effect_stats`), and 'n_pairs', the pairs they are over. The targets are put in the APL16 panel's canonical
+    pair order first (`H.canonical_pairs`): pyolfsysm's effects canonicalize the model's side only, and E83's targets
+    are in sorted pair order, so without it the pairs whose two orders differ would drop out. Every reading is checked
+    by `check_pairs`: the pairs it is not over must be exactly those of its silent odors (`undefined[(change, unit)]`,
+    none when absent), so a pair dropped by an ordering or alignment fault still raises."""
     tg = {t: H.canonical_pairs(de) for t, de in tg.items()}
+    undefined = undefined or {}
     rows = []
     for (ch, unit, ro), g in pairs.groupby(['change', 'unit', 'readout'], sort=False):
         idx = pd.MultiIndex.from_arrays([g['odor_a'], g['odor_b']], names=['odor_a', 'odor_b'])
         on, off = pd.Series(g['on'].to_numpy(float), index=idx), pd.Series(g['off'].to_numpy(float), index=idx)
         row = dict(change=ch, unit=unit, readout=ro)
+        und = undefined.get((ch, unit), frozenset())
         for t, de in tg.items():
+            n = check_pairs(on, off, de, und, f'{ch} {unit} {ro} {t}')
             sp = H.apl_effect_spread_shape(on, off, de)
             st = H.apl_effect_stats(on, off, de)
-            if int(st['apl_effect_n_pairs']) != 120:
-                raise RuntimeError(f"{ch} {unit} {ro} {t}: {st['apl_effect_n_pairs']} pairs, not 120")
             row.update({f'{t}_amplitude': sp['apl_effect_amplitude'], f'{t}_shape': sp['apl_effect_shape'],
                         f'{t}_sd_ratio': sp['apl_effect_sd_ratio'], f'{t}_pearson': st['apl_effect_pearson']})
+        row['n_pairs'] = n
         rows.append(row)
     return pd.DataFrame(rows)
 
 
-def _zcell_readings(runs: Mapping[Tuple[str, str], Dict[str, tuple]], tg: Mapping[str, pd.Series]) -> pd.DataFrame:
+def _zcell_readings(runs: Mapping[Tuple[str, str], Dict[str, tuple]], tg: Mapping[str, pd.Series],
+                    silent: Optional[Mapping[Tuple[str, str], Mapping[str, Sequence[str]]]] = None) -> pd.DataFrame:
     """E73's per-KC reading under the saturating ('zcell') and the linear map ('zcell_lin'; E95's
     `zcell_distances_map`), per run and per population (E83's POPULATIONS whose wirings all have a run), scored as E83's
-    `effect_scores`."""
+    `effect_scores`, with 'n_pairs' and 'silent_odors' (`silent_odors` of each run, computed when `silent` is None).
+    The reading's noise in expectation gives a silent odor a vector, so its pairs are normally defined; a pair a run
+    leaves undefined must be a silent odor's (otherwise it raises), and a population is then read on the pairs every
+    member defines."""
     from experiments import E83_cross_wiring_fit as E83
     from experiments import E95_static_apl as E95
+    silent = dict(silent) if silent is not None else {k: silent_odors(o) for k, o in runs.items()}
     rows = []
-    by = {}
+    by, miss = {}, {}
     for (ch, w), o in runs.items():
+        sp = silent_pairs({od for c in ('on', 'off') for od in silent[(ch, w)].get(c, ())})
         for ro, amp in (('zcell', 'saturating'), ('zcell_lin', 'linear')):
-            by[(ch, w, ro)] = E95.zcell_distances_map(o, amp)
+            d = E95.zcell_distances_map(o, amp)
+            m = frozenset(frozenset(p) for p, a, b in zip(d['on'].index, d['on'].to_numpy(float),
+                                                            d['off'].reindex(d['on'].index).to_numpy(float))
+                          if not (np.isfinite(a) and np.isfinite(b)))
+            if not m <= sp:
+                raise RuntimeError(f'{ch} {w} {ro}: {len(m - sp)} undefined pairs with no silent odor behind them')
+            by[(ch, w, ro)], miss[(ch, w, ro)] = d, m
     changes = list(dict.fromkeys(ch for ch, _ in runs))
     for ch in changes:
         for ro in ('zcell', 'zcell_lin'):
             units = [(w, 'wiring', (w,)) for w in ALL_WIRINGS if (ch, w, ro) in by]
             units += [(n, 'population', ws) for n, ws in E83.POPULATIONS.items() if all((ch, w, ro) in by for w in ws)]
             for unit, kind, ws in units:
+                und = frozenset().union(*(miss[(ch, w, ro)] for w in ws))
                 d = by[(ch, unit, ro)] if kind == 'wiring' else E83.population([by[(ch, w, ro)] for w in ws])
-                rows.append(dict(change=ch, unit=unit, kind=kind, n_wirings=len(ws), readout=ro, **E83.effect_scores(d, tg)))
+                d = mask_pairs(d, und) if und else d
+                lab = silent_label({w: silent[(ch, w)] for w in ws if any(silent[(ch, w)].get(c) for c in ('on', 'off'))})
+                rows.append(dict(change=ch, unit=unit, kind=kind, n_wirings=len(ws), readout=ro,
+                                 n_pairs=len(ALL_PAIRS) - len(und), silent_odors=lab, **E83.effect_scores(d, tg)))
     return pd.DataFrame(rows)
 
 
@@ -1498,12 +1737,28 @@ def step_readings(tag: str, root: Optional[Path] = None, wirings: Sequence[str] 
     return out
 
 
-def _step_table(rd: pd.DataFrame, realism: pd.DataFrame, apl: Mapping[str, dict], base_tag: str = 'none') -> pd.DataFrame:
+def _silent_by_step(realism: pd.DataFrame) -> Dict[str, Dict[str, Dict[str, List[str]]]]:
+    """{step: {wiring: {'on': [...], 'off': [...]}}} from b_realism's 'silent_on' / 'silent_off' (odors joined by ';')."""
+    out: Dict[str, Dict[str, Dict[str, List[str]]]] = {}
+    for r in realism.itertuples(index=False):
+        s = {c: [x for x in str(getattr(r, f'silent_{c}') or '').split(';') if x and x != 'nan'] for c in ('on', 'off')}
+        if s['on'] or s['off']:
+            out.setdefault(r.step, {})[r.wiring] = s
+    return out
+
+
+def _step_table(rd: pd.DataFrame, realism: pd.DataFrame, apl: Mapping[str, dict]) -> pd.DataFrame:
     """One row per step for part C: pn_inhadd, V2's held verdict and its linear category, the equal on S at fixed scales
-    (`equal_rule` against the unchanged fits, E83's change 'none'), the number of flagged runs and runs at a bound."""
+    (`equal_rule` on the changes against the unchanged fits, E83's change 'none', read on the same pairs: the readings'
+    d_ columns, `score_runs`), the number of flagged runs and runs at a bound, the runs with a silent odor ('silent',
+    'n_silent_runs', 'silent_odors'; such a step is never a level, `levels`) and the pairs S is read on ('n_pairs_S'),
+    and the KCs at low concentration (outcome (e)): the response rates at LOW_CARRYING with APL on and off, medians over
+    the wirings, the flies' ('low_flies_on' control flies, 'low_flies_off' APL output blocked (TNT)), and their classes
+    against the identity point's (`low_conc_class`)."""
     rows = []
     cal = rd[rd['readout'] == 'cal'].set_index(['change', 'unit'])
     raw = rd[rd['readout'] == 'raw'].set_index(['change', 'unit'])
+    sil = _silent_by_step(realism)
     for tag, a in apl.items():
         if 'e98' not in a:
             continue
@@ -1521,18 +1776,33 @@ def _step_table(rd: pd.DataFrame, realism: pd.DataFrame, apl: Mapping[str, dict]
                    n_at_bound=int((r['at_bound_thr'] | r['at_bound_apl']).sum()),
                    n_at_bound_S=int((rs['at_bound_thr'] | rs['at_bound_apl']).sum()))
         row['flagged'] = bool(row['n_flagged'] > 0)
-        if (tag, 'S') in cal.index and (base_tag, 'S') in cal.index:
-            dp = {t: float(cal.loc[(tag, 'S'), f'{t}_pattern'] - cal.loc[(base_tag, 'S'), f'{t}_pattern'])
-                  for t in EQUAL_TARGETS + BETTER_HALVES}
-            draw = float(raw.loc[(tag, 'S'), 'z8_loss'] - raw.loc[(base_tag, 'S'), 'z8_loss'])
-            dme = float(cal.loc[(tag, 'S'), 'mean_effect'] - cal.loc[(base_tag, 'S'), 'mean_effect'])
+        st = sil.get(tag, {})
+        row.update(silent=bool(st), n_silent_runs=len(st), silent_odors=silent_label(st))
+        low = a.get('low')
+        car = low[low['stimulus'] == LOW_CARRYING] if low is not None and len(low) else pd.DataFrame()
+        if len(car):
+            row.update(low_on=float(car['rate_on'].median()), low_off=float(car['rate_off'].median()),
+                       low_off_over_on=float(car['off_over_on'].median()), low_flies_on=float(car['flies_on'].iloc[0]),
+                       low_flies_off=float(car['flies_off'].iloc[0]))
+        if (tag, 'S') in cal.index and ('none', 'S') in cal.index:
+            dp = {t: float(cal.loc[(tag, 'S'), f'd_{t}_pattern']) for t in EQUAL_TARGETS + BETTER_HALVES}
+            draw = float(raw.loc[(tag, 'S'), 'd_z8_loss'])
+            dme = float(cal.loc[(tag, 'S'), 'd_mean_effect'])
             eq = equal_rule(dp, draw, dme, row['n_flagged_S'], row['n_at_bound_S'])
             row.update(equal_S=eq['equal'], **{f'd_pattern_S_{t}': v for t, v in dp.items()}, d_raw_loss_S=draw,
-                       d_mean_effect_cal_S=dme, pattern_S=float(cal.loc[(tag, 'S'), 'z8_pattern']))
+                       d_mean_effect_cal_S=dme, pattern_S=float(cal.loc[(tag, 'S'), 'z8_pattern']),
+                       n_pairs_S=int(cal.loc[(tag, 'S'), 'n_pairs']))
         else:
             row['equal_S'] = False
         rows.append(row)
-    return pd.DataFrame(rows)
+    out = pd.DataFrame(rows)
+    ident = out[out['step'] == STEP_IDENTITY] if len(out) else out
+    if len(ident) and 'low_on' in out.columns:
+        for c in ('on', 'off'):
+            c2 = float(ident[f'low_{c}'].iloc[0])
+            out[f'low_class_{c}'] = [low_conc_class(m, f, c2) if np.isfinite(m) and f > 0 else ''
+                                     for m, f in zip(out[f'low_{c}'], out[f'low_flies_{c}'])]
+    return out
 
 
 def part_score(root: Optional[Path] = None, out: Optional[Path] = None) -> dict:
@@ -1557,39 +1827,55 @@ def part_score(root: Optional[Path] = None, out: Optional[Path] = None) -> dict:
             if rec is None or o is None or not rec.get('complete'):
                 continue
             runs[(tag, w)] = o
+            sl = silent_odors(o)
             real_rows.append(dict(step=tag, wiring=w, pn_inhadd=rec['pn_inhadd'], pn_inhsc=rec['pn_inhsc'],
                                   thr_factor=rec['thr_factor'], apl_factor=rec['apl_factor'],
                                   at_bound_thr=rec['at_bound_thr'], at_bound_apl=rec['at_bound_apl'],
+                                  silent_on=';'.join(sl['on']), silent_off=';'.join(sl['off']),
+                                  n_pairs_defined=len(ALL_PAIRS) - len(silent_pairs(sl['on'] + sl['off'])),
                                   **{f'param_{k}': v for k, v in rec['params'].items()}, **E83.realism(o)))
     require_identity('all', sorted({w for _, w in runs}))
     tg = E86.targets()
     meta = {t: dict(step=t, pn_inhadd=step_value(step_of_tag(t))) for t in tags}
-    rd, pairs = E83.score_runs(runs, meta, tg=tg)
-    parts = _effect_parts(pairs, tg)
+    rd, pairs, silence = score_runs(runs, meta, tg)
+    parts = _effect_parts(pairs, tg, {k: s['undefined'] for k, s in silence.items()})
     rd = rd.merge(parts, on=['change', 'unit', 'readout'], how='left')
+    if rd['n_pairs'].isna().any() or (rd['n_pairs'] != [silence[(c, u)]['n_pairs'] for c, u in zip(rd['change'], rd['unit'])]).any():
+        raise RuntimeError('the readings and their per-pair rows disagree on the pairs')
     zc = _zcell_readings(runs, tg)
     rd = pd.concat([rd, zc.assign(**{'step': zc['change']})], ignore_index=True) if len(zc) else rd
+    rd['pairs'] = [pairs_note(int(n), s if isinstance(s, str) else '', k, ro)
+                   for n, s, k, ro in zip(rd['n_pairs'], rd['silent_odors'], rd['kind'], rd['readout'])]
     write_table(rd, out / 'b_readings.csv', caveat=True)
     realism = pd.DataFrame(real_rows)
     write_table(realism, out / 'b_realism.csv', caveat=True)
+    step_silent = {t: silent_label(s) for t, s in _silent_by_step(realism).items()}
     apl = {t: step_readings(t, root) for t in tags}
     for key, name in (('e98_comparisons', 'b_e98.csv'), ('e98_wirings', 'b_e98_wirings.csv'), ('e100_rows', 'b_e100.csv'),
                       ('e101', 'b_e101.csv'), ('e101_summary', 'b_e101_summary.csv'), ('low', 'b_low_conc.csv')):
         frames = [a[key] for a in apl.values() if key in a and len(a[key])]
         if frames:
-            write_table(pd.concat(frames, ignore_index=True), out / name, caveat=True)
+            write_table(mark_silent(pd.concat(frames, ignore_index=True), step_silent), out / name, caveat=True)
     pn = pd.DataFrame([a['pn'] for a in apl.values() if 'pn' in a])
-    write_table(pn, out / 'b_pn.csv', caveat=True)
+    write_table(mark_silent(pn, step_silent), out / 'b_pn.csv', caveat=True)
     steps = _step_table(rd, realism, apl)
     write_table(steps, out / 'b_steps.csv', caveat=True)
     full = steps[steps['n_wirings'] == len(ALL_WIRINGS)] if len(steps) else steps
-    lv = levels(full) if len(full) else dict(L_apl=None, L_lin=None, L_free=None, flagged=[])
+    lv = levels(full) if len(full) else dict(L_apl=None, L_lin=None, L_free=None, flagged=[], silent=[])
+    if len(full) and full['silent'].astype(bool).any():
+        f0 = full.assign(silent=False)
+        l0 = levels(f0)
+        lv['beside_without_silent_rule'] = dict({k: l0[k] for k in ('L_apl', 'L_lin', 'L_free')},
+                                                refit_levels=refit_levels(l0, f0))
     lv.update(steps_scored=tags, complete_steps=list(full['step']) if len(full) else [],
+              silent_odors={t: step_silent[t] for t in tags if t in step_silent},
               refit_levels=refit_levels(lv, full) if len(full) else [], rules=dict(
                   L_apl="smallest pn_inhadd with E98's V2 inside (6 of 8, carrying reading and level, held under partners)",
                   L_lin="smallest pn_inhadd with V2's linear reading inside on 6 of 8 (carrying reading and level)",
                   L_free="largest pn_inhadd that is an equal at fixed scales on S by E94's rule",
-                  flagged='a step with a run outside the realism bands is not a level'),
+                  flagged='a step with a run outside the realism bands is not a level',
+                  silent='a step with a run in which an odor is silent (no KC spikes; its 15 pairs undefined) is not a '
+                         'level (Deviations)'),
               time=time.strftime('%Y-%m-%d %H:%M'), host=_host())
     _write_json(out / 'levels.json', lv)
     if out == out_dir():

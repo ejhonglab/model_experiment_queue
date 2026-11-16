@@ -57,9 +57,10 @@ def test_gain_spread_falls_along_the_ladder():
 # ---------------------------------------------------------------------------
 # part C's levels
 
-def _steps(v2, v2_lin, eq, flagged):
+def _steps(v2, v2_lin, eq, flagged, silent=None):
     vals = (M.PN_INHADD_DEFAULT,) + M.LADDER
-    return pd.DataFrame(dict(value=vals, v2=v2, v2_linear=v2_lin, equal_S=eq, flagged=flagged))
+    return pd.DataFrame(dict(value=vals, v2=v2, v2_linear=v2_lin, equal_S=eq, flagged=flagged,
+                             silent=[False] * len(vals) if silent is None else silent))
 
 
 def test_levels_basic():
@@ -94,6 +95,21 @@ def test_levels_none_exist():
     assert M.refit_levels(M.levels(s2), s2) == []
     with pytest.raises(ValueError):
         M.levels(s.drop(columns=['equal_S']))
+    with pytest.raises(ValueError):
+        M.levels(s.drop(columns=['silent']))
+
+
+def test_levels_step_with_a_silent_odor_is_not_a_level():
+    # the fixed gain inside on V2 and its linear reading, an equal, unflagged, but with an odor silent in one run
+    s = _steps(v2=['flatter'] * 6 + ['inside'], v2_lin=['flatter'] * 6 + ['inside'], eq=[True] * 7, flagged=[False] * 7,
+               silent=[False] * 6 + [True])
+    lv = M.levels(s)
+    assert lv['L_apl'] is None and lv['L_lin'] is None and lv['L_free'] == 10000.0
+    assert lv['silent'] == [M.FIXED_GAIN_INHADD] and lv['flagged'] == []
+    # without L_apl the refit's fallback, the last unflagged step, skips the silent one too
+    assert M.refit_levels(lv, s) == [10000.0]
+    s2 = s.assign(flagged=[False] * 5 + [True, False])
+    assert M.refit_levels(M.levels(s2), s2) == [3141.0]
 
 
 # ---------------------------------------------------------------------------
@@ -370,3 +386,133 @@ def test_update_identity_merges_points_under_its_lock(tmp_path, monkeypatch):
     with pytest.raises(TimeoutError):
         with M._Lock(p, timeout=0.5):
             pass
+
+
+# ---------------------------------------------------------------------------
+# odors silent in a run: their pairs handled explicitly, every other missing pair raising
+
+def _silent_counts(rng, silent=()):
+    x = pd.DataFrame(rng.poisson(1.0, size=(60, 16)).astype(float), columns=list(H.APL16_ODORS))
+    x[list(silent)] = 0.0
+    return x
+
+
+def _sorted(s):
+    """E83's `_cs` orientation (each pair's odors sorted), which differs from the panel's for many pairs."""
+    s = s.copy()
+    s.index = pd.MultiIndex.from_tuples([tuple(sorted(p)) for p in s.index], names=['odor_a', 'odor_b'])
+    return s.sort_index()
+
+
+def _data(rng):
+    return H.canonical_pairs(pd.Series(rng.normal(0.18, 0.05, 120), index=pd.MultiIndex.from_tuples(H.PAIRS16)))
+
+
+def test_silent_odors_and_label():
+    rng = np.random.default_rng(0)
+    o = {'on': (None, _silent_counts(rng, ['B-myr'])), 'off': (None, _silent_counts(rng))}
+    assert M.silent_odors(o) == {'on': ['B-myr'], 'off': []}
+    assert len(M.silent_pairs(['B-myr'])) == 15 and len(M.silent_pairs(['B-myr', 'ms'])) == 29
+    assert M.silent_label({'M1': {'on': ['B-myr'], 'off': []}}) == 'B-myr (M1, APL on)'
+    lab = M.silent_label({'M1': {'on': ['B-myr'], 'off': []}, 'P1': {'on': ['ms', 'B-myr'], 'off': ['ms']}})
+    assert lab == 'ms (P1, APL on and off); B-myr (M1, APL on; P1, APL on)'
+    assert M.silent_label({'M1': {'on': [], 'off': []}}) == ''
+
+
+def test_unit_silence_and_mask_pairs():
+    silent = {('c', 'M1'): {'on': ['B-myr'], 'off': []}, ('c', 'P1'): {'on': [], 'off': ['ms']},
+              ('c', 'real'): {'on': [], 'off': []}}
+    u = M.unit_silence(silent, 'c', ('real', 'P1', 'M1'))          # a population: every member's pairs
+    assert u['n_pairs'] == 91 and u['odors'] == ['ms', 'B-myr'] and u['undefined'] == M.silent_pairs(['ms', 'B-myr'])
+    assert u['silent_odors'] == 'ms (P1, APL off); B-myr (M1, APL on)'
+    assert M.unit_silence(silent, 'c', ('real',)) == dict(undefined=frozenset(), n_pairs=120, silent_odors='', odors=[])
+    rng = np.random.default_rng(1)
+    d = {c: _sorted(H.readout_pair_distances(_silent_counts(rng), 'raw')) for c in ('on', 'off')}
+    m = M.mask_pairs(d, u['undefined'])
+    assert int(m['on'].isna().sum()) == 29 and int(m['off'].isna().sum()) == 29 and int(d['on'].isna().sum()) == 0
+    assert 'all 120' == M.pairs_note(120, '')
+    assert M.pairs_note(105, 'B-myr (M1, APL on)', 'population').startswith('105 of 120, the pairs every member')
+
+
+def test_check_pairs_handles_a_silent_odor():
+    rng = np.random.default_rng(2)
+    on = H.readout_pair_distances(_silent_counts(rng, ['B-myr']), 'raw')            # B-myr's 15 pairs NaN
+    off = H.readout_pair_distances(_silent_counts(rng), 'raw')
+    assert int(on.isna().sum()) == 15
+    data = _data(rng)
+    und = M.silent_pairs(['B-myr'])
+    assert M.check_pairs(on, off, data, und, 'x') == 105
+    # the pairs absent instead of NaN (as in E83's per-pair rows), in E83's sorted orientation: the same
+    on2, off2 = _sorted(on).dropna(), _sorted(off).reindex(_sorted(on).dropna().index)
+    assert M.check_pairs(on2, off2, data, und, 'x') == 105
+    # the statistics on the defined pairs are those of the 105 pairs alone
+    st = H.apl_effect_stats(on, off, data)
+    keep = [p for p in data.index if frozenset(p) not in und]
+    st105 = H.apl_effect_stats(on.reindex(keep), off.reindex(keep), data.reindex(keep))
+    assert st['apl_effect_n_pairs'] == 105 and st['apl_effect_rmse_centered'] == pytest.approx(st105['apl_effect_rmse_centered'])
+
+
+def test_check_pairs_raises_on_an_ordering_fault():
+    rng = np.random.default_rng(3)
+    on, off = (H.readout_pair_distances(_silent_counts(rng), 'raw') for _ in range(2))
+    data = _data(rng)
+    assert M.check_pairs(on, off, data, frozenset(), 'x') == 120
+    # the data in sorted orientation: pyolfsysm puts only the model's side in the panel's order, so pairs drop
+    with pytest.raises(RuntimeError, match='ordering or alignment fault'):
+        M.check_pairs(on, off, _sorted(data), frozenset(), 'x')
+    # the same with a silent odor: the fault still raises
+    on_s = H.readout_pair_distances(_silent_counts(rng, ['B-myr']), 'raw')
+    with pytest.raises(RuntimeError, match='ordering or alignment fault'):
+        M.check_pairs(on_s, off, _sorted(data), M.silent_pairs(['B-myr']), 'x')
+
+
+def test_check_pairs_raises_on_pairs_no_silent_odor_explains():
+    rng = np.random.default_rng(4)
+    on, off = (H.readout_pair_distances(_silent_counts(rng), 'raw') for _ in range(2))
+    data = _data(rng)
+    with pytest.raises(RuntimeError, match='no silent odor behind them'):           # one pair dropped
+        M.check_pairs(on.iloc[1:], off, data, frozenset(), 'x')
+    on_nan = on.copy()
+    on_nan.iloc[5] = np.nan
+    with pytest.raises(RuntimeError, match='no silent odor behind them'):           # one pair NaN
+        M.check_pairs(on_nan, off, data, frozenset(), 'x')
+    with pytest.raises(RuntimeError, match="silent odors' pairs with a distance"):  # a silent odor's pairs present
+        M.check_pairs(on, off, data, M.silent_pairs(['B-myr']), 'x')
+    on_s = H.readout_pair_distances(_silent_counts(rng, ['B-myr']), 'raw')
+    with pytest.raises(RuntimeError, match='no silent odor behind them'):           # silent, but not declared
+        M.check_pairs(on_s, off, data, frozenset(), 'x')
+    with pytest.raises(RuntimeError, match='repeated pairs'):
+        M.check_pairs(pd.concat([on, on.iloc[:1]]), off, data, frozenset(), 'x')
+    with pytest.raises(RuntimeError, match="data's per-pair effect"):
+        M.check_pairs(on, off, data.iloc[1:], frozenset(), 'x')
+
+
+def _pair_rows(change, unit, on, off):
+    """E83's `score_runs` per-pair rows of one reading (sorted orientation, undefined pairs absent)."""
+    me = _sorted(H.apl_effect(on, off))
+    return pd.DataFrame(dict(change=change, unit=unit, readout='cal', odor_a=me.index.get_level_values(0),
+                             odor_b=me.index.get_level_values(1), on=_sorted(on).reindex(me.index).to_numpy(),
+                             off=_sorted(off).reindex(me.index).to_numpy(), effect=me.to_numpy()))
+
+
+def test_effect_parts_with_a_silent_odor():
+    rng = np.random.default_rng(5)
+    off = H.readout_pair_distances(_silent_counts(rng), 'raw')
+    on_s = H.readout_pair_distances(_silent_counts(rng, ['B-myr']), 'raw')
+    on = H.readout_pair_distances(_silent_counts(rng), 'raw')
+    pairs = pd.concat([_pair_rows('gain_fixed', 'M1', on_s, off), _pair_rows('gain_fixed', 'real', on, off)])
+    tg = {'z8': _sorted(_data(rng)), 'halfA': _sorted(_data(rng))}         # E83's targets come sorted
+    parts = M._effect_parts(pairs, tg, {('gain_fixed', 'M1'): M.silent_pairs(['B-myr'])}).set_index('unit')
+    assert parts.loc['M1', 'n_pairs'] == 105 and parts.loc['real', 'n_pairs'] == 120
+    sp = H.apl_effect_spread_shape(on_s, off, H.canonical_pairs(tg['z8']))
+    assert parts.loc['M1', 'z8_shape'] == pytest.approx(sp['apl_effect_shape'])
+    with pytest.raises(RuntimeError, match='gain_fixed M1 cal z8: 15 pairs missing'):    # not declared: raises
+        M._effect_parts(pairs, tg)
+
+
+def test_mark_silent():
+    df = pd.DataFrame(dict(step=['inhadd100', 'gain_fixed'], x=[1, 2]))
+    m = M.mark_silent(df, {'gain_fixed': 'B-myr (M1, APL on)'})
+    assert m['silent_odors_16odor'].tolist() == ['', 'B-myr (M1, APL on)']
+    with pytest.raises(ValueError):
+        M.mark_silent(df.drop(columns=['step']), {})
