@@ -116,6 +116,12 @@ Deviations from the entry (each also in the note):
   rows), DM3 from Or47a (the file gives dm3 to Or33b too).
 - E93's F input is read from its saved file (inputs/F.csv, both hashes checked): E93's `input_of('F')` now rebuilds it
   within 1.4e-14, not exactly, and the identity against B_F_real needs the exact input.
+- Part D: Yang's answer to question 19 (2026-11-15 18:08) leaves every recording in and the set standing, so part D
+  reads its lists as fixed; every part D table carries D_QUALITY_CAVEAT (she has not checked these recordings' quality).
+  The amendment's "a stimulus whose block is out was not imaged, and the range rule applies" is read as: a ratio that
+  needs a concentration the recording did not image, between its imaged neighbours, is missing (`value_at` with the
+  12's design); 20210805_3FLfun2 then gives no V2, as the amendment says. The order class is by Spearman's rho of
+  concentration on block, at least ORDER_RHO_MIN for every odor (the 12's ascending design swaps one pa pair).
 - E37's saved APL table has no pre-odor level and is the mean (and peak) over the whole time after odor onset, not over
   0-0.5 s, so its ratios in A5 are of the window values, not of the evoked activity.
 
@@ -2609,6 +2615,14 @@ D3_RERUNS = (('20210804_2FLfun3', '20210804_2FLfun2'), ('20210823_4FLfun4', '202
 D_V_RATIOS = tuple(r for r in RATIOS if r[0] in ('V1_paa-4', 'V1_paa-2.954', 'V2'))
 D_BASELINES = ('order_matched', 'first_in_block')
 SOLVENT = 'pfo'
+# Yang's answer to question 19 (2026-11-15 18:08): "all data can be used but unsure of quality questions"
+D_QUALITY_CAVEAT = ("Yang has not checked these recordings' quality (her answer to question 19, 2026-11-15 18:08: all data "
+                    "can be used, but she is unsure of quality questions); question 20 and the block_out base are open")
+
+
+def _d_csv(df: pd.DataFrame, path: Path) -> None:
+    """A part D table, written with D_QUALITY_CAVEAT in a 'caveat' column."""
+    df.assign(caveat=D_QUALITY_CAVEAT).to_csv(path, index=False)
 
 
 def part_c_done() -> bool:
@@ -2899,9 +2913,9 @@ def part_d0() -> dict:
     if the eligibility differs from the amendment's lists or the reader does not reproduce part A."""
     out = out_dir()
     el = d0_eligibility()
-    el.to_csv(out / 'd0_eligibility.csv', index=False)
+    _d_csv(el, out / 'd0_eligibility.csv')
     rep = d0_reproduce_12()
-    res = dict(eligibility_matches=bool(el['matches'].all()), mismatches=el.loc[~el['matches']].to_dict('records'),
+    res = dict(caveat=D_QUALITY_CAVEAT, eligibility_matches=bool(el['matches'].all()), mismatches=el.loc[~el['matches']].to_dict('records'),
                reproduce_12=rep, n_recordings=int(len(el)), time=time.strftime('%Y-%m-%d %H:%M'), host=_host())
     _write_json(out / 'd0.json', res)
     if not res['eligibility_matches']:
@@ -3168,22 +3182,22 @@ def part_d() -> dict:
             if pth.get(k) is not None:
                 files[str(pth[k])] = hashlib.sha256(Path(pth[k]).read_bytes()).hexdigest()
     resp = d_resp(stems, 'maps')
-    resp.to_csv(out / 'd_responses.csv', index=False)
+    _d_csv(resp, out / 'd_responses.csv')
     resp_yang = d_resp(stems, 'yang')
     el = pd.read_csv(out / 'd0_eligibility.csv').set_index('stem')
     lags = el['v2_lag']
     v2r, classes, d1 = d1_v2r(resp, ranges, on, on_partner=on_s)
-    v2r.to_csv(out / 'd1_v2r.csv', index=False)
-    classes.to_csv(out / 'd1_classes.csv', index=False)
-    d1_lag_slope(resp, ranges, lags).to_csv(out / 'd1_lag_slope.csv', index=False)
+    _d_csv(v2r, out / 'd1_v2r.csv')
+    _d_csv(classes, out / 'd1_classes.csv')
+    _d_csv(d1_lag_slope(resp, ranges, lags), out / 'd1_lag_slope.csv')
     cats12 = d_twelve_categories(resp, ranges, on)
     d2 = d2_replication(resp, ranges, on, cats12)
-    d2.to_csv(out / 'd2_replication.csv', index=False)
-    d2_plane_pairs(resp, ranges).to_csv(out / 'd2_plane_pairs.csv', index=False)
+    _d_csv(d2, out / 'd2_replication.csv')
+    _d_csv(d2_plane_pairs(resp, ranges), out / 'd2_plane_pairs.csv')
     for k, t in d3_tables(resp, ranges, lags, means, tables).items():
-        t.to_csv(out / f'{k}.csv', index=False)
-    d_yang_table_ratios(resp_yang, ranges).to_csv(out / 'd_yang_table_ratios.csv', index=False)
-    summ = dict(a0=a0, d0=dict(eligibility_matches=d0['eligibility_matches'], reproduce_12=d0['reproduce_12']), D1=d1,
+        _d_csv(t, out / f'{k}.csv')
+    _d_csv(d_yang_table_ratios(resp_yang, ranges), out / 'd_yang_table_ratios.csv')
+    summ = dict(caveat=D_QUALITY_CAVEAT, a0=a0, d0=dict(eligibility_matches=d0['eligibility_matches'], reproduce_12=d0['reproduce_12']), D1=d1,
                 categories_12=cats12, D2_replicates=d2[d2['replicates'].notna()][['set', 'comparison', 'category',
                                                                                       'category_12', 'replicates']].to_dict('records'),
                 time=time.strftime('%Y-%m-%d %H:%M'), host=_host())
