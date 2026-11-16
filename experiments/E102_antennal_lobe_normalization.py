@@ -260,7 +260,12 @@ def read_table(path: Path) -> pd.DataFrame:
 
 
 def _write_json(path: Path, obj) -> None:
-    Path(path).write_text(json.dumps(obj, indent=1, default=_json_default) + '\n')
+    """Written to a temporary file beside it and renamed (atomic, also on NFS), so that another lane never reads a
+    partly written file."""
+    path = Path(path)
+    tmp = path.with_name(f'.{path.name}.{os.getpid()}.tmp')
+    tmp.write_text(json.dumps(obj, indent=1, default=_json_default) + '\n')
+    os.replace(tmp, path)
 
 
 def _json_default(x):
