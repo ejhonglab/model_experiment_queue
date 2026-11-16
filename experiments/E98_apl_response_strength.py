@@ -39,10 +39,11 @@ Parts (CLI `--part`):
   (E79_baseline_noise.csv, E79_blank_vs_odor_maps.csv); Hallem's 10^-2 rows through olfsysm's hc_data.csv equal E38's
   (`hallem_identity`; olfdb's copy of the table checked beside when present); the extended-input run reproduces each
   wiring's saved run on the 16 panel odors with 0 count differences and E90's saved APL window and pre-odor means (real
-  wiring: mean over odors 19.548, pre-odor share 0.423) ('reproduces', which part B requires); a blank stimulus gives
-  an evoked APL of zero ('blank_zero': it does not with E90's pre-odor window, which includes the KC layer's start-up
-  from zero at -0.5 s; 0.51 on the real wiring, -0.016 over SETTLED_PRE_WINDOW; part C's pre-odor level, `with_a0`,
-  waits on a decision) (`--no-runs`: the reader and Hallem only).
+  wiring: mean over odors 19.548, pre-odor share 0.423) ('reproduces', which part B requires); the pre-odor identity
+  as amended 2026-11-15 17:59 (`a0_identity`): the blank's window mean within 0.5 % of the settled pre-odor level and
+  the settled level the same for every stimulus. The entry's item ("a blank stimulus gives an evoked APL of zero",
+  against E90's pre-odor window) is recorded as failed ('blank_zero': 0.49 to 0.56 with APL on, the window holding the
+  KC layer's start-up from zero at -0.5 s) (`--no-runs`: the reader and Hallem only).
 - A (no simulations): A1 the flies' responses per recording and stimulus under E79's three baselines, with and without
   the blank subtracted, the two presentations' agreement, the block order and the drift of the first-in-block paraffin
   oil response (a1_responses.csv, a1_agreement.csv, a1_pfo_drift.csv); A2 the dose-response per odor, recording and fly:
@@ -82,11 +83,15 @@ Parts (CLI `--part`):
     46 glomeruli), E95's refit at the connectome's bouton share with the uniform component (f1); B3 E36's KC-spike-driven
     fit and E37's spike-only point at 40 Hz with the gain; B4 E77's screen points S1_inhadd1000 and S1_inhadd3141 (weaker
     PN normalization) at their held readings.
-- C (no simulations; the entry's (C) as amended 2026-11-15 15:24; `verdict_core`): every comparison read under the
-  carrying reading, its three partners (PARTNERS: the first-in-block baseline with no blank; the two recordings without
-  ms at 10^-2 read at ms 10^-3.431, V1 only; without the two recordings with a large blank and 20210805_3FRfun1) and
-  the entry's literal reading (the blank removed twice, decides nothing); a category is held when the carrying reading
-  and every partner give it (`held_category`), otherwise reading-dependent (not decided). V1 (paa over ms near 10^-3,
+- C (no simulations; the entry's (C) as amended 2026-11-15 15:24 and 17:59; `verdict_core`, `--a0 blank`): the model
+  at the carrying pre-odor level, the blank's window mean in the same run and condition (`with_a0`); every comparison
+  read under the carrying reading, its partners (PARTNERS: the first-in-block baseline with no blank; the two recordings
+  without ms at 10^-2 read at ms 10^-3.431, V1 only; without the two recordings with a large blank and 20210805_3FRfun1;
+  and the model at the settled level) and two literal lines (the flies' with the blank removed twice; the model at
+  E90's level), which decide nothing (VERDICT_READINGS); a category is held when the carrying reading and every partner
+  give it (`held_category`), otherwise reading-dependent (not decided). Part C first checks the amended pre-odor
+  identity on every run it reads, and stops if one fails; it also writes A4 and A6 at the carrying level
+  (`carrying_tables`) and B2 to B4 at it (`b_points_readings`; a run failing the identity left out). V1 (paa over ms near 10^-3,
   the lab's input, the hull of the two readings of paa's concentration, under each estimate of ms's input, V1_ESTIMATES,
   the panel's own first; `v1_from_estimates`) and V2 (paa at 10^-5 over paa at 10^-4, in the series as recorded); the
   pulse sets' permutation test (`pulse_permutation`, the 56 splits of the 8 flies into 3 and 5; disagreeing sets leave
@@ -781,6 +786,8 @@ HALLEM_STIMULI: Tuple[Stim, ...] = (('pa', -2.0), ('pa', -4.0), ('pa', -6.0), ('
                                     ('ms', -6.0), ('ms', -8.0), ('paa', -2.0))
 APL_TOL = 1e-9                   # part 0: APL's means against E90's, and the blank's evoked activity (absolute)
 SETTLED_PRE_WINDOW = (-0.25, 0.0)    # APL's pre-odor level after the KC layer's start-up (it starts at time_start, -0.5 s)
+A0_IDENTITY_REL = 0.005              # part 0 as amended 17:59: the blank's window mean within 0.5 % of the settled level
+PRE_SETTLED_TOL = 1e-9               # and the settled level the same for every stimulus of a run
 A0_DEFINITIONS = ('e90', 'settled', 'blank')   # part C's pre-odor level: E90's pre-odor mean, 'pre_settled', the blank's window
 
 
@@ -1297,6 +1304,32 @@ def _append_csv(path: Path, row: dict) -> None:
     df.to_csv(path, mode='a', header=not path.exists(), index=False)
 
 
+def a0_identity(apl: pd.DataFrame) -> dict:
+    """Part 0's pre-odor identity as amended 2026-11-15 17:59, on one run's APL means (index the stimuli; win, pre,
+    pre_settled): the blank's window mean lies within A0_IDENTITY_REL of the settled pre-odor level (relative to it; both 0
+    passes), and the settled level is the same for every stimulus (within PRE_SETTLED_TOL). Beside, the entry's item as
+    written (the blank's window minus E90's pre-odor mean), which fails with E90's window."""
+    if BLANK_LABEL not in apl.index:
+        raise RuntimeError('a run without a blank stimulus')
+    b = apl.loc[BLANK_LABEL]
+    ps = apl['pre_settled'].astype(float)
+    s0 = float(b['pre_settled'])
+    rel = float(abs(b['win'] - s0) / abs(s0)) if s0 != 0 else (0.0 if b['win'] == 0 else float('inf'))
+    spread = float(ps.max() - ps.min())
+    return dict(blank_win=float(b['win']), pre_settled=s0, blank_minus_settled_rel=float((b['win'] - s0) / s0) if s0 else 0.0,
+                blank_within_rel=bool(rel <= A0_IDENTITY_REL), pre_settled_spread=spread,
+                pre_settled_same=bool(spread <= PRE_SETTLED_TOL), passes=bool(rel <= A0_IDENTITY_REL and spread <= PRE_SETTLED_TOL),
+                entry_item_blank_minus_e90_pre=float(b['win'] - b['pre']))
+
+
+def a0_identity_table(b1: pd.DataFrame) -> pd.DataFrame:
+    """`a0_identity` on every run of `load_b1` rows (one row per wiring and condition)."""
+    rows = []
+    for (w, c), g in b1.groupby(['wiring', 'cond'], sort=False):
+        rows.append(dict(wiring=w, cond=c, **a0_identity(g.set_index('stimulus')[['win', 'pre', 'pre_settled']])))
+    return pd.DataFrame(rows)
+
+
 def b1_identity(label: str, roots: Optional[Sequence[Path]] = None) -> dict:
     """Part 0's run identities of one wiring's saved B1 run: on the 16 panel odors the spike counts and responses equal
     the saved fit's (E83's `saved_fit`, APL on and off; 0 differences), APL's window and pre-odor means equal E90's saved
@@ -1329,11 +1362,14 @@ def b1_identity(label: str, roots: Optional[Sequence[Path]] = None) -> dict:
                       blank_pre_settled=float(b['pre_settled']) if 'pre_settled' in b.index else None,
                       blank_response_rate=float(o['responses'][BLANK_LABEL].astype(float).mean()),
                       n_stimuli=int(o['apl'].shape[0]))
+        if 'pre_settled' in o['apl'].columns:
+            res[c]['a0_identity'] = a0_identity(o['apl'])
     res['reproduces'] = bool(all(res[c]['counts_differ'] == 0 and res[c]['responses_differ'] == 0
                                  and res[c]['apl_win_max_abs_diff'] <= APL_TOL and res[c]['apl_pre_max_abs_diff'] <= APL_TOL
                                  for c, _ in CONDS))
-    res['blank_zero'] = bool(abs(res['on']['blank_evoked']) <= APL_TOL)
-    res['exact'] = bool(res['reproduces'] and res['blank_zero'])
+    res['blank_zero'] = bool(abs(res['on']['blank_evoked']) <= APL_TOL)          # the entry's item, recorded as failed
+    res['a0_identity_passes'] = bool(all(res[c].get('a0_identity', {}).get('passes') for c, _ in CONDS))
+    res['exact'] = bool(res['reproduces'] and res['a0_identity_passes'])
     return res
 
 
@@ -1357,12 +1393,14 @@ def b1_identity_e101(label: str) -> dict:
                       apl_pre_max_abs_diff=float((a['pre'] - e90.loc[list(H.APL16_ODORS), 'pre']).abs().max()),
                       apl_mean_win=float(a['win'].mean()), apl_pre_share=float(a['pre'].mean() / a['win'].mean()),
                       blank_evoked=float(b['win'] - b['pre']), blank_evoked_settled=float(b['win'] - b['pre_settled']),
-                      blank_response_rate=float(b['response_rate']), n_stimuli=int(len(g)))
+                      blank_response_rate=float(b['response_rate']), n_stimuli=int(len(g)),
+                      a0_identity=a0_identity(g[['win', 'pre', 'pre_settled']]))
     res['reproduces'] = bool(all(res[c]['counts_differ'] == 0 and res[c]['responses_differ'] == 0
                                  and res[c]['apl_win_max_abs_diff'] <= APL_TOL and res[c]['apl_pre_max_abs_diff'] <= APL_TOL
                                  for c, _ in CONDS))
-    res['blank_zero'] = bool(abs(res['on']['blank_evoked']) <= APL_TOL)
-    res['exact'] = bool(res['reproduces'] and res['blank_zero'])
+    res['blank_zero'] = bool(abs(res['on']['blank_evoked']) <= APL_TOL)          # the entry's item, recorded as failed
+    res['a0_identity_passes'] = bool(all(res[c]['a0_identity']['passes'] for c, _ in CONDS))
+    res['exact'] = bool(res['reproduces'] and res['a0_identity_passes'])
     return res
 
 
@@ -1647,7 +1685,8 @@ def run_point_b(arm: str, name: str, root: Optional[Path] = None, force: bool = 
                             responses_differ=int((r16.to_numpy(float) != rs[list(H.APL16_ODORS)].to_numpy(float)).sum()) if ok else -1)
         else:
             ident[c] = dict(index_equal=None, counts_differ=None, responses_differ=None, note='no saved run found')
-        ident[c].update(n_stimuli=len(labels), blank_evoked=float(o['apl'].loc[BLANK_LABEL, 'win'] - o['apl'].loc[BLANK_LABEL, 'pre']))
+        ident[c].update(n_stimuli=len(labels), blank_evoked=float(o['apl'].loc[BLANK_LABEL, 'win'] - o['apl'].loc[BLANK_LABEL, 'pre']),
+                        a0_identity=a0_identity(o['apl']))
         _append_csv(d / 'runs.csv', dict(arm=arm, point=name, cond=ct, n_stimuli=len(labels), host=_host(),
                                          time=time.strftime('%Y-%m-%d %H:%M'), runtime_s=time.time() - t1,
                                          threads=os.environ.get('OMP_NUM_THREADS'), input_sha256=_frame_sha(orn),
@@ -1656,6 +1695,7 @@ def run_point_b(arm: str, name: str, root: Optional[Path] = None, force: bool = 
         print(f'{arm} {name} {ct}: {time.time() - t1:.0f} s, identity {ident[c]}', flush=True)
         del o, r, s
     ident['exact'] = bool(all(ident[c].get('counts_differ') == 0 and ident[c].get('responses_differ') == 0 for c, _ in CONDS))
+    ident['a0_identity_passes'] = bool(all(ident[c]['a0_identity']['passes'] for c, _ in CONDS))
     _write_json(d / f'{name}_identity.json', ident)
     del sim, mp, rv
     gc.collect()
@@ -1670,6 +1710,52 @@ def _pn_index(rv, gl: pd.Index) -> pd.Index:
     from pyolfsysm.mb_model import get_sim_var
     n = np.asarray(get_sim_var(rv.pn, 'pn_sims')[0]).shape[0]
     return gl if n == len(gl) else pd.RangeIndex(n, name='pn_row')
+
+
+def refresh_point_identities(root: Optional[Path] = None) -> pd.DataFrame:
+    """The amended pre-odor identity (`a0_identity`) of every saved B2 to B4 run, from its APL means, written into its
+    <name>_identity.json ('a0_identity_passes'); a run that fails is left out of its description."""
+    rows = []
+    for arm, names in B_POINTS.items():
+        d = b_root(root) / arm
+        for n in names:
+            f = d / f'{n}_identity.json'
+            if not f.exists():
+                continue
+            ident = _read_json(f)
+            for c, ct in CONDS:
+                ident.setdefault(c, {})['a0_identity'] = a0_identity(pd.read_csv(d / f'{n}_{ct}_apl.csv', index_col=0))
+            ident['a0_identity_passes'] = bool(all(ident[c]['a0_identity']['passes'] for c, _ in CONDS))
+            _write_json(f, ident)
+            rows.append(dict(arm=arm, point=n, reproduces=ident.get('exact'), a0_identity_passes=ident['a0_identity_passes'],
+                             **{f'{c}_blank_minus_settled_rel': ident[c]['a0_identity']['blank_minus_settled_rel'] for c, _ in CONDS}))
+    return pd.DataFrame(rows)
+
+
+def b_points_readings(root: Optional[Path] = None) -> pd.DataFrame:
+    """B2 to B4 described at the carrying level (each run with its own blank): V1's ratio under the panel's ms and the
+    control panel's, and V2, linear and over the indicator family; runs failing the pre-odor identity are left out (and
+    listed as such)."""
+    rows = []
+    for arm, names in B_POINTS.items():
+        d = b_root(root) / arm
+        for n in names:
+            f = d / f'{n}_on_apl.csv'
+            if not f.exists():
+                continue
+            ident = _read_json(d / f'{n}_identity.json') or {}
+            if not ident.get('a0_identity_passes', False):
+                rows.append(dict(arm=arm, point=n, note='left out: fails the pre-odor identity'))
+                continue
+            a = pd.read_csv(f, index_col=0)
+            for lab, num, den in (('V1, the panel ms', V1_NUM, 'ms'), ('V1, kiwi-control/control ms', V1_NUM, V1_ESTIMATES['kiwi-control/control']),
+                                  ('V2', V2_NUM, V2_DEN)):
+                for col in ('win',) + (('win_pulse',) if 'win_pulse' in a.columns else ()):
+                    rs = model_ratio_set(a.loc[num, col], a.loc[den, col], a.loc[BLANK_LABEL, col])
+                    rows.append(dict(arm=arm, point=n, name=POINT_NAMES[n], comparison=lab, window=col,
+                                     ratio_linear=float(rs['ratio'].iloc[0]), ratio_min=float(rs['ratio'].min()),
+                                     ratio_max=float(rs['ratio'].max())))
+    return pd.DataFrame(rows)
 
 
 def run_b2(root: Optional[Path] = None) -> None:
@@ -2049,7 +2135,8 @@ def stimulus_classes(on: pd.DataFrame, num: str, den: str, lo: float, hi: float)
     on) through the indicator family (INDICATOR_NS x FORMS), its range, the linear reading (n 1, evoked), the class of
     the set and of the linear reading against [lo, hi] (`classify`), and the distance from the nearer end of the
     interval: of the linear reading (signed, the linear ratio minus that end) and of the set (0 if any of it is
-    inside). The pre-odor level must be the same for both stimuli."""
+    inside). The pre-odor level must be the same for both stimuli; a stimulus that does not exceed it has no ratio
+    (class 'no ratio', in no category)."""
     rows = []
     for w, g in on.groupby('wiring', sort=False):
         g = g.set_index('stimulus')
@@ -2059,6 +2146,10 @@ def stimulus_classes(on: pd.DataFrame, num: str, den: str, lo: float, hi: float)
         p1, p2 = float(g.loc[num, 'pre']), float(g.loc[den, 'pre'])
         if not np.isclose(p1, p2, rtol=1e-9, atol=1e-9):
             raise RuntimeError(f'{w}: the pre-odor levels of {num} and {den} differ ({p1}, {p2})')
+        if not (a1 > p2 and a2 > p2):
+            rows.append(dict(wiring=w, numerator=num, denominator=den, a_num=a1, a_den=a2, a0=p2, cls='no ratio',
+                             cls_linear='no ratio', flies_lo90=lo, flies_hi90=hi))
+            continue
         rs = model_ratio_set(a1, a2, p2)
         lin = float(indicator_ratio(a1, a2, p2, 1.0, 'evoked'))
         end = lo if abs(lin - lo) <= abs(lin - hi) else hi
@@ -2132,60 +2223,92 @@ def _intervals(flies: pd.DataFrame, ids: Sequence[str]) -> Optional[Tuple[float,
     return hull(iv)
 
 
-def verdict_core(flies: Dict[str, pd.DataFrame], b1: pd.DataFrame, pulse: Optional[Dict[str, dict]] = None,
+# the readings of the verdict (the amendments of 15:24 and 17:59): (key, the flies' reading set, the model's pre-odor level, role)
+VERDICT_READINGS: Tuple[Tuple[str, str, str, str], ...] = (
+    ('carrying', 'carrying', 'blank', 'carrying'),
+    ('first_in_block', 'first_in_block', 'blank', 'partner'),
+    ('own_range', 'own_range', 'blank', 'partner'),
+    ('without_three', 'without_three', 'blank', 'partner'),
+    ('settled', 'carrying', 'settled', 'partner'),
+    ('literal_flies', 'literal', 'blank', 'literal'),
+    ('literal_model', 'carrying', 'e90', 'literal'))
+LITERAL_NAMES = {'literal_flies': "the flies' literal reading (the blank removed twice)",
+                 'literal_model': "the model under E90's pre-odor level"}
+A0_CARRYING, A0_PARTNER, A0_LITERAL = 'blank', 'settled', 'e90'
+
+
+def verdict_core(flies: Dict[str, pd.DataFrame], b1, pulse: Optional[Dict[str, dict]] = None,
                  solvent: Optional[Dict[str, float]] = None) -> Tuple[dict, pd.DataFrame, pd.DataFrame]:
-    """Part C's verdict (the entry's (C) as amended 2026-11-15 15:24). `flies`: the flies' ratios (rows of `flies_ratios`)
-    under every reading of READING_SETS ('carrying', the partners, 'literal'); `b1`: `load_b1` rows (APL on is read);
-    `pulse`: `pulse_permutation` results for 'V1_paa-4', 'V1_paa-2.954' and 'V2' (carrying reading); `solvent`: the
-    flies' solvent response rates ({'ctrl', 'tnt'}) for outcome (h).
-    - Each comparison is read under every reading (the 6-of-8 rule on the same model rows); its category is held when
-      the carrying reading and every partner give it (`held_category`; V2 without the V1-only partner), otherwise
-      reading-dependent (not decided). The literal reading is shown and decides nothing.
+    """Part C's verdict (the entry's (C) as amended 2026-11-15 15:24 and 17:59). `flies`: the flies' ratios (rows of
+    `flies_ratios`) under every reading set of READING_SETS ('carrying', the partners, 'literal'); `b1`: `load_b1` rows
+    under each model pre-odor level ({'blank', 'settled', 'e90'}: `with_a0`'s; a single frame stands for all three);
+    `pulse`: `pulse_permutation` results for 'V1_paa-4', 'V1_paa-2.954' and 'V2' (carrying reading); `solvent`: the flies'
+    solvent response rates ({'ctrl', 'tnt'}) for outcome (h).
+    - Each comparison is read under every reading of VERDICT_READINGS (the flies' reading set with the model at a
+      level; the 6-of-8 rule); its category is held when the carrying reading (the flies' carrying reading, the model
+      at the blank's level) and every partner (the flies' partner readings at the blank's level, and the settled level
+      with the flies' carrying reading) give it (`held_category`; V2 without the V1-only partner), otherwise
+      reading-dependent (not decided). The two literal lines (the flies' with the blank removed twice; the model under
+      E90's level) are shown, decide nothing, and name the wirings whose class differs from the carrying reading's.
     - V1: paa (the lab's input at 10^-4) over each estimate of ms's input at 10^-3 (V1_ESTIMATES, the panel's own first)
       against the hull of the flies' two readings of paa's concentration; `v1_from_estimates` over the held categories.
     - V2: paa at 10^-5 (PAA5_SESSION's diagnostics) over the panel's paa; the other sessions' estimates beside.
     - A comparison on which the pulse sets disagree is not decided (V1 if either of its ratios disagrees).
     - V3 to V5 on Hallem's stimuli where B1 has them, under the carrying reading (described).
     Returns (verdict, one row per comparison and reading, the per-wiring rows of every comparison and reading)."""
-    on = b1[b1['cond'] == 'on'][['wiring', 'stimulus', 'win', 'pre']]
+    levels = b1 if isinstance(b1, dict) else {lv: b1 for lv in A0_DEFINITIONS}
+    ons = {lv: d[d['cond'] == 'on'][['wiring', 'stimulus', 'win', 'pre']] for lv, d in levels.items()}
+    b1c = levels[A0_CARRYING]
     comps, rows = [], []
+    spec = {k: (fk, lv, role) for k, fk, lv, role in VERDICT_READINGS}
 
-    def read(name, num, den, ids, readings, decides):
-        out = {}
-        for rk in readings:
-            iv = _intervals(flies[rk], ids)
+    def read(name, num, den, ids, keys, decides):
+        out, wcs = {}, {}
+        for rk in keys:
+            fk, lv, role = spec[rk]
+            iv = _intervals(flies[fk], ids)
             if iv is None:
                 continue
-            wc = stimulus_classes(on, num, den, *iv)
+            wc = stimulus_classes(ons[lv], num, den, *iv)
             if wc.empty:
                 continue
+            wc.insert(0, 'model_level', lv)
             wc.insert(0, 'reading_set', rk)
             wc.insert(0, 'comparison', name)
             rows.append(wc)
-            c = dict(comparison=name, reading_set=rk, reading=reading_label(READING_SETS[rk][0]), subset=READING_SETS[rk][1],
-                     numerator=num, denominator=den, flies_lo90=iv[0], flies_hi90=iv[1], n_wirings=int(len(wc)),
-                     category=comparison_verdict(wc['cls']), category_linear=comparison_verdict(wc['cls_linear']),
+            wcs[rk] = wc
+            c = dict(comparison=name, reading_set=rk, role=role, flies_reading=reading_label(READING_SETS[fk][0]),
+                     flies_subset=READING_SETS[fk][1], model_level=lv, numerator=num, denominator=den, flies_lo90=iv[0],
+                     flies_hi90=iv[1], n_wirings=int(len(wc)), category=comparison_verdict(wc['cls']),
+                     category_linear=comparison_verdict(wc['cls_linear']),
                      **{f'n_{k}': int((wc['cls'] == k).sum()) for k in CATEGORIES + ('mixed',)},
                      model_linear_min=float(wc['ratio_linear'].min()), model_linear_max=float(wc['ratio_linear'].max()),
                      model_min=float(wc['ratio_min'].min()), model_max=float(wc['ratio_max'].max()), decides=decides)
             comps.append(c)
             out[rk] = c
+        if 'carrying' in wcs:
+            base = wcs['carrying'].set_index('wiring')['cls']
+            for rk in ('literal_flies', 'literal_model', 'settled'):
+                if rk in wcs:
+                    other = wcs[rk].set_index('wiring')['cls']
+                    out[rk]['wirings_class_differs'] = sorted(w for w in base.index if w in other.index and other[w] != base[w])
         return out
 
-    v1_partners = tuple(PARTNERS)
-    v2_partners = tuple(k for k in PARTNERS if k not in V1_ONLY_PARTNERS)
+    v1_partners = tuple(k for k, _, _, role in VERDICT_READINGS if role == 'partner')
+    v2_partners = tuple(k for k in v1_partners if k not in V1_ONLY_PARTNERS)
+    literal = tuple(k for k, _, _, role in VERDICT_READINGS if role == 'literal')
     v1_ids = ('V1_paa-4', 'V1_paa-2.954')
     v1_held, v1_lines = {}, {}
     for est, lab in V1_ESTIMATES.items():
-        r = read(f"V1, ms's input from {est}", V1_NUM, lab, v1_ids, ('carrying',) + v1_partners + ('literal',), True)
+        r = read(f"V1, ms's input from {est}", V1_NUM, lab, v1_ids, ('carrying',) + v1_partners + literal, True)
         if 'carrying' not in r or any(k not in r for k in v1_partners):
             continue
         cats = {k: r[k]['category'] for k in r}
         v1_held[est] = held_category(cats, v1_partners)
         v1_lines[est] = _line(r, v1_partners, v1_held[est])
-    r2 = read(f'V2, paa at 10^-5 from {PAA5_SESSION}/diag', V2_NUM, V2_DEN, ('V2',), ('carrying',) + v2_partners + ('literal',), True)
+    r2 = read(f'V2, paa at 10^-5 from {PAA5_SESSION}/diag', V2_NUM, V2_DEN, ('V2',), ('carrying',) + v2_partners + literal, True)
     for sn, lab in V2_BESIDE.items():
-        read(f'V2 beside, paa at 10^-5 from {sn}/diag', lab, V2_DEN, ('V2',), ('carrying',) + v2_partners + ('literal',), False)
+        read(f'V2 beside, paa at 10^-5 from {sn}/diag', lab, V2_DEN, ('V2',), ('carrying',) + v2_partners + literal, False)
     for rid, (num, den) in HALLEM_COMPARISONS.items():
         read(f"{rid} (Hallem's input)", num, den, (rid,), ('carrying',), False)
     pulse = pulse or {}
@@ -2214,7 +2337,7 @@ def verdict_core(flies: Dict[str, pd.DataFrame], b1: pd.DataFrame, pulse: Option
         oc.append('d')
     if v1 in ('not decided',) or v2 in ('not decided',) or v1_pulse or v2_pulse:
         oc.append('e')
-    blank = b1[b1['stimulus'] == BLANK_LABEL]
+    blank = b1c[b1c['stimulus'] == BLANK_LABEL]
     if len(blank):
         rates = blank.groupby('cond')['response_rate'].agg(['min', 'median', 'max'])
         out['blank_response_rate'] = {c: rates.loc[c].to_dict() for c in rates.index}
@@ -2233,13 +2356,22 @@ def verdict_core(flies: Dict[str, pd.DataFrame], b1: pd.DataFrame, pulse: Option
 
 
 def _line(r: Dict[str, dict], partners: Sequence[str], held: str) -> dict:
-    """A verdict line: the carrying reading's category with its wiring count, each partner's, the literal reading's, and
-    the held category."""
+    """A verdict line: the carrying reading's category with its wiring count, each partner's (the settled level's
+    last), the two literal readings' (deciding nothing; where their category differs from the carrying one, the wirings
+    whose class differs), and the held category."""
     def cell(c):
-        return f"{c['category']} ({c.get('n_' + c['category'], 0) if c['category'] in CATEGORIES else max(c[f'n_{k}'] for k in CATEGORIES)} of {c['n_wirings']})"
-    line = dict(carrying=cell(r['carrying']), **{k: cell(r[k]) for k in partners if k in r})
-    if 'literal' in r:
-        line['literal (decides nothing)'] = cell(r['literal'])
+        n = c.get('n_' + c['category'], 0) if c['category'] in CATEGORIES else max(c[f'n_{k}'] for k in CATEGORIES)
+        return f"{c['category']} ({n} of {c['n_wirings']})"
+    line = dict(carrying=cell(r['carrying']))
+    for k in sorted(partners, key=lambda x: x == 'settled'):
+        if k in r:
+            line[k] = cell(r[k])
+    for k in ('literal_flies', 'literal_model'):
+        if k in r:
+            txt = cell(r[k])
+            if r[k]['category'] != r['carrying']['category']:
+                txt += f" (differs from the carrying reading; wirings changing class: {', '.join(r[k].get('wirings_class_differs', [])) or 'none'})"
+            line[f'{LITERAL_NAMES[k]} (decides nothing)'] = txt
     line['held'] = held
     return line
 
@@ -2300,8 +2432,9 @@ def v2_descriptions(per_recording: pd.DataFrame, recs, drift: pd.DataFrame) -> d
 
 def pulse_matched(b1: pd.DataFrame, flies_short: pd.DataFrame, flies_long: pd.DataFrame, root: Optional[Path] = None) -> dict:
     """The pulse-matched readings (described): V1 under the megamat estimate of ms's input, the 0.5 s recordings' hull
-    against the family's eight wirings, and the 1 s recordings' hull against B2's 1 s run on the real wiring (APL's
-    mean over 0-0.5 s and over 0-1 s) when it exists."""
+    against the family's eight wirings (`b1` at the carrying level), and the 1 s recordings' hull against B2's 1 s run on
+    the real wiring (APL's mean over 0-0.5 s and over 0-1 s, each against the blank's mean over the same window) when it
+    exists and passes the pre-odor identity."""
     on = b1[b1['cond'] == 'on'][['wiring', 'stimulus', 'win', 'pre']]
     out = {}
     iv = _intervals(flies_short, ('V1_paa-4', 'V1_paa-2.954'))
@@ -2314,8 +2447,11 @@ def pulse_matched(b1: pd.DataFrame, flies_short: pd.DataFrame, flies_long: pd.Da
     if iv is not None and (d / 'pulse1_on_apl.csv').exists():
         a = pd.read_csv(d / 'pulse1_on_apl.csv', index_col=0)
         res = dict(flies=list(iv))
+        ident = _read_json(d / 'pulse1_identity.json') or {}
+        if not ident.get('a0_identity_passes', True):
+            return dict(out, long_vs_b2_pulse1='left out: the run fails the pre-odor identity')
         for col in ('win', 'win_pulse'):
-            rs = model_ratio_set(a.loc[V1_NUM, col], a.loc['ms', col], a.loc['ms', 'pre'])
+            rs = model_ratio_set(a.loc[V1_NUM, col], a.loc['ms', col], a.loc[BLANK_LABEL, col])
             res[col] = dict(ratio_linear=float(rs['ratio'].iloc[0]), ratio_min=float(rs['ratio'].min()),
                             ratio_max=float(rs['ratio'].max()), cls=classify(rs['ratio'], *iv))
         out['long_vs_b2_pulse1'] = res
@@ -2335,25 +2471,54 @@ def with_a0(b1: pd.DataFrame, how: str) -> pd.DataFrame:
         b['pre'] = b['pre_settled']
     elif how == 'blank':
         bl = b[b['stimulus'] == BLANK_LABEL].set_index(['wiring', 'cond'])['win']
+        miss = sorted(set(zip(b['wiring'], b['cond'])) - set(bl.index))
+        if miss:
+            raise RuntimeError(f'runs without a blank stimulus: {miss}')
         b['pre'] = [bl[(w, c)] for w, c in zip(b['wiring'], b['cond'])]
     b['evoked'] = b['win'] - b['pre']
     return b
 
 
-def part_c(wirings: Sequence[str] = ALL_WIRINGS, allow_missing: bool = False, a0: Optional[str] = None) -> dict:
-    """Part C (module docstring; the entry's (C) as amended 2026-11-15 15:24): reads B1's runs (`load_b1`; all eight
-    wirings unless `allow_missing`), the flies' ratios under every reading of READING_SETS (`flies_ratios`), the pulse
-    sets' permutation test on V1's two ratios and V2 (carrying reading), V2's descriptions and the pulse-matched
-    readings; writes c_comparisons.csv, c_wirings.csv and verdict.json."""
-    if a0 is None:
-        raise RuntimeError("part C needs the definition of the model's pre-odor level (--a0 e90|settled|blank): the blank "
-                           "identity fails with E90's window (the KC layer's start-up), so the definition waits on a decision")
+def carrying_tables(b1_blank: pd.DataFrame) -> Dict[str, pd.DataFrame]:
+    """Part A's A4 and A6 again at the carrying level (the blank's window mean), from B1's runs (which reproduce E90's and
+    add the blank), beside part A's tables (written under E90's level, unchanged): a4_apl_carrying.csv (per wiring and
+    panel odor, APL's window mean, the blank's, the response above it, with part A's input, PN and KC columns),
+    a4_profile_carrying.csv (`profile_summary`) and a6_power_carrying.csv (`power_table`, the SDs of part A)."""
+    on = b1_blank[(b1_blank['cond'] == 'on') & b1_blank['stimulus'].isin(H.APL16_ODORS)]
+    a4 = pd.read_csv(out_dir() / 'a4_apl.csv')
+    m = on[['wiring', 'stimulus', 'win', 'pre']].rename(columns={'stimulus': 'odor', 'win': 'a_b1', 'pre': 'a0_blank'})
+    t = a4.merge(m, on=['wiring', 'odor'], how='inner')
+    if not np.allclose(t['a'], t['a_b1'], rtol=0, atol=APL_TOL):
+        raise RuntimeError("B1's window means differ from part A's (E90's)")
+    t = t.assign(a0_e90=t['a0'], evoked_e90=t['evoked'], a0=t['a0_blank'], evoked=t['a_b1'] - t['a0_blank']).drop(columns=['a_b1', 'a0_blank'])
+    prof = profile_summary(t)
+    summ = _read_json(out_dir() / 'a_summary.json') or {}
+    sds = {k: v for k, v in (summ.get('a6_sd_log2') or {}).items() if k in ('median', 'max')}
+    power = power_table(t, sds) if sds else pd.DataFrame()
+    return dict(a4_apl_carrying=t, a4_profile_carrying=prof, a6_power_carrying=power)
+
+
+def part_c(wirings: Sequence[str] = ALL_WIRINGS, allow_missing: bool = False, a0: Optional[str] = A0_CARRYING) -> dict:
+    """Part C (module docstring; the entry's (C) as amended 2026-11-15 15:24 and 17:59): reads B1's runs (`load_b1_all`;
+    all eight wirings unless `allow_missing`), checks the amended pre-odor identity on every run read (`a0_identity`;
+    stops if a run fails), reads the model at the carrying level (`a0`, the blank's), the settled level (a partner) and
+    E90's level (the literal line), the flies' ratios under every reading of READING_SETS (`flies_ratios`), the pulse
+    sets' permutation test on V1's two ratios and V2 (carrying reading), V2's descriptions, the pulse-matched readings
+    and B2 to B4 at the carrying level; writes c_comparisons.csv, c_wirings.csv, c_a0_identity.csv,
+    c_b_points.csv, a4_apl_carrying.csv, a4_profile_carrying.csv, a6_power_carrying.csv and verdict.json."""
+    if a0 != A0_CARRYING:
+        raise ValueError(f"the carrying level is {A0_CARRYING!r} (the amendment of 17:59), not {a0!r}")
     b1 = load_b1_all(wirings)
     missing = b1.attrs.get('missing') or []
     if missing and not allow_missing:
         raise RuntimeError(f'B1 runs missing: {missing}')
     b1_sources = dict(sources=b1.attrs.get('sources'), e101=b1.attrs.get('e101'))
-    b1 = with_a0(b1, a0)
+    ident = a0_identity_table(b1)
+    out = out_dir()
+    ident.to_csv(out / 'c_a0_identity.csv', index=False)
+    if not ident['passes'].all():
+        raise RuntimeError(f"the pre-odor identity fails: {ident[~ident['passes']].to_dict('records')}")
+    levels = {lv: with_a0(b1, lv) for lv in (A0_CARRYING, A0_PARTNER, A0_LITERAL)}
     recs = load_recordings()
     resp = stimulus_responses(recs)
     flies, per = {}, {}
@@ -2366,17 +2531,34 @@ def part_c(wirings: Sequence[str] = ALL_WIRINGS, allow_missing: bool = False, a0
         d = pc[(pc['ratio_id'] == rid) & pc['entered']]
         pulse[rid] = pulse_permutation(d.groupby('fly')['log_ratio'].mean(), short)
     k = kc_rates('z1')
-    verdict, comps, rows = verdict_core(flies, b1, pulse, solvent=dict(ctrl=float(k.loc['pfo', 'ctrl']), tnt=float(k.loc['pfo', 'tnt'])))
+    verdict, comps, rows = verdict_core(flies, levels, pulse, solvent=dict(ctrl=float(k.loc['pfo', 'ctrl']), tnt=float(k.loc['pfo', 'tnt'])))
     drift = a1_tables(recs, resp)['drift_summary']
     verdict['V2_descriptions'] = v2_descriptions(pc, recs, drift)
     rd = CARRYING[0]
-    verdict['pulse_matched'] = pulse_matched(b1, flies_ratios(resp, rd, 'pulse_0.5s')[0], flies_ratios(resp, rd, 'pulse_1s')[0])
-    out = out_dir()
+    verdict['pulse_matched'] = pulse_matched(levels[A0_CARRYING], flies_ratios(resp, rd, 'pulse_0.5s')[0],
+                                             flies_ratios(resp, rd, 'pulse_1s')[0])
+    pts = refresh_point_identities()
+    bpr = b_points_readings()
+    bpr.to_csv(out / 'c_b_points.csv', index=False)
+    verdict['b_points_left_out'] = pts.loc[~pts['a0_identity_passes'], 'point'].tolist() if len(pts) else []
     comps.to_csv(out / 'c_comparisons.csv', index=False)
     rows.to_csv(out / 'c_wirings.csv', index=False)
-    verdict.update(a0=a0, b1_sources=b1_sources, reading_sets={k: dict(reading=reading_label(v[0]), subset=v[1]) for k, v in READING_SETS.items()},
+    ct = carrying_tables(levels[A0_CARRYING])
+    for name, t in ct.items():
+        t.to_csv(out / f'{name}.csv', index=False)
+    prof = ct['a4_profile_carrying']
+    verdict['premise_restated'] = dict(
+        blank_share_of_window_mean=dict(min=float((prof['a0'] / prof['a_mean']).min()), max=float((prof['a0'] / prof['a_mean']).max())),
+        real=float(prof.set_index('wiring').loc['real', 'a0'] / prof.set_index('wiring').loc['real', 'a_mean']))
+    if len(ct['a6_power_carrying']):
+        verdict['a6_best5_carrying'] = ct['a6_power_carrying'].head(5)[['numerator', 'denominator', 'family_ratio', 'family_min',
+                                                                         'family_max', 'proportional_tnt', 'delta_log2']].to_dict('records')
+    verdict.update(a0=dict(carrying=A0_CARRYING, partner=A0_PARTNER, literal=A0_LITERAL), b1_sources=b1_sources,
+                   a0_identity=ident.to_dict('records'),
+                   reading_sets={k: dict(reading=reading_label(v[0]), subset=v[1]) for k, v in READING_SETS.items()},
+                   verdict_readings=[dict(key=k, flies=fk, model_level=lv, role=role) for k, fk, lv, role in VERDICT_READINGS],
                    wirings=sorted(set(b1['wiring'])), missing_runs=missing, time=time.strftime('%Y-%m-%d %H:%M'),
-                   host=_host(), commits=dict(H.code_commits()))
+                   host=_host(), commits=process_commits())
     _write_json(out / 'verdict.json', verdict)
     return verdict
 
@@ -2741,10 +2923,12 @@ def _ratio_row(name: str, fr: dict, cat: str, wc: pd.DataFrame, **extra) -> dict
 
 
 def d1_v2r(resp: pd.DataFrame, ranges: Dict[str, Tuple[float, float]], on: pd.DataFrame,
-           extra_recordings: Sequence[str] = ('20210827_3FRfun4',)) -> Tuple[pd.DataFrame, pd.DataFrame, dict]:
+           extra_recordings: Sequence[str] = ('20210827_3FRfun4',),
+           on_partner: Optional[pd.DataFrame] = None) -> Tuple[pd.DataFrame, pd.DataFrame, dict]:
     """D1: V2 in the shuffled-order recordings (V2R) under the carrying reading, the first-in-block baseline and each
     reading with one fly left out; its category is held when all of them give it and the 0.5 s and 1 s flies do not
-    disagree (`pulse_permutation`, the 15 splits of 6 flies into 2 and 4); beside, V2R with `extra_recordings` (the 12's
+    disagree (`pulse_permutation`, the 15 splits of 6 flies into 2 and 4), and the model at the partner level
+    (`on_partner`, the settled one; the amendment of 17:59) gives it too; beside, V2R with `extra_recordings` (the 12's
     shuffled one) and V1's two ratios in the same recordings. Returns (one row per reading, per wiring classes under the
     carrying reading with each wiring's distance from the interval's nearer end, the result)."""
     rows, cats = [], {}
@@ -2759,6 +2943,10 @@ def d1_v2r(resp: pd.DataFrame, ranges: Dict[str, Tuple[float, float]], on: pd.Da
         rows.append(_ratio_row(name, fr.to_dict(), cat, wc, decides=True))
         if name == 'carrying':
             classes = wc.assign(category=cat)
+            if on_partner is not None:
+                cs, wcs = _cat(on_partner, V2_NUM, V2_DEN, fr['lo90'], fr['hi90'])
+                cats['settled'] = cs
+                rows.append(_ratio_row('carrying, the model at the settled level', fr.to_dict(), cs, wcs, decides=True))
             for rid in ('V1_paa-4', 'V1_paa-2.954'):
                 g = f.set_index('ratio_id').loc[rid]
                 rows.append(dict(reading=f'carrying, {rid} (beside)', ratio=g['ratio'], lo90=g['lo90'], hi90=g['hi90'],
@@ -2960,8 +3148,11 @@ def part_d() -> dict:
     verdict = _read_json(out / 'verdict.json')
     a0 = verdict.get('a0')
     d0 = part_d0()
-    b1 = with_a0(load_b1_all(ALL_WIRINGS), a0)
+    b1all = load_b1_all(ALL_WIRINGS)
+    b1 = with_a0(b1all, A0_CARRYING)
     on = b1[b1['cond'] == 'on'][['wiring', 'stimulus', 'win', 'pre']]
+    b1s = with_a0(b1all, A0_PARTNER)
+    on_s = b1s[b1s['cond'] == 'on'][['wiring', 'stimulus', 'win', 'pre']]
     ranges = twelve_design()
     stems = list(D_RECORDINGS) + twelve()
     rows = d_rows(stems)
@@ -2981,7 +3172,7 @@ def part_d() -> dict:
     resp_yang = d_resp(stems, 'yang')
     el = pd.read_csv(out / 'd0_eligibility.csv').set_index('stem')
     lags = el['v2_lag']
-    v2r, classes, d1 = d1_v2r(resp, ranges, on)
+    v2r, classes, d1 = d1_v2r(resp, ranges, on, on_partner=on_s)
     v2r.to_csv(out / 'd1_v2r.csv', index=False)
     classes.to_csv(out / 'd1_classes.csv', index=False)
     d1_lag_slope(resp, ranges, lags).to_csv(out / 'd1_lag_slope.csv', index=False)
@@ -3055,7 +3246,7 @@ def main() -> None:
         part_b(arms, ws, None if a.root is None else Path(a.root))
     elif a.part == 'C':
         provenance('C', allow_missing=a.allow_missing, a0=a.a0)
-        print(json.dumps(part_c(ws, allow_missing=a.allow_missing, a0=a.a0), indent=1, default=float), flush=True)
+        print(json.dumps(part_c(ws, allow_missing=a.allow_missing, a0=a.a0 or A0_CARRYING), indent=1, default=float), flush=True)
     elif a.part == 'D0':
         provenance('D0')
         print(json.dumps(part_d0(), indent=1, default=float), flush=True)

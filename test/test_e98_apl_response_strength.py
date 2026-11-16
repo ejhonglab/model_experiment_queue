@@ -335,7 +335,7 @@ def test_verdict_core_held_and_outcomes():
     assert v['V1'] == 'inside' and v['V2'] == 'inside' and v['outcomes'] == ['a']
     assert v['V1_lines']['megamat/megamat (the panel)']['carrying'] == 'inside (8 of 8)'
     assert list(v['V1_lines'])[0] == 'megamat/megamat (the panel)'
-    assert set(comps['reading_set']) == set(M.READING_SETS) and 'linear_minus_nearer_end' in rows.columns
+    assert set(comps['reading_set']) == {k for k, *_ in M.VERDICT_READINGS} and 'linear_minus_nearer_end' in rows.columns
     # a partner whose interval excludes the model: V1 reading-dependent under every estimate, not decided, outcome (e)
     v, _, _ = M.verdict_core(_readings(own_range=_flies(v1a=(0.6, 0.9), v1b=(0.9, 1.1))), _b1_rows(paa5=0.5))
     assert set(v['V1_held_per_estimate'].values()) == {'reading-dependent'} and v['V1'] == 'not decided'
@@ -615,3 +615,61 @@ def test_d_refuses_recordings_outside_its_lists_and_runs_after_part_c(monkeypatc
         M.part_d()
     with pytest.raises(PermissionError):
         M.d_frame_means(dict(stem='20210714_2FRfun5', folder='/nonexistent'))
+
+
+# ---------------------------------------------------------------------------
+# the pre-odor level (the amendment of 17:59)
+
+def test_blank_level_ratios_by_hand():
+    b = _b1_rows(paa5=0.5, pre=8.0)
+    b.loc[b['stimulus'] == M.BLANK_LABEL, 'win'] = 8.5                     # the blank's window: 0.5 above E90's level
+    bl = M.with_a0(b, 'blank')
+    assert np.allclose(bl.loc[bl['stimulus'] == M.BLANK_LABEL, 'evoked'], 0.0)
+    on = bl[bl['cond'] == 'on']
+    wc = M.stimulus_classes(on, M.V1_NUM, 'ms', 0.5, 2.0)
+    a1, a2, ab = 8.0 + 12.0, 8.0 + 10.0, 8.5
+    assert wc['ratio_linear'].iloc[0] == pytest.approx((a1 - ab) / (a2 - ab))
+    rs = M.model_ratio_set(a1, a2, ab)
+    assert rs[(rs.form == 'baseline') & (rs.n == 2.0)]['ratio'].iloc[0] == pytest.approx((a1 ** 2 - ab ** 2) / (a2 ** 2 - ab ** 2))
+    assert rs[(rs.form == 'evoked') & (rs.n == 2.0)]['ratio'].iloc[0] == pytest.approx(((a1 - ab) / (a2 - ab)) ** 2)
+    # a stimulus that does not exceed the blank has no ratio
+    b2 = bl.copy()
+    b2.loc[b2['stimulus'] == 'ms', 'win'] = 8.4
+    wc2 = M.stimulus_classes(b2[b2['cond'] == 'on'], M.V1_NUM, 'ms', 0.5, 2.0)
+    assert (wc2['cls'] == 'no ratio').all() and M.comparison_verdict(wc2['cls']) == 'not decided'
+
+
+def test_a_category_the_settled_level_does_not_give_is_reading_dependent():
+    blank = _b1_rows(paa5=0.85)                                            # V2 flatter at the blank's level
+    settled = _b1_rows(paa5=0.55)                                          # inside the flies' 0.43 to 0.59 at the settled level
+    v, comps, _ = M.verdict_core(_readings(), dict(blank=blank, settled=settled, e90=blank))
+    assert v['V2_line']['carrying'].startswith('flatter') and v['V2_line']['settled'].startswith('inside')
+    assert v['V2_held'] == 'reading-dependent' and v['V2'] == 'not decided' and 'e' in v['outcomes']
+    # the literal lines decide nothing and name the wirings whose class differs
+    v, _, _ = M.verdict_core(_readings(), dict(blank=blank, settled=blank, e90=settled))
+    assert v['V2'] == 'flatter'
+    lit = [x for k, x in v['V2_line'].items() if k.startswith("the model under E90")][0]
+    assert lit.startswith('inside') and 'wirings changing class' in lit and 'real' in lit
+
+
+def test_pre_odor_identity_bounds():
+    def apl(blank_win, settled=8.8):
+        idx = pd.Index(['paa', 'ms', M.BLANK_LABEL], name='stimulus')
+        return pd.DataFrame(dict(win=[20.0, 18.0, blank_win], pre=8.3, pre_settled=settled), index=idx)
+    assert M.a0_identity(apl(8.8 * 0.998))['passes']                       # 0.2 % below: passes
+    r = M.a0_identity(apl(8.8 * 0.99))                                     # 1 % below: fails
+    assert not r['passes'] and not r['blank_within_rel'] and r['pre_settled_same']
+    x = apl(8.8)
+    x.loc['ms', 'pre_settled'] = 8.8 + 1e-6                                # the settled level not the same for every stimulus
+    assert not M.a0_identity(x)['passes']
+    assert M.a0_identity(apl(0.0, settled=0.0))['passes']                 # spike-only APL: both zero
+    assert M.a0_identity(apl(8.8))['entry_item_blank_minus_e90_pre'] == pytest.approx(0.5)
+
+
+def test_a_run_without_a_blank_is_refused():
+    b = _b1_rows()
+    b = b[b['stimulus'] != M.BLANK_LABEL]
+    with pytest.raises(RuntimeError):
+        M.with_a0(b, 'blank')
+    with pytest.raises(RuntimeError):
+        M.a0_identity(b[b['cond'] == 'on'].set_index('stimulus')[['win', 'pre']].assign(pre_settled=8.0))
