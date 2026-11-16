@@ -1179,6 +1179,7 @@ Canonical experiment names for summary reports:
 | E98 | the strength of APL's response in the flies against the model's APL |
 | E99 | the evenness of APL's weights among KCs and over a KC's claws |
 | E100 | the flies' APL at the weak odors and at the panel's concentrations |
+| E101 | the flies' APL against their KC claws in the dual-colour recordings |
 
 ## Model-output archive (data/model_outputs/ in the shared directory)
 
