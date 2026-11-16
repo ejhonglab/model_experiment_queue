@@ -1,6 +1,6 @@
-"""Tests of reports/build_since_priority_changes.py on a scratch template, with a scratch shared directory (its
-data-target registry and experiment index) and every output in tmp_path, never in the shared directory or in
-outputs/_artifacts."""
+"""Tests of the digest pages' scripts (reports/build_since_priority_changes.py and build_since_yang_new_data.py, both
+build_summary.page_main) on a scratch template, with a scratch shared directory (its data-target registry and
+experiment index) and every output in tmp_path, never in the shared directory or in outputs/_artifacts."""
 import json
 import os
 import subprocess
@@ -8,8 +8,11 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+import pytest
+
 REPO = Path(__file__).resolve().parents[1]
-SCRIPT = REPO / 'reports' / 'build_since_priority_changes.py'
+# each digest page's name: its script is reports/build_<name>.py
+NAMES = ['since_priority_changes', 'since_yang_new_data']
 
 TEMPLATE = """# Since the priority changes
 
@@ -45,19 +48,22 @@ def scratch_shared(tmp_path):
     return shared
 
 
-def build(tmp_path, template):
+def build(tmp_path, template, name):
     shared = scratch_shared(tmp_path)
     t = tmp_path / 'template.md'
-    t.write_text(template)
+    if template is not None:
+        t.write_text(template)
     out_md, out_html = tmp_path / 'md' / 'page.md', tmp_path / 'html' / 'index.html'
-    r = subprocess.run([sys.executable, str(SCRIPT), '--template', str(t), '--out-md', str(out_md),
+    script = REPO / 'reports' / f'build_{name}.py'
+    r = subprocess.run([sys.executable, str(script), '--template', str(t), '--out-md', str(out_md),
         '--out-html', str(out_html)], env=dict(os.environ, KC_REMAPPING_SHARED=str(shared)), cwd=str(REPO),
         capture_output=True, text=True)
     return r, shared, t, out_md, out_html
 
 
-def test_build(tmp_path):
-    r, shared, t, out_md, out_html = build(tmp_path, TEMPLATE)
+@pytest.mark.parametrize('name', NAMES)
+def test_build(tmp_path, name):
+    r, shared, t, out_md, out_html = build(tmp_path, TEMPLATE, name)
     assert r.returncode == 0, r.stdout + r.stderr
     md = out_md.read_text()
     assert '{{' not in md and '⟦pv:' not in md
@@ -71,13 +77,33 @@ def test_build(tmp_path):
     page = out_html.read_text()
     assert '<title>Since the priority changes</title>' in page
     assert 'KC / ORN data: apl_effect_mean' in page and '<details' in page and 'id="learned"' in page
-    assert (out_html.parent / 'since_priority_changes_filled.md').read_text().count('⟦pv:') == 7
+    assert (out_html.parent / f'{name}_filled.md').read_text().count('⟦pv:') == 7
     # nothing written to the (scratch) shared directory
     assert not (shared / 'add_to_reports').exists()
 
 
-def test_unresolved_placeholder_fails(tmp_path):
-    r, shared, t, out_md, out_html = build(tmp_path, TEMPLATE + '\nAnd {{data:no_such_target ~ .2f}}.\n')
+@pytest.mark.parametrize('name', NAMES)
+def test_unresolved_placeholder_fails(tmp_path, name):
+    r, shared, t, out_md, out_html = build(tmp_path, TEMPLATE + '\nAnd {{data:no_such_target ~ .2f}}.\n', name)
     assert r.returncode != 0
     assert 'unresolved placeholders' in r.stderr and 'data:no_such_target' in r.stderr
     assert not out_md.exists() and not out_html.exists() and not out_html.parent.exists()
+
+
+@pytest.mark.parametrize('name', NAMES)
+def test_missing_template_fails(tmp_path, name):
+    r, shared, t, out_md, out_html = build(tmp_path, None, name)
+    assert r.returncode != 0 and f'no template at {t}' in r.stderr
+    assert not out_md.exists() and not out_html.parent.exists()
+
+
+def test_default_paths(tmp_path):
+    """Each script's defaults follow its name (the template beside it, the page under outputs/_artifacts/)."""
+    shared = scratch_shared(tmp_path)
+    for name in NAMES:
+        r = subprocess.run([sys.executable, str(REPO / 'reports' / f'build_{name}.py'), '--help'], cwd=str(REPO),
+            env=dict(os.environ, KC_REMAPPING_SHARED=str(shared)), capture_output=True, text=True)
+        assert r.returncode == 0, r.stderr
+        help_text = ' '.join(r.stdout.split())
+        assert f'reports/{name}_template.md' in help_text and f'outputs/_artifacts/{name}/index.html' in help_text
+        assert f'add_to_reports/{name}.md' in help_text

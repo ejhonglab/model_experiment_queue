@@ -13,7 +13,8 @@
 4. builds the page with source tooltips (md_to_artifact.py) at
    outputs/_artifacts/summary/index.html.
 save_report_copy.py stays manual; the page is not published as an artifact (CLAUDE.md, "Report copies").
-Steps 2-4 are fill_and_build(), which build_since_priority_changes.py uses for its own page.
+Steps 2-4 are fill_and_build(), which the digest pages (build_since_priority_changes.py,
+build_since_yang_new_data.py) use for their own templates, through page_main().
 Usage: ./venv/bin/python reports/build_summary.py [--skip-progress-plot] [--data-targets]
        (--data-targets first rebuilds the registry, kcq/data_targets.py)
 """
@@ -77,6 +78,39 @@ def fill_and_build(template_path: Path, out_md: Path, out_html: Path, filled_nam
     print('\n'.join(l for l in (r.stdout + r.stderr).split('\n') if l and 'Warning' not in l and 'warnings.warn' not in l)[-600:])
     print(f'{len(side)} values filled; {len(probs)} lint problems; markdown -> {out_md}; page -> {out_html}')
     return r.returncode == 0 and 'LINT PROBLEMS' not in r.stdout
+
+
+def page_main(name: str, doc: str) -> None:
+    """The command line of a page built from its own template with fill_and_build() alone (the digest pages:
+    build_since_priority_changes.py, build_since_yang_new_data.py), reading only what main() already produced.
+
+    Options `--template`, `--out-md` and `--out-html` override the defaults below; exits non-zero on a missing
+    template, an unresolved placeholder (nothing written) or a failed page build.
+
+    Args:
+        name: the page's name: its template is reports/<name>_template.md, its plain filled markdown the shared
+            directory's add_to_reports/<name>.md (sidecar <name>.values.json next to it), its page
+            outputs/_artifacts/<name>/index.html (beside <name>_filled.md, the markdown with tooltip markup).
+        doc: the calling script's docstring; its first paragraph is the command's description.
+    """
+    ap = argparse.ArgumentParser(description=doc.split('\n\n')[0])
+    ap.add_argument('--template', type=Path, default=H.HERE / 'reports' / f'{name}_template.md',
+        help='default: %(default)s')
+    ap.add_argument('--out-md', type=Path, default=None,
+        help=f"the plain filled markdown, its .values.json sidecar next to it (default: the shared directory's "
+        f'add_to_reports/{name}.md)')
+    ap.add_argument('--out-html', type=Path, default=H.HERE / 'outputs' / '_artifacts' / name / 'index.html',
+        help='the page (default: %(default)s)')
+    args = ap.parse_args()
+    if not args.template.is_file():
+        sys.exit(f'no template at {args.template}')
+    out_md = args.out_md or H.shared_dir() / 'add_to_reports' / f'{name}.md'
+    try:
+        ok = fill_and_build(args.template, out_md, args.out_html, f'{name}_filled.md')
+    except KeyError as e:
+        sys.exit(e.args[0])
+    if not ok:
+        sys.exit(1)
 
 
 def main() -> None:

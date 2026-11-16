@@ -20,15 +20,16 @@ body at most ANSWERS_MAX_BODY bytes, at most ANSWERS_MAX_FILES files per questio
 Everything else is read-only.
 
 Serves `/`, a page with two tabs: Report (the default; sub-tabs Summary, Experiments and
-mechanisms, Since the priority changes and Questions for Yang: the latest copies of the summary,
-the report page, the page on what was learned since the main goal's last two changes and the
-questions to Yang with their answer form, in the shared directory's reports/ (`REPORTS`), each in
-its own frame, never reloaded by themselves: a note offers a reload when a newer copy is saved)
-and Monitor (`/monitor`, the dashboard; it updates itself in place, without a page reload, and not
-while it is hidden or anything is full screen; query parameters `days`, `tokens` and `group`
-choose what the usage plots show). Also `/report/<view>` (the report files: `summary`,
-`experiments`, `since-priority-changes`, `questions-for-yang`), `/api/reports` (their file names
-and times), `/api/state` (the dashboard's data as JSON) and `POST /api/answers` (above).
+mechanisms, Since the priority changes, Since Yang's new data and Questions for Yang: the latest
+copies of the summary, the report page, the page on what was learned since the main goal's last two
+changes, the page on what was learned from Yang's new data and the questions to Yang with their
+answer form, in the shared directory's reports/ (`REPORTS`), each in its own frame, never reloaded
+by themselves: a note offers a reload when a newer copy is saved) and Monitor (`/monitor`, the
+dashboard; it updates itself in place, without a page reload, and not while it is hidden or anything
+is full screen; query parameters `days`, `tokens` and `group` choose what the usage plots show).
+Also `/report/<view>` (the report files: `summary`, `experiments`, `since-priority-changes`,
+`since-yang-new-data`, `questions-for-yang`), `/api/reports` (their file names and times),
+`/api/state` (the dashboard's data as JSON) and `POST /api/answers` (above).
 Standard library only, so it runs under any system python3 >= 3.8.
 """
 import argparse
@@ -787,6 +788,7 @@ REPORTS = {
     'summary': ('Summary', 'current-summary.html'),
     'experiments': ('Experiments and mechanisms', 'current-report.html'),
     'since-priority-changes': ('Since the priority changes', 'current-since-priority-changes.html'),
+    'since-yang-new-data': ("Since Yang's new data", 'current-since-yang-new-data.html'),
     # its page has a form whose answers POST /api/answers saves (ANSWERS_DIR, below)
     'questions-for-yang': ('Questions for Yang', 'current-questions-for-yang.html'),
 }

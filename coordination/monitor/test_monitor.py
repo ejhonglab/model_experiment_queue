@@ -463,11 +463,11 @@ def test_http(tmp_path):
     base = 'http://127.0.0.1:{}'.format(httpd.server_address[1])
     try:
         # / is the tabbed page: Report (Summary, Experiments and mechanisms, Since the priority
-        # changes) and Monitor
+        # changes, Since Yang's new data, Questions for Yang) and Monitor
         page = urllib.request.urlopen(base + '/').read().decode()
         assert '<title>Model experiments</title>' in page
         for label in ('>Report<', '>Monitor<', '>Summary<', '>Experiments and mechanisms<',
-                '>Since the priority changes<'):
+                '>Since the priority changes<', '>Since Yang&#x27;s new data<', '>Questions for Yang<'):
             assert label in page
         monitor = urllib.request.urlopen(base + '/monitor').read().decode()
         assert '<title>Model experiments</title>' in monitor and '<h2>Hosts</h2>' in monitor
@@ -497,50 +497,51 @@ def test_http(tmp_path):
         httpd.shutdown()
 
 
-def test_since_priority_changes_view(tmp_path):
-    """The third Report view: its sub-tab (after Experiments and mechanisms) and frame source come
-    from REPORTS, its file is served and listed once a copy is saved, and the missing-file page shows
-    until then."""
+@pytest.mark.parametrize('view,label,name,prev,nxt', [
+    ('since-priority-changes', 'Since the priority changes', 'since_priority_changes', 'experiments',
+        'since-yang-new-data'),
+    ('since-yang-new-data', "Since Yang's new data", 'since_yang_new_data', 'since-priority-changes',
+        'questions-for-yang'),
+])
+def test_digest_views(tmp_path, view, label, name, prev, nxt):
+    """The third and fourth Report views, the digest pages: their sub-tabs (in REPORTS' order) and frame
+    sources come from REPORTS, their files are served and listed once a copy is saved, and the missing-file
+    page shows until then."""
     make_shared(tmp_path, time.time())
     reports = tmp_path / 'reports'
     reports.mkdir()
-    httpd = ThreadingHTTPServer(('127.0.0.1', 0),
-        server.make_handler(server.Monitor(str(tmp_path)), 30))
-    t = threading.Thread(target=httpd.serve_forever, daemon=True)
-    t.start()
-    base = 'http://127.0.0.1:{}'.format(httpd.server_address[1])
-    try:
+    with serving(tmp_path) as base:
         page = urllib.request.urlopen(base + '/').read().decode()
-        tab = '<a data-view="since-priority-changes" href="#since-priority-changes">'
-        assert tab + 'Since the priority changes</a>' in page
-        assert page.index('data-view="experiments"') < page.index(tab) < page.index(
-            'data-view="questions-for-yang"')
+        tab = '<a data-view="{0}" href="#{0}">'.format(view)
+        assert tab + server.esc(label) + '</a>' in page
+        assert page.index('data-view="{}"'.format(prev)) < page.index(tab) < page.index(
+            'data-view="{}"'.format(nxt))
         # the page's map of views is generated from REPORTS
         views = json.loads(page.split('var V=', 1)[1].split(',F={}', 1)[0])
         assert views == dict(summary=dict(src='/report/summary', rep=1),
             experiments=dict(src='/report/experiments', rep=1),
             monitor=dict(src='/monitor'),
-            **{'since-priority-changes': dict(src='/report/since-priority-changes', rep=1),
-                'questions-for-yang': dict(src='/report/questions-for-yang', rep=1)})
+            **{v: dict(src='/report/' + v, rep=1) for v in ('since-priority-changes', 'since-yang-new-data',
+                'questions-for-yang')})
+        assert list(views) == ['summary', 'experiments', 'since-priority-changes', 'since-yang-new-data',
+            'questions-for-yang', 'monitor']
         # no copy saved yet: the missing-file page, and nothing listed
         with pytest.raises(urllib.error.HTTPError) as e:
-            urllib.request.urlopen(base + '/report/since-priority-changes')
+            urllib.request.urlopen(base + '/report/' + view)
         assert e.value.code == 404
-        assert 'No Since the priority changes report has been saved' in e.value.read().decode()
+        assert 'No {} report has been saved'.format(server.esc(label)) in e.value.read().decode()
         assert json.loads(urllib.request.urlopen(base + '/api/reports').read()) == {}
         # save_report_copy.py's copy and its --current link
-        (reports / 'since_priority_changes.html').write_text('<!doctype html><html><body>'
-            '<h1>since the changes</h1><a href="https://example.org/x">x</a></body></html>')
-        os.symlink('since_priority_changes.html', str(reports / 'current-since-priority-changes.html'))
-        body = urllib.request.urlopen(base + '/report/since-priority-changes').read().decode()
-        assert '<h1>since the changes</h1>' in body and "a[i].target='_blank'" in body
+        (reports / (name + '.html')).write_text('<!doctype html><html><body>'
+            '<h1>the digest</h1><a href="https://example.org/x">x</a></body></html>')
+        os.symlink(name + '.html', str(reports / 'current-{}.html'.format(view)))
+        body = urllib.request.urlopen(base + '/report/' + view).read().decode()
+        assert '<h1>the digest</h1>' in body and "a[i].target='_blank'" in body
         info = json.loads(urllib.request.urlopen(base + '/api/reports').read())
-        assert set(info) == {'since-priority-changes'}
-        assert info['since-priority-changes']['label'] == 'Since the priority changes'
-        assert info['since-priority-changes']['file'] == 'since_priority_changes.html'
-        assert info['since-priority-changes']['mtime'] > 0
-    finally:
-        httpd.shutdown()
+        assert set(info) == {view}
+        assert info[view]['label'] == label
+        assert info[view]['file'] == name + '.html'
+        assert info[view]['mtime'] > 0
 
 
 def test_reports_stay_in_their_folder(tmp_path):
@@ -619,7 +620,7 @@ def test_question_titles():
 
 
 def test_questions_view(tmp_path):
-    """The fourth Report view, last in the bar: the questions page, served once its copy is saved."""
+    """The fifth Report view, last in the bar: the questions page, served once its copy is saved."""
     reports = tmp_path / 'reports'
     reports.mkdir()
     with serving(tmp_path) as base:

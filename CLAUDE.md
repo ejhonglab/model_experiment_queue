@@ -1240,6 +1240,12 @@ last two changes (written at Tom's request, 2026-11-13), rebuilt only on request
 `./venv/bin/python reports/build_since_priority_changes.py` (from its template; reads only what build_summary.py made), then
 `./venv/bin/python reports/save_report_copy.py outputs/_artifacts/since_priority_changes/index.html since_priority_changes --current current-since-priority-changes.html`.
 
+The Report tab's fourth view, "Since Yang's new data", is a snapshot of what was learned from Yang's new data, by type of
+data, with what remains to be checked (written at Tom's request, 2026-11-16), rebuilt only on request and not kept current
+at each completion: `./venv/bin/python reports/build_since_yang_new_data.py` (from reports/since_yang_new_data_template.md;
+reads only what build_summary.py made), then
+`./venv/bin/python reports/save_report_copy.py outputs/_artifacts/since_yang_new_data/index.html since_yang_new_data --current current-since-yang-new-data.html`.
+
 Every artifact page we publish (per-experiment summaries, add_to_reports pages) must also exist as a
 self-contained file under
 `<shared>/reports/`, the same document the artifact's share > export download gives. The

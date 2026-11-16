@@ -12,23 +12,24 @@ session records there current, and each host's `<host>_status.md` supplies the r
 
 Open **http://hal:17486** on any computer on the lab network. The page has two tabs, chosen in
 the bar at the top (the address remembers the view: `#summary`, `#experiments`,
-`#since-priority-changes`, `#questions-for-yang`, `#monitor`):
+`#since-priority-changes`, `#since-yang-new-data`, `#questions-for-yang`, `#monitor`):
 
-- **Report** (the default), with four sub-tabs: **Summary**, the latest all-experiments summary,
+- **Report** (the default), with five sub-tabs: **Summary**, the latest all-experiments summary,
   **Experiments and mechanisms**, the report page with the experiment list, **Since the
-  priority changes**, what was learned since the last two changes of the main goal (a snapshot,
-  rebuilt only on request), and **Questions for Yang**, the queue's open questions about Yang's
-  recordings with a form to answer them ("Answers to the questions" below). They are the files
-  `reports/current-summary.html`, `reports/current-report.html`,
-  `reports/current-since-priority-changes.html` and `reports/current-questions-for-yang.html` in
-  the shared directory, the copies `save_report_copy.py` keeps current (`REPORTS` in `server.py`
-  lists them; a new view needs only an entry there). Until a copy is saved, a view says so. Each is
-  shown in its own frame, as published, with
-  its own contents list, full-screen figures and hover definitions; switching tabs keeps each
-  view's place. The reports never reload by themselves: once a minute the page checks whether a
-  newer copy has been saved and, if so, says so in the bar with a "reload" link. Links to other
-  sites (the artifacts) open in a new browser tab. "open alone" opens the current view in a tab of
-  its own.
+  priority changes**, what was learned since the last two changes of the main goal, **Since
+  Yang's new data**, what was learned from Yang's new data, by type of data, with what remains to
+  be checked (both snapshots, rebuilt only on request), and **Questions for Yang**, the queue's open
+  questions about Yang's recordings with a form to answer them ("Answers to the questions" below).
+  They are the files `reports/current-summary.html`, `reports/current-report.html`,
+  `reports/current-since-priority-changes.html`, `reports/current-since-yang-new-data.html` and
+  `reports/current-questions-for-yang.html` in the shared directory, the copies
+  `save_report_copy.py` keeps current (`REPORTS` in `server.py` lists them; a new view needs only
+  an entry there). Until a copy is saved, a view says so. Each is shown in its own frame, as
+  published, with its own contents list, full-screen figures and hover definitions; switching
+  tabs keeps each view's place. The reports never reload by themselves: once a minute the page
+  checks whether a newer copy has been saved and, if so, says so in the bar with a "reload" link.
+  Links to other sites (the artifacts) open in a new browser tab. "open alone" opens the current
+  view in a tab of its own.
 - **Monitor**, the dashboard below (also at `http://hal:17486/monitor`). It updates itself in place
   every 30 s, without reloading the page (no blink, and the scroll position and open "status
   file" boxes stay), and not while it is hidden (another tab shown, or the browser tab in the
