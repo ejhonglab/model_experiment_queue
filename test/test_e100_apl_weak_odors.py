@@ -756,3 +756,11 @@ def test_blank_level_ratios_by_hand_and_runs_without_blank_refused():
         M.family_on(_b1_rows(blank=False), M.A0_CARRYING)
     # E90's level reads the saved pre-odor mean (8) instead
     assert (M.family_on(_b1_rows(), M.A0_LITERAL)['pre'] == 8.0).all()
+
+
+def test_recording_c_leave_one_out_share():
+    res = M.recording_c(_planted_recording(True), 'minus_recording')
+    s = res['stimuli'].set_index('stim')
+    # the strongest map makes most of the in-sample common map; scored against the others' common map its share falls
+    assert s.loc['paa @ -3', 'r2_common_loo'] < s.loc['paa @ -3', 'r2_common']
+    assert s['r2_common_loo'].between(0, 1).all() and s['r2_common_loo_corrected'].notna().all()

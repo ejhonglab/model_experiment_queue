@@ -105,8 +105,10 @@ Deviations from the entry (each also in the note):
   indicator reading beside the family for set S is E98's indicator family itself; a saturating form would need a
   saturation constant that the entry does not fix, so none is added.
 - Part C's choices the entry does not fix: the common map is the first singular vector of the stimulus maps (E79's
-  analysis 2, 2 px blur for per-stimulus statistics); a map's share of it is its r^2 with it (means removed) and, beside,
-  that over the map's reliability (Spearman-Brown of the mean r between presentations), since weak maps are noisier;
+  analysis 2, 2 px blur for per-stimulus statistics); a map's share of it is its r^2 with the common map of the other
+  stimuli (means removed; leaving the map out, since the strongest maps otherwise make most of the common map and so
+  favour the panel's concentrations) over the map's reliability (Spearman-Brown of the mean r between presentations),
+  since weak maps are noisier; the in-sample shares beside;
   the stimulus classes (`stimulus_class`: set W's paa at 10^-3 'panel', the rest of set W 'weak'; in sets S and H the
   panel's odors within one log unit of 10^-3 'panel' and stimuli at 10^-5 or below 'weak'); the solvent's map counts as
   the common map in a recording when its r with the common map is at least the median of the odors' maps'
@@ -2058,7 +2060,8 @@ def recording_c(rec: dict, baseline: str) -> Dict[str, object]:
       each odor's two highest concentrations (E79's choice), lengths in um (recordings.csv's pixel size);
     - 'stimuli': per stimulus the calyx mean, the repeat r of its first two presentations (E79's) and the mean over all
       pairs, the reliability of the mean map (Spearman-Brown), the common map's share of it (cos^2 with the first singular
-      vector, means kept; r^2 with it, means removed; that r^2 over the reliability, a share corrected for noise), the
+      vector, means kept; r^2 with it, means removed; that r^2 over the reliability, a share corrected for noise; the
+      same with the common map of the other stimuli, '_loo', which part C's comparison of weak and panel stimuli reads), the
       response-weighted centroid (E79's `centroid_grid`, 0-1 in the outline's box, image axes as recorded) and the class;
     - 'solvent': the solvent's map (the mean of its presentations, as recorded) against the common map (means kept), beside
       the odors' maps' r with it, its split-half r (even against odd presentations), its calyx mean and its share of the
@@ -2084,12 +2087,15 @@ def recording_c(rec: dict, baseline: str) -> Dict[str, object]:
     vk = vk if vk.sum() >= 0 else -vk
     _, vr = DS.svd_shared(X, True)
     rows = []
-    for k in stims:
+    for i, k in enumerate(stims):
         x, reps = bl[k], maps[k][1]
         xr = x - x.mean()
         rel = mean_pair_r(reps, mask)
         sb = spearman_brown(rel, len(reps))
         r2 = float((xr @ vr) ** 2 / (xr @ xr)) if (xr @ xr) > 0 else np.nan
+        # the common map of the other stimuli (a map's own share is not inflated by its part in the common map)
+        v_lo = DS.svd_shared(np.delete(X, i, axis=0), True)[1] if len(stims) >= 3 else None
+        r2_lo = float((xr @ v_lo) ** 2 / (xr @ xr)) if v_lo is not None and (xr @ xr) > 0 else np.nan
         cg = DS.centroid_grid(maps[k][0], mask)
         rows.append(dict(meta, odor=k[0], conc=k[1], stim=stim_label(k), cls=stimulus_class(rec['set'], k),
                          n_presentations=len(reps), calyx_mean=float(maps[k][0][mask].mean()),
@@ -2098,6 +2104,8 @@ def recording_c(rec: dict, baseline: str) -> Dict[str, object]:
                          cos2_common=float((x @ vk) ** 2 / (x @ x)) if (x @ x) > 0 else np.nan,
                          r2_common=r2, r_common_kept=float(np.corrcoef(x, vk)[0, 1]),
                          r2_common_corrected=r2 / sb if np.isfinite(sb) and sb > C_MIN_SB_RELIABILITY else np.nan,
+                         r2_common_loo=r2_lo,
+                         r2_common_loo_corrected=r2_lo / sb if np.isfinite(sb) and sb > C_MIN_SB_RELIABILITY else np.nan,
                          centroid_y=cg['cy'] if cg else np.nan, centroid_x=cg['cx'] if cg else np.nan))
     S = pd.DataFrame(rows)
     sidx = np.flatnonzero(fr['is_solvent'].to_numpy(bool))
@@ -2172,7 +2180,7 @@ def c_summaries(shared: pd.DataFrame, stimuli: pd.DataFrame, solvent: pd.DataFra
                                  n_flies_positive=int((pf > 0).sum()))
         d['centroid_y_offsets'] = dict(reference=CENTROID_REFERENCE.get(set_), offsets=offs)
         wp = {}
-        for col in ('r2_common', 'r2_common_corrected', 'cos2_common'):
+        for col in ('r2_common_loo_corrected', 'r2_common_loo', 'r2_common', 'r2_common_corrected', 'cos2_common'):
             per = s[s['cls'].isin(['weak', 'panel'])].groupby(['fly', 'recording', 'cls'])[col].mean().unstack('cls')
             if not {'weak', 'panel'} <= set(per.columns):
                 continue
@@ -2415,7 +2423,8 @@ def verdict_line(fam: pd.DataFrame, results: dict, set_: str, num: Stim, den: St
             n = int((g == v).sum()) if v in CATEGORIES else int(max([(g == k).sum() for k in CATEGORIES] or [0]))
             per[est] = f'{v} ({n} of {len(g)})' + ('' if v in CATEGORIES else
                                                    f', most {max(CATEGORIES, key=lambda k: (g == k).sum())}')
-        out[role] = dict(cls=res['cls'], per_estimate=per)
+        out[role] = dict(cls=res['cls'], per_estimate=per, cls_linear=res['cls_linear'],
+                         linear_per_estimate=res['linear_per_estimate'])
     cl = {a0: (out[r]['cls'] if isinstance(out[r], dict) else 'not read')
           for r, a0 in (('carrying', A0_CARRYING), ('partner', A0_PARTNER), ('literal_e90', A0_LITERAL))}
     out['held'] = held_class(cl)
@@ -2509,6 +2518,11 @@ def score(a0s: Sequence[str] = A0_DEFINITIONS) -> dict:
     for key, *_ in FLIES_VARIANTS:
         cl = {stim_label(s): held('W', key, s, W1_DENOMINATOR) for s in W1_RATIOS}
         w1_beside[key] = dict(W1=w1_verdict(cl), classes=cl)
+    def held_lin(set_, num, den):
+        return held_class({a0: results.get((a0, set_, 'yang', stim_label(num), stim_label(den)), {})
+                           .get('cls_linear', 'not read') for a0 in a0s})
+
+    w1_lin = {stim_label(s): held_lin('W', s, W1_DENOMINATOR) for s in W1_RATIOS}
     w1_by_a0 = {}
     for a0 in a0s:
         cl = {stim_label(s): c_(a0, 'W', 'yang', s, W1_DENOMINATOR) for s in W1_RATIOS}
@@ -2571,6 +2585,8 @@ def score(a0s: Sequence[str] = A0_DEFINITIONS) -> dict:
         yang_use=YANG_USE_NOTE, calyx_response=CALYX_RESPONSE, carrying_reading=CARRYING_READING, a0_definitions=list(a0s),
         a0_carrying=A0_CARRYING, a0_partner=A0_PARTNER, a0_literal=A0_LITERAL,
         W1=w1_verdict(w1_classes), W1_classes=w1_classes, W1_by_a0=w1_by_a0, W1_beside_flies_readings=w1_beside,
+        W1_linear_beside=dict(W1=w1_verdict(w1_lin), classes=w1_lin,
+                              note='the linear reading (n 1, evoked), given beside the verdict as E98 does; decides nothing'),
         W1_lines={stim_label(s): verdict_line(fam, results, 'W', s, W1_DENOMINATOR) for s in W1_RATIOS},
         W1_over_farn2_described={stim_label(s): c_(A0_CARRYING, 'W', 'yang', s, W1_BESIDE_DENOMINATOR)
                                  for s in W1_RATIOS if s != W1_BESIDE_DENOMINATOR},
@@ -2593,7 +2609,7 @@ def score(a0s: Sequence[str] = A0_DEFINITIONS) -> dict:
     if csum is not None:
         f_, g_ = {}, {}
         for set_, d in csum.get('per_set', {}).items():
-            wp = d.get('common_share_weak_vs_panel', {}).get('r2_common_corrected')
+            wp = d.get('common_share_weak_vs_panel', {}).get('r2_common_loo_corrected')
             if wp:
                 f_[set_] = dict(wp, lower_at_weak=bool(wp['lo90'] > 0))
             if 'solvent' in d:
