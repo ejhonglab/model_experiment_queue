@@ -1,0 +1,26 @@
+{
+ "experiment": "E103_apl_across_odors_heldout",
+ "part": "A",
+ "results": "/local/tensor/Tom/claude_kc_remapping/results/E103_apl_across_odors_heldout",
+ "tables": {
+  "a_ratios_12.csv": "5b1d217e5d0deaf1ebb3f22e5cc53fdf53302fc5cef18b0a99f6e1a4bc1e546c",
+  "a_per_fly_12.csv": "090441ca69b23390ccc71bc36a3b0d2fdd36501b841e4c4dcbbbb75046889c6c",
+  "a_least_detectable.csv": "35d6e43c4d7e73a5bce7e45a054b16ebddfb434d08fb6234fe4c7bdcc690656d",
+  "a_classes_12.csv": "90a5d59488f6e877fa767ae8212f6445814dd4e4d62338bfe7b28654e11bfdd9",
+  "a_class_wirings_12.csv": "614c306379267976678ab26d6dac9ffc206db17f5619d530e0c72835742c566c",
+  "a_summary.json": "c5d5a9630bee384f0e55b63960760763e36eb1e5dea5814c3de04fa6fafcbf11"
+ },
+ "host": "viki",
+ "time": "2026-11-15 22:51",
+ "commits": {
+  "queue_commit": "c06c2ffa6f549e4785276e6cae7bf2e4df627a4c",
+  "queue_dirty": false,
+  "pyolfsysm_commit": "98818460697c25025e41960408e9780c6ce60bbd",
+  "pyolfsysm_dirty": false,
+  "al_analysis_commit": "7b25156efd9e12b0fd9529ab6144228ebced2599",
+  "al_analysis_dirty": false,
+  "hong2p_commit": "ae2abda6bd6e9df4b6475a243c286dfeeb09ac70",
+  "hong2p_dirty": false
+ },
+ "note": "Part A's tables, written before any map or response file of the 2021-10/11 series was opened. Commit this file before running any later part: `require_part_a` refuses to open the series' maps until it is committed and the tables match it."
+}
