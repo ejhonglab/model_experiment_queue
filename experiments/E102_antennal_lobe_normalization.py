@@ -1303,7 +1303,9 @@ def refit_class(d_pattern: Mapping[str, float], d_raw_loss: float, d_mean: float
     change (refit minus unchanged, calibrated readout) against 'z8' (all recordings) and halves 'halfA' to 'halfD'. Equal:
     within EQUAL_PATTERN against z8, A and B, the four fits inside the bands, the raw-count loss within EQUAL_RAW and the
     mean APL effect within EQUAL_MEAN. Better: lower by BETTER_MARGIN or more against z8 and lower against each half
-    (better is read first: an improvement larger than the equal's margin). A price: anything else."""
+    (better is read first: an improvement larger than the equal's margin). A price: anything else; as the rule is written
+    (E94's, the change within EQUAL_PATTERN in absolute value), that includes a refit lower by more than BETTER_MARGIN
+    against all recordings that is not lower against every half, which the note then names as such."""
     need = ('z8',) + BETTER_HALVES
     missing = [t for t in need if t not in d_pattern]
     if missing:
