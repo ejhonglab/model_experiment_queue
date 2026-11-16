@@ -55,7 +55,7 @@ So part of a KC's trial-to-trial variability is common to the odors of a repeat:
 
 ## orn-kc-level-comparison
 asked: 2026-11-16
-sentence: Twice as many KCs respond to each odor (0.150 instead of 0.068 of the KCs, with the per-odor pattern conserved), and the mean pair correlation rises from 0.16 to 0.34, above the ORN input's own 0.29.
+sentence: With APL output blocked (TNT), twice as many KCs respond to each odor (0.150 instead of 0.068 of the KCs, with the per-odor pattern conserved), and the mean pair correlation rises from 0.16 to 0.34, above the ORN input's own 0.29.
 sentence_main: Twice as many KCs respond to each odor (0.150 instead of 0.068 of the KCs, with the per-odor pattern conserved), and the mean pair distance falls from 0.84 to 0.66, below the ORN input's own 0.71.
 question: I think this might not be a fair comparison: the ORNs use a dense code with about 50 units, whereas the KC space is sparse and high dimensional. Using cosine to measure the correlation of the ORN representations and comparing between the two spaces doesn't seem fair. Am I wrong?
 
@@ -156,16 +156,14 @@ All nine block pairs sit below the monotone fit, but only three of them do so st
 
 ## blocking-apl-uniform-sparsening
 asked: 2026-11-16
-sentence: What blocking APL output does, mostly: a uniform sparsening.
+sentence: What APL output does, mostly: a uniform sparsening, which blocking it removes.
 sentence_main: What blocking APL output does, mostly: a uniform sparsening.
-question: This sounds opposite? The function of inhibition is to decorrelate odor pairs?
+question: (Of the main page's heading, "What blocking APL output does, mostly: a uniform sparsening.") This sounds opposite? The function of inhibition is to decorrelate odor pairs?
 
-The heading is worded the wrong way round, and the reading in the question is the right one. Blocking APL output sparsens nothing: with APL output blocked (TNT) twice as many KCs respond to each odor ({{data:tnt_frac ~ .3f}} of the KCs against {{data:ctrl_frac ~ .3f}}) and the mean pair correlation rises from {{inv:data:ctrl_mean_dist ~ .2f}} to {{inv:data:tnt_mean_dist ~ .2f}}. What the heading names is what APL's output does in the intact fly, which is what blocking it takes away.
+On the main page this heading reads "What blocking APL output does, mostly: a uniform sparsening", which is worded the wrong way round, and the reading in the question is the right one. At Yang's request the heading is reworded in this version, and the sentence after it now says that it is about the flies with APL output blocked (TNT). Blocking APL output sparsens nothing: with APL output blocked (TNT) twice as many KCs respond to each odor ({{data:tnt_frac ~ .3f}} of the KCs against {{data:ctrl_frac ~ .3f}}) and the mean pair correlation rises from {{inv:data:ctrl_mean_dist ~ .2f}} to {{inv:data:tnt_mean_dist ~ .2f}}. What the heading names is what APL's output does in the intact fly, which is what blocking it takes away.
 
 **In control flies APL sparsens and decorrelates.** Fewer KCs respond to each odor, and every one of the 120 pairs is less correlated than it is with APL output blocked (TNT): the per-pair APL effect runs from {{data:apl_effect_min ~ +.2f}} to {{data:apl_effect_max ~ +.2f}}, {{data:apl_effect_mean ~ +.2f}} on average. The two are not opposites. With fewer KCs responding, two odors share fewer KCs, so the sparsening is the way the inhibition decorrelates.
 
 **What "uniform" adds.** It does not say that every pair is decorrelated by the same amount. It says that one rule holds for all pairs: how much APL decorrelates a pair depends only on how correlated the pair is without APL, not on which two odors they are. That is what the monotone fit of the next sentence tests (isotonic R² {{data:iso_r2 ~ .2f}}).
 
 **What "mostly" leaves out.** The nine fruity × small-ester pairs, which APL decorrelates more than that rule gives: the block of the paragraph after next ([which pairs deviate from the fit, and how consistently](#yq-pairs-off-the-monotone-fit)).
-
-A heading that says what is meant would be "What APL output does, mostly: a uniform sparsening, which blocking it removes".
