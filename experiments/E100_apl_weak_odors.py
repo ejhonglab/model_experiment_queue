@@ -95,9 +95,10 @@ Deviations from the entry (each also in the note):
 - The classes of a ratio (`classify_linear`): E98's `classify` takes logarithms and so refuses an interval that reaches
   0, which set W's arithmetic means can give (the entry's own rule); the same rules on the ratios themselves, which
   agree with E98's for positive values (tested).
-- The model's pre-odor level: E98's definition as written (E90's saved pre-odor mean, 'e90') carries W1 and W2; E98's
-  other two (`with_a0`: 'settled', 'blank'), an open decision of E98's part C, are read beside, and verdict.json says
-  whether W1 is the same under all three.
+- The model's pre-odor level: E98's definition as written (E90's saved pre-odor mean, 'e90') includes the KC layer's
+  start-up (unresolved_issues.md, 2026-11-15 17:48) and which level carries E98's verdict is open, so W1 and W2 are read
+  under all three of E98's (`with_a0`: 'e90', 'settled', 'blank'); W1 is stated when the three agree, otherwise it
+  depends on that choice (verdict.json's W1_by_a0).
 - W2's rule over input estimates is W1's (`ratio_over_estimates`; the entry fixes none for W2). E98's saturating
   indicator reading beside the family for set S is E98's indicator family itself; a saturating form would need a
   saturation constant that the entry does not fix, so none is added.
@@ -2467,7 +2468,8 @@ def score(a0s: Sequence[str] = A0_DEFINITIONS) -> dict:
     rw = recs_b[(recs_b['set'] == 'W') & ~recs_b['label_unsure']]
     verdict = dict(
         calyx_response=CALYX_RESPONSE, carrying_reading=CARRYING_READING, a0_definitions=list(a0s),
-        W1=w1_main['e90'] if 'e90' in w1_main else None, W1_by_a0=w1_main, W1_agrees_over_a0=agree,
+        W1=next(iter(w1_main.values())) if agree else "depends on the model's pre-odor level (E98's open choice)",
+        W1_by_a0=w1_main, W1_agrees_over_a0=agree,
         W1_classes={a0: w1[(a0, CALYX_RESPONSE)]['classes'] for a0 in a0s},
         W1_maps_beside={a0: w1[(a0, 'maps')] for a0 in a0s},
         W1_over_farn2_described={a0: {stim_label(s): c_(a0, 'W', CALYX_RESPONSE, s, W1_BESIDE_DENOMINATOR)
@@ -2479,11 +2481,12 @@ def score(a0s: Sequence[str] = A0_DEFINITIONS) -> dict:
         b1_sources=sources, b1_e101=e101, time=time.strftime('%Y-%m-%d %H:%M'), host=_host(),
         commits=dict(H.code_commits()))
     oc = []
-    if verdict['W1'] == 'inside' and all(v['verdict'] == 'inside' for v in w2.get('e90', {}).values()):
+    w2_all = [v['verdict'] for d in w2.values() for v in d.values()]
+    if verdict['W1'] == 'inside' and w2_all and all(v == 'inside' for v in w2_all):
         oc.append('a')
     if verdict['W1'] == 'flatter':
         oc.append('b')
-    if any(v['verdict'] == 'flatter' for v in w2.get('e90', {}).values()):
+    if w2_all and all(v == 'flatter' for v in w2_all):
         oc.append('c')
     csum = _read_json(out / 'c_summary.json')
     if csum is not None:
