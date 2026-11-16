@@ -11,7 +11,11 @@ Handles the subset of markdown the report uses: `#` / `##` headings, paragraphs,
 numbered lists (numbering preserved, so a list may continue after a note paragraph), bullet
 and task lists, bold, inline code, links (http(s) URLs and in-page `#id` anchors; a heading ending
 in `{#id}` gets that id, e.g. `## Footnotes {#footnotes}`), and the escapes `\\~`, `\\[`, `\\]`,
-`\\_`. A paragraph starting with `*Added` is styled as a provenance note.
+`\\_`. A paragraph starting with `*Added` is styled as a provenance note. Hover definitions work as
+in md_to_artifact.py: a block opened by a line `%%% hover` and closed by `%%%`, each line
+`term: definition`, is removed from the text, and every whole-word occurrence of a term in
+paragraphs, list items and table cells (not headings) gets a dotted underline showing the
+definition on hover (md_to_artifact's `with_defs` and `span.def` style).
 
 Usage: ./venv/bin/python reports/build_report_artifact.py [--out PATH]
 """
@@ -20,6 +24,8 @@ import datetime as dt
 import html
 import re
 from pathlib import Path
+
+from reports import md_to_artifact as M
 
 HERE = Path(__file__).resolve().parent
 MD = HERE / 'apl_orn_to_kc_remapping_report.md'
@@ -45,7 +51,7 @@ CSS = """
   a { color: var(--accent); }
   .added { background: var(--soft); border-left: 3px solid var(--accent); padding: 8px 12px; margin: 14px 0 6px; }
   ol.added-list { border-left: 3px solid var(--accent); padding-left: 32px; margin-left: 0; }
-"""
+""" + next(ln for ln in M.CSS.splitlines() if ln.strip().startswith('span.def ')) + '\n'
 
 
 def inline(s: str) -> str:
@@ -67,7 +73,42 @@ def heading(tag: str, text: str) -> str:
     return f'<{tag}>{inline(text)}</{tag}>'
 
 
+def hover_defs(md: str):
+    """Removes the `%%% hover` blocks from the markdown (they may sit anywhere) and collects their
+    `term: definition` lines, as md_to_artifact.py's convert_body does.
+
+    Returns:
+        (the markdown without the blocks, {term: definition})
+
+    Raises:
+        ValueError: a block is not closed by a `%%%` line, or another `%%%` line is left (no other
+            block is supported here), so no marker or definition is ever rendered as text.
+    """
+    kept, defs, in_defs = [], {}, False
+    for ln in md.split('\n'):
+        if ln.strip() == '%%% hover':
+            in_defs = True; continue
+        if in_defs and ln.strip() == '%%%':
+            in_defs = False; continue
+        if in_defs:
+            if ':' in ln:
+                term, definition = ln.split(':', 1); defs[term.strip()] = definition.strip()
+            continue
+        if ln.strip().startswith('%%%'):
+            raise ValueError(f'unsupported block marker in the report markdown: {ln.strip()!r}')
+        kept.append(ln)
+    if in_defs:
+        raise ValueError('a `%%% hover` block in the report markdown is not closed by a `%%%` line')
+    return '\n'.join(kept), defs
+
+
 def convert(md: str) -> str:
+    md, defs = hover_defs(md)
+
+    def text(s: str) -> str:
+        """Inline markdown of a paragraph, list item or table cell, with the hover definitions."""
+        return M.with_defs(inline(s), defs)
+
     lines = md.split('\n')
     out, i = [], 0
     max_exp = 0
@@ -83,11 +124,11 @@ def convert(md: str) -> str:
             while i < len(lines) and lines[i].startswith('|'):
                 rows.append(lines[i]); i += 1
             cells = [[c.strip() for c in r.strip().strip('|').split('|')] for r in rows]
-            t = ['<table>', '<tr>' + ''.join(f'<th>{inline(c)}</th>' for c in cells[0]) + '</tr>']
+            t = ['<table>', '<tr>' + ''.join(f'<th>{text(c)}</th>' for c in cells[0]) + '</tr>']
             for r in cells[2:]:
                 t.append('<tr>' + ''.join(
                     f'<td class="{"num" if re.fullmatch(r"[−+\-]?[0-9.]+(\s*\[.*\])?", c) else "txt"}">'
-                    f'{inline(c)}</td>' for c in r) + '</tr>')
+                    f'{text(c)}</td>' for c in r) + '</tr>')
             t.append('</table>')
             out.append('\n'.join(t)); continue
         m = re.match(r'^(\d+)\. (.*)', ln)
@@ -102,7 +143,7 @@ def convert(md: str) -> str:
                     max_exp = max(max_exp, int(em.group(1)))
                 i += 1
             cls = ' class="added-list"' if after_note else ''
-            out.append(f'<ol start="{start}"{cls}>' + ''.join(f'<li>{inline(x)}</li>' for x in items)
+            out.append(f'<ol start="{start}"{cls}>' + ''.join(f'<li>{text(x)}</li>' for x in items)
                 + '</ol>')
             after_note = False
             continue
@@ -110,23 +151,23 @@ def convert(md: str) -> str:
             items = []
             while i < len(lines) and lines[i].startswith('- '):
                 items.append(lines[i][2:]); i += 1
-            li = [f'<li class="task">&#9744; {inline(x[4:])}</li>' if x.startswith('[ ] ')
-                else f'<li>{inline(x)}</li>' for x in items]
+            li = [f'<li class="task">&#9744; {text(x[4:])}</li>' if x.startswith('[ ] ')
+                else f'<li>{text(x)}</li>' for x in items]
             out.append('<ul>' + ''.join(li) + '</ul>'); continue
         if ln.strip() == '':
             i += 1; continue
         para = [ln]; i += 1
         while i < len(lines) and lines[i].strip() and not re.match(r'^(#|\||\d+\. |- )', lines[i]):
             para.append(lines[i]); i += 1
-        text = ' '.join(para)
-        if text.startswith('*Added'):
-            out.append(f'<p class="added">{inline(text)}</p>'); after_note = True
-        elif text.startswith('Nov 3, 2026'):
+        joined = ' '.join(para)
+        if joined.startswith('*Added'):
+            out.append(f'<p class="added">{text(joined)}</p>'); after_note = True
+        elif joined.startswith('Nov 3, 2026'):
             # the experiment count is filled in once the whole document has been scanned
-            out.append(f'<p class="meta">{inline(text)} · page rebuilt {dt.date.today().isoformat()}'
+            out.append(f'<p class="meta">{text(joined)} · page rebuilt {dt.date.today().isoformat()}'
                 '</p>')
         else:
-            out.append(f'<p>{inline(text)}</p>')
+            out.append(f'<p>{text(joined)}</p>')
     body = '\n'.join(out)
     if max_exp:
         body = body.replace('page rebuilt ' + dt.date.today().isoformat(),
