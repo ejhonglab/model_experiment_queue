@@ -8,6 +8,25 @@ directory's notes/ and are linked from here.
 
 ## Open
 
+### The progress plot's ρ line ends on two points of kinds the plot is meant to leave out (found 2026-11-16, hal, the report pages' revision)
+- **What.** `reports/summary_progress_plot.py` leaves out oracle inputs and random, shuffled or re-drawn wirings by tag
+  (`EXCLUDE_VARIANT`: `^input-searched_`, `^oracle_half`, `wiring-`, `^popfit_[PM]\d`, ...). From E83 on, variants carry
+  the wiring as a suffix (`_real`, `_P1` ... `_M3`), and searched inputs have other tags (E83's `DI_`, `DP_`, `A2_`,
+  all of E86's), so neither rule catches them. The line of ρ on the per-pair APL effect therefore takes its last two
+  steps, 0.602 to 0.707 (E83, `DI_halfB_s0.6_P3`) and to 0.749 (E86, `C1_B_P3`), from searched inputs read on the single
+  re-drawn wiring P3, on raw counts and against all recordings, half of which the search had seen. On P3 the family's own
+  fit already reads 0.623 (E72's `popfit_P3`, which the plot leaves out); the same inputs on the other wirings read 0.32
+  to 0.62. From E83 on, every experiment's point on every line may likewise be a single re-drawn wiring's reading (E91,
+  E93 to E96 and E99 are, on the ρ line, without setting a new best).
+- **What it affects.** The summary's progress plot (the ρ line since 2026-11-12) and, until 2026-11-16, its text, which
+  gave the line's end as 0.602. The line of the APL-effect loss is not affected (it ends at E76's 0.050, a real-wiring
+  fit). No model, gate or table was chosen by the ρ line (it is a description by the rules of 2026-11-13).
+- **Done.** The summary's text now describes the two steps and what they are, and names the choice; the digest page
+  "Since the priority changes" says the same (2026-11-16).
+- **Remains.** Tom's choice: extend the exclusions (searched inputs of E83 and E86, and readings of single re-drawn
+  wirings, tags ending `_[PM]<n>`), after which the ρ line ends at 0.602 again, or keep the points with the text as it
+  now stands. Then rebuild the plot and the summary.
+
 ### The APL-effect table did not check the realism of variants archived in part subfolders (found 2026-11-14 00:20, viki, E93's write-up)
 - **What.** `kcq/apl_effect.py` looked for a variant's archived responses (`<tag>_on_responses.parquet`,
   `<tag>_acute_off_responses.parquet`) only at the root of its archive folder. The experiments that archive their runs in
