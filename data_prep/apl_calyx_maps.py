@@ -22,6 +22,7 @@ from __future__ import annotations
 import struct
 from pathlib import Path
 
+import os
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -31,7 +32,17 @@ import tifffile
 from matplotlib.path import Path as MplPath
 from scipy.ndimage import gaussian_filter, map_coordinates
 
-SHARED = Path('/mnt/tensor/Tom/claude_kc_remapping')
+def _shared_dir() -> Path:
+    """The shared directory (kcq.harness.shared_dir's rule, without importing the harness): $KC_REMAPPING_SHARED, else the
+    first of /local, /mnt and /media's tensor/Tom/claude_kc_remapping that exists, else the /mnt path."""
+    cands = [os.environ.get('KC_REMAPPING_SHARED')] + [f'/{r}/tensor/Tom/claude_kc_remapping' for r in ('local', 'mnt', 'media')]
+    for c in cands:
+        if c and Path(c).is_dir():
+            return Path(c)
+    return Path('/mnt/tensor/Tom/claude_kc_remapping')
+
+
+SHARED = _shared_dir()
 DATA = SHARED / 'data' / 'yang_apl_calyx_maps' / '2021_APL_18um'
 OUT = SHARED / 'results' / 'apl_calyx_maps'
 ODORS = ['ms', 'pa', 'paa']

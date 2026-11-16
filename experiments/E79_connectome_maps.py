@@ -89,7 +89,7 @@ from data_prep import apl_calyx_maps as ACM
 HERE = Path(__file__).resolve().parents[1]  # the repository root
 SHARED = ACM.SHARED
 OUT = SHARED / 'results' / 'E79_apl_calyx_constraints'
-YANG_APL = Path('/mnt/tensor/Tom/claude_APL_modeling_YZ4TC/Claude_APL_analysis/apl_synapses')
+YANG_APL = ACM.SHARED.parent / 'claude_APL_modeling_YZ4TC' / 'Claude_APL_analysis' / 'apl_synapses'
 # in the model's data directory (the installed pyolfsysm's, found without importing it; in
 # al_analysis's data directory until 2026-11-12)
 PRAT_DIR = next(Path(p) for p in importlib.util.find_spec('pyolfsysm').submodule_search_locations

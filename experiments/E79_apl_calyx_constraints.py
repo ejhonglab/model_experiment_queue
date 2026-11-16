@@ -740,7 +740,7 @@ def axes_check() -> pd.DataFrame:
     rel['expected'] = [', '.join(f"{'+' if v > 0 else '-'}{k.split('_')[0]}" for k, v in expect.get(r, {}).items()) for r in rel.index]
     rel['as_expected'] = [all(np.sign(rel.loc[r, k]) == v for k, v in expect[r].items()) if r in expect else np.nan for r in rel.index]
     rel = rel.reset_index()
-    yc = Path('/mnt/tensor/Tom/claude_APL_modeling_YZ4TC/Claude_APL_analysis/apl_synapses/odor_weighted/'
+    yc = (SHARED.parent / 'claude_APL_modeling_YZ4TC/Claude_APL_analysis/apl_synapses/odor_weighted/'
         'PN_APL_synapses_odor_weighted.csv')
     if yc.exists():
         y = pd.read_csv(yc, usecols=['dataset', 'x_nm', 'z_nm', 'view_right_um', 'view_dorsal_um'])
