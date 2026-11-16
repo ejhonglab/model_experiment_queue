@@ -730,3 +730,29 @@ def test_held_class_and_no_ratio():
     assert (wc['cls'] == 'no ratio').sum() == 3 and (wc['cls'] == 'inside').sum() == 5
     res, _ = M.read_ratio(on, 0.3, 0.6, {'s1': '2h [s1/diag] @ -6'}, 'paa')
     assert res['cls'] == 'not decided'           # 5 of 8 inside: under E98's 6 of 8
+
+
+def _b1_rows(blank=True):
+    rows = []
+    for k in range(8):
+        for cond in ('on', 'acute_off'):
+            for stim, win in (('paa', 20.0), ('2h [s1/diag] @ -6', 16.0)) + ((('blank @ 0', 10.0),) if blank else ()):
+                rows.append(dict(wiring=f'w{k}', cond=cond, stimulus=stim, win=win, pre=8.0, pre_settled=10.0,
+                                 evoked=win - 8.0, response_rate=0.05))
+    return pd.DataFrame(rows)
+
+
+def test_blank_level_ratios_by_hand_and_runs_without_blank_refused():
+    from experiments import E98_apl_response_strength as E98
+    on = M.family_on(_b1_rows(), M.A0_CARRYING)
+    assert (on['pre'] == 10.0).all()                  # the blank's window mean is the level
+    wc = M.model_classes(on, '2h [s1/diag] @ -6', 'paa', 0.1, 0.2)
+    # both forms by hand at the blank's level 10: evoked ((16 - 10) / (20 - 10))^n, baseline (16^n - 10^n) / (20^n - 10^n)
+    hand = [((16 - 10) / (20 - 10)) ** n for n in E98.INDICATOR_NS] + \
+        [(16 ** n - 10 ** n) / (20 ** n - 10 ** n) for n in E98.INDICATOR_NS]
+    assert np.allclose(wc['ratio_linear'], 0.6)
+    assert np.allclose(wc['ratio_min'], min(hand)) and np.allclose(wc['ratio_max'], max(hand))
+    with pytest.raises(RuntimeError, match='without a blank'):
+        M.family_on(_b1_rows(blank=False), M.A0_CARRYING)
+    # E90's level reads the saved pre-odor mean (8) instead
+    assert (M.family_on(_b1_rows(), M.A0_LITERAL)['pre'] == 8.0).all()

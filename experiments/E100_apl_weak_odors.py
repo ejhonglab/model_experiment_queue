@@ -241,6 +241,11 @@ ODOR_ABBREV = {'paraffin oil': SOLVENT, 'pfo': SOLVENT, 'phenylacetaldehyde': 'p
                'methyl salicylate': 'ms', '2-heptanone': '2h', 'methyl acetate': 'ma', 'farnesol': 'farn',
                '4-heptanol': '4h-ol', '2-butanone': '2-but', 'geranyl acetate': 'ga'}
 COPY_DIR_NAME = 'yang_apl_recordings'
+# Yang's answers through the questions form (questions_for_yang/ in the shared directory): question 1 "yes, all" (17:13)
+# and "yes, all data can be used across all sets" (18:08); question 13 "all data can be used but i would have to check
+# quality" and question 19 "all data can be used but unsure of quality questions" (18:08). Written into the tables.
+YANG_USE_NOTE = ("use: released by Yang ('yes, all data can be used across all sets', 2026-11-15 18:08); quality: not "
+                 "confirmed by her for some sets (questions 13 and 19, 18:08), and no recording is left out on her word")
 
 
 def out_dir() -> Path:
@@ -987,19 +992,47 @@ def match_b1(b1: pd.DataFrame, stims: Sequence[Stim], inputs: Optional[Dict[str,
     return pd.DataFrame(rows)
 
 
+def a0_identity_checked(b1: pd.DataFrame, path: Optional[Path] = None) -> pd.DataFrame:
+    """E98's amended pre-odor identity (`a0_identity_table`, 2026-11-15 17:59; E100's entry as amended 18:08) on every
+    run of `b1`: the blank's window mean within 0.5 % of the settled level and the settled level the same for every
+    stimulus to 1e-9. Written to `path` when given; raises when a run fails (part 0's rule: the experiment stops)."""
+    from experiments import E98_apl_response_strength as E98
+    ident = E98.a0_identity_table(b1)
+    if path is not None:
+        ident.to_csv(path, index=False)
+    if not ident['passes'].all():
+        raise RuntimeError("E98's pre-odor identity fails on "
+                           f"{ident.loc[~ident['passes'], ['wiring', 'cond']].values.tolist()}")
+    return ident
+
+
 def part_a2() -> dict:
     """A2: a2_family.csv (per wiring, stimulus of sets W and S with ORN input, session estimate and condition: APL's
-    window, pre-odor and evoked activity and the KCs' response rate, read from E98's B1) and a2_unmatched.csv (the
-    stimuli with input that B1 does not carry). The family's W1 and W2 ratios through E98's indicator family are formed
-    in `score`, beside the flies' intervals."""
+    window mean, its evoked activity under the carrying pre-odor level (the blank's window mean, 'evoked_blank') with the
+    partner's ('evoked_settled') and E90's ('evoked_e90', = 'evoked') beside, and the KCs' response rate, which does not
+    depend on the level; read from E98's B1), a2_unmatched.csv (the stimuli with input that B1 does not carry) and
+    a2_a0_identity.csv (`a0_identity_checked` on every run read; also in identity.json). The family's W1 and W2 ratios
+    through E98's indicator family are formed in `score`, beside the flies' intervals."""
+    from experiments import E98_apl_response_strength as E98
     b1 = read_e98_b1()
+    out = out_dir()
+    ident = a0_identity_checked(b1, out / 'a2_a0_identity.csv')
+    old = _read_json(out / 'identity.json') or {}
+    old['a0_identity'] = dict(passed=bool(ident['passes'].all()), n_runs=int(len(ident)),
+                              max_blank_minus_settled_rel=float(ident['blank_minus_settled_rel'].abs().max()))
+    _write_json(out / 'identity.json', old)
     m = match_b1(b1, a2_stimuli())
     fam = m.dropna(subset=['b1_stimulus']).merge(b1, left_on='b1_stimulus', right_on='stimulus',
                                                  suffixes=('', '_b1')).drop(columns=['stimulus_b1'])
-    out = out_dir()
+    blank = b1[b1['stimulus'] == E98.BLANK_LABEL].set_index(['wiring', 'cond'])['win']
+    fam['level_blank'] = [float(blank[(w, c)]) for w, c in zip(fam['wiring'], fam['cond'])]
+    fam['evoked_blank'] = fam['win'] - fam['level_blank']
+    fam['evoked_settled'] = fam['win'] - fam['pre_settled']
+    fam['evoked_e90'] = fam['win'] - fam['pre']
     fam.to_csv(out / 'a2_family.csv', index=False)
     m[m['b1_stimulus'].isna()].to_csv(out / 'a2_unmatched.csv', index=False)
-    return dict(n_rows=len(fam), n_unmatched=int(m['b1_stimulus'].isna().sum()), missing_runs=b1.attrs.get('missing'))
+    return dict(n_rows=len(fam), n_unmatched=int(m['b1_stimulus'].isna().sum()), missing_runs=b1.attrs.get('missing'),
+                a0_identity=old['a0_identity'])
 
 
 # ---------------------------------------------------------------------------
@@ -1911,6 +1944,7 @@ def part_b(sets: Sequence[str] = E100_SETS, n_boot: int = N_BOOT) -> dict:
         p, s, r = recording_b(rec)
         r['content'] = row['content']
         r['label_unsure'] = LABEL_UNSURE in str(row['content'])
+        r['yang_use'] = YANG_USE_NOTE
         pres.append(p)
         per_stim.append(s)
         rows.append(r)
@@ -1933,7 +1967,7 @@ def part_b(sets: Sequence[str] = E100_SETS, n_boot: int = N_BOOT) -> dict:
     old = _read_json(out / 'identity.json') or {}
     old['readings_2021'] = ident
     _write_json(out / 'identity.json', old)
-    summ = dict(calyx_response=CALYX_RESPONSE, carrying_reading=CARRYING_READING, references=
+    summ = dict(yang_use=YANG_USE_NOTE, calyx_response=CALYX_RESPONSE, carrying_reading=CARRYING_READING, references=
                 {k: stim_label(v) for k, v in SET_REFERENCE.items()}, identity_readings_2021=ident,
                 n_recordings=R.groupby('set').size().to_dict(),
                 n_flies=R[~R['label_unsure']].groupby('set')['fly'].nunique().to_dict(),
@@ -2184,7 +2218,7 @@ def part_c(sets: Sequence[str] = E100_SETS) -> dict:
     stimuli.to_csv(out / 'c_stimuli.csv', index=False)
     solvent.to_csv(out / 'c_solvent.csv', index=False)
     cent.to_csv(out / 'c_centroid.csv', index=False)
-    summ = dict(baselines=CARRYING_READING, blurs_px=list(C_BLURS_PX), n_recordings=recs.groupby('set').size().to_dict(),
+    summ = dict(yang_use=YANG_USE_NOTE, baselines=CARRYING_READING, blurs_px=list(C_BLURS_PX), n_recordings=recs.groupby('set').size().to_dict(),
                 per_set=c_summaries(shared, stimuli, solvent, cent), seconds=round(time.time() - t0, 1))
     _write_json(out / 'c_summary.json', summ)
     return summ
@@ -2227,6 +2261,11 @@ def family_on(b1: pd.DataFrame, a0: str) -> pd.DataFrame:
     """B1's APL-on rows (wiring, stimulus, win, pre) with the model's pre-odor level `a0` (E98's `with_a0`, one of
     A0_DEFINITIONS: 'e90' E90's pre-odor mean as saved, E98's definition as written; 'settled'; 'blank')."""
     from experiments import E98_apl_response_strength as E98
+    if a0 == 'blank':
+        runs = set(zip(b1['wiring'], b1['cond']))
+        have = set(zip(*[b1.loc[b1['stimulus'] == E98.BLANK_LABEL, k] for k in ('wiring', 'cond')]))
+        if runs - have:
+            raise RuntimeError(f"runs without a blank stimulus, which the blank's level needs: {sorted(runs - have)}")
     b = E98.with_a0(b1, a0)
     return b[b['cond'] == 'on'][['wiring', 'stimulus', 'win', 'pre']]
 
@@ -2358,6 +2397,32 @@ FLIES_VARIANTS: Tuple[Tuple[str, str, Optional[str], str], ...] = (
     ('pulse_1s', CALYX_RESPONSE, None, 'pulse_1s'))
 
 
+def verdict_line(fam: pd.DataFrame, results: dict, set_: str, num: Stim, den: Stim, key: str = 'yang') -> dict:
+    """A verdict line (E100's entry as amended 2026-11-15 18:08): the class under the carrying level with, per input
+    estimate, its class and the count of wirings in that class (or, where not decided, the largest category's), then the
+    partner level's, then E90's (which decides nothing), the held class, and whether E90's level gives another class."""
+    out = {}
+    for role, a0 in (('carrying', A0_CARRYING), ('partner', A0_PARTNER), ('literal_e90', A0_LITERAL)):
+        res = results.get((a0, set_, key, stim_label(num), stim_label(den)))
+        if res is None:
+            out[role] = 'not read'
+            continue
+        f = fam[(fam['a0_definition'] == a0) & (fam['set'] == set_) & (fam['flies_reading'] == key)
+                & (fam['stimulus'] == stim_label(num)) & (fam['reference'] == stim_label(den))]
+        per = {}
+        for est, v in res['per_estimate'].items():
+            g = f[f['estimate'] == est]['cls']
+            n = int((g == v).sum()) if v in CATEGORIES else int(max([(g == k).sum() for k in CATEGORIES] or [0]))
+            per[est] = f'{v} ({n} of {len(g)})' + ('' if v in CATEGORIES else
+                                                   f', most {max(CATEGORIES, key=lambda k: (g == k).sum())}')
+        out[role] = dict(cls=res['cls'], per_estimate=per)
+    cl = {a0: (out[r]['cls'] if isinstance(out[r], dict) else 'not read')
+          for r, a0 in (('carrying', A0_CARRYING), ('partner', A0_PARTNER), ('literal_e90', A0_LITERAL))}
+    out['held'] = held_class(cl)
+    out['e90_differs'] = bool(cl[A0_LITERAL] != cl[A0_CARRYING])
+    return out
+
+
 def score(a0s: Sequence[str] = A0_DEFINITIONS) -> dict:
     """The verdict as far as parts A2 and B allow (W1 and W2; W3 waits on part D, on hold with the connectome tables):
     reads part B's tables and B1's runs on the eight wirings (`read_e98_b1`), checks E98's pre-odor identity on every run
@@ -2383,10 +2448,7 @@ def score(a0s: Sequence[str] = A0_DEFINITIONS) -> dict:
     recs_b = pd.read_csv(out / 'b_recordings.csv')
     b1 = read_e98_b1()
     sources, e101 = b1.attrs.get('sources'), b1.attrs.get('e101')
-    ident = E98.a0_identity_table(b1)
-    ident.to_csv(out / 'score_a0_identity.csv', index=False)
-    if not ident['passes'].all():
-        raise RuntimeError(f"E98's pre-odor identity fails on {ident.loc[~ident['passes'], ['wiring', 'cond']].values.tolist()}")
+    ident = a0_identity_checked(b1, out / 'score_a0_identity.csv')
     stims = sorted({(o, float(c)) for o, c in zip(per_stim['odor'], per_stim['conc'])})
     inputs = session_inputs()
     matched = match_b1(b1, stims, inputs)
@@ -2500,13 +2562,17 @@ def score(a0s: Sequence[str] = A0_DEFINITIONS) -> dict:
             row.update(kc_data_rates(st))
             weak_rows.append(row)
     weak = pd.DataFrame(weak_rows)
+    weak['yang_use'] = YANG_USE_NOTE
     weak.to_csv(out / 'score_weak_table.csv', index=False)
     rw = recs_b[(recs_b['set'] == 'W') & ~recs_b['label_unsure']]
+    for name, num, den in W2_RATIOS:
+        w2[name]['line'] = verdict_line(fam, results, 'S', num, den)
     verdict = dict(
-        calyx_response=CALYX_RESPONSE, carrying_reading=CARRYING_READING, a0_definitions=list(a0s),
+        yang_use=YANG_USE_NOTE, calyx_response=CALYX_RESPONSE, carrying_reading=CARRYING_READING, a0_definitions=list(a0s),
         a0_carrying=A0_CARRYING, a0_partner=A0_PARTNER, a0_literal=A0_LITERAL,
         W1=w1_verdict(w1_classes), W1_classes=w1_classes, W1_by_a0=w1_by_a0, W1_beside_flies_readings=w1_beside,
-        W1_over_farn2_described={stim_label(s): held('W', 'yang', s, W1_BESIDE_DENOMINATOR)
+        W1_lines={stim_label(s): verdict_line(fam, results, 'W', s, W1_DENOMINATOR) for s in W1_RATIOS},
+        W1_over_farn2_described={stim_label(s): c_(A0_CARRYING, 'W', 'yang', s, W1_BESIDE_DENOMINATOR)
                                  for s in W1_RATIOS if s != W1_BESIDE_DENOMINATOR},
         a0_identity_passes=bool(ident['passes'].all()),
         W2=w2, W3='waits: part D is on hold with the connectome tables (rule of 2026-11-15 15:35)',
