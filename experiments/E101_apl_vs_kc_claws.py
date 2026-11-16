@@ -226,6 +226,8 @@ READINGS = ('carrying', 'block', 'first_two')
 CARRYING = 'carrying'
 B_MULTIPLES = (0.0, 1.0, 2.0)            # b = 0, b_G, 2 b_G
 KEPT_SD_MULT = 2.0
+SENSITIVITY_WARP_UM = 5.0                # the sensitivity readings leave out runs Yang's notes mark as warped this much or more
+SENSITIVITY_NM = 925.0                   # or as taken at this wavelength
 N_BOOT = 10000
 SEED = 0
 CI = (5.0, 95.0)                         # 90 % intervals
@@ -555,6 +557,10 @@ def part_a1() -> dict:
             d.update(stimulus_source="recordings.csv's odors", stimuli=r['odors'], n_stimuli=np.nan, n_solvent=np.nan,
                      design='', block_order='', odors='')
         d.update(note_remarks(r))
+        w_, nm = pd.to_numeric(d['warp_um'], errors='coerce'), pd.to_numeric(d['wavelength_nm'], errors='coerce')
+        d['out_of_sensitivity_readings'] = '; '.join(x for x, ok in (
+            (f"warp {w_:g} um", np.isfinite(w_) and w_ >= SENSITIVITY_WARP_UM),
+            (f"{nm:g} nm", np.isfinite(nm) and abs(nm - SENSITIVITY_NM) < 1)) if ok)
         d['why_not_read'] = ('' if d['usable'] and d['group'] != 'left out' else
                              'a plane at 87 um, one channel processed' if d['group'] == 'left out' else
                              'raw only (rule of 2026-11-15 15:28)')
@@ -575,7 +581,8 @@ def part_a1() -> dict:
                       block_orders=', '.join(f'{k} {v}' for k, v in u['block_order'].value_counts().items()),
                       wavelengths_nm=', '.join(f'{k:g} x{v}' for k, v in
                                                pd.to_numeric(x['wavelength_nm'], errors='coerce').value_counts().items()),
-                      warp_5um_or_more=int((pd.to_numeric(x['warp_um'], errors='coerce') >= 5).sum()),
+                      warp_5um_or_more=int((pd.to_numeric(x['warp_um'], errors='coerce') >= SENSITIVITY_WARP_UM).sum()),
+                      out_of_sensitivity_readings=int((x['out_of_sensitivity_readings'] != '').sum()),
                       stimulus_sets=' || '.join(sorted(set(u['odors'].dropna().astype(str)) - {''}))))
     gt = pd.DataFrame(g)
     gt.to_csv(out_dir() / 'a1_groups.csv', index=False)
