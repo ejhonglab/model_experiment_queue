@@ -673,3 +673,46 @@ def test_a_run_without_a_blank_is_refused():
         M.with_a0(b, 'blank')
     with pytest.raises(RuntimeError):
         M.a0_identity(b[b['cond'] == 'on'].set_index('stimulus')[['win', 'pre']].assign(pre_settled=8.0))
+
+
+# ---------------------------------------------------------------------------
+# the comparison table (on made-up rows and a made-up run folder)
+
+def test_comparison_summary_on_made_up_rows():
+    v, comps, rows = M.verdict_core(_readings(), _b1_rows(paa5=0.85, ms_scale=(1.0, 0.4, 1.0, 1.0, 1.0)))
+    s = M.comparison_summary(comps, rows, v).set_index('comparison')
+    v2 = s.loc[[c for c in s.index if c.startswith('V2, ')][0]]
+    assert v2['held'] == 'flatter' == v2['category'] and v2['n_flatter'] == 8 and v2['decides']
+    assert v2['category_settled'] == 'flatter' and v2['category_own_range'] == ''         # no V1-only partner for V2
+    assert v2['model_linear_min'] == pytest.approx(min(v2[f'{w}_linear'] for w in M.ALL_WIRINGS))
+    assert v2['real_linear'] == pytest.approx(0.85) and v2['real_class'] == 'flatter'
+    assert v2['real_linear_minus_nearer_end'] == pytest.approx(0.85 - 0.59)                # the upper end is nearer
+    v1 = s.loc["V1, ms's input from megamat/megamat (the panel)"]
+    assert v1['held'] == v['V1_held_per_estimate']['megamat/megamat (the panel)'] == 'inside'
+    assert s.loc["V1, ms's input from megamat/diag", 'held'] == 'steeper'                  # paa / ms 3, all wirings steeper
+    for c in s.index:
+        if c.startswith('V2 beside'):
+            assert s.loc[c, 'held'] == 'described' and not s.loc[c, 'decides']
+    assert M.comparison_held("V3_ms-4 (Hallem's input)", v) == 'described'
+    assert M.comparison_held("V1, ms's input from nowhere", v) == 'not run'
+
+
+def test_b_points_classes_on_a_made_up_run_folder(tmp_path):
+    def apl(paa, ms, ms_ctrl, paa5, blank=8.0):
+        idx = pd.Index(['paa', 'ms', M.V1_ESTIMATES['kiwi-control/control'], M.V2_NUM, M.BLANK_LABEL], name='stimulus')
+        return pd.DataFrame(dict(win=[paa, ms, ms_ctrl, paa5, blank], pre=7.5, pre_settled=blank), index=idx)
+    b = tmp_path / 'B'
+    for arm in ('B1', 'B2', 'B4'):
+        (b / arm).mkdir(parents=True)
+    apl(20.0, 18.0, 19.0, 8.0 + 12.0 * 0.9).to_csv(b / 'B1' / 'real_on_apl.csv')             # C2: V2 flatter
+    apl(20.0, 18.0, 19.0, 8.0 + 12.0 * 0.5).to_csv(b / 'B4' / 'E77_inhadd3141_on_apl.csv')    # V2 inside
+    M._write_json(b / 'B4' / 'E77_inhadd3141_identity.json', dict(a0_identity_passes=True))
+    apl(20.0, 18.0, 19.0, 8.0 + 12.0 * 0.5).to_csv(b / 'B2' / 'pulse1_on_apl.csv')            # fails the identity: left out
+    M._write_json(b / 'B2' / 'pulse1_identity.json', dict(a0_identity_passes=False))
+    t = M.b_points_classes({'V1': (0.67, 1.26), 'V2': (0.46, 0.61)}, root=tmp_path)
+    assert set(t['point']) == {'real', 'E77_inhadd3141'}
+    r = t.set_index(['point', 'comparison'])
+    assert r.loc[('real', 'V2'), 'ratio_linear'] == pytest.approx(0.9) and r.loc[('real', 'V2'), 'cls'] == 'flatter'
+    assert r.loc[('E77_inhadd3141', 'V2'), 'cls'] == 'inside' == r.loc[('E77_inhadd3141', 'V2'), 'cls_linear']
+    assert r.loc[('real', 'V1, the panel ms'), 'ratio_linear'] == pytest.approx(12.0 / 10.0)
+    assert r.loc[('real', 'V1, kiwi-control/control ms'), 'ratio_linear'] == pytest.approx(12.0 / 11.0)

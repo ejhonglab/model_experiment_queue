@@ -98,7 +98,12 @@ Parts (CLI `--part`):
   the comparison not decided); V2's descriptions (the order factor, the shuffled recording, the pa 10^-6.771 repeat, the
   paraffin oil drift; no gate); the pulse-matched readings; V3 to V5 (Hallem's input) described; the outcomes (a) to
   (e) and (h) (verdict.json, c_comparisons.csv, c_wirings.csv with each wiring's distance from the nearer end).
-- table: comparison_table.md and the figures.
+- table (no simulations): comparison_table.md and comparison_table.csv (`comparison_table`, `comparison_summary`: every
+  comparison of part C under the carrying reading, each reading's category, the per-wiring readings, the real wiring's
+  runs of part B classed against the flies' intervals in comparison_table_b_points.csv, the pulse sets, part D's D1 and
+  D2), and the note's figures (`figures`: E98_verdict.png, E98_dose_response.png, E98_v2_sets.png).
+- variants (no simulations): variants.csv in the results folder, the archive's params.csv source (`variants_table`:
+  one row per model saved under outputs/E98_apl_response_strength/B/).
 
 Deviations from the entry (each also in the note):
 - Resolved by the entry's amendment (2026-11-15 15:24): the first version's main reading subtracted the position-matched
@@ -3211,9 +3216,521 @@ def part_d() -> dict:
     return summ
 
 
-def comparison_table() -> str:
-    """comparison_table.md from the parts' tables."""
-    raise NotImplementedError
+# ---------------------------------------------------------------------------
+# the comparison table, the figures and the archive's variants table (no simulations; from the parts' saved tables)
+
+TABLE_READINGS = ('carrying', 'first_in_block', 'own_range', 'without_three', 'settled', 'literal_flies', 'literal_model')
+READING_TITLES = {'carrying': 'carrying', 'first_in_block': 'first-in-block baseline',
+                  'own_range': 'ms at 10^-3.431 in the two recordings', 'without_three': 'without the three recordings',
+                  'settled': "the model's settled level", 'literal_flies': "the flies' literal reading (decides nothing)",
+                  'literal_model': "E90's level (decides nothing)"}
+D2_SET_TITLES = {'all21': 'the 21 ascending runs outside the 12', '15 um': '15 µm plane', '18 um': '18 µm, repeat runs',
+                 '21 um': '21 µm plane', '24 um': '24 µm plane', 'yang_lists': "Yang's lists for 15 and 21 µm",
+                 'interleaved': "the 12's interleaved design"}
+POINT_REFS = {   # B2 to B4: the saved fit each point reproduces (experiment folder, tag)
+    'pulse1': ('E80_remaining_candidates', 'C2_pulse1_fixed'), 'E93_F': ('E93_missing_glomeruli_input', 'B_F_real'),
+    'E95_f1': ('E95_static_apl', 'rate0.068_aplboth_aplpnhold_flatu_k2_f1'),
+    'E36_spk40': ('E36_spike_apl_jointfit', 'spk_thr40_gain1.5_k2_cap3_s2'),
+    'E37_spko40': ('E37_spike_only_apl', 'spk_thr40_gain1.5_k2_cap3_s2_nopnapl'),
+    'E77_inhadd1000': ('E77_input_side_common_error', 'C2_S1_inhadd1000'),
+    'E77_inhadd3141': ('E77_input_side_common_error', 'C2_S1_inhadd3141')}
+B1_REF = ('E67_apl_effect_fits', 'rate0.068_aplboth_k2_cap3')         # the real wiring's fit (E72 part B's seed)
+E101_X2 = ('results', 'E101_apl_vs_kc_claws', 'c_x2_flies.csv')
+POINT_SHORT = {'real': 'C2 at its fit (0.5 s pulse)', 'pulse1': 'C2, 1 s pulse', 'E93_F': 'C2, fuller input (46 glomeruli)',
+               'E95_f1': "refit at the connectome's bouton share", 'E36_spk40': 'KC-spike-driven APL (older base)',
+               'E37_spko40': 'spike-only APL (older base)', 'E77_inhadd1000': 'C2, weaker PN normalization (1000)',
+               'E77_inhadd3141': 'C2, weaker PN normalization (3141)'}
+E101_SETS = {'L': "dual-colour flies, Yang's list", 'V0': 'dual-colour development flies'}
+
+
+def comparison_held(name: str, verdict: dict) -> str:
+    """The held category of a comparison of c_comparisons.csv, from verdict.json: V1's under its estimate of ms's input,
+    V2's; 'described' for the comparisons that decide nothing (V2 beside, V3 to V5)."""
+    if name.startswith('V1, '):
+        return verdict.get('V1_held_per_estimate', {}).get(name.split("ms's input from ", 1)[-1], 'not run')
+    if name.startswith('V2, '):
+        return verdict.get('V2_held', 'not run')
+    return 'described'
+
+
+def comparison_summary(comps: pd.DataFrame, wirings: pd.DataFrame, verdict: dict,
+                       wiring_order: Sequence[str] = ALL_WIRINGS) -> pd.DataFrame:
+    """One row per comparison of part C (`comps`: c_comparisons.csv; `wirings`: c_wirings.csv): the flies' 90 % interval
+    under the carrying reading, the model at the carrying level (the linear reading's range over the wirings, the
+    indicator family's range, each wiring's linear ratio, range, class and the linear reading's signed distance from the
+    nearer end of the flies' interval), the class counts and category, each partner's and literal line's category, and
+    the held category (`comparison_held`)."""
+    rows = []
+    for name, g in comps.groupby('comparison', sort=False):
+        g = g.set_index('reading_set')
+        if 'carrying' not in g.index:
+            continue
+        c = g.loc['carrying']
+        row = dict(comparison=name, decides=bool(c['decides']), numerator=c['numerator'], denominator=c['denominator'],
+                   flies_lo90=float(c['flies_lo90']), flies_hi90=float(c['flies_hi90']), n_wirings=int(c['n_wirings']),
+                   model_linear_min=float(c['model_linear_min']), model_linear_max=float(c['model_linear_max']),
+                   model_min=float(c['model_min']), model_max=float(c['model_max']),
+                   **{f'n_{k}': int(c[f'n_{k}']) for k in CATEGORIES + ('mixed',)},
+                   category=c['category'], category_linear=c['category_linear'])
+        for rk in TABLE_READINGS[1:]:
+            row[f'category_{rk}'] = g.loc[rk, 'category'] if rk in g.index else ''
+        row['held'] = comparison_held(name, verdict)
+        w = wirings[(wirings['comparison'] == name) & (wirings['reading_set'] == 'carrying')].set_index('wiring')
+        for wi in wiring_order:
+            if wi not in w.index:
+                continue
+            x = w.loc[wi]
+            row.update({f'{wi}_linear': float(x['ratio_linear']), f'{wi}_min': float(x['ratio_min']),
+                        f'{wi}_max': float(x['ratio_max']), f'{wi}_class': x['cls'],
+                        f'{wi}_linear_minus_nearer_end': float(x['linear_minus_nearer_end'])})
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def b_points_classes(intervals: Dict[str, Tuple[float, float]], root: Optional[Path] = None) -> pd.DataFrame:
+    """The real wiring's runs of part B at the carrying level (each with its own blank): C2 itself (B1) and B2 to B4,
+    on V1 under the panel's ms and the control panel's and on V2, linear and over the indicator family, each classed
+    (`classify`) against the flies' carrying intervals (`intervals`: {'V1': V1's hull, 'V2': V2's}); runs failing the
+    pre-odor identity are left out."""
+    rows = []
+    pts = [('B1', 'real')] + [(arm, n) for arm, names in B_POINTS.items() for n in names]
+    for arm, n in pts:
+        d = b_root(root) / arm
+        f = d / f'{n}_on_apl.csv'
+        if not f.exists():
+            continue
+        if arm != 'B1' and not (_read_json(d / f'{n}_identity.json') or {}).get('a0_identity_passes', False):
+            continue
+        a = pd.read_csv(f, index_col=0)
+        for lab, num, den, key in (('V1, the panel ms', V1_NUM, 'ms', 'V1'),
+                                   ('V1, kiwi-control/control ms', V1_NUM, V1_ESTIMATES['kiwi-control/control'], 'V1'),
+                                   ('V2', V2_NUM, V2_DEN, 'V2')):
+            lo, hi = intervals[key]
+            for col in ('win',) + (('win_pulse',) if 'win_pulse' in a.columns else ()):
+                rs = model_ratio_set(a.loc[num, col], a.loc[den, col], a.loc[BLANK_LABEL, col])
+                x = rs['ratio'].to_numpy(float)
+                rows.append(dict(arm=arm, point=n, name=POINT_NAMES.get(n, "C2's fit on the real wiring (B1)"),
+                                 comparison=lab, window=col, ratio_linear=float(x[0]), ratio_min=float(x.min()),
+                                 ratio_max=float(x.max()), flies_lo90=lo, flies_hi90=hi, cls=classify(x, lo, hi),
+                                 cls_linear=classify(x[:1], lo, hi)))
+    return pd.DataFrame(rows)
+
+
+def _f(x, spec: str = '.2f') -> str:
+    try:
+        return '' if x is None or not np.isfinite(float(x)) else format(float(x), spec)
+    except (TypeError, ValueError):
+        return str(x)
+
+
+def _md_table(header: Sequence[str], rows: Sequence[Sequence[str]]) -> List[str]:
+    return ['| ' + ' | '.join(header) + ' |', '|' + '---|' * len(header)] + ['| ' + ' | '.join(str(c) for c in r) + ' |'
+                                                                            for r in rows]
+
+
+def _counts(r) -> str:
+    return ', '.join(f"{int(r[f'n_{k}'])} {k}" for k in CATEGORIES + ('mixed',) if int(r[f'n_{k}']))
+
+
+def comparison_table(out: Optional[Path] = None) -> str:
+    """comparison_table.md and comparison_table.csv (`comparison_summary`) from part C's and part D's tables: the verdict,
+    every comparison under the carrying reading (the flies' interval, the model's linear range and indicator range over
+    the eight wirings, the class counts, the category, the held category), each reading's category, the per-wiring
+    readings of V1 and V2, the real wiring's runs of part B (`b_points_classes`), the pulse sets, and part D's D1 and D2
+    with Yang's caveat. Returns the markdown."""
+    out = out_dir() if out is None else Path(out)
+    verdict = _read_json(out / 'verdict.json')
+    if verdict is None:
+        raise RuntimeError("the table needs part C's verdict (verdict.json)")
+    comps, wir = pd.read_csv(out / 'c_comparisons.csv'), pd.read_csv(out / 'c_wirings.csv')
+    summ = comparison_summary(comps, wir, verdict)
+    summ.to_csv(out / 'comparison_table.csv', index=False)
+    L = ["# E98: the strength of APL's response in the flies against the model's APL", '',
+         f"Generated by experiments/E98_apl_response_strength.py (`--part table`) at "
+         f"{str(H.code_commits().get('queue_commit', ''))[:7]} from part C's verdict of {verdict.get('time')} "
+         f"({verdict.get('host')}). Ratios of APL's response, one stimulus over another. The flies: Yang's 2021 calyx "
+         'maps (12 recordings, 8 flies), the calyx-mean peak dF/F under the order-matched baseline, geometric mean over '
+         'flies with a 90 % bootstrap interval. The model: C2 at each of the eight wirings\' fits, APL\'s mean over 0 to '
+         "0.5 s minus the blank's in the same run (APL on), linear (Hill exponent 1) and over the indicator family "
+         '(exponents 1 to 2.5, two forms). A wiring is inside if any of its ratios lies in the flies\' interval; a '
+         'comparison takes a category when 6 of the 8 wirings do; it is held when the carrying reading and every partner '
+         'give it.', '']
+    L += ['## Verdict', '', f"- V1 (paa over ms near 10^-3): **{verdict['V1']}**; held per estimate of ms's input: "
+          + '; '.join(f'{k} {v}' for k, v in verdict['V1_held_per_estimate'].items()) + '.',
+          f"- V2 (paa at 10^-5 over 10^-4): **{verdict['V2']}** ({verdict.get('V2_note', '')}).",
+          f"- Outcomes: {', '.join(f'({k}) {v}' for k, v in verdict.get('outcome_names', {}).items()) or 'none'}.",
+          f"- The 0.5 s and 1 s recordings disagree on V1: {verdict['V1_pulse_disagree']}; on V2: {verdict['V2_pulse_disagree']}.",
+          '- The blank: KC response rate with APL on '
+          + ' / acutely off '.join(_f(verdict.get('blank_response_rate', {}).get(c, {}).get('max'), '.3f') for c in ('on', 'acute_off'))
+          + " (largest over the wirings); the flies' solvent, control flies / APL output blocked (TNT), "
+          + ' / '.join(_f(verdict.get('flies_solvent_rate', {}).get(k), '.3f') for k in ('ctrl', 'tnt')) + " (Yang's 1 z).", '']
+    hdr = ['comparison', "flies' 90 % interval", 'model, linear (8 wirings)', 'model, indicator family', 'wirings',
+           'category', 'held']
+    L += ['## Every comparison, the carrying reading', ''] + _md_table(hdr, [
+        [r['comparison'], f"{_f(r['flies_lo90'])} to {_f(r['flies_hi90'])}",
+         f"{_f(r['model_linear_min'])} to {_f(r['model_linear_max'])}", f"{_f(r['model_min'])} to {_f(r['model_max'])}",
+         _counts(r), r['category'], r['held']] for _, r in summ.iterrows()]) + ['']
+    present = [rk for rk in TABLE_READINGS if rk == 'carrying' or summ[f'category_{rk}'].astype(str).str.len().gt(0).any()]
+    L += ['## The category under each reading', ''] + _md_table(
+        ['comparison'] + [READING_TITLES[rk] for rk in present],
+        [[r['comparison']] + [r['category'] if rk == 'carrying' else (r[f'category_{rk}'] or '') for rk in present]
+         for _, r in summ.iterrows() if r['decides']]) + ['']
+    dec = summ[summ['decides']]
+    L += ['## Per wiring, V1 and V2 (the carrying reading)', '',
+          'Each cell: the linear ratio [the indicator family\'s range], the class, and the linear ratio minus the nearer '
+          "end of the flies' interval.", ''] + _md_table(
+        ['wiring'] + [r['comparison'] for _, r in dec.iterrows()],
+        [[w] + [f"{_f(r.get(f'{w}_linear'))} [{_f(r.get(f'{w}_min'))}, {_f(r.get(f'{w}_max'))}] {r.get(f'{w}_class', '')} "
+                f"({_f(r.get(f'{w}_linear_minus_nearer_end'), '+.3f')})" for _, r in dec.iterrows()]
+         for w in ALL_WIRINGS]) + ['']
+    v1 = summ[summ['comparison'].str.startswith('V1, ')].iloc[0]
+    v2 = summ[summ['comparison'].str.startswith('V2, ')].iloc[0]
+    bp = b_points_classes({'V1': (v1['flies_lo90'], v1['flies_hi90']), 'V2': (v2['flies_lo90'], v2['flies_hi90'])})
+    if len(bp):
+        bp.to_csv(out / 'comparison_table_b_points.csv', index=False)
+        L += ['## The real wiring\'s runs of part B (described; decide nothing)', '',
+              f"Against the flies' carrying intervals: V1 {_f(v1['flies_lo90'])} to {_f(v1['flies_hi90'])}, V2 "
+              f"{_f(v2['flies_lo90'])} to {_f(v2['flies_hi90'])}. 'win_pulse': APL's mean over the 1 s pulse.", '']
+        L += _md_table(['run', 'comparison', 'window', 'linear', 'indicator family', 'class', 'class, linear'],
+                       [[r['point'], r['comparison'], r['window'], _f(r['ratio_linear']),
+                         f"{_f(r['ratio_min'])} to {_f(r['ratio_max'])}", r['cls'], r['cls_linear']] for _, r in bp.iterrows()]) + ['']
+    pul = verdict.get('pulse', {})
+    if pul:
+        L += ['## The pulse sets (carrying reading)', ''] + _md_table(
+            ['ratio', '0.5 s recordings', '1 s recordings', 'splits as large', 'disagree'],
+            [[k, _f(p.get('ratio_short')), _f(p.get('ratio_long')), f"{p.get('n_as_large')} of {p.get('n_splits')}",
+              p.get('disagree')] for k, p in pul.items()]) + ['']
+    if (out / 'd_summary.json').exists():
+        ds = _read_json(out / 'd_summary.json')
+        L += ["## Part D: Yang's 2021 recordings outside the 12 (decides nothing on the 12)", '', f"_{ds.get('caveat')}_", '']
+        if (out / 'd1_v2r.csv').exists():
+            d1 = pd.read_csv(out / 'd1_v2r.csv')
+            L += [f"D1, V2 in the shuffled-order recordings (V2R): **{ds['D1']['V2R']}**.", ''] + _md_table(
+                ['reading', 'ratio', '90 % interval', 'flies', 'recordings', 'category'],
+                [[r['reading'], _f(r['ratio']), f"{_f(r['lo90'])} to {_f(r['hi90'])}", int(r['n_flies']),
+                  int(r['n_recordings']), '' if pd.isna(r['category']) else r['category']] for _, r in d1.iterrows()]) + ['']
+        if (out / 'd2_replication.csv').exists():
+            d2 = pd.read_csv(out / 'd2_replication.csv')
+            d2 = d2[d2['comparison'].isin(['V1 megamat/megamat (the panel)', 'V2'])]
+            L += ['D2, the same flies at other planes and in repeat runs (V1 under the megamat estimate of ms\'s input; V2 '
+                  "with validation2's paa at 10^-5).", ''] + _md_table(
+                ['set', 'recordings', 'comparison', "flies' 90 % interval", 'category', 'on the 12', 'replicates'],
+                [[D2_SET_TITLES.get(r['set'], r['set']), int(r['n_recordings']), r['comparison'],
+                  f"{_f(r['flies_lo90'])} to {_f(r['flies_hi90'])}", r['category'], r['category_12'], r['replicates']]
+                 for _, r in d2.iterrows()]) + ['']
+    md = '\n'.join(L) + '\n'
+    (out / 'comparison_table.md').write_text(md)
+    return md
+
+
+def _style(ax) -> None:
+    for s in ('top', 'right'):
+        ax.spines[s].set_visible(False)
+    ax.tick_params(colors='#333333', labelsize=8)
+
+
+def _log_ratio_axis(ax, lo: float, hi: float) -> None:
+    from matplotlib.ticker import NullLocator
+    cands = ((0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20) if hi / lo > 30 else
+             (0.02, 0.05, 0.1, 0.2, 0.3, 0.5, 0.7, 1, 1.5, 2, 3, 5, 10, 20))
+    ticks = [t for t in cands if lo <= t <= hi]
+    ax.set_xscale('log')
+    ax.set_xlim(lo, hi)
+    ax.set_xticks(ticks)
+    ax.set_xticklabels([f'{t:g}' for t in ticks])
+    ax.xaxis.set_minor_locator(NullLocator())
+    ax.axvline(1.0, color='#999999', lw=0.8, zorder=0)
+
+
+FLIES_GRAY, MODEL_BLUE, BESIDE_ORANGE = '#9a9a9a', '#2a78d6', '#eb6834'
+ODOR_COLORS = {'pa': '#2a78d6', 'paa': '#eb6834', 'ms': '#1baf7a'}
+
+
+def _comparison_label(name: str) -> str:
+    if name.startswith('V1, '):
+        return "paa / ms near $10^{-3}$, ms's input: " + name.split("ms's input from ", 1)[-1]
+    if name.startswith('V2'):
+        ses = name.split('from ', 1)[-1]
+        return ('paa $10^{-5}$ / $10^{-4}$, $10^{-5}$ input: ' + ses + ('' if name.startswith('V2, ') else ' (beside)'))
+    rid = name.split(' ', 1)[0]
+    num, den = {r[0]: (r[1], r[2]) for r in RATIOS}[rid]
+    return f"{num[0]} $10^{{{num[1]:g}}}$ / {den[0]} $10^{{{den[1]:g}}}$, Hallem's input (beside)"
+
+
+def figure_verdict(summ: pd.DataFrame, path: Path) -> Path:
+    """E98_verdict.png: every comparison under the carrying reading, the flies' 90 % interval (gray bar) against the
+    model's linear ratio on each of the eight wirings (dots) and the indicator family's range over them (line); top, the
+    lab's input (V1 under each estimate of ms's input, V2 and its two other estimates); bottom, Hallem's input (V3 to V5,
+    described)."""
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    lab = summ[summ['comparison'].str.startswith(('V1', 'V2'))]
+    hal = summ[~summ['comparison'].str.startswith(('V1', 'V2'))]
+    parts = [(t, g) for t, g in (("the lab's input", lab), ("Hallem's input (described; decides nothing)", hal)) if len(g)]
+    fig, axs = plt.subplots(len(parts), 1, figsize=(12.5, 0.42 * len(summ) + 2.2),
+                            gridspec_kw=dict(height_ratios=[len(g) + 0.6 for _, g in parts]), squeeze=False)
+    for ax, (title, g) in zip(axs[:, 0], parts):
+        n = len(g)
+        ys = np.arange(n)[::-1]
+        for y, (_, r) in zip(ys, g.iterrows()):
+            ax.add_patch(matplotlib.patches.Rectangle((r['flies_lo90'], y - 0.22), r['flies_hi90'] - r['flies_lo90'], 0.44,
+                                                      color=FLIES_GRAY, alpha=0.55, lw=0, zorder=1))
+            ax.plot([r['model_min'], r['model_max']], [y, y], color=MODEL_BLUE, lw=1.2, alpha=0.6, zorder=2)
+            lin = [r.get(f'{w}_linear') for w in ALL_WIRINGS if np.isfinite(r.get(f'{w}_linear', np.nan))]
+            ax.scatter(lin, [y] * len(lin), s=16, color=MODEL_BLUE, edgecolor='white', lw=0.5, zorder=3)
+            txt = r['category'] + ('' if r['held'] == 'described' else f" (held: {r['held']})")
+            ax.text(1.01, y, txt, transform=ax.get_yaxis_transform(), va='center', fontsize=7.5, color='#333333')
+        ax.set_yticks(ys)
+        ax.set_yticklabels([_comparison_label(c) for c in g['comparison']], fontsize=8)
+        lo = 0.8 * min(g['flies_lo90'].min(), g['model_min'].min())
+        hi = 1.25 * max(g['flies_hi90'].max(), g['model_max'].max())
+        _log_ratio_axis(ax, lo, hi)
+        ax.set_ylim(-0.7, n - 0.3)
+        ax.set_title(title, fontsize=9.5, loc='left')
+        _style(ax)
+    axs[-1, 0].set_xlabel("ratio of APL's response (numerator over denominator)", fontsize=9)
+    h = [matplotlib.patches.Patch(color=FLIES_GRAY, alpha=0.55, label="flies, 90 % interval (12 recordings, 8 flies)"),
+         matplotlib.lines.Line2D([], [], color=MODEL_BLUE, marker='o', lw=0, ms=4, label='model, linear, each of 8 wirings'),
+         matplotlib.lines.Line2D([], [], color=MODEL_BLUE, lw=1.2, alpha=0.6, label='model, indicator family, range')]
+    fig.legend(handles=h, loc='upper center', ncol=3, fontsize=8, frameon=False)
+    fig.tight_layout(rect=(0, 0, 0.84, 0.97))
+    fig.savefig(path, dpi=130)
+    plt.close(fig)
+    return path
+
+
+def _plain_log_y(ax) -> None:
+    from matplotlib.ticker import FuncFormatter, LogLocator, NullFormatter
+    ax.set_yscale('log')
+    lo, hi = ax.get_ylim()
+    ax.yaxis.set_major_locator(LogLocator(base=10, subs=(1.0, 2.0, 5.0) if hi / lo > 20 else (1.0, 1.5, 2.0, 3.0, 5.0, 7.0)))
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f'{v:g}'))
+    ax.yaxis.set_minor_formatter(NullFormatter())
+
+
+SOURCE_MARKERS = {'panel': ('o', 'black'), 'validation2/diag': ('s', 'white'), 'megamat/diag': ('^', 'white'),
+                  'kiwi-control/diag': ('v', 'white'), 'kiwi-control/control': ('D', 'white')}
+
+
+def figure_dose_response(a2: pd.DataFrame, b1_blank: pd.DataFrame, path: Path) -> Path:
+    """E98_dose_response.png: per odor (pa, paa, ms), the flies' APL response against log10 concentration (top: the
+    calyx-mean peak dF/F under the carrying reading, geometric mean over flies with its 90 % interval) and the model's
+    (bottom: APL's window mean minus the blank's, APL on; the real wiring as markers and line, the range over the eight
+    wirings as bars and band; Hallem's input as a line, each of the lab's sessions' estimates as its own marker), both on
+    log scales so that equal slopes mean equal fold changes per log unit."""
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    odors = ('pa', 'paa', 'ms')
+    src = {x['label']: x['source'] for x in b1_specs()}
+    fig, axs = plt.subplots(2, 3, figsize=(11.5, 6.6), sharex='col')
+    on = b1_blank[b1_blank['cond'] == 'on'].copy()
+    on['resp'] = on['win'] - on['pre']
+    tab = on.pivot_table(index='stimulus', columns='wiring', values='resp')
+    lab_inputs = {'pa': [('pa', -3.0)], 'paa': [('paa', -4.0), (V2_NUM, -5.0)] + [(v, -5.0) for v in V2_BESIDE.values()],
+                  'ms': [(v, -3.0) for v in V1_ESTIMATES.values()]}
+    for j, o in enumerate(odors):
+        ax, bx = axs[0, j], axs[1, j]
+        g = a2[(a2['odor'] == o) & (a2['reading'] == 'order_matched')].sort_values('conc')
+        ax.errorbar(g['conc'], g['fly_geomean'], yerr=[g['fly_geomean'] - g['fly_lo90'], g['fly_hi90'] - g['fly_geomean']],
+                    color=ODOR_COLORS[o], marker='o', ms=4, lw=1.4, capsize=2)
+        hs = [(c, hallem_label(o, c)) for c in (-8.0, -6.0, -4.0, -2.0) if hallem_label(o, c) in tab.index]
+        if hs:
+            cc = [c for c, _ in hs]
+            v = tab.loc[[lab for _, lab in hs]]
+            bx.fill_between(cc, v.min(axis=1), v.max(axis=1), color=ODOR_COLORS[o], alpha=0.18, lw=0)
+            if len(cc) == 1:
+                bx.plot([cc[0], cc[0]], [float(v.min(axis=1).iloc[0]), float(v.max(axis=1).iloc[0])], color=ODOR_COLORS[o], lw=0.9)
+            bx.plot(cc, v['real'], color=ODOR_COLORS[o], lw=1.6, marker='o', ms=4)
+        pts = [(lab, c) for lab, c in lab_inputs[o] if lab in tab.index]
+        for lab, c in pts:
+            same = [q for q, cc in pts if cc == c]
+            x = c + 0.14 * (same.index(lab) - (len(same) - 1) / 2)
+            m, fc = SOURCE_MARKERS.get(src.get(lab, ''), ('o', 'gray'))
+            v = tab.loc[lab]
+            bx.plot([x, x], [v.min(), v.max()], color='#333333', lw=0.9)
+            bx.plot([x], [v['real']], marker=m, mfc=fc, mec='#333333', ms=5.5, lw=0)
+        for a in (ax, bx):
+            for c, ls in ((PANEL_INPUT_CONC[o], ':'),) + (((-5.0, '--'),) if o == 'paa' else ()):
+                a.axvline(c, color='#777777', ls=ls, lw=0.9, zorder=0)
+            _plain_log_y(a)
+            _style(a)
+        ax.set_title(o, fontsize=10)
+        bx.set_xlabel('log10 concentration (v/v)', fontsize=9)
+    axs[0, 0].set_ylabel("flies: APL, calyx-mean peak dF/F\n(geometric mean over 8 flies, 90 %)", fontsize=9)
+    axs[1, 0].set_ylabel("model: APL above the blank, APL on\n(model units; real wiring, range over 8)", fontsize=9)
+    L2 = matplotlib.lines.Line2D
+    h = [L2([], [], color='#555555', lw=1.6, marker='o', ms=4, label="Hallem's input (band: 8 wirings)")]
+    names = {'panel': "the lab's input as the panel has it", 'validation2/diag': 'validation2 diagnostics',
+             'megamat/diag': 'megamat diagnostics', 'kiwi-control/diag': 'kiwi-control diagnostics',
+             'kiwi-control/control': 'kiwi-control control panel'}
+    h += [L2([], [], marker=m, mfc=fc, mec='#333333', lw=0, ms=5.5, label=names[k]) for k, (m, fc) in SOURCE_MARKERS.items()]
+    h += [L2([], [], color='#777777', ls=':', lw=0.9, label="the lab's input concentration"),
+          L2([], [], color='#777777', ls='--', lw=0.9, label='paa at $10^{-5}$ (V2)')]
+    fig.legend(handles=h, loc='lower center', ncol=4, fontsize=8, frameon=False)
+    fig.tight_layout(rect=(0, 0.09, 1, 1))
+    fig.savefig(path, dpi=130)
+    plt.close(fig)
+    return path
+
+
+def e101_r3_rows() -> pd.DataFrame:
+    """E101's APL r3 (paa at 10^-5 over 10^-4) in its fly sets L and V0, carrying reading, b = 0 (E101_SETS), for the V2
+    figure (a description; Yang has not checked those recordings' quality)."""
+    import re
+    p = H.shared_dir().joinpath(*E101_X2)
+    if not p.exists():
+        return pd.DataFrame()
+    t = pd.read_csv(p, comment='#')
+    t = t[(t['reading'] == 'carrying') & (t['b_mult'] == 0) & (t['ratio_id'] == 'r3') & (t['quantity'] == 'APL')
+          & t['flies'].isin(list(E101_SETS))]
+    rows = []
+    for _, r in t.iterrows():
+        m = re.search(r':\s*([0-9.]+)\s*\[', str(r['readings']))
+        rows.append(dict(label=f"{E101_SETS[r['flies']]} ({int(r['n_flies'])} flies)", ratio=float(m.group(1)) if m else np.nan,
+                         lo=float(r['lo']), hi=float(r['hi'])))
+    return pd.DataFrame(rows)
+
+
+def figure_v2(a3: pd.DataFrame, d1: pd.DataFrame, d2: pd.DataFrame, e101: pd.DataFrame, wir: pd.DataFrame,
+              bp: pd.DataFrame, path: Path) -> Path:
+    """E98_v2_sets.png: V2 (paa at 10^-5 over 10^-4). Left, the flies across recording sets (the 12 under the carrying
+    reading and two partners, the shuffled-order recordings, part D's sets, E101's dual-colour flies), each a ratio with its
+    90 % interval, against the family's linear range (validation2's estimate of paa at 10^-5; band) and indicator range
+    (lighter band) over the eight wirings, the other two sessions' estimates' linear ranges beside. Right, the model on
+    the real wiring under the runs of part B (linear dot, indicator range line) against the flies' carrying interval."""
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    rows = []
+    a = a3[a3['ratio_id'] == 'V2']
+    for rd, sub, lab in (('order_matched', 'all', 'the 12, carrying reading'), ('first_in_block', 'all', 'the 12, first-in-block baseline'),
+                         ('order_matched', 'without_large_blank_and_3FRfun1', 'the 12 without the three recordings')):
+        r = a[(a['reading'] == rd) & (a['subset'] == sub)]
+        if len(r):
+            r = r.iloc[0]
+            rows.append(dict(label=f"{lab} ({int(r['n_flies'])} flies)", ratio=r['ratio'], lo=r['lo90'], hi=r['hi90'], kind='12'))
+    r = d1[d1['reading'] == 'carrying']
+    if len(r):
+        r = r.iloc[0]
+        rows.append(dict(label=f"shuffled-order runs, V2R ({int(r['n_flies'])} flies)", ratio=r['ratio'], lo=r['lo90'],
+                         hi=r['hi90'], kind='D'))
+    for _, r in d2[d2['comparison'] == 'V2'].iterrows():
+        n = int(r['n_flies_V2'])
+        rows.append(dict(label=f"{D2_SET_TITLES.get(r['set'], r['set'])} ({n} fl{'y' if n == 1 else 'ies'})", ratio=r['V2'],
+                         lo=r['flies_lo90'], hi=r['flies_hi90'], kind='D'))
+    for _, r in e101.iterrows():
+        rows.append(dict(r, kind='E101'))
+    t = pd.DataFrame(rows)
+    fig, (ax, bx) = plt.subplots(1, 2, figsize=(12, 0.36 * len(t) + 1.9), gridspec_kw=dict(width_ratios=(1.25, 1)))
+    v2 = wir[(wir['reading_set'] == 'carrying') & wir['comparison'].str.startswith('V2, ')]
+    ax.axvspan(v2['ratio_min'].min(), v2['ratio_max'].max(), color=MODEL_BLUE, alpha=0.10, lw=0)
+    ax.axvspan(v2['ratio_linear'].min(), v2['ratio_linear'].max(), color=MODEL_BLUE, alpha=0.35, lw=0)
+    for ses in V2_BESIDE:
+        b = wir[(wir['reading_set'] == 'carrying') & (wir['comparison'] == f'V2 beside, paa at 10^-5 from {ses}/diag')]
+        if len(b):
+            ax.axvspan(b['ratio_linear'].min(), b['ratio_linear'].max(), color=BESIDE_ORANGE, alpha=0.35, lw=0)
+    ys = np.arange(len(t))[::-1]
+    mk = {'12': 'o', 'D': 's', 'E101': 'D'}
+    for y, (_, r) in zip(ys, t.iterrows()):
+        ax.plot([r['lo'], r['hi']], [y, y], color='#444444', lw=1.4)
+        if np.isfinite(r['ratio']):
+            ax.plot([r['ratio']], [y], marker=mk[r['kind']], color='#222222', ms=5, lw=0)
+    ax.set_yticks(ys)
+    ax.set_yticklabels(t['label'], fontsize=8)
+    _log_ratio_axis(ax, 0.15, 1.3)
+    ax.set_ylim(-0.7, len(t) - 0.3)
+    ax.set_xlabel('paa at $10^{-5}$ over paa at $10^{-4}$', fontsize=9)
+    ax.set_title("the flies' APL by recording set (ratio, 90 % interval)", fontsize=9.5)
+    _style(ax)
+    h = [matplotlib.patches.Patch(color=MODEL_BLUE, alpha=0.35, label="family, linear (validation2's paa at $10^{-5}$)"),
+         matplotlib.patches.Patch(color=MODEL_BLUE, alpha=0.10, label='family, indicator family'),
+         matplotlib.patches.Patch(color=BESIDE_ORANGE, alpha=0.35, label="family, linear, the other sessions' estimates")]
+    ax.legend(handles=h, loc='lower center', bbox_to_anchor=(0.5, 1.06), ncol=2, fontsize=7.5, frameon=False)
+    q = bp[(bp['comparison'] == 'V2')].reset_index(drop=True)
+    yq = np.arange(len(q))[::-1]
+    lo, hi = float(v2['flies_lo90'].iloc[0]), float(v2['flies_hi90'].iloc[0])
+    bx.axvspan(lo, hi, color=FLIES_GRAY, alpha=0.45, lw=0)
+    for y, (_, r) in zip(yq, q.iterrows()):
+        bx.plot([r['ratio_min'], r['ratio_max']], [y, y], color=MODEL_BLUE, lw=1.3, alpha=0.6)
+        bx.plot([r['ratio_linear']], [y], marker='o', color=MODEL_BLUE, ms=5, lw=0)
+    bx.set_yticks(yq)
+    bx.set_yticklabels([POINT_SHORT.get(r['point'], r['point'])
+                        + (', mean over the pulse' if r['window'] == 'win_pulse' else '') for _, r in q.iterrows()], fontsize=8)
+    _log_ratio_axis(bx, 0.3, 1.3)
+    bx.set_ylim(-0.7, len(q) - 0.3)
+    bx.set_xlabel('paa at $10^{-5}$ over paa at $10^{-4}$', fontsize=9)
+    bx.set_title('the model on the real wiring\n(dot: linear; line: indicator family)', fontsize=9.5)
+    bx.legend(handles=[matplotlib.patches.Patch(color=FLIES_GRAY, alpha=0.45, label="flies, the 12, carrying reading")],
+              loc='lower center', bbox_to_anchor=(0.5, 1.06), fontsize=7.5, frameon=False)
+    _style(bx)
+    fig.tight_layout()
+    fig.savefig(path, dpi=130)
+    plt.close(fig)
+    return path
+
+
+def figures(out: Optional[Path] = None) -> List[Path]:
+    """The three figures of the note, from the saved tables and B1's runs (no simulations): E98_verdict.png,
+    E98_dose_response.png and E98_v2_sets.png."""
+    out = out_dir() if out is None else Path(out)
+    verdict = _read_json(out / 'verdict.json')
+    comps, wir = pd.read_csv(out / 'c_comparisons.csv'), pd.read_csv(out / 'c_wirings.csv')
+    summ = comparison_summary(comps, wir, verdict)
+    paths = [figure_verdict(summ, out / 'E98_verdict.png')]
+    b1 = with_a0(load_b1_all(ALL_WIRINGS), A0_CARRYING)
+    paths.append(figure_dose_response(pd.read_csv(out / 'a2_medians.csv'), b1, out / 'E98_dose_response.png'))
+    v1 = summ[summ['comparison'].str.startswith('V1, ')].iloc[0]
+    v2 = summ[summ['comparison'].str.startswith('V2, ')].iloc[0]
+    bp = b_points_classes({'V1': (v1['flies_lo90'], v1['flies_hi90']), 'V2': (v2['flies_lo90'], v2['flies_hi90'])})
+    paths.append(figure_v2(pd.read_csv(out / 'a3_ratios.csv'), pd.read_csv(out / 'd1_v2r.csv'),
+                           pd.read_csv(out / 'd2_replication.csv'), e101_r3_rows(), wir, bp, out / 'E98_v2_sets.png'))
+    return paths
+
+
+def variants_table(root: Optional[Path] = None) -> pd.DataFrame:
+    """results/E98_apl_response_strength/variants.csv, the archive's params.csv source: one row per model saved under
+    outputs/E98_apl_response_strength/B/ (the real wiring's B1 run and B2 to B4's points; tag = the file names'
+    variant), with the saved fit it reproduces, the absolute parameters with APL on (part B's runs.csv), the settings that
+    differ from C2's (the pulse's timing, E77's PN normalization, E36's claw threshold and gain), the commits, the input's
+    sha256, the number of stimuli, the KCs' response rate over the 16 panel odors with APL on and acutely off, and
+    whether the run reproduced its source's saved fit (0 count differences on the panel odors). The other seven wirings'
+    B1 runs are E101's (data/model_outputs/E101_apl_vs_kc_claws/A3/), not listed here."""
+    rows = []
+    pts = [('B1', 'real')] + [(arm, n) for arm, names in B_POINTS.items() for n in names]
+    for arm, n in pts:
+        d = b_root(root) / arm
+        if not (d / 'runs.csv').exists() or not (d / f'{n}_on_responses.parquet').exists():
+            continue
+        runs = pd.read_csv(d / 'runs.csv')
+        on = runs[(runs['wiring'] if arm == 'B1' else runs['point']).eq(n) & runs['cond'].eq('on')].iloc[-1]
+        ident = _read_json(d / f'{n}_identity.json') or {}
+        ref = B1_REF if arm == 'B1' else POINT_REFS[n]
+        row = dict(tag=n, variant=n, part=arm, arm=arm, point=n, wiring='real', ref_experiment=ref[0], ref_fit=ref[1],
+                   config=POINT_NAMES.get(n, "C2's fit on the real wiring (B1's extended input)"))
+        row.update({k[len('param_'):]: float(on[k]) for k in on.index if str(k).startswith('param_')})
+        rec = ident.get('record', {}) or {}
+        row.update({k: v for k, v in (rec.get('kws') or {}).items() if isinstance(v, (int, float))})
+        for k in ('claw_thr', 'gain', 'k'):
+            if k in rec:
+                row[k] = rec[k]
+        for k in ('aplkc_flat_size', 'aplkc_flat_unit', 'aplpn_hold'):
+            if k in rec:
+                row[k] = rec[k]
+        row.update(n_stimuli=int(on['n_stimuli']), input_sha256=on['input_sha256'], queue_commit=on['queue_commit'],
+                   pyolfsysm_commit=on['pyolfsysm_commit'], host=on['host'], time=on['time'])
+        for c, ct in CONDS:
+            r = pd.read_parquet(d / f'{n}_{ct}_responses.parquet')
+            row[f'rate_{ct}'] = float(r[[o for o in H.APL16_ODORS if o in r.columns]].astype(float).to_numpy().mean())
+        if arm == 'B1':
+            row['reproduces_fit'] = bool(all(ident.get(c, {}).get('counts_differ') == 0 for c in ('on', 'off')))
+        else:
+            row['reproduces_fit'] = bool(ident.get('exact'))
+        rows.append(row)
+    t = pd.DataFrame(rows)
+    t.to_csv(out_dir() / 'variants.csv', index=False)
+    return t
 
 
 def _wirings(arg: str) -> Tuple[str, ...]:
@@ -3228,7 +3745,7 @@ def _wirings(arg: str) -> Tuple[str, ...]:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
-    ap.add_argument('--part', required=True, choices=['0', 'A', 'B', 'C', 'D0', 'D', 'table'])
+    ap.add_argument('--part', required=True, choices=['0', 'A', 'B', 'C', 'D0', 'D', 'table', 'variants'])
     ap.add_argument('--wirings', default='all8', help="all8 or a comma-separated list of wiring labels")
     ap.add_argument('--arm', default='B1', help="part B's arms, comma-separated (B1..B4)")
     ap.add_argument('--threads', type=int, default=4,
@@ -3267,7 +3784,12 @@ def main() -> None:
     elif a.part == 'D':
         print(json.dumps(part_d(), indent=1, default=float), flush=True)
     elif a.part == 'table':
+        provenance('table')
         print(comparison_table(), flush=True)
+        for f in figures():
+            print(f, flush=True)
+    elif a.part == 'variants':
+        print(variants_table().to_string(), flush=True)
 
 
 if __name__ == '__main__':
