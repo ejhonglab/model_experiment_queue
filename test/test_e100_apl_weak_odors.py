@@ -716,3 +716,17 @@ def test_centroid_offsets_planted():
     c = M.centroid_offsets(pd.DataFrame(rows), 'paa')
     assert len(c) == 2 and np.allclose(c['offset_2h'], 0.1) and np.allclose(c['offset_ma'], -0.05)
     assert np.allclose(c['slope_per_log_mean'], 0.03)
+
+
+def test_held_class_and_no_ratio():
+    # E98's amendment of 17:59: the blank's level carries, the settled level is the partner, E90's decides nothing
+    assert M.A0_DEFINITIONS == ('blank', 'settled', 'e90')
+    assert M.held_class({'blank': 'flatter', 'settled': 'flatter', 'e90': 'inside'}) == 'flatter'
+    assert M.held_class({'blank': 'flatter', 'settled': 'inside', 'e90': 'flatter'}) == 'reading-dependent'
+    assert M.held_class({'blank': 'not decided', 'settled': 'not decided'}) == 'reading-dependent'
+    # a numerator not above the pre-odor level has no ratio, and counts toward no category
+    on = _b1_on(lambda k: 9.0 if k < 3 else 18.0)
+    wc = M.model_classes(on, '2h [s1/diag] @ -6', 'paa', 0.3, 0.6)
+    assert (wc['cls'] == 'no ratio').sum() == 3 and (wc['cls'] == 'inside').sum() == 5
+    res, _ = M.read_ratio(on, 0.3, 0.6, {'s1': '2h [s1/diag] @ -6'}, 'paa')
+    assert res['cls'] == 'not decided'           # 5 of 8 inside: under E98's 6 of 8

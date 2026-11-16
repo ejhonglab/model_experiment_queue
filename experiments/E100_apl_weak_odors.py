@@ -95,10 +95,12 @@ Deviations from the entry (each also in the note):
 - The classes of a ratio (`classify_linear`): E98's `classify` takes logarithms and so refuses an interval that reaches
   0, which set W's arithmetic means can give (the entry's own rule); the same rules on the ratios themselves, which
   agree with E98's for positive values (tested).
-- The model's pre-odor level: E98's definition as written (E90's saved pre-odor mean, 'e90') includes the KC layer's
-  start-up (unresolved_issues.md, 2026-11-15 17:48) and which level carries E98's verdict is open, so W1 and W2 are read
-  under all three of E98's (`with_a0`: 'e90', 'settled', 'blank'); W1 is stated when the three agree, otherwise it
-  depends on that choice (verdict.json's W1_by_a0).
+- The model's pre-odor level follows E98's part C as amended 2026-11-15 17:59 (E90's saved pre-odor mean holds the KC
+  layer's start-up, unresolved_issues.md 17:48): the blank's window mean carries, the settled level is a partner (a
+  ratio's class is held only when both give it, `held_class`; otherwise reading-dependent, not decided), E90's level is
+  a literal line; a stimulus not above the level has no ratio; E98's pre-odor identity is checked on every run read
+  (`score` stops if it fails). The flies' other readings (the map-based calyx mean, the block's solvent, without the
+  large solvents, the 1 s pulses; FLIES_VARIANTS) give W1 beside and decide nothing.
 - W2's rule over input estimates is W1's (`ratio_over_estimates`; the entry fixes none for W2). E98's saturating
   indicator reading beside the family for set S is E98's indicator family itself; a saturating form would need a
   saturation constant that the entry does not fix, so none is added.
@@ -1618,7 +1620,20 @@ CARRYING_READING = {'W': 'minus_recording', 'S': 'order_matched', 'H': 'order_ma
 RATIO_RULE = {'W': 'w', 'S': 'e98', 'H': 'e98'}       # `fly_ratio_w` for set W, E98's rule (`fly_ratio_e98`) otherwise
 SET_REFERENCE: Dict[str, Stim] = {'W': ('paa', -3.0), 'S': ('pa', -3.0), 'H': ('paa', -3.431)}
 LABEL_UNSURE = 'label absent or unsure'    # recordings.csv's content for set H's fly without APL label (a control)
-A0_DEFINITIONS = ('e90', 'settled', 'blank')    # E98's definitions of the model's pre-odor level (its open decision)
+# the model's pre-odor level, E98's part C as amended 2026-11-15 17:59 (E98's A0_CARRYING, A0_PARTNER, A0_LITERAL): the
+# blank's window mean carries, the settled level is a partner (a class is held only when both give it), E90's saved
+# pre-odor mean (which holds the KC layer's start-up) is a literal line that decides nothing
+A0_CARRYING, A0_PARTNER, A0_LITERAL = 'blank', 'settled', 'e90'
+A0_DEFINITIONS = (A0_CARRYING, A0_PARTNER, A0_LITERAL)
+CATEGORIES = ('inside', 'flatter', 'steeper')
+
+
+def held_class(by_a0: Dict[str, str]) -> str:
+    """A ratio's class held over the model's pre-odor levels (E98's `held_category` with the settled level as the
+    partner): the carrying level's ('blank') class when it is inside, flatter or steeper and the partner's is the same;
+    otherwise 'reading-dependent' (not decided). The literal level decides nothing."""
+    c = by_a0.get(A0_CARRYING)
+    return c if c in CATEGORIES and by_a0.get(A0_PARTNER) == c else 'reading-dependent'
 KC_DATA_FRACTIONS = ('results', 'E72_wiring_population', 'low_conc', 'data_fractions.csv')
 APL16_IN_SETS = ('pa', 'paa', 'ms', '2h', '2-but')     # the APL16 panel's odors among sets W, S and H (all at 10^-3)
 PANEL_CONC = -3.0
@@ -2219,8 +2234,9 @@ def family_on(b1: pd.DataFrame, a0: str) -> pd.DataFrame:
 def model_classes(on: pd.DataFrame, num: str, den: str, lo: float, hi: float) -> pd.DataFrame:
     """Per wiring, the family's ratio of B1 stimulus `num` over `den` (rows of `on`: wiring, stimulus, win, pre) through
     E98's indicator family (`model_ratio_set`: n 1 to 2.5, the two forms), the linear reading (n 1, evoked) and their
-    classes against the flies' [lo, hi] (`classify_linear`; E98's `stimulus_classes` with that classifier). Ratios that
-    are not finite (an evoked part below 0 raised to a fractional power) are left out of the set and counted."""
+    classes against the flies' [lo, hi] (`classify_linear`; E98's `stimulus_classes` with that classifier). As E98's, a
+    stimulus whose window mean does not exceed the pre-odor level has no ratio (class 'no ratio', in no category).
+    Ratios that are still not finite are left out of the set and counted."""
     from experiments import E98_apl_response_strength as E98
     rows = []
     ok = bool(np.isfinite(lo) and np.isfinite(hi))
@@ -2232,6 +2248,11 @@ def model_classes(on: pd.DataFrame, num: str, den: str, lo: float, hi: float) ->
         p1, p2 = float(g.loc[num, 'pre']), float(g.loc[den, 'pre'])
         if not np.isclose(p1, p2, rtol=1e-9, atol=1e-9):
             raise RuntimeError(f'{w}: the pre-odor levels of {num} and {den} differ ({p1}, {p2})')
+        if not (a1 > p2 and a2 > p2):     # E98's rule (17:59): a stimulus not above the pre-odor level has no ratio
+            rows.append(dict(wiring=w, numerator=num, denominator=den, a_num=a1, a_den=a2, a0=p2, ratio_linear=np.nan,
+                             ratio_min=np.nan, ratio_max=np.nan, n_nonfinite=0, flies_lo90=lo, flies_hi90=hi,
+                             cls='no ratio', cls_linear='no ratio'))
+            continue
         with np.errstate(invalid='ignore', divide='ignore'):
             rs = E98.model_ratio_set(a1, a2, p2)['ratio'].to_numpy(float)
             lin = float(E98.indicator_ratio(a1, a2, p2, 1.0, 'evoked'))
@@ -2328,20 +2349,33 @@ def _flies_row(ratios: pd.DataFrame, set_: str, num: Stim, den: Stim, src: str =
     return r.iloc[0] if len(r) and r['n_flies'].iloc[0] > 0 else None
 
 
+# the flies' readings each ratio is classed under: (key, calyx response, reading (None: the set's carrying one), subset);
+# 'yang' (Yang's table, the carrying reading, all recordings) decides, the others are beside and decide nothing
+FLIES_VARIANTS: Tuple[Tuple[str, str, Optional[str], str], ...] = (
+    ('yang', CALYX_RESPONSE, None, 'all'), ('maps', 'maps', None, 'all'),
+    ('minus_block', CALYX_RESPONSE, 'minus_block', 'all'),
+    ('without_large_solvent', CALYX_RESPONSE, None, 'without_large_solvent'),
+    ('pulse_1s', CALYX_RESPONSE, None, 'pulse_1s'))
+
+
 def score(a0s: Sequence[str] = A0_DEFINITIONS) -> dict:
     """The verdict as far as parts A2 and B allow (W1 and W2; W3 waits on part D, on hold with the connectome tables):
-    reads part B's tables and B1's runs on the eight wirings (`read_e98_b1`), and writes
-    - score_family_ratios.csv: per set, stimulus with B1 input and its set's reference, calyx response, pre-odor level
-      (`a0s`, E98's three definitions) and input estimate, each wiring's ratio through E98's indicator family and its
-      class against the flies' interval under the set's carrying reading (all recordings);
-    - score_ratio_classes.csv: per set, stimulus, calyx response and pre-odor level the class over estimates;
+    reads part B's tables and B1's runs on the eight wirings (`read_e98_b1`), checks E98's pre-odor identity on every run
+    (`a0_identity_table`: the blank's window within 0.5 % of the settled level; it stops if one fails, as E98's part C
+    does), and writes
+    - score_a0_identity.csv: that check per wiring and condition;
+    - score_family_ratios.csv: per set, stimulus with B1 input and its set's reference, flies' reading (FLIES_VARIANTS),
+      model pre-odor level (`a0s`) and input estimate, each wiring's ratio through E98's indicator family and its class
+      against the flies' interval;
+    - score_ratio_classes.csv: per set, stimulus, flies' reading and pre-odor level the class over estimates, and the
+      class held over the carrying and partner levels (`held_class`);
     - score_weak_table.csv: per stimulus of set W (and set S's W2 stimuli) the flies' ratio over the set's reference
       (Yang's table, the carrying reading; the map-based reading, the block's solvent and farn at 10^-2 beside), the
-      family's ratios (linear and through the indicator family, over wirings and estimates), the family's KC response
-      rates with APL on and off, and the flies' KC response rates (`kc_data_rates`);
-    - verdict.json: W1 (under each pre-odor level; E98's definition as written, 'e90', first), W1 under the map-based
-      reading beside (decides nothing), W2 (described: `w2_verdict`), W3 (waits), the outcomes reached and part C's
-      descriptions (f) and (g) when c_summary.json is there."""
+      family's ratios (linear and through the indicator family, over wirings and estimates; carrying level), the
+      family's KC response rates with APL on and off, and the flies' KC response rates (`kc_data_rates`);
+    - verdict.json: W1 (the held classes of the six ratios, `w1_verdict`), W1 under each level alone and under the other
+      flies' readings beside (deciding nothing), W2 (`w2_verdict` of its held classes), W3 (waits), the outcomes reached
+      and part C's descriptions (f) and (g) when c_summary.json is there."""
     from experiments import E98_apl_response_strength as E98
     out = out_dir()
     ratios = pd.read_csv(out / 'b_ratios.csv')
@@ -2349,80 +2383,82 @@ def score(a0s: Sequence[str] = A0_DEFINITIONS) -> dict:
     recs_b = pd.read_csv(out / 'b_recordings.csv')
     b1 = read_e98_b1()
     sources, e101 = b1.attrs.get('sources'), b1.attrs.get('e101')
+    ident = E98.a0_identity_table(b1)
+    ident.to_csv(out / 'score_a0_identity.csv', index=False)
+    if not ident['passes'].all():
+        raise RuntimeError(f"E98's pre-odor identity fails on {ident.loc[~ident['passes'], ['wiring', 'cond']].values.tolist()}")
     stims = sorted({(o, float(c)) for o, c in zip(per_stim['odor'], per_stim['conc'])})
     inputs = session_inputs()
     matched = match_b1(b1, stims, inputs)
     fam_rows, cls_rows, weak_rows = [], [], []
     results: Dict[Tuple[str, str, str, str, str], dict] = {}
+
+    def one(on, a0, set_, key, st, ref, f, nums, d):
+        res, rows = read_ratio(on, float(f['lo90']), float(f['hi90']), nums, d)
+        results[(a0, set_, key, stim_label(st), stim_label(ref))] = res
+        if len(rows):
+            fam_rows.append(rows.assign(set=set_, a0_definition=a0, flies_reading=key, stimulus=stim_label(st),
+                                        reference=stim_label(ref), flies_ratio=float(f['ratio'])))
+        lin = rows['ratio_linear'] if len(rows) else pd.Series(dtype=float)
+        cls_rows.append(dict(set=set_, a0_definition=a0, flies_reading=key, stimulus=stim_label(st),
+                             reference=stim_label(ref), flies_ratio=float(f['ratio']), flies_lo90=float(f['lo90']),
+                             flies_hi90=float(f['hi90']), flies_mean=f['mean'], n_flies=int(f['n_flies']),
+                             cls=res['cls'], cls_linear=res['cls_linear'], per_estimate=json.dumps(res['per_estimate']),
+                             linear_per_estimate=json.dumps(res['linear_per_estimate']),
+                             n_no_ratio=int((rows['cls'] == 'no ratio').sum()) if len(rows) else 0,
+                             linear_min=float(lin.min()) if len(lin) else np.nan,
+                             linear_max=float(lin.max()) if len(lin) else np.nan,
+                             family_min=float(rows['ratio_min'].min()) if len(rows) else np.nan,
+                             family_max=float(rows['ratio_max'].max()) if len(rows) else np.nan))
+
     for a0 in a0s:
         on = family_on(b1, a0)
         for set_, ref in SET_REFERENCE.items():
             den = estimate_labels(matched, ref)
-            for src in CALYX_RESPONSES:
+            # the reference's input is the APL16 panel's own where it is one (paa at 10^-3 -> 10^-4, pa at 10^-3)
+            d = (den.get(next((k for k, v in den.items() if v in H.APL16_ODORS), None)) or next(iter(den.values()))
+                 if den else None)
+            for key, src, rd, sub in FLIES_VARIANTS:
                 for st in stims:
-                    f = _flies_row(ratios, set_, st, ref, src)
+                    f = _flies_row(ratios, set_, st, ref, src, rd, sub)
                     nums = estimate_labels(matched, st)
-                    if f is None or not nums or not den:
-                        continue
-                    # the reference's input is the APL16 panel's own where it is one (paa at 10^-3 -> 10^-4, pa at 10^-3)
-                    d = den.get(next((k for k, v in den.items() if v in H.APL16_ODORS), None)) or next(iter(den.values()))
-                    res, rows = read_ratio(on, float(f['lo90']), float(f['hi90']), nums, d)
-                    results[(a0, set_, src, stim_label(st), stim_label(ref))] = res
-                    fam_rows.append(rows.assign(set=set_, a0_definition=a0, calyx_response=src, stimulus=stim_label(st),
-                                                reference=stim_label(ref), flies_ratio=float(f['ratio'])))
-                    cls_rows.append(dict(set=set_, a0_definition=a0, calyx_response=src, stimulus=stim_label(st),
-                                         reference=stim_label(ref), flies_ratio=float(f['ratio']),
-                                         flies_lo90=float(f['lo90']), flies_hi90=float(f['hi90']), flies_mean=f['mean'],
-                                         n_flies=int(f['n_flies']), cls=res['cls'], cls_linear=res['cls_linear'],
-                                         per_estimate=json.dumps(res['per_estimate']),
-                                         linear_per_estimate=json.dumps(res['linear_per_estimate']),
-                                         linear_min=float(rows['ratio_linear'].min()),
-                                         linear_max=float(rows['ratio_linear'].max()),
-                                         family_min=float(rows['ratio_min'].min()),
-                                         family_max=float(rows['ratio_max'].max())))
+                    if f is not None and nums and d is not None:
+                        one(on, a0, set_, key, st, ref, f, nums, d)
             if set_ == 'W':   # W1's beside: over farn at 10^-2, each estimate over the same session's farn
                 fden = estimate_labels(matched, W1_BESIDE_DENOMINATOR)
                 for st in W1_RATIOS:
                     f = _flies_row(ratios, 'W', st, W1_BESIDE_DENOMINATOR)
-                    if st == W1_BESIDE_DENOMINATOR or f is None:
-                        continue
-                    res, rows = read_ratio(on, float(f['lo90']), float(f['hi90']), estimate_labels(matched, st), fden)
-                    results[(a0, 'W', CALYX_RESPONSE, stim_label(st), stim_label(W1_BESIDE_DENOMINATOR))] = res
-                    if len(rows):
-                        fam_rows.append(rows.assign(set='W', a0_definition=a0, calyx_response=CALYX_RESPONSE,
-                                                    stimulus=stim_label(st), reference=stim_label(W1_BESIDE_DENOMINATOR),
-                                                    flies_ratio=float(f['ratio'])))
-                    cls_rows.append(dict(set='W', a0_definition=a0, calyx_response=CALYX_RESPONSE, stimulus=stim_label(st),
-                                         reference=stim_label(W1_BESIDE_DENOMINATOR), flies_ratio=float(f['ratio']),
-                                         flies_lo90=float(f['lo90']), flies_hi90=float(f['hi90']), flies_mean=f['mean'],
-                                         n_flies=int(f['n_flies']), cls=res['cls'], cls_linear=res['cls_linear'],
-                                         per_estimate=json.dumps(res['per_estimate']),
-                                         linear_per_estimate=json.dumps(res['linear_per_estimate'])))
+                    if st != W1_BESIDE_DENOMINATOR and f is not None:
+                        one(on, a0, 'W', 'yang', st, W1_BESIDE_DENOMINATOR, f, estimate_labels(matched, st), fden)
     fam = pd.concat(fam_rows, ignore_index=True)
     cls = pd.DataFrame(cls_rows)
+
+    def c_(a0, set_, key, num, den):
+        return results.get((a0, set_, key, stim_label(num), stim_label(den)), {}).get('cls', 'not read')
+
+    def held(set_, key, num, den):
+        return held_class({a0: c_(a0, set_, key, num, den) for a0 in a0s})
+
+    cls['held'] = [held(r.set, r.flies_reading, parse_stim(r.stimulus), parse_stim(r.reference)) for r in cls.itertuples()]
     fam.to_csv(out / 'score_family_ratios.csv', index=False)
     cls.to_csv(out / 'score_ratio_classes.csv', index=False)
-
-    def c_(a0, set_, src, num, den):
-        return results.get((a0, set_, src, stim_label(num), stim_label(den)), {}).get('cls', 'not read')
-
-    w1 = {}
+    w1_classes = {stim_label(s): held('W', 'yang', s, W1_DENOMINATOR) for s in W1_RATIOS}
+    w1_beside = {}
+    for key, *_ in FLIES_VARIANTS:
+        cl = {stim_label(s): held('W', key, s, W1_DENOMINATOR) for s in W1_RATIOS}
+        w1_beside[key] = dict(W1=w1_verdict(cl), classes=cl)
+    w1_by_a0 = {}
     for a0 in a0s:
-        for src in CALYX_RESPONSES:
-            classes = {stim_label(s): c_(a0, 'W', src, s, W1_DENOMINATOR) for s in W1_RATIOS}
-            w1[(a0, src)] = dict(W1=w1_verdict(classes), classes=classes)
-    w1_main = {a0: w1[(a0, CALYX_RESPONSE)]['W1'] for a0 in a0s}
-    agree = len(set(w1_main.values())) == 1
+        cl = {stim_label(s): c_(a0, 'W', 'yang', s, W1_DENOMINATOR) for s in W1_RATIOS}
+        w1_by_a0[a0] = dict(W1=w1_verdict(cl), classes=cl)
     w2 = {}
-    for a0 in a0s:
-        d = {}
-        for name, num, den in W2_RATIOS:
-            f = _flies_row(ratios, 'S', num, den)
-            comp = c_(a0, 'S', CALYX_RESPONSE, num, den)
-            d[name] = dict(comparison=comp, n_flies=int(f['n_flies']) if f is not None else 0,
-                           verdict=w2_verdict(comp, int(f['n_flies']) if f is not None else 0),
-                           flies=[float(f['ratio']), float(f['lo90']), float(f['hi90'])] if f is not None else None)
-        w2[a0] = d
+    for name, num, den in W2_RATIOS:
+        f = _flies_row(ratios, 'S', num, den)
+        hc = held('S', 'yang', num, den)
+        nf = int(f['n_flies']) if f is not None else 0
+        w2[name] = dict(held=hc, by_a0={a0: c_(a0, 'S', 'yang', num, den) for a0 in a0s}, n_flies=nf,
+                        verdict=w2_verdict(hc, nf),
+                        flies=[float(f['ratio']), float(f['lo90']), float(f['hi90'])] if f is not None else None)
     # the weak table: set W's stimuli over paa at 10^-3, set S's W2 stimuli over pa at 10^-3
     for set_, ref, todo in (('W', W1_DENOMINATOR, [s for s in SET_W_STIMULI if s != W1_DENOMINATOR] + [W1_DENOMINATOR]),
                             ('S', ('pa', -3.0), [('ms', -3.0), ('paa', -3.0), ('pa', -3.0)])):
@@ -2444,13 +2480,13 @@ def score(a0s: Sequence[str] = A0_DEFINITIONS) -> dict:
                     if f is not None:
                         row.update(over_farn2_ratio=f['ratio'], over_farn2_lo90=f['lo90'], over_farn2_hi90=f['hi90'])
                 for a0 in a0s:
-                    x = cls[(cls['set'] == set_) & (cls['a0_definition'] == a0) & (cls['calyx_response'] == CALYX_RESPONSE)
+                    x = cls[(cls['set'] == set_) & (cls['a0_definition'] == a0) & (cls['flies_reading'] == 'yang')
                             & (cls['stimulus'] == stim_label(st)) & (cls['reference'] == stim_label(ref))]
                     if len(x):
                         row.update({f'family_linear_min_{a0}': x['linear_min'].iloc[0],
                                     f'family_linear_max_{a0}': x['linear_max'].iloc[0],
                                     f'family_min_{a0}': x['family_min'].iloc[0], f'family_max_{a0}': x['family_max'].iloc[0],
-                                    f'cls_{a0}': x['cls'].iloc[0]})
+                                    f'cls_{a0}': x['cls'].iloc[0], 'held': x['held'].iloc[0]})
             ps = per_stim[(per_stim['set'] == set_) & (per_stim['stim'] == stim_label(st)) & ~per_stim['label_unsure']]
             row.update(yang_raw_median=float(ps['yang_raw'].median()) if len(ps) else np.nan,
                        map_over_yang_median=float(ps['map_over_yang_raw'].median()) if len(ps) else np.nan,
@@ -2468,12 +2504,11 @@ def score(a0s: Sequence[str] = A0_DEFINITIONS) -> dict:
     rw = recs_b[(recs_b['set'] == 'W') & ~recs_b['label_unsure']]
     verdict = dict(
         calyx_response=CALYX_RESPONSE, carrying_reading=CARRYING_READING, a0_definitions=list(a0s),
-        W1=next(iter(w1_main.values())) if agree else "depends on the model's pre-odor level (E98's open choice)",
-        W1_by_a0=w1_main, W1_agrees_over_a0=agree,
-        W1_classes={a0: w1[(a0, CALYX_RESPONSE)]['classes'] for a0 in a0s},
-        W1_maps_beside={a0: w1[(a0, 'maps')] for a0 in a0s},
-        W1_over_farn2_described={a0: {stim_label(s): c_(a0, 'W', CALYX_RESPONSE, s, W1_BESIDE_DENOMINATOR)
-                                      for s in W1_RATIOS if s != W1_BESIDE_DENOMINATOR} for a0 in a0s},
+        a0_carrying=A0_CARRYING, a0_partner=A0_PARTNER, a0_literal=A0_LITERAL,
+        W1=w1_verdict(w1_classes), W1_classes=w1_classes, W1_by_a0=w1_by_a0, W1_beside_flies_readings=w1_beside,
+        W1_over_farn2_described={stim_label(s): held('W', 'yang', s, W1_BESIDE_DENOMINATOR)
+                                 for s in W1_RATIOS if s != W1_BESIDE_DENOMINATOR},
+        a0_identity_passes=bool(ident['passes'].all()),
         W2=w2, W3='waits: part D is on hold with the connectome tables (rule of 2026-11-15 15:35)',
         set_w_solvent=dict(yang_median=float(rw['solvent'].median()), yang_min=float(rw['solvent'].min()),
                            yang_max=float(rw['solvent'].max()), n_large=int(rw['large_solvent'].sum()),
@@ -2481,7 +2516,7 @@ def score(a0s: Sequence[str] = A0_DEFINITIONS) -> dict:
         b1_sources=sources, b1_e101=e101, time=time.strftime('%Y-%m-%d %H:%M'), host=_host(),
         commits=dict(H.code_commits()))
     oc = []
-    w2_all = [v['verdict'] for d in w2.values() for v in d.values()]
+    w2_all = [v['verdict'] for v in w2.values()]
     if verdict['W1'] == 'inside' and w2_all and all(v == 'inside' for v in w2_all):
         oc.append('a')
     if verdict['W1'] == 'flatter':
