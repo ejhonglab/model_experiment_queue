@@ -422,9 +422,10 @@ def convert_body(md: str, figdir: Optional[Path] = None, *, byline: bool = True,
             out.append('\n'.join(t)); continue
         m = _ITEM_RE.match(s)
         if m:
-            start = int(m.group(1)); items = []
+            start = int(m.group(1)); items = []; nums = []
             base = _indent(ln)
             while i < len(lines) and _ITEM_RE.match(lines[i].strip()):
+                nums.append(int(_ITEM_RE.match(lines[i].strip()).group(1)))
                 item = text_html(take_item(_ITEM_RE.match(lines[i].strip()).group(2)))
                 if nested_items:
                     sub = take_nested(base)
@@ -434,7 +435,11 @@ def convert_body(md: str, figdir: Optional[Path] = None, *, byline: bool = True,
                 while i < len(lines) and lines[i].strip() == '' and i + 1 < len(lines) \
                         and _ITEM_RE.match(lines[i + 1].strip()):
                     i += 1   # blank line between items of the same list
-            out.append(f'<ol start="{start}">' + ''.join(f'<li>{x}</li>' for x in items) + '</ol>')
+            # an item whose source number is not the next one keeps it (`value`), so that a list whose numbers
+            # jump (e.g. questions 11, 12, 19, 20 in one section) is not renumbered by the browser
+            out.append(f'<ol start="{start}">' + ''.join(
+                f'<li value="{n}">{x}</li>' if n != start + k else f'<li>{x}</li>'
+                for k, (n, x) in enumerate(zip(nums, items))) + '</ol>')
             continue
         m = _BULLET_RE.match(s)
         if m:

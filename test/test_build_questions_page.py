@@ -85,3 +85,22 @@ def test_cli_newest_questions(tmp_path):
     r = subprocess.run([sys.executable, str(SCRIPT), str(bad), '--out', str(out)], cwd=str(REPO),
         capture_output=True, text=True, env=dict(os.environ, KC_REMAPPING_SHARED=str(shared)))
     assert r.returncode != 0 and 'questions_<YYYY-MM-DD_HHMM>.md' in r.stderr
+
+
+def test_jumping_numbers_kept():
+    """Questions whose numbers jump inside one section (11, 12, 19, 20) keep their numbers on the page: the items after
+    the jump carry `value`, so the browser does not renumber them 13 and 14 (found 2026-11-15 17:58, questions 19 and 20
+    shown as a second 13 and 14)."""
+    md = ("# Q\n\nIntro.\n\n## Section\n\n11. **A.** a?\n12. **B.** b?\n19. **C.** c?\n20. **D.** d?\n\n"
+          "## Next\n\n13. **E.** e?\n")
+    page = M.convert_markdown(md, None, nested_items=True)
+    assert '<ol start="11">' in page
+    assert '<li value="19">' in page and '<li value="20">' in page
+    assert '<li value="11">' not in page and '<li value="12">' not in page
+    assert '<ol start="13"><li>' in page
+
+
+def test_consecutive_numbers_unchanged():
+    """A list with consecutive numbers renders exactly as before (no `value` attributes)."""
+    page = M.convert_markdown("# Q\n\nIntro.\n\n1. one\n2. two\n3. three\n", None)
+    assert 'value=' not in page and '<ol start="1"><li>' in page
