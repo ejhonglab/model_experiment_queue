@@ -462,3 +462,30 @@ def test_with_a0_definitions():
         M.with_a0(b, 'other')
     with pytest.raises(RuntimeError):
         M.with_a0(b.assign(pre_settled=np.nan), 'settled')
+
+
+def test_load_b1_all_takes_e101_where_e98_has_not_run(tmp_path):
+    labels = list(H.APL16_ODORS) + [M.V2_NUM, M.BLANK_LABEL]
+    kc = pd.Index(np.arange(5), name='kc_id')
+    gl = pd.Index(['DL1'], name='glomerulus')
+    own = tmp_path / 'own'
+    own.mkdir()
+    for ct in ('on', 'acute_off'):
+        o = dict(responses=pd.DataFrame(np.eye(5, len(labels)), index=kc, columns=labels),
+                 spike_counts=pd.DataFrame(np.eye(5, len(labels)), index=kc, columns=labels),
+                 pn_win=pd.DataFrame(1.0, index=gl, columns=labels), pn_pre=pd.DataFrame(0.5, index=gl, columns=labels),
+                 apl=pd.DataFrame(dict(win=np.arange(len(labels)) + 8.0, pre=8.0, pre_settled=8.5),
+                                  index=pd.Index(labels, name='stimulus')))
+        M.save_b1(own, 'real', ct, o)
+    b = M.load_b1(['real'], roots=[own])
+    e = pd.concat([b, b.assign(wiring='P1')], ignore_index=True)
+    f = tmp_path / 'a3_apl.csv'
+    e.to_csv(f, index=False)
+    out = M.load_b1_all(['real', 'P1', 'P2'], roots=[own], e101_path=f)
+    assert out.attrs['sources'] == {'real': 'E98', 'P1': 'E101'}
+    assert out.attrs['missing'] == [('P2', 'acute_off'), ('P2', 'on')]
+    assert out.attrs['e101']['overlap_check']['real']['max_abs_diff'] == 0.0
+    e.loc[(e['wiring'] == 'real') & (e['stimulus'] == 'paa'), 'win'] += 1e-9
+    e.to_csv(f, index=False)
+    with pytest.raises(RuntimeError):
+        M.load_b1_all(['real', 'P1'], roots=[own], e101_path=f)

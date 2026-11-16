@@ -71,6 +71,9 @@ Parts (CLI `--part`):
     against E38's drosolf table, `hallem_identity`); the blank. The saved layout and its reader, `load_b1` (which E100
     uses), are described in B1_LAYOUT. With B1 the KCs' response rate to the blank, APL on and off, against the flies'
     solvent.
+    E101's part A3 ran B1's 52 stimuli on all eight wirings (hal, 2026-11-15) through `ExtendedRun`; `load_b1_all` takes
+    the wirings E98 has not run from its table (results/E101_apl_vs_kc_claws/a3_apl.csv, sha256 and commits recorded),
+    after checking that it equals E98's own runs exactly where both exist (the real wiring).
   - B2 to B4 on the real wiring (`run_point_b`, `point_spec`, POINT_NAMES), each on B1's stimuli (the runs of
     2026-11-15 on the 46 without Hallem's rows below 10^-2, which came after) and checked on the 16
     panel odors against its source's saved run (0 differences): B2 C2 with the 1 s pulse (E80's C2_pulse1_fixed; APL's
@@ -1162,6 +1165,64 @@ def load_b1(wirings: Sequence[str] = ALL_WIRINGS, roots: Optional[Sequence[Path]
     return df
 
 
+E101_A3_TABLE = ('results', 'E101_apl_vs_kc_claws', 'a3_apl.csv')
+E101_A3_PROVENANCE = ('results', 'E101_apl_vs_kc_claws', 'provenance_A3.json')
+B1_COMPARE_COLS = ('win', 'pre', 'pre_settled', 'response_rate')
+
+
+def load_b1_e101(path: Optional[Path] = None) -> Tuple[pd.DataFrame, dict]:
+    """B1's stimuli as E101's part A3 ran them on the eight wirings (hal, 2026-11-15; E98's `ExtendedRun` and `save_b1`,
+    its table written by E98's `load_b1`): results/E101_apl_vs_kc_claws/a3_apl.csv, `load_b1`'s rows, and its record
+    (path, sha256, E101's A3 provenance: the commits of the runs and of the table)."""
+    path = H.shared_dir().joinpath(*E101_A3_TABLE) if path is None else Path(path)
+    import hashlib
+    b = pd.read_csv(path, float_precision='round_trip')
+    prov = _read_json(H.shared_dir().joinpath(*E101_A3_PROVENANCE)) or {}
+    rec = dict(path=str(path), sha256=hashlib.sha256(Path(path).read_bytes()).hexdigest(),
+               runs=[dict(commits=r.get('commits'), host=r.get('host'), time=r.get('time'), runs_only=r.get('runs_only'))
+                     for r in prov.get('runs', [])])
+    b['file'] = f'E101:{Path(path).name}'
+    return b, rec
+
+
+def load_b1_all(wirings: Sequence[str] = ALL_WIRINGS, e101: bool = True, roots: Optional[Sequence[Path]] = None,
+                e101_path: Optional[Path] = None) -> pd.DataFrame:
+    """B1's rows (`load_b1`'s columns) on `wirings`: E98's own runs where they exist (`b1_roots`), the other wirings from
+    E101's A3 (`load_b1_e101`) when `e101`. On every wiring both have, the two must agree exactly (B1_COMPARE_COLS on
+    every condition and stimulus), else it raises. attrs: 'missing', 'sources' ({wiring: 'E98' / 'E101'}), 'e101' (the
+    record and the overlap's check)."""
+    try:
+        own = load_b1(wirings, roots)
+    except NotImplementedError:
+        own = pd.DataFrame(columns=['wiring'])
+    have = set(own['wiring']) if len(own) else set()
+    parts, sources, check = ([own] if len(own) else []), {w: 'E98' for w in have}, {}
+    rec = None
+    if e101:
+        eb, rec = load_b1_e101(e101_path)
+        for w in sorted(have & set(eb['wiring'])):
+            a = own[own['wiring'] == w].set_index(['cond', 'stimulus'])[list(B1_COMPARE_COLS)].sort_index()
+            b = eb[eb['wiring'] == w].set_index(['cond', 'stimulus'])[list(B1_COMPARE_COLS)].sort_index()
+            same_idx = a.index.equals(b.index)
+            d = float((a - b).abs().to_numpy().max()) if same_idx else float('nan')
+            check[w] = dict(index_equal=bool(same_idx), max_abs_diff=d, n=int(len(a)))
+            if not same_idx or d != 0.0:
+                raise RuntimeError(f"{w}: E101's A3 rows differ from E98's B1 run: {check[w]}")
+        add = [w for w in wirings if w not in have and w in set(eb['wiring'])]
+        if add:
+            parts.append(eb[eb['wiring'].isin(add)])
+            sources.update({w: 'E101' for w in add})
+    if not parts:
+        raise NotImplementedError("no B1 runs (E98's or E101's)")
+    out = pd.concat(parts, ignore_index=True)
+    out = out[out['wiring'].isin(wirings)]
+    out.attrs['missing'] = sorted(set((w, ct) for w in wirings for _, ct in CONDS)
+                                  - set(zip(out['wiring'], out['cond'])))
+    out.attrs['sources'] = sources
+    out.attrs['e101'] = dict(record=rec, overlap_check=check)
+    return out
+
+
 def run_b1(label: str, root: Optional[Path] = None, force: bool = False) -> Dict[str, dict]:
     """B1 on one wiring: build the extended input (`b1_input`), run APL on and acutely off (`ExtendedRun`), save the
     outputs under `b_root(root)`/B1/ (B1_LAYOUT) with b1_stimuli.csv and a runs.csv row per condition, and the run's
@@ -1250,11 +1311,44 @@ def b1_identity(label: str, roots: Optional[Sequence[Path]] = None) -> dict:
     return res
 
 
-def run_identity(label: str) -> dict:
-    """Part 0's run identities on one wiring (`b1_identity`) from its saved B1 run, run here first (`run_b1`, the local
-    outputs) when no root holds it."""
-    if load_b1_run(label) is None:
-        run_b1(label)
+def b1_identity_e101(label: str) -> dict:
+    """Part 0's run identities of a wiring that E98 has not run, from E101's part A3 (`load_b1_e101`; E101's
+    a3_identity.json for the 16 odors' counts and responses against the saved fit): APL's window and pre-odor means on
+    the 16 panel odors against E90's saved ones, and the blank's evoked APL, as `b1_identity`."""
+    eb, rec = load_b1_e101()
+    ident = (_read_json(H.shared_dir() / 'results' / 'E101_apl_vs_kc_claws' / 'a3_identity.json') or {}).get(label, {})
+    res = dict(wiring=label, source='E101 A3', e101_table_sha256=rec['sha256'])
+    for c, ct in CONDS:
+        g = eb[(eb['wiring'] == label) & (eb['cond'] == ct)].set_index('stimulus')
+        e90 = pd.read_csv(e90_dir(f'{label}_{ct}') / f'{label}_{ct}_apl.csv', index_col=0)
+        a = g.loc[list(H.APL16_ODORS)]
+        b = g.loc[BLANK_LABEL]
+        ie = ident.get(c, {})
+        res[c] = dict(counts_differ=ie.get('counts_differ'), responses_differ=ie.get('responses_differ'),
+                      apl_win_max_abs_diff=float((a['win'] - e90.loc[list(H.APL16_ODORS), 'win']).abs().max()),
+                      apl_pre_max_abs_diff=float((a['pre'] - e90.loc[list(H.APL16_ODORS), 'pre']).abs().max()),
+                      apl_mean_win=float(a['win'].mean()), apl_pre_share=float(a['pre'].mean() / a['win'].mean()),
+                      blank_evoked=float(b['win'] - b['pre']), blank_evoked_settled=float(b['win'] - b['pre_settled']),
+                      blank_response_rate=float(b['response_rate']), n_stimuli=int(len(g)))
+    res['reproduces'] = bool(all(res[c]['counts_differ'] == 0 and res[c]['responses_differ'] == 0
+                                 and res[c]['apl_win_max_abs_diff'] <= APL_TOL and res[c]['apl_pre_max_abs_diff'] <= APL_TOL
+                                 for c, _ in CONDS))
+    res['blank_zero'] = bool(abs(res['on']['blank_evoked']) <= APL_TOL)
+    res['exact'] = bool(res['reproduces'] and res['blank_zero'])
+    return res
+
+
+def run_identity(label: str, run: bool = True) -> dict:
+    """Part 0's run identities on one wiring: from E98's saved B1 run (`b1_identity`); else from E101's A3
+    (`b1_identity_e101`); else run here first (`run_b1`, the local outputs) when `run`."""
+    if load_b1_run(label) is not None:
+        return b1_identity(label)
+    eb, _ = load_b1_e101()
+    if label in set(eb['wiring']):
+        return b1_identity_e101(label)
+    if not run:
+        raise RuntimeError(f'{label}: no B1 run')
+    run_b1(label)
     return b1_identity(label)
 
 
@@ -2226,10 +2320,11 @@ def part_c(wirings: Sequence[str] = ALL_WIRINGS, allow_missing: bool = False, a0
     if a0 is None:
         raise RuntimeError("part C needs the definition of the model's pre-odor level (--a0 e90|settled|blank): the blank "
                            "identity fails with E90's window (the KC layer's start-up), so the definition waits on a decision")
-    b1 = load_b1(wirings)
+    b1 = load_b1_all(wirings)
     missing = b1.attrs.get('missing') or []
     if missing and not allow_missing:
         raise RuntimeError(f'B1 runs missing: {missing}')
+    b1_sources = dict(sources=b1.attrs.get('sources'), e101=b1.attrs.get('e101'))
     b1 = with_a0(b1, a0)
     recs = load_recordings()
     resp = stimulus_responses(recs)
@@ -2251,7 +2346,7 @@ def part_c(wirings: Sequence[str] = ALL_WIRINGS, allow_missing: bool = False, a0
     out = out_dir()
     comps.to_csv(out / 'c_comparisons.csv', index=False)
     rows.to_csv(out / 'c_wirings.csv', index=False)
-    verdict.update(a0=a0, reading_sets={k: dict(reading=reading_label(v[0]), subset=v[1]) for k, v in READING_SETS.items()},
+    verdict.update(a0=a0, b1_sources=b1_sources, reading_sets={k: dict(reading=reading_label(v[0]), subset=v[1]) for k, v in READING_SETS.items()},
                    wirings=sorted(set(b1['wiring'])), missing_runs=missing, time=time.strftime('%Y-%m-%d %H:%M'),
                    host=_host(), commits=dict(H.code_commits()))
     _write_json(out / 'verdict.json', verdict)
