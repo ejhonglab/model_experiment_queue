@@ -311,12 +311,15 @@ def blank_identity(resp: pd.DataFrame) -> float:
 
 
 def value_at(concs: Sequence[float], values: Sequence[float], c: float,
-             design_range: Optional[Tuple[float, float]] = None) -> Tuple[float, str]:
+             design_range: Optional[Tuple[float, float]] = None,
+             design_concs: Optional[Sequence[float]] = None) -> Tuple[float, str]:
     """A recording's response at log10 concentration `c` from its imaged concentrations `concs` and responses `values`:
     ('imaged') if imaged; ('interpolated') linear on log10 concentration between its two imaged neighbours inside its
     imaged range; ('substituted') the nearest imaged end when `c` is outside the series' `design_range` (default the
     recording's own range) and within MATCH_LOG_UNITS of that end, inclusive; otherwise NaN ('outside', or 'missing'
-    when `c` is inside the design range but outside the recording's own)."""
+    when `c` is inside the design range but outside the recording's own, or, with `design_concs` (the series' imaged
+    concentrations, part D), when a design concentration between the two neighbours was not imaged in this recording: a
+    stimulus whose block is left out was not imaged)."""
     x = np.asarray(concs, dtype=float)
     y = np.asarray(values, dtype=float)
     if x.size == 0:
@@ -331,6 +334,10 @@ def value_at(concs: Sequence[float], values: Sequence[float], c: float,
         return float(y[hit[0]]), 'imaged'
     lo, hi = float(x[0]), float(x[-1])
     if lo < c < hi:
+        if design_concs is not None:
+            a, b = float(x[x < c].max()), float(x[x > c].min())
+            if any(a + CONC_TOL < float(d) < b - CONC_TOL for d in design_concs):
+                return np.nan, 'missing'
         return float(np.interp(c, x, y)), 'interpolated'
     dlo, dhi = design_range if design_range is not None else (lo, hi)
     if dlo - CONC_TOL <= c <= dhi + CONC_TOL:
@@ -401,14 +408,20 @@ def _stim(s: Stim) -> str:
 
 
 def flies_ratios(resp: pd.DataFrame, reading: Tuple[str, bool] = MAIN_READING, subset: str = 'all',
-                 ratios=RATIOS) -> Tuple[pd.DataFrame, pd.DataFrame]:
+                 ratios=RATIOS, ranges: Optional[Dict[str, Tuple[float, float]]] = None,
+                 recordings: Optional[Sequence[str]] = None,
+                 design: Optional[Dict[str, Sequence[float]]] = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """A3: every ratio of `ratios` under one reading and subset of the recordings: (one row per ratio, per recording
     rows with each response, how it was read and whether the recording entered). The one-log rule stands in a
     recording's end for a concentration outside the series' design range (`value_at`), or, in subset
     'all_recording_ranges', outside the recording's own range (ms at 10^-3 then reads ms at 10^-3.431 in the two
-    recordings without ms at 10^-2)."""
-    dr = design_ranges(resp) if subset != 'all_recording_ranges' else {}
-    keep = set(subset_recordings(resp, subset))
+    recordings without ms at 10^-2). `ranges` gives the design ranges, `design` the design's concentrations per odor
+    (part D passes the 12's: their ranges, and a reading that needs a design concentration the recording did not image is
+    missing, `value_at`), `recordings` an explicit list of recordings in place of `subset`'s."""
+    if design is not None and ranges is None:
+        ranges = {o: (min(v), max(v)) for o, v in design.items()}
+    dr = (design_ranges(resp) if ranges is None else dict(ranges)) if subset != 'all_recording_ranges' else {}
+    keep = set(subset_recordings(resp, subset)) if recordings is None else set(recordings)
     r = _reading(resp, reading)
     r = r[r['recording'].isin(keep)]
     rec_rows, rows = [], []
@@ -419,7 +432,7 @@ def flies_ratios(resp: pd.DataFrame, reading: Tuple[str, bool] = MAIN_READING, s
                        pulse_s=float(g['pulse_s'].iloc[0]))
             for side, (o, c) in (('num', num), ('den', den)):
                 go = g[g['odor'] == o]
-                v, how = value_at(go['conc'], go['response'], c, dr.get(o))
+                v, how = value_at(go['conc'], go['response'], c, dr.get(o), None if design is None else design.get(o))
                 row[f'{side}_value'], row[f'{side}_how'] = v, how
             row['entered'] = bool(np.isfinite(row['num_value']) and np.isfinite(row['den_value'])
                                   and row['num_value'] > MIN_RESPONSE and row['den_value'] > MIN_RESPONSE)
@@ -2368,6 +2381,631 @@ def part_c(wirings: Sequence[str] = ALL_WIRINGS, allow_missing: bool = False, a0
     return verdict
 
 
+# ---------------------------------------------------------------------------
+# part D: Yang's 2021 recordings outside the 12 (the entry's (C) as amended 2026-11-15 17:50)
+
+D_FOLDER = ('data', 'yang_apl_recordings', '2021_jul_sep')
+D_SET = 'A2021'
+D1_SHUFFLED = ('20210714_2FRfun2', '20210714_2FRfun5', '20210716_1FLfun2', '20210716_3FLfun4', '20210823_4FLfun5',
+               '20210826_1FLfun5', '20210903_1FLfun6')
+D2_PLANES: Dict[int, Tuple[str, ...]] = {
+    15: ('20210714_2FLfun1', '20210714_2FRfun4', '20210805_3FLfun3', '20210823_4FLfun2', '20210823_4FRfun1',
+         '20210826_1FLfun3', '20210827_3FRfun1', '20210905_1FLfun1', '20210905_1FRfun1'),
+    18: ('20210716_3FLfun3', '20210804_2FLfun3', '20210823_4FLfun4', '20210827_3FRfun2'),
+    21: ('20210823_4FLfun3', '20210826_1FLfun4', '20210903_1FLfun2', '20210903_1FLfun5', '20210903_1FLfun7',
+         '20210903_1FRfun2'),
+    24: ('20210903_1FLfun3', '20210903_1FRfun3')}
+D2_ASCENDING = tuple(x for v in D2_PLANES.values() for x in v)
+D3_REPEATS_ONLY = ('20210805_3FLfun2', '20210903_1FLfun1')
+D_RECORDINGS = D1_SHUFFLED + D2_ASCENDING + D3_REPEATS_ONLY
+YANG_LISTS: Dict[int, Tuple[str, ...]] = {
+    15: ('20210905_1FLfun1', '20210905_1FRfun1', '20210826_1FLfun3', '20210823_4FRfun1', '20210714_2FRfun4'),
+    21: ('20210903_1FLfun2', '20210903_1FRfun2', '20210826_1FLfun4', '20210823_4FLfun3', '20210716_3FLfun4',
+         '20210714_2FRfun2')}
+D2_NOT_INTERLEAVED = ('20210714_2FLfun1', '20210714_2FRfun4', '20210716_3FLfun3')   # one odor's series in consecutive blocks
+D2_V2_ONLY = ('20210823_4FLfun2', '20210823_4FLfun4')                             # no ms at 10^-2
+D_EXTRA_OUT: Dict[str, Tuple[int, ...]] = {'20210903_1FLfun6': (1,)}             # Yang's note: not vented (blocks from 1)
+D_BLOCK_OUT: Dict[str, Tuple[int, ...]] = {                                      # the yaml's block_out, blocks from 1
+    '20210714_2FLfun1': (1, 12, 13), '20210805_3FLfun2': (8, 9, 10), '20210716_3FLfun3': (1,), '20210903_1FRfun3': (1,),
+    '20210903_1FLfun5': (6,), '20210903_1FLfun7': (1,)}
+D1_LAGS: Dict[str, float] = {'20210714_2FRfun5': -0.55, '20210716_1FLfun2': -0.55, '20210823_4FLfun5': -0.55,
+                             '20210714_2FRfun2': -0.97, '20210716_3FLfun4': 6.91, '20210826_1FLfun5': 6.91,
+                             '20210903_1FLfun6': 6.91}
+LAG_TOL = 0.005
+ORDER_RHO_MIN = 0.9      # the 12's ascending design swaps one pa pair in three recordings (rho 0.943)
+D_OUTSIDE_THE_8 = ('2021-07-16_fly1', '2021-07-16_fly3')                       # the two flies outside the 12's 8
+D3_SAME_PLANE = (('20210714_2FRfun5', '20210714_2FRfun1'), ('20210823_4FLfun5', '20210823_4FLfun3'),
+                 ('20210903_1FLfun6', '20210903_1FLfun3'), ('20210827_3FRfun4', '20210827_3FRfun2'))
+D3_ADJACENT = (('20210826_1FLfun5', '20210826_1FLfun4'), ('20210716_3FLfun4', '20210716_3FLfun3'),
+               ('20210714_2FRfun2', '20210714_2FRfun1'))
+D3_REPEATS: Tuple[Tuple[str, Stim], ...] = (
+    ('20210805_3FLfun2', ('pa', -6.771)), ('20210823_4FLfun2', ('pa', -6.771)), ('20210823_4FLfun4', ('pa', -6.771)),
+    ('20210805_3FRfun1', ('pa', -6.771)), ('20210823_4FRfun2', ('pa', -6.771)),
+    ('20210903_1FLfun1', ('paa', -5.34)), ('20210903_1FLfun1', ('ms', -6.294)))
+D3_RERUNS = (('20210804_2FLfun3', '20210804_2FLfun2'), ('20210823_4FLfun4', '20210823_4FLfun1'),
+             ('20210903_1FLfun5', '20210903_1FLfun2'), ('20210903_1FLfun7', '20210903_1FLfun2'))
+D_V_RATIOS = tuple(r for r in RATIOS if r[0] in ('V1_paa-4', 'V1_paa-2.954', 'V2'))
+D_BASELINES = ('order_matched', 'first_in_block')
+SOLVENT = 'pfo'
+
+
+def part_c_done() -> bool:
+    """Whether part C's verdict is written (part D runs only after it)."""
+    return (out_dir() / 'verdict.json').exists()
+
+
+def twelve() -> List[str]:
+    """The 12 recordings' stems (E79's recordings.csv)."""
+    return list(recording_info().index)
+
+
+def fly_id(date, fly) -> str:
+    """E79's fly id, '<YYYY-MM-DD>_fly<n>', from a date written YYYYMMDD or YYYY-MM-DD."""
+    d = str(date).replace('-', '')
+    return f'{d[:4]}-{d[4:6]}-{d[6:8]}_fly{int(float(fly))}'
+
+
+def d_rows(stems: Sequence[str]) -> pd.DataFrame:
+    """viki's recordings.csv rows of `stems` (E100's `read_recordings`, every set; the row whose date is the stem's, so the
+    one stem written twice resolves), indexed by stem, with 'fly' (E79's form), 'side' and 'role' (D1, D2, D3 or the 12).
+    Raises on a stem outside part D's lists and the 12, on a missing or repeated row and on a row that is not processed
+    (`use_until_further_notice`)."""
+    from experiments import E100_apl_weak_odors as E100
+    allowed = set(D_RECORDINGS) | set(twelve())
+    bad = [x for x in stems if x not in allowed]
+    if bad:
+        raise PermissionError(f'part D reads only its lists and the 12: {bad}')
+    r = E100.read_recordings(sets=None)
+    out = []
+    for st in stems:
+        g = r[(r['stem'] == st) & (r['date'].astype(str).str.replace('-', '') == st[:8])]
+        if len(g) != 1:
+            raise RuntimeError(f'{st}: {len(g)} rows in recordings.csv')
+        row = g.iloc[0].to_dict()
+        if not str(row.get('use_until_further_notice', '')).startswith('processed'):
+            raise PermissionError(f"{st}: not processed ({row.get('use_until_further_notice')})")
+        row['fly_id'] = fly_id(row['date'], row['fly'])
+        row['side'] = str(row['hemisphere'])
+        row['role'] = 'D1' if st in D1_SHUFFLED else 'D2' if st in D2_ASCENDING else 'D3' if st in D3_REPEATS_ONLY else '12'
+        out.append(row)
+    return pd.DataFrame(out).set_index('stem', drop=False)
+
+
+def d_yaml_path(row) -> Path:
+    from experiments import E100_apl_weak_odors as E100
+    p = E100.recording_paths(row)['yaml']
+    if p is None:
+        raise FileNotFoundError(f"{row['stem']}: no yaml")
+    return Path(p)
+
+
+def yaml_block_out(path: Path) -> Tuple[int, ...]:
+    """The yaml's `block_out` (blocks numbered from 1), empty if none."""
+    import yaml
+    y = yaml.safe_load(Path(path).read_text())
+    return tuple(int(x) for x in (y.get('block_out') or []))
+
+
+def d_stim_table(path: Path, stem: str, extra_out: Sequence[int] = ()) -> pd.DataFrame:
+    """One recording's presentations from its yaml (E100's `yaml_stimuli`; blocks from 0 there, 'block1' from 1 here):
+    'odor' with the solvent as SOLVENT, 'out' (the block in the yaml's `block_out` or in `extra_out`, from 1),
+    'pfo_block' (every presentation of the block is the solvent), 'first' (the stimulus's first block among the kept
+    ones)."""
+    from experiments import E100_apl_weak_odors as E100
+    t = E100.yaml_stimuli(path, stem)
+    t['odor'] = [SOLVENT if o == E100.SOLVENT else o for o in t['odor']]
+    t['block1'] = t['block'] + 1
+    out = set(yaml_block_out(path)) | set(int(x) for x in extra_out)
+    t['out'] = t['block1'].isin(out)
+    t['pfo_block'] = t.groupby('block')['odor'].transform(lambda x: bool((x == SOLVENT).all())).astype(bool)
+    kept = t[~t['out'] & (t['odor'] != SOLVENT)]
+    first = kept.groupby(['odor', 'log10_conc'])['block1'].min()
+    t['first'] = [bool(o != SOLVENT and not ou and first.get((o, c)) == b)
+                  for o, c, b, ou in zip(t['odor'], t['log10_conc'], t['block1'], t['out'])]
+    return t
+
+
+def d_stimulus_blocks(table: pd.DataFrame, which: str = 'first') -> pd.DataFrame:
+    """The (odor, conc, block1) of every stimulus read: its first kept block ('first'), or every kept block ('all')."""
+    k = table[~table['out'] & (table['odor'] != SOLVENT)]
+    if which == 'first':
+        k = k[k['first']]
+    return k.drop_duplicates(['odor', 'log10_conc', 'block1'])[['odor', 'log10_conc', 'block1']]
+
+
+def d_responses_from_means(means: Sequence[float], table: pd.DataFrame, baseline: str, which: str = 'first') -> pd.DataFrame:
+    """Each stimulus's response from per-presentation calyx means (`means`, in the yaml's presentation order) and the
+    stimulus table (`d_stim_table`): 'order_matched' each presentation minus the mean over the kept solvent blocks of
+    their presentation at the same position; 'first_in_block' each presentation minus the mean of the kept blocks'
+    position-1 solvent presentations; the response the mean over the stimulus's presentations in its block (two in a
+    block of three, three in a block of five), nothing further subtracted. `which` 'first' (the first kept block) or 'all'
+    (every kept block, part D3's repeats). Rows: odor, conc, block1, response, rep1 to rep3, n_reps."""
+    m = np.asarray(means, dtype=float)
+    if len(m) != len(table):
+        raise ValueError(f'{len(m)} presentation values for {len(table)} presentations')
+    t = table.reset_index(drop=True)
+    kept = ~t['out']
+    if baseline == 'order_matched':
+        pb = t[kept & t['pfo_block']]
+        if pb.empty:
+            raise RuntimeError('no kept solvent block for the order-matched baseline')
+        base = pb.groupby('position').apply(lambda g: float(m[g.index].mean())).to_dict()
+    elif baseline == 'first_in_block':
+        f = t[kept & (t['position'] == 1) & (t['odor'] == SOLVENT)]
+        base = float(m[f.index].mean())
+    else:
+        raise ValueError(f'unknown baseline {baseline!r}')
+    rows = []
+    for _, sb in d_stimulus_blocks(t, which).iterrows():
+        g = t[(t['block1'] == sb['block1']) & (t['odor'] == sb['odor']) & (t['log10_conc'] == sb['log10_conc'])]
+        reps = [float(m[i] - (base[int(pos)] if isinstance(base, dict) else base)) for i, pos in zip(g.index, g['position'])]
+        rows.append(dict(odor=sb['odor'], conc=float(sb['log10_conc']), block1=int(sb['block1']), response=float(np.mean(reps)),
+                         n_reps=len(reps), **{f'rep{j + 1}': (reps[j] if j < len(reps) else np.nan) for j in range(3)}))
+    return pd.DataFrame(rows)
+
+
+def d_frame_means(row, source: str = 'maps') -> np.ndarray:
+    """One recording's per-presentation calyx means: 'maps' its peak dF/F maps inside the calyx outline (E79's mask,
+    E100's `calyx_responses`), 'yang' Yang's ROI table (roi_peak_dff in presentation order, its pins checked against the
+    yaml's). Refuses a recording of part D's lists before part C's verdict exists."""
+    from experiments import E100_apl_weak_odors as E100
+    from data_prep import apl_calyx_maps as ACM
+    import tifffile
+    if row['stem'] in D_RECORDINGS and not part_c_done():
+        raise PermissionError(f"{row['stem']}: part D opens no map or ROI table before part C's verdict exists")
+    paths = E100.recording_paths(row)
+    if source == 'maps':
+        stack = tifffile.imread(paths['peak_maps']).astype(float)
+        mask = ACM.roi_mask(ACM.read_imagej_polygon(paths['roi']), stack.shape[1:])
+        return E100.calyx_responses(stack, mask)
+    if source == 'yang':
+        t = pd.read_csv(paths['roi_table'])
+        y = E100.yaml_stimuli(d_yaml_path(row), row['stem'])
+        if list(t['pin_n'].astype(int)) != list(y['pin'].astype(int)):
+            raise RuntimeError(f"{row['stem']}: Yang's ROI table's pins are not the yaml's")
+        return t['roi_peak_dff'].to_numpy(float)
+    raise ValueError(f'unknown source {source!r}')
+
+
+def d_resp(stems: Sequence[str], source: str = 'maps') -> pd.DataFrame:
+    """Part D's responses in E98's `stimulus_responses` format (baselines D_BASELINES, nothing subtracted beyond the
+    baseline, 'blank' NaN), for `stems` (part D's lists and the 12), from the maps or Yang's tables."""
+    rows = d_rows(stems)
+    out = []
+    for st, row in rows.iterrows():
+        tab = d_stim_table(d_yaml_path(row), st, D_EXTRA_OUT.get(st, ()))
+        m = d_frame_means(row, source)
+        for bl in D_BASELINES:
+            r = d_responses_from_means(m, tab, bl)
+            for x in r.to_dict('records'):
+                out.append(dict(recording=st, fly=row['fly_id'], side=row['side'], pulse_s=float(row['pulse_s']),
+                                plane_um=row['plane_depth_um'], role=row['role'], odor=x['odor'], conc=x['conc'],
+                                stimulus=f"{x['odor']} {x['conc']:g}", block=x['block1'] - 1, baseline=bl,
+                                blank_subtracted=False, blank=np.nan, response=x['response'], rep1=x['rep1'], rep2=x['rep2'],
+                                rep3=x['rep3'], n_reps=x['n_reps'], source=source))
+    return pd.DataFrame(out)
+
+
+def interp_weights(concs: Sequence[float], c: float, design: Optional[Sequence[float]] = None) -> Dict[float, float]:
+    """The weights `value_at` puts on a recording's imaged concentrations to read concentration `c` (1 on an imaged or
+    substituted one, the two neighbours' linear weights on log10 concentration when interpolated); empty when it cannot
+    be read; `design` the series' concentrations, whose range and members `value_at` applies)."""
+    x = sorted(float(v) for v in concs)
+    rng = (min(design), max(design)) if design is not None else None
+    _, how = value_at(x, [0.0] * len(x), c, rng, design)
+    if how == 'imaged':
+        return {next(v for v in x if abs(v - c) <= CONC_TOL): 1.0}
+    if how == 'interpolated':
+        hi = next(v for v in x if v > c)
+        lo = max(v for v in x if v < c)
+        w = (hi - c) / (hi - lo)
+        return {lo: w, hi: 1.0 - w}
+    if how == 'substituted':
+        return {concentration_match(c, [x[0], x[-1]]): 1.0}
+    return {}
+
+
+def block_lag(table: pd.DataFrame, num: Stim, den: Stim, design: Optional[Dict[str, Sequence[float]]] = None) -> float:
+    """A recording's block lag for a ratio: the interpolation-weighted block (from 1) of the numerator's concentration
+    minus the denominator's, each over the first kept blocks of its imaged neighbours (NaN if either cannot be read)."""
+    sb = d_stimulus_blocks(table)
+    out = []
+    for o, c in (num, den):
+        g = sb[sb['odor'] == o].set_index('log10_conc')['block1']
+        w = interp_weights(g.index, c, (design or {}).get(o))
+        if not w:
+            return float('nan')
+        out.append(sum(wt * float(g[k]) for k, wt in w.items()))
+    return float(out[0] - out[1])
+
+
+def order_class(table: pd.DataFrame, odors: Sequence[str] = ('pa', 'paa', 'ms')) -> str:
+    """'ascending' if every odor's concentration rises with block over its stimuli's first kept blocks (Spearman's rho
+    of concentration on block at least ORDER_RHO_MIN for each odor), else 'shuffled'."""
+    from scipy.stats import spearmanr
+    sb = d_stimulus_blocks(table)
+    for o in odors:
+        g = sb[sb['odor'] == o].sort_values('block1')
+        if len(g) > 2 and not spearmanr(g['block1'], g['log10_conc'])[0] >= ORDER_RHO_MIN - 1e-12:
+            return 'shuffled'
+    return 'ascending'
+
+
+def twelve_design() -> Dict[str, List[float]]:
+    """The 12's design: each odor's imaged concentrations over the 12 recordings (part A's responses); its range is the
+    design range part D passes to `value_at`."""
+    a1 = pd.read_csv(out_dir() / 'a1_responses.csv')
+    return {o: sorted(float(c) for c in g.unique()) for o, g in a1.groupby('odor')['conc']}
+
+
+def eligibility(table: pd.DataFrame, design: Dict[str, Sequence[float]]) -> dict:
+    """From the stimulus table alone: the order class, V1's and V2's availability (every stimulus they read can be read
+    from the kept blocks, `value_at` with the 12's design ranges) and V2's block lag."""
+    sb = d_stimulus_blocks(table)
+
+    def ok(st: Stim) -> bool:
+        g = sb[sb['odor'] == st[0]]
+        dc = design.get(st[0])
+        return bool(np.isfinite(value_at(g['log10_conc'], [1.0] * len(g), st[1], (min(dc), max(dc)), dc)[0]))
+    v1 = all(ok(x) for x in (('paa', -4.0), ('paa', -2.954), ('ms', -3.0)))
+    v2 = all(ok(x) for x in (('paa', -5.0), ('paa', -4.0)))
+    return dict(order=order_class(table), v1=v1, v2=v2,
+                v2_lag=block_lag(table, ('paa', -5.0), ('paa', -4.0), design) if v2 else np.nan)
+
+
+def d0_expected(stem: str) -> dict:
+    """The eligibility the amendment's lists give a recording (D3's: order and ratios not fixed, NaN)."""
+    if stem in D1_SHUFFLED:
+        return dict(order='shuffled', v1=True, v2=True, v2_lag=D1_LAGS[stem])
+    if stem in D2_ASCENDING:
+        return dict(order='ascending', v1=stem not in D2_V2_ONLY, v2=True, v2_lag=np.nan)
+    if stem == '20210805_3FLfun2':
+        return dict(order=None, v1=None, v2=False, v2_lag=np.nan)
+    return dict(order=None, v1=None, v2=None, v2_lag=np.nan)
+
+
+def d0_eligibility() -> pd.DataFrame:
+    """D0's eligibility table, from the yaml files alone (no map or ROI table opened): per recording of part D's lists and
+    of the 12, its role, plane, pulse, fly, the yaml's `block_out` and part D's extra blocks out, the number of
+    presentations (and viki's frames_equal_presentations), the order class, V1's and V2's availability and V2's block
+    lag, beside the amendment's (`d0_expected`) and whether they match."""
+    ranges = twelve_design()
+    stems = list(D_RECORDINGS) + twelve()
+    rows = d_rows(stems)
+    out = []
+    for st, row in rows.iterrows():
+        path = d_yaml_path(row)
+        tab = d_stim_table(path, st, D_EXTRA_OUT.get(st, ()))
+        el = eligibility(tab, ranges)
+        ex = d0_expected(st) if st in D_RECORDINGS else dict(order=None, v1=None, v2=None, v2_lag=np.nan)
+        bo = yaml_block_out(path)
+        rec = dict(stem=st, role=row['role'], fly=row['fly_id'], side=row['side'], plane_um=row['plane_depth_um'],
+                   pulse_s=float(row['pulse_s']), n_presentations=int(len(tab)),
+                   frames_equal_presentations=row.get('frames_equal_presentations'), nstim=int(tab['position'].max()),
+                   pfo_blocks=';'.join(str(b) for b in sorted(tab.loc[tab['pfo_block'], 'block1'].unique())),
+                   block_out=';'.join(str(b) for b in bo), extra_out=';'.join(str(b) for b in D_EXTRA_OUT.get(st, ())),
+                   block_out_expected=';'.join(str(b) for b in D_BLOCK_OUT.get(st, ())),
+                   outside_the_8=row['fly_id'] in D_OUTSIDE_THE_8, **el,
+                   **{f'{k}_expected': v for k, v in ex.items()})
+        m = [rec['block_out'] == rec['block_out_expected'] if st in D_RECORDINGS else True]
+        for k in ('order', 'v1', 'v2'):
+            if ex[k] is not None:
+                m.append(rec[k] == ex[k])
+        if np.isfinite(ex['v2_lag']):
+            m.append(bool(abs(rec['v2_lag'] - ex['v2_lag']) <= LAG_TOL))
+        rec['matches'] = bool(all(m))
+        out.append(rec)
+    return pd.DataFrame(out)
+
+
+def d0_reproduce_12() -> dict:
+    """D0: the generalized reader pointed at the 12 through their yaml (not frames.csv) reproduces part A's
+    a1_responses.csv under both baselines (nothing subtracted), within IDENTITY_TOL, on the same recordings and stimuli."""
+    a1 = pd.read_csv(out_dir() / 'a1_responses.csv')
+    a1 = a1[~a1['blank_subtracted'].astype(bool) & a1['baseline'].isin(D_BASELINES)]
+    mine = d_resp(twelve(), 'maps')
+    key = ['recording', 'stimulus', 'baseline']
+    a = a1.set_index(key)[['response', 'rep1', 'rep2']].sort_index()
+    b = mine.set_index(key)[['response', 'rep1', 'rep2']].sort_index()
+    same = a.index.equals(b.index)
+    d = float((a - b).abs().to_numpy().max()) if same else float('nan')
+    return dict(index_equal=bool(same), n=int(len(a)), max_abs_diff=d, exact=bool(same and d <= IDENTITY_TOL))
+
+
+def part_d0() -> dict:
+    """D0 (yaml only for part D's recordings; the 12's maps for the reader's check): d0_eligibility.csv, d0.json. Raises
+    if the eligibility differs from the amendment's lists or the reader does not reproduce part A."""
+    out = out_dir()
+    el = d0_eligibility()
+    el.to_csv(out / 'd0_eligibility.csv', index=False)
+    rep = d0_reproduce_12()
+    res = dict(eligibility_matches=bool(el['matches'].all()), mismatches=el.loc[~el['matches']].to_dict('records'),
+               reproduce_12=rep, n_recordings=int(len(el)), time=time.strftime('%Y-%m-%d %H:%M'), host=_host())
+    _write_json(out / 'd0.json', res)
+    if not res['eligibility_matches']:
+        raise RuntimeError(f"D0: the eligibility from the yaml differs from the amendment's lists: {res['mismatches']}")
+    if not rep['exact']:
+        raise RuntimeError(f"D0: the generalized reader does not reproduce part A on the 12: {rep}")
+    return res
+
+
+def _cat(on: pd.DataFrame, num: str, den: str, lo: float, hi: float) -> Tuple[str, pd.DataFrame]:
+    wc = stimulus_classes(on, num, den, lo, hi)
+    return comparison_verdict(wc['cls']), wc
+
+
+def _ratio_row(name: str, fr: dict, cat: str, wc: pd.DataFrame, **extra) -> dict:
+    return dict(reading=name, ratio=fr['ratio'], lo90=fr['lo90'], hi90=fr['hi90'], n_flies=fr['n_flies'],
+                n_recordings=fr['n_recordings'], sd_log2_flies=fr['sd_log2_flies'], category=cat,
+                **{f'n_{k}': int((wc['cls'] == k).sum()) for k in CATEGORIES + ('mixed',)}, **extra)
+
+
+def d1_v2r(resp: pd.DataFrame, ranges: Dict[str, Tuple[float, float]], on: pd.DataFrame,
+           extra_recordings: Sequence[str] = ('20210827_3FRfun4',)) -> Tuple[pd.DataFrame, pd.DataFrame, dict]:
+    """D1: V2 in the shuffled-order recordings (V2R) under the carrying reading, the first-in-block baseline and each
+    reading with one fly left out; its category is held when all of them give it and the 0.5 s and 1 s flies do not
+    disagree (`pulse_permutation`, the 15 splits of 6 flies into 2 and 4); beside, V2R with `extra_recordings` (the 12's
+    shuffled one) and V1's two ratios in the same recordings. Returns (one row per reading, per wiring classes under the
+    carrying reading with each wiring's distance from the interval's nearer end, the result)."""
+    rows, cats = [], {}
+    rec1 = [r for r in D1_SHUFFLED if r in set(resp['recording'])]
+    per = {}
+    for name, rd in (('carrying', CARRYING[0]), ('first_in_block', PARTNERS['first_in_block'][0])):
+        f, pr = flies_ratios(resp, rd, 'all', D_V_RATIOS, None, rec1, ranges)
+        per[name] = pr
+        fr = f.set_index('ratio_id').loc['V2']
+        cat, wc = _cat(on, V2_NUM, V2_DEN, fr['lo90'], fr['hi90'])
+        cats[name] = cat
+        rows.append(_ratio_row(name, fr.to_dict(), cat, wc, decides=True))
+        if name == 'carrying':
+            classes = wc.assign(category=cat)
+            for rid in ('V1_paa-4', 'V1_paa-2.954'):
+                g = f.set_index('ratio_id').loc[rid]
+                rows.append(dict(reading=f'carrying, {rid} (beside)', ratio=g['ratio'], lo90=g['lo90'], hi90=g['hi90'],
+                                 n_flies=g['n_flies'], n_recordings=g['n_recordings'], decides=False))
+    pc = per['carrying']
+    v2 = pc[(pc['ratio_id'] == 'V2') & pc['entered']]
+    for fly in sorted(v2['fly'].unique()):
+        fr = fly_ratio(v2[v2['fly'] != fly])
+        cat, wc = _cat(on, V2_NUM, V2_DEN, fr['lo90'], fr['hi90'])
+        cats[f'without {fly}'] = cat
+        rows.append(_ratio_row(f'carrying, without {fly}', fr, cat, wc, decides=True))
+    flies = sorted(v2['fly'].unique())
+    short = sorted(resp.loc[resp['recording'].isin(rec1) & np.isclose(resp['pulse_s'], 0.5), 'fly'].unique())
+    pulse = pulse_permutation(v2.groupby('fly')['log_ratio'].mean(), short)
+    c0 = cats['carrying']
+    held = c0 if (c0 in CATEGORIES and all(v == c0 for v in cats.values()) and not pulse['disagree']) else 'not decided'
+    extra = [r for r in extra_recordings if r in set(resp['recording'])]
+    if extra:
+        f, _ = flies_ratios(resp, CARRYING[0], 'all', D_V_RATIOS, None, rec1 + extra, ranges)
+        fr = f.set_index('ratio_id').loc['V2']
+        cat, wc = _cat(on, V2_NUM, V2_DEN, fr['lo90'], fr['hi90'])
+        rows.append(_ratio_row(f"carrying, with {', '.join(extra)} (beside)", fr.to_dict(), cat, wc, decides=False))
+    res = dict(V2R=held, categories=cats, pulse=pulse, flies=flies, short_flies=short,
+               outside_the_8=[f for f in flies if f in D_OUTSIDE_THE_8])
+    return pd.DataFrame(rows), classes, res
+
+
+def d1_lag_slope(resp: pd.DataFrame, ranges: Dict[str, Tuple[float, float]], lags: pd.Series) -> pd.DataFrame:
+    """D1 beside: over every recording (part D's and the 12) of the flies that have both orders, the slope of V2's log
+    ratio (carrying reading, one recording) on its block lag: pooled, and within flies (each fly's mean removed)."""
+    _, pr = flies_ratios(resp, CARRYING[0], 'all', D_V_RATIOS, None, sorted(set(resp['recording'])), ranges)
+    v = pr[(pr['ratio_id'] == 'V2') & pr['entered']].copy()
+    v['lag'] = v['recording'].map(lags)
+    v['order'] = np.where(v['recording'].isin(D1_SHUFFLED) | (v['recording'] == '20210827_3FRfun4'), 'shuffled', 'ascending')
+    both = v.groupby('fly')['order'].nunique()
+    v = v[v['fly'].isin(both.index[both == 2]) & np.isfinite(v['lag'])]
+    rows = []
+    if len(v) >= 3:
+        pooled = np.polyfit(v['lag'], v['log_ratio'], 1)[0]
+        dv = v.assign(x=v['lag'] - v.groupby('fly')['lag'].transform('mean'),
+                      y=v['log_ratio'] - v.groupby('fly')['log_ratio'].transform('mean'))
+        within = float((dv['x'] * dv['y']).sum() / (dv['x'] ** 2).sum()) if (dv['x'] ** 2).sum() > 0 else np.nan
+        rows.append(dict(n_recordings=int(len(v)), n_flies=int(v['fly'].nunique()), slope_pooled=float(pooled),
+                         slope_within_flies=within, flies=';'.join(sorted(v['fly'].unique())),
+                         note='log of V2 (natural log) per block of lag'))
+    return pd.concat([pd.DataFrame(rows), v[['recording', 'fly', 'order', 'lag', 'log_ratio']]], ignore_index=True)
+
+
+def d_twelve_categories(resp12: pd.DataFrame, ranges, on: pd.DataFrame) -> dict:
+    """The 12's categories under the carrying reading (V1 under each estimate of ms's input on the hull; V2), as part C
+    reads them."""
+    f = flies_ratios(resp12, CARRYING[0], 'all', D_V_RATIOS, None, twelve(), ranges)[0]
+    return _categories(f, on)
+
+
+def _categories(f: pd.DataFrame, on: pd.DataFrame) -> dict:
+    f = f.set_index('ratio_id')
+    out = {}
+    iv = _intervals(f.reset_index(), ('V1_paa-4', 'V1_paa-2.954'))
+    for est, lab in V1_ESTIMATES.items():
+        out[f'V1 {est}'] = _cat(on, V1_NUM, lab, *iv)[0] if iv is not None else 'not run'
+    out['V2'] = _cat(on, V2_NUM, V2_DEN, f.loc['V2', 'lo90'], f.loc['V2', 'hi90'])[0] if np.isfinite(f.loc['V2', 'lo90']) \
+        else 'not run'
+    return out
+
+
+def d2_sets(resp: pd.DataFrame) -> Dict[str, List[str]]:
+    have = set(resp['recording'])
+    sets = {'all21': [x for x in D2_ASCENDING if x in have]}
+    for pl, xs in D2_PLANES.items():
+        sets[f'{pl} um'] = [x for x in xs if x in have]
+    yl = {x for v in YANG_LISTS.values() for x in v}
+    sets['yang_lists'] = [x for x in D2_ASCENDING if x in yl and x in have]
+    sets['interleaved'] = [x for x in D2_ASCENDING if x not in D2_NOT_INTERLEAVED and x in have]
+    return sets
+
+
+def d2_replication(resp: pd.DataFrame, ranges, on: pd.DataFrame, cats12: dict) -> pd.DataFrame:
+    """D2: V1's two ratios and V2 over each of `d2_sets`, the model's category against each set's interval (V1 under
+    each estimate of ms's input, on the hull; V2), and whether it replicates (equals the 12's category under the carrying
+    reading: V1 with the megamat estimate, V2 with validation2's paa at 10^-5). Decides nothing."""
+    rows = []
+    for name, recs in d2_sets(resp).items():
+        if not recs:
+            continue
+        f = flies_ratios(resp, CARRYING[0], 'all', D_V_RATIOS, None, recs, ranges)[0]
+        cats = _categories(f, on)
+        fi = f.set_index('ratio_id')
+        iv = _intervals(f, ('V1_paa-4', 'V1_paa-2.954'))
+        for k, c in cats.items():
+            rid = 'V2' if k == 'V2' else 'V1'
+            rows.append(dict(set=name, n_recordings=len(recs), comparison=k, category=c, category_12=cats12.get(k),
+                             replicates=(bool(c == cats12.get(k)) if k in ('V2', 'V1 megamat/megamat (the panel)') else None),
+                             flies_lo90=(fi.loc['V2', 'lo90'] if rid == 'V2' else (iv[0] if iv else np.nan)),
+                             flies_hi90=(fi.loc['V2', 'hi90'] if rid == 'V2' else (iv[1] if iv else np.nan)),
+                             V1_paa4=fi.loc['V1_paa-4', 'ratio'], V1_paa2954=fi.loc['V1_paa-2.954', 'ratio'],
+                             V2=fi.loc['V2', 'ratio'], n_flies_V2=int(fi.loc['V2', 'n_flies']),
+                             outside_the_8=';'.join(sorted({f for f in resp.loc[resp['recording'].isin(recs), 'fly']}
+                                                           & set(D_OUTSIDE_THE_8)))))
+    return pd.DataFrame(rows)
+
+
+def _per_recording_logs(resp: pd.DataFrame, ranges, recs: Sequence[str], baseline=CARRYING[0]) -> pd.DataFrame:
+    _, pr = flies_ratios(resp, baseline, 'all', D_V_RATIOS, None, list(recs), ranges)
+    return pr.pivot_table(index='recording', columns='ratio_id', values='log_ratio')
+
+
+def d2_plane_pairs(resp: pd.DataFrame, ranges) -> pd.DataFrame:
+    """D2: per calyx (fly and side), the log ratio at 15, 21 or 24 um minus the log ratio at 18 um (the 12's recording of
+    that calyx), per ratio; then per plane and ratio the mean over calyces and the count of positive differences."""
+    meta = resp.drop_duplicates('recording').set_index('recording')
+    logs = _per_recording_logs(resp, ranges, sorted(set(resp['recording'])))
+    t12 = set(twelve())
+    rows = []
+    for rec in D2_ASCENDING:
+        if rec not in logs.index:
+            continue
+        pl = next(k for k, v in D2_PLANES.items() if rec in v)
+        if pl == 18:
+            continue
+        ref = [r for r in t12 if r in logs.index and meta.loc[r, 'fly'] == meta.loc[rec, 'fly']
+               and meta.loc[r, 'side'] == meta.loc[rec, 'side']]
+        if len(ref) != 1:
+            continue
+        for rid in ('V1_paa-4', 'V1_paa-2.954', 'V2'):
+            d = logs.loc[rec, rid] - logs.loc[ref[0], rid] if rid in logs.columns else np.nan
+            rows.append(dict(recording=rec, reference_18um=ref[0], fly=meta.loc[rec, 'fly'], side=meta.loc[rec, 'side'],
+                             plane_um=pl, ratio_id=rid, log_diff=float(d)))
+    per = pd.DataFrame(rows)
+    summ = []
+    if len(per):
+        for (pl, rid), g in per.dropna(subset=['log_diff']).groupby(['plane_um', 'ratio_id']):
+            c = g.groupby(['fly', 'side'])['log_diff'].mean()
+            summ.append(dict(plane_um=pl, ratio_id=rid, n_calyces=int(len(c)), mean_log_diff=float(c.mean()),
+                             n_positive=int((c > 0).sum()), recording='(summary)'))
+    return pd.concat([per, pd.DataFrame(summ)], ignore_index=True)
+
+
+def d3_tables(resp: pd.DataFrame, ranges, lags: pd.Series, means: Dict[str, np.ndarray],
+              tables: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
+    """D3's descriptions: shuffled against ascending in one calyx (d3_pairs: the difference of log V2 and of the block
+    lags), stimuli repeated within a recording (d3_repeats: the later block's response over the earlier's, carrying
+    baseline over every kept solvent block), repeat runs of one calyx and plane (d3_reruns: the later run's ratio over
+    the earlier's)."""
+    logs = _per_recording_logs(resp, ranges, sorted(set(resp['recording'])))
+    pairs = []
+    for kind, ps in (('same plane', D3_SAME_PLANE), ('adjacent planes', D3_ADJACENT)):
+        for a, b in ps:
+            pairs.append(dict(kind=kind, shuffled=a, ascending=b,
+                              log_v2_diff=float(logs.loc[a, 'V2'] - logs.loc[b, 'V2']) if a in logs.index and b in logs.index
+                              else np.nan, lag_diff=float(lags.get(a, np.nan) - lags.get(b, np.nan))))
+    reps = []
+    for rec, (o, c) in D3_REPEATS:
+        if rec not in means:
+            continue
+        r = d_responses_from_means(means[rec], tables[rec], CARRYING[0][0], which='all')
+        g = r[(r['odor'] == o) & np.isclose(r['conc'], c)].sort_values('block1')
+        if len(g) == 2:
+            reps.append(dict(recording=rec, stimulus=f'{o} {c:g}', earlier_block=int(g['block1'].iloc[0]),
+                             later_block=int(g['block1'].iloc[1]), earlier=float(g['response'].iloc[0]),
+                             later=float(g['response'].iloc[1]),
+                             later_over_earlier=float(g['response'].iloc[1] / g['response'].iloc[0])))
+    reruns = []
+    for later, earlier in D3_RERUNS:
+        for rid in ('V1_paa-4', 'V1_paa-2.954', 'V2'):
+            ok = later in logs.index and earlier in logs.index and rid in logs.columns
+            reruns.append(dict(later=later, earlier=earlier, ratio_id=rid,
+                               later_over_earlier=float(np.exp(logs.loc[later, rid] - logs.loc[earlier, rid])) if ok else np.nan))
+    return dict(d3_pairs=pd.DataFrame(pairs), d3_repeats=pd.DataFrame(reps), d3_reruns=pd.DataFrame(reruns))
+
+
+def d_yang_table_ratios(resp_yang: pd.DataFrame, ranges) -> pd.DataFrame:
+    """Every ratio of part D's sets also from Yang's ROI tables by the same arithmetic (a description): the 12 first, then
+    V2R's recordings and D2's sets, under both baselines."""
+    rows = []
+    groups = [('the 12', twelve()), ('D1 (V2R)', list(D1_SHUFFLED))] + [(f'D2 {k}', v) for k, v in d2_sets(resp_yang).items()]
+    for name, recs in groups:
+        recs = [r for r in recs if r in set(resp_yang['recording'])]
+        if not recs:
+            continue
+        for bl in D_BASELINES:
+            f = flies_ratios(resp_yang, (bl, False), 'all', D_V_RATIOS, None, recs, ranges)[0]
+            for _, r in f.iterrows():
+                rows.append(dict(group=name, baseline=bl, ratio_id=r['ratio_id'], ratio=r['ratio'], lo90=r['lo90'],
+                                 hi90=r['hi90'], n_flies=r['n_flies'], n_recordings=r['n_recordings']))
+    return pd.DataFrame(rows)
+
+
+def part_d() -> dict:
+    """Part D (the amendment of 2026-11-15 17:50): refuses to run before part C's verdict exists; reads part C's pre-odor
+    level and the model's rows (`load_b1_all`, `with_a0`), D0's checks, the responses of part D's recordings and the 12
+    from the maps and from Yang's tables, and writes d_responses.csv, d1_v2r.csv, d1_classes.csv, d1_lag_slope.csv,
+    d2_replication.csv, d2_plane_pairs.csv, d3_pairs.csv, d3_repeats.csv, d3_reruns.csv, d_yang_table_ratios.csv,
+    d_summary.json and provenance_D.json (with every input file's sha256)."""
+    import hashlib
+    if not part_c_done():
+        raise RuntimeError("part D runs after part C's verdict (results/E98_apl_response_strength/verdict.json)")
+    out = out_dir()
+    verdict = _read_json(out / 'verdict.json')
+    a0 = verdict.get('a0')
+    d0 = part_d0()
+    b1 = with_a0(load_b1_all(ALL_WIRINGS), a0)
+    on = b1[b1['cond'] == 'on'][['wiring', 'stimulus', 'win', 'pre']]
+    ranges = twelve_design()
+    stems = list(D_RECORDINGS) + twelve()
+    rows = d_rows(stems)
+    means, tables, files = {}, {}, {}
+    from experiments import E100_apl_weak_odors as E100
+    for st, row in rows.iterrows():
+        tables[st] = d_stim_table(d_yaml_path(row), st, D_EXTRA_OUT.get(st, ()))
+        means[st] = d_frame_means(row, 'maps')
+        if len(means[st]) != len(tables[st]):
+            raise RuntimeError(f'{st}: {len(means[st])} frames for {len(tables[st])} presentations')
+        pth = E100.recording_paths(row)
+        for k in ('yaml', 'peak_maps', 'roi', 'roi_table'):
+            if pth.get(k) is not None:
+                files[str(pth[k])] = hashlib.sha256(Path(pth[k]).read_bytes()).hexdigest()
+    resp = d_resp(stems, 'maps')
+    resp.to_csv(out / 'd_responses.csv', index=False)
+    resp_yang = d_resp(stems, 'yang')
+    el = pd.read_csv(out / 'd0_eligibility.csv').set_index('stem')
+    lags = el['v2_lag']
+    v2r, classes, d1 = d1_v2r(resp, ranges, on)
+    v2r.to_csv(out / 'd1_v2r.csv', index=False)
+    classes.to_csv(out / 'd1_classes.csv', index=False)
+    d1_lag_slope(resp, ranges, lags).to_csv(out / 'd1_lag_slope.csv', index=False)
+    cats12 = d_twelve_categories(resp, ranges, on)
+    d2 = d2_replication(resp, ranges, on, cats12)
+    d2.to_csv(out / 'd2_replication.csv', index=False)
+    d2_plane_pairs(resp, ranges).to_csv(out / 'd2_plane_pairs.csv', index=False)
+    for k, t in d3_tables(resp, ranges, lags, means, tables).items():
+        t.to_csv(out / f'{k}.csv', index=False)
+    d_yang_table_ratios(resp_yang, ranges).to_csv(out / 'd_yang_table_ratios.csv', index=False)
+    summ = dict(a0=a0, d0=dict(eligibility_matches=d0['eligibility_matches'], reproduce_12=d0['reproduce_12']), D1=d1,
+                categories_12=cats12, D2_replicates=d2[d2['replicates'].notna()][['set', 'comparison', 'category',
+                                                                                      'category_12', 'replicates']].to_dict('records'),
+                time=time.strftime('%Y-%m-%d %H:%M'), host=_host())
+    _write_json(out / 'd_summary.json', summ)
+    for f in (H.shared_dir() / 'data' / 'yang_apl_recordings' / 'recordings.csv', out / 'verdict.json', out / 'a1_responses.csv'):
+        files[str(f)] = hashlib.sha256(Path(f).read_bytes()).hexdigest()
+    b1_rec = load_b1_all(ALL_WIRINGS).attrs
+    _write_json(out / 'provenance_D.json', dict(part='D', script=H.script_path(__file__), commits=process_commits(),
+                                                time=time.strftime('%Y-%m-%d %H:%M'), host=_host(), a0=a0, files=files,
+                                                b1_sources=dict(sources=b1_rec.get('sources'), e101=b1_rec.get('e101'))))
+    return summ
+
+
 def comparison_table() -> str:
     """comparison_table.md from the parts' tables."""
     raise NotImplementedError
@@ -2385,7 +3023,7 @@ def _wirings(arg: str) -> Tuple[str, ...]:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
-    ap.add_argument('--part', required=True, choices=['0', 'A', 'B', 'C', 'table'])
+    ap.add_argument('--part', required=True, choices=['0', 'A', 'B', 'C', 'D0', 'D', 'table'])
     ap.add_argument('--wirings', default='all8', help="all8 or a comma-separated list of wiring labels")
     ap.add_argument('--arm', default='B1', help="part B's arms, comma-separated (B1..B4)")
     ap.add_argument('--threads', type=int, default=4,
@@ -2418,6 +3056,11 @@ def main() -> None:
     elif a.part == 'C':
         provenance('C', allow_missing=a.allow_missing, a0=a.a0)
         print(json.dumps(part_c(ws, allow_missing=a.allow_missing, a0=a.a0), indent=1, default=float), flush=True)
+    elif a.part == 'D0':
+        provenance('D0')
+        print(json.dumps(part_d0(), indent=1, default=float), flush=True)
+    elif a.part == 'D':
+        print(json.dumps(part_d(), indent=1, default=float), flush=True)
     elif a.part == 'table':
         print(comparison_table(), flush=True)
 

@@ -489,3 +489,129 @@ def test_load_b1_all_takes_e101_where_e98_has_not_run(tmp_path):
     e.to_csv(f, index=False)
     with pytest.raises(RuntimeError):
         M.load_b1_all(['real', 'P1'], roots=[own], e101_path=f)
+
+
+# ---------------------------------------------------------------------------
+# part D (the amendment of 2026-11-15 17:50): made-up stimulus files and calyx means
+
+PINS = ['NA'] * 36 + ['paraffin oil', 'phenylacetaldehyde(-5.340)', 'phenylacetaldehyde(-4.386)', 'phenylacetaldehyde(-3.431)',
+                      'methyl salicylate(-2)']
+
+
+def _yaml(tmp_path, name, seq, nstim, block_out=None):
+    import yaml
+    d = dict(nblock=len(seq) // nstim, nstim=nstim, odor_pin=PINS, odor_stim_seq=list(seq))
+    if block_out is not None:
+        d['block_out'] = list(block_out)
+    f = tmp_path / f'{name}.yaml'
+    f.write_text(yaml.safe_dump(d))
+    return f
+
+
+def test_d_baselines_with_five_presentations_and_the_solvent_block_in_the_middle(tmp_path):
+    # blocks of five (pfo, odor x3, pfo); the all-solvent block is block 2 of 4
+    seq = [37, 38, 38, 38, 37] + [37] * 5 + [37, 39, 39, 39, 37] + [37, 40, 40, 40, 37]
+    t = M.d_stim_table(_yaml(tmp_path, 'r5', seq, 5), 'r5')
+    assert list(t.groupby('block1')['pfo_block'].first()) == [False, True, False, False]
+    means = np.zeros(len(seq))
+    means[5:10] = [0.01, 0.02, 0.03, 0.04, 0.05]          # the solvent block, positions 1 to 5
+    means[[0, 10, 15]] = [0.0, 0.03, 0.06]                # the other blocks' first solvent presentations
+    means[1:4] = [0.12, 0.13, 0.14]                       # paa -5.34
+    means[16:19] = [0.32, 0.33, 0.34]                     # paa -3.431
+    om = M.d_responses_from_means(means, t, 'order_matched').set_index('conc')
+    assert om.loc[-5.34, 'response'] == pytest.approx(np.mean([0.12 - 0.02, 0.13 - 0.03, 0.14 - 0.04]))
+    assert om.loc[-5.34, 'n_reps'] == 3 and om.loc[-3.431, 'rep3'] == pytest.approx(0.34 - 0.04)
+    fib = M.d_responses_from_means(means, t, 'first_in_block').set_index('conc')
+    base = np.mean([0.0, 0.01, 0.03, 0.06])               # position 1 of every kept block, the solvent block's included
+    assert fib.loc[-5.34, 'response'] == pytest.approx(np.mean([0.12, 0.13, 0.14]) - base)
+
+
+def test_d_block_out_first_of_two_blocks_and_the_range_rule(tmp_path):
+    # blocks of three; paa -4.386 twice (blocks 2 and 4), block 3 (paa -3.431) left out
+    seq = [37, 38, 38, 37, 39, 39, 37, 40, 40, 37, 39, 39, 37, 41, 41, 37, 37, 37]
+    t = M.d_stim_table(_yaml(tmp_path, 'r3', seq, 3, block_out=[3]), 'r3')
+    sb = M.d_stimulus_blocks(t).set_index('log10_conc')['block1']
+    assert sb.to_dict() == {-5.34: 1, -4.386: 2, -2.0: 5}                     # -3.431 not imaged; -4.386 at its first block
+    assert t.loc[t['block1'] == 3, 'out'].all() and not t.loc[t['block1'] == 4, 'first'].any()
+    design = {'paa': [-5.34, -4.386, -3.431, -2.954]}
+    # paa at 10^-4 needs -3.431, which this recording did not image: missing, not interpolated across it
+    v, how = M.value_at([-5.34, -4.386, -2.954], [0.1, 0.2, 0.3], -4.0, (-5.34, -2.954), design['paa'])
+    assert np.isnan(v) and how == 'missing'
+    v, how = M.value_at([-5.34, -4.386, -2.954], [0.1, 0.2, 0.3], -5.0, (-5.34, -2.954), design['paa'])
+    assert how == 'interpolated'
+    all_blocks = M.d_responses_from_means(np.arange(len(seq)) / 100.0, t, 'order_matched', which='all')
+    assert sorted(all_blocks.loc[np.isclose(all_blocks['conc'], -4.386), 'block1']) == [2, 4]
+
+
+def test_d_block_lag_and_order_class(tmp_path):
+    # ascending: paa -5.34 in block 1, -4.386 in block 3, -3.431 in block 5 (blocks of three)
+    seq = [37, 38, 38, 37, 41, 41, 37, 39, 39, 37, 41, 41, 37, 40, 40, 37, 37, 37]
+    t = M.d_stim_table(_yaml(tmp_path, 'asc', seq, 3), 'asc')
+    design = {'paa': [-6.294, -5.34, -4.386, -3.431, -2.954]}
+    lag = M.block_lag(t, ('paa', -5.0), ('paa', -4.0), design)
+    w5, w4 = (-4.386 + 5.0) / (-4.386 + 5.34), (-3.431 + 4.0) / (-3.431 + 4.386)
+    assert w5 == pytest.approx(0.644, abs=5e-4) and w4 == pytest.approx(0.596, abs=5e-4)
+    assert lag == pytest.approx((w5 * 1 + (1 - w5) * 3) - (w4 * 3 + (1 - w4) * 5))
+    assert M.order_class(t, ('paa',)) == 'ascending'
+    shuffled = [37, 40, 40, 37, 41, 41, 37, 39, 39, 37, 41, 41, 37, 38, 38, 37, 37, 37]
+    assert M.order_class(M.d_stim_table(_yaml(tmp_path, 'shf', shuffled, 3), 'shf'), ('paa',)) == 'shuffled'
+
+
+@pytest.mark.skipif(not _shared(), reason='shared directory (the release, part A) not available')
+def test_d_block_lags_of_the_shuffled_and_ascending_sequences():
+    design = M.twelve_design()
+    rows = M.d_rows(['20210714_2FRfun5', '20210714_2FRfun2', '20210716_3FLfun4', '20210823_4FRfun1'])
+    lags = {st: M.block_lag(M.d_stim_table(M.d_yaml_path(r), st, M.D_EXTRA_OUT.get(st, ())), ('paa', -5.0), ('paa', -4.0), design)
+            for st, r in rows.iterrows()}
+    assert lags['20210714_2FRfun5'] == pytest.approx(-0.55, abs=M.LAG_TOL)       # sequence A
+    assert lags['20210714_2FRfun2'] == pytest.approx(-0.97, abs=M.LAG_TOL)
+    assert lags['20210716_3FLfun4'] == pytest.approx(6.91, abs=M.LAG_TOL)
+    assert lags['20210823_4FRfun1'] == pytest.approx(-3.143, abs=M.LAG_TOL)      # ascending
+
+
+def _d_resp(log_v2_by_fly, pulses):
+    """Made-up responses of D1's recordings: one recording per fly, paa at 10^-5.34, -4.386, -3.431 and -2.954, ms at -3.431
+    and -2; V2 set to each fly's ratio, the paa series otherwise flat."""
+    rows = []
+    stems = list(M.D1_SHUFFLED)
+    for i, (fly, lr) in enumerate(log_v2_by_fly.items()):
+        st = stems[i]
+        v4 = 0.2
+        v5 = v4 * np.exp(lr)
+        # paa at -5 is 0.644 x paa(-5.34) + 0.356 x paa(-4.386); paa at -4 is 0.596 x paa(-4.386) + 0.404 x paa(-3.431)
+        vals = {('paa', -5.34): (v5 - 0.356 * v4) / 0.644, ('paa', -4.386): v4, ('paa', -3.431): v4, ('paa', -2.954): v4,
+                ('ms', -3.431): 0.2, ('ms', -2.0): 0.2}
+        for bl in ('order_matched', 'first_in_block'):
+            for (o, c), v in vals.items():
+                rows.append(dict(recording=st, fly=fly, side='L', pulse_s=pulses[fly], odor=o, conc=c, stimulus=f'{o} {c:g}',
+                                 baseline=bl, blank_subtracted=False, blank=np.nan, response=v, rep1=v, rep2=v))
+    return pd.DataFrame(rows)
+
+
+def test_d1_held_against_not_decided_with_one_fly_left_out():
+    design = {'paa': [-6.294, -5.34, -4.386, -3.431, -2.954], 'ms': [-7.725, -6.294, -4.863, -3.431, -2.0]}
+    flies = [f'2021-01-0{i}_fly1' for i in range(1, 7)]
+    pulses = {f: (0.5 if i < 2 else 1.0) for i, f in enumerate(flies)}
+    on = _b1_rows(paa5=0.9)                                # the model's V2 0.9 on every wiring
+    on = on[on['cond'] == 'on'][['wiring', 'stimulus', 'win', 'pre']]
+    # every fly's V2 near 0.5: flatter, held
+    resp = _d_resp({f: np.log(0.5) + 0.02 * k for k, f in enumerate(flies)}, pulses)
+    rows, classes, res = M.d1_v2r(resp, design, on, extra_recordings=())
+    assert res['categories']['carrying'] == 'flatter' and res['V2R'] == 'flatter' and len(classes) == 8
+    assert res['pulse']['n_splits'] == 15
+    # one fly at 3: the interval with it reaches the model's 0.9, without it the category is flatter: not decided
+    lv = {f: np.log(0.5) for f in flies}
+    lv[flies[5]] = np.log(3.0)
+    rows, classes, res = M.d1_v2r(_d_resp(lv, pulses), design, on, extra_recordings=())
+    cats = res['categories']
+    assert cats[f'without {flies[5]}'] == 'flatter' and cats['carrying'] != 'flatter' and res['V2R'] == 'not decided'
+
+
+def test_d_refuses_recordings_outside_its_lists_and_runs_after_part_c(monkeypatch):
+    with pytest.raises(PermissionError):
+        M.d_rows(['20210706_1FRfun1'])                     # a pilot recording
+    monkeypatch.setattr(M, 'part_c_done', lambda: False)
+    with pytest.raises(RuntimeError):
+        M.part_d()
+    with pytest.raises(PermissionError):
+        M.d_frame_means(dict(stem='20210714_2FRfun5', folder='/nonexistent'))
