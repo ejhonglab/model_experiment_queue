@@ -423,12 +423,29 @@ def test_b1_save_and_load_round_trip(tmp_path):
 def test_b1_input_structure():
     orn, t = M.b1_input()
     panel = H.apl16_orn_deltas()
-    assert orn.shape == (36, 46) and orn.index.equals(panel.index)
+    assert orn.shape == (36, 52) and orn.index.equals(panel.index)
     assert orn.iloc[:, :16].equals(panel.astype(float))
-    assert list(t.loc[t['included'], 'label']) == M.input_labels(orn)
-    left = t.loc[~t['included'], 'label'].tolist()
-    assert left == [M.hallem_label(o, c) for o, c in M.HALLEM_STIMULI if c != -2.0]
+    assert list(t.loc[t['included'], 'label']) == M.input_labels(orn) and t['included'].all()
     assert (orn[(M.ADDED_PANEL, M.BLANK_LABEL)] == 0).all()
+    o46, t46 = M.b1_input(include_hallem_lower=False)
+    assert o46.shape == (36, 46)
+    assert t46.loc[~t46['included'], 'label'].tolist() == [M.hallem_label(o, c) for o, c in M.HALLEM_STIMULI if c != -2.0]
+
+
+def test_hallem_glomerulus_names_and_table():
+    assert M.hallem_glomerulus('da4m') == 'DA4m' and M.hallem_glomerulus('vc3') == 'VC3' and M.hallem_glomerulus('vm5d') == 'VM5d'
+    with pytest.raises(ValueError):
+        M.hallem_glomerulus('dm3+dm5')
+    t, info = M.hallem_hc_table()
+    assert t.shape[1] == 23 and not t.columns.duplicated().any() and len(info['sha256']) == 64
+    assert (t.loc['pentyl acetate -2'] == t.loc['pentyl acetate']).all()
+    rows = M.hallem_rows()
+    assert set(rows.columns) == set(M.HALLEM_STIMULI)
+
+
+@pytest.mark.skipif(not _shared(), reason='shared directory not available')
+def test_hallem_identity_against_e38():
+    assert M.hallem_identity()['exact']
 
 
 def test_with_a0_definitions():

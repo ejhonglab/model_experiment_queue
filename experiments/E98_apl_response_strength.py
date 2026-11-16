@@ -34,11 +34,15 @@ Definitions (the entry's, fixed before any reading):
   otherwise not decided (`comparison_verdict`). The linear reading (n 1, evoked) is given beside every verdict.
 
 Parts (CLI `--part`):
-- 0, the identities (identity.json; part A refuses to run until the reader's pass, part B until all pass): the reader
-  reproduces E79's per-stimulus calyx means under its three baselines (E79_maps_across_baselines.csv) and its blank
-  table (E79_baseline_noise.csv, E79_blank_vs_odor_maps.csv); the extended-input run reproduces each wiring's saved run
-  on the 16 panel odors with 0 count differences and E90's saved APL window and pre-odor means (real wiring: mean over
-  odors 19.548, pre-odor share 0.423); a blank stimulus gives an evoked APL of zero (`--no-runs`: the reader only).
+- 0, the identities (identity.json; part A refuses to run until the reader's pass): the reader reproduces E79's
+  per-stimulus calyx means under its three baselines (E79_maps_across_baselines.csv) and its blank table
+  (E79_baseline_noise.csv, E79_blank_vs_odor_maps.csv); Hallem's 10^-2 rows through olfsysm's hc_data.csv equal E38's
+  (`hallem_identity`; olfdb's copy of the table checked beside when present); the extended-input run reproduces each
+  wiring's saved run on the 16 panel odors with 0 count differences and E90's saved APL window and pre-odor means (real
+  wiring: mean over odors 19.548, pre-odor share 0.423) ('reproduces', which part B requires); a blank stimulus gives
+  an evoked APL of zero ('blank_zero': it does not with E90's pre-odor window, which includes the KC layer's start-up
+  from zero at -0.5 s; 0.51 on the real wiring, -0.016 over SETTLED_PRE_WINDOW; part C's pre-odor level, `with_a0`,
+  waits on a decision) (`--no-runs`: the reader and Hallem only).
 - A (no simulations): A1 the flies' responses per recording and stimulus under E79's three baselines, with and without
   the blank subtracted, the two presentations' agreement, the block order and the drift of the first-in-block paraffin
   oil response (a1_responses.csv, a1_agreement.csv, a1_pfo_drift.csv); A2 the dose-response per odor, recording and fly:
@@ -62,12 +66,13 @@ Parts (CLI `--part`):
     from the three sessions' diagnostics and the control panel (V1's other estimates of ms's input); 2h, t2h, 2-but and
     1-6ol at 10^-6, 2h at 10^-5, ma at 10^-7 and ea at 10^-8 from the kiwi-control session (LOW_SESSION, E49's source);
     E100's 12 (4h-ol at 10^-6 and farn at 10^-2 from all three sessions, 2h and 2-but at 10^-6 and ma at 10^-7 from
-    the other two; read by none of E98's parts); Hallem's pa and ms at 10^-2, -4, -6 and -8 and paa at 10^-2 (drosolf's
-    10^-2 table as E38 reads it, on the glomeruli it shares with the input; the lower rows plug in through
-    `hallem_rows` and enter only with `include_hallem_lower`, so the first B1 runs carry 46 stimuli and list the six
-    left out in b1_stimuli.csv); the blank. The saved layout and its reader, `load_b1` (which E100 uses), are described
-    in B1_LAYOUT. With B1 the KCs' response rate to the blank, APL on and off, against the flies' solvent.
-  - B2 to B4 on the real wiring (`run_point_b`, `point_spec`, POINT_NAMES), each on B1's stimuli and checked on the 16
+    the other two; read by none of E98's parts); Hallem's pa and ms at 10^-2, -4, -6 and -8 and paa at 10^-2 (olfsysm's
+    pyolfsysm/data/hc_data.csv, `hallem_rows`, on the glomeruli it shares with the input; part 0 checks its 10^-2 rows
+    against E38's drosolf table, `hallem_identity`); the blank. The saved layout and its reader, `load_b1` (which E100
+    uses), are described in B1_LAYOUT. With B1 the KCs' response rate to the blank, APL on and off, against the flies'
+    solvent.
+  - B2 to B4 on the real wiring (`run_point_b`, `point_spec`, POINT_NAMES), each on B1's stimuli (the runs of
+    2026-11-15 on the 46 without Hallem's rows below 10^-2, which came after) and checked on the 16
     panel odors against its source's saved run (0 differences): B2 C2 with the 1 s pulse (E80's C2_pulse1_fixed; APL's
     mean also over 0-1 s, 'win_pulse'), E93's fuller input F at its held point B_F_real (`e93_input`: B1's stimuli on
     46 glomeruli), E95's refit at the connectome's bouton share with the uniform component (f1); B3 E36's KC-spike-driven
@@ -97,8 +102,9 @@ Deviations from the entry (each also in the note):
   are pa 10^-6.771 repeats); kept out here so that the reader reproduces E79, and no ratio of the fixed list reads it.
 - B1's low-concentration stimuli come from the kiwi-control session's diagnostics (E49's source for ma and ea), with the
   other sessions' beside where the entry asks for them; paa at 10^-5 from validation2's, as the entry says.
-- Hallem's conversion: the 10^-2 rows on the 16 glomeruli Hallem and the input share, 0 on the other 20 (E38's
-  'hallem_only'); the lower rows wait on a source (drosolf's concentration series is not read here).
+- Hallem's conversion: the rows on the 16 glomeruli Hallem and the input share, 0 on the other 20 (E38's
+  'hallem_only'), read from olfsysm's hc_data.csv (its sha256 and the olfsysm commit in identity.json and the runs'
+  rows), DM3 from Or47a (the file gives dm3 to Or33b too).
 - E93's F input is read from its saved file (inputs/F.csv, both hashes checked): E93's `input_of('F')` now rebuilds it
   within 1.4e-14, not exactly, and the identity against B_F_real needs the exact input.
 - E37's saved APL table has no pre-odor level and is the mean (and peak) over the whole time after odor onset, not over
@@ -756,7 +762,6 @@ BLANK_LABEL = 'blank @ 0'
 HALLEM_NAMES = {'pa': 'pentyl acetate', 'ms': 'methyl salicylate', 'paa': 'phenylacetaldehyde'}
 HALLEM_STIMULI: Tuple[Stim, ...] = (('pa', -2.0), ('pa', -4.0), ('pa', -6.0), ('pa', -8.0), ('ms', -2.0), ('ms', -4.0),
                                     ('ms', -6.0), ('ms', -8.0), ('paa', -2.0))
-HALLEM_CONC_ENV = 'KC_HALLEM_CONC_CSV'   # a table of Hallem's lower-concentration rows, when one is available
 APL_TOL = 1e-9                   # part 0: APL's means against E90's, and the blank's evoked activity (absolute)
 SETTLED_PRE_WINDOW = (-0.25, 0.0)    # APL's pre-odor level after the KC layer's start-up (it starts at time_start, -0.5 s)
 A0_DEFINITIONS = ('e90', 'settled', 'blank')   # part C's pre-odor level: E90's pre-odor mean, 'pre_settled', the blank's window
@@ -822,43 +827,120 @@ def session_inputs() -> Dict[str, pd.DataFrame]:
     return E100.session_inputs(SESSIONS)
 
 
+HALLEM_FILE = 'hc_data.csv'          # olfsysm's tabulation of Hallem & Carlson 2006 (pyolfsysm/data; tracked)
+OLFDB_HALLEM_COPY = Path('outputs/_planning/atlas_2026-11-15/hallem_carlson_2006_olfdb.json')   # olfdb's, fetched 16:30
+HALLEM_DM3_RECEPTOR = '47a'           # the file's header gives dm3 to both 33b and 47a; DM3 is Or47a (olfdb, E38's drosolf)
+
+
+def hallem_glomerulus(name: str) -> str:
+    """hc_data.csv's lower-case glomerulus name in the form drosolf and the model use ('da4m' -> 'DA4m', 'vc3' -> 'VC3')."""
+    import re
+    m = re.fullmatch(r'([a-z]+)(\d+)([a-z]*)', str(name).strip())
+    if m is None:
+        raise ValueError(f'unexpected glomerulus name {name!r}')
+    return m.group(1).upper() + m.group(2) + m.group(3)
+
+
+def hallem_hc_table(path: Optional[Path] = None) -> Tuple[pd.DataFrame, dict]:
+    """olfsysm's Hallem & Carlson 2006 table (pyolfsysm/data/hc_data.csv): odorant rows (the class-11 concentration
+    series labelled '<odorant> -<k>') x glomeruli (the first header row, put in drosolf's form; dm3 taken from
+    HALLEM_DM3_RECEPTOR, the other dm3 column (Or33b) dropped as E38's drosolf table drops the multiglomerular one),
+    spike-rate changes; and its record (path, sha256, the olfsysm commit)."""
+    import hashlib
+    path = H.pyolfsysm_data_dir() / HALLEM_FILE if path is None else Path(path)
+    raw = pd.read_csv(path, header=None)
+    gl, rec = list(raw.iloc[0, 2:]), list(raw.iloc[1, 2:])
+    keep = [i for i, (g, r) in enumerate(zip(gl, rec)) if not (str(g).strip() == 'dm3' and str(r).strip() != HALLEM_DM3_RECEPTOR)]
+    t = raw.iloc[2:, :]
+    vals = t.iloc[:, 2:].iloc[:, keep].astype(float)
+    vals.columns = [hallem_glomerulus(gl[i]) for i in keep]
+    if vals.columns.duplicated().any():
+        raise RuntimeError(f'{path}: repeated glomeruli {list(vals.columns[vals.columns.duplicated()])}')
+    vals.index = [str(x).strip() for x in t.iloc[:, 1]]
+    vals.index.name = 'odorant'
+    vals.columns.name = 'glomerulus'
+    info = dict(path=str(path), sha256=hashlib.sha256(Path(path).read_bytes()).hexdigest(), dm3_receptor=HALLEM_DM3_RECEPTOR,
+                olfsysm_commit=H.code_commits().get('pyolfsysm_commit'))
+    return vals, info
+
+
 def hallem_rows(path: Optional[Path] = None, lower: bool = True) -> pd.DataFrame:
-    """Hallem's spike deltas (glomerulus x (odor, log10 concentration)) for HALLEM_STIMULI where a source has them: the
-    10^-2 rows from drosolf's table as E38 reads it (`orns.orns(add_sfr=False, drop_sfr=False, columns='glomerulus')`,
-    multiglomerular receptors dropped); the lower-concentration rows from `path` (default the environment variable
-    HALLEM_CONC_ENV) when given: a CSV with columns 'odor' (Hallem's name, HALLEM_NAMES), 'log10_conc' and one column per
-    glomerulus (drosolf's glomerulus names), spike deltas without the spontaneous rate (`lower` False: the 10^-2 rows
-    only). Stimuli no source has are left out (and listed by `b1_input`)."""
-    from drosolf import orns
-    d = orns.orns(add_sfr=False, drop_sfr=False, columns='glomerulus')
-    d = d.loc[:, [g for g in d.columns if '+' not in g]].astype(float)
+    """Hallem's spike deltas (glomerulus x (odor, log10 concentration)) for HALLEM_STIMULI, from olfsysm's hc_data.csv
+    (`hallem_hc_table`): the 10^-2 rows of pa and ms from its concentration series ('pentyl acetate -2', ...), paa's from
+    its 10^-2 table ('phenylacetaldehyde'), the lower rows from the series (`lower` False: the 10^-2 rows only). Part 0
+    checks that the 10^-2 rows equal E38's (drosolf's table, `hallem_identity`)."""
+    t, _ = hallem_hc_table(path)
     cols = {}
     for o, c in HALLEM_STIMULI:
-        if abs(c + 2.0) < CONC_TOL and HALLEM_NAMES[o] in d.index:
-            cols[(o, c)] = d.loc[HALLEM_NAMES[o]]
-    path = Path(path) if path is not None else (Path(os.environ[HALLEM_CONC_ENV]) if os.environ.get(HALLEM_CONC_ENV) else None)
-    if lower and path is not None:
-        t = pd.read_csv(path)
-        names = {v: k for k, v in HALLEM_NAMES.items()}
-        for _, r in t.iterrows():
-            o, c = names.get(str(r['odor'])), float(r['log10_conc'])
-            if o is None or (o, c) not in set(HALLEM_STIMULI) or (o, c) in cols:
-                continue
-            cols[(o, c)] = r.drop(['odor', 'log10_conc']).astype(float)
+        if not lower and abs(c + 2.0) > CONC_TOL:
+            continue
+        name = HALLEM_NAMES[o]
+        row = f'{name} {int(round(c))}' if f'{name} {int(round(c))}' in t.index else (name if abs(c + 2.0) < CONC_TOL else None)
+        if row is None or row not in t.index:
+            continue
+        cols[(o, c)] = t.loc[row]
     out = pd.DataFrame(cols)
     out.index.name = 'glomerulus'
     return out
 
 
-def b1_input(include_hallem_lower: bool = False, hallem_path: Optional[Path] = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def hallem_identity() -> dict:
+    """Part 0's identity of Hallem's arm: through this path (`hallem_rows`, olfsysm's hc_data.csv) Hallem's pa, ms and paa
+    at 10^-2 equal E38's inputs (drosolf's 10^-2 table as E38's `hallem_deltas` reads it; pa through the same call) on
+    every glomerulus the input shares with it, and the file's concentration series at 10^-2 equals its 10^-2 table."""
+    from drosolf import orns
+    from experiments import E38_hallem_input as E38
+    gl = list(H.apl16_orn_deltas().index)
+    ours = hallem_rows(lower=False)
+    e38 = E38.hallem_deltas(gl)
+    d = orns.orns(add_sfr=False, drop_sfr=False, columns='glomerulus')
+    d = d.loc[:, [g for g in d.columns if '+' not in g]]
+    shared = [g for g in gl if g in d.columns]
+    ref = {'pa': d.loc[HALLEM_NAMES['pa'], shared].astype(float), 'ms': e38['ms'], 'paa': e38['paa']}
+    t, info = hallem_hc_table()
+    res = dict(file=info, shared_glomeruli=shared)
+    for o in ('pa', 'ms', 'paa'):
+        mine = ours[(o, -2.0)].reindex(shared)
+        r = ref[o].reindex(shared).astype(float)
+        res[o] = dict(max_abs_diff=float((mine - r).abs().max()), n=int(len(shared)), missing=int(mine.isna().sum()))
+    for o in ('pa', 'ms'):
+        res[f'{o}_series_vs_table'] = float((t.loc[f'{HALLEM_NAMES[o]} -2'] - t.loc[HALLEM_NAMES[o]]).abs().max())
+    res['exact'] = bool(all(res[o]['max_abs_diff'] == 0 and res[o]['missing'] == 0 for o in ('pa', 'ms', 'paa'))
+                        and res['pa_series_vs_table'] == 0 and res['ms_series_vs_table'] == 0)
+    return res
+
+
+def olfdb_hallem_check(path: Path) -> dict:
+    """A one-time cross-check of `hallem_rows` against olfdb's reference dataset hallem-carlson-2006 (a JSON fetched from
+    its API: rows glomeruli, cols '<odorant> @ <k>', float32 values_b64): the largest difference over Hallem's stimuli
+    and the glomeruli both have."""
+    import base64
+    d = json.loads(Path(path).read_text())
+    v = np.frombuffer(base64.b64decode(d['values_b64']), dtype='<f4').reshape(d['shape'])
+    lab = lambda x: str(x['label'] if isinstance(x, dict) else x)
+    ref = pd.DataFrame(v, index=[lab(r) for r in d['rows']], columns=[lab(c) for c in d['cols']])
+    ref = ref.loc[:, ~ref.columns.duplicated()]
+    ours = hallem_rows()
+    out = {}
+    for (o, c), col in ours.items():
+        name = f'{HALLEM_NAMES[o]} @ {int(round(c))}'
+        if name not in ref.columns:
+            out[f'{o} {c:g}'] = 'not in olfdb'
+            continue
+        g = [x for x in col.index if x in ref.index]
+        out[f'{o} {c:g}'] = dict(n=len(g), max_abs_diff=float((col.loc[g].astype(float) - ref.loc[g, name].astype(float)).abs().max()))
+    return out
+
+
+def b1_input(include_hallem_lower: bool = True, hallem_path: Optional[Path] = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """B1's extended input: the lab's 16 odors (H.apl16_orn_deltas, unchanged and first), then the added stimuli of
     `b1_specs` (panel ADDED_PANEL, odor the stimulus label), on the input's 36 glomeruli; a session's glomeruli outside
     them dropped and the ones it lacks filled with 0; Hallem's stimuli on the glomeruli Hallem and the input share, 0
     elsewhere (E38's 'hallem_only'); the blank all 0. Returns (input, table): the table has one row per B1 stimulus
     (`b1_specs`' fields, 'included', why not, the glomeruli filled with 0 and dropped, the input total and its positive
-    part) and the input vector of every included stimulus (columns orn_<glomerulus>). Hallem's rows below 10^-2 enter
-    only with `include_hallem_lower` (and a source, `hallem_rows`), so that every wiring's first B1 run has the same 46
-    stimuli; the left-out ones are listed ('included' False, with the reason)."""
+    part) and the input vector of every included stimulus (columns orn_<glomerulus>). Hallem's rows come from olfsysm's
+    hc_data.csv (`hallem_rows`); without `include_hallem_lower` the rows below 10^-2 are left out and listed ('included'
+    False, with the reason)."""
     panel = H.apl16_orn_deltas()
     gl = list(panel.index)
     sess = session_inputs()
@@ -873,10 +955,8 @@ def b1_input(include_hallem_lower: bool = False, hallem_path: Optional[Path] = N
         elif sp['source'] == 'hallem':
             key = (sp['odor'], sp['conc'])
             if key not in hal.columns:
-                row.update(included=False, reason=("left out of the first B1 runs (the lower rows enter with "
-                           "include_hallem_lower / --hallem-lower)" if not include_hallem_lower else
-                           "no source for Hallem's row at this concentration (drosolf's table gives 10^-2 only; the lower "
-                           f"rows plug in through hallem_rows, {HALLEM_CONC_ENV} or --hallem-csv)"))
+                row.update(included=False, reason=("left out (include_hallem_lower False)" if not include_hallem_lower
+                                                   else f"not in {HALLEM_FILE}"))
                 rows.append(row)
                 continue
             h = hal[key]
@@ -1094,6 +1174,8 @@ def run_b1(label: str, root: Optional[Path] = None, force: bool = False) -> Dict
         return _read_json(d / f'{label}_identity.json') or b1_identity(label, [d])
     t0 = time.time()
     orn, table = b1_input()
+    hinfo = hallem_hc_table()[1]
+    table['hallem_file_sha256'] = np.where(table['source'] == 'hallem', hinfo['sha256'], '')
     table.to_csv(d / 'b1_stimuli.csv', index=False)
     er = ExtendedRun(label, orn)
     commits = process_commits()
@@ -1103,7 +1185,8 @@ def run_b1(label: str, root: Optional[Path] = None, force: bool = False) -> Dict
         save_b1(d, label, ct, o)
         row = dict(wiring=label, cond=ct, n_stimuli=len(er.labels), host=_host(), time=time.strftime('%Y-%m-%d %H:%M'),
                    runtime_s=time.time() - t1, threads=os.environ.get('OMP_NUM_THREADS'),
-                   input_sha256=_frame_sha(orn), **{f'param_{k}': v for k, v in er.params(c).items()},
+                   input_sha256=_frame_sha(orn), hallem_file_sha256=hinfo['sha256'],
+                   **{f'param_{k}': v for k, v in er.params(c).items()},
                    **{k: v for k, v in commits.items() if not isinstance(v, (dict, list))})
         _append_csv(d / 'runs.csv', row)
         print(f'{label} {ct}: {time.time() - t1:.0f} s', flush=True)
@@ -1558,11 +1641,20 @@ def part_0(wirings: Sequence[str] = ALL_WIRINGS, runs: bool = True) -> dict:
     print(f"reader identity: exact {res['reader']['exact']} ({time.time() - t0:.0f} s)", flush=True)
     if not res['reader']['exact']:
         raise RuntimeError(f"the reader does not reproduce E79: {res['reader']}")
+    res['hallem'] = hallem_identity()
+    olfdb = H.HERE / OLFDB_HALLEM_COPY
+    if olfdb.exists():
+        res['hallem']['olfdb_check'] = dict(file=str(OLFDB_HALLEM_COPY), result=olfdb_hallem_check(olfdb))
+    _write_json(path, res)
+    print(f"Hallem identity: exact {res['hallem']['exact']}", flush=True)
+    if not res['hallem']['exact']:
+        raise RuntimeError(f"Hallem's rows through hc_data.csv are not E38's: {res['hallem']}")
     if runs:
         for w in wirings:
             res[f'run_{w}'] = run_identity(w)
             _write_json(path, res)
-    res['all_exact'] = bool(res['reader']['exact'] and all(res.get(f'run_{w}', {}).get('exact') for w in ALL_WIRINGS))
+    res['all_exact'] = bool(res['reader']['exact'] and res['hallem']['exact']
+                            and all(res.get(f'run_{w}', {}).get('exact') for w in ALL_WIRINGS))
     _write_json(path, res)
     return res
 
