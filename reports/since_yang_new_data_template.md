@@ -7,6 +7,7 @@ The program began with two sets of Yang's recordings of KC somata: the 16-odor p
 [TOC]
 
 %%% hover
+re-drawn: Of the PN→KC wiring: a randomized version of the hemibrain wiring that the model otherwise uses, made either by permuting the claws among the KCs of each type or by a shuffle that keeps every glomerulus pair's count of shared KCs. Each KC keeps its number of claws and each glomerulus its number of claws; which KC gets which glomerulus changes. A model on a re-drawn wiring stands for another fly with the same statistics, so a result that holds on re-drawn wirings does not depend on the one mapped brain.
 APL effect: Of one odor pair, its odor-odor distance with APL on minus its distance with APL off. In the KC data, the control flies' distance minus the distance with APL output blocked (TNT), each the mean over recordings of the cosine distance; in a model, its distance with APL on minus its distance with APL acutely off.
 APL-effect loss: The root mean squared difference between a model's and the KC data's per-pair APL effect over the 120 odor pairs; lower is better. It splits exactly into a mean part and a pattern part, and its floor is the loss that a second sample of the same flies would show against the first.
 pattern part: The APL-effect loss with both means removed: how far the model's pattern of the APL effect across the 120 pairs is from the flies'. It splits exactly into an amplitude part (the model spreads its effect over the pairs more or less widely than the flies) and a shape part.

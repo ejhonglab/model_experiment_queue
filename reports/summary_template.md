@@ -5,6 +5,7 @@ last model experiment: {{meta:last_experiment}}, edited: {{meta:generated}}
 [TOC]
 
 %%% hover
+re-drawn: Of the PN→KC wiring: a randomized version of the hemibrain wiring that the model otherwise uses, made either by permuting the claws among the KCs of each type or by a shuffle that keeps every glomerulus pair's count of shared KCs. Each KC keeps its number of claws and each glomerulus its number of claws; which KC gets which glomerulus changes. A model on a re-drawn wiring stands for another fly with the same statistics, so a result that holds on re-drawn wirings does not depend on the one mapped brain.
 isotonic: Order-preserving. An isotonic fit is the non-decreasing curve (a step function) closest to the data in the least-squares sense, with no assumption about its shape; see the footnote on the monotone fit.
 VCF: Odor distances derived from how often odors co-occur across natural odor sources (the hyperbolic embedding of natural-source statistics in the thesis), used as a reference for structure the ORN input does not predict.
 oracles: Model manipulations handed part of the answer (which KCs or which glomeruli to change, read off the KC data or off the model's own output scored against them); ceiling tests, never mechanisms. See the footnote on the term.

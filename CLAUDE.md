@@ -948,6 +948,12 @@ bare ID ("the per-glomerulus drive normalization sweep (E20)", not "E20").
   publishing; the artifact renders exactly that file.
 - Numbers in tables with the data value and the model baseline alongside (see above); prose
   says what moved and whether it reached the data.
+- **No walls of text (Tom, 2026-11-16).** In every page, note and reply that people read (the summary, the digest
+  pages, per-experiment notes and pages, chat posts, replies to Tom), a paragraph or a list item holds one topic in
+  about five sentences or ~100 words at most. Longer ones are split at the topic changes or turned into a list or a
+  table; an "In brief" is several short paragraphs or bullets, never one block. No whole long paragraph is in bold:
+  at most its first sentence or a lead phrase. This holds for text a planning subagent returns too (say so in its
+  brief), and existing long paragraphs are split when a page is next revised.
 - **Third person throughout.** Summary reports (and the final report) are read by people other than
   Tom: never address the reader or Tom in the second person ("your megamat data"); name data
   by what they are ("the megamat ORN recordings, 9 flies"). Replies to Tom in the terminal and

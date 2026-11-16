@@ -1,5 +1,9 @@
 # APL and the ORN→KC remapping of odor–odor correlations
 
+%%% hover
+re-drawn: Of the PN→KC wiring: a randomized version of the hemibrain wiring that the model otherwise uses, made either by permuting the claws among the KCs of each type or by a shuffle that keeps every glomerulus pair's count of shared KCs. Each KC keeps its number of claws and each glomerulus its number of claws; which KC gets which glomerulus changes. A model on a re-drawn wiring stands for another fly with the same statistics, so a result that holds on re-drawn wirings does not depend on the one mapped brain.
+%%%
+
 Nov 3, 2026 · @Tom
 
 ## Bottom line
