@@ -174,11 +174,15 @@ def test_family_line_and_ratios():
     assert apl['indicator_min'].iloc[0] <= want <= apl['indicator_max'].iloc[0]
 
 
-def test_ratio_sets_baselines():
+def _fam_blank():
     f = _fam(1.0)
-    f = pd.concat([f, f[f['stimulus'] == 'pa'].assign(stimulus=M.BLANK_LABEL, apl_win=8.6, apl_evoked=0.6,
-                                                      **{M.claw_col(sub, sh, 'win'): 60.0 for sub in M.CLAW_SUBSETS
-                                                         for sh in M.CLAW_SHARES})])
+    return pd.concat([f, f[f['stimulus'] == 'pa'].assign(stimulus=M.BLANK_LABEL, apl_win=8.6, apl_evoked=0.6,
+                                                         **{M.claw_col(sub, sh, 'win'): 60.0 for sub in M.CLAW_SUBSETS
+                                                            for sh in M.CLAW_SHARES})])
+
+
+def test_ratio_sets_baselines():
+    f = _fam_blank()
     rs = M.ratio_sets(f[f['wiring'] == 'real'], 'pa', 'ms', baselines=('e90', 'settled', 'blank'))
     lin = rs[(rs['n'] == 1.0) & (rs['form'] == 'evoked')]
     a = lin[lin['quantity'] == 'APL'].set_index('baseline')['ratio']
@@ -186,6 +190,74 @@ def test_ratio_sets_baselines():
     assert a['e90'] == pytest.approx((pa.apl_win - 8.0) / (ms.apl_win - 8.0))
     assert a['settled'] == pytest.approx((pa.apl_win - 8.5) / (ms.apl_win - 8.5))
     assert a['blank'] == pytest.approx((pa.apl_win - 8.6) / (ms.apl_win - 8.6))
+    # the claws: at E90's pre-odor mean under 'e90', at the blank's window under 'blank' and under the partner 'settled'
+    c = lin[(lin['quantity'] == 'claws') & (lin['subset'] == 'input') & (lin['share'] == 0.0)].set_index('baseline')['ratio']
+    col = M.claw_col('input', 0.0, 'win')
+    assert c['e90'] == pytest.approx((pa[col] - 50.0) / (ms[col] - 50.0))
+    assert c['blank'] == pytest.approx((pa[col] - 60.0) / (ms[col] - 60.0)) == pytest.approx(c['settled'])
+
+
+def test_blank_level_zero_and_by_hand():
+    f = _fam_blank()
+    g = f[f['wiring'] == 'real']
+    # under the blank's level the blank's response is zero at both stages, in both forms
+    z = M.ratio_sets(g, M.BLANK_LABEL, 'ms', baselines=('blank',))
+    assert np.allclose(z['ratio'], 0.0)
+    # both forms give the ratio computed by hand
+    rs = M.ratio_sets(g, 'pa', 'ms', baselines=('blank',)).set_index(['quantity', 'subset', 'share', 'n', 'form'])['ratio']
+    pa, ms = g[g.stimulus == 'pa'].iloc[0], g[g.stimulus == 'ms'].iloc[0]
+    a1, a2, a0 = pa.apl_win, ms.apl_win, 8.6
+    apl = M.ratio_sets(g, 'pa', 'ms', baselines=('blank',))
+    apl = apl[apl['quantity'] == 'APL'].set_index(['n', 'form'])['ratio']
+    assert apl[(2.0, 'evoked')] == pytest.approx(((a1 - a0) / (a2 - a0)) ** 2)
+    assert apl[(2.0, 'baseline')] == pytest.approx((a1 ** 2 - a0 ** 2) / (a2 ** 2 - a0 ** 2))
+    col = M.claw_col('input', 0.25, 'win')
+    c1, c2, c0 = pa[col], ms[col], 60.0
+    assert rs[('claws', 'input', 0.25, 1.5, 'evoked')] == pytest.approx(((c1 - c0) / (c2 - c0)) ** 1.5)
+    assert rs[('claws', 'input', 0.25, 1.5, 'baseline')] == pytest.approx((c1 ** 1.5 - c0 ** 1.5) / (c2 ** 1.5 - c0 ** 1.5))
+
+
+def test_run_without_a_blank_refused():
+    g = _fam(1.0)
+    g = g[g['wiring'] == 'real']
+    for bl in ('blank', 'settled'):
+        with pytest.raises(ValueError, match='blank'):
+            M.ratio_sets(g, 'pa', 'ms', baselines=(bl,))
+    assert len(M.ratio_sets(g, 'pa', 'ms', baselines=('e90',)))
+
+
+def test_partner_clause():
+    # APL's or Q's class that the partner level does not give is reading-dependent: not decided
+    assert M.partner_held('inside', ['inside', 'inside'], 'APL') == 'inside'
+    assert M.partner_held('inside', ['inside', 'flatter'], 'APL') == 'not decided'
+    assert M.partner_held('flatter', ['steeper', 'flatter'], 'Q') == 'not decided'
+    assert M.partner_held('flatter', ['not decided', 'flatter'], 'Q') == 'not decided'
+    # the claws have no partner level
+    assert M.partner_held('flatter', ['steeper', 'steeper'], 'claws') == 'flatter'
+    assert M.partner_held('not decided', ['inside', 'inside'], 'APL') == 'not decided'
+
+
+def _a3_run(blank_win=8.78, settled=8.79, rate=0.0, vary=0.0):
+    stims = ['pa', 'ms', M.BLANK_LABEL]
+    kc = pd.MultiIndex.from_arrays([np.repeat([1, 2], 2), np.arange(4)], names=['kc_id', 'claw'])
+    run = dict(meta=dict(claw_glomerulus=np.array(['DM1', 'DM1', 'VA2', 'X']), kc_of_claw=np.repeat([1, 2], 2)))
+    for _, ct in M.A3_CONDS:
+        apl = pd.DataFrame(dict(win=[20.0, 19.0, blank_win], pre=8.27, pre_settled=[settled, settled + vary, settled]),
+                           index=pd.Index(stims, name='stimulus'))
+        pre = pd.DataFrame(np.full((4, 3), 100.0), index=kc, columns=stims)
+        pre.iloc[0, 1] += vary * 1000
+        resp = pd.DataFrame(np.zeros((2, 3)), columns=stims)
+        resp.iloc[0, 2] = rate
+        run[ct] = dict(apl=apl, claw_pre=pre, responses=resp)
+    return run
+
+
+def test_a3_blank_checks():
+    rows = M.a3_blank_checks('real', _a3_run())
+    assert len(rows) == 2 and all(r['passed'] for r in rows)
+    assert not any(r['passed'] for r in M.a3_blank_checks('real', _a3_run(blank_win=8.9)))      # 1.3 % off
+    assert not any(r['passed'] for r in M.a3_blank_checks('real', _a3_run(vary=1e-3)))          # levels differ
+    assert not any(r['passed'] for r in M.a3_blank_checks('real', _a3_run(rate=1.0)))           # the blank recruits KCs
 
 
 # ---------------------------------------------------------------------------
@@ -652,35 +724,43 @@ def test_parts_b_to_e_and_score_on_made_up_recordings(tmp_path, monkeypatch):
     assert b['channel_check'] == 'passed'
     assert b['b_G'] == pytest.approx(0.034, abs=0.006)           # the planted leak, measured in the green-only flies
     assert b['cross_check_passed'] is True and not b['outcome_h']
-    b2 = pd.read_csv(tmp_path / 'b2_reverse.csv')
+    b2 = M.read_table(tmp_path / 'b2_reverse.csv')
     assert len(b2) and b2['share_of_set_l'].abs().max() < 0.1      # red-only flies: APL's channel far below set L's
     c = M.part_c(n_boot=500)
     x1 = json.loads((tmp_path / 'c_x1.json').read_text())
     assert x1['all']['carrying b1']['verdict'] == 'one function'
     M.part_d(n_perm=100, cell_ums=(4.0,))
-    d = pd.read_csv(tmp_path / 'd_x3.csv')
+    d = M.read_table(tmp_path / 'd_x3.csv')
     assert set(d['reading']) == set(M.READINGS) and set(d['b_mult']) == set(M.B_MULTIPLES)
     M.part_e()
-    e = pd.read_csv(tmp_path / 'e_claw_distances.csv')
+    e = M.read_table(tmp_path / 'e_claw_distances.csv')
     assert len(e) and e['distance_noise_removed'].notna().any()
     pd.DataFrame(dict(stem=list(M.GROUP_L), out_of_sensitivity_readings=['warp 9 um'] + [''] * (len(M.GROUP_L) - 1))
                  ).to_csv(tmp_path / 'a1_recordings.csv', index=False)
-    with pytest.raises(ValueError, match='a0s'):
-        M.score(('pre',))
     v = M.score(model_sets=_made_up_model_sets())
     assert v['X1']['held'] == 'one function'
     assert v['X3']['by_reading']['carrying']['verdict'] == 'follows' and v['X3']['held'] == 'follows'
-    assert v['a0_carrying'] is None and v['X2']['carrying_baseline'] == 'carrying baseline: not fixed (open issue 3e15a91)'
-    assert set(v['X2']['by_baseline']) == set(M.A0_CHOICES)
-    for a0 in M.A0_CHOICES:
-        for q in M.X2_QUANTITIES:
-            assert v['X2']['by_baseline'][a0][q]['held'] in ('flatter', 'inside', 'steeper', 'not decided')
+    assert v['model_levels'] == dict(carrying='blank', partner='settled', shown_deciding_nothing='e90')
+    assert v['caveat'] == M.QUALITY_CAVEAT
     for q in M.X2_QUANTITIES:
-        h = v['X2']['held_by_baseline'][q]
-        assert v['X2']['class_changes_between_baselines'][q] == (len(set(h.values())) > 1)
+        assert v['X2']['held'][q] in ('flatter', 'inside', 'steeper', 'not decided')
+        assert v['X2']['lines'][q].startswith(f'{q}: ') and "E90's level (decides nothing)" in v['X2']['lines'][q]
+        qq = v['X2']['quantities'][q]
+        assert qq['held'] == M.partner_held(qq['held_before_partner'], list(qq['partner_classes'].values()), q)
+    assert set(v['X2']['quantities']['APL']['partner_classes']) == {'carrying b0', 'carrying b1'}
     assert (tmp_path / 'verdict.json').exists()
-    t = pd.read_csv(tmp_path / 'score_x2.csv')
-    assert set(t['a0']) == set(M.A0_CHOICES) and (t['carrying_baseline'] == M.A0_CARRYING_NOTE).all()
+    with open(tmp_path / 'score_x2.csv') as f:
+        assert f.readline().strip() == f'# {M.QUALITY_CAVEAT}'
+    t = M.read_table(tmp_path / 'score_x2.csv')
+    assert set(t['a0']) == set(M.A0_CHOICES)
+    assert set(t[t['a0'] == 'settled']['reading']) == {'carrying'}                  # the partner: the carrying reading only
+    assert dict(t[['a0', 'level_role']].drop_duplicates().values.tolist()) == M.A0_ROLE
+    for name in ('channel_check.csv', 'b1_slopes.csv', 'c_responses.csv', 'c_x2_flies.csv', 'd_x3.csv',
+                 'e_claw_distances.csv', 'e_model_distances.csv', 'score_x3_flies.csv'):
+        with open(tmp_path / name) as f:
+            assert f.readline().strip() == f'# {M.QUALITY_CAVEAT}', name
+    for name in ('channel_check.json', 'b_leak.json', 'c_x1.json', 'verdict.json'):
+        assert json.loads((tmp_path / name).read_text())['caveat'] == M.QUALITY_CAVEAT, name
     assert (tmp_path / 'score_x3_flies.csv').exists()
     assert (tmp_path / 'e_model_distances.csv').exists()
     assert v['sensitivity']['left_out'] == [M.GROUP_L[0]] and v['sensitivity']['X1']['held'] == 'one function'
@@ -694,11 +774,10 @@ def test_parts_b_to_e_and_score_on_made_up_recordings(tmp_path, monkeypatch):
     w = M.score(model_sets=_made_up_model_sets())
     assert w['X1']['held'] == 'not decided' and w['X1']['held_if_slope_carried'] == 'one function'
     assert all(x == 'not decided' for kk, x in w['X1']['by_reading'].items() if kk.endswith('b1'))
-    for a0 in M.A0_CHOICES:
-        assert w['X2']['by_baseline'][a0]['APL']['held'] == v['X2']['by_baseline'][a0]['APL']['held']
-        for q in M.KC_QUANTITIES:
-            assert w['X2']['by_baseline'][a0][q]['held'] == 'not decided'
-            assert w['X2']['held_by_baseline_if_slope_carried'][q][a0] == v['X2']['by_baseline'][a0][q]['held']
+    assert w['X2']['held']['APL'] == v['X2']['held']['APL']
+    for q in M.KC_QUANTITIES:
+        assert w['X2']['held'][q] == 'not decided'
+        assert w['X2']['held_if_slope_carried'][q] == v['X2']['held'][q]
     assert w['X3']['held'] != 'follows' and w['cross_check_rule']
     assert w['sensitivity']['X1']['held'] == 'not decided'
 
