@@ -72,8 +72,9 @@ Parts (CLI `--part`):
     uses), are described in B1_LAYOUT. With B1 the KCs' response rate to the blank, APL on and off, against the flies'
     solvent.
     E101's part A3 ran B1's 52 stimuli on all eight wirings (hal, 2026-11-15) through `ExtendedRun`; `load_b1_all` takes
-    the wirings E98 has not run from its table (results/E101_apl_vs_kc_claws/a3_apl.csv, sha256 and commits recorded),
-    after checking that it equals E98's own runs exactly where both exist (the real wiring).
+    the wirings E98 has not run from its archived runs (data/model_outputs/E101_apl_vs_kc_claws/A3/, E98's layout; every
+    file's sha256 and E101's commits recorded), after checking that they equal E98's own runs exactly where both exist
+    (the real wiring).
   - B2 to B4 on the real wiring (`run_point_b`, `point_spec`, POINT_NAMES), each on B1's stimuli (the runs of
     2026-11-15 on the 46 without Hallem's rows below 10^-2, which came after) and checked on the 16
     panel odors against its source's saved run (0 differences): B2 C2 with the 1 s pulse (E80's C2_pulse1_fixed; APL's
@@ -1170,17 +1171,29 @@ E101_A3_PROVENANCE = ('results', 'E101_apl_vs_kc_claws', 'provenance_A3.json')
 B1_COMPARE_COLS = ('win', 'pre', 'pre_settled', 'response_rate')
 
 
+E101_A3_ARCHIVE = ('data', 'model_outputs', 'E101_apl_vs_kc_claws', 'A3')
+
+
 def load_b1_e101(path: Optional[Path] = None) -> Tuple[pd.DataFrame, dict]:
     """B1's stimuli as E101's part A3 ran them on the eight wirings (hal, 2026-11-15; E98's `ExtendedRun` and `save_b1`,
-    its table written by E98's `load_b1`): results/E101_apl_vs_kc_claws/a3_apl.csv, `load_b1`'s rows, and its record
-    (path, sha256, E101's A3 provenance: the commits of the runs and of the table)."""
-    path = H.shared_dir().joinpath(*E101_A3_TABLE) if path is None else Path(path)
+    E98's B1 layout plus E101's stages): `load_b1`'s rows from its archived runs
+    (data/model_outputs/E101_apl_vs_kc_claws/A3/), or from its table (results/E101_apl_vs_kc_claws/a3_apl.csv, E98's
+    `load_b1` written out) when `path` names a CSV or the archive is absent; and its record (where, the sha256 of every
+    file read, E101's A3 provenance: the commits of the runs and of the table)."""
     import hashlib
-    b = pd.read_csv(path, float_precision='round_trip')
     prov = _read_json(H.shared_dir().joinpath(*E101_A3_PROVENANCE)) or {}
-    rec = dict(path=str(path), sha256=hashlib.sha256(Path(path).read_bytes()).hexdigest(),
-               runs=[dict(commits=r.get('commits'), host=r.get('host'), time=r.get('time'), runs_only=r.get('runs_only'))
+    rec = dict(runs=[dict(commits=r.get('commits'), host=r.get('host'), time=r.get('time'), runs_only=r.get('runs_only'))
                      for r in prov.get('runs', [])])
+    arc = H.shared_dir().joinpath(*E101_A3_ARCHIVE)
+    if path is None and arc.is_dir():
+        b = load_b1(ALL_WIRINGS, roots=[arc])
+        files = sorted(f for f in arc.iterdir() if f.name.endswith(('_apl.csv', '_responses.parquet')))
+        rec.update(path=str(arc), sha256={f.name: hashlib.sha256(f.read_bytes()).hexdigest() for f in files})
+        b['file'] = 'E101:' + str(arc)
+        return b, rec
+    path = H.shared_dir().joinpath(*E101_A3_TABLE) if path is None else Path(path)
+    b = pd.read_csv(path, float_precision='round_trip')
+    rec.update(path=str(path), sha256=hashlib.sha256(Path(path).read_bytes()).hexdigest())
     b['file'] = f'E101:{Path(path).name}'
     return b, rec
 
@@ -1317,7 +1330,9 @@ def b1_identity_e101(label: str) -> dict:
     the 16 panel odors against E90's saved ones, and the blank's evoked APL, as `b1_identity`."""
     eb, rec = load_b1_e101()
     ident = (_read_json(H.shared_dir() / 'results' / 'E101_apl_vs_kc_claws' / 'a3_identity.json') or {}).get(label, {})
-    res = dict(wiring=label, source='E101 A3', e101_table_sha256=rec['sha256'])
+    res = dict(wiring=label, source='E101 A3', e101_path=rec['path'],
+               e101_sha256={k: v for k, v in rec['sha256'].items() if k.startswith(f'{label}_')}
+               if isinstance(rec['sha256'], dict) else rec['sha256'])
     for c, ct in CONDS:
         g = eb[(eb['wiring'] == label) & (eb['cond'] == ct)].set_index('stimulus')
         e90 = pd.read_csv(e90_dir(f'{label}_{ct}') / f'{label}_{ct}_apl.csv', index_col=0)
