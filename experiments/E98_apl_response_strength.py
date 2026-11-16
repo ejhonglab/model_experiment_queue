@@ -1292,7 +1292,7 @@ def point_spec(name: str, orn: Optional[pd.DataFrame] = None) -> dict:
             saved = _saved_pair(_archive('E36_spike_apl_jointfit'), fit)
         else:
             tp = json.loads((H.shared_dir() / 'results' / 'E37_spike_only_apl' / 'tuned_params.json').read_text())
-            p = _json_params(tp[f'{fit}_nopnapl'])
+            p = {k: float(tp[f'{fit}_nopnapl'][k]) for k in E37.PARAMS}
             if p.get('wPNAPL_scale', 1.0) != 0.0:
                 raise RuntimeError(f"E37's spike-only point has wPNAPL_scale {p.get('wPNAPL_scale')}")
             saved = _saved_pair(_archive('E37_spike_only_apl'), f'{fit}_nopnapl')
