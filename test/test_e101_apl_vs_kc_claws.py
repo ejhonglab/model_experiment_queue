@@ -425,7 +425,7 @@ OK = "processed: usable (Yang's processed products only)"
 def test_refusals(monkeypatch):
     # the mechanism, whatever the module's current release state
     monkeypatch.setattr(M, 'YANG_RELEASED', False)
-    monkeypatch.setattr(M, 'CHANNELS_CONFIRMED', False)
+    monkeypatch.setattr(M, 'CHANNEL_MODE', 'waiting')
     row = dict(stem='20221207_1FLfun2', use_until_further_notice=OK, folder='/nonexistent')
     with pytest.raises(PermissionError, match='not released'):
         M.check_readable(row)
@@ -439,6 +439,31 @@ def test_refusals(monkeypatch):
     for part in (M.part_b, M.part_c, M.part_d, M.part_e, M.score):
         with pytest.raises(NotImplementedError, match='release'):
             part()
+    # released, but the channels neither confirmed nor read as inferred: still waiting
+    monkeypatch.setattr(M, 'YANG_RELEASED', True)
+    for part in (M.part_b, M.part_c, M.score):
+        with pytest.raises(NotImplementedError, match='CHANNEL_MODE'):
+            part()
+
+
+def test_gate_needs_the_channel_check(tmp_path, monkeypatch):
+    import json
+    monkeypatch.setattr(M, 'out_dir', lambda: tmp_path)
+    monkeypatch.setattr(M, 'YANG_RELEASED', True)
+    monkeypatch.setattr(M, 'CHANNEL_MODE', M.INFERRED_CHECKED)
+    M._gate('B')                                                   # part B runs before the check
+    for part in ('C', 'D', 'E', 'score'):
+        with pytest.raises(M.ChannelCheckNotPassed, match='not run'):
+            M._gate(part)
+    for v in ('swapped', 'failed'):
+        (tmp_path / 'channel_check.json').write_text(json.dumps(dict(verdict=v)))
+        with pytest.raises(M.ChannelCheckNotPassed, match=v):
+            M._gate('C')
+    (tmp_path / 'channel_check.json').write_text(json.dumps(dict(verdict='passed')))
+    M._gate('C')
+    monkeypatch.setattr(M, 'CHANNEL_MODE', 'confirmed by Yang')
+    (tmp_path / 'channel_check.json').unlink()
+    M._gate('D')                                                   # confirmed by Yang: no check needed
 
 
 @pytest.mark.skipif(_shared() is None or not (_shared() / 'data' / 'yang_apl_recordings' / 'recordings.csv').exists(),
@@ -467,7 +492,11 @@ L_CONCS = {'pa': (-6.214, -5.612, -5.01, -4.408, -3.806, -2.0), 'paa': (-6.0, -5
            'ms': (-5.112, -4.334, -3.556, -2.778, -2.0)}
 
 
-def _made_up_recording(stem, group, rng, leak=0.034, coupling=0.9, green_only=False, n_px=60):
+def _made_up_recording(stem, group, rng, leak=0.034, coupling=0.9, green_only=False, red_only=False, n_px=60,
+                       reverse_leak=0.01):
+    """A made-up two-channel recording of set L's design: APL (C1) and the KCs (C2) with odor-specific patterns coupled
+    by `coupling`, the leak of green into red `leak`; `green_only` (group G) without a KC response, `red_only` (group R)
+    without an APL response, its C1 carrying `reverse_leak` of the KC channel."""
     stims = [(o, c) for o in L_CONCS for c in L_CONCS[o]]
     f = _frames(['pfo'] + stims + ['pfo'])
     f['is_solvent'] = f['odor'] == 'solvent'
@@ -482,9 +511,10 @@ def _made_up_recording(stem, group, rng, leak=0.034, coupling=0.9, green_only=Fa
             k = rng.normal(0, 0.005, (n_px, n_px))
         else:
             ks = 0.05 + 0.25 * (c - min(L_CONCS[o])) / (max(L_CONCS[o]) - min(L_CONCS[o]))
-            a = 5 * ks * (1 + 0.3 * U[o]) + rng.normal(0, 0.03, (n_px, n_px))
+            a = (0.0 if red_only else 5 * ks * (1 + 0.3 * U[o])) + rng.normal(0, 0.03 if not red_only else 0.005,
+                                                                               (n_px, n_px))
             k = (0.0 if green_only else ks * (1 + 0.3 * V[o])) + rng.normal(0, 0.005, (n_px, n_px))
-        apl.append(a)
+        apl.append(a + (reverse_leak * k if red_only else 0.0))
         kc.append(k + leak * a)
     apl, kc = np.stack(apl), np.stack(kc)
     f['C1'], f['C2'] = apl.mean(axis=(1, 2)), kc.mean(axis=(1, 2))
@@ -510,21 +540,110 @@ def _made_up_model_sets():
     return M.model_x2(pd.DataFrame(rows))
 
 
+R_TEST = ('20220715_4FRfun2', '20221005_2FLfun1', '20221005_2FLfun2', '20221005_2FRfun1')
+
+
+def _swap(rec):
+    """The same recording with its two channels exchanged (a wrong channel assignment)."""
+    f = rec['frames'].copy()
+    f['C1'], f['C2'] = rec['frames']['C2'].to_numpy(), rec['frames']['C1'].to_numpy()
+    return dict(rec, frames=f, stacks={'C1': rec['stacks']['C2'], 'C2': rec['stacks']['C1']})
+
+
+def _controls(rng, swap=False, dual_in_g=False):
+    g = [_made_up_recording(s, 'G', rng, green_only=not dual_in_g, n_px=20) for s in M.GROUP_G]
+    r = [_made_up_recording(s, 'R', rng, red_only=True, n_px=20) for s in R_TEST]
+    if swap:
+        g, r = [_swap(x) for x in g], [_swap(x) for x in r]
+    return g, r
+
+
+def test_channel_check_pass_swap_fail(tmp_path, monkeypatch):
+    rng = np.random.default_rng(11)
+    # a pass: the green-only flies respond in C1 with C2 at the leak, the red-only flies in C2 with C1 near zero
+    g, r = _controls(rng)
+    t, res = M.channel_check(g + r)
+    assert res['verdict'] == 'passed', res
+    assert (t['cls'] == 'as inferred').all()
+    assert t[t['group'] == 'G']['expected_other_fraction'].max() < 0.06   # the planted leak, 0.034
+    assert {f['fly'] for f in res['flies']} == {M.fly_of(s) for s in M.GROUP_G + R_TEST}
+    # a swap: every control's channels exchanged
+    g, r = _controls(rng, swap=True)
+    t, res = M.channel_check(g + r)
+    assert res['verdict'] == 'swapped' and (t['cls'] == 'swapped').all()
+    # a fail: the 'green-only' flies carry a KC response in C2 (0.2 of APL's), so C2 is more than the leak
+    g, r = _controls(rng, dual_in_g=True)
+    t, res = M.channel_check(g + r)
+    assert res['verdict'] == 'failed' and (t[t['group'] == 'G']['cls'] == 'neither').all()
+    assert (t[t['group'] == 'R']['cls'] == 'as inferred').all()
+    # a fail: no red-only fly with two channels
+    g, _ = _controls(rng)
+    one = [dict(x, frames=x['frames'].drop(columns='C1')) for x in _controls(rng)[1]]
+    t, res = M.channel_check(g + one)
+    assert res['verdict'] == 'failed' and (t[t['group'] == 'R']['cls'] == 'not evaluable').all()
+    # one recording of three swapped in a green-only fly still leaves it 'as inferred' (2 of 3); two of three do not
+    g, r = _controls(rng)
+    gs = [_swap(x) if x['stem'] == '20221005_1MRfun2' else x for x in g]
+    assert M.channel_check(gs + r)[1]['verdict'] == 'passed'
+    gs = [_swap(x) if x['stem'] in ('20221005_1MRfun2', '20221005_1MRfun3') else x for x in g]
+    assert M.channel_check(gs + r)[1]['verdict'] == 'failed'
+    # part B writes the verdict and parts C to E then refuse
+    recs = {'L': [_made_up_recording(s, 'L', rng, n_px=20) for s in M.GROUP_L]}
+    g, r = _controls(rng, swap=True)
+    recs.update(G=g, R=r)
+    monkeypatch.setattr(M, 'read_groups', lambda groups, maps=True: [x for gg in groups for x in recs.get(gg, [])])
+    monkeypatch.setattr(M, 'out_dir', lambda: tmp_path)
+    monkeypatch.setattr(M, 'YANG_RELEASED', True)
+    monkeypatch.setattr(M, 'CHANNEL_MODE', M.INFERRED_CHECKED)
+    b = M.part_b(n_perm=50)
+    assert b['channel_check'] == 'swapped'
+    import json
+    assert json.loads((tmp_path / 'channel_check.json').read_text())['verdict'] == 'swapped'
+    assert (tmp_path / 'channel_check.csv').exists() and (tmp_path / 'b_leak.json').exists()
+    for part in (M.part_c, M.part_d, M.part_e, M.score):
+        with pytest.raises(M.ChannelCheckNotPassed, match='swapped'):
+            part()
+
+
+def test_channel_class_numbers():
+    resp = {'C1': pd.Series({'pa @ -2': 1.0, 'ms @ -2': 0.5}), 'C2': pd.Series({'pa @ -2': 0.1, 'ms @ -2': 0.4}),
+            'C1_solvent_sd': 0.01, 'C2_solvent_sd': 0.01}
+    c = M.channel_class(resp, 'C1', 'C2')
+    assert c['cls'] == 'as inferred' and c['expected_strongest'] == 'pa @ -2'
+    assert c['expected_other_fraction'] == pytest.approx(0.1)
+    assert c['swapped_strongest'] == 'ms @ -2' and c['swapped_other_fraction'] == pytest.approx(0.5 / 0.4)
+    # the other channel at 0.2 of the expected one's: not the leak
+    c = M.channel_class(dict(resp, C2=pd.Series({'pa @ -2': 0.2, 'ms @ -2': 0.1})), 'C1', 'C2')
+    assert c['cls'] == 'neither'
+    # the expected channel below twice its solvent SD, or below 0.02 dF/F: does not respond
+    c = M.channel_class(dict(resp, C1_solvent_sd=0.6), 'C1', 'C2')
+    assert not c['expected_responds'] and c['cls'] == 'neither'
+    small = dict(resp, C1=resp['C1'] * 0.015, C2=resp['C2'] * 0.0)
+    assert M.channel_class(dict(small, C1_solvent_sd=0.001), 'C1', 'C2')['cls'] == 'neither'
+
+
 def test_parts_b_to_e_and_score_on_made_up_recordings(tmp_path, monkeypatch):
     import json
     rng = np.random.default_rng(5)
     recs = {'L': [_made_up_recording(s, 'L', rng) for s in M.GROUP_L],
-            'G': [_made_up_recording(s, 'G', rng, green_only=True) for s in M.GROUP_G]}
+            'G': [_made_up_recording(s, 'G', rng, green_only=True) for s in M.GROUP_G],
+            'R': [_made_up_recording(s, 'R', rng, red_only=True, n_px=20) for s in R_TEST]}
     monkeypatch.setattr(M, 'read_groups', lambda groups, maps=True: [r for g in groups for r in recs.get(g, [])])
     monkeypatch.setattr(M, 'out_dir', lambda: tmp_path)
+    monkeypatch.setattr(M, 'load_a3_run', lambda label, d=None: None)
+    monkeypatch.setattr(M, 'e_remy_rows', lambda pairs=(('pa', 'ms'),): [])
+    monkeypatch.setattr(M, 'YANG_RELEASED', False)
     with pytest.raises(NotImplementedError, match='release'):
         M.part_b()
     monkeypatch.setattr(M, 'YANG_RELEASED', True)
-    monkeypatch.setattr(M, 'CHANNELS_CONFIRMED', True)
+    monkeypatch.setattr(M, 'CHANNEL_MODE', M.INFERRED_CHECKED)
     (tmp_path / 'a4_rule.json').write_text(json.dumps(dict(b_g_alone=True)))
     b = M.part_b(n_perm=100)
+    assert b['channel_check'] == 'passed'
     assert b['b_G'] == pytest.approx(0.034, abs=0.006)           # the planted leak, measured in the green-only flies
     assert b['cross_check_passed'] is True and not b['outcome_h']
+    b2 = pd.read_csv(tmp_path / 'b2_reverse.csv')
+    assert len(b2) and b2['share_of_set_l'].abs().max() < 0.1      # red-only flies: APL's channel far below set L's
     c = M.part_c(n_boot=500)
     x1 = json.loads((tmp_path / 'c_x1.json').read_text())
     assert x1['all']['carrying b1']['verdict'] == 'one function'
@@ -534,14 +653,30 @@ def test_parts_b_to_e_and_score_on_made_up_recordings(tmp_path, monkeypatch):
     M.part_e()
     e = pd.read_csv(tmp_path / 'e_claw_distances.csv')
     assert len(e) and e['distance_noise_removed'].notna().any()
-    with pytest.raises(ValueError, match='a0'):
-        M.score()
-    v = M.score('e90', model_sets=_made_up_model_sets())
+    pd.DataFrame(dict(stem=list(M.GROUP_L), out_of_sensitivity_readings=['warp 9 um'] + [''] * (len(M.GROUP_L) - 1))
+                 ).to_csv(tmp_path / 'a1_recordings.csv', index=False)
+    with pytest.raises(ValueError, match='a0s'):
+        M.score(('pre',))
+    v = M.score(model_sets=_made_up_model_sets())
     assert v['X1']['held'] == 'one function'
     assert v['X3']['by_reading']['carrying']['verdict'] == 'follows' and v['X3']['held'] == 'follows'
+    assert v['a0_carrying'] is None and v['X2']['carrying_baseline'] == 'carrying baseline: not fixed (open issue 3e15a91)'
+    assert set(v['X2']['by_baseline']) == set(M.A0_CHOICES)
+    for a0 in M.A0_CHOICES:
+        for q in M.X2_QUANTITIES:
+            assert v['X2']['by_baseline'][a0][q]['held'] in ('flatter', 'inside', 'steeper', 'not decided')
     for q in M.X2_QUANTITIES:
-        assert v['X2'][q]['held'] in ('flatter', 'inside', 'steeper', 'not decided')
+        h = v['X2']['held_by_baseline'][q]
+        assert v['X2']['class_changes_between_baselines'][q] == (len(set(h.values())) > 1)
     assert (tmp_path / 'verdict.json').exists()
+    t = pd.read_csv(tmp_path / 'score_x2.csv')
+    assert set(t['a0']) == set(M.A0_CHOICES) and (t['carrying_baseline'] == M.A0_CARRYING_NOTE).all()
+    assert (tmp_path / 'score_x3_flies.csv').exists()
+    assert (tmp_path / 'e_model_distances.csv').exists()
+    assert v['sensitivity']['left_out'] == [M.GROUP_L[0]] and v['sensitivity']['X1']['held'] == 'one function'
+    assert v['sensitivity']['X3']['held'] == 'follows' and set(v['sensitivity']['planes']) == {'15 um'}
+    assert v['V0']['n_flies'] == 0 and v['V0']['not_repeated'] == [] and v['V0']['not_decided_in_v0']
+    assert 'pixel for pixel' in v['alignment']['note'] and v['alignment']['set_l_not_registered_together'] == []
 
 
 def test_a3_apl_tables_made_up(tmp_path, monkeypatch):

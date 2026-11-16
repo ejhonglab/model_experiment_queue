@@ -34,8 +34,10 @@ The groups of two-channel recordings (the entry's table, fixed here; GROUPS):
   read: the fall 2024 sets (F1, F2), R2023 and the unprocessed runs of sets D, V and DEV.
 
 Definitions (the entry's, fixed before any reading):
-- The channels: `_C1` is APL (GCaMP6f, green PMT) and `_C2` the KCs (jRGECO1a, red PMT), as viki's copy infers; nothing is
-  read for results before Yang confirms it (question 2; CHANNELS_CONFIRMED).
+- The channels: `_C1` is APL (GCaMP6f, green PMT) and `_C2` the KCs (jRGECO1a, red PMT), as viki's copy infers. Yang's
+  question 2 is open (YANG_CHANNELS_CONFIRMED); by Tom's decision of 2026-11-15 17:33 (CHANNEL_DECISION) E101 reads them
+  as inferred, checked by the controls first (CHANNEL_MODE; `channel_check`, part B): parts C to E and the score run only
+  if the check passed.
 - A recording's maps: per presentation and channel, Yang's peak dF/F map in the copied variant (APL's rigid
   motion-corrected; the KC channel moved by the same shifts), inside her calyx outline, in cells of CELL_UM (4 um) made with
   the recording's own pixel size (CELL_UM_BESIDE, 2 and 8 um, beside); a cell enters when at least CELL_MIN_INSIDE of its
@@ -101,15 +103,33 @@ Parts (CLI `--part`):
   runs of E90's stage reading on E98's extended input (B1's stimuli), eight wirings, APL on and acutely off, with the claw
   stage saved (outputs/E101_apl_vs_kc_claws/A3/; a3_runs.csv, a3_stimuli.csv, a3_family.csv, a3_ratios.csv,
   a3_identity.json); A4 what the place test can detect on made-up two-channel maps (a4_power.csv, a4_rule.json).
-- B (after Yang's release): B1 group G's slope per cell, b_G per fly and pooled, and the cross-check between the two
-  green-only flies; B2 group R's APL channel where APL carries no indicator; B3 group M's red marker; B4 set L's solvent
-  maps; B5 set L's own slope against b_G (below twice b_G: outcome (h)).
-- C (after Yang's release): C1 per recording and stimulus APL's response and K_b; C2 X1's statistic; C3 X2's three ratios
-  for the claws, APL and Q; C4 beside (V0, L+, VT, Hallem's input, APL off, Yang's single-colour group tables).
-- D (after Yang's release): X3's statistic per recording of set L, with its null, ceiling, cross-correlogram and E79's
+- B (after Yang's release): first the channel check (`channel_check`; channel_check.csv, channel_check.json), then B1
+  group G's slope per cell, b_G per fly and pooled, and the cross-check between the two green-only flies; B2 group R's APL
+  channel where APL carries no indicator; B3 group M's red marker; B4 set L's solvent maps; B5 set L's own slope against
+  b_G (below twice b_G: outcome (h)). Part B runs whole whatever the check says.
+- C (after part B's channel check passed): C1 per recording and stimulus APL's response and K_b; C2 X1's statistic; C3
+  X2's three ratios for the claws, APL and Q; C4 beside (V0, L+, VT, Hallem's input, APL off, Yang's single-colour group
+  tables).
+- D (after the check passed): X3's statistic per recording of set L, with its null, ceiling, cross-correlogram and E79's
   common-map share.
-- E (after Yang's release; described): the claws' own odor-odor distances from K_b's maps.
-- score: the verdicts (verdict.json).
+- E (after the check passed; described): the claws' own odor-odor distances from K_b's maps (e_claw_distances.csv), with
+  the family's claw stage and Remy's claws beside (e_model_distances.csv).
+- score (after the check passed): the verdicts (verdict.json, score_x2.csv), X2 under each of the model's pre-odor levels
+  A0_CHOICES side by side (A0_CARRYING).
+
+The channel check (Tom, 2026-11-15 17:33; thresholds fixed in code before any map of the controls was read, `channel_check`):
+per two-channel recording of the controls, under the carrying reading of calyx responses, the channel that must respond
+(CHANNEL_EXPECTED: C1 in group G, the green-only flies; C2 in group R, the red-only flies) responds if its response to its
+strongest stimulus exceeds CHANNEL_RESPOND_SD (2) times the SD of its solvent responses and CHANNEL_RESPOND_MIN (0.02 dF/F);
+the other channel stays at the leak if its response to that stimulus is at most CHANNEL_OTHER_MAX (0.15) of it in absolute
+value. A recording is 'as inferred' if both hold, 'swapped' if the same holds with the channels' roles exchanged, and
+'neither' otherwise (also when both hold). A control fly is 'as inferred' ('swapped') if at least CHANNEL_FLY_MIN_SHARE
+(2/3) of its two-channel recordings are; otherwise 'neither'. The check passes if every control fly of groups G and R with
+a two-channel recording is 'as inferred', with at least one such fly in each group; it reads 'swapped' if every one is
+'swapped'; otherwise it fails. Why these numbers: the entry's Probes give the green-only flies' KC channel at 0.028 and
+0.039 of the APL channel (slopes) and the red-only fly's APL channel at 0.015 dF/F at most, against slopes of 0.13 to 0.30
+of the KC channel on the APL channel in the dual-colour flies; 0.15 lies about four times above the leak and below the
+dual-colour flies' coupling, and a swap puts the ratio near 1 / 0.035.
 
 Deviations from the entry (each also in the note):
 - A3's stimuli are B1's as `b1_input` gives them: all 52 of `b1_specs` since E98's 11884b2 (Hallem's rows from olfsysm's
@@ -132,6 +152,23 @@ Deviations from the entry (each also in the note):
   planted leak is A4_B_G (0.034, the planner's green-only slopes 0.028 and 0.039, the entry's Probes) with the KC channel's
   odor-evoked amplitude A4_KC_OVER_APL (0.2) of APL's; "the made-up flies" of A4's rule are pooled over the whole grid of
   reliabilities (0.3 to 0.9 per channel, every pair equally weighted), the literal reading of the entry.
+- The channels are read as inferred while Yang's question 2 is open, by Tom's decision of 2026-11-15 17:33 (the entry
+  asked for her confirmation first); part B's channel check takes its place as a gate (above). The check is per control
+  fly: every green-only and red-only fly with a two-channel recording must agree, the literal reading of "in the green-only
+  flies ... in the red-only fly" (group R has two flies, 2022-07-15 fly 4's right calyx and 2022-10-05 fly 2).
+- The model's pre-odor level for X2 is not fixed: the entry's text reads the claws and APL as window minus E90's pre-odor
+  mean (through E98's definition for APL), but that window holds the KC layer's start-up (open issue 3e15a91, in
+  unresolved_issues.md) and E98 made the level a required choice that a planner has not made. The score gives X2 under
+  each of A0_CHOICES side by side ('e90'; 'settled', APL's settled pre-odor mean with the claws at E90's; 'blank', the
+  blank's window for both) and says whether any class changes between them (A0_CARRYING records "not fixed").
+- Part E adds the family's claw stage (A3: the correlation distance over the claws of the input's glomeruli, window minus
+  E90's pre-odor mean, in E90's three claw versions) and Remy's claws for pa and ms (E90's readers, as measured and with the
+  trial noise removed) as e_model_distances.csv, beside the flies'.
+- Parts C to E skip a recording that lacks one of the two channels' maps (listed in their outputs).
+- Yang answered question 18 (2026-11-15 17:53): no run is left out, so the runs at 925 nm and those marked as warped by 5 um
+  or more stay in every carrying reading, as the entry has them; the score reports the sensitivity readings without them
+  beside (and the planes apart, V0 as the repetition, X3 at 2 and 8 um), deciding nothing (`beside`). Whether C2 moved by
+  C1's shifts is aligned with C1 pixel for pixel is not answered; the score says where X3 depends on it (ALIGNMENT_NOTE).
 
 CLI (from the repository root):
     ./venv/bin/python -u -m experiments.E101_apl_vs_kc_claws --part A1
@@ -140,6 +177,8 @@ CLI (from the repository root):
         -m experiments.E101_apl_vs_kc_claws --part A3
     ./venv/bin/python -u -m experiments.E101_apl_vs_kc_claws --part A4
     ./venv/bin/python -u -m experiments.E101_apl_vs_kc_claws --part B           # after Yang's release (YANG_RELEASED)
+    ./venv/bin/python -u -m experiments.E101_apl_vs_kc_claws --part C           # C, D, E and score: after the check passed
+    ./venv/bin/python -u -m experiments.E101_apl_vs_kc_claws --part score       # X2 under every pre-odor level (--a0 all)
     --dry-run lists what a part would read and write, and exits.
 
 Outputs: results/E101_apl_vs_kc_claws/ in the shared directory (the tables above, identity.json, verdict.json,
@@ -294,8 +333,29 @@ A4_SMOOTH_CELLS = 1.5                    # the spatial scale of the made-up patt
 
 # Yang's release and her answers (questions 2 and 13 to 18): parts B to E read nothing until these are set
 YANG_RELEASED = True                     # question 13: "yes, all" (2026-11-15 17:13, questions_for_yang/answers_2026-11-15_1614__2026-11-15_171352.txt)
-CHANNELS_CONFIRMED = False               # question 2: C1 = APL (green), C2 = KCs (red)
+YANG_CHANNELS_CONFIRMED = False          # question 2: C1 = APL (green), C2 = KCs (red); open on 2026-11-15
 RELEASED_STEMS: Tuple[str, ...] = ()     # if she releases only some recordings: their stems (empty: all, once released)
+
+# how the channels are read (replaces the gate on Yang's confirmation, 2026-11-15): 'waiting' (nothing read), 'inferred,
+# checked by the controls' (part B's channel check gates parts C to E and the score), 'confirmed by Yang'
+CHANNEL_MODES = ('waiting', 'inferred, checked by the controls', 'confirmed by Yang')
+INFERRED_CHECKED = CHANNEL_MODES[1]
+CHANNEL_MODE = INFERRED_CHECKED
+CHANNEL_DECISION = ("Tom, 2026-11-15 17:33 (hal's terminal), while Yang's question 2 is open: E101 goes ahead with C1 = APL "
+                    "(GCaMP6f) and C2 = KCs (jRGECO1a), as inferred, and part B's controls check it first: in the green-only "
+                    "flies (group G) C1 must respond and C2 carry only the leak, in the red-only fly (group R) C2 must respond "
+                    "and C1 stay near zero; otherwise E101 stops after part B and reports.")
+# the channel check's thresholds, fixed 2026-11-15 before any map of the controls was read (module docstring)
+CHANNEL_EXPECTED = {'G': ('C1', 'C2'), 'R': ('C2', 'C1')}   # (the channel that must respond, the one that must not)
+CHANNEL_RESPOND_SD = 2.0                 # responds: above this many SDs of its solvent responses ...
+CHANNEL_RESPOND_MIN = 0.02               # ... and above this (dF/F; E98's MIN_RESPONSE)
+CHANNEL_OTHER_MAX = 0.15                 # the other channel at that stimulus: |response| at most this share of it
+CHANNEL_FLY_MIN_SHARE = 2.0 / 3.0        # a control fly agrees when at least this share of its recordings do
+
+# the model's pre-odor level for X2: not fixed (open issue 3e15a91, unresolved_issues.md: E90's pre-odor window holds the
+# KC layer's start-up; E98's choice of level is with a planner), so X2 is scored under every level of A0_CHOICES
+A0_CARRYING: Optional[str] = None
+A0_CARRYING_NOTE = 'carrying baseline: not fixed (open issue 3e15a91)'
 
 
 def out_dir() -> Path:
@@ -332,6 +392,15 @@ def provenance(part: str, **extra) -> None:
     d.setdefault('runs', []).append(dict(commits=dict(H.code_commits()), host=_host(),
                                          time=time.strftime('%Y-%m-%d %H:%M'), **extra))
     _write_json(path, d)
+
+
+def data_provenance() -> dict:
+    """For parts B to E and the score: the sha256 of viki's recordings.csv, the channel mode and Tom's decision."""
+    import hashlib
+    f = copy_dir() / 'recordings.csv'
+    return dict(recordings_csv_sha256=hashlib.sha256(f.read_bytes()).hexdigest() if f.exists() else None,
+                channel_mode=CHANNEL_MODE, channel_decision=CHANNEL_DECISION,
+                yang_channels_confirmed=YANG_CHANNELS_CONFIRMED)
 
 
 def group_of(stem: str) -> Optional[str]:
@@ -1457,8 +1526,7 @@ def released(stem: str) -> bool:
 
 def check_readable(row) -> None:
     """The two refusals: a raw-only row (rule of 2026-11-15 15:28, recordings.csv's use_until_further_notice) and a
-    recording Yang has not released (`released`); and, for the two-channel recordings, the channels unconfirmed
-    (CHANNELS_CONFIRMED, question 2)."""
+    recording Yang has not released (`released`). How the channels are read is gated per part (`_gate`, CHANNEL_MODE)."""
     from experiments import E100_apl_weak_odors as E100
     if not E100.usable_row(row):
         raise PermissionError(f"{row['stem']}: raw only, not used until further notice (rule of 2026-11-15 15:28, "
@@ -1824,9 +1892,15 @@ def held_class(classes: Dict[object, str], unprobed: Optional[str], n_unprobed: 
 
 def _waiting(part: str) -> None:
     raise NotImplementedError(
-        f"part {part} reads Yang's two-channel recordings from viki's copy only after her release (question 13) and her "
-        "confirmation of the channels (question 2): YANG_RELEASED and CHANNELS_CONFIRMED; its readers and statistics are "
-        "written and tested on made-up maps")
+        f"part {part} reads Yang's two-channel recordings from viki's copy only after her release (question 13) and with "
+        "the channels either confirmed by her (question 2) or read as inferred and checked by the controls (Tom, "
+        "2026-11-15 17:33): YANG_RELEASED and CHANNEL_MODE; its readers and statistics are written and tested on made-up "
+        "maps")
+
+
+class ChannelCheckNotPassed(RuntimeError):
+    """Parts C to E and the score refuse to run while the channels are read as inferred and part B's channel check has not
+    passed (channel_check.json)."""
 
 
 def reader_identity_released(stem: Optional[str] = None) -> dict:
@@ -1886,8 +1960,116 @@ B_SCAN = tuple(np.round(np.arange(0.0, 4.0 + 1e-9, 0.25), 2))   # D: multiples o
 
 
 def _gate(part: str) -> None:
-    if not (YANG_RELEASED and CHANNELS_CONFIRMED):
+    """Parts B to E and the score: nothing is read before Yang's release or while CHANNEL_MODE is 'waiting'; with the
+    channels read as inferred (Tom, 2026-11-15 17:33), parts C to E and the score need part B's channel check passed."""
+    if not YANG_RELEASED or CHANNEL_MODE not in CHANNEL_MODES[1:]:
         _waiting(part)
+    if part != 'B' and CHANNEL_MODE == INFERRED_CHECKED:
+        chk = _read_json(out_dir() / 'channel_check.json')
+        if chk is None or chk.get('verdict') != 'passed':
+            raise ChannelCheckNotPassed(
+                f"part {part}: the channels are read as inferred (C1 = APL, C2 = KCs; {CHANNEL_DECISION}) and part B's "
+                f"channel check has {'not run' if chk is None else 'given ' + repr(chk.get('verdict'))} "
+                "(channel_check.json); E101 stops after part B")
+
+
+# ---- the channel check (part B, first)
+
+def channel_responses(frames: pd.DataFrame) -> dict:
+    """A two-channel recording's calyx responses per stimulus under the carrying reading (`stimulus_responses`) and the SD
+    of each channel's solvent responses (`solvent_responses`), per channel."""
+    out = {}
+    for c in CHANNELS:
+        v = frames[c].to_numpy(dtype=float)
+        out[c] = stimulus_responses(frames, v)['value']
+        out[f'{c}_solvent_sd'] = float(np.std(solvent_responses(frames, v), ddof=1))
+    return out
+
+
+def _responds(resp: pd.Series, sd: float) -> Tuple[str, float, float, bool]:
+    """The strongest stimulus of a channel, its response, the threshold, and whether it responds (above
+    CHANNEL_RESPOND_SD SDs of its solvent responses and CHANNEL_RESPOND_MIN)."""
+    s = str(resp.idxmax())
+    v = float(resp[s])
+    thr = max(CHANNEL_RESPOND_SD * float(sd), CHANNEL_RESPOND_MIN)
+    return s, v, thr, bool(np.isfinite(v) and v > thr)
+
+
+def channel_class(resp: dict, expected: str, other: str) -> dict:
+    """One control recording's class (`resp` from `channel_responses`): 'as inferred' if `expected` responds to its
+    strongest stimulus (`_responds`) and `other`'s response to that stimulus is at most CHANNEL_OTHER_MAX of it in absolute
+    value; 'swapped' if the same holds with the two channels' roles exchanged; otherwise 'neither' (also if both hold).
+    With the numbers that decide it."""
+    row = {}
+    ok = {}
+    for role, a, b in (('expected', expected, other), ('swapped', other, expected)):
+        s, v, thr, r = _responds(resp[a], resp[f'{a}_solvent_sd'])
+        frac = float(abs(resp[b][s]) / v) if v > 0 else np.nan
+        ok[role] = bool(r and np.isfinite(frac) and frac <= CHANNEL_OTHER_MAX)
+        row.update({f'{role}_channel': a, f'{role}_strongest': s, f'{role}_response': v, f'{role}_threshold': thr,
+                    f'{role}_responds': r, f'{role}_solvent_sd': float(resp[f'{a}_solvent_sd']),
+                    f'{role}_other_response': float(resp[b][s]), f'{role}_other_fraction': frac})
+    row['cls'] = ('neither' if ok['expected'] and ok['swapped'] else 'as inferred' if ok['expected'] else
+                  'swapped' if ok['swapped'] else 'neither')
+    return row
+
+
+def channel_verdict(rows: pd.DataFrame) -> dict:
+    """The check from its per-recording rows (columns group, fly, cls; groups G and R; recordings without both channels
+    absent): each fly 'as inferred' or 'swapped' if at least CHANNEL_FLY_MIN_SHARE of its recordings are, else 'neither';
+    'passed' if every fly is 'as inferred' with at least one fly in each of G and R, 'swapped' if every fly is 'swapped'
+    (the same condition), otherwise 'failed'."""
+    flies = []
+    for (g, f), x in rows.groupby(['group', 'fly'], sort=True):
+        n = len(x)
+        si, ss = float((x['cls'] == 'as inferred').mean()), float((x['cls'] == 'swapped').mean())
+        flies.append(dict(group=g, fly=f, n_recordings=n, share_as_inferred=si, share_swapped=ss,
+                          cls='as inferred' if si >= CHANNEL_FLY_MIN_SHARE - 1e-12 else
+                          'swapped' if ss >= CHANNEL_FLY_MIN_SHARE - 1e-12 else 'neither'))
+    fl = pd.DataFrame(flies, columns=['group', 'fly', 'n_recordings', 'share_as_inferred', 'share_swapped', 'cls'])
+    both = all((fl['group'] == g).any() for g in CHANNEL_EXPECTED)
+    if both and (fl['cls'] == 'as inferred').all():
+        v = 'passed'
+    elif both and (fl['cls'] == 'swapped').all():
+        v = 'swapped'
+    else:
+        v = 'failed'
+    why = '' if v == 'passed' else (
+        'a control group has no fly with a two-channel recording' if not both else
+        '; '.join(f"{r['fly']} ({r['group']}): {r['cls']}" for r in flies if r['cls'] != 'as inferred'))
+    return dict(verdict=v, why=why, flies=flies)
+
+
+def channel_check(recs: Sequence[dict]) -> Tuple[pd.DataFrame, dict]:
+    """The channel check over the control recordings `recs` (read by `read_two_channel`, groups G and R): per recording
+    `channel_class` (a recording without both channels, or whose responses cannot be formed, is listed with
+    cls 'not evaluable' and left out of the verdict), then `channel_verdict`, with the thresholds and Tom's decision."""
+    rows = []
+    for r in recs:
+        g = r.get('group')
+        if g not in CHANNEL_EXPECTED:
+            continue
+        base = dict(group=g, recording=r['stem'], fly=r.get('fly', fly_of(r['stem'])))
+        if 'skipped' in r or not set(CHANNELS) <= set(r['frames'].columns):
+            rows.append(dict(base, cls='not evaluable', why=r.get('skipped', 'one channel only')))
+            continue
+        try:
+            resp = channel_responses(r['frames'])
+        except ValueError as e:
+            rows.append(dict(base, cls='not evaluable', why=str(e)))
+            continue
+        rows.append(dict(base, **channel_class(resp, *CHANNEL_EXPECTED[g]), why=''))
+    t = pd.DataFrame(rows)
+    ev = t[t['cls'] != 'not evaluable'] if len(t) else t
+    res = channel_verdict(ev if len(ev) else pd.DataFrame(columns=['group', 'fly', 'cls']))
+    res.update(mode=CHANNEL_MODE, decision=CHANNEL_DECISION, yang_question_2_confirmed=YANG_CHANNELS_CONFIRMED,
+               thresholds=dict(CHANNEL_EXPECTED={k: list(v) for k, v in CHANNEL_EXPECTED.items()},
+                               CHANNEL_RESPOND_SD=CHANNEL_RESPOND_SD, CHANNEL_RESPOND_MIN=CHANNEL_RESPOND_MIN,
+                               CHANNEL_OTHER_MAX=CHANNEL_OTHER_MAX, CHANNEL_FLY_MIN_SHARE=CHANNEL_FLY_MIN_SHARE,
+                               reading=CARRYING),
+               n_recordings=int(len(ev)), n_not_evaluable=int(len(t) - len(ev)),
+               written=time.strftime('%Y-%m-%d %H:%M'), host=_host())
+    return t, res
 
 
 def group_rows(groups: Sequence[str]) -> pd.DataFrame:
@@ -1913,6 +2095,20 @@ def read_groups(groups: Sequence[str], maps: bool = True) -> List[dict]:
         rec['group'] = row['group']
         out.append(rec)
     return out
+
+
+def two_channel(recs: Sequence[dict]) -> Tuple[List[dict], List[dict]]:
+    """The recordings read with both channels, and the others ({stem, group, why}): skipped by the reader, or one channel
+    only."""
+    ok, left = [], []
+    for r in recs:
+        if 'skipped' in r:
+            left.append(dict(stem=r['stem'], group=r.get('group'), why=r['skipped']))
+        elif not set(CHANNELS) <= set(r['frames'].columns):
+            left.append(dict(stem=r['stem'], group=r.get('group'), why='one channel only'))
+        else:
+            ok.append(r)
+    return ok, left
 
 
 def recording_cells(rec: dict, cell_um: float = CELL_UM) -> dict:
@@ -1986,7 +2182,8 @@ def x3_rows(rec: dict, cells: dict, b_g: float, kept: Sequence[str], multiples: 
             x = x3_recording(A, tuple(remove_leak(k, a, bm * b_g) for k, a in zip(K, A)), od, n_perm=n_perm,
                              seed=SEED + zlib_seed(rec['stem']), normalize_kc=normalize_kc)
             rows.append(dict(recording=rec['stem'], fly=rec['fly'], group=rec.get('group'), plane_um=rec.get('plane_um'),
-                             reading=rd, b_mult=float(bm), b=float(bm * b_g), **x))
+                             registration_matched=rec.get('registration_matched'), reading=rd, b_mult=float(bm),
+                             b=float(bm * b_g), **x))
     return rows
 
 
@@ -2035,7 +2232,9 @@ def b1_leak(recs: Sequence[dict], cells: Dict[str, dict], n_perm: int = N_PERM) 
 
 
 def part_b(n_perm: int = N_PERM) -> dict:
-    """Part B (the controls, first of all recordings): B1 (`b1_leak`; b_leak.json, b1_slopes.csv, b1_cross_check.csv);
+    """Part B (the controls, first of all recordings): first the channel check (`channel_check` on groups G and R;
+    channel_check.csv, channel_check.json; its verdict gates parts C to E while the channels are read as inferred), then
+    B1 (`b1_leak`; b_leak.json, b1_slopes.csv, b1_cross_check.csv);
     B2, group R's APL channel where APL carries no indicator, per stimulus and as a share of set L's median APL response
     at the same stimulus, and the per-cell slope of that channel on the KC channel (b2_reverse.csv); B3, group M's red
     marker's response and its agreement with APL's map (b3_marker.csv); B4, set L's solvent maps: the r over cells between
@@ -2043,18 +2242,24 @@ def part_b(n_perm: int = N_PERM) -> dict:
     B5, set L's own slope against b_G (b5_slopes.csv; outcome (h) if its median is below B5_SLOPE_MULT b_G)."""
     _gate('B')
     out = out_dir()
-    G = [r for r in read_groups(('G',)) if 'skipped' not in r]
+    G_all = read_groups(('G',))
+    R_all = read_groups(('R',))
+    chk_rows, chk = channel_check(G_all + R_all)
+    chk_rows.to_csv(out / 'channel_check.csv', index=False)
+    _write_json(out / 'channel_check.json', chk)
+    print(f"channel check: {chk['verdict']}{' (' + chk['why'] + ')' if chk['why'] else ''}", flush=True)
+    G = [r for r in G_all if 'skipped' not in r and set(CHANNELS) <= set(r['stacks'])]
     cells = {r['stem']: recording_cells(r) for r in G}
     b1 = b1_leak(G, cells, n_perm)
     pd.DataFrame(b1['per_recording']).to_csv(out / 'b1_slopes.csv', index=False)
     b1['cross_check'].to_csv(out / 'b1_cross_check.csv', index=False)
     b_g = b1['b_G']
-    L = [r for r in read_groups(('L',)) if 'skipped' not in r]
+    L, l_left = two_channel(read_groups(('L',)))
     lc = {r['stem']: recording_cells(r) for r in L}
     l_apl = pd.concat([stimulus_responses(r['frames'], r['frames']['C1'].to_numpy())['value'].rename(r['stem'])
                        for r in L], axis=1).median(axis=1)
     rows = []
-    for r in read_groups(('R',)):
+    for r in R_all:
         if 'skipped' in r or 'C1' not in r.get('stacks', {}) or 'C2' not in r.get('stacks', {}):
             rows.append(dict(recording=r['stem'], skipped=r.get('skipped', 'one channel only')))
             continue
@@ -2103,9 +2308,10 @@ def part_b(n_perm: int = N_PERM) -> dict:
     b5 = pd.DataFrame(b5)
     b5.to_csv(out / 'b5_slopes.csv', index=False)
     set_l = float(b5.groupby('fly')['median_slope'].median().median()) if len(b5) else np.nan
-    res = dict(b_G=b_g, b_G_per_fly=b1['per_fly'], cross_check_passed=b1['cross_check_passed'],
+    res = dict(channel_check=chk['verdict'], b_G=b_g, b_G_per_fly=b1['per_fly'],
+               cross_check_passed=b1['cross_check_passed'],
                set_l_median_slope=set_l, outcome_h=bool(np.isfinite(set_l) and set_l < B5_SLOPE_MULT * b_g),
-               skipped=[dict(stem=r['stem'], why=r['skipped']) for r in G + L if 'skipped' in r])
+               skipped=[dict(stem=r['stem'], why=r['skipped']) for r in G_all + R_all if 'skipped' in r] + l_left)
     _write_json(out / 'b_leak.json', res)
     return res
 
@@ -2202,9 +2408,10 @@ def part_c(n_boot: int = N_BOOT) -> dict:
     if bl is None:
         raise RuntimeError('part C needs part B first (b_leak.json)')
     b_g = float(bl['b_G'])
-    c = pd.concat([c_rows(r, b_g) for r in read_groups(('L', 'L+', 'V0', 'VT'), maps=False) if 'skipped' not in r],
-                  ignore_index=True)
+    recs, left = two_channel(read_groups(('L', 'L+', 'V0', 'VT'), maps=False))
+    c = pd.concat([c_rows(r, b_g) for r in recs], ignore_index=True)
     c.to_csv(out / 'c_responses.csv', index=False)
+    pd.DataFrame(left, columns=['stem', 'group', 'why']).to_csv(out / 'c_left_out.csv', index=False)
     L = c[c['group'] == 'L']
     x1r, x1 = x1_table(L, n_boot=n_boot)
     _, x1u = x1_table(L, flies=UNPROBED_X12, min_flies=HELD_X12_MIN, n_boot=n_boot)
@@ -2263,9 +2470,9 @@ def part_d(n_perm: int = N_PERM, cell_ums: Sequence[float] = (CELL_UM,) + CELL_U
         raise RuntimeError('part D needs part B first (b_leak.json)')
     b_g = float(bl['b_G'])
     rows, scan, desc = [], [], []
-    for r in read_groups(('L', 'L+', 'V0')):
-        if 'skipped' in r:
-            continue
+    recs, left = two_channel(read_groups(('L', 'L+', 'V0')))
+    pd.DataFrame(left, columns=['stem', 'group', 'why']).to_csv(out / 'd_left_out.csv', index=False)
+    for r in recs:
         kept = recording_kept(r, b_g)
         for cu in cell_ums:
             cells = recording_cells(r, cu)
@@ -2273,6 +2480,8 @@ def part_d(n_perm: int = N_PERM, cell_ums: Sequence[float] = (CELL_UM,) + CELL_U
             if cu == CELL_UM:
                 scan += x3_rows(r, cells, b_g, kept, multiples=B_SCAN, readings=(CARRYING,), n_perm=n_perm)
                 desc.append(dict(recording=r['stem'], fly=r['fly'], group=r['group'], n_kept=len(kept),
+                                 registration_matched=r.get('registration_matched'),
+                                 C1_tag=r.get('files', {}).get('C1_tag'), C2_tag=r.get('files', {}).get('C2_tag'),
                                  **d_described(r, cells, b_g, kept)))
     pd.DataFrame(rows).to_csv(out / 'd_x3.csv', index=False)
     pd.DataFrame(scan).to_csv(out / 'd_x3_scan.csv', index=False)
@@ -2312,19 +2521,78 @@ def e_rows(rec: dict, cells: dict, b_g: float, multiples: Sequence[float] = (0.0
     return rows
 
 
+E_MODEL_STIMULI = ('pa', 'ms', 'paa', 'paa [validation2/diag] @ -5', 'paa [kiwi-control/diag] @ -5',
+                   'paa [megamat/diag] @ -5')    # B1's labels: pa, ms and paa at the panel's input, paa at 10^-5 (three sessions)
+
+
+def e_model_rows(wirings: Sequence[str] = ALL_WIRINGS) -> List[dict]:
+    """Part E's model side (described): per wiring (A3's saved runs, APL on) and claw version (CLAW_SHARES, E90's
+    `claw_signal` scales as `claw_totals` forms them), the correlation distance (1 - Pearson r over the claws of the 36
+    input glomeruli) between E_MODEL_STIMULI, each claw's window mean minus E90's pre-odor mean (the model has no trial
+    noise). Wirings without an A3 run are left out."""
+    rows = []
+    input_gl = [str(g) for g in H.apl16_orn_deltas().index]
+    for w in wirings:
+        run = load_a3_run(w)
+        if run is None:
+            continue
+        on, meta = run['on'], run['meta']
+        ch = on['claw_win'].astype(float) - on['claw_pre'].astype(float)
+        counts = on['spike_counts'].astype(float)
+        panel = list(H.APL16_ODORS)
+        s0, s1 = _rms(ch[panel].to_numpy()), _rms(counts[panel].to_numpy())
+        ix = pd.Index(counts.index.get_level_values(H.KC_ID_LEVEL)).get_indexer(np.asarray(meta['kc_of_claw']))
+        m = np.isin(np.asarray(meta['claw_glomerulus']).astype(str), input_gl)
+        st = [s for s in E_MODEL_STIMULI if s in ch.columns]
+        for share in CLAW_SHARES:
+            X = ch[st].to_numpy()
+            if share:
+                X = (1.0 - share) * X / s0 + share * counts[st].to_numpy()[ix] / s1
+            D = 1.0 - np.corrcoef(X[m].T)
+            for i in range(len(st)):
+                for j in range(i + 1, len(st)):
+                    rows.append(dict(source='model', wiring=w, claw_share=share, stim_a=st[i], stim_b=st[j],
+                                     distance=float(D[i, j]), n_claws=int(m.sum())))
+    return rows
+
+
+def e_remy_rows(pairs: Sequence[Tuple[str, str]] = (('pa', 'ms'),)) -> List[dict]:
+    """Remy's claws (E90's readers; megamat panel, her window): per fly the correlation distance between two odors as
+    measured (`remy_window_means`) and with the trial noise removed (`remy_noise_removed`). Empty when her matrices are not
+    there."""
+    from experiments import E90_model_stages as E90
+    try:
+        _, _, odors = E90.remy_matrices('claw', 'stim')
+        meas, nr = E90.remy_window_means('claw'), E90.remy_noise_removed('claw')
+    except FileNotFoundError:
+        return []
+    rows = []
+    for a, b in pairs:
+        if a not in odors or b not in odors:
+            continue
+        i, j = odors.index(a), odors.index(b)
+        for f in range(meas.shape[0]):
+            rows.append(dict(source='Remy claws', wiring='', fly=f'fly{f + 1}', stim_a=a, stim_b=b,
+                             distance=float(meas[f, i, j]), distance_noise_removed=float(nr[f, i, j])))
+    return rows
+
+
 def part_e() -> dict:
-    """Part E (described, decides nothing): `e_rows` for every recording of set L (e_claw_distances.csv)."""
+    """Part E (described, decides nothing): `e_rows` for every recording of set L (e_claw_distances.csv); beside, the
+    family's claw stage (`e_model_rows`) and Remy's claws (`e_remy_rows`) (e_model_distances.csv)."""
     _gate('E')
     out = out_dir()
     bl = _read_json(out / 'b_leak.json')
     if bl is None:
         raise RuntimeError('part E needs part B first (b_leak.json)')
     rows = []
-    for r in read_groups(('L',)):
-        if 'skipped' not in r:
-            rows += e_rows(r, recording_cells(r), float(bl['b_G']))
+    recs, left = two_channel(read_groups(('L',)))
+    for r in recs:
+        rows += e_rows(r, recording_cells(r), float(bl['b_G']))
     pd.DataFrame(rows).to_csv(out / 'e_claw_distances.csv', index=False)
-    return dict(n_rows=len(rows))
+    model = e_model_rows() + e_remy_rows()
+    pd.DataFrame(model).to_csv(out / 'e_model_distances.csv', index=False)
+    return dict(n_rows=len(rows), n_model_rows=len(model), left_out=left)
 
 
 # ---- the score
@@ -2361,32 +2629,13 @@ def x2_model_classes(sets: pd.DataFrame, rid: str, quantity: str, lo: float, hi:
     return dict(cls=cls, per_estimate=per_est, per_wiring=per_wiring)
 
 
-def score(a0: Optional[str] = None, model_sets: Optional[pd.DataFrame] = None) -> dict:
-    """The verdicts (verdict.json), from parts A3, A4, B, C and D, on set L with flies as units, each held (`held_class`)
-    over b in (0, b_G), the carrying reading and both partners, and the unprobed flies: X1 (`x1_table`'s verdicts), X2
-    (per ratio and quantity `x2_model_classes` against the flies' hull, then `x2_quantity_verdict`; the model's pre-odor
-    level `a0`, A0_CHOICES, a required choice as in E98's part C), X3 (`fly_x3` and `x3_verdict` per reading, with B1's
-    cross-check and A4's rule); V0's classes beside ("not repeated in the development flies" where they differ)."""
-    _gate('score')
-    if a0 not in A0_CHOICES:
-        raise ValueError(f'score needs the model\'s pre-odor level a0, one of {A0_CHOICES} (a required choice)')
-    out = out_dir()
-    bl, x1, rule = _read_json(out / 'b_leak.json'), _read_json(out / 'c_x1.json'), _read_json(out / 'a4_rule.json')
-    if bl is None or x1 is None or rule is None:
-        raise RuntimeError('score needs parts A4, B and C first')
-    keys = [(rd, bm) for bm in (0.0, 1.0) for rd in READINGS]
-    res = dict(a0=a0, b_G=bl['b_G'], outcome_h=bl['outcome_h'], cross_check_passed=bl['cross_check_passed'],
-               b_g_alone=rule['b_g_alone'])
-    k = lambda rd, bm: f'{rd} b{bm:g}'
-    x1_cls = {kk: x1['all'][k(*kk)]['verdict'] for kk in keys if k(*kk) in x1['all']}
-    x1_un = {kk: x1['unprobed'][k(*kk)]['verdict'] for kk in keys if k(*kk) in x1['unprobed']}
-    un = set(x1_un.values())
-    res['X1'] = dict(held=held_class(x1_cls, un.pop() if len(un) == 1 else 'not decided', len(UNPROBED_X12),
-                                     HELD_X12_MIN),
-                     by_reading={f'{a} b{b:g}': v for (a, b), v in x1_cls.items()})
-    sets = load_model_x2() if model_sets is None else model_sets
-    flies = pd.read_csv(out / 'c_x2_flies.csv')
-    x2 = {}
+def x2_score(sets: pd.DataFrame, flies: pd.DataFrame, a0: str,
+             keys: Sequence[Tuple[str, float]]) -> Tuple[dict, List[dict]]:
+    """X2 under one pre-odor level of the model `a0`: per quantity, reading and b (`keys`), each ratio's class
+    (`x2_model_classes` against the flies' hull of c_x2_flies.csv) for set L and for its unprobed flies, the quantity's
+    class (`x2_quantity_verdict`), and the class held over the readings, b and the unprobed flies (`held_class`; at least
+    HELD_X12_MIN of them remaining). Returns {quantity: {held, by_reading}} and the long rows of score_x2.csv."""
+    x2, rows = {}, []
     for q in X2_QUANTITIES:
         by, by_un = {}, {}
         for (rd, bm) in keys:
@@ -2398,15 +2647,73 @@ def score(a0: Optional[str] = None, model_sets: Optional[pd.DataFrame] = None) -
                     row = f[f['ratio_id'] == rid]
                     if row.empty or not np.isfinite(row['lo'].iloc[0]):
                         rc[rid] = 'not decided'
+                        rows.append(dict(a0=a0, quantity=q, flies=who, reading=rd, b_mult=bm, ratio_id=rid, lo=np.nan,
+                                         hi=np.nan, n_flies=int(row['n_flies'].iloc[0]) if len(row) else 0,
+                                         cls='not decided', per_estimate=''))
                         continue
-                    rc[rid] = x2_model_classes(sets, rid, q, float(row['lo'].iloc[0]), float(row['hi'].iloc[0]), a0)['cls']
+                    lo, hi = float(row['lo'].iloc[0]), float(row['hi'].iloc[0])
+                    mc = x2_model_classes(sets, rid, q, lo, hi, a0)
+                    rc[rid] = mc['cls']
+                    rows.append(dict(a0=a0, quantity=q, flies=who, reading=rd, b_mult=bm, ratio_id=rid, lo=lo, hi=hi,
+                                     n_flies=int(row['n_flies'].iloc[0]), cls=mc['cls'],
+                                     per_estimate='; '.join(f'{e}: {c}' for e, c in mc['per_estimate'].items()),
+                                     per_wiring='; '.join(f"{w['wiring']}/{w['estimate']}: {w['cls']}"
+                                                          for w in mc['per_wiring'])))
                 store[(rd, bm)] = dict(ratios=rc, cls=x2_quantity_verdict(rc))
         un = {v['cls'] for v in by_un.values()}
-        n_un = int(flies[(flies['flies'] == 'L unprobed')]['n_flies'].min()) if (flies['flies'] == 'L unprobed').any() else 0
+        fu = flies[(flies['flies'] == 'L unprobed') & (flies['quantity'] == q)]
+        n_un = int(fu['n_flies'].min()) if len(fu) else 0
         x2[q] = dict(held=held_class({kk: v['cls'] for kk, v in by.items()}, un.pop() if len(un) == 1 else 'not decided',
                                      n_un, HELD_X12_MIN),
-                     by_reading={f'{a} b{b:g}': v for (a, b), v in by.items()})
-    res['X2'] = x2
+                     unprobed_classes=sorted({v['cls'] for v in by_un.values()}), n_unprobed_flies_min=n_un,
+                     by_reading={f'{a} b{b:g}': v for (a, b), v in by.items()},
+                     by_reading_unprobed={f'{a} b{b:g}': v for (a, b), v in by_un.items()})
+    return x2, rows
+
+
+def score(a0s: Sequence[str] = A0_CHOICES, model_sets: Optional[pd.DataFrame] = None) -> dict:
+    """The verdicts (verdict.json, score_x2.csv), from parts A3, A4, B, C and D, on set L with flies as units, each held
+    (`held_class`) over b in (0, b_G), the carrying reading and both partners, and the unprobed flies: X1 (`x1_table`'s
+    verdicts), X2 under each of the model's pre-odor levels `a0s` side by side (`x2_score`; A0_CARRYING: not fixed, open
+    issue 3e15a91), with whether any class changes between them, X3 (`fly_x3` and `x3_verdict` per reading, with B1's
+    cross-check and A4's rule); the channel check's verdict recorded."""
+    _gate('score')
+    a0s = tuple(a0s)
+    if not a0s or any(a not in A0_CHOICES for a in a0s):
+        raise ValueError(f"score needs the model's pre-odor levels a0s, from {A0_CHOICES}")
+    out = out_dir()
+    bl, x1, rule = _read_json(out / 'b_leak.json'), _read_json(out / 'c_x1.json'), _read_json(out / 'a4_rule.json')
+    if bl is None or x1 is None or rule is None:
+        raise RuntimeError('score needs parts A4, B and C first')
+    chk = _read_json(out / 'channel_check.json')
+    keys = [(rd, bm) for bm in (0.0, 1.0) for rd in READINGS]
+    res = dict(channel_mode=CHANNEL_MODE, channel_check=None if chk is None else chk.get('verdict'),
+               a0_levels=list(a0s), a0_carrying=A0_CARRYING, a0_carrying_note=A0_CARRYING_NOTE, b_G=bl['b_G'],
+               outcome_h=bl['outcome_h'], cross_check_passed=bl['cross_check_passed'], b_g_alone=rule['b_g_alone'])
+    k = lambda rd, bm: f'{rd} b{bm:g}'
+    x1_cls = {kk: x1['all'][k(*kk)]['verdict'] for kk in keys if k(*kk) in x1['all']}
+    x1_un = {kk: x1['unprobed'][k(*kk)]['verdict'] for kk in keys if k(*kk) in x1['unprobed']}
+    un = set(x1_un.values())
+    n_un = min((int(v['n_flies']) for kk in keys if k(*kk) in x1['unprobed']
+                for v in x1['unprobed'][k(*kk)]['pairs'].values()), default=0)
+    res['X1'] = dict(held=held_class(x1_cls, un.pop() if len(un) == 1 else 'not decided', n_un, HELD_X12_MIN),
+                     unprobed_classes=sorted(set(x1_un.values())), n_unprobed_flies_min=n_un,
+                     by_reading={f'{a} b{b:g}': v for (a, b), v in x1_cls.items()},
+                     by_reading_unprobed={f'{a} b{b:g}': v for (a, b), v in x1_un.items()})
+    sets = load_model_x2() if model_sets is None else model_sets
+    flies = pd.read_csv(out / 'c_x2_flies.csv')
+    x2_all, x2_rows = {}, []
+    for a0 in a0s:
+        x2_all[a0], rows = x2_score(sets, flies, a0, keys)
+        x2_rows += rows
+    t = pd.DataFrame(x2_rows)
+    t.insert(0, 'carrying_baseline', A0_CARRYING_NOTE if A0_CARRYING is None else A0_CARRYING)
+    t.to_csv(out / 'score_x2.csv', index=False)
+    held = {q: {a0: x2_all[a0][q]['held'] for a0 in a0s} for q in X2_QUANTITIES}
+    res['X2'] = dict(carrying_baseline=A0_CARRYING_NOTE if A0_CARRYING is None else A0_CARRYING,
+                     held_by_baseline=held,
+                     class_changes_between_baselines={q: len(set(v.values())) > 1 for q, v in held.items()},
+                     by_baseline=x2_all)
     d = pd.read_csv(out / 'd_x3.csv')
     d = d[(d['group'] == 'L') & (d['cell_um'] == CELL_UM)]
     x3 = {}
@@ -2417,8 +2724,138 @@ def score(a0: Optional[str] = None, model_sets: Optional[pd.DataFrame] = None) -
     res['X3'] = dict(held=held_class({rd: v['verdict'] for rd, v in x3.items()} if len(x3) == len(READINGS)
                                      else {'missing': 'not decided'}, None, 0, 0),
                      by_reading={rd: {kk: v for kk, v in r.items() if kk != 'flies'} for rd, r in x3.items()})
+    fl = [dict(f, reading=rd) for rd, r in x3.items() for f in r['flies']]
+    pd.DataFrame(fl).to_csv(out / 'score_x3_flies.csv', index=False)
+    res.update(beside(sets, a0s, keys, bool(bl['cross_check_passed']), bool(rule['b_g_alone']), res))
     _write_json(out / 'verdict.json', res)
     return res
+
+
+ALIGNMENT_NOTE = (
+    "Yang's question 18, second half (whether C2 moved by C1's shifts is aligned with C1 pixel for pixel), is not answered "
+    "(2026-11-15 17:53). X3 depends on that alignment throughout: its agreement A is a Pearson r over cells between APL's "
+    "odor-specific map and the KC channel's from other presentations, and K_b = C2 - b C1 is formed cell by cell, so a "
+    "shift of the KC map against APL's lowers A and leaves part of the leak in K_b where APL's map changes steeply (the "
+    "cross-check of B1 and the scan over b read the same cells). X1 and X2 read calyx means inside one outline and do not "
+    "depend on it. The data's own checks, described: the cross-correlogram's peak lag (d_described.csv: the share of "
+    "stimuli whose peak lies within one cell of zero), the 8 um cells beside (less sensitive to a shift of a fraction of a "
+    "cell), and the recordings whose two channels' maps were not registered with the same shifts (registration_matched "
+    "False).")
+
+
+def _x1_classes(c: pd.DataFrame, flies: Optional[Sequence[str]] = None, min_flies: int = X1_MIN_FLIES,
+                n_boot: int = N_BOOT) -> Tuple[dict, dict]:
+    """X1's class per reading and b in (0, b_G) on the response rows `c` (`x1_table`), and the pairs' summaries."""
+    _, x1 = x1_table(c, flies=flies, min_flies=min_flies, n_boot=n_boot)
+    keep = {k: v for k, v in x1.items() if k[1] in (0.0, 1.0)}
+    return ({f'{rd} b{bm:g}': v['verdict'] for (rd, bm), v in keep.items()},
+            {f'{rd} b{bm:g}': v['pairs'] for (rd, bm), v in keep.items()})
+
+
+def _x3_classes(d: pd.DataFrame, cross: bool, b_g_alone: bool, unprobed: Sequence[str]) -> dict:
+    """X3 per reading on part D's rows `d` (`fly_x3`, `x3_verdict`), without the per-fly rows."""
+    return {rd: x3_verdict(fly_x3(g), cross, b_g_alone, unprobed) for rd, g in d.groupby('reading', sort=False)}
+
+
+def _x2_held(sets: pd.DataFrame, flies: pd.DataFrame, a0s: Sequence[str], keys, unprobed: bool) -> dict:
+    """X2's class per baseline and quantity on a flies' table (rows 'L', and 'L unprobed' when `unprobed`): held over
+    the readings and b, with the unprobed flies' rule when `unprobed`, without it otherwise."""
+    out = {}
+    for a0 in a0s:
+        x2, _ = x2_score(sets, flies, a0, keys)
+        out[a0] = {q: (v['held'] if unprobed else
+                       held_class({k: r['cls'] for k, r in v['by_reading'].items()}, None, 0, 0))
+                   for q, v in x2.items()}
+    return out
+
+
+def beside(sets: pd.DataFrame, a0s: Sequence[str], keys, cross: bool, b_g_alone: bool, main: dict) -> dict:
+    """What the score reports beside the verdicts, deciding nothing: the sensitivity readings (set L without the runs
+    that Yang's notes mark as warped by SENSITIVITY_WARP_UM or more or as taken at SENSITIVITY_NM, a1_recordings.csv's
+    out_of_sensitivity_readings; Yang, question 18, 2026-11-15 17:53: no run is left out of the carrying readings; and
+    the planes apart), V0 as the repetition ("not repeated in the development flies" where its class differs from a held
+    one), X3 at the other cell sizes, and the alignment of the two channels' maps (ALIGNMENT_NOTE)."""
+    out = out_dir()
+    c = pd.read_csv(out / 'c_responses.csv')
+    d_all = pd.read_csv(out / 'd_x3.csv')
+    a1 = pd.read_csv(out / 'a1_recordings.csv')
+    outs = set(a1[a1['out_of_sensitivity_readings'].fillna('').astype(str) != '']['stem'])
+    cL, dL = c[c['group'] == 'L'], d_all[(d_all['group'] == 'L') & (d_all['cell_um'] == CELL_UM)]
+    # sensitivity: without the warped and 925 nm runs
+    cs, ds = cL[~cL['recording'].isin(outs)], dL[~dL['recording'].isin(outs)]
+    x1s, _ = _x1_classes(cs)
+    x1su, _ = _x1_classes(cs, flies=UNPROBED_X12, min_flies=HELD_X12_MIN)
+    un = set(x1su.values())
+    fs = pd.concat([x2_flies(cs).assign(flies='L'), x2_flies(cs, flies=UNPROBED_X12).assign(flies='L unprobed')],
+                   ignore_index=True)
+    x3s = _x3_classes(ds, cross, b_g_alone, UNPROBED_X3)
+    sens = dict(left_out=sorted(outs & set(cL['recording'])),
+                left_out_flies=sorted({fly_of(x) for x in outs & set(cL['recording'])}),
+                X1=dict(by_reading=x1s, held=held_class(x1s, un.pop() if len(un) == 1 else 'not decided', HELD_X12_MIN,
+                                                         HELD_X12_MIN)),
+                X2=_x2_held(sets, fs, a0s, keys, True),
+                X3=dict(by_reading={rd: v['verdict'] for rd, v in x3s.items()},
+                        held=held_class({rd: v['verdict'] for rd, v in x3s.items()} if len(x3s) == len(READINGS)
+                                        else {'missing': 'not decided'}, None, 0, 0)))
+    # the planes apart (carrying reading)
+    planes = {}
+    for pl in sorted(pd.to_numeric(cL['plane_um'], errors='coerce').dropna().unique()):
+        cp = cL[pd.to_numeric(cL['plane_um'], errors='coerce') == pl]
+        dp = dL[(pd.to_numeric(dL['plane_um'], errors='coerce') == pl) & (dL['reading'] == CARRYING)]
+        x1p, pairs = _x1_classes(cp[cp['reading'] == CARRYING])
+        fx = fly_x3(dp) if len(dp) else pd.DataFrame(columns=['fly', 'b_mult', 'cls'])
+        n_pass = (len(set(fx[(fx['b_mult'] == 0.0) & (fx['cls'] == 'pass')]['fly'])
+                      & set(fx[(fx['b_mult'] == 1.0) & (fx['cls'] == 'pass')]['fly'])) if len(fx) else 0)
+        planes[f'{pl:g} um'] = dict(n_recordings=int(cp['recording'].nunique()), n_flies=int(cp['fly'].nunique()),
+                                    X1=x1p, X1_pairs=pairs,
+                                    X3=x3_verdict(fx, cross, b_g_alone)['verdict'] if len(fx) else 'not decided',
+                                    X3_n_flies=int(fx['fly'].nunique()) if len(fx) else 0, X3_n_pass_0_bG=n_pass)
+    sens['planes'] = planes
+    # V0, the repetition (its own flies; no unprobed rule)
+    cV = c[c['group'] == 'V0']
+    dV = d_all[(d_all['group'] == 'V0') & (d_all['cell_um'] == CELL_UM)]
+    v0_flies = sorted(cV['fly'].unique())
+    x1v, x1v_pairs = _x1_classes(cV)
+    fv = pd.read_csv(out / 'c_x2_flies.csv')
+    fv = fv[fv['flies'] == 'V0'].assign(flies='L')
+    x3v = _x3_classes(dV, cross, b_g_alone, v0_flies)
+    v0 = dict(n_flies=len(v0_flies), n_recordings=int(cV['recording'].nunique()),
+              X1=dict(by_reading=x1v, held=held_class(x1v, None, 0, 0), pairs=x1v_pairs),
+              X2=_x2_held(sets, fv, a0s, keys, False) if len(fv) else {},
+              X3=dict(by_reading={rd: v['verdict'] for rd, v in x3v.items()},
+                      held=held_class({rd: v['verdict'] for rd, v in x3v.items()} if len(x3v) == len(READINGS)
+                                      else {'missing': 'not decided'}, None, 0, 0)))
+    flags, undecided = [], []
+
+    def compare(name, h, hv):
+        if h == 'not decided':
+            return
+        if hv == 'not decided':
+            undecided.append(f'{name} {h}: the development flies do not decide it')
+        elif hv != h:
+            flags.append(f'{name} {h}: not repeated in the development flies ({hv})')
+    compare('X1', main['X1']['held'], v0['X1']['held'])
+    for a0 in a0s:
+        for q in X2_QUANTITIES:
+            compare(f'X2 {q} ({a0})', main['X2']['by_baseline'][a0][q]['held'], v0['X2'].get(a0, {}).get(q, 'not decided'))
+    compare('X3', main['X3']['held'], v0['X3']['held'])
+    v0['not_repeated'] = flags
+    v0['not_decided_in_v0'] = undecided
+    # X3 at the other cell sizes (carrying reading's classes per reading)
+    cells = {}
+    for cu in CELL_UM_BESIDE:
+        dc = d_all[(d_all['group'] == 'L') & (d_all['cell_um'] == cu)]
+        if len(dc):
+            cells[f'{cu:g} um'] = {rd: v['verdict'] for rd, v in _x3_classes(dc, cross, b_g_alone, UNPROBED_X3).items()}
+    desc = pd.read_csv(out / 'd_described.csv') if (out / 'd_described.csv').exists() else pd.DataFrame()
+    dl = desc[desc['group'] == 'L'] if len(desc) else desc
+    align = dict(note=ALIGNMENT_NOTE,
+                 set_l_not_registered_together=sorted(dl[dl['registration_matched'] == False]['recording'])   # noqa: E712
+                 if len(dl) and 'registration_matched' in dl else [],
+                 cc_peak_within_one_cell_share_median=float(dl['cc_peak_within_one_cell_share'].median())
+                 if len(dl) and 'cc_peak_within_one_cell_share' in dl else np.nan,
+                 X3_other_cell_sizes=cells)
+    return dict(sensitivity=sens, V0=v0, alignment=align)
 
 
 PARTS = ('0', 'A1', 'A2', 'A3', 'A4', 'B', 'C', 'D', 'E', 'score')
@@ -2428,6 +2865,11 @@ READS = {
     'A2': "E90's saved stage matrices (data/model_outputs/E90_model_stages/B/)",
     'A3': "C2's family on E98's B1 input (E83's saved fits); E98's saved B1 runs for the identity",
     'A4': 'nothing (made-up maps)',
+    'B': "viki's copy: groups G, R, M and L, both channels (after Yang's release)",
+    'C': "viki's copy: sets L, L+, V0 and VT, calyx means of both channels (after the channel check passed)",
+    'D': "viki's copy: sets L, L+ and V0, both channels' maps (after the channel check passed)",
+    'E': "viki's copy: set L's maps; A3's claw stage; Remy's claw matrices (after the channel check passed)",
+    'score': 'the tables of parts A3, A4, B, C and D (after the channel check passed)',
 }
 WRITES = {
     '0': 'identity.json', 'A1': 'a1_recordings.csv, a1_groups.csv',
@@ -2435,6 +2877,12 @@ WRITES = {
     'A3': 'a3_runs.csv, a3_stimuli.csv, a3_family.csv, a3_ratios.csv, a3_lines.csv, a3_identity.json; '
           'outputs/E101_apl_vs_kc_claws/A3/',
     'A4': 'a4_power.csv, a4_rule.json',
+    'B': 'channel_check.csv, channel_check.json, b_leak.json, b1_slopes.csv, b1_cross_check.csv, b2_reverse.csv, '
+         'b3_marker.csv, b4_solvent.csv, b5_slopes.csv',
+    'C': 'c_responses.csv, c_left_out.csv, c_x1_recordings.csv, c_x1.json, c_x2_flies.csv',
+    'D': 'd_x3.csv, d_x3_scan.csv, d_described.csv, d_left_out.csv',
+    'E': 'e_claw_distances.csv, e_model_distances.csv',
+    'score': 'verdict.json, score_x2.csv, score_x3_flies.csv',
 }
 
 
@@ -2448,7 +2896,9 @@ def main() -> None:
                     help="A3: the runs, their identities and the APL side's tables (no claw stage read)")
     ap.add_argument('--n-flies', type=int, default=A4_N_FLIES, help='A4: made-up flies per condition')
     ap.add_argument('--n-perm', type=int, default=A4_N_PERM, help='A4: null assignments per made-up recording')
-    ap.add_argument('--a0', choices=A0_CHOICES, help="score: the model's pre-odor level (a required choice, E98's)")
+    ap.add_argument('--a0', choices=A0_CHOICES + ('all',), default='all',
+                    help="score: the model's pre-odor levels X2 is scored under (default all, side by side; the carrying "
+                         "level is not fixed, open issue 3e15a91)")
     ap.add_argument('--dry-run', action='store_true', help='say what the part reads and writes, and exit')
     a = ap.parse_args()
     if a.dry_run:
@@ -2480,10 +2930,11 @@ def main() -> None:
         provenance('A4', n_flies=a.n_flies, n_perm=a.n_perm)
         print(json.dumps(part_a4(a.n_flies, a.n_perm), indent=1, default=float), flush=True)
     elif a.part == 'score':
-        provenance('score', a0=a.a0)
-        print(json.dumps(score(a.a0), indent=1, default=float), flush=True)
+        a0s = A0_CHOICES if a.a0 == 'all' else (a.a0,)
+        provenance('score', a0=list(a0s), **data_provenance())
+        print(json.dumps(score(a0s), indent=1, default=float), flush=True)
     else:
-        provenance(a.part)
+        provenance(a.part, **data_provenance())
         print(json.dumps({'B': part_b, 'C': part_c, 'D': part_d, 'E': part_e}[a.part](), indent=1, default=float),
               flush=True)
 
