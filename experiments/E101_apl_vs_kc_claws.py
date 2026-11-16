@@ -112,8 +112,9 @@ Parts (CLI `--part`):
 - score: the verdicts (verdict.json).
 
 Deviations from the entry (each also in the note):
-- A3's stimuli are B1's as `b1_input` gives them (46 of `b1_specs`' 52: Hallem's six rows below 10^-2 have no source and are
-  left out, as in E98's first B1 runs, and listed in a3_stimuli.csv).
+- A3's stimuli are B1's as `b1_input` gives them: all 52 of `b1_specs` since E98's 11884b2 (Hallem's rows from olfsysm's
+  hc_data.csv). A first A3 run on the 46 stimuli of E98's first B1 runs (Hallem's six rows below 10^-2 without a source)
+  was made before that commit and is kept apart (outputs/E101_apl_vs_kc_claws/A3_b1_46/); the tables read the 52.
 - A3's check against E90's saved claw-stage sums and A2 read E90's saved stage matrices; the code subagent that wrote this
   could not read them (the permission system refused the read, as it had the planning subagent's), so `--part A2` and
   `--part 0 --e90` are left for hal's session. A3 reproduces the saved fit's counts on the 16 panel odors (E83's
@@ -1017,7 +1018,7 @@ def part_a3(wirings: Sequence[str] = ALL_WIRINGS) -> dict:
     a3_ratios.csv, a3_lines.csv, a3_identity.json."""
     ident = part_a3_runs(wirings)
     _write_json(out_dir() / 'a3_identity.json', ident)
-    return a3_tables(wirings)
+    return dict(apl=a3_apl_tables(wirings), claws=a3_tables(wirings))
 
 
 def model_x2(fam: pd.DataFrame, baselines: Sequence[str] = ('e90', 'settled', 'blank')) -> pd.DataFrame:
@@ -1088,6 +1089,43 @@ def a3_tables(wirings: Sequence[str] = ALL_WIRINGS) -> dict:
     shutil.copyfile(d / 'a3_stimuli.csv', out / 'a3_stimuli.csv')
     _write_json(out / 'a3_identity.json', {w: _read_json(d / f'{w}_identity.json') for w in wirings})
     return dict(n_rows=len(fam), n_x2_rows=len(summ))
+
+
+def a3_apl_tables(wirings: Sequence[str] = ALL_WIRINGS) -> dict:
+    """A3's APL side, from the saved runs' APL means and responses only (E98's B1 layout, read by E98's `load_b1`; no
+    claw stage): a3_apl.csv (per wiring, condition and stimulus APL's window, pre-odor and settled pre-odor means, its
+    evoked activity and the KCs' response rate) and a3_apl_x2.csv (per wiring, X2 ratio and estimate of the input, under
+    the three pre-odor levels A0_CHOICES, APL's linear ratio and its range over E98's indicator family)."""
+    from experiments import E98_apl_response_strength as E98
+    b = E98.load_b1(wirings, roots=[a3_dir()])
+    out = out_dir()
+    b.to_csv(out / 'a3_apl.csv', index=False)
+    rows = []
+    for w, g in b[b['cond'] == 'on'].groupby('wiring', sort=False):
+        g = g.set_index('stimulus')
+        blank = g.loc[BLANK_LABEL] if BLANK_LABEL in g.index else None
+        for rid, (nums, dens) in X2_MODEL.items():
+            pairs = [(nu, de, 'main') for nu in nums for de in dens]
+            pairs += [(nu, dens[0], 'beside') for nu in X2_MODEL_BESIDE.get(rid, ())]
+            for nu, de, role in pairs:
+                if nu not in g.index or de not in g.index:
+                    continue
+                for a0 in A0_CHOICES:
+                    base = dict(e90=g.loc[nu, 'pre'], settled=g.loc[nu, 'pre_settled'],
+                                blank=np.nan if blank is None else blank['win'])[a0]
+                    if not np.isfinite(base):
+                        continue
+                    rs = E98.model_ratio_set(g.loc[nu, 'win'], g.loc[de, 'win'], base, APL_NS)
+                    rows.append(dict(wiring=w, ratio_id=rid, numerator=nu, denominator=de, role=role,
+                                     estimate=de if rid in ('r1', 'r2') else nu, a0=a0,
+                                     apl_linear=float(E98.indicator_ratio(g.loc[nu, 'win'], g.loc[de, 'win'], base, 1.0,
+                                                                          'evoked')),
+                                     apl_min=float(rs['ratio'].min()), apl_max=float(rs['ratio'].max()),
+                                     kc_rate_num=float(g.loc[nu, 'response_rate']),
+                                     kc_rate_den=float(g.loc[de, 'response_rate'])))
+    x2 = pd.DataFrame(rows)
+    x2.to_csv(out / 'a3_apl_x2.csv', index=False)
+    return dict(n_rows=len(b), n_x2_rows=len(x2), missing=b.attrs.get('missing'))
 
 
 def e90_claw_identity(wirings: Sequence[str] = ALL_WIRINGS, tol: float = 1e-9) -> dict:
@@ -2399,6 +2437,8 @@ def main() -> None:
     ap.add_argument('--wirings', default=','.join(ALL_WIRINGS), help='A3: comma-separated wirings')
     ap.add_argument('--e90', action='store_true', help="part 0: also check against E90's saved stage matrices")
     ap.add_argument('--runs-only', action='store_true', help="A3: the runs and their identities only, no tables")
+    ap.add_argument('--apl-only', action='store_true',
+                    help="A3: the runs, their identities and the APL side's tables (no claw stage read)")
     ap.add_argument('--n-flies', type=int, default=A4_N_FLIES, help='A4: made-up flies per condition')
     ap.add_argument('--n-perm', type=int, default=A4_N_PERM, help='A4: null assignments per made-up recording')
     ap.add_argument('--a0', choices=A0_CHOICES, help="score: the model's pre-odor level (a required choice, E98's)")
@@ -2421,7 +2461,13 @@ def main() -> None:
         w = tuple(x for x in a.wirings.split(',') if x)
         provenance('A3', wirings=list(w), runs_only=a.runs_only)
         _process_commits()
-        res = part_a3_runs(w) if a.runs_only else part_a3(w)
+        if a.runs_only or a.apl_only:
+            res = part_a3_runs(w)
+            _write_json(out_dir() / 'a3_identity.json', res)
+            if a.apl_only:
+                res = dict(identity=res, apl=a3_apl_tables(w))
+        else:
+            res = part_a3(w)
         print(json.dumps(res, indent=1, default=float), flush=True)
     elif a.part == 'A4':
         provenance('A4', n_flies=a.n_flies, n_perm=a.n_perm)

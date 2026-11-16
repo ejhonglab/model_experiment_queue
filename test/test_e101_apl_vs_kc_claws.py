@@ -540,3 +540,29 @@ def test_parts_b_to_e_and_score_on_made_up_recordings(tmp_path, monkeypatch):
     for q in M.X2_QUANTITIES:
         assert v['X2'][q]['held'] in ('flatter', 'inside', 'steeper', 'not decided')
     assert (tmp_path / 'verdict.json').exists()
+
+
+def test_a3_apl_tables_made_up(tmp_path, monkeypatch):
+    d = tmp_path / 'A3'
+    d.mkdir()
+    stims = ['pa', 'ms', 'paa', 'paa [validation2/diag] @ -5', 'ms [megamat/diag] @ -3', M.BLANK_LABEL]
+    win = {'pa': 21.0, 'ms': 19.0, 'paa': 20.0, 'paa [validation2/diag] @ -5': 17.0, 'ms [megamat/diag] @ -3': 18.0,
+           M.BLANK_LABEL: 8.8}
+    for ct in ('on', 'acute_off'):
+        pd.DataFrame(dict(win=[win[s] for s in stims], pre=8.27, pre_settled=8.79),
+                     index=pd.Index(stims, name='stimulus')).to_csv(d / f'real_{ct}_apl.csv')
+        r = pd.DataFrame(np.zeros((10, len(stims))), columns=stims)
+        r.iloc[0, 0] = 1.0
+        for k in ('responses', 'spike_counts', 'pn_win', 'pn_pre'):
+            r.to_parquet(d / f'real_{ct}_{k}.parquet')
+    monkeypatch.setattr(M, 'a3_dir', lambda: d)
+    monkeypatch.setattr(M, 'out_dir', lambda: tmp_path)
+    res = M.a3_apl_tables(('real',))
+    x = pd.read_csv(tmp_path / 'a3_apl_x2.csv')
+    r1 = x[(x['ratio_id'] == 'r1') & (x['estimate'] == 'ms') & (x['a0'] == 'e90')].iloc[0]
+    assert r1['apl_linear'] == pytest.approx((21.0 - 8.27) / (19.0 - 8.27))
+    r1b = x[(x['ratio_id'] == 'r1') & (x['estimate'] == 'ms') & (x['a0'] == 'blank')].iloc[0]
+    assert r1b['apl_linear'] == pytest.approx((21.0 - 8.8) / (19.0 - 8.8))
+    r3 = x[(x['ratio_id'] == 'r3') & (x['a0'] == 'settled')].iloc[0]
+    assert r3['apl_linear'] == pytest.approx((17.0 - 8.79) / (20.0 - 8.79)) and r3['kc_rate_num'] == 0.0
+    assert set(x['ratio_id']) == {'r1', 'r2', 'r3'} and res['n_rows'] == 2 * len(stims)
