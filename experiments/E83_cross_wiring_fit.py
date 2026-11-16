@@ -168,7 +168,8 @@ def wiring_parts(label: str) -> dict:
 
 
 def build_simulator(label: str, orn: Optional[pd.DataFrame] = None, breadth: Optional[pd.Series] = None,
-                    params: Optional[Dict[str, float]] = None, input_tag: Optional[str] = None) -> Tuple:
+                    params: Optional[Dict[str, float]] = None, input_tag: Optional[str] = None,
+                    extra_kws: Optional[dict] = None) -> Tuple:
     """C2's family on one wiring as a fixed-parameter simulator (`make_fixed_param_kc_simulator`, one simulation to
     build), at the wiring's fit's parameters, with the ORN input `orn` (default the lab's).
 
@@ -182,6 +183,9 @@ def build_simulator(label: str, orn: Optional[pd.DataFrame] = None, breadth: Opt
             (`wiring_parts(label)['breadth']`) to hold it, as the searches of part C do.
         params: starting parameters (default the fit's).
         input_tag: see `breadth`.
+        extra_kws: further `make_fixed_param_kc_simulator` kwargs (scalars, e.g. dict(pn_inhadd=1000.0, pn_inhsc=...),
+            E102's PN normalization); they do not enter the breadth recomputed for `orn`, so pass the breadth of the
+            same kwargs (E77_input_screen.handle_breadth with the wiring's claw x bouton matrix) with them.
 
     Returns:
         (simulate, info): info has 'label', 'params', 'kws' (the scalar model kwargs, as E77's `build_c2_simulator`
@@ -206,14 +210,15 @@ def build_simulator(label: str, orn: Optional[pd.DataFrame] = None, breadth: Opt
         if not W.equals(P['W']):
             raise RuntimeError(f'{label}: the wiring built with input {input_tag} differs from the lab input\'s')
     wAPLKC = J.breadth_weights(wnorm['wAPLKC'], breadth, BREADTH_K)
-    sim, _ = make_fixed_param_kc_simulator(orn, initial_params=p, **J.base_kws(None), _wPNKC=W, _wAPLKC=wAPLKC,
-                                           _wKCAPL=wnorm['wKCAPL'], _wAPLPN=wnorm['wAPLPN'], _wPNAPL=wnorm['wPNAPL'],
-                                           kc_kc_inh=p['wKCKC_scale'], kc_kc_tau=J.TAU)
+    extra = dict(extra_kws or {})
+    sim, _ = make_fixed_param_kc_simulator(orn, initial_params=p, **dict(J.base_kws(None), **extra), _wPNKC=W,
+                                           _wAPLKC=wAPLKC, _wKCAPL=wnorm['wKCAPL'], _wAPLPN=wnorm['wAPLPN'],
+                                           _wPNAPL=wnorm['wPNAPL'], kc_kc_inh=p['wKCKC_scale'], kc_kc_tau=J.TAU)
     cells = dict(zip(sim.__code__.co_freevars, sim.__closure__))
     if not (np.array_equal(cells['wAPLKC_unscaled'].cell_contents.ravel(), wAPLKC.to_numpy())
             and np.array_equal(cells['wAPLPN_unscaled'].cell_contents.ravel(), wnorm['wAPLPN'].to_numpy())):
         raise RuntimeError("the simulator's unscaled APL weights are not the ones it was built with")
-    kws = _scalar_kws(dict(J.base_kws(None), kc_kc_inh=p['wKCKC_scale'], kc_kc_tau=J.TAU))
+    kws = _scalar_kws(dict(J.base_kws(None), **extra, kc_kc_inh=p['wKCKC_scale'], kc_kc_tau=J.TAU))
     return sim, dict(label=label, params=p, kws=kws, breadth=breadth, wAPLKC=wAPLKC, wAPLPN=wnorm['wAPLPN'], W=W, orn=orn,
                      cells=cells)
 
