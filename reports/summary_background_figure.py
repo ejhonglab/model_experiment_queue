@@ -13,6 +13,10 @@ whose residual defines the fruity x small-ester block. Drawn twice:
   matrices in olfdb's blue-white-red Oklab colormap (white at r = 0, symmetric -1..1, diagonal
   masked); shown in a collapsible block under the first figure in summary reports.
 
+Not drawn by main(): `draw_similarity()` draws the first figure's six panels as 1 - its distances (KCs: cosine
+similarity, ORNs: Pearson correlation), with that figure's numbers, in the Pearson figure's colours, for Yang's
+version of the summary (reports/yang_summary.py, which writes it to results/summary_yang/).
+
 Wording rules (CLAUDE.md, "Summary reports"): genotype labels are "control flies" and "APL
 output blocked (TNT)" everywhere; matrix panel titles name only what is shown and the measure
 appears once, in the colorbar label, by name; long titles are split over two lines. Writes
@@ -52,20 +56,26 @@ def stats_for(orn: pd.Series, ctrl: pd.Series, tnt: pd.Series, block: pd.Series)
         mean_ctrl=float(ctrl.mean()), mean_tnt=float(tnt.mean())), iso_resid
 
 
-def draw(orn, ctrl, tnt, within, block, iso_resid, nums, *, measure: str, out_name: str) -> None:
+def draw(orn, ctrl, tnt, within, block, iso_resid, nums, *, measure: str, out_name: str, out_path=None) -> None:
     """measure 'cosine': matrices and axes in distance (KCs cosine, ORNs correlation distance);
-    'pearson': matrices and axes in Pearson correlation r = 1 - distance."""
+    'pearson': matrices and axes in Pearson correlation r = 1 - distance; 'similarity': the 'cosine'
+    distances as 1 - distance (KCs cosine similarity, ORNs Pearson correlation), drawn as 'pearson' is.
+    The figure goes to `out_path` if given, else to OUT / out_name."""
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
     odors = list(H.APL16_ODORS)
     pearson = measure == 'pearson'
-    rho_on = 'correlations' if pearson else 'distances'   # what the panel titles' ρ is computed on
-    tf = (lambda s: 1.0 - s) if pearson else (lambda s: s)
+    similarity = measure == 'similarity'
+    corr = pearson or similarity   # signed values, 1 - distance
+    rho_on = 'correlations' if corr else 'distances'   # what the panel titles' ρ is computed on
+    tf = (lambda s: 1.0 - s) if corr else (lambda s: s)
     o, c, t = tf(orn), tf(ctrl), tf(tnt)
     fit = tf(ctrl - iso_resid)
-    if pearson:
+    if corr:
         orn_lab, kc_lab = 'Pearson correlation across glomerular responses', 'Pearson correlation across KC responses'
+        if similarity:
+            kc_lab = 'cosine similarity across KC responses'
         ax_lab = 'Pearson correlation'
         cmap = H.oklab_diverging_cmap(); vmin, vmax = -1.0, 1.0
         lo = min(o.min(), c.min(), t.min()); lo = min(0.0, np.floor(lo * 10) / 10)
@@ -79,22 +89,22 @@ def draw(orn, ctrl, tnt, within, block, iso_resid, nums, *, measure: str, out_na
         orn_vmax = max(1.0, float(np.ceil(o.max() * 10) / 10))
         orn_lim = (0.0, max(1.03, float(o.max()) + 0.03))
     fig, axes = plt.subplots(2, 3, figsize=(16, 10.2))
-    mats = [(square(o, odors, np.nan if pearson else 0.0), 'ORNs', orn_lab),
-        (square(c, odors, np.nan if pearson else 0.0), 'KCs, control flies', kc_lab),
-        (square(t, odors, np.nan if pearson else 0.0), 'KCs, APL output blocked (TNT)', kc_lab)]
+    mats = [(square(o, odors, np.nan if corr else 0.0), 'ORNs', orn_lab),
+        (square(c, odors, np.nan if corr else 0.0), 'KCs, control flies', kc_lab),
+        (square(t, odors, np.nan if corr else 0.0), 'KCs, APL output blocked (TNT)', kc_lab)]
     for k, (ax, (m, title, cbar)) in enumerate(zip(axes[0], mats)):
-        if pearson:
+        if corr:
             ax.set_facecolor('#e5e7eb')
-        im = ax.imshow(m.to_numpy(), cmap=cmap, vmin=vmin, vmax=(orn_vmax if (k == 0 and not pearson) else vmax))
+        im = ax.imshow(m.to_numpy(), cmap=cmap, vmin=vmin, vmax=(orn_vmax if (k == 0 and not corr) else vmax))
         ax.set_xticks(range(16)); ax.set_xticklabels(odors, rotation=90, fontsize=8); ax.set_yticks(range(16)); ax.set_yticklabels(odors, fontsize=8)
         ax.set_title(title, fontsize=11)
         fig.colorbar(im, ax=ax, fraction=0.046, pad=0.03).set_label(cbar, fontsize=8)
-    orn_ax = 'ORNs: Pearson correlation' if pearson else 'ORNs: Pearson correlation distance'
-    kc_ax = (lambda g: f'KCs, {g}: ' + ('Pearson correlation' if pearson else 'cosine distance'))
-    corner = 'upper left' if pearson else 'lower right'
+    orn_ax = 'ORNs: Pearson correlation' if corr else 'ORNs: Pearson correlation distance'
+    kc_ax = (lambda g: f'KCs, {g}: ' + ('Pearson correlation' if pearson else 'cosine similarity' if similarity else 'cosine distance'))
+    corner = 'upper left' if corr else 'lower right'
 
     def scatter(ax, x, y, xlabel, ylabel, title):
-        xlim = lim if pearson else orn_lim
+        xlim = lim if corr else orn_lim
         ax.plot([0, max(xlim[1], lim[1])], [0, max(xlim[1], lim[1])], ls='--', color='0.8', lw=1, zorder=0)
         ax.scatter(x[~within], y[~within], s=16, color='#5c6370', label='between-group pairs')
         ax.scatter(x[within], y[within], s=16, color='#1f77ff', label='within-group pairs')
@@ -112,13 +122,13 @@ def draw(orn, ctrl, tnt, within, block, iso_resid, nums, *, measure: str, out_na
     order = np.argsort(t.to_numpy())
     ax.plot(t.to_numpy()[order], fit.to_numpy()[order], color='#333333', lw=1.4, label='monotone (isotonic) fit')
     ax.set_xlim(lim); ax.set_ylim(lim); ax.set_xlabel(kc_ax('APL output blocked (TNT)')); ax.set_ylabel(kc_ax('control flies'))
-    where = 'below' if pearson else 'above'
+    where = 'below' if corr else 'above'
     ax.set_title(f"KCs, control flies vs APL output blocked (TNT)\n(isotonic R2 {nums['iso_r2']:.2f}; fruity x small-ester pairs "
         f"{abs(nums['block']):.3f} {where} the fit)", fontsize=11)
     ax.legend(fontsize=8, loc=corner); ax.spines[['top', 'right']].set_visible(False)
-    what = 'Pearson correlation' if pearson else 'KCs: cosine distance'
+    what = 'Pearson correlation' if pearson else 'KCs: cosine similarity' if similarity else 'KCs: cosine distance'
     fig.suptitle(f"Yang's APL16 KC data: the ORN->KC remapping in control flies and what blocking APL output (TNT) does to it ({what})", fontsize=12)
-    fig.tight_layout(); fig.savefig(OUT / out_name, dpi=130); plt.close(fig)
+    fig.tight_layout(); fig.savefig(out_path if out_path is not None else OUT / out_name, dpi=130); plt.close(fig)
 
 
 def main() -> None:
@@ -140,6 +150,29 @@ def main() -> None:
         print(measure, {k: round(v, 3) for k, v in nums.items()})
     old.update(rate_ratios())
     jp.write_text(json.dumps(old, indent=1) + '\n')
+
+
+def draw_similarity(out_path) -> dict:
+    """The six panels of summary_background.png as 1 - its distances (KCs: cosine similarity, ORNs: Pearson
+    correlation), with the same numbers (the ρ's, the isotonic R² and the block, computed on the distances), at
+    `out_path` (its folder is made). main() does not call this; reports/yang_summary.py does.
+
+    Returns:
+        The numbers (stats_for's dict).
+    """
+    from pathlib import Path
+    out_path = Path(out_path)
+    orn = H.orn16_consensus_pairs()
+    ctrl = H.yang_mean_rdm('TNT3c', 'cosine')
+    tnt = H.yang_mean_rdm('TNT', 'cosine')
+    o, ctrl = H.align_pairs(orn, ctrl); _, tnt = H.align_pairs(ctrl, tnt)
+    idx = ctrl.index
+    within = pd.Series([H.ODOR_GROUPS.get(a, a) == H.ODOR_GROUPS.get(b, b) for a, b in idx], index=idx)
+    block = pd.Series([H.block_label(a, b) == H.FRUITY_SMALL_BLOCK for a, b in idx], index=idx)
+    nums, iso_resid = stats_for(o, ctrl, tnt, block)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    draw(o, ctrl, tnt, within, block, iso_resid, nums, measure='similarity', out_name=out_path.name, out_path=out_path)
+    return nums
 
 
 def rate_ratios(n_boot: int = 5000) -> dict:
