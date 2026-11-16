@@ -293,6 +293,37 @@ def provenance(part: str, **extra) -> None:
     _write_json(path, d)
 
 
+def dirty_code(repo: Path = H.HERE) -> List[str]:
+    """The checkout's modified tracked files that are code (.py, .cpp, .hpp, .h, .toml, .cfg): what a run's outputs could
+    depend on. Other modified files (a report template another session is editing) do not count."""
+    import subprocess
+    st = subprocess.run(['git', 'status', '--porcelain', '--untracked-files=no'], cwd=repo, capture_output=True, text=True,
+                        check=True).stdout
+    paths = [ln[3:].strip() for ln in st.splitlines() if ln.strip()]
+    return [x for x in paths if x.endswith(('.py', '.cpp', '.hpp', '.h', '.toml', '.cfg'))]
+
+
+_RUN_COMMITS: Dict[str, object] = {}
+
+
+def run_commits() -> Dict[str, object]:
+    """The commits of the code a run loads (read once per process), refusing modified code in this repository or in
+    pyolfsysm (`dirty_code`); the modified non-code files of this repository are listed ('queue_dirty_files')."""
+    if not _RUN_COMMITS:
+        import subprocess
+        c = {k: v for k, v in H.code_commits().items() if not isinstance(v, (dict, list))}
+        bad = dirty_code()
+        olf = Path(H.pyolfsysm_dir()) if hasattr(H, 'pyolfsysm_dir') else None
+        bad_olf = dirty_code(olf) if olf is not None and olf.exists() else []
+        if bad or bad_olf:
+            raise RuntimeError(f'part B runs from committed code only: modified {bad + bad_olf}')
+        st = subprocess.run(['git', 'status', '--porcelain', '--untracked-files=no'], cwd=H.HERE, capture_output=True,
+                            text=True).stdout
+        c['queue_dirty_files'] = ';'.join(ln[3:].strip() for ln in st.splitlines() if ln.strip())
+        _RUN_COMMITS.update(c)
+    return dict(_RUN_COMMITS)
+
+
 def identity_path() -> Path:
     return out_dir() / 'identity.json'
 
@@ -573,7 +604,7 @@ def run_point(wiring: str, step, root: Optional[Path] = None, force: bool = Fals
             return rec
     if not _is_identity(step):
         require_identity('point', [wiring])
-    commits = E98.process_commits(strict=True)
+    commits = run_commits()
     t0 = time.time()
     held = hold_point(wiring, step)
     breadth = held.pop('breadth_series')
