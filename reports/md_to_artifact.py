@@ -33,6 +33,9 @@ Usage: ./venv/bin/python reports/md_to_artifact.py note.md page.html [--figdir D
 A line `%%% html <path>` (relative to --figdir) inserts that file's HTML verbatim (the summary's
 progress plot from summary_progress_plot.py); lint ignores <script> blocks.
 Import: convert_markdown(md_text, figdir) -> html; lint(html) -> list of problems.
+`convert_markdown(..., nested_items=True)` (not the command line; off by default, so other pages are
+unchanged) keeps a numbered list with indented sub-bullets or indented paragraphs under an item as one
+list, those blocks inside the item (the questions page, build_questions_page.py).
 """
 from __future__ import annotations
 
@@ -41,6 +44,7 @@ import base64
 import html as html_mod
 import re
 import sys
+import textwrap
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -246,8 +250,20 @@ def _bullet_list(items: List[Tuple[int, str]], render) -> str:
     return ''.join(html)
 
 
-def convert_body(md: str, figdir: Optional[Path] = None, *, byline: bool = True, defs: Optional[dict] = None) -> str:
-    """Converts markdown to the body HTML (no page wrapper)."""
+def _indent(ln: str) -> int:
+    return len(ln) - len(ln.lstrip())
+
+
+def convert_body(md: str, figdir: Optional[Path] = None, *, byline: bool = True, defs: Optional[dict] = None,
+        nested_items: bool = False) -> str:
+    """Converts markdown to the body HTML (no page wrapper).
+
+    Args:
+        nested_items: lines indented deeper than a numbered item, after its text (sub-bullets, and
+            paragraphs after a blank line), are converted as blocks of their own inside that item's
+            `<li>`, so a numbered list with sub-bullets stays one list. Off by default: the other pages
+            keep their output (their indented lines after a numbered item end the list, as before).
+    """
     lines = md.split('\n')
     out: List[str] = []
     i = 0
@@ -301,6 +317,24 @@ def convert_body(md: str, figdir: Optional[Path] = None, *, byline: bool = True,
             parts.append(lines[i].strip()); i += 1
         return ' '.join(parts)
 
+    def take_nested(base: int) -> str:
+        """With `nested_items`: the lines after an item's text indented deeper than `base` (blank
+        lines included while deeper lines follow them), dedented; '' if there are none."""
+        nonlocal i
+        block = []
+        while i < len(lines):
+            if lines[i].strip() == '':
+                k = i
+                while k < len(lines) and lines[k].strip() == '':
+                    k += 1
+                if k < len(lines) and _indent(lines[k]) > base:
+                    block.extend(lines[i:k]); i = k; continue
+                break
+            if _indent(lines[i]) <= base:
+                break
+            block.append(lines[i]); i += 1
+        return textwrap.dedent('\n'.join(block)).strip('\n')
+
     while i < len(lines):
         ln = lines[i]
         s = ln.strip()
@@ -338,7 +372,8 @@ def convert_body(md: str, figdir: Optional[Path] = None, *, byline: bool = True,
                 inner.append(lines[i]); i += 1
             i += 1   # the closing ???
             out.append(f'<details class="fold"><summary>{inline(title_txt)}</summary>'
-                + convert_body('\n'.join(inner), figdir, byline=False, defs=defs) + '</details>')
+                + convert_body('\n'.join(inner), figdir, byline=False, defs=defs, nested_items=nested_items)
+                + '</details>')
             continue
         fm = _FIG_RE.match(s)
         if fm:
@@ -388,12 +423,18 @@ def convert_body(md: str, figdir: Optional[Path] = None, *, byline: bool = True,
         m = _ITEM_RE.match(s)
         if m:
             start = int(m.group(1)); items = []
+            base = _indent(ln)
             while i < len(lines) and _ITEM_RE.match(lines[i].strip()):
-                items.append(take_item(_ITEM_RE.match(lines[i].strip()).group(2)))
+                item = text_html(take_item(_ITEM_RE.match(lines[i].strip()).group(2)))
+                if nested_items:
+                    sub = take_nested(base)
+                    if sub:
+                        item += convert_body(sub, figdir, byline=False, defs=defs, nested_items=True)
+                items.append(item)
                 while i < len(lines) and lines[i].strip() == '' and i + 1 < len(lines) \
                         and _ITEM_RE.match(lines[i + 1].strip()):
                     i += 1   # blank line between items of the same list
-            out.append(f'<ol start="{start}">' + ''.join(f'<li>{text_html(x)}</li>' for x in items) + '</ol>')
+            out.append(f'<ol start="{start}">' + ''.join(f'<li>{x}</li>' for x in items) + '</ol>')
             continue
         m = _BULLET_RE.match(s)
         if m:
@@ -417,8 +458,9 @@ def convert_body(md: str, figdir: Optional[Path] = None, *, byline: bool = True,
     return '\n'.join(out)
 
 
-def convert_markdown(md: str, figdir: Optional[Path] = None, title: Optional[str] = None) -> str:
-    body = convert_body(md, figdir)
+def convert_markdown(md: str, figdir: Optional[Path] = None, title: Optional[str] = None, *,
+        nested_items: bool = False) -> str:
+    body = convert_body(md, figdir, nested_items=nested_items)
     if '@@TOC@@' in body:
         body = body.replace('@@TOC@@', build_toc(body.replace('@@TOC@@', '')))
     if title is None:

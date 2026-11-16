@@ -3,16 +3,22 @@
 Run with `./venv/bin/python -m pytest coordination/monitor` from the repository's root (standard library
 only, besides pytest).
 """
+import contextlib
 import json
 import os
+import re
 import socket
+import stat
 import subprocess
 import sys
 import threading
 import time
+import urllib.error
 import urllib.request
+from datetime import datetime
 from http.server import ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import urlencode
 
 import pytest
 
@@ -492,8 +498,9 @@ def test_http(tmp_path):
 
 
 def test_since_priority_changes_view(tmp_path):
-    """The third Report view: its sub-tab (last in the bar) and frame source come from REPORTS, its
-    file is served and listed once a copy is saved, and the missing-file page shows until then."""
+    """The third Report view: its sub-tab (after Experiments and mechanisms) and frame source come
+    from REPORTS, its file is served and listed once a copy is saved, and the missing-file page shows
+    until then."""
     make_shared(tmp_path, time.time())
     reports = tmp_path / 'reports'
     reports.mkdir()
@@ -505,14 +512,16 @@ def test_since_priority_changes_view(tmp_path):
     try:
         page = urllib.request.urlopen(base + '/').read().decode()
         tab = '<a data-view="since-priority-changes" href="#since-priority-changes">'
-        assert tab + 'Since the priority changes</a></div>' in page
-        assert page.index('data-view="experiments"') < page.index(tab)
+        assert tab + 'Since the priority changes</a>' in page
+        assert page.index('data-view="experiments"') < page.index(tab) < page.index(
+            'data-view="questions-for-yang"')
         # the page's map of views is generated from REPORTS
         views = json.loads(page.split('var V=', 1)[1].split(',F={}', 1)[0])
         assert views == dict(summary=dict(src='/report/summary', rep=1),
             experiments=dict(src='/report/experiments', rep=1),
             monitor=dict(src='/monitor'),
-            **{'since-priority-changes': dict(src='/report/since-priority-changes', rep=1)})
+            **{'since-priority-changes': dict(src='/report/since-priority-changes', rep=1),
+                'questions-for-yang': dict(src='/report/questions-for-yang', rep=1)})
         # no copy saved yet: the missing-file page, and nothing listed
         with pytest.raises(urllib.error.HTTPError) as e:
             urllib.request.urlopen(base + '/report/since-priority-changes')
@@ -542,6 +551,205 @@ def test_reports_stay_in_their_folder(tmp_path):
     assert server.report_body(str(tmp_path), 'summary') is None
     assert server.report_path(str(tmp_path), 'other') is None
     assert server.report_info(str(tmp_path)) == {}
+
+
+QUESTIONS_NAME = 'questions_2026-11-15_1614.md'
+QUESTIONS_MD = """# Questions for Yang
+
+Asked 2026-11-15.
+
+## The APL-only recordings
+
+1. **Use.** May the queue use your files? The sets are:
+   - (a) January 2025;
+   - (b) 2022-10-31.
+
+   Which should be left out?
+2. **Channels.** Is `_C1` always ChanA?
+
+## The calyx table
+
+10. **roi_peak_dff.** How is it computed?
+11. A question without a bold title.
+"""
+ANSWER_NAME = re.compile(r'^answers_2026-11-15_1614__\d{4}-\d{2}-\d{2}_\d{6}(_\d+)?\.txt$')
+
+
+def questions_dir(shared):
+    q = shared / 'questions_for_yang'
+    q.mkdir(parents=True)
+    (q / QUESTIONS_NAME).write_text(QUESTIONS_MD)
+    return q
+
+
+def answer_files(q):
+    return sorted(p.name for p in q.iterdir() if p.name.startswith('answers_'))
+
+
+@contextlib.contextmanager
+def serving(shared):
+    httpd = ThreadingHTTPServer(('127.0.0.1', 0), server.make_handler(server.Monitor(str(shared)), 30))
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    try:
+        yield 'http://127.0.0.1:{}'.format(httpd.server_address[1])
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
+def post_answers(base, fields=None, data=None, accept=None,
+        ctype='application/x-www-form-urlencoded'):
+    """(status, body text) of a POST to /api/answers of `fields` urlencoded, or of the bytes `data`."""
+    body = data if data is not None else urlencode(fields).encode()
+    req = urllib.request.Request(base + '/api/answers', data=body, method='POST',
+        headers={'Content-Type': ctype})
+    if accept:
+        req.add_header('Accept', accept)
+    try:
+        r = urllib.request.urlopen(req)
+        return r.status, r.read().decode()
+    except urllib.error.HTTPError as e:
+        return e.code, e.read().decode()
+
+
+def test_question_titles():
+    assert server.question_titles(QUESTIONS_MD) == {1: 'Use', 2: 'Channels', 10: 'roi_peak_dff', 11: ''}
+    # indented numbered lines are not questions, and a number given twice keeps its first line
+    assert server.question_titles('1. **A.** x\n   2. **B.** y\n1. **C.** z\n') == {1: 'A'}
+
+
+def test_questions_view(tmp_path):
+    """The fourth Report view, last in the bar: the questions page, served once its copy is saved."""
+    reports = tmp_path / 'reports'
+    reports.mkdir()
+    with serving(tmp_path) as base:
+        page = urllib.request.urlopen(base + '/').read().decode()
+        assert ('<a data-view="questions-for-yang" href="#questions-for-yang">Questions for Yang</a>'
+            '</div>') in page
+        with pytest.raises(urllib.error.HTTPError) as e:
+            urllib.request.urlopen(base + '/report/questions-for-yang')
+        assert e.value.code == 404
+        assert 'No Questions for Yang report has been saved' in e.value.read().decode()
+        (reports / 'questions_for_yang.html').write_text('<!doctype html><html><body><h1>questions</h1>'
+            '<form method="post" action="/api/answers"></form></body></html>')
+        os.symlink('questions_for_yang.html', str(reports / 'current-questions-for-yang.html'))
+        body = urllib.request.urlopen(base + '/report/questions-for-yang').read().decode()
+        assert '<h1>questions</h1>' in body and 'action="/api/answers"' in body
+        info = json.loads(urllib.request.urlopen(base + '/api/reports').read())
+        assert info['questions-for-yang']['label'] == 'Questions for Yang'
+        assert info['questions-for-yang']['file'] == 'questions_for_yang.html'
+
+
+def test_answers_saved(tmp_path):
+    """A valid submission writes exactly one new file, named with both times, with the header and the
+    non-empty answers under their questions' titles; the page's script gets JSON instead of a page."""
+    q = questions_dir(tmp_path)
+    with serving(tmp_path) as base:
+        status, body = post_answers(base, [('questions_file', QUESTIONS_NAME), ('name', ' Yang\n Z '),
+            ('answer_1', 'Yes, all of them.\r\nLeave out fly 2.'), ('answer_2', '  \r\n '),
+            ('answer_10', 'The peak of the ROI trace.'), ('answer_11', 'No title, still saved.')])
+        assert status == 200
+        files = answer_files(q)
+        assert len(files) == 1 and ANSWER_NAME.match(files[0]), files
+        assert 'Answers saved' in body and 'questions_for_yang/' + files[0] in body
+        assert 'href="/report/questions-for-yang"' in body
+        path = q / files[0]
+        assert stat.S_IMODE(path.stat().st_mode) == 0o664
+        text = path.read_text()
+        head, _, rest = text.partition('\n\n')
+        lines = head.split('\n')
+        assert lines[0] == 'Answers to questions_for_yang/' + QUESTIONS_NAME
+        assert re.match(r'^received: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$', lines[1])
+        assert lines[2:] == ['name: Yang Z', 'from: 127.0.0.1']
+        assert rest == ('Question 1: Use\nYes, all of them.\nLeave out fly 2.\n\n'
+            'Question 10: roi_peak_dff\nThe peak of the ROI trace.\n\n'
+            'Question 11\nNo title, still saved.\n')
+        # the page's script asks for JSON; a second submission is a second file
+        status, body = post_answers(base, [('questions_file', QUESTIONS_NAME), ('answer_2', 'Yes.')],
+            accept='application/json')
+        reply = json.loads(body)
+        assert status == 200 and reply['ok'] and reply['answers'] == 1
+        files = answer_files(q)
+        assert len(files) == 2 and reply['file'] == 'questions_for_yang/' + [
+            f for f in files if f != path.name][0]
+        new = (q / reply['file'].split('/')[1]).read_text()
+        assert 'name: (not given)' in new and new.endswith('Question 2: Channels\nYes.\n')
+        assert path.read_text() == text
+        # only the questions folder is written to
+        assert sorted(p.name for p in tmp_path.iterdir()) == ['questions_for_yang']
+
+
+def test_answers_refused(tmp_path, monkeypatch):
+    """Refused submissions write nothing: a bad or missing questions file, no answer, an answer to a
+    question the file does not have, a body over the limit, another content type, too many files."""
+    q = questions_dir(tmp_path)
+    (tmp_path / 'questions_2026-11-15_1614.md').write_text(QUESTIONS_MD)
+    ok = [('answer_1', 'yes')]
+    with serving(tmp_path) as base:
+        for bad in ('../' + QUESTIONS_NAME, QUESTIONS_NAME + '\n', 'questions_2026-11-15_1614.txt',
+                'answers.md', '', '/etc/passwd', 'questions_2026-11-16_0900.md'):
+            status, body = post_answers(base, [('questions_file', bad)] + ok)
+            assert status == 400 and 'Unknown questions file' in body, bad
+        status, body = post_answers(base, ok)
+        assert status == 400 and 'Unknown questions file' in body
+        # a link in the folder that leads out of it counts as no file
+        os.symlink('../questions_2026-11-15_1614.md', str(q / 'questions_2026-11-15_1615.md'))
+        status, _ = post_answers(base, [('questions_file', 'questions_2026-11-15_1615.md')] + ok)
+        assert status == 400
+        status, body = post_answers(base, [('questions_file', QUESTIONS_NAME), ('name', 'Yang'),
+            ('answer_1', ''), ('answer_2', ' \r\n')], accept='application/json')
+        assert status == 400 and json.loads(body) == dict(ok=False,
+            error='Nothing was saved: every answer box was empty.')
+        status, body = post_answers(base, [('questions_file', QUESTIONS_NAME), ('answer_3', 'x')])
+        assert status == 400 and 'has no question 3' in body
+        status, body = post_answers(base, [('questions_file', QUESTIONS_NAME), ('answer_1', 'a'),
+            ('answer_1', 'b')])
+        assert status == 400 and 'more than once' in body
+        status, body = post_answers(base, [('questions_file', QUESTIONS_NAME),
+            ('answer_1', 'x' * (server.ANSWER_MAX_CHARS + 1))])
+        assert status == 400 and 'longer than' in body
+        big = urlencode([('questions_file', QUESTIONS_NAME), ('answer_1', 'x' * (300 * 1024))]).encode()
+        status, body = post_answers(base, data=big)
+        assert status == 413 and 'larger than 256 KB' in body
+        status, _ = post_answers(base, data=urlencode([('questions_file', QUESTIONS_NAME)] + ok).encode(),
+            ctype='multipart/form-data; boundary=x')
+        assert status == 415
+        assert answer_files(q) == []
+        # the cap on answer files per questions file
+        monkeypatch.setattr(server, 'ANSWERS_MAX_FILES', 2)
+        for k in range(2):
+            assert post_answers(base, [('questions_file', QUESTIONS_NAME)] + ok)[0] == 200
+        status, body = post_answers(base, [('questions_file', QUESTIONS_NAME)] + ok)
+        assert status == 429 and len(answer_files(q)) == 2
+        # other paths take no POST, and /api/answers no GET
+        req = urllib.request.Request(base + '/api/state', data=b'x=1', method='POST')
+        with pytest.raises(urllib.error.HTTPError) as e:
+            urllib.request.urlopen(req)
+        assert e.value.code == 404
+        with pytest.raises(urllib.error.HTTPError) as e:
+            urllib.request.urlopen(base + '/api/answers')
+        assert e.value.code == 404
+
+
+def test_answers_never_overwrite(tmp_path):
+    """Two submissions in the same second, or a file already there by that name, get new names."""
+    q = questions_dir(tmp_path)
+    now = datetime(2026, 11, 15, 16, 40, 12)
+    stem = 'answers_2026-11-15_1614__2026-11-15_164012'
+    (q / (stem + '.txt')).write_text('already here')
+    fields = dict(questions_file=[QUESTIONS_NAME], answer_1=['first'])
+    p2, n = server.save_answers(str(tmp_path), fields, '10.0.0.5', now)
+    assert os.path.basename(p2) == stem + '_2.txt' and n == 1
+    fields['answer_1'] = ['second']
+    p3, _ = server.save_answers(str(tmp_path), fields, '10.0.0.5', now)
+    assert os.path.basename(p3) == stem + '_3.txt'
+    assert (q / (stem + '.txt')).read_text() == 'already here'
+    assert 'first' in Path(p2).read_text() and 'second' in Path(p3).read_text()
+    assert 'from: 10.0.0.5' in Path(p3).read_text()
+    with pytest.raises(server.AnswerError) as e:
+        server.save_answers(str(tmp_path), dict(questions_file=[QUESTIONS_NAME]), now=now)
+    assert e.value.status == 400
+    assert answer_files(q) == [stem + '.txt', stem + '_2.txt', stem + '_3.txt']
 
 
 def test_dashboard_updates_in_place(tmp_path):

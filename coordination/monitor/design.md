@@ -19,7 +19,8 @@ of its status file.
 Hooks write `presence/<host>__<session>.json` into the shared directory. They do not send
 anything to the server. So:
 
-- the server is a pure reader of one folder, and no agent depends on it being up;
+- the server is a reader of one folder (with the one exception below, the answers to the
+  questions page), and no agent depends on it being up;
 - no port has to be reachable from every host (hal runs ufw), and any host that mounts tensor
   takes part;
 - history survives server restarts, and the server can move to another host.
@@ -27,6 +28,25 @@ anything to the server. So:
 The cost is latency. NFS attribute caching delays what the server sees by up to about a
 minute, and the server polls (inotify does not see writes from other NFS clients). Agents
 change state over minutes, so this does not matter.
+
+## The one write: answers to the questions page (2026-11-15)
+
+The queue's questions about Yang's recordings are a page in the Report tab, and the people who
+answer them do so in a browser, not through an agent, so the form on that page needs something to
+receive it; the monitor already serves the page, on the lab network, from a host that mounts the
+shared directory. So `POST /api/answers` is the one place the server writes, and it is kept narrow:
+
+- it writes only new files, in one folder (`questions_for_yang/`), created exclusively (never an
+  overwrite; a taken name gets a suffix), named from the questions file and the time of receipt,
+  so every submission is kept and the queue's sessions read the answers like any other file in
+  the shared directory;
+- the form names its questions file, never a path: the name must be a `questions_<stamp>.md`
+  that exists in that folder (links leading out of it count as missing), and its numbered
+  questions decide which answer fields are accepted and give the titles in the file;
+- the request is bounded (256 KB body, per-field lengths, 200 fields), and so is the folder (200
+  answer files per questions file), since anyone on the lab network can reach the port and the
+  form has no login;
+- everything else the server does stays read-only.
 
 ## Keeping hooks off the critical path
 

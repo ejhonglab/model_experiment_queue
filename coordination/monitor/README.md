@@ -3,24 +3,27 @@
 A web page on the lab network, titled "Model experiments", showing which hosts take part in the
 KC-remapping work queue (see `../../CLAUDE.md`), what is claimed or running, how many tokens each
 host's Claude sessions use and how close each claude.ai account is to its plan's limits, and
-what the sessions are doing. It reads only the shared directory on tensor. Claude Code hooks,
-the queue sessions' status line and `chat_watch.sh` keep the session records there current,
-and each host's `<host>_status.md` supplies the rest.
+what the sessions are doing. It reads the shared directory on tensor, and writes to it in one
+place only: the answers sent with the form of the Questions for Yang page ("Answers to the
+questions" below). Claude Code hooks, the queue sessions' status line and `chat_watch.sh` keep the
+session records there current, and each host's `<host>_status.md` supplies the rest.
 
 ## Viewing it
 
 Open **http://hal:17486** on any computer on the lab network. The page has two tabs, chosen in
 the bar at the top (the address remembers the view: `#summary`, `#experiments`,
-`#since-priority-changes`, `#monitor`):
+`#since-priority-changes`, `#questions-for-yang`, `#monitor`):
 
-- **Report** (the default), with three sub-tabs: **Summary**, the latest all-experiments summary,
-  **Experiments and mechanisms**, the report page with the experiment list, and **Since the
+- **Report** (the default), with four sub-tabs: **Summary**, the latest all-experiments summary,
+  **Experiments and mechanisms**, the report page with the experiment list, **Since the
   priority changes**, what was learned since the last two changes of the main goal (a snapshot,
-  rebuilt only on request). They are the files `reports/current-summary.html`,
-  `reports/current-report.html` and `reports/current-since-priority-changes.html` in the shared
-  directory, the copies `save_report_copy.py` keeps current (`REPORTS` in `server.py` lists them;
-  a new view needs only an entry there). Until a copy is saved, a view says so. Each is shown in
-  its own frame, as published, with
+  rebuilt only on request), and **Questions for Yang**, the queue's open questions about Yang's
+  recordings with a form to answer them ("Answers to the questions" below). They are the files
+  `reports/current-summary.html`, `reports/current-report.html`,
+  `reports/current-since-priority-changes.html` and `reports/current-questions-for-yang.html` in
+  the shared directory, the copies `save_report_copy.py` keeps current (`REPORTS` in `server.py`
+  lists them; a new view needs only an entry there). Until a copy is saved, a view says so. Each is
+  shown in its own frame, as published, with
   its own contents list, full-screen figures and hover definitions; switching tabs keeps each
   view's place. The reports never reload by themselves: once a minute the page checks whether a
   newer copy has been saved and, if so, says so in the bar with a "reload" link. Links to other
@@ -89,6 +92,31 @@ the bar at the top (the address remembers the view: `#summary`, `#experiments`,
 `http://hal:17486/api/state` returns the same data as JSON, and `http://hal:17486/api/reports`
 the report files' names and save times.
 
+## Answers to the questions
+
+The Questions for Yang page is built from the newest `questions_<YYYY-MM-DD_HHMM>.md` in the shared
+directory's `questions_for_yang/` (or the file given) by `reports/build_questions_page.py`, which
+adds a form below the questions: an optional name and one box per numbered question, labelled with
+its bold title. Rebuild and save it whenever a new questions file is written (from the repository's
+root):
+```
+./venv/bin/python reports/build_questions_page.py
+./venv/bin/python reports/save_report_copy.py outputs/_artifacts/questions_for_yang/index.html \
+    questions_for_yang --current current-questions-for-yang.html
+```
+The form sends its answers to `POST /api/answers` (urlencoded; the page's script asks for a JSON
+reply and keeps the text in the boxes, and without the script the server replies with a page). The
+server saves each submission as a new file next to the questions,
+`questions_for_yang/answers_<questions file's YYYY-MM-DD_HHMM>__<YYYY-MM-DD_HHMMSS>.txt` (`_2`,
+`_3`, ... added if the name is taken; a file is never overwritten), mode 664: a header (the
+questions file, when it was received, the name given, the sender's address), then each non-empty
+answer under "Question N: <title>". This is the server's only write; everything else is read-only.
+It refuses (and writes nothing for) a questions file that is not a `questions_<YYYY-MM-DD_HHMM>.md`
+in that folder (the form names a file, never a path), a submission with no answer or with an
+answer to a question the file does not have, a body over 256 KB (413), an answer over 50000
+characters, a name over 200, and more than 200 answer files per questions file (429). The form
+works only where the server serves the page; a copy opened from `reports/` says so when sent.
+
 ## Setting it up
 
 **On every host that runs queue sessions**, pull both repositories:
@@ -127,7 +155,7 @@ plus a restart for the server only:
 
 | changed | pull on | then |
 |---|---|---|
-| `server.py` | hal (the host serving the page) | `systemctl --user restart claude-queue-monitor` |
+| `server.py` (also the answer form's limits and question titles, which `reports/build_questions_page.py` imports from it) | hal (the host serving the page) | `systemctl --user restart claude-queue-monitor` |
 | `presence_hook.py` | every host running queue sessions | nothing: every hook call runs the file afresh, so running sessions use the new version from their next event |
 | `statusline_capture.py` | every host running queue sessions | nothing: each status-line update runs the file afresh |
 | `../chat_watch.sh` | every host running queue sessions | nothing: a running watcher finishes on the old version and the next one it is restarted as uses the new one |

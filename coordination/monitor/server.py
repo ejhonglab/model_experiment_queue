@@ -2,24 +2,33 @@
 """LAN dashboard of the model-experiments work queue: hosts, claims, token and plan usage,
 and the Claude sessions.
 
-Reads only the shared directory (Tom/claude_kc_remapping under /local/tensor or /mnt/tensor):
+Reads the shared directory (Tom/claude_kc_remapping under /local/tensor or /mnt/tensor):
 - presence/<host>__<session>.json, written by presence_hook.py (Claude Code hooks; includes
   each session's model and effort level);
 - presence/<host>__<session>.watch, the heartbeat chat_watch.sh writes every poll;
 - usage/<host>__<session>.jsonl, the 15-min usage samples presence_hook.py appends (tokens by
   model, the claude.ai account, the plan's 5-hour and weekly usage);
 - <host>_status.md, each host's self-reported status (its front matter, if any);
-- chat.md entry headers, experiment_priorities.md (experiment index, work claims).
+- chat.md entry headers, experiment_priorities.md (experiment index, work claims);
+- reports/current-*.html (the Report tab), and questions_for_yang/questions_*.md (the titles of
+  the questions answered through the questions page's form).
+
+It writes in one place only (since 2026-11-15): `POST /api/answers`, the form of the Questions for
+Yang page, saves each submission as a new file in the shared directory's questions_for_yang/,
+answers_<questions file's stamp>__<YYYY-MM-DD_HHMMSS>.txt (`save_answers`; never overwriting, the
+body at most ANSWERS_MAX_BODY bytes, at most ANSWERS_MAX_FILES files per questions file).
+Everything else is read-only.
 
 Serves `/`, a page with two tabs: Report (the default; sub-tabs Summary, Experiments and
-mechanisms, and Since the priority changes: the latest copies of the summary, the report page and
-the page on what was learned since the main goal's last two changes, in the shared directory's
-reports/ (`REPORTS`), each in its own frame, never reloaded by themselves: a note offers a reload
-when a newer copy is saved) and Monitor (`/monitor`, the dashboard; it updates itself in place,
-without a page reload, and not while it is hidden or anything is full screen; query parameters
-`days`, `tokens` and `group` choose what the usage plots show). Also `/report/<view>` (the report
-files: `summary`, `experiments`, `since-priority-changes`), `/api/reports` (their file names and
-times) and `/api/state` (the dashboard's data as JSON).
+mechanisms, Since the priority changes and Questions for Yang: the latest copies of the summary,
+the report page, the page on what was learned since the main goal's last two changes and the
+questions to Yang with their answer form, in the shared directory's reports/ (`REPORTS`), each in
+its own frame, never reloaded by themselves: a note offers a reload when a newer copy is saved)
+and Monitor (`/monitor`, the dashboard; it updates itself in place, without a page reload, and not
+while it is hidden or anything is full screen; query parameters `days`, `tokens` and `group`
+choose what the usage plots show). Also `/report/<view>` (the report files: `summary`,
+`experiments`, `since-priority-changes`, `questions-for-yang`), `/api/reports` (their file names
+and times), `/api/state` (the dashboard's data as JSON) and `POST /api/answers` (above).
 Standard library only, so it runs under any system python3 >= 3.8.
 """
 import argparse
@@ -778,6 +787,8 @@ REPORTS = {
     'summary': ('Summary', 'current-summary.html'),
     'experiments': ('Experiments and mechanisms', 'current-report.html'),
     'since-priority-changes': ('Since the priority changes', 'current-since-priority-changes.html'),
+    # its page has a form whose answers POST /api/answers saves (ANSWERS_DIR, below)
+    'questions-for-yang': ('Questions for Yang', 'current-questions-for-yang.html'),
 }
 # added to each report page served: links to other sites open in a new browser tab, not in the frame
 REPORT_LINK_SCRIPT = (
@@ -916,6 +927,180 @@ def missing_report(view):
         'content="light dark"><title>{0}</title><style>{1}</style></head><body><div class="missing">'
         'No {0} report has been saved in the shared directory\'s reports/ yet.</div></body></html>'
         ).format(esc(label), CSS + SHELL_CSS)
+
+
+# ---------------------------------------------------------------- answers to the questions page
+
+# The one place the server writes to the shared directory: POST /api/answers saves the answers typed
+# into the questions page's form (reports/build_questions_page.py) as a new text file next to the
+# questions, <shared>/questions_for_yang/answers_<questions stamp>__<YYYY-MM-DD_HHMMSS>.txt. It never
+# overwrites a file, and it reads only the questions file the form names (for the questions' titles).
+ANSWERS_DIR = 'questions_for_yang'
+# the Report view whose page holds the form (the reply links back to it)
+ANSWERS_VIEW = 'questions-for-yang'
+# a questions file's name (questions_YYYY-MM-DD_HHMM.md), matched whole; group 1 is its stamp
+QUESTIONS_FILE = re.compile(r'questions_(\d{4}-\d{2}-\d{2}_\d{4})\.md')
+# a question: an unindented numbered line, its title the bold text it opens with (if any)
+QUESTION_LINE = re.compile(r'^(\d+)\. +(?:\*\*(.+?)\*\*)?')
+# the form's answer fields: answer_<question number>
+ANSWER_FIELD = re.compile(r'answer_(\d{1,4})')
+ANSWERS_MAX_BODY = 256 * 1024
+ANSWERS_MAX_FIELDS = 200
+ANSWER_MAX_CHARS = 50000
+ANSWER_NAME_MAX_CHARS = 200
+# answer files kept per questions file: more submissions are refused (429), which bounds what the
+# endpoint can write to about ANSWERS_MAX_FILES * ANSWERS_MAX_BODY per questions file
+ANSWERS_MAX_FILES = 200
+
+
+class AnswerError(Exception):
+    """A refused submission of answers: the HTTP status and the reason, for the reply."""
+
+    def __init__(self, status, message):
+        Exception.__init__(self, message)
+        self.status = status
+        self.message = message
+
+
+def question_titles(text):
+    """{number: title} of a questions markdown's questions, in file order.
+
+    A question is an unindented line starting `N. `; its title is the bold text it opens with
+    (`**Use.**`), without a final '.' or ':', or '' if it has none. A number given twice keeps its
+    first line. reports/build_questions_page.py labels the form's boxes with the same titles.
+    """
+    out = {}
+    for line in text.splitlines():
+        m = QUESTION_LINE.match(line)
+        if m and int(m.group(1)) not in out:
+            out[int(m.group(1))] = (m.group(2) or '').strip().rstrip('.:').strip()
+    return out
+
+
+def questions_file_path(shared, name):
+    """The questions file `name` in <shared>/questions_for_yang/, or None if `name` is not a
+    questions file's name (questions_YYYY-MM-DD_HHMM.md) or no such file is there (a link that leads
+    out of the folder counts as none)."""
+    if not isinstance(name, str) or not QUESTIONS_FILE.fullmatch(name):
+        return None
+    base = os.path.realpath(os.path.join(shared, ANSWERS_DIR))
+    path = os.path.realpath(os.path.join(base, name))
+    if os.path.dirname(path) != base or not os.path.isfile(path):
+        return None
+    return path
+
+
+def save_answers(shared, fields, client='-', now=None):
+    """Saves a submission of the questions page's form as a new text file; the server's only write.
+
+    The file, <shared>/questions_for_yang/answers_<questions stamp>__<YYYY-MM-DD_HHMMSS>.txt (with
+    `_2`, `_3`, ... before `.txt` if that name is taken; it is created exclusively, so nothing is ever
+    overwritten), has a header (the questions file, when the answers were received, the name given,
+    the sender's address) and then each non-empty answer under "Question N: <title>", in the
+    questions file's order.
+
+    Args:
+        shared: the shared directory.
+        fields: the form's fields as parse_qs gives them ({name: [values]}): `questions_file` (the
+            name of a file in questions_for_yang/, never a path), `name` (optional) and
+            `answer_<N>` for question N of that file. Other fields are ignored.
+        client: the sender's address, for the header.
+        now: when the answers were received (datetime; default now).
+
+    Returns:
+        (path of the new file, number of answers in it).
+
+    Raises:
+        AnswerError: the submission was refused; nothing was written.
+    """
+    def one(key):
+        values = fields.get(key) or ['']
+        if len(values) > 1:
+            raise AnswerError(400, 'The field {} was sent more than once.'.format(key))
+        return values[0]
+
+    qname = one('questions_file')
+    qpath = questions_file_path(shared, qname)
+    if qpath is None:
+        raise AnswerError(400, 'Unknown questions file: {}.'.format(qname[:80] or '(none given)'))
+    titles = question_titles(read_text(qpath) or '')
+    name = ' '.join(one('name').split())
+    if len(name) > ANSWER_NAME_MAX_CHARS:
+        raise AnswerError(400, 'The name is longer than {} characters.'.format(ANSWER_NAME_MAX_CHARS))
+    answers = {}
+    for key in fields:
+        m = ANSWER_FIELD.fullmatch(key)
+        if not m:
+            continue
+        n = int(m.group(1))
+        if n not in titles:
+            raise AnswerError(400, '{} has no question {}.'.format(qname, n))
+        text = one(key).replace('\r\n', '\n').replace('\r', '\n').strip()
+        if len(text) > ANSWER_MAX_CHARS:
+            raise AnswerError(400, 'The answer to question {} is longer than {} characters.'.format(
+                n, ANSWER_MAX_CHARS))
+        if text:
+            answers[n] = text
+    if not answers:
+        raise AnswerError(400, 'Nothing was saved: every answer box was empty.')
+
+    now = now or datetime.now()
+    qdir = os.path.dirname(qpath)
+    prefix = 'answers_{}__'.format(QUESTIONS_FILE.fullmatch(qname).group(1))
+    try:
+        n_files = sum(1 for f in os.listdir(qdir) if f.startswith(prefix))
+    except OSError:
+        n_files = 0
+    if n_files >= ANSWERS_MAX_FILES:
+        raise AnswerError(429, '{} already has {} answer files; ask Tom to make room.'.format(
+            qname, n_files))
+    lines = ['Answers to {}/{}'.format(ANSWERS_DIR, qname),
+        'received: {}'.format(now.strftime('%Y-%m-%d %H:%M:%S')),
+        'name: {}'.format(name or '(not given)'),
+        'from: {}'.format(client), '']
+    for n in titles:
+        if n in answers:
+            lines += ['Question {}{}'.format(n, ': ' + titles[n] if titles[n] else ''), answers[n], '']
+    data = '\n'.join(lines).encode('utf-8')
+    stem = prefix + now.strftime('%Y-%m-%d_%H%M%S')
+    for k in range(1, 100):
+        path = os.path.join(qdir, stem + ('_{}'.format(k) if k > 1 else '') + '.txt')
+        try:
+            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o664)
+        except FileExistsError:
+            continue
+        except OSError as e:
+            raise AnswerError(500, 'The answers could not be saved ({}).'.format(e.strerror))
+        try:
+            try:
+                # 0o664 whatever the umask; the share may refuse a mode change (its files belong to
+                # another user), which leaves the umask's mode
+                os.fchmod(fd, 0o664)
+            except OSError:
+                pass
+            with os.fdopen(fd, 'wb') as f:
+                f.write(data)
+        except OSError as e:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+            raise AnswerError(500, 'The answers could not be saved ({}).'.format(e.strerror))
+        return path, len(answers)
+    raise AnswerError(500, 'The answers could not be saved: no free file name.')
+
+
+def answers_reply(ok, message):
+    """The page POST /api/answers replies with (the form sent without JavaScript): `message` and a
+    link back to the questions."""
+    return ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        '<meta name="color-scheme" content="light dark"><script>{theme}</script>'
+        '<title>{title}</title><style>{css}</style></head><body><main><h1>{title}</h1>'
+        '<p{cls}>{message}</p><p><a href="/report/{view}">Back to the questions</a></p>'
+        '</main></body></html>').format(theme=THEME_SCRIPT, css=CSS,
+        title='Answers saved' if ok else 'Answers not saved', cls='' if ok else ' class="err"',
+        message=esc(message), view=ANSWERS_VIEW)
 
 
 SCOPES = (
@@ -1534,6 +1719,77 @@ def make_handler(monitor, refresh):
             self.send_header('Cache-Control', 'no-store')
             self.end_headers()
             self.wfile.write(body)
+
+        def do_POST(self):
+            """POST /api/answers (the questions page's form; save_answers, the server's only write).
+            Replies with JSON if the request accepts it (the page's script), else with a page."""
+            if urlparse(self.path).path != '/api/answers':
+                self.send_error(404)
+                return
+            # a client that sends less than its Content-Length would hold the thread for good
+            self.connection.settimeout(60)
+            want_json = 'application/json' in (self.headers.get('Accept') or '')
+            try:
+                path, n = save_answers(monitor.shared, self.read_form(), self.client_address[0])
+            except AnswerError as e:
+                ok, status, message = False, e.status, e.message
+                reply = dict(ok=False, error=e.message)
+            else:
+                name = '{}/{}'.format(ANSWERS_DIR, os.path.basename(path))
+                ok, status = True, 200
+                message = ('{} {} saved as {} in the queue\'s shared directory. Each submission is '
+                    'saved as a new file, so answers can be added or corrected by sending the form '
+                    'again.').format(n, 'answer' if n == 1 else 'answers', name)
+                reply = dict(ok=True, file=name, answers=n)
+            if want_json:
+                body, ctype = json.dumps(reply).encode(), 'application/json'
+            else:
+                body, ctype = answers_reply(ok, message).encode(), 'text/html; charset=utf-8'
+            self.send_response(status)
+            self.send_header('Content-Type', ctype)
+            self.send_header('Content-Length', str(len(body)))
+            self.send_header('Cache-Control', 'no-store')
+            self.end_headers()
+            self.wfile.write(body)
+
+        def read_form(self):
+            """The request's urlencoded form as parse_qs gives it; AnswerError if it is refused (no
+            or bad Content-Length, a body over ANSWERS_MAX_BODY, another content type, too many
+            fields)."""
+            length = self.headers.get('Content-Length')
+            if length is None or self.headers.get('Transfer-Encoding'):
+                self.close_connection = True
+                raise AnswerError(411, 'The request has no Content-Length.')
+            try:
+                length = int(length)
+            except ValueError:
+                length = -1
+            if length < 0:
+                self.close_connection = True
+                raise AnswerError(400, 'The request has a bad Content-Length.')
+            if length > ANSWERS_MAX_BODY:
+                self.close_connection = True
+                # read (and drop) a body up to a few times the limit, so the sender gets the reply
+                # rather than a reset connection; anything larger is cut off unread
+                left = length if length <= 4 * ANSWERS_MAX_BODY else 0
+                while left > 0:
+                    chunk = self.rfile.read(min(left, 65536))
+                    if not chunk:
+                        break
+                    left -= len(chunk)
+                raise AnswerError(413, 'The answers are larger than {} KB in all.'.format(
+                    ANSWERS_MAX_BODY // 1024))
+            body = self.rfile.read(length)
+            ctype = (self.headers.get('Content-Type') or '').split(';')[0].strip().lower()
+            if ctype != 'application/x-www-form-urlencoded':
+                raise AnswerError(415, 'The form must be sent as application/x-www-form-urlencoded.')
+            try:
+                return parse_qs(body.decode('utf-8'), keep_blank_values=True,
+                    max_num_fields=ANSWERS_MAX_FIELDS)
+            except UnicodeDecodeError:
+                raise AnswerError(400, 'The form is not UTF-8.')
+            except ValueError:
+                raise AnswerError(400, 'The form has more than {} fields.'.format(ANSWERS_MAX_FIELDS))
 
         def log_message(self, fmt, *args):
             pass
