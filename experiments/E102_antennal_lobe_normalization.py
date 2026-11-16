@@ -1142,8 +1142,10 @@ def s1_parts() -> Tuple[pd.DataFrame, pd.DataFrame]:
         for ro in ('cal', 'raw'):
             on = pd.Series(g[f'{ro}_on'].to_numpy(float), index=idx)
             off = pd.Series(g[f'{ro}_off'].to_numpy(float), index=idx)
-            data = E72.data_for(ro)
+            data = H.canonical_pairs(E72.data_for(ro))
             st = H.apl_effect_stats(on, off, data)
+            if int(st['apl_effect_n_pairs']) != 120:
+                raise RuntimeError(f"{pid} {ro}: {st['apl_effect_n_pairs']} pairs, not 120")
             sp = H.apl_effect_spread_shape(on, off, data)
             row = dict(point_id=pid, pn_inhadd=inhadd, readout=ro, loss=st['apl_effect_rmse'], mean_effect=st['apl_effect_mean'],
                        pattern=st['apl_effect_rmse_centered'], amplitude=sp['apl_effect_amplitude'], shape=sp['apl_effect_shape'],
@@ -1386,7 +1388,11 @@ def low_conc_class(model: float, flies: float, model_c2: float, factor: float = 
 
 def _effect_parts(pairs: pd.DataFrame, tg: Mapping[str, pd.Series]) -> pd.DataFrame:
     """Per (change, unit, readout) of E83's `score_runs` pairs and per target: the pattern part's amplitude and shape
-    parts, the spread ratio and Pearson r on the per-pair APL effect (`H.apl_effect_spread_shape`, `H.apl_effect_stats`)."""
+    parts, the spread ratio and Pearson r on the per-pair APL effect (`H.apl_effect_spread_shape`, `H.apl_effect_stats`).
+    The targets are put in the APL16 panel's canonical pair order first (`H.canonical_pairs`): pyolfsysm's effects
+    canonicalize the model's side only, and E83's targets are in sorted pair order, so without it the pairs whose two
+    orders differ would drop out; every reading must have 120 pairs."""
+    tg = {t: H.canonical_pairs(de) for t, de in tg.items()}
     rows = []
     for (ch, unit, ro), g in pairs.groupby(['change', 'unit', 'readout'], sort=False):
         idx = pd.MultiIndex.from_arrays([g['odor_a'], g['odor_b']], names=['odor_a', 'odor_b'])
@@ -1395,6 +1401,8 @@ def _effect_parts(pairs: pd.DataFrame, tg: Mapping[str, pd.Series]) -> pd.DataFr
         for t, de in tg.items():
             sp = H.apl_effect_spread_shape(on, off, de)
             st = H.apl_effect_stats(on, off, de)
+            if int(st['apl_effect_n_pairs']) != 120:
+                raise RuntimeError(f"{ch} {unit} {ro} {t}: {st['apl_effect_n_pairs']} pairs, not 120")
             row.update({f'{t}_amplitude': sp['apl_effect_amplitude'], f'{t}_shape': sp['apl_effect_shape'],
                         f'{t}_sd_ratio': sp['apl_effect_sd_ratio'], f'{t}_pearson': st['apl_effect_pearson']})
         rows.append(row)
@@ -1569,10 +1577,10 @@ def part_score(root: Optional[Path] = None, out: Optional[Path] = None) -> dict:
     write_table(pn, out / 'b_pn.csv', caveat=True)
     steps = _step_table(rd, realism, apl)
     write_table(steps, out / 'b_steps.csv', caveat=True)
-    lv = levels(steps[steps['n_wirings'] == len(ALL_WIRINGS)]) if len(steps) else {}
-    lv.update(steps_scored=tags, complete_steps=[t for t in tags if any(
-        (s['step'] == t and s['n_wirings'] == len(ALL_WIRINGS)) for s in steps.to_dict('records'))],
-              refit_levels=refit_levels(lv, steps) if lv else [], rules=dict(
+    full = steps[steps['n_wirings'] == len(ALL_WIRINGS)] if len(steps) else steps
+    lv = levels(full) if len(full) else dict(L_apl=None, L_lin=None, L_free=None, flagged=[])
+    lv.update(steps_scored=tags, complete_steps=list(full['step']) if len(full) else [],
+              refit_levels=refit_levels(lv, full) if len(full) else [], rules=dict(
                   L_apl="smallest pn_inhadd with E98's V2 inside (6 of 8, carrying reading and level, held under partners)",
                   L_lin="smallest pn_inhadd with V2's linear reading inside on 6 of 8 (carrying reading and level)",
                   L_free="largest pn_inhadd that is an equal at fixed scales on S by E94's rule",
