@@ -456,3 +456,87 @@ def test_a1_rows_from_recordings_csv():
     assert n['M'] == 1 and n['left out'] == 1
     assert not t[t['group'] == 'raw only']['usable'].any()
     assert t[t['group'].isin(list(M.GROUPS))]['usable'].all()
+
+
+# ---------------------------------------------------------------------------
+# parts B to E and the score, end to end on made-up recordings (the readers replaced, the outputs in tmp_path)
+
+L_CONCS = {'pa': (-6.214, -5.612, -5.01, -4.408, -3.806, -2.0), 'paa': (-6.0, -5.0, -4.0, -3.0, -2.0),
+           'ms': (-5.112, -4.334, -3.556, -2.778, -2.0)}
+
+
+def _made_up_recording(stem, group, rng, leak=0.034, coupling=0.9, green_only=False, n_px=60):
+    stims = [(o, c) for o in L_CONCS for c in L_CONCS[o]]
+    f = _frames(['pfo'] + stims + ['pfo'])
+    f['is_solvent'] = f['odor'] == 'solvent'
+    f['stim'] = ['solvent' if s else f'{o} @ {c:g}' for s, o, c in zip(f['is_solvent'], f['odor'], f['log10_conc'])]
+    U = {o: M.smooth_field(rng, n_px, 6.0).reshape(n_px, n_px) for o in L_CONCS}
+    V = {o: coupling * U[o] + np.sqrt(1 - coupling ** 2) * M.smooth_field(rng, n_px, 6.0).reshape(n_px, n_px)
+         for o in L_CONCS}
+    apl, kc = [], []
+    for st, o, c in zip(f['is_solvent'], f['odor'], f['log10_conc']):
+        if st:
+            a = rng.normal(0, 0.02, (n_px, n_px))
+            k = rng.normal(0, 0.005, (n_px, n_px))
+        else:
+            ks = 0.05 + 0.25 * (c - min(L_CONCS[o])) / (max(L_CONCS[o]) - min(L_CONCS[o]))
+            a = 5 * ks * (1 + 0.3 * U[o]) + rng.normal(0, 0.03, (n_px, n_px))
+            k = (0.0 if green_only else ks * (1 + 0.3 * V[o])) + rng.normal(0, 0.005, (n_px, n_px))
+        apl.append(a)
+        kc.append(k + leak * a)
+    apl, kc = np.stack(apl), np.stack(kc)
+    f['C1'], f['C2'] = apl.mean(axis=(1, 2)), kc.mean(axis=(1, 2))
+    return dict(stem=stem, fly=M.fly_of(stem), calyx=M.calyx_of(stem), group=group, plane_um=15.0, frames=f,
+                mask=np.ones((n_px, n_px), bool), pixel_um=1.0, xml=None, registration_matched=True,
+                stacks={'C1': apl, 'C2': kc}, channels=['C1', 'C2'], truncated=False)
+
+
+def _made_up_model_sets():
+    rows = []
+    stims = ['pa', 'ms', 'paa', 'paa [validation2/diag] @ -5', 'paa [kiwi-control/diag] @ -5', 'paa [megamat/diag] @ -5',
+             'ms [kiwi-control/diag] @ -3', 'ms [megamat/diag] @ -3', 'ms [validation2/diag] @ -3',
+             'ms [kiwi-control/control] @ -3', M.BLANK_LABEL]
+    level = {'pa': 1.3, 'ms': 1.0, 'paa': 1.1, M.BLANK_LABEL: 0.0}
+    for w in M.ALL_WIRINGS:
+        for s in stims:
+            v = level.get(s, 0.6 if s.startswith('paa') else 1.0)
+            rows.append(dict(wiring=w, cond='on', stimulus=s, apl_win=8 + 11 * v, apl_pre=8.0, apl_pre_settled=8.5,
+                             apl_evoked=11 * v, pn_total=1.0, kc_rate=0.05,
+                             **{M.claw_col(sub, sh, k): (1000 + 5000 * v if k == 'win' else 1000.0 if k == 'pre'
+                                                         else 5000 * v)
+                                for sub in M.CLAW_SUBSETS for sh in M.CLAW_SHARES for k in ('win', 'pre', 'change')}))
+    return M.model_x2(pd.DataFrame(rows))
+
+
+def test_parts_b_to_e_and_score_on_made_up_recordings(tmp_path, monkeypatch):
+    import json
+    rng = np.random.default_rng(5)
+    recs = {'L': [_made_up_recording(s, 'L', rng) for s in M.GROUP_L],
+            'G': [_made_up_recording(s, 'G', rng, green_only=True) for s in M.GROUP_G]}
+    monkeypatch.setattr(M, 'read_groups', lambda groups, maps=True: [r for g in groups for r in recs.get(g, [])])
+    monkeypatch.setattr(M, 'out_dir', lambda: tmp_path)
+    with pytest.raises(NotImplementedError, match='release'):
+        M.part_b()
+    monkeypatch.setattr(M, 'YANG_RELEASED', True)
+    monkeypatch.setattr(M, 'CHANNELS_CONFIRMED', True)
+    (tmp_path / 'a4_rule.json').write_text(json.dumps(dict(b_g_alone=True)))
+    b = M.part_b(n_perm=100)
+    assert b['b_G'] == pytest.approx(0.034, abs=0.006)           # the planted leak, measured in the green-only flies
+    assert b['cross_check_passed'] is True and not b['outcome_h']
+    c = M.part_c(n_boot=500)
+    x1 = json.loads((tmp_path / 'c_x1.json').read_text())
+    assert x1['all']['carrying b1']['verdict'] == 'one function'
+    M.part_d(n_perm=100, cell_ums=(4.0,))
+    d = pd.read_csv(tmp_path / 'd_x3.csv')
+    assert set(d['reading']) == set(M.READINGS) and set(d['b_mult']) == set(M.B_MULTIPLES)
+    M.part_e()
+    e = pd.read_csv(tmp_path / 'e_claw_distances.csv')
+    assert len(e) and e['distance_noise_removed'].notna().any()
+    with pytest.raises(ValueError, match='a0'):
+        M.score()
+    v = M.score('e90', model_sets=_made_up_model_sets())
+    assert v['X1']['held'] == 'one function'
+    assert v['X3']['by_reading']['carrying']['verdict'] == 'follows' and v['X3']['held'] == 'follows'
+    for q in M.X2_QUANTITIES:
+        assert v['X2'][q]['held'] in ('flatter', 'inside', 'steeper', 'not decided')
+    assert (tmp_path / 'verdict.json').exists()
