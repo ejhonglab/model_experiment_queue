@@ -454,12 +454,15 @@ def point_breadth(spec: dict, m: dict) -> pd.Series:
 
 
 def build_simulator(extra_kws: Optional[dict], *, wPNKC: Optional[pd.DataFrame], breadth: pd.Series,
-                    params: Dict[str, float], kc_kc_tau: float = KC_KC_TAU) -> Tuple[Callable, dict]:
+                    params: Dict[str, float], kc_kc_tau: float = KC_KC_TAU,
+                    orn: Optional[pd.DataFrame] = None) -> Tuple[Callable, dict]:
     """E77_input_screen.build_c2_simulator with KC-KC inhibition's time constant as an argument (build_c2_simulator
     sets E10's 0.05 s after the extra kwargs): the bouton base's kwargs plus `extra_kws`, C2's normalized connectome APL
     weights, breadth exponent 2 on the APL->KC weights with `breadth`, KC-KC inhibition at the parameters' scale with
-    time constant `kc_kc_tau`, on the wiring `wPNKC` (None: the hemibrain's). Returns (simulate, info) as
-    build_c2_simulator does; info['kws'] has kc_kc_tau."""
+    time constant `kc_kc_tau`, on the wiring `wPNKC` (None: the hemibrain's), with the ORN input `orn` (None: the lab's
+    16 odors; a subset of its odors, with `breadth` held at the full input's, gives the full run's outputs for those
+    odors, as E90_settled_preodor uses it). Returns (simulate, info) as build_c2_simulator does; info['kws'] has
+    kc_kc_tau."""
     from experiments import E10_joint_fit as J
     from experiments import E77_input_screen as S
     from pyolfsysm.mb_model import make_fixed_param_kc_simulator
@@ -474,11 +477,12 @@ def build_simulator(extra_kws: Optional[dict], *, wPNKC: Optional[pd.DataFrame],
         kws['_wPNKC'] = wPNKC
     kws.update(_wAPLKC=wAPLKC, _wKCAPL=P['wnorm']['wKCAPL'], _wAPLPN=P['wnorm']['wAPLPN'], _wPNAPL=P['wnorm']['wPNAPL'],
                kc_kc_inh=p['wKCKC_scale'], kc_kc_tau=float(kc_kc_tau))
-    sim, _ = make_fixed_param_kc_simulator(P['orn'], initial_params=p, **kws)
+    orn = P['orn'] if orn is None else orn
+    sim, _ = make_fixed_param_kc_simulator(orn, initial_params=p, **kws)
     cells = {k: c for k, c in zip(sim.__code__.co_freevars, sim.__closure__)}
     if not np.array_equal(cells['wAPLKC_unscaled'].cell_contents.ravel(), wAPLKC.to_numpy()):
         raise RuntimeError("the simulator's unscaled APL->KC weights are not the ones it was built with")
-    return sim, dict(params=p, kws=scalar, breadth=breadth, wAPLKC=wAPLKC, orn=P['orn'],
+    return sim, dict(params=p, kws=scalar, breadth=breadth, wAPLKC=wAPLKC, orn=orn,
                      wPNKC=P['W'] if wPNKC is None else wPNKC, cells=cells)
 
 
