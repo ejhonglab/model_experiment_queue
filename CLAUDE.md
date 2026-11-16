@@ -1181,6 +1181,7 @@ Canonical experiment names for summary reports:
 | E100 | the flies' APL at the weak odors and at the panel's concentrations |
 | E101 | the flies' APL against their KC claws in the dual-colour recordings |
 | E102 | the antennal lobe's normalization at the strength the flies' APL asks for |
+| E103 | the flies' APL across odors in the held-out vial series |
 
 ## Model-output archive (data/model_outputs/ in the shared directory)
 
