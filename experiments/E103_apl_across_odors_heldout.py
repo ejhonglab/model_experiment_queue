@@ -2185,10 +2185,84 @@ def part_e() -> dict:
     return summ
 
 
+# ---------------------------------------------------------------------------
+# the note's figure (no simulation; from the parts' saved tables)
+
+SET_COLORS = {'the 12': '#2a78d6', 'held-out': '#eb6834', 'set S': '#1baf7a'}   # the reference palette's first three
+RATIO_LABELS = {'P1': 'P1  paa 10^-4 / ms 10^-3', 'P2': 'P2  paa 10^-3.431 / ms 10^-3',
+                'P3': 'P3  paa / ms, both 10^-3.431', 'Q1': 'Q1  pa 10^-4.386 / ms 10^-3',
+                'Q2': 'Q2  pa / ms, both 10^-4', 'F1': 'F1  ms 10^-4 / ms 10^-2',
+                'S1': 'S1  paa 10^-4.386 / paa 10^-3.431', 'S2': 'S2  pa 10^-5.34 / pa 10^-4.386'}
+
+
+def figure_ratios(path: Optional[Path] = None) -> Path:
+    """E103_ratios.png: per ratio of the fixed list, the 12 and the held-out flies (geometric mean over flies, 90 %
+    interval; carrying reading, 18 um), set S's value (the entry's estimate; P2 a range), and the family's linear
+    range (C2 on the eight wirings at the blank's level: over the five estimates of ms's input for P1 and P2, on
+    Hallem's input for Q2 and F1). From b_x1.csv, c_classes.csv and e_hallem.csv."""
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    out = out_dir()
+    path = out / 'E103_ratios.png' if path is None else Path(path)
+    x = read_table(out / 'b_x1.csv')
+    x = x[x['series_reading'] == 'carrying'].set_index('ratio_id')
+    c = read_table(out / 'c_classes.csv')
+    cc = c[(c['reading'] == 'carrying') & (c['x'] == 'X2')]
+    fam = {rid: (float(cc['model_linear_min'].min()), float(cc['model_linear_max'].max())) for rid in ('P1', 'P2')}
+    h = read_table(out / 'e_hallem.csv')
+    h = h[h['set'].str.startswith('held-out')].set_index('ratio_id')
+    fam.update({rid: (float(h.loc[rid, 'model_linear_min']), float(h.loc[rid, 'model_linear_max'])) for rid in ('Q2', 'F1')})
+    fig, ax = plt.subplots(figsize=(8.6, 5.6), dpi=150)
+    ids = list(RATIO_IDS)
+    for i, rid in enumerate(ids):
+        y = len(ids) - 1 - i
+        if rid in fam:
+            lo, hi = fam[rid]
+            ax.fill_betweenx([y - 0.38, y + 0.38], lo, hi, color='#d7d7d7', lw=0, zorder=0,
+                             label='the family, linear (C2, 8 wirings)' if i == 0 else None)
+        for k, (name, r, lo, hi, dy) in enumerate((
+                ('the 12', x.loc[rid, 'ratio_ref'], x.loc[rid, 'lo90_ref'], x.loc[rid, 'hi90_ref'], 0.2),
+                ('held-out', x.loc[rid, 'ratio'], x.loc[rid, 'lo90'], x.loc[rid, 'hi90'], 0.0))):
+            ax.plot([lo, hi], [y + dy, y + dy], color=SET_COLORS[name], lw=2, solid_capstyle='round', zorder=2)
+            ax.plot([r], [y + dy], 'o', ms=6.5, color=SET_COLORS[name], mec='white', mew=1.2, zorder=3,
+                    label={'the 12': 'the 12 recordings, Jul to Sep 2021 (8 flies)',
+                           'held-out': 'the held-out series, Oct to Nov 2021 (5 flies)'}[name] if i == 0 else None)
+        s_lo, s_hi = SET_S[rid]
+        if s_hi > s_lo:
+            ax.plot([s_lo, s_hi], [y - 0.2, y - 0.2], color=SET_COLORS['set S'], lw=2, zorder=2)
+        ax.plot([np.sqrt(s_lo * s_hi)], [y - 0.2], 'D', ms=6, color=SET_COLORS['set S'], mec='white', mew=1.2, zorder=3,
+                label='set S, the 2022 single-colour flies (estimate)' if i == 0 else None)
+        if bool(x.loc[rid, 'differ']):
+            ax.text(0.105, y, 'differs', fontsize=7.5, color='#333333', va='center', ha='left')
+    ax.set_yticks(range(len(ids)))
+    ax.set_yticklabels([RATIO_LABELS[r] for r in ids[::-1]], fontsize=8.5)
+    ax.set_xscale('log')
+    ax.set_xlim(0.1, 8.0)
+    ticks = (0.2, 0.3, 0.5, 0.7, 1, 1.5, 2, 3, 5)
+    ax.set_xticks(ticks)
+    ax.set_xticklabels([f'{t:g}' for t in ticks])
+    from matplotlib.ticker import NullLocator
+    ax.xaxis.set_minor_locator(NullLocator())
+    ax.axvline(1.0, color='#999999', lw=0.8, zorder=0)
+    ax.set_xlabel("ratio of APL's response (calyx-mean peak dF/F), 90 % interval over flies", fontsize=9)
+    for sname in ('top', 'right'):
+        ax.spines[sname].set_visible(False)
+    ax.tick_params(colors='#333333', labelsize=8.5)
+    ax.legend(loc='upper center', bbox_to_anchor=(0.45, 1.16), ncol=2, fontsize=7.8, frameon=False)
+    fig.tight_layout()
+    fig.savefig(path, facecolor='white')
+    plt.close(fig)
+    return path
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
-    ap.add_argument('--part', required=True, choices=('0', 'A', 'B', 'C', 'D', 'E'))
+    ap.add_argument('--part', required=True, choices=('0', 'A', 'B', 'C', 'D', 'E', 'figures'))
     a = ap.parse_args()
+    if a.part == 'figures':
+        print(figure_ratios())
+        return
     res = {'0': part_0, 'A': part_a, 'B': part_b, 'C': part_c, 'D': part_d, 'E': part_e}[a.part]()
     print(json.dumps(res if a.part != 'A' else dict(tables=res['tables'], dest=res['dest']), indent=1,
                      default=_json_default)[:20000])
