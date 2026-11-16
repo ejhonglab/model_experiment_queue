@@ -510,6 +510,62 @@ def test_stage_save_and_load(tmp_path, monkeypatch):
     assert meta['kc_of_claw'] == [10, 10, 10, 11, 11] and meta['bouton_glomerulus'] == ['DA1', 'DA1', 'VA2', 'DM1']
 
 
+def test_pre_settled_odor_reads_e98s_window():
+    E90 = pytest.importorskip('experiments.E90_model_stages')
+    mp, rv, W = _fake_stage_sim()
+    t = E90.step_times(mp, rv)
+    idx = G.settled_steps(t)
+    # 0.01 s steps from -1 s: -0.25 s included, 0 s not (E98's SETTLED_PRE_WINDOW)
+    assert idx[0] == 75 and idx[-1] == 99 and len(idx) == 25
+    for i in range(3):
+        got = G.pre_settled_odor(mp, rv, W, i)
+        b = rv.pn.bouton_sims[i][:, idx]
+        a = rv.kc.inh_sims[i].ravel()
+        claw = E90.claw_inputs(W.to_numpy(), b, a[idx - 1], rv.kc.wAPLKC.ravel()).mean(axis=1)
+        assert np.array_equal(got['claw_pre_settled'], claw) and np.array_equal(got['bouton_pre_settled'], b.mean(axis=1))
+        assert np.array_equal(got['pn_pre_settled'], rv.pn.pn_sims[i][:, idx].mean(axis=1))
+        assert got['apl_pre_settled'] == a[idx].mean()
+        # E90's pre-odor window is wider (-0.5 to 0 s, open on the left), so its means differ on random traces
+        assert not np.allclose(G.read_stages_odor(mp, rv, W, i, E90.MODEL_WINDOW)['claw_pre'], claw)
+
+
+def test_with_settled_pre_replaces_only_the_pre_odor_means():
+    E90 = pytest.importorskip('experiments.E90_model_stages')
+    mp, rv, W = _fake_stage_sim()
+    odors = ['2h', 'IaA', 'pa']
+    st = E90.read_stages(mp, rv, W, np.arange(3), odors, E90.MODEL_WINDOW)
+    recs = [G.pre_settled_odor(mp, rv, W, i) for i in range(3)]
+    lv = G._settled_frames(recs, st)
+    s = G.with_settled_pre(st, lv)
+    for k in ('claw', 'bouton'):
+        assert np.array_equal(s[f'{k}_pre'].to_numpy(), np.column_stack([r[f'{k}_pre_settled'] for r in recs]))
+        assert s[f'{k}_pre'].index.equals(st[f'{k}_pre'].index) and list(s[f'{k}_pre'].columns) == odors
+        assert s[f'{k}_win'] is st[f'{k}_win']
+    assert s['pn_pre'] is st['pn_pre'] and np.array_equal(s['apl']['win'], st['apl']['win'])
+    assert np.array_equal(s['apl']['pre'].to_numpy(), [r['apl_pre_settled'] for r in recs])
+    assert not np.array_equal(st['claw_pre'].to_numpy(), s['claw_pre'].to_numpy())        # the input is left as it was
+    # one record stands for every odor (a run whose pre-odor level is the same for all)
+    one = G._settled_frames(recs[:1], st)
+    assert np.array_equal(one['claw'].to_numpy(), np.repeat(recs[0]['claw_pre_settled'][:, None], 3, axis=1))
+    with pytest.raises(RuntimeError):
+        G._settled_frames(recs[:2], st)
+    with pytest.raises(RuntimeError):
+        G.with_settled_pre(st, dict(lv, claw=lv['claw'].iloc[:, :2]))
+
+
+def test_settled_save_and_load(tmp_path, monkeypatch):
+    E90 = pytest.importorskip('experiments.E90_model_stages')
+    mp, rv, W = _fake_stage_sim()
+    st = E90.read_stages(mp, rv, W, np.arange(3), ['2h', 'IaA', 'pa'], E90.MODEL_WINDOW)
+    lv = G._settled_frames([G.pre_settled_odor(mp, rv, W, i) for i in range(3)], st)
+    monkeypatch.setattr(G, '_f_settled_dir', lambda: tmp_path)
+    G.save_settled('F_x_real', lv, dict(counts_equal=True))
+    got = G.load_settled('F_x_real')
+    assert got['check'] == dict(counts_equal=True) and np.array_equal(got['apl'].to_numpy(), lv['apl'].to_numpy())
+    s = G.with_settled_pre(st, got)
+    assert np.array_equal(s['claw_pre'].to_numpy(), lv['claw'].to_numpy())
+
+
 def test_b2_odor_params_in_the_runs_order():
     row = pd.Series(dict(tag='B2_F_k1_s1_real', thr_per_odor=json.dumps({'b @ -3': 1.2, 'a @ -3': 0.8}),
                          apl_per_odor=json.dumps({'a @ -3': 0.5, 'b @ -3': 2.5})))

@@ -722,14 +722,16 @@ def flies_step_groups(soma: pd.DataFrame, claw: pd.DataFrame) -> pd.DataFrame:
                                  hi=float(np.nanpercentile(gb[g], CI[1]))) for g in GROUPS}).T
 
 
-def step_verdict_rows(sm: pd.DataFrame, passes: Dict[Tuple[str, str, str], bool]) -> pd.DataFrame:
+def step_verdict_rows(sm: pd.DataFrame, passes: Dict[Tuple[str, str, str], bool],
+                      mc: Optional[pd.DataFrame] = None) -> pd.DataFrame:
     """The two steps like for like (somata minus E90's claws on both sides, `CLAW_READING`), every like-for-like reading,
     by `compare`; rows as `soma_verdict_rows` with element 'step' (cond 'on' the step with APL on, 'off' the step without
     APL, both from the claws with APL on, as E90's). A noise-removed comparison is read if the group passed A1's check and
-    E90's check of the claws' noise removal passed."""
+    E90's check of the claws' noise removal passed. `mc`: the model's claws in `model_claws`' layout (E90's by default;
+    E92_gain's F5 passes them at the settled pre-odor level)."""
     e90v = json.loads((H.results_dir('E90_model_stages') / 'verdict.json').read_text())
     claw_ok = bool(e90v['noise_check_passed']['claw'])
-    mc = model_claws()
+    mc = model_claws() if mc is None else mc
     fc = flies_claws()
     rows = []
     for prefix, u, fr, ms in like_for_like():

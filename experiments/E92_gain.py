@@ -1673,10 +1673,11 @@ def stage_frames(per_odor: Sequence[Dict[str, object]], odors: Sequence[str], W:
 
 def _f_b2_worker(conn, label: str, parts: dict, fit: dict, js: List[int]) -> None:
     """A worker of `FPool` (E87's WiringPool protocol): wiring `label`'s simulator on the ORN columns `js` (as E91's
-    `_c91_worker`); for each task ({'thr', 'apl': per odor of js; 'wAPLKC': per claw; 'claw_inh_pool'}) each odor alone
-    (`mp.sim_only`) at its threshold factor, APL on at its tied APL scale (E80's `_tied`) and APL off, APL's activity
-    saved: its responses, spike counts and stage matrices (`read_stages_odor`); the weights, the pooled share and the
-    saving reset after each task; until None."""
+    `_c91_worker`); for each task ({'thr', 'apl': per odor of js; 'wAPLKC': per claw; 'claw_inh_pool'; 'conds', both
+    by default}) each odor alone (`mp.sim_only`) at its threshold factor, APL on at its tied APL scale (E80's `_tied`)
+    and APL off, APL's activity saved: its responses, spike counts, stage matrices (`read_stages_odor`) and pre-odor
+    means after the KC layer's start-up (`pre_settled_odor`); the weights, the pooled share and the saving reset after
+    each task; until None."""
     try:
         from experiments import E80_screen as S80
         from experiments import E90_model_stages as E90
@@ -1706,16 +1707,20 @@ def _f_b2_worker(conn, label: str, parts: dict, fit: dict, js: List[int]) -> Non
             try:
                 E91.set_pool(mp, float(msg.get('claw_inh_pool', 0.0)))
                 mp.kc.save_inh_sims = True
+                conds = tuple(msg.get('conds', ('on', 'off')))
                 for jj in range(len(order)):
                     rec = dict(odor=names[jj])
                     for cond, q in (('on', S80._tied(p, float(msg['apl'][jj]))),
                                     ('off', dict(p, wAPLKC_scale=0.0, wAPLPN_scale=0.0))):
+                        if cond not in conds:
+                            continue
                         mp.sim_only = [int(order[jj])]
                         try:
                             r, s = sim(q, kc_thr_factor=np.full(n_kc, float(msg['thr'][jj])))
                         finally:
                             mp.sim_only = []
                         rec[cond] = dict(read_stages_odor(mp, rv, W, int(order[jj]), E90.MODEL_WINDOW),
+                                         **pre_settled_odor(mp, rv, W, int(order[jj])),
                                          responses=r.iloc[:, jj].to_numpy(dtype=float),
                                          counts=s.iloc[:, jj].to_numpy(dtype=float))
                     recs.append(rec)
@@ -1730,17 +1735,19 @@ def _f_b2_worker(conn, label: str, parts: dict, fit: dict, js: List[int]) -> Non
 
 
 class FPool(E87.WiringPool):
-    """E87's WiringPool with `_f_b2_worker`: `run_f(thr, apl, wk, s)` runs every odor alone at its threshold factor
-    and tied APL scale (lists in the saved outputs' column order), with the APL->KC weights `wk` (a per-claw Series, or
-    None for the fit's) and the pooled share s, and returns the per-odor records."""
+    """E87's WiringPool with `_f_b2_worker`: `run_f(thr, apl, wk, s, conds)` runs every odor alone at its threshold
+    factor and tied APL scale (lists in the saved outputs' column order), with the APL->KC weights `wk` (a per-claw
+    Series, or None for the fit's) and the pooled share s, in `conds` (APL on and off by default), and returns the
+    per-odor records."""
 
     _WORKER = staticmethod(_f_b2_worker)
 
-    def run_f(self, thr: Sequence[float], apl: Sequence[float], wk: Optional[pd.Series], s: float) -> List[dict]:
+    def run_f(self, thr: Sequence[float], apl: Sequence[float], wk: Optional[pd.Series], s: float,
+              conds: Sequence[str] = ('on', 'off')) -> List[dict]:
         arr = None if wk is None else wk.to_numpy(dtype=float)
         for conn, js in zip(self.conns, self.groups):
             conn.send(dict(thr=[float(thr[j]) for j in js], apl=[float(apl[j]) for j in js], wAPLKC=arr,
-                           claw_inh_pool=float(s)))
+                           claw_inh_pool=float(s), conds=list(conds)))
         recs: List[Optional[dict]] = [None] * len(self.cols)
         for conn, js in zip(self.conns, self.groups):
             status, v = conn.recv()
@@ -2211,6 +2218,424 @@ def part_f(out: Path, workers: int = 4, n_workers: int = 16, stages: bool = True
 
 
 # ---------------------------------------------------------------------------
+# F5: the claws and the steps at the pre-odor level after the KC layer's start-up (unresolved_issues.md, 2026-11-15)
+#
+# olfsysm's claws, KCs and APL start from zero at time_start (-0.5 s) and settle about 0.2 to 0.3 s later, so E90's
+# pre-odor mean (its PRE_WINDOW, -0.5 to 0 s) reads APL low and the claws high with APL on. F4's claws and steps (and
+# part A3's steps, from the same claws of C2) are read again with the pre-odor level over E98's settled window. The
+# stage matrices saved only window means, so the pre-odor level is simulated again at the runs' own parameters.
+
+SETTLED_PRE_WINDOW = (-0.25, 0.0)       # E98's SETTLED_PRE_WINDOW, closed on the left as E98 reads it
+F_SETTLED_DIR = 'F_settled'
+F_SETTLED_FAMILIES = ('C2',) + F_STAGE_FAMILIES
+F_SETTLED_TOL = 1e-9                    # a rerun's E90 pre-odor means against its saved stage run's
+F_SETTLED_READING = 'saturating_z_none_pearson'     # the reading of the note's table of the claws and the steps
+
+
+def settled_steps(t: np.ndarray) -> np.ndarray:
+    """The steps of SETTLED_PRE_WINDOW (t >= -0.25 s and t < 0, as E98 reads it)."""
+    return np.flatnonzero((t >= SETTLED_PRE_WINDOW[0] - 1e-9) & (t < SETTLED_PRE_WINDOW[1] - 1e-9))
+
+
+def pre_settled_odor(mp, rv, W: pd.DataFrame, i: int) -> Dict[str, object]:
+    """The pre-odor means of olfsysm's odor index i over SETTLED_PRE_WINDOW, read as `read_stages_odor` reads E90's:
+    'pn_pre_settled', 'bouton_pre_settled', 'claw_pre_settled' (`E90.claw_inputs`) and 'apl_pre_settled'."""
+    from experiments import E90_model_stages as E90
+    idx = settled_steps(E90.step_times(mp, rv))
+    if idx.size == 0 or idx[0] < 1:
+        raise RuntimeError(f'the settled window has steps {idx[:3]}')
+    pn = np.asarray(rv.pn.pn_sims[i], dtype=float)
+    bt = np.asarray(rv.pn.bouton_sims[i], dtype=float)[:, idx]
+    a = np.asarray(rv.kc.inh_sims[i], dtype=float).ravel()
+    wk = np.asarray(rv.kc.wAPLKC, dtype=float).ravel()
+    return dict(pn_pre_settled=pn[:, idx].mean(axis=1), bouton_pre_settled=bt.mean(axis=1),
+                claw_pre_settled=E90.claw_inputs(W.to_numpy(dtype=float), bt, a[idx - 1], wk).mean(axis=1),
+                apl_pre_settled=float(a[idx].mean()))
+
+
+def _f_settled_dir() -> Path:
+    d = H.outputs_dir(EXPERIMENT) / F_SETTLED_DIR
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _pre_diff(e90: Dict[str, object], st: dict, j: int) -> Dict[str, float]:
+    """The largest differences between one odor's E90 pre-odor means (`read_stages_odor`) and column j of a saved stage
+    run's (APL on)."""
+    return dict(claw=float(np.abs(np.asarray(e90['claw_pre'], dtype=float) - st['claw_pre'].iloc[:, j].to_numpy(dtype=float)).max()),
+                bouton=float(np.abs(np.asarray(e90['bouton_pre'], dtype=float)
+                                    - st['bouton_pre'].iloc[:, j].to_numpy(dtype=float)).max()),
+                apl=float(abs(float(e90['apl_pre']) - float(st['apl']['pre'].iloc[j]))))
+
+
+def _settled_frames(per_odor: Sequence[Dict[str, object]], st: dict) -> dict:
+    """{'claw', 'bouton': units x odors, 'apl': per odor} settled levels in a saved stage run's layout, from one
+    `pre_settled_odor` record per odor column (or a single record standing for every odor)."""
+    cols = st['claw_pre'].columns
+    recs = list(per_odor) * len(cols) if len(per_odor) == 1 else list(per_odor)
+    if len(recs) != len(cols):
+        raise RuntimeError(f'{len(recs)} settled records for {len(cols)} odors')
+    out = {k: pd.DataFrame(np.column_stack([np.asarray(r[f'{k}_pre_settled'], dtype=float) for r in recs]),
+                           index=st[f'{k}_pre'].index, columns=cols) for k in ('claw', 'bouton')}
+    out['apl'] = pd.Series([float(r['apl_pre_settled']) for r in recs], index=st['apl'].index, name='pre_settled')
+    return out
+
+
+def _level_summary(st: dict, lv: dict) -> dict:
+    return dict(claw_pre_e90_mean=float(st['claw_pre'].to_numpy(dtype=float).mean()),
+                claw_pre_settled_mean=float(lv['claw'].to_numpy(dtype=float).mean()),
+                bouton_pre_e90_mean=float(st['bouton_pre'].to_numpy(dtype=float).mean()),
+                bouton_pre_settled_mean=float(lv['bouton'].to_numpy(dtype=float).mean()),
+                apl_pre_e90=[float(x) for x in st['apl']['pre']], apl_pre_settled=[float(x) for x in lv['apl']])
+
+
+def f_settled_one(family: str, w: str) -> Tuple[dict, dict]:
+    """The settled pre-odor level, APL on, of C2's fit on wiring w (E83's simulator; E90's part B stage run) or of E91's
+    refit (E91's simulator at s = F_POOL; F3's stage run). The saved run's pre-odor means are the same for every odor
+    (checked: one simulator, the same parameters), so its first odor is run alone (`mp.sim_only`); its counts must equal
+    the saved run's and its E90 pre-odor means (`read_stages_odor`) the saved stage run's within F_SETTLED_TOL, and its
+    settled level (`pre_settled_odor`) stands for every odor. Returns (`_settled_frames`, the check)."""
+    from experiments import E72_wiring_population as E72
+    from experiments import E90_model_stages as E90
+    if family == 'C2':
+        st = E90.load_stage('B', f'{w}_on')
+        sim, info = E83.build_simulator(w)
+        p = dict(info['params'])
+    elif family == 'E91_refit':
+        tag = E91.d_tag(w, F_K, F_POOL)
+        st = load_stage_f(f_stage_tag(family, w), 'on', ('E91fit', tag))
+        sim, info = E91.build_simulator91(w, claw_inh_pool=F_POOL)
+        p = E72.fitted_params(F_SOURCE, tag)
+    else:
+        raise ValueError(family)
+    if st is None:
+        raise RuntimeError(f'{family} {w}: no saved stage run')
+    same = {k: bool(np.ptp(st[k].to_numpy(dtype=float), axis=1).max() == 0) for k in ('claw_pre', 'bouton_pre')}
+    same['apl'] = bool(np.ptp(st['apl']['pre'].to_numpy(dtype=float)) == 0)
+    if not all(same.values()):
+        raise RuntimeError(f'{family} {w}: the saved pre-odor means differ between odors: {same}')
+    cells = info['cells']
+    mp, rv = cells['mp'].cell_contents, cells['rv'].cell_contents
+    order = np.asarray(cells['odor_order'].cell_contents, dtype=int)
+    W = info['W']
+    if not np.array_equal(np.asarray(rv.kc.wPNKC, dtype=float), W.to_numpy(dtype=float)):
+        raise RuntimeError(f"{w}: olfsysm's wPNKC differs from the wiring's claw x bouton matrix")
+    if family == 'E91_refit' and float(mp.kc.claw_inh_pool) != F_POOL:
+        raise RuntimeError(f"{w}: the simulator's claw_inh_pool is {mp.kc.claw_inh_pool}")
+    j = 0
+    mp.kc.save_inh_sims = True
+    mp.sim_only = [int(order[j])]
+    try:
+        r, s = sim(p)
+        e90 = read_stages_odor(mp, rv, W, int(order[j]), E90.MODEL_WINDOW)
+        se = pre_settled_odor(mp, rv, W, int(order[j]))
+    finally:
+        mp.sim_only = []
+        mp.kc.save_inh_sims = False
+    ref = st['spike_counts']
+    counts_equal = bool(str(ref.columns[j]) == str(s.columns[j]) and s.index.equals(ref.index)
+                        and np.array_equal(s.iloc[:, j].to_numpy(dtype=float), ref.iloc[:, j].to_numpy(dtype=float)))
+    chk = dict(family=family, wiring=w, odors_run=[str(s.columns[j])], counts_equal=counts_equal,
+               pre_e90_diff=_pre_diff(e90, st, j), same_every_odor=same)
+    if not counts_equal or max(chk['pre_e90_diff'].values()) > F_SETTLED_TOL:
+        raise RuntimeError(f'{family} {w}: the rerun is not the saved run: {chk}')
+    lv = _settled_frames([se], st)
+    chk.update(_level_summary(st, lv))
+    return lv, chk
+
+
+def f_settled_b2(w: str, n_workers: int = 8) -> Tuple[dict, dict]:
+    """The settled pre-odor level, APL on, of E91's choice on the base with the flies' recruitment on wiring w: every
+    odor alone at its threshold factor and tied APL scale as run (`FPool`, as `f_stage_b2`, APL on only); its counts must
+    equal the archived run's and its E90 pre-odor means F3's stage run's within F_SETTLED_TOL. Returns
+    (`_settled_frames`, the check)."""
+    family = 'E91_B2_k1_s1'
+    tag = E91.run_tag(F_B2_CHOICE, w)
+    st = load_stage_f(f_stage_tag(family, w), 'on', ('E91', tag))
+    if st is None:
+        raise RuntimeError(f'{family} {w}: no saved stage run')
+    row = e91_run_row(tag)
+    pv = E91.parse_variant(F_B2_CHOICE)
+    parts = E83.wiring_parts(w)
+    wk = E89.apl_kc_weights(parts['wnorm']['wAPLKC'], parts['breadth'], pv['exponent'])
+    if str(row.get('wAPLKC_sha256')) != E89.E80_sha(wk):
+        raise RuntimeError(f'{tag}: the APL->KC weights are not the run\'s')
+    pool = FPool(w, n_workers)
+    try:
+        thr, apl = b2_odor_params(row, pool.cols)
+        recs = pool.run_f(thr, apl, wk, pv['s'], conds=('on',))
+    finally:
+        pool.close()
+    ref = st['spike_counts']
+    if [str(c) for c in ref.columns] != list(pool.cols):
+        raise RuntimeError(f'{tag}: the saved odors {list(ref.columns)} are not the pool\'s {pool.cols}')
+    counts_equal = bool(all(np.array_equal(np.asarray(r['on']['counts'], dtype=float), ref.iloc[:, j].to_numpy(dtype=float))
+                            for j, r in enumerate(recs)))
+    diffs = [_pre_diff(r['on'], st, j) for j, r in enumerate(recs)]
+    chk = dict(family=family, wiring=w, odors_run=list(pool.cols), counts_equal=counts_equal,
+               pre_e90_diff={k: max(d[k] for d in diffs) for k in ('claw', 'bouton', 'apl')})
+    if not counts_equal or max(chk['pre_e90_diff'].values()) > F_SETTLED_TOL:
+        raise RuntimeError(f'{family} {w}: the rerun is not the saved run: {chk}')
+    lv = _settled_frames([r['on'] for r in recs], st)
+    chk.update(_level_summary(st, lv))
+    return lv, chk
+
+
+def save_settled(tag: str, lv: dict, chk: dict) -> None:
+    """A run's settled levels under outputs/.../F_settled/ (<tag>_on_<claw|bouton|apl>_pre_settled.parquet) and its
+    check (<tag>_settled_check.json)."""
+    d = _f_settled_dir()
+    for k in ('claw', 'bouton'):
+        x = lv[k].copy()
+        x.columns = [str(c) for c in x.columns]
+        if isinstance(x.index, pd.MultiIndex):
+            x.index = x.index.set_names([str(n) for n in x.index.names])
+        x.to_parquet(d / f'{tag}_on_{k}_pre_settled.parquet')
+    lv['apl'].rename('pre_settled').to_frame().to_parquet(d / f'{tag}_on_apl_pre_settled.parquet')
+    _write_json(d / f'{tag}_settled_check.json', chk)
+
+
+def load_settled(tag: str) -> Optional[dict]:
+    """`save_settled`'s levels and check (the local outputs, else the archive); None if absent."""
+    for d in (_f_settled_dir(), H.shared_dir() / 'data' / 'model_outputs' / EXPERIMENT / F_SETTLED_DIR):
+        if (d / f'{tag}_settled_check.json').exists():
+            lv = {k: pd.read_parquet(d / f'{tag}_on_{k}_pre_settled.parquet') for k in ('claw', 'bouton')}
+            lv['apl'] = pd.read_parquet(d / f'{tag}_on_apl_pre_settled.parquet')['pre_settled']
+            lv['check'] = json.loads((d / f'{tag}_settled_check.json').read_text())
+            return lv
+    return None
+
+
+def part_f5_runs(families: Sequence[str] = F_SETTLED_FAMILIES, wirings: Optional[Sequence[str]] = None,
+                 n_workers: int = 8) -> None:
+    """F5's simulations (resumable; a run whose levels exist is skipped): the settled pre-odor level, APL on, of each
+    family on each wiring (C2 on E90's eight by default, E91's two stage families on S), saved with its check."""
+    from experiments import E90_model_stages as E90
+    cc = None
+    for fam in families:
+        for w in (wirings or (E90.ALL_WIRINGS if fam == 'C2' else E83.S_WIRINGS)):
+            tag = f_stage_tag(fam, w)
+            if load_settled(tag) is not None:
+                continue
+            # the checkout is shared with other sessions' uncommitted work: recorded, not refused
+            cc = _commits(strict=False) if cc is None else cc
+            t0 = time.time()
+            lv, chk = f_settled_b2(w, n_workers) if fam == 'E91_B2_k1_s1' else f_settled_one(fam, w)
+            chk.update(seconds=round(time.time() - t0, 1), **cc)
+            save_settled(tag, lv, chk)
+            print(f"F5 {tag}: exact (counts, E90 pre-odor means within {max(chk['pre_e90_diff'].values()):.1e}); claws' "
+                  f"pre-odor mean {chk['claw_pre_e90_mean']:.3f} -> {chk['claw_pre_settled_mean']:.3f}, APL's "
+                  f"{np.mean(chk['apl_pre_e90']):.3f} -> {np.mean(chk['apl_pre_settled']):.3f}, {time.time() - t0:.0f} s",
+                  flush=True)
+
+
+def with_settled_pre(st: dict, lv: dict) -> dict:
+    """A stage dict with its claws' and boutons' pre-odor means (and APL's) replaced by the settled levels (`lv`), whose
+    units and odors must be the stage dict's."""
+    s = dict(st)
+    for k in ('claw', 'bouton'):
+        x, y = st[f'{k}_pre'], lv[k]
+        if x.shape != y.shape or [str(c) for c in x.columns] != [str(c) for c in y.columns]:
+            raise RuntimeError(f'{k}: the settled levels {y.shape} are not the stage\'s {x.shape}')
+        if not (x.index.equals(y.index) or [str(v) for v in x.index] == [str(v) for v in y.index]):
+            raise RuntimeError(f'{k}: the settled levels\' units are not the stage\'s')
+        s[f'{k}_pre'] = pd.DataFrame(y.to_numpy(dtype=float), index=x.index, columns=x.columns)
+    a = lv['apl'].to_numpy(dtype=float)
+    if len(a) != len(st['apl']):
+        raise RuntimeError(f"{len(a)} settled APL levels for {len(st['apl'])} odors")
+    s['apl'] = st['apl'].assign(pre=a)
+    return s
+
+
+def _units_meta_c2(w: str) -> dict:
+    """E90's units' metadata of a wiring (its cache, the archive's copy, else `units_meta` of the wiring)."""
+    from experiments import E90_model_stages as E90
+    for d in (E90.local_dir('B'), H.shared_dir() / 'data' / 'model_outputs' / 'E90_model_stages' / 'B'):
+        if (d / f'{w}_units.json').exists():
+            return {k: np.asarray(v) for k, v in json.loads((d / f'{w}_units.json').read_text()).items()}
+    return {k: np.asarray(v) for k, v in units_meta(E90.wiring_matrix(w)).items()}
+
+
+def f5_pairs(force: bool = False) -> pd.DataFrame:
+    """E90's readings (`read_wiring`) at the settled pre-odor level with APL on (APL off as saved; only the claws with
+    APL on enter E92's steps): C2 on E90's eight wirings with E90's generators (NOISE_SEED + the wiring's index), E91's
+    two stage families on S with F4's (NOISE_SEED + F_NOISE_SEED + the run's index); cached in
+    outputs/.../F_settled/stage_pairs_settled.parquet."""
+    from experiments import E90_model_stages as E90
+    path = _f_settled_dir() / 'stage_pairs_settled.parquet'
+    if path.exists() and not force:
+        return pd.read_parquet(path)
+    rows = []
+    for i, w in enumerate(E90.ALL_WIRINGS):
+        st = {c: E90.load_stage('B', f'{w}_{cc}') for c, cc in E90.CONDS}
+        lv = load_settled(f_stage_tag('C2', w))
+        if lv is None or any(v is None for v in st.values()):
+            raise RuntimeError(f'C2 {w}: no settled levels or stage run (run --part F5runs first)')
+        rr = E90.read_wiring(w, with_settled_pre(st['on'], lv), st['off'], _units_meta_c2(w),
+                             np.random.default_rng(E90.NOISE_SEED + i))
+        rows.append(pd.DataFrame(rr).assign(family='C2', tag=f_stage_tag('C2', w)))
+        print(f'F5 read C2 {w}', flush=True)
+    i = 0
+    for fam in F_STAGE_FAMILIES:
+        src = 'E91fit' if fam == 'E91_refit' else 'E91'
+        for w in E83.S_WIRINGS:
+            tag = f_stage_tag(fam, w)
+            stag = E91.d_tag(w, F_K, F_POOL) if fam == 'E91_refit' else E91.run_tag(F_B2_CHOICE, w)
+            st = {c: load_stage_f(tag, c, (src, stag)) for c in ('on', 'off')}
+            lv = load_settled(tag)
+            if lv is None or any(v is None for v in st.values()):
+                raise RuntimeError(f'{tag}: no settled levels or stage run')
+            meta = None
+            for d in (_f_dir(), H.shared_dir() / 'data' / 'model_outputs' / EXPERIMENT / F_DIR):
+                if (d / f'{tag}_units.json').exists():
+                    meta = {k: np.asarray(v) for k, v in json.loads((d / f'{tag}_units.json').read_text()).items()}
+                    break
+            if meta is None:
+                raise RuntimeError(f'{tag}: no units metadata')
+            rr = E90.read_wiring(w, with_settled_pre(st['on'], lv), st['off'], meta,
+                                 np.random.default_rng(E90.NOISE_SEED + F_NOISE_SEED + i))
+            rows.append(pd.DataFrame(rr).assign(family=fam, tag=tag))
+            i += 1
+            print(f'F5 read {tag}', flush=True)
+    df = pd.concat(rows, ignore_index=True)
+    df.to_parquet(path)
+    return df
+
+
+def _step_cells(rows: pd.DataFrame) -> Dict[str, dict]:
+    """Per group the steps' 'differ / read' cells with APL on and without (part A's `verdicts`)."""
+    return {g: dict(on=_cell(v['on']), off=_cell(v['off']), verdict=v['verdict']) for g, v in _A().verdicts(rows).items()}
+
+
+def _claw_means(claws: pd.DataFrame) -> Dict[str, Dict[str, float]]:
+    """Per family and reading the claws' group means over S's wirings."""
+    c = claws[claws.wiring.isin(E83.S_WIRINGS)]
+    return {f'{fam}|{rd}': {g: float(x[g].mean()) for g in _A().GROUPS}
+            for (fam, rd), x in c.groupby(['family', 'reading'], sort=False)}
+
+
+def _step_values(steps: pd.DataFrame, reading: str = F_SETTLED_READING) -> Dict[str, Dict[str, float]]:
+    """Per family and condition S's population's step in one reading, per group (the model's value) and the flies'."""
+    x = steps[steps.reading == reading]
+    return {f'{fam}|{c}': {**{g: float(v) for g, v in zip(y.group, y.model)}, **{f'flies_{g}': float(v)
+                                                                                 for g, v in zip(y.group, y.flies)}}
+            for (fam, c), y in x.groupby(['family', 'cond'], sort=False)}
+
+
+def part_f5(out: Path) -> dict:
+    """F5: F4's claws and steps (claws_F_settled.csv, steps_F_settled.csv) and part A3's steps
+    (steps_like_for_like_settled.csv) at the settled pre-odor level, beside F4's and A3's as they stand; settled_F.json
+    (the reruns' checks, the claws and the steps old and new, the 'differ / read' cells old and new) and
+    comparison_table_F_settled.md. A4's line and every somata reading read spike counts only and do not move."""
+    from experiments import E90_model_stages as E90
+    A = _A()
+    t0 = time.time()
+    pairs = f5_pairs()
+    cl = claw_groups(pairs)
+    claws_f = cl[cl.wiring.isin(E83.S_WIRINGS)].reset_index(drop=True)
+    claws_f.to_csv(out / 'claws_F_settled.csv', index=False)
+    e90v = json.loads((H.results_dir('E90_model_stages') / 'verdict.json').read_text())
+    claw_ok = bool(e90v['noise_check_passed']['claw'])
+    passes = A.check_passes()
+    sm = pd.read_csv(out / 'somata_F_means.csv')
+    steps = f_step_rows(sm, claws_f, passes, claw_ok)
+    steps.to_csv(out / 'steps_F_settled.csv', index=False)
+    mc = cl[cl.family == 'C2'].drop(columns=['family']).reset_index(drop=True)
+    st_a = A.step_verdict_rows(pd.read_csv(A.out_dir() / 'somata_model.csv'), passes, mc=mc)
+    st_a.to_csv(out / 'steps_like_for_like_settled.csv', index=False)
+    old_steps = pd.read_csv(out / 'steps_F.csv')
+    old_a = pd.read_csv(A.out_dir() / 'steps_like_for_like.csv')
+    old_claws = pd.read_csv(out / 'claws_F.csv')
+    mc_old = A.model_claws()
+    checks = {}
+    for fam in F_SETTLED_FAMILIES:
+        for w in (E90.ALL_WIRINGS if fam == 'C2' else E83.S_WIRINGS):
+            lv = load_settled(f_stage_tag(fam, w))
+            checks[f_stage_tag(fam, w)] = lv['check']
+    res = dict(window=dict(e90=list(E90.PRE_WINDOW), settled=list(SETTLED_PRE_WINDOW)), checks=checks,
+               claws=dict(old=_claw_means(old_claws), new=_claw_means(claws_f)),
+               claws_c2_8=dict(old={rd: {g: float(x[g].mean()) for g in A.GROUPS} for rd, x in mc_old.groupby('reading')},
+                               new={rd: {g: float(x[g].mean()) for g in A.GROUPS} for rd, x in mc.groupby('reading')}),
+               steps_f=dict(old=_step_values(old_steps), new=_step_values(steps)),
+               cells_f=dict(old={fam: _step_cells(x) for fam, x in old_steps.groupby('family', sort=False)},
+                            new={fam: _step_cells(x) for fam, x in steps.groupby('family', sort=False)}),
+               cells_a3=dict(old=_step_cells(old_a), new=_step_cells(st_a)),
+               diff_a3={k: {f'{g}|{c}': [float(x[(x.group == g) & (x.cond == c) & x.read]['diff'].min()),
+                                         float(x[(x.group == g) & (x.cond == c) & x.read]['diff'].max())]
+                            for g in A.GROUPS for c in A.CONDS} for k, x in (('old', old_a), ('new', st_a))},
+               diff_f={k: {f'{fam}|{g}|{c}': [float(y[(y.group == g) & (y.cond == c) & y.read]['diff'].min()),
+                                              float(y[(y.group == g) & (y.cond == c) & y.read]['diff'].max())]
+                           for fam, y in x.groupby('family', sort=False) for g in A.GROUPS for c in A.CONDS}
+                       for k, x in (('old', old_steps), ('new', steps))},
+               claw_noise_check=claw_ok)
+    _write_json(out / 'settled_F.json', res)
+    comparison_table_f5(out, res)
+    print(f'F5 read in {time.time() - t0:.0f} s', flush=True)
+    return res
+
+
+def comparison_table_f5(out: Path, res: Optional[dict] = None) -> str:
+    """comparison_table_F_settled.md from settled_F.json."""
+    A = _A()
+    res = json.loads((out / 'settled_F.json').read_text()) if res is None else res
+    G = A.TABLE_GROUPS
+    L = ["# E92 part F5: the claws and the steps at the pre-odor level after the KC layer's start-up", '',
+         f'Generated by experiments/E92_gain.py at {H.code_commits().get("queue_commit", "")[:7]}. The pre-odor level '
+         f"with APL on over {res['window']['settled']} s (E98's settled window) instead of E90's {res['window']['e90']} s; "
+         "APL off as saved. A4's line and the somata read spike counts only and do not move.", '',
+         '## The reruns (APL on): their checks and pre-odor levels', '',
+         '| run | odors run | counts equal | E90 pre-odor means, largest difference (claw / bouton / APL) | claws, mean pre-odor '
+         'level: E90 / settled | boutons | APL (mean over odors) |', '|---|---:|---|---:|---:|---:|---:|']
+    for tag, c in res['checks'].items():
+        d = c['pre_e90_diff']
+        L.append(f"| {tag} | {len(c['odors_run'])} | {c['counts_equal']} | {d['claw']:.1e} / {d['bouton']:.1e} / "
+                 f"{d['apl']:.1e} | {c['claw_pre_e90_mean']:.3f} / {c['claw_pre_settled_mean']:.3f} | "
+                 f"{c['bouton_pre_e90_mean']:.3f} / {c['bouton_pre_settled_mean']:.3f} | "
+                 f"{np.mean(c['apl_pre_e90']):.3f} / {np.mean(c['apl_pre_settled']):.3f} |")
+    L += ['', "## The claws with APL on (all claws, the drive alone), S's wirings' mean: E90's level -> settled", '',
+          '| family | reading | ' + ' | '.join(A.TABLE_HEAD[g] for g in G) + ' |', '|---|---|' + '---:|' * len(G)]
+    for k, new in res['claws']['new'].items():
+        old = res['claws']['old'].get(k, {})
+        fam, rd = k.split('|')
+        L.append(f'| {fam} | {rd} | ' + ' | '.join(f"{_f(old.get(g), '.3f')} -> {_f(new[g], '.3f')}" for g in G) + ' |')
+    L += ['', "C2 on E90's eight wirings (part A3's claws):", '',
+          '| reading | ' + ' | '.join(A.TABLE_HEAD[g] for g in G) + ' |', '|---|' + '---:|' * len(G)]
+    for rd, new in res['claws_c2_8']['new'].items():
+        old = res['claws_c2_8']['old'][rd]
+        L.append(f'| {rd} | ' + ' | '.join(f"{_f(old[g], '.3f')} -> {_f(new[g], '.3f')}" for g in G) + ' |')
+    L += ['', f"## The steps, S's populations, {F_SETTLED_READING} (the model; the flies beside): E90's level -> settled", '',
+          '| family | step | ' + ' | '.join(A.TABLE_HEAD[g] for g in G) + ' |', '|---|---|' + '---:|' * len(G)]
+    for k, new in res['steps_f']['new'].items():
+        old = res['steps_f']['old'][k]
+        fam, c = k.split('|')
+        L.append(f"| {fam} | {'with APL on' if c == 'on' else 'without APL'} | "
+                 + ' | '.join(f"{_f(old[g], '+.3f')} -> {_f(new[g], '+.3f')}" for g in G) + ' |')
+        L.append(f"| flies | {'with APL on' if c == 'on' else 'without APL'} | "
+                 + ' | '.join(_f(new[f'flies_{g}'], '+.3f') for g in G) + ' |')
+    L += ['', "## The steps' verdicts (differ / read, with the sign): E90's level -> settled", '',
+          '| family | ' + ' | '.join(f'{A.TABLE_HEAD[g]}: with APL on | without APL' for g in G) + ' |',
+          '|---|' + '---:|---:|' * len(G)]
+    for fam, new in res['cells_f']['new'].items():
+        old = res['cells_f']['old'][fam]
+        L.append(f'| {fam} (S) | ' + ' | '.join(f"{old[g]['on']} -> {new[g]['on']} | {old[g]['off']} -> {new[g]['off']}"
+                                                for g in G) + ' |')
+    old, new = res['cells_a3']['old'], res['cells_a3']['new']
+    L.append("| C2, part A3 (population of eight) | " + ' | '.join(
+        f"{old[g]['on']} -> {new[g]['on']} | {old[g]['off']} -> {new[g]['off']}" for g in G) + ' |')
+    L += ['', "## Part A3's steps: the model minus the flies over the readings read (smallest, largest)", '',
+          '| group | with APL on | without APL |', '|---|---:|---:|']
+    for g in G:
+        cells = []
+        for c in A.CONDS:
+            o, n = res['diff_a3']['old'][f'{g}|{c}'], res['diff_a3']['new'][f'{g}|{c}']
+            cells.append(f'{o[0]:+.3f} to {o[1]:+.3f} -> {n[0]:+.3f} to {n[1]:+.3f}')
+        L.append(f'| {A.TABLE_HEAD[g]} | ' + ' | '.join(cells) + ' |')
+    text = '\n'.join(L) + '\n'
+    (out / 'comparison_table_F_settled.md').write_text(text)
+    return text
+
+
+# ---------------------------------------------------------------------------
 # the archive, the figure and the table
 
 def write_variants(out: Path) -> pd.DataFrame:
@@ -2390,9 +2815,10 @@ def provenance(out: Path, part: str, **extra) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('--part', required=True,
-                    choices=('B1', 'B2', 'B3', 'smoke', 'co', 'C', 'score', 'D', 'Dscore', 'E', 'F', 'Ftable', 'variants',
-                             'table'))
-    ap.add_argument('--wirings', default='S', help="B1 / B2 / B3: 'S', 'T' or a comma-separated list")
+                    choices=('B1', 'B2', 'B3', 'smoke', 'co', 'C', 'score', 'D', 'Dscore', 'E', 'F', 'Ftable', 'F5runs', 'F5',
+                             'variants', 'table'))
+    ap.add_argument('--wirings', default='S', help="B1 / B2 / B3 / F5runs: 'S', 'T' or a comma-separated list; F5runs "
+                                                   "also 'default' (each family's own)")
     ap.add_argument('--workers', type=int, default=4, help='co / score: processes (4)')
     ap.add_argument('--reference', default='C2', choices=REFERENCE_FAMILIES,
                     help="C / score: the reference family (C2's clipped family; 'E91_refits' is a stub)")
@@ -2404,12 +2830,15 @@ def main() -> None:
     ap.add_argument('--no-co', action='store_true', help='score: skip the co-response readings')
     ap.add_argument('--f-workers', type=int, default=16, help="F: the B2 stage runs' one-odor worker processes (16)")
     ap.add_argument('--no-stages', action='store_true', help='F: skip the stage runs and the steps (F3, F4)')
+    ap.add_argument('--families', default=','.join(F_SETTLED_FAMILIES),
+                    help="F5runs: comma-separated families (C2, E91_refit, E91_B2_k1_s1); with --wirings 'default', C2 on "
+                         "E90's eight wirings and the others on S")
     args = ap.parse_args()
     warnings.simplefilter('ignore', RuntimeWarning)
     out = H.results_dir(EXPERIMENT)
-    ws = _wirings(args.wirings)
+    ws = None if args.wirings == 'default' else _wirings(args.wirings)
     if args.part in ('B1', 'B2', 'B3', 'smoke', 'C', 'D', 'F') and not (args.part == 'D' and args.dry_run):
-        provenance(out, args.part, wirings=list(ws), reference=args.reference,
+        provenance(out, args.part, wirings=list(ws or ()), reference=args.reference,
                    **(dict(pop=args.pop, k=args.k, d_start=args.d_start) if args.part == 'D' else {}))
     if args.part == 'B1':
         part_b1(out, ws)
@@ -2438,6 +2867,12 @@ def main() -> None:
     elif args.part == 'Ftable':
         comparison_table_f(out)
         figure_f(out)
+    elif args.part == 'F5runs':
+        part_f5_runs(args.families.split(','), ws, args.f_workers)
+    elif args.part == 'F5':
+        provenance(out, 'F5', SETTLED_PRE_WINDOW=SETTLED_PRE_WINDOW, F_SETTLED_FAMILIES=F_SETTLED_FAMILIES,
+                   F_SETTLED_TOL=F_SETTLED_TOL, F_NOISE_SEED=F_NOISE_SEED)
+        part_f5(out)
     elif args.part == 'variants':
         write_variants(out)
     elif args.part == 'table':
