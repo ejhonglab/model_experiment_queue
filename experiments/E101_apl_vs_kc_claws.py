@@ -2718,7 +2718,11 @@ def part_b(n_perm: int = N_PERM) -> dict:
     set_l = float(b5.groupby('fly')['median_slope'].median().median()) if len(b5) else np.nan
     res = dict(caveat=QUALITY_CAVEAT, channel_check=chk['verdict'], b_G=b_g, b_G_per_fly=b1['per_fly'],
                cross_check_passed=b1['cross_check_passed'],
-               set_l_median_slope=set_l, outcome_h=bool(np.isfinite(set_l) and set_l < B5_SLOPE_MULT * b_g),
+               set_l_median_slope=set_l,
+               # outcome (h), "the controls fail (B1's cross-check, or B5)": either clause; B5's alone beside
+               outcome_h_b5=bool(np.isfinite(set_l) and set_l < B5_SLOPE_MULT * b_g),
+               outcome_h=bool((not b1['cross_check_passed'])
+                              or (np.isfinite(set_l) and set_l < B5_SLOPE_MULT * b_g)),
                skipped=[dict(stem=r['stem'], why=r['skipped']) for r in G_all + R_all if 'skipped' in r] + l_left)
     _write_json(out / 'b_leak.json', res)
     return res
@@ -3228,7 +3232,8 @@ def score(model_sets: Optional[pd.DataFrame] = None) -> dict:
     res = dict(caveat=QUALITY_CAVEAT, channel_mode=CHANNEL_MODE,
                channel_check=None if chk is None else chk.get('verdict'),
                model_levels=dict(carrying=A0_CARRYING, partner=A0_PARTNER, shown_deciding_nothing=A0_SHOWN),
-               b_G=bl['b_G'], outcome_h=bl['outcome_h'], cross_check_passed=bl['cross_check_passed'],
+               b_G=bl['b_G'], outcome_h=bl['outcome_h'], outcome_h_b5=bl.get('outcome_h_b5'),
+               cross_check_passed=bl['cross_check_passed'],
                b_g_alone=rule['b_g_alone'])
     k = lambda rd, bm: f'{rd} b{bm:g}'
     cross = bool(bl['cross_check_passed'])

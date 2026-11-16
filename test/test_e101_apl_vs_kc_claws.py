@@ -723,7 +723,7 @@ def test_parts_b_to_e_and_score_on_made_up_recordings(tmp_path, monkeypatch):
     b = M.part_b(n_perm=100)
     assert b['channel_check'] == 'passed'
     assert b['b_G'] == pytest.approx(0.034, abs=0.006)           # the planted leak, measured in the green-only flies
-    assert b['cross_check_passed'] is True and not b['outcome_h']
+    assert b['cross_check_passed'] is True and not b['outcome_h'] and not b['outcome_h_b5']
     b2 = M.read_table(tmp_path / 'b2_reverse.csv')
     assert len(b2) and b2['share_of_set_l'].abs().max() < 0.1      # red-only flies: APL's channel far below set L's
     c = M.part_c(n_boot=500)
