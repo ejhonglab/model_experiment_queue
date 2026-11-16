@@ -2714,13 +2714,16 @@ def d_stimulus_blocks(table: pd.DataFrame, which: str = 'first') -> pd.DataFrame
     return k.drop_duplicates(['odor', 'log10_conc', 'block1'])[['odor', 'log10_conc', 'block1']]
 
 
-def d_responses_from_means(means: Sequence[float], table: pd.DataFrame, baseline: str, which: str = 'first') -> pd.DataFrame:
+def d_responses_from_means(means: Sequence[float], table: pd.DataFrame, baseline: str, which: str = 'first',
+                           n_first: Optional[int] = None) -> pd.DataFrame:
     """Each stimulus's response from per-presentation calyx means (`means`, in the yaml's presentation order) and the
     stimulus table (`d_stim_table`): 'order_matched' each presentation minus the mean over the kept solvent blocks of
     their presentation at the same position; 'first_in_block' each presentation minus the mean of the kept blocks'
     position-1 solvent presentations; the response the mean over the stimulus's presentations in its block (two in a
     block of three, three in a block of five), nothing further subtracted. `which` 'first' (the first kept block) or 'all'
-    (every kept block, part D3's repeats). Rows: odor, conc, block1, response, rep1 to rep3, n_reps."""
+    (every kept block, part D3's repeats). `n_first` (E103, other series' block sizes): the response the mean of the
+    block's first `n_first` presentations of the stimulus (None: all of them, E98's). Rows: odor, conc, block1, response,
+    rep1 to rep3 (and rep4 on, where a block has more presentations), n_reps (the presentations averaged)."""
     m = np.asarray(means, dtype=float)
     if len(m) != len(table):
         raise ValueError(f'{len(m)} presentation values for {len(table)} presentations')
@@ -2740,8 +2743,10 @@ def d_responses_from_means(means: Sequence[float], table: pd.DataFrame, baseline
     for _, sb in d_stimulus_blocks(t, which).iterrows():
         g = t[(t['block1'] == sb['block1']) & (t['odor'] == sb['odor']) & (t['log10_conc'] == sb['log10_conc'])]
         reps = [float(m[i] - (base[int(pos)] if isinstance(base, dict) else base)) for i, pos in zip(g.index, g['position'])]
-        rows.append(dict(odor=sb['odor'], conc=float(sb['log10_conc']), block1=int(sb['block1']), response=float(np.mean(reps)),
-                         n_reps=len(reps), **{f'rep{j + 1}': (reps[j] if j < len(reps) else np.nan) for j in range(3)}))
+        used = reps if n_first is None else reps[:int(n_first)]
+        rows.append(dict(odor=sb['odor'], conc=float(sb['log10_conc']), block1=int(sb['block1']), response=float(np.mean(used)),
+                         n_reps=len(used), **{f'rep{j + 1}': (reps[j] if j < len(reps) else np.nan)
+                                              for j in range(max(3, len(reps)))}))
     return pd.DataFrame(rows)
 
 
