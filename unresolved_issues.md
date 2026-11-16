@@ -33,6 +33,16 @@ directory's notes/ and are linked from here.
   level, so they have no level partner; E101's part 0 blank item is replaced by E98's amended identity. E92 (hal): its part A
   and verdicts rest on spike counts and are not affected; its part F (E92_gain, F3) reads E90's stages as window minus
   pre-odor mean and is to be sized.
+  2026-11-15 19:30 (hal): E92 sized (part F5, queue 80d8376; an Opus code subagent of hal's session). The claws' pre-odor
+  level with APL on was simulated again at each run's parameters: 16 reruns (C2 on the eight wirings, E91's refits and its
+  choice on the base with the flies' recruitment on S), each reproducing its counts and E90's pre-odor means exactly; C2's
+  settled claws equal atlas's settled E90 tables. All claws (session z, APL on) become less alike by 0.026 to 0.047 for C2 and
+  the refits, but by only 0.004 to 0.011 on the oracle base, whose pre-odor level already differs by odor; the steps shrink by
+  as much. Part A3: the model's claws are 0.14 to 0.15 more alike than Remy's noise-removed claws (was 0.17 to 0.18), and the
+  ester group's step with APL on differs in 10 of 16 readings (was 15); no verdict class changes. Part F: the summed form still
+  reads as the clipped family (claws within 0.003, steps within 0.007), and the oracle base's difference from C2 in claws and
+  steps falls from 0.03-0.05 to 0.01-0.02. The somata, A4's line and every place on it, and part B read spike counts and do
+  not move. Dated lines are in E92's note (A3, F, Summary, Interpretation) and the page is rebuilt. E92 is done for this issue.
 - **Checked by viki (2026-11-15 17:49 to 18:20, an Opus subagent of viki's session; scripts and outputs in the shared
   results/preodor_startup_check_viki/).**
   - When each stage starts (olfsysm.cpp): the ORN layer integrates from time_pre_start at its spontaneous rate (constant

@@ -24,3 +24,14 @@ from reports.report_values import format_value
 ])
 def test_format_value(value, spec, expected):
     assert format_value(value, spec) == expected
+
+
+def test_table_skips_leading_caveat_lines(tmp_path):
+    from reports.report_values import _table
+    f = tmp_path / 't.csv'
+    f.write_text('# a caveat line\n# another\na,b\n1,x#y\n2,z\n')
+    df = _table(str(f))
+    assert list(df.columns) == ['a', 'b'] and df['b'].tolist() == ['x#y', 'z']
+    g = tmp_path / 'u.csv'
+    g.write_text('a,b\n1,2\n')
+    assert _table(str(g)).shape == (1, 2)

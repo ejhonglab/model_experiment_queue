@@ -65,7 +65,15 @@ def _registry() -> Dict[str, Any]:
 
 @lru_cache(maxsize=None)
 def _table(path: str) -> pd.DataFrame:
-    return pd.read_csv(path)
+    """A results table; leading lines that start with '#' (a caveat line, e.g. E101's "# Yang has not checked ...")
+    are skipped, and '#' anywhere else is read as data."""
+    n = 0
+    with open(path, encoding='utf-8', errors='replace') as f:
+        for line in f:
+            if not line.startswith('#'):
+                break
+            n += 1
+    return pd.read_csv(path, skiprows=n)
 
 
 def _folders(exp: str) -> List[Path]:
