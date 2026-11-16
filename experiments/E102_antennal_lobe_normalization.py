@@ -328,6 +328,55 @@ def identity_path() -> Path:
     return out_dir() / 'identity.json'
 
 
+class _Lock:
+    """A lock beside a shared file (`mkdir` is atomic on NFS), for identity.json's read-modify-write when two lanes run
+    part 0 at once; a lock older than LOCK_STALE_S is taken as stale."""
+
+    def __init__(self, path: Path, timeout: float = 600.0):
+        self.d, self.timeout = Path(str(path) + '.lock'), timeout
+
+    def __enter__(self):
+        t0 = time.time()
+        while True:
+            try:
+                self.d.mkdir()
+                return self
+            except FileExistsError:
+                try:
+                    if time.time() - self.d.stat().st_mtime > LOCK_STALE_S:
+                        self.d.rmdir()
+                        continue
+                except FileNotFoundError:
+                    continue
+                if time.time() - t0 > self.timeout:
+                    raise TimeoutError(f'{self.d} held for more than {self.timeout} s')
+                time.sleep(1.0)
+
+    def __exit__(self, *exc):
+        try:
+            self.d.rmdir()
+        except FileNotFoundError:
+            pass
+
+
+LOCK_STALE_S = 600.0
+
+
+def update_identity(**entries) -> dict:
+    """identity.json updated under its lock: each keyword replaces that entry; 'points' entries are merged by wiring."""
+    path = identity_path()
+    with _Lock(path):
+        ident = _read_json(path) or {}
+        for k, v in entries.items():
+            if k == 'points':
+                ident.setdefault('points', {}).update(v)
+            else:
+                ident[k] = v
+        ident['time'], ident['host'] = time.strftime('%Y-%m-%d %H:%M'), _host()
+        _write_json(path, ident)
+    return ident
+
+
 def require_identity(which: str = 'all', wirings: Sequence[str] = ALL_WIRINGS, path: Optional[Path] = None) -> None:
     """Refuses to go on past a failed (or missing) identity of part 0 (identity.json): 'point' needs the identity point of
     each of `wirings` passed; 'readers' the no-simulation identities (the unchanged fits' populations, the readings of
@@ -831,17 +880,12 @@ def part_0(wirings: Sequence[str] = ALL_WIRINGS, runs: bool = True, root: Option
     """identity.json: the no-simulation identities (the unchanged fits' populations against BASE_PATTERN, E98's and
     E100's readings of their own saved runs), the identity point on `wirings` (`run_point` at STEP_IDENTITY, with the
     extended run) when `runs`, and E77's and E98's B4 identities where part B's runs exist. Earlier entries are kept."""
-    path = identity_path()
-    ident = _read_json(path) or {}
     t0 = time.time()
-    ident['base_population'] = base_population()
-    ident['e98_reading'] = e98_reading_identity()
-    ident['e100_reading'] = e100_reading_identity()
-    _write_json(path, ident)
+    ident = update_identity(base_population=base_population(), e98_reading=e98_reading_identity(),
+                            e100_reading=e100_reading_identity())
     print(f"readers: base population {ident['base_population']['passes']}, E98 {ident['e98_reading']['passes']}, "
           f"E100 {ident['e100_reading']['passes']} ({time.time() - t0:.0f} s)", flush=True)
     if runs:
-        ident.setdefault('points', {})
         for w in wirings:
             try:
                 rec = run_point(w, STEP_IDENTITY, root)
@@ -849,16 +893,11 @@ def part_0(wirings: Sequence[str] = ALL_WIRINGS, runs: bool = True, root: Option
             except RuntimeError as e:
                 rec, ok = load_point(STEP_IDENTITY, w, root) or {}, False
                 print(f'{w}: identity point FAILED: {e}', flush=True)
-            ident['points'][w] = dict(exact=ok, **{k: rec.get(k) for k in ('identity_point', 'extended_identity',
-                                                                            'extended_matches_held', 'a0_identity_passes',
-                                                                            'seconds')})
-            _write_json(path, ident)
+            ident = update_identity(points={w: dict(exact=ok, **{k: rec.get(k) for k in (
+                'identity_point', 'extended_identity', 'extended_matches_held', 'a0_identity_passes', 'seconds')})})
             if not ok:
-                break
-    ident['e77'] = e77_identity(root)
-    ident['b4'] = b4_identity(root)
-    ident['time'], ident['host'] = time.strftime('%Y-%m-%d %H:%M'), _host()
-    _write_json(path, ident)
+                raise RuntimeError(f'{w}: the identity point failed; the experiment stops (identity.json)')
+    ident = update_identity(e77=e77_identity(root), b4=b4_identity(root))
     provenance('0', wirings=list(wirings), runs=runs)
     return dict(base_population=ident['base_population']['passes'], e98_reading=ident['e98_reading']['passes'],
                 e100_reading=ident['e100_reading']['passes'],
@@ -1483,16 +1522,19 @@ def _step_table(rd: pd.DataFrame, realism: pd.DataFrame, apl: Mapping[str, dict]
     return pd.DataFrame(rows)
 
 
-def part_score(root: Optional[Path] = None) -> dict:
+def part_score(root: Optional[Path] = None, out: Optional[Path] = None) -> dict:
     """The score (no simulation; from part B's saved runs, every step with a complete point): b_readings.csv (E83's
     `score_runs` per step, unit and readout against every target of E86's, with the amplitude and shape parts, the spread
     ratio and Pearson r, and E73's per-KC readings), b_realism.csv (each run's bands, E83's `realism`, and whether its
     bisections stopped at a bound), b_e98.csv / b_e98_wirings.csv (E98's comparisons), b_e100.csv (W1), b_e101.csv (X2's
     APL and Q), b_low_conc.csv, b_pn.csv, b_steps.csv (one row per step) and levels.json (part C). Refuses to run past a
-    failed identity."""
+    failed identity (the E77 and B4 identities are first read again from part B's points). `out`: the folder of the
+    tables (default results/E102_antennal_lobe_normalization/)."""
     from experiments import E83_cross_wiring_fit as E83
     from experiments import E86_reduced_input_candidate as E86
-    out = out_dir()
+    out = out_dir() if out is None else Path(out)
+    out.mkdir(parents=True, exist_ok=True)
+    update_identity(e77=e77_identity(root), b4=b4_identity(root))
     tags = available_steps(root)
     runs, real_rows = {}, []
     for tag in tags:
@@ -1537,7 +1579,8 @@ def part_score(root: Optional[Path] = None) -> dict:
                   flagged='a step with a run outside the realism bands is not a level'),
               time=time.strftime('%Y-%m-%d %H:%M'), host=_host())
     _write_json(out / 'levels.json', lv)
-    provenance('score', steps=tags, n_runs=len(runs))
+    if out == out_dir():
+        provenance('score', steps=tags, n_runs=len(runs))
     return lv
 
 
@@ -1604,6 +1647,7 @@ def main() -> None:
     ap.add_argument('--force', action='store_true', help='part B: run points that are saved again')
     ap.add_argument('--level', type=float, default=None, help='part D: the level (pn_inhadd) to print the refits for')
     ap.add_argument('--no-runs', action='store_true', help='part 0: only the identities that need no simulation')
+    ap.add_argument('--out', default=None, help='score: write the tables to another folder (e.g. a smoke test)')
     a = ap.parse_args()
     root = Path(a.root) if a.root else None
     if a.part == '0':
@@ -1616,7 +1660,7 @@ def main() -> None:
             raise SystemExit('the identity step belongs to part 0')
         part_b(_wirings(a.wirings), steps, root, force=a.force)
     elif a.part == 'score':
-        print(json.dumps(part_score(root), indent=1, default=str))
+        print(json.dumps(part_score(root, Path(a.out) if a.out else None), indent=1, default=str))
     elif a.part == 'D':
         if a.level is None:
             raise SystemExit('--part D needs --level')

@@ -356,3 +356,17 @@ def test_tables_carry_the_caveat(tmp_path):
     assert M.read_table(tmp_path / 't.csv').equals(df)
     M.write_table(df, tmp_path / 'u.csv')
     assert M.read_table(tmp_path / 'u.csv').equals(df)
+
+
+def test_update_identity_merges_points_under_its_lock(tmp_path, monkeypatch):
+    p = tmp_path / 'identity.json'
+    monkeypatch.setattr(M, 'identity_path', lambda: p)
+    M.update_identity(points={'real': dict(exact=True)}, base_population=dict(passes=True))
+    M.update_identity(points={'P1': dict(exact=False)})
+    d = json.loads(p.read_text())
+    assert d['points'] == {'real': dict(exact=True), 'P1': dict(exact=False)} and d['base_population'] == dict(passes=True)
+    assert not (tmp_path / 'identity.json.lock').exists()
+    (tmp_path / 'identity.json.lock').mkdir()                       # held by another lane
+    with pytest.raises(TimeoutError):
+        with M._Lock(p, timeout=0.5):
+            pass
