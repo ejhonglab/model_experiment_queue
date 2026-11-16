@@ -319,6 +319,34 @@ def aplpn_hold_tag(hold: Optional[float]) -> str:
     return '' if hold is None else 'aplpnhold_'
 
 
+def pn_norm_kws(inhadd: Optional[float] = None, inhsc: Optional[float] = None) -> dict:
+    """(E102) fit_mb_model's PN normalization kwargs, as --pn-inhadd / --pn-inhsc set them: {} when neither is given (not
+    passed, the fits as before), else {'pn_inhadd': A, 'pn_inhsc': S} (olfsysm's PN gain is pn_inhsc / (pn_inhadd +
+    0.25 inhA + 0.75 inhB)). Both or neither: pn_inhsc is raised with pn_inhadd to keep the gain at a typical inhibition
+    (E77_input_screen.inhsc_for), so it is never left at its default by omission."""
+    if inhadd is None and inhsc is None:
+        return {}
+    if inhadd is None or inhsc is None:
+        raise ValueError('--pn-inhadd and --pn-inhsc go together')
+    a, s = float(inhadd), float(inhsc)
+    if not (np.isfinite(a) and np.isfinite(s) and a > 0.0 and s > 0.0):
+        raise ValueError(f'--pn-inhadd and --pn-inhsc must be finite and positive (got {inhadd}, {inhsc})')
+    return {'pn_inhadd': a, 'pn_inhsc': s}
+
+
+def _tag_number(x: float) -> str:
+    """A number for a tag or file name: 6 significant digits, ASCII only (no '+' in an exponent)."""
+    return f'{float(x):.6g}'.replace('+', '')
+
+
+def pn_norm_tag(pn: Optional[dict]) -> str:
+    """(E102) The tag part of --pn-inhadd / --pn-inhsc: pnadd<A>sc<S>_ (6 significant digits each; the exact values are in
+    fits.csv's pn_inhadd / pn_inhsc and the provenance); '' when not given."""
+    if not pn:
+        return ''
+    return f"pnadd{_tag_number(pn['pn_inhadd'])}sc{_tag_number(pn['pn_inhsc'])}_"
+
+
 APLKC_FLAT_KINDS = ('uniform', 'connectome', 'offclaw', 'offclaw_ped', 'allsyn', 'allsyn_even', 'allsyn_even_calyx')
 # (E96) the components built from the counts of APL's synapses per KC (`aplkc_flat_counts`); (E99) 'allsyn_even' (T1)
 # each KC's count of all of APL's synapses (on its kept claws, on no claw in the calyx, in the peduncle) and
@@ -807,7 +835,7 @@ def bouton_base(orn: pd.DataFrame, out_dir: Path, claw_thr=None, gain: Optional[
     base_params: Optional[str] = None, info: Optional[dict] = None, input_tag: Optional[str] = None,
     wiring_matrix: Optional[pd.DataFrame] = None, wiring_tag: Optional[str] = None,
     kc_thr_input_exp: Optional[float] = None, claw_transfer: Optional[dict] = None,
-    timing: Optional[dict] = None):
+    timing: Optional[dict] = None, pn: Optional[dict] = None):
     """The bouton base at its tuned parameters (E3's; with `claw_thr`, E16's as recorded in
     E19's thr<T>_k0_kckc0 row): normalized APL weights, wPNKC, and the per-KC APL-off
     breadth (total spike count; hal's saved run if copied to the shared directory, else
@@ -856,7 +884,14 @@ def bouton_base(orn: pd.DataFrame, out_dir: Path, claw_thr=None, gain: Optional[
     run behind the breadth (and any pre-pass above built on it) has that pulse: the breadth of the base at
     the flies' pulse, as E77_input_screen.handle_breadth computes it for E80's re-held points (cached with
     a `timing_label` prefix; hal's saved runs are at olfsysm's pulse, so they do not apply). The returned
-    parameters, weights and wiring are the base's (the timing is a model kwarg of the fit too)."""
+    parameters, weights and wiring are the base's (the timing is a model kwarg of the fit too).
+
+    With `pn` (`pn_norm_kws`, not empty; the PN normalization's pn_inhadd and pn_inhsc, E102), the APL-off run behind the
+    breadth (and any pre-pass above built on it) has those PN kwargs, on the wiring given: the breadth of the base with
+    that antennal lobe, as E77_input_screen.handle_breadth computes it for E102's re-held points (cached with a
+    `pn_norm_tag` prefix; hal's saved runs are at olfsysm's normalization, so they do not apply). The base's own run
+    (the normalized APL weights, which come from the connectome) and the returned parameters and wiring are the base's
+    (the PN kwargs are model kwargs of the fit too)."""
     from pyolfsysm.mb_model import fit_mb_model
     hal_out = H.shared_dir() / 'data' / 'hal_outputs'
     if claw_thr is None:
@@ -945,6 +980,15 @@ def bouton_base(orn: pd.DataFrame, out_dir: Path, claw_thr=None, gain: Optional[
         hal_path = out_dir / 'no_such_file'
         off_path = out_dir / (timing_label(timing) + '_' + off_path.name)
         print(f'breadth at the pulse {timing}', flush=True)
+    if pn:
+        bad = set(pn) - {'pn_inhadd', 'pn_inhsc'}
+        if bad or len(pn) != 2:
+            raise ValueError(f'pn must be pn_norm_kws (pn_inhadd and pn_inhsc), not {sorted(pn)}')
+        # the breadth (and the pre-passes) with this PN normalization (hal's saved runs are at olfsysm's)
+        kws = dict(kws, **pn)
+        hal_path = out_dir / 'no_such_file'
+        off_path = out_dir / (pn_norm_tag(pn) + off_path.name)
+        print(f'breadth with the PN normalization {pn}', flush=True)
     if hal_path.exists():
         off_spk = pd.read_parquet(hal_path)
         print(f'breadth from {hal_path}', flush=True)
@@ -1606,7 +1650,8 @@ def fit_one(k: float, orn, initial, wnorm, breadth, loss_fn, *, kckc0: float, ma
     block_proxy: Optional[dict] = None, kc_spiking: Optional[dict] = None,
     kc_thr_factor_fixed: Optional[np.ndarray] = None, claw_transfer: Optional[dict] = None,
     protocol: Optional[dict] = None, spike_times: bool = False, claw_inh_pool: Optional[float] = None,
-    apl_divisive: bool = False, aplpn_hold: Optional[float] = None, aplkc_flat: Optional[dict] = None):
+    apl_divisive: bool = False, aplpn_hold: Optional[float] = None, aplkc_flat: Optional[dict] = None,
+    pn: Optional[dict] = None):
     """One joint fit; `kc_thr_factors` (K x KCs, `jitter_factors`) adds the K jittered runs of
     each condition (`jitter_conditions`) to every evaluation; `init_exact_expect` (not None)
     starts exactly at the `init_from` fit's parameters (`init_from_fit` with exact=True);
@@ -1631,7 +1676,9 @@ def fit_one(k: float, orn, initial, wnorm, breadth, loss_fn, *, kckc0: float, ma
     `initial`'s and fits the other three, the KC->APL and bouton->APL scales tied to the APL->KC scale as without it (from
     the start's values; `aplpn_fixed` instead fixes the bouton->APL scale at F x `initial`'s and ties the KC->APL scale
     only); `aplkc_flat` (E95: `aplkc_flat_spec`) adds the size d of an unweighted component of the APL->KC weights as a
-    fitted parameter ('aplkc_flat', bounded, `aplkc_flat_param`; not passed when None)."""
+    fitted parameter ('aplkc_flat', bounded, `aplkc_flat_param`; not passed when None); `pn` (E102: `pn_norm_kws`, the PN
+    normalization's pn_inhadd and pn_inhsc) is a fixed model kwarg of every simulation of the fit, APL on and off (not
+    passed when None or empty; `breadth` should then be `bouton_base`'s with the same `pn`)."""
     from pyolfsysm.mb_model import optimize_mb_model_params
     wAPLKC = breadth_weights(wnorm['wAPLKC'], breadth, k)
     r19 = None if (claw_thr is None or apl_drive != 'claws') else e19_row(claw_thr, k, kckc0)
@@ -1767,6 +1814,14 @@ def fit_one(k: float, orn, initial, wnorm, breadth, loss_fn, *, kckc0: float, ma
     if div_kws and block_proxy is not None:
         # (the proxy's replays were validated for the subtractive form only)
         raise NotImplementedError('--block-proxy with --apl-divisive')
+    # (E102; only when given, so the default path is unchanged)
+    pn = dict(pn or {})
+    if pn:
+        if set(pn) != {'pn_inhadd', 'pn_inhsc'}:
+            raise ValueError(f'pn must be pn_norm_kws (pn_inhadd and pn_inhsc), not {sorted(pn)}')
+        if block_proxy is not None:
+            # (the proxy's replays were validated at olfsysm's PN normalization only)
+            raise NotImplementedError('--block-proxy with --pn-inhadd / --pn-inhsc')
     # (E82; only when asked, so the default path is unchanged)
     if spike_times:
         hook_kws['condition_spike_times'] = ('on', 'off')
@@ -1787,7 +1842,7 @@ def fit_one(k: float, orn, initial, wnorm, breadth, loss_fn, *, kckc0: float, ma
             maxfev=maxfev, optimizer_kws=opt_kws, verify=False, verbose=verbose,
             **base_kws(claw_thr, apl_drive, claw_transfer), **wiring_kws, _wAPLKC=wAPLKC, _wKCAPL=wnorm['wKCAPL'],
             _wAPLPN=wnorm['wAPLPN'], _wPNAPL=wnorm['wPNAPL'], kc_kc_inh=kckc0, kc_kc_tau=TAU, **kc_spiking,
-            **protocol, **pool_kws, **div_kws, **flat_kws
+            **protocol, **pool_kws, **div_kws, **flat_kws, **pn
         )
     return res, init, bounds
 
@@ -2054,6 +2109,13 @@ def main() -> None:
         help="(E92) fit_mb_model's apl_inh_divisive in every simulation of the fit: each claw's PN drive x becomes "
             'x / (1 + max(i, 0)), i its APL inhibition, in place of x - i (nothing changes with APL off); off by default; '
             'tag part div_; not with --claw-inh-pool or --block-proxy')
+    ap.add_argument('--pn-inhadd', type=float, default=None, metavar='A',
+        help="(E102) fit_mb_model's pn_inhadd in every simulation of the fit, APL on and off, and in the breadth run (olfsysm's "
+            'PN gain is pn_inhsc / (pn_inhadd + 0.25 inhA + 0.75 inhB); its default 31.4088); needs --pn-inhsc; not fitted; '
+            'off by default; tag part pnadd<A>sc<S>_')
+    ap.add_argument('--pn-inhsc', type=float, default=None, metavar='S',
+        help="(E102) fit_mb_model's pn_inhsc, with --pn-inhadd (olfsysm's default 368.6631; E77_input_screen.inhsc_for "
+            'raises it with pn_inhadd)')
     ap.add_argument('--smoke', action='store_true', help='time a few evaluations and exit')
     ap.add_argument('--figure-only', action='store_true', help='only redraw the figures from saved results')
     args = ap.parse_args()
@@ -2302,6 +2364,17 @@ def main() -> None:
             aplpn_hold_kws(args.aplpn_hold)
         except ValueError as e:
             ap.error(str(e))
+    # (E102) the PN normalization, fixed
+    try:
+        pn = pn_norm_kws(args.pn_inhadd, args.pn_inhsc)
+    except ValueError as e:
+        ap.error(str(e))
+    if pn:
+        if args.block_proxy > 0:
+            ap.error('--pn-inhadd / --pn-inhsc with --block-proxy is not supported')
+        if args.apl_drive == 'spikes_only':
+            ap.error("--pn-inhadd / --pn-inhsc with --apl-drive spikes_only is not supported (its base is re-tuned at olfsysm's "
+                'PN normalization)')
     # (E95) the unweighted component of the APL->KC weights, its size fitted
     flat_spec = None
     if args.aplkc_flat is not None or args.aplkc_flat_unit is not None or args.aplkc_flat_init is not None:
@@ -2320,7 +2393,8 @@ def main() -> None:
         wiring_matrix=wiring_matrix, wiring_tag=args.wiring_tag,
         **({} if args.kc_thr_input_exp is None else dict(kc_thr_input_exp=args.kc_thr_input_exp)),
         **({} if not claw_transfer else dict(claw_transfer=claw_transfer)),
-        **({} if not timing_kws(protocol) else dict(timing=timing_kws(protocol)))
+        **({} if not timing_kws(protocol) else dict(timing=timing_kws(protocol))),
+        **({} if not pn else dict(pn=pn))
     )
     # (E71) the fixed input-scaled threshold factor, in the model's KC order (that of the breadth run), and
     # the pre-pass's record (kept out of base_info, which describes a spike-only base when it is not empty)
@@ -2358,7 +2432,7 @@ def main() -> None:
     prefix = zcell_tag + band_tag + {'spikes': 'spk_', 'spikes_only': 'spko_'}.get(args.apl_drive, '') + ('' if args.claw_thr is None else f'thr{args.claw_thr:g}{claw_transfer_tag(claw_transfer)}_') + wiring_tag + (
         '' if gain is None else f'gain{gain:g}_') + rate_tag + block_tag + loss_tag + kckc_tag + kc_tag + thrin_tag + (
         claw_inh_pool_tag(args.claw_inh_pool)) + apl_divisive_tag(args.apl_divisive) + aplpn_hold_tag(args.aplpn_hold) + (
-        aplkc_flat_tag(flat_spec)) + proxy_tag + jit_tag
+        aplkc_flat_tag(flat_spec)) + pn_norm_tag(pn) + proxy_tag + jit_tag
     jit_factors, jit_meta = None, {}
     if jit_k > 0:
         jit_factors = jitter_factors(jit_k, len(breadth), jit_sigma, args.jitter_seed, jit_scale)
@@ -2389,7 +2463,8 @@ def main() -> None:
                 gain_glomeruli=(','.join(gain_gloms) if gain_gloms else None), wiring=args.wiring,
                 wiring_seed=(args.wiring_seed if args.wiring else None), orn_input=args.orn_input,
                 apl_drive=args.apl_drive, base_params=args.base_params,
-                **({} if not claw_transfer else dict(claw_thr_subgain=args.claw_thr_subgain, claw_thr_width=args.claw_thr_width)))
+                **({} if not claw_transfer else dict(claw_thr_subgain=args.claw_thr_subgain, claw_thr_width=args.claw_thr_width)),
+                **pn)
         res, init, bounds = fit_one(k, orn, initial, wnorm, breadth, loss_fn, kckc0=args.kckc0,
             maxfev=5 if args.smoke else args.maxfev, method=args.method,
             thr0_factor=args.thr0_factor, claw_thr=args.claw_thr, init_from=args.init_from,
@@ -2405,7 +2480,8 @@ def main() -> None:
             **({} if args.claw_inh_pool is None else dict(claw_inh_pool=args.claw_inh_pool)),
             **({} if not args.apl_divisive else dict(apl_divisive=True)),
             **({} if args.aplpn_hold is None else dict(aplpn_hold=args.aplpn_hold)),
-            **({} if flat_spec is None else dict(aplkc_flat=flat_spec))
+            **({} if flat_spec is None else dict(aplkc_flat=flat_spec)),
+            **({} if not pn else dict(pn=pn))
         )
         hist = res['history']
         hist.to_csv(res_dir / f'history_{tag}.csv')
@@ -2489,6 +2565,8 @@ def main() -> None:
             **({} if flat_spec is None else dict(aplkc_flat=flat_spec['kind'], aplkc_flat_unit=flat_spec['unit'],
                 aplkc_flat_init=flat_spec['initial'], aplkc_flat_max=flat_spec['bounds'][1],
                 aplkc_flat_size=float(res['extra_params']['aplkc_flat']))),
+            # (E102: the PN normalization's pn_inhadd and pn_inhsc, absolute; absent when not given)
+            **pn,
             # (E73 part C: the per-KC session z-score reading's settings; absent when not used)
             **(dict(rate_criterion=args.rate_criterion, zcell_q=loss_fn.zcell['q'], zcell_map=loss_fn.zcell['amp'],
                 zcell_calibrate=loss_fn.zcell['calibrate'], zcell_drift=loss_fn.zcell['drift'])
@@ -2561,7 +2639,7 @@ def main() -> None:
             script='experiments/E10_joint_fit.py', host=subprocess.run(['hostname'], capture_output=True,
                 text=True).stdout.strip(),
             **start_prov,
-            base=base_kws(args.claw_thr, args.apl_drive, claw_transfer), apl_drive=args.apl_drive,
+            base=dict(base_kws(args.claw_thr, args.apl_drive, claw_transfer), **pn), apl_drive=args.apl_drive,
             init_params=args.init_params, claw_thr=args.claw_thr, gain=gain, gain_glomeruli=gain_gloms,
             wiring=args.wiring, wiring_seed=(args.wiring_seed if args.wiring else None), orn_input=args.orn_input,
             wiring_file=args.wiring_file, wiring_tag=args.wiring_tag,
@@ -2611,6 +2689,10 @@ def main() -> None:
                 'x the claw\'s PN drive minus APL\'s inhibition of it (olfsysm mp.kc.claw_inh_pool); the claw states that '
                 'drive APL stay the clipped ones and nothing changes with APL off, so the breadth run (APL off) is the '
                 'base\'s'))) if args.claw_inh_pool is not None else {}),
+            **(dict(pn_normalization=dict(pn, note=('E102: every simulation (APL on and APL off) and the breadth run (the base at '
+                'its tuned parameters, APL off, on the wiring given) have fit_mb_model\'s pn_inhadd and pn_inhsc (olfsysm\'s PN '
+                'gain is pn_inhsc / (pn_inhadd + 0.25 inhA + 0.75 inhB) inside the PN saturation); the normalized APL weights '
+                'come from the base\'s own run, as without them'))) if pn else {}),
             **(dict(apl_inh_divisive=dict(value=True, note=('E92: every simulation (APL on and APL off) has fit_mb_model\'s '
                 'apl_inh_divisive: each claw\'s PN drive x becomes x / (1 + max(i, 0)), i its APL inhibition (olfsysm '
                 'mp.kc.apl_inh_divisive), in place of x - i; with APL off x / (1 + 0) = x, so the breadth run (APL off) is the '

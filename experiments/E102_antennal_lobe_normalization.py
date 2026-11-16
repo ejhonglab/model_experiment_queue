@@ -106,8 +106,20 @@ Parts (CLI `--part`):
   b_e98_wirings.csv, b_e100.csv, b_e101.csv, b_e101_summary.csv: E98's, E100's and E101's comparisons per step;
   b_low_conc.csv; b_pn.csv; each with 'silent_odors_16odor'), b_steps.csv (one row per step) and part C's levels
   (levels.json).
-- D (the refits): the commands of `E10_joint_fit.py` with C2's options at each level (`refit_commands`; printed, not run),
-  and their classes once fitted (`--score-refits`).
+- D (the refits; `--level`, `--wirings`, default S): per wiring, one after another (`part_d`, `run_refit`; resumable),
+  E10_joint_fit.py with C2's options (REFIT_ARGS, REFIT_MAXFEV evaluations, `--tag _cap3`) and the level's PN kwargs
+  (its `--pn-inhadd` / `--pn-inhsc`, which also recompute the breadth behind the APL->KC weights with them on the
+  wiring's own wiring), from the wiring's part-B point at the level (`--init-params` on D/init_<step>.json,
+  `write_init_params`), into this experiment's folders (fits.csv, history_<tag>.csv, provenance_<tag>.json; the outputs
+  under outputs/E102_antennal_lobe_normalization/; logs under D/). Before it fits, the start check (`start_check`) runs
+  E10 itself for one evaluation and requires its APL-on and APL-off counts and responses to be part B's point's and its
+  breadth `point_breadth`'s, exactly (D/start_<step>.json); otherwise the experiment stops. After it, the refit's
+  extended run (`refit_extended`, part B's layout under D/runs/), whose panel columns must equal E10's saved outputs.
+  T's wirings only once S's refitted population is an equal or better (`refit_due`). `--check-only` runs the start
+  checks alone, `--dry-run` prints the commands, `--score-refits` scores (`part_score_refits`: d_readings, d_compare,
+  d_realism, d_params, the extended readings of the unchanged fits, part B's point and the refits on the refitted
+  wirings with their per-wiring class counts, and d_class_<step>.json with S's class by `refit_class`, T's beside and
+  outcome (e)'s class).
 
 Deviations (2026-11-16, after part B; the entry did not foresee them):
 - A silent odor. At the fixed gain on M1 no KC fires a spike to B-myr with APL on (B-myr is the odor the weaker
@@ -143,6 +155,9 @@ values. Every table holding Yang's recordings' values (the flies' intervals and 
 
 Usage (from the repository root):
     ./venv/bin/python -u -m experiments.E102_antennal_lobe_normalization --part A
+    env OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 PYTHONUNBUFFERED=1 nice -n 10 ./venv/bin/python -u \\
+        -m experiments.E102_antennal_lobe_normalization --part D --level 1000 --wirings real,P1
+    ./venv/bin/python -u -m experiments.E102_antennal_lobe_normalization --part D --level 1000 --score-refits
     env OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 PYTHONUNBUFFERED=1 nice -n 10 ./venv/bin/python -u \\
         -m experiments.E102_antennal_lobe_normalization --part 0
     env OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 PYTHONUNBUFFERED=1 nice -n 10 ./venv/bin/python -u \\
@@ -668,6 +683,45 @@ def b4_point_identity(step, d: Path, wiring: str = 'real') -> dict:
     return out
 
 
+def extended_block(rec: dict, d: Path, wiring: str, step, held: Mapping, breadth: pd.Series, commits: Mapping) -> bool:
+    """A point's extended run (`run_extended` at `held`'s params and params_off), saved under `d` in E98's B1 layout with
+    the stimulus table, the claws' metadata (<wiring>_units.json), E101's family table (<wiring>_family.csv) and the run
+    rows (<wiring>_runs.csv); `rec` gets 'extended_vs_held_on' / '_off' (the extended run's 16 panel columns against
+    `held`'s 'on' / 'off' outputs), 'a0_identity_on' / '_off' (E98's amended blank identity), 'extended_matches_held',
+    'a0_identity_passes' and 'seconds_extended'. Returns whether both checks passed."""
+    from experiments import E98_apl_response_strength as E98
+    from experiments import E101_apl_vs_kc_claws as E101
+    t1 = time.time()
+    kws = step_kws(step)
+    out, table, meta = run_extended(wiring, step, held, breadth)
+    tmp = d / f'.b1_stimuli_{wiring}.csv'
+    table.to_csv(tmp, index=False)
+    os.replace(tmp, d / 'b1_stimuli.csv')
+    _write_json(d / f'{wiring}_units.json', meta)
+    rows = []
+    for c, ct in E98.CONDS:
+        o = out[ct]
+        E98.save_b1(d, wiring, ct, o)
+        same = _differ(held[c], (o['responses'][list(H.APL16_ODORS)], o['spike_counts'][list(H.APL16_ODORS)]))
+        rec[f'extended_vs_held_{c}'] = same
+        rec[f'a0_identity_{c}'] = E98.a0_identity(o['apl'])
+        rows.append(dict(wiring=wiring, step=step_tag(step), cond=ct, n_stimuli=int(o['spike_counts'].shape[1]),
+                         runtime_s=o['seconds'], host=_host(), time=time.strftime('%Y-%m-%d %H:%M'),
+                         threads=os.environ.get('OMP_NUM_THREADS'), pn_inhadd=kws['pn_inhadd'], pn_inhsc=kws['pn_inhsc'],
+                         **{f'param_{k}': v for k, v in o['params'].items()},
+                         **{k: v for k, v in commits.items() if not isinstance(v, (dict, list))}))
+    fam = E101.family_table(wiring, out, meta, list(H.APL16_ODORS))
+    fam.to_csv(d / f'{wiring}_family.csv', index=False)
+    pd.DataFrame(rows).to_csv(d / f'{wiring}_runs.csv', index=False)
+    rec['seconds_extended'] = time.time() - t1
+    ext_ok = all(rec[f'extended_vs_held_{c}'].get('counts_differ') == 0
+                 and rec[f'extended_vs_held_{c}'].get('responses_differ') == 0 for c in ('on', 'off'))
+    a0_ok = all(rec[f'a0_identity_{c}']['passes'] for c in ('on', 'off'))
+    rec['extended_matches_held'], rec['a0_identity_passes'] = bool(ext_ok), bool(a0_ok)
+    del out
+    return bool(ext_ok and a0_ok)
+
+
 def run_point(wiring: str, step, root: Optional[Path] = None, force: bool = False, extended: bool = True) -> dict:
     """One point of part B (resumable): `hold_point`, the 16-odor outputs and the parameters saved, then `run_extended`
     saved in E98's B1 layout with E101's family table; checks that the extended run's 16 panel columns equal the held
@@ -677,8 +731,6 @@ def run_point(wiring: str, step, root: Optional[Path] = None, force: bool = Fals
     run until the wiring's identity point has passed (`require_identity`). Returns the point's record
     (<wiring>_point.json)."""
     import gc
-    from experiments import E98_apl_response_strength as E98
-    from experiments import E101_apl_vs_kc_claws as E101
     d = step_dir(step, root)
     rec_path = d / f'{wiring}_point.json'
     if not force and rec_path.exists():
@@ -718,33 +770,7 @@ def run_point(wiring: str, step, root: Optional[Path] = None, force: bool = Fals
         raise RuntimeError(f'{wiring} {step_tag(step)}: an identity failed: '
                            + json.dumps({k: rec.get(k) for k in ('identity_point', 'e77_identity')}, default=str))
     if extended:
-        t1 = time.time()
-        out, table, meta = run_extended(wiring, step, held, breadth)
-        tmp = d / f'.b1_stimuli_{wiring}.csv'
-        table.to_csv(tmp, index=False)
-        os.replace(tmp, d / 'b1_stimuli.csv')
-        _write_json(d / f'{wiring}_units.json', meta)
-        rows = []
-        for c, ct in E98.CONDS:
-            o = out[ct]
-            E98.save_b1(d, wiring, ct, o)
-            same = _differ(held[c], (o['responses'][list(H.APL16_ODORS)], o['spike_counts'][list(H.APL16_ODORS)]))
-            rec[f'extended_vs_held_{c}'] = same
-            rec[f'a0_identity_{c}'] = E98.a0_identity(o['apl'])
-            rows.append(dict(wiring=wiring, step=step_tag(step), cond=ct, n_stimuli=int(o['spike_counts'].shape[1]),
-                             runtime_s=o['seconds'], host=_host(), time=time.strftime('%Y-%m-%d %H:%M'),
-                             threads=os.environ.get('OMP_NUM_THREADS'), pn_inhadd=kws['pn_inhadd'], pn_inhsc=kws['pn_inhsc'],
-                             **{f'param_{k}': v for k, v in o['params'].items()},
-                             **{k: v for k, v in commits.items() if not isinstance(v, (dict, list))}))
-        fam = E101.family_table(wiring, out, meta, list(H.APL16_ODORS))
-        fam.to_csv(d / f'{wiring}_family.csv', index=False)
-        pd.DataFrame(rows).to_csv(d / f'{wiring}_runs.csv', index=False)
-        rec['seconds_extended'] = time.time() - t1
-        ext_ok = all(rec[f'extended_vs_held_{c}'].get('counts_differ') == 0
-                     and rec[f'extended_vs_held_{c}'].get('responses_differ') == 0 for c in ('on', 'off'))
-        a0_ok = all(rec[f'a0_identity_{c}']['passes'] for c in ('on', 'off'))
-        rec['extended_matches_held'], rec['a0_identity_passes'] = bool(ext_ok), bool(a0_ok)
-        checks_ok &= ext_ok and a0_ok
+        checks_ok &= extended_block(rec, d, wiring, step, held, breadth, commits)
         if _is_identity(step):
             rec['extended_identity'] = extended_identity(wiring, d)
             checks_ok &= rec['extended_identity']['exact']
@@ -752,7 +778,6 @@ def run_point(wiring: str, step, root: Optional[Path] = None, force: bool = Fals
             rec['b4_identity'] = b4_point_identity(step, d, wiring)
             checks_ok &= rec['b4_identity']['exact']
         rec['extended_done'] = True
-        del out
     rec['complete'] = bool(checks_ok)
     rec['seconds'] = time.time() - t0
     _write_json(rec_path, rec)
@@ -841,7 +866,9 @@ def e100_w1(b1: pd.DataFrame) -> dict:
     """E100's W1 (the six weak-odor ratios over paa at 10^-3, the model's input paa at 10^-4) of extended runs (`b1`)
     under each pre-odor level, against E100's saved flies' intervals (b_ratios.csv, set W, Yang's table, the carrying
     reading): per ratio the held class (`held_class`; carrying level and partner), the classes at each level, the linear
-    reading's, and W1 (`w1_verdict`)."""
+    reading's, and W1 (`w1_verdict`); 'wirings' the per-wiring classes behind them (E100's `model_classes` rows, per
+    level ('a0_level'), ratio and estimate of the input), which read a set of fewer than eight wirings (part D's refits
+    on S)."""
     from experiments import E100_apl_weak_odors as E100
     ratios = pd.read_csv(H.shared_dir() / 'results' / E100.EXPERIMENT / 'b_ratios.csv')
     stims = list(E100.W1_RATIOS) + [E100.W1_DENOMINATOR]
@@ -850,7 +877,7 @@ def e100_w1(b1: pd.DataFrame) -> dict:
     d = (den.get(next((k for k, v in den.items() if v in H.APL16_ODORS), None)) or next(iter(den.values()))) if den else None
     if d is None:
         raise RuntimeError('no B1 stimulus for the W1 denominator')
-    res, rows = {}, []
+    res, rows, wrows = {}, [], []
     for a0 in E100.A0_DEFINITIONS:
         on = E100.family_on(b1, a0)
         for st in E100.W1_RATIOS:
@@ -858,6 +885,9 @@ def e100_w1(b1: pd.DataFrame) -> dict:
             nums = E100.estimate_labels(matched, st)
             r, wc = E100.read_ratio(on, float(f['lo90']), float(f['hi90']), nums, d)
             res[(a0, E100.stim_label(st))] = r
+            if len(wc):
+                wrows.append(wc.assign(a0_level=a0, stimulus=E100.stim_label(st), reference=E100.stim_label(E100.W1_DENOMINATOR),
+                                       flies_lo90=float(f['lo90']), flies_hi90=float(f['hi90'])))
             lin = wc['ratio_linear'] if len(wc) else pd.Series(dtype=float)
             rows.append(dict(a0=a0, stimulus=E100.stim_label(st), reference=E100.stim_label(E100.W1_DENOMINATOR),
                              flies_ratio=float(f['ratio']), flies_lo90=float(f['lo90']), flies_hi90=float(f['hi90']),
@@ -871,7 +901,7 @@ def e100_w1(b1: pd.DataFrame) -> dict:
     held_lin = {E100.stim_label(st): E100.held_class({a0: res[(a0, E100.stim_label(st))]['cls_linear']
                                                       for a0 in E100.A0_DEFINITIONS}) for st in E100.W1_RATIOS}
     return dict(W1=E100.w1_verdict(held), classes=held, W1_linear=E100.w1_verdict(held_lin), classes_linear=held_lin,
-                rows=pd.DataFrame(rows))
+                rows=pd.DataFrame(rows), wirings=pd.concat(wrows, ignore_index=True) if wrows else pd.DataFrame())
 
 
 def e100_reading_identity() -> dict:
@@ -1685,7 +1715,7 @@ def available_steps(root: Optional[Path] = None) -> List[str]:
 def step_readings(tag: str, root: Optional[Path] = None, wirings: Sequence[str] = ALL_WIRINGS) -> dict:
     """One step's readings of its extended runs (no simulation): E98's verdict (`e98_verdict`) with its comparison rows,
     E100's W1 (`e100_w1`), E101's X2 on APL and Q for r1 and r3 (`E101.model_x2`, `x2_model_classes`, against E101's
-    saved flies' intervals, set L, b 0), the KCs at low concentration per wiring (`low_conc_table`) and the PN stage
+    saved flies' intervals, set L, b 0), each also per wiring ('e98_wirings', 'e100_wirings', 'e101_wirings'), the KCs at low concentration per wiring (`low_conc_table`) and the PN stage
     against the PN dendrites (E90's `pn_statistics`, on the real wiring's run: the PN stage does not depend on the
     wiring)."""
     from experiments import E90_model_stages as E90
@@ -1705,11 +1735,12 @@ def step_readings(tag: str, root: Optional[Path] = None, wirings: Sequence[str] 
     w1 = e100_w1(b1)
     out['e100'] = {k: w1[k] for k in ('W1', 'classes', 'W1_linear', 'classes_linear')}
     out['e100_rows'] = w1['rows'].assign(step=tag)
+    out['e100_wirings'] = w1['wirings'].assign(step=tag)
     fam = pd.concat([pd.read_csv(d / f'{w}_family.csv') for w in have if (d / f'{w}_family.csv').exists()], ignore_index=True)
     sets = E101.model_x2(fam, baselines=('blank', 'settled'))
     t = read_table(H.shared_dir() / 'results' / E101.EXPERIMENT / 'c_x2_flies.csv')
     t = t[(t['reading'] == 'carrying') & (t['b_mult'] == 0.0) & (t['flies'] == 'L')]
-    x2 = []
+    x2, x2w = [], []
     for rid in ('r1', 'r3'):
         for q in ('APL', 'Q'):
             f = t[(t['ratio_id'] == rid) & (t['quantity'] == q)]
@@ -1721,8 +1752,11 @@ def step_readings(tag: str, root: Optional[Path] = None, wirings: Sequence[str] 
             x2.append(dict(step=tag, ratio_id=rid, quantity=q, flies_lo90=lo, flies_hi90=hi, cls_blank=by['blank']['cls'],
                            cls_settled=by['settled']['cls'], held=held,
                            per_estimate=json.dumps(by['blank']['per_estimate'])))
+            for a0, r in by.items():
+                x2w += [dict(x, step=tag, ratio_id=rid, a0_level=a0, flies_lo90=lo, flies_hi90=hi) for x in r['per_wiring']]
     s = E101.x2_model_summary(sets)
     out['e101'] = pd.DataFrame(x2)
+    out['e101_wirings'] = pd.DataFrame(x2w)
     out['e101_summary'] = s.assign(step=tag)
     lows = []
     for w in have:
@@ -1883,35 +1917,550 @@ def part_score(root: Optional[Path] = None, out: Optional[Path] = None) -> dict:
     return lv
 
 
-def refit_commands(level: float, wirings: Sequence[str] = S_WIRINGS, root: Optional[Path] = None) -> List[str]:
-    """Part D's commands: E10_joint_fit.py with C2's options (REFIT_ARGS, REFIT_MAXFEV evaluations) on each wiring at the
-    level, from its point of part B (its held parameters as --init-params), with the step's PN parameters. E10_joint_fit.py
-    does not take the PN parameters yet (the entry's "New: --pn-inhadd, Python only"); the commands carry
-    `--pn-inhadd` / `--pn-inhsc` for when it does."""
-    from experiments import E83_cross_wiring_fit as E83
-    kws = step_kws(level)
-    pfile = local_dir('D') / f'init_{step_tag(level)}.json'
+# ---------------------------------------------------------------------------
+# part D: the refits
+
+REFIT_TAG = '_cap3'                     # E10's --tag: the refits' tags end k2_cap3, as the unchanged fits' do
+REFIT_PARAM_KEYS = ('fixed_thr', 'wAPLKC_scale', 'wKCAPL_scale', 'wAPLPN_scale', 'wPNAPL_scale', 'wKCKC_scale')
+REFIT_CONDS = (('on', 'on'), ('off', 'acute_off'))
+
+
+def refit_change(level) -> str:
+    """The refits' change in the score's tables: 'refit_<step tag>' (e.g. refit_inhadd1000)."""
+    return f'refit_{step_tag(level)}'
+
+
+def refit_root() -> Path:
+    """The refits' runs, outputs/E102_antennal_lobe_normalization/D/runs/, in part B's layout (B/<step tag>/: the 16-odor
+    outputs as <wiring>_held_*, the extended runs, <wiring>_point.json), so that part B's readers (`load_held`,
+    `load_point`, `step_readings`) read them with this folder as `root`."""
+    return local_dir('D/runs')
+
+
+def init_params_path(level) -> Path:
+    return local_dir('D') / f'init_{step_tag(level)}.json'
+
+
+def write_init_params(level, root: Optional[Path] = None) -> Path:
+    """D/init_<step>.json: {wiring: the absolute parameters of its part-B point at the level, APL on (REFIT_PARAM_KEYS)} for
+    every wiring with a complete point there, so that two lanes write the same content (atomically).
+    `E10_joint_fit.read_params` reads one wiring's entry (`--init-params <file>:<wiring>`)."""
     params = {}
-    cmds = []
-    for w in wirings:
+    for w in ALL_WIRINGS:
         rec = load_point(level, w, root)
-        if rec is None:
-            raise RuntimeError(f'{w}: no part B point at {step_tag(level)}')
-        params[w] = rec['params']
-        wk = E83.wiring_kws(w)
-        extra = []
-        if 'wiring' in wk:
-            extra = ['--wiring', wk['wiring'], '--wiring-seed', str(wk['wiring_seed'])]
-        elif 'wiring_matrix' in wk:
-            seed = wk['wiring_tag'].split('seed')[1]
-            f = H.shared_dir() / 'data' / 'model_outputs' / 'E59_coinput_shuffle' / f'wPNKC_curveball_within_type-seed{seed}_matched.parquet'
-            extra = ['--wiring-file', str(f), '--wiring-tag', wk['wiring_tag']]
-        cmds.append(' '.join(['./venv/bin/python', '-u', 'experiments/E10_joint_fit.py', *REFIT_ARGS, '--maxfev',
-                              str(REFIT_MAXFEV), '--experiment', EXPERIMENT, '--tag', f'refit_{step_tag(level)}_{w}',
-                              '--pn-inhadd', repr(kws['pn_inhadd']), '--pn-inhsc', repr(kws['pn_inhsc']),
-                              '--init-params', f'{pfile}:{w}', *extra]))
-    _write_json(pfile, params)
-    return cmds
+        if rec is not None and rec.get('complete'):
+            params[w] = {k: float(rec['params'][k]) for k in REFIT_PARAM_KEYS}
+    if not params:
+        raise RuntimeError(f'no complete part B point at {step_tag(level)}')
+    path = init_params_path(level)
+    _write_json(path, params)
+    return path
+
+
+def refit_wiring_args(wiring: str) -> List[str]:
+    """A wiring's E10_joint_fit.py wiring options, from its unchanged fit's fits.csv row (E91's `d_member`: --wiring /
+    --wiring-seed for P1 to P4, --wiring-file / --wiring-tag for M1 to M3, none for the real wiring)."""
+    from experiments import E91_summed_drive_inhibition as E91
+    return list(E91.d_member(wiring)['wiring_args'])
+
+
+def refit_args(level, wiring: str, maxfev: int = REFIT_MAXFEV, experiment: str = EXPERIMENT,
+               init_path: Optional[Path] = None) -> List[str]:
+    """E10_joint_fit.py's options for one refit: C2's (REFIT_ARGS, --tag REFIT_TAG), `maxfev` evaluations, into
+    `experiment`'s folders, with the level's PN kwargs (`step_kws`, absolute), from the wiring's part-B point at the level
+    (`--init-params`, `write_init_params`), on the wiring (`refit_wiring_args`)."""
+    kws = step_kws(level)
+    path = init_params_path(level) if init_path is None else Path(init_path)
+    return [*REFIT_ARGS, '--maxfev', str(int(maxfev)), '--experiment', experiment, '--tag', REFIT_TAG,
+            '--pn-inhadd', repr(float(kws['pn_inhadd'])), '--pn-inhsc', repr(float(kws['pn_inhsc'])),
+            '--init-params', f'{path}:{wiring}', *refit_wiring_args(wiring)]
+
+
+def refit_tag(level, wiring: str) -> str:
+    """The tag E10_joint_fit.py gives a refit (its prefix rules: the wiring, rate0.068_, aplboth_, the PN tag
+    `E10_joint_fit.pn_norm_tag`, then k2 and REFIT_TAG)."""
+    from experiments import E10_joint_fit as J
+    a = refit_wiring_args(wiring)
+    wt = ''
+    if '--wiring' in a:
+        wt = f"wiring-{a[a.index('--wiring') + 1]}-seed{a[a.index('--wiring-seed') + 1]}_"
+    if '--wiring-tag' in a:
+        wt += f"wiring-{a[a.index('--wiring-tag') + 1]}_"
+    return f"{wt}rate{H.data_target('ctrl_frac'):.3f}_aplboth_{J.pn_norm_tag(step_kws(level))}k2{REFIT_TAG}"
+
+
+def _e10_outputs(d: Path, tag: str) -> Optional[Dict[str, tuple]]:
+    """An E10 fit's saved outputs in folder `d` ({'on', 'off'}: (responses, spike counts)), or None."""
+    out = {}
+    for c, ct in REFIT_CONDS:
+        ps = [Path(d) / f'{tag}_{ct}_{k}.parquet' for k in ('responses', 'spike_counts')]
+        if not all(p.exists() for p in ps):
+            return None
+        out[c] = tuple(pd.read_parquet(p) for p in ps)
+    return out
+
+
+def _breadth_of(off_spk: pd.DataFrame) -> pd.Series:
+    """Each KC's total APL-off spike count, indexed by KC id (as E10_joint_fit.bouton_base and E77's handle_breadth)."""
+    return pd.Series(off_spk.astype(float).sum(axis='columns').to_numpy(), index=off_spk.index.get_level_values(H.KC_ID_LEVEL))
+
+
+def compare_start(e10: Mapping[str, tuple], held: Mapping[str, tuple], e10_breadth: pd.Series, breadth: pd.Series) -> dict:
+    """The start identity of a refit: E10's first evaluation ({'on', 'off'}: (responses, spike counts)) against part B's
+    point at the level (`_differ`: 0 count and response differences, same KCs and odors), and the breadth behind E10's
+    APL->KC weights (its bouton_base APL-off run with the PN kwargs) against `point_breadth`'s (same KCs in the same order,
+    values equal). 'exact' when all hold."""
+    res = {c: _differ(e10[c], held[c]) for c in ('on', 'off')}
+    same = bool(e10_breadth.index.equals(breadth.index))
+    res['breadth_index_equal'] = same
+    res['breadth_max_abs_diff'] = (float(np.abs(e10_breadth.to_numpy(float) - breadth.to_numpy(float)).max()) if same
+                                   else float('nan'))
+    res['exact'] = bool(all(res[c]['index_equal'] and res[c]['counts_differ'] == 0 and res[c]['responses_differ'] == 0
+                            for c in ('on', 'off')) and same and res['breadth_max_abs_diff'] == 0.0)
+    return res
+
+
+def start_path(level) -> Path:
+    return local_dir('D') / f'start_{step_tag(level)}.json'
+
+
+def _update_entry(path: Path, key: str, value) -> dict:
+    """A JSON file's entry `key` replaced under its lock (two lanes write the same file)."""
+    with _Lock(path):
+        d = _read_json(path) or {}
+        d[key] = value
+        _write_json(path, d)
+    return d
+
+
+def start_check(level, wiring: str, root: Optional[Path] = None) -> dict:
+    """The refit's start, checked on E10 itself before it fits: E10_joint_fit.main with the refit's options and one
+    evaluation (`--maxfev 1`), through E78_claw_knee's redirected runner (its scratch experiment, under
+    outputs/E102_antennal_lobe_normalization/D/start_check/<step>_<wiring>/; nothing reaches the shared results), then
+    `compare_start` against part B's point at the level, and the first evaluation's parameters against the point's.
+    Recorded in D/start_<step>.json under the wiring. Raises unless exact: the experiment stops there."""
+    import shutil
+    import subprocess
+    import sys
+    from experiments import E78_claw_knee as E78
+    tag = refit_tag(level, wiring)
+    held = load_held(level, wiring, root)
+    pt = load_point(level, wiring, root)
+    if held is None or pt is None or not pt.get('complete'):
+        raise RuntimeError(f'{wiring}: no complete part B point at {step_tag(level)}')
+    croot = local_dir('D') / 'start_check' / f'{step_tag(level)}_{wiring}'
+    if croot.exists():
+        shutil.rmtree(croot)
+    croot.mkdir(parents=True)
+    cmd = [sys.executable, '-u', '-m', 'experiments.E78_claw_knee', '--run-e10', str(croot), '--',
+           *refit_args(level, wiring, maxfev=1, experiment=E78.CHECK_SCRATCH)]
+    t0 = time.time()
+    with open(croot / 'log.txt', 'w') as fh:
+        p = subprocess.run(cmd, cwd=H.HERE, stdout=fh, stderr=subprocess.STDOUT)
+    rec = dict(wiring=wiring, level=float(level), tag=tag, command=' '.join(cmd), returncode=int(p.returncode),
+               seconds=time.time() - t0, host=_host(), time=time.strftime('%Y-%m-%d %H:%M'), exact=False)
+    e10 = _e10_outputs(croot / 'outputs', tag) if p.returncode == 0 else None
+    offs = sorted((croot / 'outputs').glob('pnadd*base_acute_off_spike_counts.parquet'))
+    if e10 is None or len(offs) != 1:
+        rec['note'] = (f'E10 exited {p.returncode}' if p.returncode else
+                       f"E10's outputs for {tag}: {'missing' if e10 is None else 'present'}; breadth runs found: {len(offs)}")
+    else:
+        rec.update(compare_start(e10, held, _breadth_of(pd.read_parquet(offs[0])), point_breadth(wiring, step_kws(level))))
+        hist = pd.read_csv(croot / 'results' / f'history_{tag}.csv', float_precision='round_trip')
+        first = hist.iloc[0]
+        rec['start_params'] = {k: float(pt['params'][k]) for k in REFIT_PARAM_KEYS}
+        rec['first_eval_params'] = {k: float(first[k]) for k in REFIT_PARAM_KEYS if k in first.index}
+        rec['params_max_rel_diff'] = float(max(abs(rec['first_eval_params'][k] / rec['start_params'][k] - 1.0)
+                                               for k in rec['first_eval_params'] if rec['start_params'][k] != 0))
+        rec['first_eval_loss'] = float(first['loss'])
+        rec['breadth_file'] = offs[0].name
+    _update_entry(start_path(level), wiring, rec)
+    print(f"{wiring} {step_tag(level)} start check: {'exact' if rec['exact'] else 'FAILED'} ({rec['seconds']:.0f} s; "
+          f"counts differ on / off {rec.get('on', {}).get('counts_differ')} / {rec.get('off', {}).get('counts_differ')}; "
+          f"breadth max diff {rec.get('breadth_max_abs_diff')})", flush=True)
+    if not rec['exact']:
+        raise RuntimeError(f'{wiring} {step_tag(level)}: the refit\'s start does not reproduce part B\'s point; stopping '
+                           f'(see {start_path(level)} and {croot / "log.txt"})')
+    return rec
+
+
+def _refit_fits() -> pd.DataFrame:
+    """This experiment's fits.csv (E10's rows), parameters read exactly; empty if none."""
+    p = out_dir() / 'fits.csv'
+    return pd.read_csv(p, float_precision='round_trip') if p.exists() else pd.DataFrame(columns=['tag'])
+
+
+def refit_params(tag: str) -> Dict[str, float]:
+    """A refit's fitted parameters (REFIT_PARAM_KEYS, absolute) from its best evaluation in E10's history (written once
+    and read exactly; fits.csv is rewritten whenever another row is added), checked against its fits.csv row."""
+    hist = pd.read_csv(out_dir() / f'history_{tag}.csv', float_precision='round_trip')
+    best = hist.loc[hist['loss'].idxmin()]
+    p = {k: float(best[k]) for k in REFIT_PARAM_KEYS}
+    row = _refit_fits().set_index('tag').loc[tag]
+    f = dict({k: float(row[k]) for k in REFIT_PARAM_KEYS if k != 'wKCKC_scale'}, wKCKC_scale=float(row['kc_kc_inh']))
+    bad = {k: (p[k], f[k]) for k in REFIT_PARAM_KEYS if not np.isclose(p[k], f[k], rtol=1e-12, atol=0)}
+    if bad:
+        raise RuntimeError(f"{tag}: the history's best evaluation and fits.csv disagree: {bad}")
+    return p
+
+
+def refit_extended(level, wiring: str, commits: Optional[Mapping] = None) -> dict:
+    """A refit's 16-odor outputs (E10's, copied) and its extended run (`extended_block` at the fitted parameters, APL on,
+    and acutely off with the APL->KC and APL->bouton scales 0, as E10's APL-off condition) under `refit_root()` in part
+    B's layout; the breadth is `point_breadth`'s (the start check showed it is E10's). The extended run's 16 panel columns
+    must equal E10's saved outputs and pass E98's blank identity. Returns the refit's record (<wiring>_point.json there,
+    with the fitted, start and unchanged parameters as absolute values); raises if a check fails."""
+    import gc
+    import hashlib
+    from experiments import E72_wiring_population as E72
+    from experiments import E83_cross_wiring_fit as E83
+    commits = dict(run_commits() if commits is None else commits)
+    tag = refit_tag(level, wiring)
+    o = E72.load_fit(EXPERIMENT, tag)
+    if o is None:
+        raise RuntimeError(f'{tag}: no saved E10 outputs')
+    p = refit_params(tag)
+    row = _refit_fits().set_index('tag').loc[tag]
+    d = step_dir(level, refit_root())
+    for c, (fr, fs) in _held_paths(d, wiring).items():
+        o[c][0].to_parquet(fr)
+        o[c][1].to_parquet(fs)
+    held = dict(params=p, params_off=dict(p, wAPLKC_scale=0.0, wAPLPN_scale=0.0), on=o['on'], off=o['off'])
+    breadth = point_breadth(wiring, step_kws(level))
+    start = load_point(level, wiring)
+    kws = step_kws(level)
+    S = E83.saved_fit(wiring)
+    n = {c: int((o[c][0].to_numpy(dtype=float) > 0.5).sum()) for c in ('on', 'off')}
+    rec = dict(wiring=wiring, step=step_tag(level), kind='refit', tag=tag, pn_inhadd=kws['pn_inhadd'],
+               pn_inhsc=kws['pn_inhsc'], params=p, params_off=held['params_off'],
+               start_params={k: float(start['params'][k]) for k in REFIT_PARAM_KEYS},
+               unchanged_params={k: float(S['p'][k]) for k in REFIT_PARAM_KEYS}, unchanged_tag=f"{S['folder']}:{S['tag']}",
+               n_on=n['on'], n_off=n['off'], unchanged_n_on=int(S['target_on']), unchanged_n_off=int(S['target_off']),
+               fit_loss=float(row['loss']), fit_initial_loss=float(row['initial_loss']), n_evals=int(row['n_evals']),
+               maxfev=int(row['maxfev']), fit_seconds=float(row['seconds']),
+               breadth_sha256=hashlib.sha256(np.ascontiguousarray(breadth.to_numpy(dtype=float), dtype='<f8').tobytes()).hexdigest(),
+               host=_host(), time=time.strftime('%Y-%m-%d %H:%M'), threads=os.environ.get('OMP_NUM_THREADS'),
+               thread_limit=os.environ.get('OMP_THREAD_LIMIT'), commits=commits, complete=False, extended_done=False)
+    rec_path = d / f'{wiring}_point.json'
+    _write_json(rec_path, rec)
+    t0 = time.time()
+    ok = extended_block(rec, d, wiring, level, held, breadth, commits)
+    rec['extended_done'], rec['complete'], rec['seconds'] = True, bool(ok), time.time() - t0
+    _write_json(rec_path, rec)
+    gc.collect()
+    print(f"{wiring} {step_tag(level)} refit's extended run: {'checks passed' if ok else 'a check FAILED'} "
+          f"({rec['seconds']:.0f} s)", flush=True)
+    if not ok:
+        raise RuntimeError(f'{wiring} {step_tag(level)}: the refit\'s extended run failed a check (see {rec_path})')
+    return rec
+
+
+def refit_due(level, wirings: Sequence[str]) -> Tuple[bool, str]:
+    """Whether the entry allows these refits: S's always (at a refit level of part C, `levels.json`); T's only if S's
+    refitted population at the level is an equal or better (d_class_<step>.json, `part_score_refits`)."""
+    lv = _read_json(out_dir() / 'levels.json') or {}
+    if float(level) not in [float(x) for x in lv.get('refit_levels', [])]:
+        return False, f"{step_tag(level)} is not a refit level of part C ({lv.get('refit_levels')})"
+    t = [w for w in wirings if w in T_WIRINGS]
+    if not t:
+        return True, 'S'
+    c = _read_json(out_dir() / f'd_class_{step_tag(level)}.json') or {}
+    cls = (c.get('S') or {}).get('class')
+    return cls in ('equal', 'better'), f"S's refitted population: {cls or 'not scored'}"
+
+
+def run_refit(level, wiring: str, root: Optional[Path] = None, force: bool = False) -> dict:
+    """One refit (resumable): the start check (`start_check`; stops if not exact), E10_joint_fit.py with the refit's
+    options (`refit_args`; a process, its log D/<tag>.log), then `refit_extended`. A refit already in fits.csv is not fitted
+    again (unless `force`); a complete record is returned as it is."""
+    import subprocess
+    import sys
+    tag = refit_tag(level, wiring)
+    rec = load_point(level, wiring, refit_root())
+    if not force and rec is not None and rec.get('complete'):
+        print(f'{wiring} {step_tag(level)}: refit done ({tag})', flush=True)
+        return rec
+    require_identity('point', [wiring])
+    commits = run_commits()
+    if force or tag not in set(_refit_fits()['tag']):
+        write_init_params(level, root)
+        start_check(level, wiring, root)
+        cmd = [sys.executable, '-u', str(H.HERE / 'experiments' / 'E10_joint_fit.py'), *refit_args(level, wiring)]
+        log = local_dir('D') / f'{tag}.log'
+        print(f'{wiring} {step_tag(level)}: fitting ({" ".join(cmd)}; log {log})', flush=True)
+        t0 = time.time()
+        with open(log, 'w') as fh:
+            r = subprocess.run(cmd, cwd=H.HERE, stdout=fh, stderr=subprocess.STDOUT)
+        if r.returncode:
+            raise RuntimeError(f'{tag}: E10_joint_fit.py exited {r.returncode} (log {log})')
+        if tag not in set(_refit_fits()['tag']):
+            raise RuntimeError(f'{tag}: the fit wrote no fits.csv row (log {log})')
+        print(f'{wiring} {step_tag(level)}: fitted in {time.time() - t0:.0f} s', flush=True)
+    return refit_extended(level, wiring, commits)
+
+
+def part_d(level, wirings: Sequence[str], root: Optional[Path] = None, force: bool = False, check_only: bool = False) -> None:
+    """Part D's refits at `level` on `wirings` (a lane), one after another (`run_refit`), if the entry allows them
+    (`refit_due`); with `check_only` only their start checks."""
+    ok, why = refit_due(level, wirings)
+    print(f'E102 D {step_tag(level)} {",".join(wirings)}: {"allowed" if ok else "not allowed"} ({why})', flush=True)
+    if not ok:
+        raise SystemExit(f'part D at {step_tag(level)} on {list(wirings)} is not due: {why}')
+    if check_only:
+        write_init_params(level, root)
+        for w in wirings:
+            start_check(level, w, root)
+        return
+    for w in wirings:
+        run_refit(level, w, root, force=force)
+    provenance('D', step=step_tag(level), wirings=list(wirings), args=refit_args(level, wirings[0]) if wirings else [])
+
+
+def refit_commands(level, wirings: Sequence[str] = S_WIRINGS) -> List[str]:
+    """Part D's E10_joint_fit.py commands at the level (printed by --dry-run; `run_refit` runs them after the start
+    check)."""
+    return [' '.join(['./venv/bin/python', '-u', 'experiments/E10_joint_fit.py', *refit_args(level, w)]) for w in wirings]
+
+
+# the refits' score
+
+def refit_runs(level) -> Dict[Tuple[str, str], Dict[str, tuple]]:
+    """{(refit_change(level), wiring): {'on', 'off'}} of every complete refit at the level (its saved 16-odor outputs)."""
+    runs = {}
+    for w in ALL_WIRINGS:
+        rec = load_point(level, w, refit_root())
+        o = load_held(level, w, refit_root())
+        if rec is not None and rec.get('complete') and o is not None:
+            runs[(refit_change(level), w)] = o
+    return runs
+
+
+def _at_bounds(tag: str, p: Mapping[str, float]) -> str:
+    """The fitted parameters at a bound of E10's optimizer (within 1e-6 relative; bounds from its provenance)."""
+    prov = _read_json(out_dir() / f'provenance_{tag}.json') or {}
+    out = []
+    for k, (lo, hi) in (prov.get('bounds') or {}).items():
+        x = p.get(k)
+        if x is None:
+            continue
+        for b, name in ((lo, 'lower'), (hi, 'upper')):
+            if np.isclose(float(x), float(b), rtol=1e-6, atol=1e-12):
+                out.append(f'{k} {name}')
+    return ';'.join(out)
+
+
+def refit_param_table(level, wirings: Sequence[str]) -> pd.DataFrame:
+    """Per refit wiring and parameter (REFIT_PARAM_KEYS): the unchanged fit's, part B's start (rates re-held at the level)
+    and the refit's absolute values, and the refit's over each."""
+    rows = []
+    for w in wirings:
+        rec = load_point(level, w, refit_root())
+        for k in REFIT_PARAM_KEYS:
+            u, s, r = rec['unchanged_params'][k], rec['start_params'][k], rec['params'][k]
+            rows.append(dict(wiring=w, param=k, unchanged=u, start=s, refit=r, refit_over_unchanged=r / u if u else np.nan,
+                             refit_over_start=r / s if s else np.nan, start_over_unchanged=s / u if u else np.nan))
+    return pd.DataFrame(rows)
+
+
+def _class_counts(df: pd.DataFrame, keys: Sequence[str], run_set: str) -> pd.DataFrame:
+    """Per group of `keys`, the wirings' classes counted (cls and cls_linear), with the linear readings' range."""
+    rows = []
+    if df is None or not len(df):
+        return pd.DataFrame()
+    for k, g in df.groupby(list(keys), sort=False, dropna=False):
+        k = k if isinstance(k, tuple) else (k,)
+        row = dict(zip(keys, k), set=run_set, n_wirings=int(g['wiring'].nunique()), wirings=';'.join(map(str, g['wiring'])))
+        for c in ('cls', 'cls_linear'):
+            if c in g.columns:
+                for v in ('inside', 'flatter', 'steeper'):
+                    row[f'n_{v}' + ('_linear' if c == 'cls_linear' else '')] = int((g[c] == v).sum())
+        for c in ('ratio_linear', 'ratio_min', 'ratio_max'):
+            if c in g.columns:
+                row[f'{c}_min'], row[f'{c}_max'] = float(g[c].min()), float(g[c].max())
+        for c in ('flies_lo90', 'flies_hi90'):
+            if c in g.columns:
+                row[c] = float(g[c].iloc[0])
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def extended_counts(readings: Mapping[str, dict]) -> pd.DataFrame:
+    """The extended runs' per-wiring classes counted per comparison, for each set of runs (`readings`: set name ->
+    `step_readings`): E98's V1 and V2 comparisons under the carrying reading; E100's six W1 ratios at the carrying level
+    per estimate of the input; E101's r1 and r3 on APL and Q at the blank's level per estimate. The 6-of-8 verdicts need
+    eight wirings, so a set of fewer is read as these counts."""
+    from experiments import E100_apl_weak_odors as E100
+    frames = []
+    for name, a in readings.items():
+        w98 = a.get('e98_wirings')
+        if w98 is not None and len(w98):
+            c = _class_counts(w98[w98['reading_set'] == 'carrying'], ('comparison',), name)
+            frames.append(c.assign(source='E98'))
+        w100 = a.get('e100_wirings')
+        if w100 is not None and len(w100):
+            c = _class_counts(w100[w100['a0_level'] == E100.A0_CARRYING], ('stimulus', 'estimate'), name)
+            frames.append(c.assign(source='E100'))
+        w101 = a.get('e101_wirings')
+        if w101 is not None and len(w101):
+            c = _class_counts(w101[w101['a0_level'] == 'blank'], ('ratio_id', 'quantity', 'estimate'), name)
+            frames.append(c.assign(source='E101'))
+    return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+
+
+COMPARE_CAL = ('z8_pattern', 'z8_amplitude', 'z8_shape', 'z8_sd_ratio', 'z8_rho', 'z8_pearson', 'halfA_pattern',
+               'halfB_pattern', 'halfC_pattern', 'halfD_pattern', 'z8_loss', 'mean_effect')
+COMPARE_RAW = ('z8_loss', 'mean_effect', 'z8_pattern', 'z8_amplitude', 'z8_shape', 'z8_sd_ratio', 'z8_rho')
+
+
+def flies_compare_row() -> dict:
+    """The flies' side of the comparison table: the data's mean APL effect, the floors of the loss and of the pattern
+    part and its two parts, the ceilings of ρ and Pearson r on the per-pair APL effect, a spread ratio of 1."""
+    t = H.data_target
+    return dict(cal_z8_pattern=t('apl_effect_pattern_floor'), cal_z8_amplitude=t('apl_effect_amplitude_floor'),
+                cal_z8_shape=t('apl_effect_shape_floor'), cal_z8_sd_ratio=1.0, cal_z8_rho=t('apl_effect_rho_ceiling'),
+                cal_z8_pearson=t('apl_effect_pearson_ceiling'), cal_z8_loss=t('apl_effect_rmse_floor'),
+                cal_mean_effect=t('apl_effect_mean'), raw_z8_loss=t('apl_effect_rmse_floor'),
+                raw_mean_effect=t('apl_effect_mean'), raw_z8_pattern=t('apl_effect_pattern_floor'),
+                raw_z8_amplitude=t('apl_effect_amplitude_floor'), raw_z8_shape=t('apl_effect_shape_floor'),
+                raw_z8_sd_ratio=1.0, raw_z8_rho=t('apl_effect_rho_ceiling'))
+
+
+def compare_table(rd: pd.DataFrame, fixed: Optional[pd.DataFrame], level, units: Sequence[str]) -> pd.DataFrame:
+    """Per unit (a population of refits, or a wiring): the unchanged fits ('none'), part B's point at the level at fixed
+    scales (`fixed`, b_readings.csv; absent if None), the refit, and the flies (floors and ceilings,
+    `flies_compare_row`): the pattern part under the calibrated readout against all recordings with its amplitude and
+    shape parts, the spread ratio, ρ and Pearson r on the per-pair APL effect, against halves A to D, the loss and the
+    mean APL effect; on raw counts the loss, the mean APL effect, the pattern part and its parts."""
+    ch, tag = refit_change(level), step_tag(level)
+    rows = []
+    for u in units:
+        for label, src, change in (('unchanged fits', rd, 'none'), (f'fixed scales at {tag} (part B)', fixed, tag),
+                                   (f'refit at {tag}', rd, ch)):
+            if src is None:
+                continue
+            row = dict(unit=u, row=label)
+            ok = True
+            for ro, cols in (('cal', COMPARE_CAL), ('raw', COMPARE_RAW)):
+                x = src[(src['change'] == change) & (src['unit'] == u) & (src['readout'] == ro)]
+                if x.empty:
+                    ok = False
+                    break
+                x = x.iloc[0]
+                row.update({f'{ro}_{c}': float(x[c]) for c in cols if c in x.index})
+                if ro == 'cal':
+                    row['n_pairs'] = int(x['n_pairs']) if 'n_pairs' in x.index and pd.notna(x['n_pairs']) else 120
+                    row['silent_odors'] = x.get('silent_odors', '') if isinstance(x.get('silent_odors', ''), str) else ''
+            if ok:
+                rows.append(row)
+        rows.append(dict(unit=u, row='the flies (floors, ceilings, the data\'s mean APL effect)', **flies_compare_row()))
+    return pd.DataFrame(rows)
+
+
+def part_score_refits(level, out: Optional[Path] = None) -> dict:
+    """The refits' score at `level` (no simulation; every complete refit, `refit_runs`): d_readings_<step>.csv (as
+    b_readings.csv: `score_runs` against every target of E86's, the changes d_ against the unchanged fits on the same
+    pairs, the amplitude and shape parts, the spread ratio, Pearson r, E73's per-KC readings), d_compare_<step>.csv
+    (`compare_table` for S, T and the eight where all their refits exist, and each wiring), d_realism_<step>.csv (each
+    refit's bands, silent odors, fit statistics, parameters at a bound), d_params_<step>.csv (`refit_param_table`),
+    d_class_<step>.json (S's class by `refit_class` and E94's equal rule; T's beside, and `t_better_holds` on a better),
+    the extended runs' readings for three sets on the refitted wirings (the unchanged fits, i.e. part 0's identity
+    point; part B's point at the level at fixed scales; the refits): d_e98, d_e98_wirings, d_e100, d_e100_wirings,
+    d_e101, d_e101_wirings, d_low_conc, d_pn (each _<step>.csv, with a 'set' column), d_extended_counts_<step>.csv
+    (`extended_counts`) and the KCs at low concentration's class (outcome (e), `low_conc_class` of the refits' median
+    against the unchanged fits' over the same wirings) in d_class."""
+    from experiments import E83_cross_wiring_fit as E83
+    from experiments import E86_reduced_input_candidate as E86
+    out = out_dir() if out is None else Path(out)
+    out.mkdir(parents=True, exist_ok=True)
+    tag, ch = step_tag(level), refit_change(level)
+    runs = refit_runs(level)
+    if not runs:
+        raise RuntimeError(f'no complete refit at {tag}')
+    have = [w for _, w in runs]
+    require_identity('point', have)
+    tg = E86.targets()
+    kws = step_kws(level)
+    rd, pairs, silence = score_runs(runs, {ch: dict(step=ch, pn_inhadd=kws['pn_inhadd'], pn_inhsc=kws['pn_inhsc'])}, tg)
+    parts = _effect_parts(pairs, tg, {k: s['undefined'] for k, s in silence.items()})
+    rd = rd.merge(parts, on=['change', 'unit', 'readout'], how='left')
+    if rd['n_pairs'].isna().any() or (rd['n_pairs'] != [silence[(c, u)]['n_pairs'] for c, u in zip(rd['change'], rd['unit'])]).any():
+        raise RuntimeError('the readings and their per-pair rows disagree on the pairs')
+    zc = _zcell_readings(runs, tg)
+    rd = pd.concat([rd, zc.assign(step=zc['change'])], ignore_index=True) if len(zc) else rd
+    rd['pairs'] = [pairs_note(int(n), s if isinstance(s, str) else '', k, ro)
+                   for n, s, k, ro in zip(rd['n_pairs'], rd['silent_odors'], rd['kind'], rd['readout'])]
+    write_table(rd, out / f'd_readings_{tag}.csv', caveat=True)
+    fpath = out / 'b_readings.csv'
+    fixed = read_table(fpath) if fpath.exists() else None
+    units = [u for u, ws in E83.POPULATIONS.items() if u in ('S', 'T', 'all8') and all(w in have for w in ws)] + have
+    write_table(compare_table(rd, fixed, level, units), out / f'd_compare_{tag}.csv', caveat=True)
+    real_rows = []
+    for (c, w), o in runs.items():
+        rec = load_point(level, w, refit_root())
+        sl = silent_odors(o)
+        real_rows.append(dict(change=c, wiring=w, tag=rec['tag'], pn_inhadd=rec['pn_inhadd'], pn_inhsc=rec['pn_inhsc'],
+                              n_evals=rec['n_evals'], maxfev=rec['maxfev'], fit_loss=rec['fit_loss'],
+                              fit_initial_loss=rec['fit_initial_loss'], fit_seconds=rec['fit_seconds'],
+                              at_bounds=_at_bounds(rec['tag'], rec['params']), silent_on=';'.join(sl['on']),
+                              silent_off=';'.join(sl['off']),
+                              n_pairs_defined=len(ALL_PAIRS) - len(silent_pairs(sl['on'] + sl['off'])),
+                              **{f'param_{k}': v for k, v in rec['params'].items()}, **E83.realism(o)))
+    realism = pd.DataFrame(real_rows)
+    write_table(realism, out / f'd_realism_{tag}.csv', caveat=True)
+    write_table(refit_param_table(level, have), out / f'd_params_{tag}.csv')
+    # the class (part D's rules)
+    cal = rd[(rd['readout'] == 'cal') & (rd['change'] == ch)].set_index('unit')
+    raw = rd[(rd['readout'] == 'raw') & (rd['change'] == ch)].set_index('unit')
+    flagged = {r.wiring: r.realism_flag for r in realism.itertuples() if isinstance(r.realism_flag, str) and r.realism_flag}
+    cls: Dict[str, object] = dict(level=float(level), step=tag, refitted=have, flagged=flagged,
+                                  silent={r.wiring: f'{r.silent_on}|{r.silent_off}' for r in realism.itertuples()
+                                          if r.silent_on or r.silent_off}, time=time.strftime('%Y-%m-%d %H:%M'), host=_host())
+    for unit, ws in (('S', S_WIRINGS), ('T', T_WIRINGS)):
+        if unit not in cal.index:
+            continue
+        dp = {t: float(cal.loc[unit, f'd_{t}_pattern']) for t in ('z8',) + BETTER_HALVES}
+        draw, dme = float(raw.loc[unit, 'd_z8_loss']), float(cal.loc[unit, 'd_mean_effect'])
+        nfl = sum(w in flagged for w in ws)
+        c = dict(d_pattern=dp, d_raw_loss=draw, d_mean_effect_cal=dme, d_mean_effect_raw=float(raw.loc[unit, 'd_mean_effect']),
+                 n_flagged=nfl, n_pairs=int(cal.loc[unit, 'n_pairs']), pattern=float(cal.loc[unit, 'z8_pattern']),
+                 pattern_unchanged=float(cal.loc[unit, 'z8_pattern'] - dp['z8']),
+                 equal_rule=equal_rule(dp, draw, dme, nfl, 0), **{'class': refit_class(dp, draw, dme, nfl)})
+        cls[unit] = c
+    if 'S' in cls and 'T' in cls and all(w in cal.index for w in ALL_WIRINGS):
+        d_single = {w: float(cal.loc[w, 'd_z8_pattern']) for w in ALL_WIRINGS}
+        cls['T']['d_single'] = d_single
+        cls['T']['better_stands'] = bool(cls['S']['class'] == 'better' and t_better_holds(
+            cls['T']['d_pattern'], d_single, cls['T']['d_raw_loss']))
+    cls['T_due'] = bool(cls.get('S', {}).get('class') in ('equal', 'better'))
+    # the extended runs: the unchanged fits (identity point), part B's point at the level, the refits
+    readings = {'unchanged': step_readings(STEP_IDENTITY, None, wirings=have),
+                'fixed': step_readings(tag, None, wirings=have), 'refit': step_readings(tag, refit_root(), wirings=have)}
+    for key, name in (('e98_comparisons', 'd_e98'), ('e98_wirings', 'd_e98_wirings'), ('e100_rows', 'd_e100'),
+                      ('e100_wirings', 'd_e100_wirings'), ('e101', 'd_e101'), ('e101_wirings', 'd_e101_wirings'),
+                      ('low', 'd_low_conc')):
+        frames = [a[key].assign(set=s) for s, a in readings.items() if key in a and len(a[key])]
+        if frames:
+            write_table(pd.concat(frames, ignore_index=True), out / f'{name}_{tag}.csv', caveat=True)
+    write_table(pd.DataFrame([dict(a['pn'], set=s) for s, a in readings.items() if 'pn' in a]), out / f'd_pn_{tag}.csv')
+    write_table(extended_counts(readings), out / f'd_extended_counts_{tag}.csv', caveat=True)
+    low = {s: a['low'][a['low']['stimulus'] == LOW_CARRYING] for s, a in readings.items() if 'low' in a}
+    if all(len(x) for x in low.values()) and 'unchanged' in low:
+        lc = {}
+        for c in ('on', 'off'):
+            f = float(low['refit'][f'flies_{c}'].iloc[0])
+            med = {s: float(x[f'rate_{c}'].median()) for s, x in low.items()}
+            lc[c] = dict(median=med, flies=f, cls_refit=low_conc_class(med['refit'], f, med['unchanged']),
+                         cls_fixed=low_conc_class(med['fixed'], f, med['unchanged']))
+        cls['low_conc'] = dict(stimulus=LOW_CARRYING, wirings=have, **lc)
+    cls['extended_e98'] = {s: dict(V1=a['e98']['V1'], V2=a['e98']['V2'], V2_held=a['e98']['V2_held'])
+                           for s, a in readings.items() if 'e98' in a}
+    cls['extended_e100'] = {s: a['e100'] for s, a in readings.items() if 'e100' in a}
+    cls['note'] = ('the 6-of-8 verdicts (E98, E100, E101) are "not decided" on fewer than eight wirings by construction; '
+                   'read d_extended_counts for a set of four')
+    _write_json(out / f'd_class_{tag}.json', cls)
+    if out == out_dir():
+        provenance('D_score', step=tag, wirings=have)
+    return cls
 
 
 # ---------------------------------------------------------------------------
@@ -1940,11 +2489,14 @@ def _steps(arg: str) -> Tuple:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0], formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--part', required=True, choices=['0', 'A', 'B', 'score', 'D'])
-    ap.add_argument('--wirings', default='all8', help="'S', 'T', 'all8' or a comma-separated list")
+    ap.add_argument('--wirings', default='all8', help="'S', 'T', 'all8' or a comma-separated list (part D: default S)")
     ap.add_argument('--steps', default='ladder', help="'ladder' or comma-separated pn_inhadd values ('identity' allowed)")
     ap.add_argument('--root', default=None, help="part B: put the runs under another folder (default the local outputs)")
     ap.add_argument('--force', action='store_true', help='part B: run points that are saved again')
-    ap.add_argument('--level', type=float, default=None, help='part D: the level (pn_inhadd) to print the refits for')
+    ap.add_argument('--level', type=float, default=None, help="part D: the level (pn_inhadd) of the refits")
+    ap.add_argument('--dry-run', action='store_true', help="part D: print the refits' E10 commands only")
+    ap.add_argument('--check-only', action='store_true', help="part D: run the refits' start checks only")
+    ap.add_argument('--score-refits', action='store_true', help='part D: score the refits at --level (no simulation)')
     ap.add_argument('--no-runs', action='store_true', help='part 0: only the identities that need no simulation')
     ap.add_argument('--out', default=None, help='score: write the tables to another folder (e.g. a smoke test)')
     a = ap.parse_args()
@@ -1963,7 +2515,13 @@ def main() -> None:
     elif a.part == 'D':
         if a.level is None:
             raise SystemExit('--part D needs --level')
-        print('\n'.join(refit_commands(a.level, _wirings(a.wirings), root)))
+        wirings = _wirings(a.wirings if a.wirings != 'all8' else 'S')
+        if a.dry_run:
+            print('\n'.join(refit_commands(a.level, wirings)))
+        elif a.score_refits:
+            print(json.dumps(part_score_refits(a.level, Path(a.out) if a.out else None), indent=1, default=str))
+        else:
+            part_d(a.level, wirings, root, force=a.force, check_only=a.check_only)
 
 
 if __name__ == '__main__':
