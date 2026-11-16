@@ -1275,30 +1275,914 @@ def z_rule(log_diff_per_calyx: Sequence[float], lo: float, hi: float) -> str:
     return 'not decided'
 
 
-def _later_part(name: str) -> dict:
+# ---------------------------------------------------------------------------
+# parts B to E: the series' responses, readings and ratios
+
+READINGS_SERIES = ('carrying', 'first_in_block', 'all_presentations', 'without_marked')     # then each fly left out
+TWELVE_FOR = {'carrying': 'carrying', 'first_in_block': 'first_in_block', 'all_presentations': 'carrying',
+              'without_marked': 'without_marked'}   # the 12's reading paired with each of the series' (part A's (1), (3))
+TEN22_PAA = tuple(x for x in THREE_VIALS_PAA if x.startswith('20211022'))     # vial 1 in the other half: vials 2, 3 carry
+TEN22_PA = tuple(x for x in SERIES if x.startswith('20211022') and x not in THREE_VIALS_PAA)
+VIAL_PAIRS = ((1, 2), (1, 3), (2, 3))
+ODORS3 = ('ms', 'paa', 'pa')                  # vial 1 of paa and pa; ms has one vial
+Y1_READINGS = ('carrying', 'first_in_block', 'without_marked')
+M_VARIANTS = ('carrying', 'before_common_removed', 'ten22_pa_beside')
+Y3_MAX_REP = 4
+
+_RESP: Dict[tuple, pd.DataFrame] = {}
+_TABLES: Dict[str, pd.DataFrame] = {}
+
+
+def _require_lock(part: str) -> None:
     if not part_a_locked():
-        raise PermissionError(f"part {name} opens the series' maps: it runs only after part A's lock is committed")
-    raise NotImplementedError(f'part {name} is not implemented yet (code to come, after part A)')
+        raise PermissionError(f"part {part} opens the series' maps: it runs only while part A's lock is committed and its "
+                              "tables match it")
+
+
+def series_responses(source: str = 'maps', which: str = 'first', n_first: Optional[int] = N_FIRST) -> pd.DataFrame:
+    """The series' 30 runs read once (`read_responses`, both baselines; the maps or Yang's tables; the stimulus's
+    first block or every block; the first `n_first` presentations or all)."""
+    key = (source, which, n_first)
+    if key not in _RESP:
+        _RESP[key] = read_responses(list(SERIES), source, ('order_matched', 'first_in_block'), which, n_first)
+    return _RESP[key]
+
+
+def series_table(stem: str) -> pd.DataFrame:
+    """One run's stimulus table (`stim_table`), read once."""
+    if stem not in _TABLES:
+        _TABLES[stem] = stim_table(series_rows([stem]).iloc[0])
+    return _TABLES[stem]
+
+
+_KEYS = ['recording', 'fly', 'side', 'pulse_s', 'plane_um', 'role', 'odor', 'conc', 'vial', 'stimulus', 'baseline',
+         'blank_subtracted', 'source']
+
+
+def every_presentation(resp_all: pd.DataFrame) -> pd.DataFrame:
+    """Partner (2): per recording, stimulus and baseline the mean over every presentation of every kept block of the
+    stimulus (both passes; pa vial 1's two series in the runs of 10-22), from `read_responses(..., which='all',
+    n_first=None)`'s rows (each a block's mean over its `n_reps` presentations)."""
+    d = resp_all.assign(_w=resp_all['response'] * resp_all['n_reps'])
+    out = d.groupby(_KEYS, dropna=False).agg(_w=('_w', 'sum'), n_reps=('n_reps', 'sum'), n_blocks=('block1', 'nunique'),
+                                              block1=('block1', 'min')).reset_index()
+    out['response'] = out['_w'] / out['n_reps']
+    out['block'] = out['block1'] - 1
+    out['blank'] = np.nan
+    return out.drop(columns='_w')
+
+
+def three_vial_odor(labels: Sequence[str]) -> Optional[str]:
+    """The run's three-vial odor from its stimulus labels ('pa' if 'pa_vial2' is among them, ...)."""
+    v = sorted({str(o).split('_vial')[0] for o in labels if '_vial' in str(o)})
+    return v[0] if len(v) == 1 else None
+
+
+def average_three_vials(resp: pd.DataFrame) -> pd.DataFrame:
+    """Part E's reading: per run, baseline and concentration, vial 1's response of the run's three-vial odor replaced by
+    the mean of the three vials' responses (those imaged); the other stimuli unchanged."""
+    out = resp.copy()
+    for rec, g in resp.groupby('recording'):
+        o = three_vial_odor(g['odor'])
+        if o is None:
+            continue
+        v = g[g['odor'].isin([o, f'{o}_vial2', f'{o}_vial3'])]
+        m = v.groupby(['baseline', 'conc'])['response'].mean()
+        idx = out.index[(out['recording'] == rec) & (out['odor'] == o)]
+        out.loc[idx, 'response'] = [float(m[(b, c)]) for b, c in zip(out.loc[idx, 'baseline'], out.loc[idx, 'conc'])]
+    return out
+
+
+def _base_key(key: str) -> str:
+    return 'carrying' if key.startswith('without 20') or key == 't_interval' else key
+
+
+def reading_responses(key: str, source: str = 'maps', three_vials: bool = False) -> Tuple[pd.DataFrame, str]:
+    """The series' responses and baseline of reading `key` (READINGS_SERIES, 'without <fly>')."""
+    k = _base_key(key)
+    if k == 'all_presentations':
+        resp = every_presentation(series_responses(source, 'all', None))
+    else:
+        resp = series_responses(source)
+    if three_vials:
+        resp = average_three_vials(resp)
+    return resp, READINGS[k]['baseline']
+
+
+def reading_recordings(resp: pd.DataFrame, key: str, baseline: str, plane: Optional[float] = CARRYING_PLANE) -> List[str]:
+    """The runs a reading reads: those with rows of its baseline (the order-matched one needs a paraffin-oil-only block),
+    at `plane` (None: all planes), without the marked runs ('without_marked') or one fly ('without <fly>')."""
+    r = resp[resp['baseline'] == baseline]
+    if plane is not None:
+        r = r[np.isclose(r['plane_um'].astype(float), float(plane))]
+    recs = sorted(r['recording'].unique())
+    if key == 'without_marked':
+        recs = [x for x in recs if x not in MARKED]
+    if key.startswith('without 20'):
+        fly = key[len('without '):]
+        recs = sorted(r.loc[r['fly'] != fly, 'recording'].unique())
+    return recs
+
+
+def series_ratios(key: str = 'carrying', plane: Optional[float] = CARRYING_PLANE, source: str = 'maps',
+                  three_vials: bool = False, recordings: Optional[Sequence[str]] = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """The series' eight ratios under reading `key` (`E98.flies_ratios`: the series' design ranges, the floor, the
+    interpolation and the one-log rule; vial 1 carries): (one row per ratio, per recording rows)."""
+    E98 = _e98()
+    resp, bl = reading_responses(key, source, three_vials)
+    recs = list(recordings) if recordings is not None else reading_recordings(resp, key, bl, plane)
+    f, pr = E98.flies_ratios(resp, (bl, False), 'all', RATIOS, None, recs)
+    f.insert(0, 'series_reading', key)
+    pr.insert(0, 'series_reading', key)
+    return f, pr
+
+
+def per_fly(pr: pd.DataFrame, rid: str) -> pd.Series:
+    """The flies' mean (natural) log ratio of `rid` over their entered recordings."""
+    e = pr[(pr['ratio_id'] == rid) & pr['entered'].astype(bool)]
+    return e.groupby('fly')['log_ratio'].mean()
+
+
+def twelve_locked() -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Part A's locked tables of the 12 (a_ratios_12.csv, a_per_fly_12.csv); refuses unless the lock holds."""
+    _require_lock('B')
+    return read_table(out_dir() / 'a_ratios_12.csv'), read_table(out_dir() / 'a_per_fly_12.csv')
+
+
+def twelve_side(reading_12: str) -> Tuple[pd.DataFrame, Dict[str, pd.Series]]:
+    """The 12's ratio rows (indexed by ratio) and per-fly mean log ratios under one of READINGS_12, from part A's locked
+    tables."""
+    r, pf = twelve_locked()
+    rows = r[r['reading_12'] == reading_12].set_index('ratio_id')
+    p = pf[pf['reading_12'] == reading_12]
+    return rows, {rid: p[p['ratio_id'] == rid].set_index('fly')['mean_log_ratio'] for rid in RATIO_IDS}
+
+
+def x1_rows(f_series: pd.DataFrame, pr_series: pd.DataFrame, r12: pd.DataFrame, pf12: Dict[str, pd.Series]) -> pd.DataFrame:
+    """Per ratio of the fixed list: the held-out flies' ratio and interval, the reference set's, the split rule
+    (`split_rule`: its share is the p of the rule, 'differ' below SPLIT_SHARE) and X1's direction (`x1_direction`)."""
+    fs = f_series.set_index('ratio_id')
+    rows = []
+    for rid in RATIO_IDS:
+        s, a = per_fly(pr_series, rid), pf12[rid].dropna()
+        d = dict(ratio_id=rid, numerator=fs.loc[rid, 'numerator'], denominator=fs.loc[rid, 'denominator'],
+                 ratio=float(fs.loc[rid, 'ratio']), lo90=float(fs.loc[rid, 'lo90']), hi90=float(fs.loc[rid, 'hi90']),
+                 sd_log2_flies=float(fs.loc[rid, 'sd_log2_flies']), n_flies=int(fs.loc[rid, 'n_flies']),
+                 n_recordings=int(fs.loc[rid, 'n_recordings']), num_how=fs.loc[rid, 'num_how'], den_how=fs.loc[rid, 'den_how'],
+                 ratio_ref=float(r12.loc[rid, 'ratio']), lo90_ref=float(r12.loc[rid, 'lo90']),
+                 hi90_ref=float(r12.loc[rid, 'hi90']), n_flies_ref=int(len(a)), set_s_lo=SET_S[rid][0],
+                 set_s_hi=SET_S[rid][1], in_x1=rid in X1_RATIOS)
+        if len(s) and len(a):
+            sr = split_rule(a, s)
+            d.update(split_share=sr['share'], n_splits=sr['n_splits'], differ=sr['differ'],
+                     **x1_direction(rid, d['ratio'], d['ratio_ref']))
+        else:
+            d.update(split_share=np.nan, n_splits=0, differ=False, toward_s=False, nearer_s=False)
+        rows.append(d)
+    return pd.DataFrame(rows)
+
+
+def series_flies(key: str = 'carrying', plane: Optional[float] = CARRYING_PLANE) -> List[str]:
+    resp, bl = reading_responses(key)
+    recs = reading_recordings(resp, key, bl, plane)
+    return sorted(resp.loc[resp['recording'].isin(recs), 'fly'].unique())
+
+
+def x1_readings() -> List[str]:
+    """The readings of X1: the carrying one, partners (1) to (3), and (4) each of the held-out flies left out."""
+    return list(READINGS_SERIES) + [f'without {f}' for f in series_flies()]
+
+
+def x1_all() -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, dict]:
+    """X1 under every reading at 18 um against the 12's matching reading (TWELVE_FOR; part A's locked tables): (per
+    reading and ratio, the series' ratio rows, the series' per-recording rows, the result: the side per reading and the
+    held side)."""
+    rows, rat, per, sides = [], [], [], {}
+    for key in x1_readings():
+        f, pr = series_ratios(key)
+        r12, pf12 = twelve_side(TWELVE_FOR[_base_key(key)])
+        x = x1_rows(f, pr, r12, pf12).assign(series_reading=key, twelve_reading=TWELVE_FOR[_base_key(key)])
+        sides[key] = x1_side(x)
+        rows.append(x.assign(side=sides[key]))
+        rat.append(f)
+        per.append(pr)
+    c = sides['carrying']
+    held = c if all(v == c for v in sides.values()) else 'reading-dependent'
+    res = dict(sides=sides, held=held, carrying=c)
+    return pd.concat(rows, ignore_index=True), pd.concat(rat, ignore_index=True), pd.concat(per, ignore_index=True), res
+
+
+def pooled_intervals() -> pd.DataFrame:
+    """The pooled intervals of P1 and P2 over the 13 flies (the held-out flies' entered recordings and the 12's per-fly
+    means from part A's locked a_per_fly_12.csv; E98's `fly_ratio`, a fly's recordings averaged on the log scale), under
+    each reading of X1 with the 12's matching reading, and Student's t on the carrying
+    reading's 13 per-fly log ratios."""
+    E98 = _e98()
+    rows = []
+    for key in x1_readings():
+        _, pr = series_ratios(key)
+        _, pf12 = twelve_side(TWELVE_FOR[_base_key(key)])
+        for rid in ('P1', 'P2'):
+            twelve = pf12[rid].rename('log_ratio').rename_axis('fly').reset_index()     # one row per fly: its mean
+            e = pd.concat([pr[(pr['ratio_id'] == rid) & pr['entered'].astype(bool)][['fly', 'log_ratio']], twelve])
+            fr = E98.fly_ratio(e)
+            rows.append(dict(reading=key, ratio_id=rid, ratio=fr['ratio'], lo90=fr['lo90'], hi90=fr['hi90'],
+                             n_flies=fr['n_flies'], n_recordings=fr['n_recordings'], sd_log2_flies=fr['sd_log2_flies']))
+            if key == 'carrying':
+                g, lo, hi = t_interval(e.groupby('fly')['log_ratio'].mean().to_numpy())
+                rows.append(dict(reading='t_interval', ratio_id=rid, ratio=g, lo90=lo, hi90=hi, n_flies=fr['n_flies'],
+                                 n_recordings=fr['n_recordings'], sd_log2_flies=fr['sd_log2_flies']))
+    return pd.DataFrame(rows)
+
+
+def d2_15um_responses() -> pd.DataFrame:
+    """E98's part D2 recordings at 15 um read by the extended reader with the carrying reading (order-matched, the
+    first two presentations)."""
+    E98 = _e98()
+    return read_responses(list(E98.D2_PLANES[15]), 'maps', ('order_matched',), 'first', N_FIRST)
+
+
+def x1_beside() -> Tuple[pd.DataFrame, dict]:
+    """X1's beside sets (carrying reading): the held-out flies at 18 um against the 12's 0.5 s flies alone (E98's
+    subset 'pulse_0.5s', 3 flies); the held-out flies at 15 um against E98's D2 recordings at 15 um (the 12's design,
+    E98's part D rule)."""
+    E98 = _e98()
+    rows, sides = [], {}
+    f, pr = series_ratios('carrying')
+    f12, pr12 = E98.flies_ratios(a1_responses(), ('order_matched', False), 'pulse_0.5s', RATIOS)
+    x = x1_rows(f, pr, f12.set_index('ratio_id'), {rid: per_fly(pr12, rid) for rid in RATIO_IDS})
+    sides['18 um against the 12\'s 0.5 s flies'] = x1_side(x)
+    rows.append(x.assign(set="18 um against the 12's 0.5 s flies", side=x1_side(x)))
+    f15, pr15 = series_ratios('carrying', plane=15)
+    rd = d2_15um_responses()
+    fd, prd = E98.flies_ratios(rd, ('order_matched', False), 'all', RATIOS, None, sorted(rd['recording'].unique()),
+                               E98.twelve_design())
+    x = x1_rows(f15, pr15, fd.set_index('ratio_id'), {rid: per_fly(prd, rid) for rid in RATIO_IDS})
+    sides["15 um against E98's D2 at 15 um"] = x1_side(x)
+    rows.append(x.assign(set="15 um against E98's D2 at 15 um", side=x1_side(x)))
+    return pd.concat(rows, ignore_index=True), sides
 
 
 def part_b() -> dict:
-    """Part B, X1: which side the held-out flies are on (not implemented yet)."""
-    return _later_part('B')
+    """Part B, X1 (which side the held-out flies are on): the eight ratios of the held-out flies at 18 um under the
+    carrying reading and partners (1) to (4) against the 12's matching reading (part A's locked tables), the split rule
+    and the side per reading, the held side; S1 and S2 as the check; beside, the 12's 0.5 s flies and the 15 um sets;
+    the pooled intervals of P1 and P2 over the 13 flies only if X1 is the 12's side, held. Writes b_x1.csv,
+    b_ratios.csv, b_per_recording.csv, b_responses.csv, b_beside.csv, b_pooled.csv (if formed), b_summary.json."""
+    _require_lock('B')
+    out = out_dir()
+    x1, rat, per, res = x1_all()
+    write_table(x1, out / 'b_x1.csv')
+    write_table(rat, out / 'b_ratios.csv')
+    write_table(per, out / 'b_per_recording.csv')
+    write_table(series_responses(), out / 'b_responses.csv')
+    bes, bsides = x1_beside()
+    write_table(bes, out / 'b_beside.csv')
+    car = x1[x1['series_reading'] == 'carrying'].set_index('ratio_id')
+    check = {rid: bool(car.loc[rid, 'differ']) for rid in ('S1', 'S2')}
+    pooled = None
+    if res['held'] == SIDES[0]:
+        pooled = pooled_intervals()
+        write_table(pooled, out / 'b_pooled.csv')
+    summ = dict(caveat=QUALITY_CAVEAT, unmeasured=UNMEASURED, x1=res['held'], sides_per_reading=res['sides'],
+                carrying=car[['ratio', 'lo90', 'hi90', 'n_flies', 'ratio_ref', 'lo90_ref', 'hi90_ref', 'split_share',
+                              'differ', 'toward_s', 'nearer_s']].to_dict('index'),
+                s1_s2_differ=check, sets_differ_in_more_than_ms=bool(any(check.values())), beside=bsides,
+                pooled_formed=pooled is not None,
+                pooled=pooled.to_dict('records') if pooled is not None else 'not formed: X1 is not the 12\'s side, held',
+                readings=dict(series={k: READINGS[_base_key(k)] for k in x1_readings()}, twelve=TWELVE_FOR),
+                recordings_carrying=reading_recordings(series_responses(), 'carrying', 'order_matched'))
+    _write_json(out / 'b_summary.json', summ)
+    provenance('B', x1=res['held'])
+    return summ
+
+
+# ---------------------------------------------------------------------------
+# part C: the family against the held-out flies
+
+def x_classes(ivs: Dict[str, Dict[str, Tuple[float, float]]], readings: Sequence[Tuple[str, str, str]],
+              levels: Optional[Dict[str, pd.DataFrame]] = None, num: Optional[str] = None,
+              estimates: Optional[Dict[str, str]] = None) -> Tuple[pd.DataFrame, pd.DataFrame, dict]:
+    """X2 (the hull of P1's and P2's intervals) and X3 (P1's) per estimate of ms's input and reading: `ivs` the flies'
+    intervals by flies' reading key and ratio; `readings` (key, flies' key, model level), the carrying one first and
+    every other a partner; the class of the eight wirings' sets (`wiring_classes`, `comparison_class`) and of their
+    linear readings; the held class per estimate (`held_class`) and X2 / X3 over the estimates (`x_over_estimates`).
+    Returns (one row per X, estimate and reading; per wiring rows of the carrying and settled readings; summary)."""
+    E98 = _e98()
+    levels = family_levels() if levels is None else levels
+    num = E98.V1_NUM if num is None else num
+    estimates = E98.V1_ESTIMATES if estimates is None else estimates
+    rows, wrows, summ = [], [], {}
+    partners = [k for k, _, _ in readings if k != 'carrying']
+    for x, ids in X_IDS.items():
+        held = {}
+        for est, lab in estimates.items():
+            cats = {}
+            for key, fk, level in readings:
+                lo, hi = _hull([ivs[fk][i] for i in ids])
+                wc = wiring_classes(levels[level], num, lab, lo, hi)
+                cats[key] = comparison_class(wc['cls_ab'])
+                rows.append(dict(x=x, estimate=est, reading=key, flies_reading=fk, model_level=level, flies_lo90=lo,
+                                 flies_hi90=hi, n_wirings=int(len(wc)), category=cats[key],
+                                 category_linear=comparison_class(wc['cls_ab_linear']),
+                                 **{f'n_{k}': int((wc['cls_ab'] == k).sum()) for k in X_CLASSES + ('mixed',)},
+                                 model_linear_min=float(wc['ratio_linear'].min()),
+                                 model_linear_max=float(wc['ratio_linear'].max()),
+                                 model_min=float(wc['ratio_min'].min()), model_max=float(wc['ratio_max'].max())))
+                if key in ('carrying', 'settled'):
+                    wrows.append(wc.assign(x=x, estimate=est, reading=key, model_level=level))
+            held[est] = held_class(cats, partners)
+            for r in rows:
+                if r['x'] == x and r['estimate'] == est:
+                    r['held_per_estimate'] = held[est]
+        summ[x] = dict(over_estimates=x_over_estimates(held), held_per_estimate=held,
+                       carrying_per_estimate={r['estimate']: r['category'] for r in rows
+                                              if r['x'] == x and r['reading'] == 'carrying'})
+    cl = pd.DataFrame(rows)
+    for x in X_IDS:
+        cl.loc[cl['x'] == x, 'x_over_estimates'] = summ[x]['over_estimates']
+    wcols = ['x', 'estimate', 'reading', 'model_level', 'wiring', 'numerator', 'denominator', 'a_num', 'a_den', 'a0',
+             'ratio_linear', 'ratio_min', 'ratio_max', 'flies_lo90', 'flies_hi90', 'cls_ab', 'cls_ab_linear', 'cls']
+    w = pd.concat(wrows, ignore_index=True)[wcols].rename(columns={'cls': 'cls_e98'})
+    return cl, w, summ
+
+
+def series_intervals(keys: Sequence[str]) -> Dict[str, Dict[str, Tuple[float, float]]]:
+    """The held-out flies' intervals at 18 um per reading key (READINGS_SERIES, 'without <fly>', and 't_interval':
+    Student's t on the carrying reading's per-fly log ratios)."""
+    out = {}
+    for k in keys:
+        if k == 't_interval':
+            _, pr = series_ratios('carrying')
+            out[k] = {rid: t_interval(per_fly(pr, rid).to_numpy())[1:] for rid in RATIO_IDS}
+        else:
+            f, _ = series_ratios(k)
+            f = f.set_index('ratio_id')
+            out[k] = {rid: (float(f.loc[rid, 'lo90']), float(f.loc[rid, 'hi90'])) for rid in RATIO_IDS}
+    return out
+
+
+def class_readings(fly_keys: Sequence[str]) -> List[Tuple[str, str, str]]:
+    """The readings of the family's classes: the carrying one and partners (1) to (4) with the model at the blank's
+    level, (5) Student's t, (6) the settled level with the flies' carrying reading."""
+    r = [(k, k, 'blank') for k in fly_keys if k != 't_interval']
+    return r + [('t_interval', 't_interval', 'blank'), ('settled', 'carrying', 'settled')]
+
+
+def widen(ivs: Dict[str, Dict[str, Tuple[float, float]]], sd_log2: float) -> Dict[str, Dict[str, Tuple[float, float]]]:
+    """Every interval widened by `sd_log2` (log2) at each end: [lo 2^-sd, hi 2^sd]."""
+    f = 2.0 ** float(sd_log2)
+    return {k: {rid: (lo / f, hi * f) for rid, (lo, hi) in v.items()} for k, v in ivs.items()}
 
 
 def part_c() -> dict:
-    """Part C, the family against the held-out flies (X2, X3; not implemented yet)."""
-    return _later_part('C')
+    """Part C, the family against the held-out flies: X2 and X3 per estimate of ms's input under the carrying reading
+    and partners (1) to (6) (c_classes.csv, c_class_wirings.csv); again against the pooled intervals where part B forms
+    them (c_pooled_classes.csv); described, each class with the intervals widened by Y1's persistent SD
+    (c_widened_classes.csv). c_summary.json."""
+    _require_lock('C')
+    out = out_dir()
+    keys = x1_readings() + ['t_interval']
+    ivs = series_intervals(keys)
+    readings = class_readings(keys)
+    cl, w, summ = x_classes(ivs, readings)
+    write_table(cl, out / 'c_classes.csv')
+    write_table(w, out / 'c_class_wirings.csv')
+    _, _, _, x1 = x1_all()
+    pooled = None
+    if x1['held'] == SIDES[0]:
+        p = pooled_intervals()
+        piv = {k: {rid: (float(g.set_index('ratio_id').loc[rid, 'lo90']), float(g.set_index('ratio_id').loc[rid, 'hi90']))
+                   for rid in ('P1', 'P2')} for k, g in p.groupby('reading')}
+        pc, _, pooled = x_classes(piv, class_readings(list(piv)))
+        write_table(pc, out / 'c_pooled_classes.csv')
+    y1 = y1_summary(y1_table())
+    sd = y1['carrying']['all']['persistent_sd']
+    wc, _, wsumm = x_classes(widen(ivs, sd), readings)
+    write_table(wc.assign(widened_by_log2=sd), out / 'c_widened_classes.csv')
+    changed = {x: dict(before=summ[x]['over_estimates'], after=wsumm[x]['over_estimates'],
+                       held_before=summ[x]['held_per_estimate'], held_after=wsumm[x]['held_per_estimate'],
+                       changes=bool(summ[x]['held_per_estimate'] != wsumm[x]['held_per_estimate']))
+               for x in X_IDS}
+    res = dict(caveat=QUALITY_CAVEAT, unmeasured=UNMEASURED,
+               classes={x: dict(over_estimates=summ[x]['over_estimates'], held_per_estimate=summ[x]['held_per_estimate'],
+                                carrying_per_estimate=summ[x]['carrying_per_estimate']) for x in X_IDS},
+               pooled=({x: dict(over_estimates=pooled[x]['over_estimates'], held_per_estimate=pooled[x]['held_per_estimate'])
+                        for x in X_IDS} if pooled else "not formed: X1 is not the 12's side, held"),
+               widened=dict(persistent_sd_log2=sd, changes=changed,
+                            note=("each interval widened by Y1's persistent SD (log2) at each end, as if one pair of vials "
+                                  "had served all five days; described")),
+               readings=[dict(key=k, flies=fk, model_level=lv) for k, fk, lv in readings],
+               family_sources=family_levels()['blank'].attrs.get('sources'), x1=x1['held'])
+    _write_json(out / 'c_summary.json', res)
+    provenance('C', classes={x: res['classes'][x]['over_estimates'] for x in X_IDS})
+    return res
+
+
+# ---------------------------------------------------------------------------
+# part D: the vials
+
+def y1_rows(resp: pd.DataFrame, baseline: str) -> pd.DataFrame:
+    """Y1's rows: per run, concentration and pair of vials of the run's three-vial odor (VIAL_PAIRS), the log2 ratio
+    of the lower-numbered vial's response over the other's (both above MIN_RESPONSE; each at its first kept block) and
+    their block distance; 'carries' False for the pairs with vial 1 in the five runs of 10-22 with three vials of paa
+    (vial 1 in the other half of the run: vials 2 and 3 carry there)."""
+    E98 = _e98()
+    r = resp[resp['baseline'] == baseline]
+    rows = []
+    for rec, g in r.groupby('recording'):
+        o = three_vial_odor(g['odor'])
+        if o is None:
+            continue
+        lab = {1: o, 2: f'{o}_vial2', 3: f'{o}_vial3'}
+        gi = g.set_index(['odor', 'conc'])
+        for c in sorted(g.loc[g['odor'] == o, 'conc'].unique()):
+            for a, b in VIAL_PAIRS:
+                ka, kb = (lab[a], c), (lab[b], c)
+                if ka not in gi.index or kb not in gi.index:
+                    continue
+                va, vb = float(gi.loc[ka, 'response']), float(gi.loc[kb, 'response'])
+                ok = va > E98.MIN_RESPONSE and vb > E98.MIN_RESPONSE
+                rows.append(dict(recording=rec, day=rec[:8], fly=g['fly'].iloc[0], side=g['side'].iloc[0],
+                                 plane_um=float(g['plane_um'].iloc[0]), odor=o, conc=float(c), pair=f'{a}/{b}',
+                                 response_a=va, response_b=vb, block_a=int(gi.loc[ka, 'block1']),
+                                 block_b=int(gi.loc[kb, 'block1']),
+                                 block_distance=abs(int(gi.loc[ka, 'block1']) - int(gi.loc[kb, 'block1'])),
+                                 log2_ratio=float(np.log2(va / vb)) if ok else np.nan, entered=bool(ok),
+                                 carries=not (rec in TEN22_PAA and a == 1), marked=rec in MARKED, baseline=baseline))
+    return pd.DataFrame(rows)
+
+
+def y1_table() -> pd.DataFrame:
+    """Y1's rows under the carrying reading (order-matched, the first two presentations; all planes), the first-in-block
+    baseline (which admits the four runs without a paraffin-oil-only block) and without the marked runs."""
+    resp = series_responses()
+    out = []
+    for key in Y1_READINGS:
+        bl = READINGS[key]['baseline']
+        t = y1_rows(resp, bl).assign(reading=key)
+        if key == 'without_marked':
+            t = t[~t['marked']]
+        out.append(t)
+    return pd.concat(out, ignore_index=True)
+
+
+def y1_summary(t: pd.DataFrame) -> dict:
+    """Y1 per reading over the carrying rows (entered): the variance split (`y1_variance_split`) over both odors and per
+    odor, the yardstick (`vial_yardstick`), and the SD by block distance."""
+    out = {}
+    for key, g in t.groupby('reading'):
+        g = g[g['carries'].astype(bool) & g['entered'].astype(bool)]
+        d = {'all': y1_variance_split(g)}
+        for o, go in g.groupby('odor'):
+            d[o] = y1_variance_split(go)
+        for k in list(d):
+            d[k]['yardstick_log2'] = vial_yardstick(d[k]['persistent_sd']) if np.isfinite(d[k]['persistent_sd']) else np.nan
+            d[k]['yardstick_factor'] = float(2 ** d[k]['yardstick_log2'])
+        d['by_block_distance'] = {int(b): dict(n=int(len(x)), mean=float(x['log2_ratio'].mean()),
+                                               sd=float(x['log2_ratio'].std(ddof=1)) if len(x) > 1 else np.nan,
+                                               rms=float(np.sqrt((x['log2_ratio'] ** 2).mean())))
+                                  for b, x in g.groupby('block_distance')}
+        out[key] = d
+    return out
+
+
+def series_maps(row) -> Tuple[np.ndarray, pd.DataFrame, np.ndarray]:
+    """One run's peak-map stack, stimulus table and calyx outline mask (`require_part_a` first; the frame count must
+    equal the presentations)."""
+    import tifffile
+    from experiments import E100_apl_weak_odors as E100
+    require_part_a(row['stem'])
+    check_row(row)
+    E100._ds()
+    from data_prep import apl_calyx_maps as ACM
+    p = E100.recording_paths(row)
+    stack = tifffile.imread(p['peak_maps']).astype(float)
+    mask = ACM.roi_mask(ACM.read_imagej_polygon(p['roi']), stack.shape[1:])
+    table = stim_table(row)
+    if stack.shape[0] != len(table):
+        raise RuntimeError(f"{row['stem']}: {stack.shape[0]} maps for {len(table)} presentations")
+    return stack, table, mask
+
+
+def block_maps(stack: np.ndarray, table: pd.DataFrame) -> Optional[Dict[Tuple[str, float], dict]]:
+    """Per stimulus at its first kept block, its presentation maps minus the order-matched baseline map (the mean of
+    the paraffin-oil-only blocks' maps at the same position), every presentation; None without such a block."""
+    E98 = _e98()
+    t = table.reset_index(drop=True)
+    kept = t[~t['out']]
+    pb = kept[kept['pfo_block']]
+    if pb.empty:
+        return None
+    base = {int(p): stack[g.index].mean(axis=0) for p, g in pb.groupby('position')}
+    out = {}
+    for _, sb in E98.d_stimulus_blocks(t, 'first').iterrows():
+        g = t[(t['block1'] == sb['block1']) & (t['odor'] == sb['odor']) & (t['log10_conc'] == sb['log10_conc'])]
+        out[(str(sb['odor']), round(float(sb['log10_conc']), 3))] = dict(
+            block1=int(sb['block1']), maps=[stack[i] - base[int(p)] for i, p in zip(g.index, g['position'])])
+    return out
+
+
+def _r(a: np.ndarray, b: np.ndarray) -> float:
+    return float(np.corrcoef(a, b)[0, 1])
+
+
+def m_recording(bm: Dict[Tuple[str, float], dict], mask: np.ndarray, blur: float = M_BLUR_PX,
+                remove_common: bool = True) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """M for one run: the common map from the nine stimuli of ms and vial 1 of paa and pa (E79's `svd_shared` on the
+    blurred block-mean maps inside the outline, means removed); each stimulus's remainder (E79's `_residual`; with
+    `remove_common` False the blurred map with its mean removed); r_rep per stimulus (the remainders of the first and
+    second halves of its presentations in its block); the pairs: vials 2 and 3 of the three-vial odor at one
+    concentration ('vial') and vial 2 or 3 against each other odor's vial 1 at the same concentration rank ('odor'),
+    with r between the remainders and the block distance. Returns (per stimulus, per pair)."""
+    from experiments import E100_apl_weak_odors as E100
+    DS = E100._ds()
+    concs = {}
+    for o, c in bm:
+        concs.setdefault(o, []).append(c)
+    concs = {o: sorted(v) for o, v in concs.items()}
+    common = [(o, c) for o in ODORS3 for c in concs.get(o, [])]
+    v = None
+    if remove_common:
+        X = np.stack([_blurred_in(np.mean(bm[k]['maps'], axis=0), mask, blur) for k in common])
+        v = DS.svd_shared(X, True)[1]
+
+    def rem(m):
+        x = _blurred_in(m, mask, blur)
+        return DS._residual(x, v, True) if v is not None else x - x.mean()
+    rems, rrep, stim = {}, {}, []
+    for k, d in bm.items():
+        p = d['maps']
+        rems[k] = rem(np.mean(p, axis=0))
+        h = len(p) // 2
+        rrep[k] = _r(rem(np.mean(p[:h], axis=0)), rem(np.mean(p[h:], axis=0))) if h >= 1 else np.nan
+        stim.append(dict(odor=k[0], conc=k[1], block1=d['block1'], n_presentations=len(p), r_rep=rrep[k]))
+    o3 = three_vial_odor([o for o, _ in bm])
+    pairs = []
+    if o3 is not None:
+        base = concs.get(o3, [])
+        for rank, c in enumerate(base):
+            a, b = (f'{o3}_vial2', c), (f'{o3}_vial3', c)
+            if a in bm and b in bm:
+                pairs.append(dict(kind='vial', a=f'{a[0]} {c:g}', b=f'{b[0]} {c:g}', rank=rank + 1, r=_r(rems[a], rems[b]),
+                                  block_distance=abs(bm[a]['block1'] - bm[b]['block1']), r_rep_a=rrep[a], r_rep_b=rrep[b]))
+            for k in (a, b):
+                if k not in bm:
+                    continue
+                for other in (o for o in ODORS3 if o != o3):
+                    if rank >= len(concs.get(other, [])):
+                        continue
+                    q = (other, concs[other][rank])
+                    pairs.append(dict(kind='odor', a=f'{k[0]} {c:g}', b=f'{q[0]} {q[1]:g}', rank=rank + 1,
+                                      r=_r(rems[k], rems[q]), block_distance=abs(bm[k]['block1'] - bm[q]['block1']),
+                                      r_rep_a=rrep[k], r_rep_b=rrep[q]))
+    return pd.DataFrame(stim), pd.DataFrame(pairs)
+
+
+def m_calyces(pairs: pd.DataFrame, max_blocks: Optional[int] = M_MAX_BLOCKS_APART,
+              max_blocks_odor: Optional[int] = M_MAX_BLOCKS_APART, min_r_rep: float = M_MIN_R_REP) -> pd.DataFrame:
+    """Per calyx (fly, side): the pairs that enter (block distance at most `max_blocks` for vial pairs and
+    `max_blocks_odor` for odor pairs, None for no limit; both stimuli's r_rep at least `min_r_rep`), r_vial and r_odor
+    their means, r_rep the mean r_rep of the entering vial pairs' stimuli, and the share (`m_share`)."""
+    p = pairs.copy()
+    lim = np.where(p['kind'] == 'vial', np.inf if max_blocks is None else max_blocks,
+                   np.inf if max_blocks_odor is None else max_blocks_odor)
+    p['enters'] = (p['block_distance'] <= lim) & (p['r_rep_a'] >= min_r_rep) & (p['r_rep_b'] >= min_r_rep)
+    rows = []
+    for (fly, side), g in p.groupby(['fly', 'side']):
+        e = g[g['enters']]
+        v, o = e[e['kind'] == 'vial'], e[e['kind'] == 'odor']
+        rv = float(v['r'].mean()) if len(v) else np.nan
+        ro = float(o['r'].mean()) if len(o) else np.nan
+        rr = float(np.mean(np.concatenate([v['r_rep_a'], v['r_rep_b']]))) if len(v) else np.nan
+        sh = m_share(rv, ro, rr) if np.isfinite(rv) and np.isfinite(ro) and np.isfinite(rr) else np.nan
+        rows.append(dict(fly=fly, side=side, calyx=f'{fly}_{side}', n_vial_pairs=int(len(v)), n_odor_pairs=int(len(o)),
+                         n_recordings=int(e['recording'].nunique()), r_vial=rv, r_odor=ro, r_rep=rr, share=sh,
+                         vial_over_odor=bool(np.isfinite(rv) and np.isfinite(ro) and rv > ro)))
+    return pd.DataFrame(rows)
+
+
+def m_result(cal: pd.DataFrame) -> dict:
+    """M's class from the calyces: the share's mean over flies (a fly's calyces averaged) and its 90 % interval from
+    E79's fly bootstrap (arithmetic, 10,000 draws), r_vial > r_odor counted over calyces, `m_class`."""
+    E98 = _e98()
+    from experiments import E79_apl_calyx_constraints as E79
+    c = cal[np.isfinite(cal['share'])]
+    pf = c.groupby('fly')['share'].mean()
+    if len(pf) == 0:
+        return dict(n_calyces=0, n_flies=0, share=np.nan, lo90=np.nan, hi90=np.nan, n_vial_over_odor=0, cls='not decided')
+    m, lo, hi = E79.fly_bootstrap(pf.to_numpy(), n_boot=E98.N_BOOT, seed=E98.SEED)
+    n = int(c['vial_over_odor'].sum())
+    return dict(n_calyces=int(len(c)), n_flies=int(len(pf)), share=float(m[0]), lo90=float(lo[0]), hi90=float(hi[0]),
+                n_vial_over_odor=n, cls=m_class(float(lo[0]), float(hi[0]), n))
+
+
+def m_tables() -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """M over every run with a paraffin-oil-only block (all planes), at each blur of M_BLURS_PX, with and without the
+    common map removed: (per stimulus, per pair), each row with its run, fly, side, plane, blur and variant."""
+    rows = series_rows(list(SERIES))
+    stims, pairs = [], []
+    for st, row in rows.iterrows():
+        stack, table, mask = series_maps(row)
+        bm = block_maps(stack, table)
+        if bm is None:
+            continue
+        meta = dict(recording=st, fly=row['fly_id'], side=row['side'], plane_um=float(row['plane_depth_um']),
+                    ten22_pa=st in TEN22_PA)
+        for blur in M_BLURS_PX:
+            for rc in (True, False):
+                s, p = m_recording(bm, mask, blur, rc)
+                kw = dict(meta, blur_px=blur, common_removed=rc)
+                stims.append(s.assign(**kw))
+                pairs.append(p.assign(**kw))
+    return pd.concat(stims, ignore_index=True), pd.concat(pairs, ignore_index=True)
+
+
+def m_summary(pairs: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Per blur and variant (the carrying one: the common map removed, without the five 10-22 runs with three vials of
+    pa; before the common map is removed; those five runs alone with no block limit on the odor pairs, beside): the
+    calyces' table and M's result."""
+    cal_rows, res_rows = [], []
+    for blur, g in pairs.groupby('blur_px'):
+        variants = {'carrying': (g[g['common_removed'] & ~g['ten22_pa']], M_MAX_BLOCKS_APART),
+                    'before_common_removed': (g[~g['common_removed'] & ~g['ten22_pa']], M_MAX_BLOCKS_APART),
+                    'ten22_pa_beside': (g[g['common_removed'] & g['ten22_pa']], None)}
+        for name, (p, odor_lim) in variants.items():
+            cal = m_calyces(p, M_MAX_BLOCKS_APART, odor_lim) if len(p) else pd.DataFrame()
+            res = m_result(cal) if len(cal) else dict(n_calyces=0, cls='not decided')
+            cal_rows.append(cal.assign(blur_px=blur, variant=name))
+            res_rows.append(dict(blur_px=blur, variant=name, carries=bool(name == 'carrying' and blur == M_BLUR_PX), **res))
+    return pd.concat(cal_rows, ignore_index=True), pd.DataFrame(res_rows)
 
 
 def part_d() -> dict:
-    """Part D, the vials (Y1, M; not implemented yet)."""
-    return _later_part('D')
+    """Part D, the vials: Y1 (d_y1_pairs.csv, the SDs, the persistent part and the yardstick in d_summary.json), M
+    (d_m_stimuli.csv, d_m_pairs.csv, d_m_calyces.csv, d_m.csv: the share and class per blur and variant)."""
+    _require_lock('D')
+    out = out_dir()
+    t = y1_table()
+    write_table(t, out / 'd_y1_pairs.csv')
+    y1 = y1_summary(t)
+    stims, pairs = m_tables()
+    write_table(stims, out / 'd_m_stimuli.csv')
+    write_table(pairs, out / 'd_m_pairs.csv')
+    cal, res = m_summary(pairs)
+    write_table(cal, out / 'd_m_calyces.csv')
+    write_table(res, out / 'd_m.csv')
+    car = res[res['carries']].iloc[0].to_dict()
+    summ = dict(caveat=QUALITY_CAVEAT, unmeasured=UNMEASURED, y1=y1, m_carrying=car,
+                m=res.to_dict('records'),
+                rules=dict(y1_yardstick=Y1_YARDSTICK, m_blur_carrying=M_BLUR_PX, m_max_blocks=M_MAX_BLOCKS_APART,
+                           m_min_r_rep=M_MIN_R_REP, m_odor_lo=M_ODOR_LO, m_min_calyces=M_MIN_CALYCES, m_block_hi=M_BLOCK_HI),
+                notes=("Y1: every pair of the three vials at each concentration, each vial at its first kept block, in "
+                       "every run with a reading (all planes); in the five 10-22 runs with three vials of paa only vials 2 "
+                       "and 3 carry. M: every run with a paraffin-oil-only block, all planes, every presentation of the "
+                       "stimulus's first block; the five 10-22 runs with three vials of pa are beside."))
+    _write_json(out / 'd_summary.json', summ)
+    provenance('D', y1_persistent_sd=y1['carrying']['all']['persistent_sd'], m=car.get('cls'))
+    return summ
+
+
+# ---------------------------------------------------------------------------
+# part E: beside (Y2, Y3, Z, Hallem's input, all three vials, Yang's tables)
+
+def y2_repeats() -> pd.DataFrame:
+    """Y2: every stimulus read in two or more kept blocks (the two passes, 16 blocks apart; pa vial 1's two series in the
+    runs of 10-22), each block under the carrying reading: the later block's response over the first's (natural log),
+    with the block distance and the kind."""
+    E98 = _e98()
+    r = series_responses('maps', 'all', N_FIRST)
+    r = r[r['baseline'] == 'order_matched']
+    rows = []
+    for (rec, o, c), g in r.groupby(['recording', 'odor', 'conc']):
+        g = g.sort_values('block1')
+        if len(g) < 2:
+            continue
+        first = g.iloc[0]
+        for _, x in g.iloc[1:].iterrows():
+            ok = first['response'] > E98.MIN_RESPONSE and x['response'] > E98.MIN_RESPONSE
+            rows.append(dict(recording=rec, fly=first['fly'], side=first['side'], plane_um=float(first['plane_um']),
+                             odor=o, conc=float(c), first_block=int(first['block1']), later_block=int(x['block1']),
+                             block_distance=int(x['block1'] - first['block1']), first=float(first['response']),
+                             later=float(x['response']),
+                             log_later_over_first=float(np.log(x['response'] / first['response'])) if ok else np.nan,
+                             kind='two passes' if rec in TWO_PASSES else '10-22 pa vial 1' if rec.startswith('20211022')
+                             else 'other'))
+    return pd.DataFrame(rows)
+
+
+def drift_per_block(rep: pd.DataFrame) -> float:
+    """The drift per block (natural log): the least-squares slope through the origin of the later-over-first log ratio
+    on the block distance."""
+    d = rep.dropna(subset=['log_later_over_first'])
+    x, y = d['block_distance'].to_numpy(float), d['log_later_over_first'].to_numpy(float)
+    return float((x * y).sum() / (x * x).sum()) if len(d) else np.nan
+
+
+def y2_p1_corrected(drift: float) -> Tuple[pd.DataFrame, dict]:
+    """P1 at 18 um (carrying reading) with its block lag corrected by the drift: per recording the lag (E98's
+    `block_lag`, paa at 10^-4 over ms at 10^-3) and log P1 minus drift x lag; the flies' ratio before and after."""
+    E98 = _e98()
+    _, pr = series_ratios('carrying')
+    e = pr[(pr['ratio_id'] == 'P1') & pr['entered'].astype(bool)].copy()
+    e['lag'] = [E98.block_lag(series_table(rec), ('paa', -4.0), ('ms', -3.0)) for rec in e['recording']]
+    e['log_ratio_corrected'] = e['log_ratio'] - drift * e['lag']
+    before = E98.fly_ratio(e[['fly', 'log_ratio']])
+    after = E98.fly_ratio(e[['fly']].assign(log_ratio=e['log_ratio_corrected']))
+    return e, dict(drift_per_block=drift, before=before, after=after)
+
+
+def y3_within_block() -> Tuple[pd.DataFrame, pd.DataFrame, dict]:
+    """Y3: per run (all planes, carrying baseline) and stimulus at its first block, the k-th presentation over the
+    first (k 2 to 4; both above MIN_RESPONSE; natural log); by odor, concentration and k the count, median and
+    geometric mean; and whether paa and ms differ in the second over the first: per fly the mean log ratio of paa's
+    (vial 1) minus ms's, its mean over flies and E79's fly bootstrap interval (differ when it excludes 0)."""
+    E98 = _e98()
+    from experiments import E79_apl_calyx_constraints as E79
+    r = series_responses()
+    r = r[r['baseline'] == 'order_matched']
+    rows = []
+    for _, x in r.iterrows():
+        for k in range(2, Y3_MAX_REP + 1):
+            col = f'rep{k}'
+            if col not in r.columns or not np.isfinite(x.get(col, np.nan)):
+                continue
+            ok = x['rep1'] > E98.MIN_RESPONSE and x[col] > E98.MIN_RESPONSE
+            rows.append(dict(recording=x['recording'], fly=x['fly'], plane_um=float(x['plane_um']), odor=x['odor'],
+                             conc=float(x['conc']), k=k, first=float(x['rep1']), kth=float(x[col]),
+                             log_kth_over_first=float(np.log(x[col] / x['rep1'])) if ok else np.nan))
+    t = pd.DataFrame(rows)
+    s = t.dropna(subset=['log_kth_over_first']).groupby(['odor', 'conc', 'k'])['log_kth_over_first'].agg(
+        n='size', median='median', mean='mean').reset_index()
+    s['geomean_ratio'] = np.exp(s['mean'])
+    k2 = t[(t['k'] == 2)].dropna(subset=['log_kth_over_first'])
+    pf = k2[k2['odor'].isin(['paa', 'ms'])].groupby(['fly', 'odor'])['log_kth_over_first'].mean().unstack()
+    pf = pf.dropna()
+    d = (pf['paa'] - pf['ms']) if len(pf) else pd.Series(dtype=float)
+    res = dict(n_flies=int(len(d)))
+    if len(d):
+        m, lo, hi = E79.fly_bootstrap(d.to_numpy(), n_boot=E98.N_BOOT, seed=E98.SEED)
+        res.update(mean_log_diff=float(m[0]), lo90=float(lo[0]), hi90=float(hi[0]),
+                   factor=float(np.exp(m[0])), differ=bool(lo[0] > 0 or hi[0] < 0), per_fly=d.to_dict())
+    return t, s, res
+
+
+def calyx_runs() -> pd.DataFrame:
+    """The series' processed runs per calyx in run order, with their planes."""
+    rows = series_rows(list(SERIES))
+    t = pd.DataFrame(dict(recording=rows.index, fly=rows['fly_id'].to_numpy(), side=rows['side'].to_numpy(),
+                          plane_um=rows['plane_depth_um'].astype(float).to_numpy(),
+                          run=[int(re.search(r'fun(\d+)', s).group(1)) for s in rows.index]))
+    return t.sort_values(['fly', 'side', 'run']).reset_index(drop=True)
+
+
+def alternating_calyces(runs: pd.DataFrame) -> List[str]:
+    """The calyces whose planes alternate from run to run: at least two switches between 15 and 18 um among consecutive
+    processed runs."""
+    out = []
+    for (fly, side), g in runs.groupby(['fly', 'side']):
+        p = g['plane_um'].tolist()
+        n = sum({a, b} == {15.0, 18.0} for a, b in zip(p[:-1], p[1:]))
+        if n >= 2:
+            out.append(f'{fly}_{side}')
+    return out
+
+
+def z_tables(rid: str = 'P1') -> Tuple[pd.DataFrame, pd.DataFrame, dict]:
+    """Z for ratio `rid` (P1 carries, P3 beside), carrying reading, all planes: per calyx the mean log ratio at 15 um
+    minus at 18 um (`z_rule` over the calyces, the mean factor's interval from E79's fly bootstrap of the flies' mean
+    calyx differences); in the alternating calyces the difference between neighbouring runs of the two planes, by order."""
+    E98 = _e98()
+    from experiments import E79_apl_calyx_constraints as E79
+    _, pr = series_ratios('carrying', plane=None)
+    runs = calyx_runs()
+    meta = runs.set_index('recording')
+    e = pr[(pr['ratio_id'] == rid) & pr['entered'].astype(bool)].copy()
+    e['side'] = e['recording'].map(meta['side'])
+    e['plane_um'] = e['recording'].map(meta['plane_um'])
+    rows = []
+    for (fly, side), g in e.groupby(['fly', 'side']):
+        a, b = g[g['plane_um'] == 15.0]['log_ratio'], g[g['plane_um'] == 18.0]['log_ratio']
+        rows.append(dict(ratio_id=rid, fly=fly, side=side, calyx=f'{fly}_{side}', n_15=int(len(a)), n_18=int(len(b)),
+                         log_15=float(a.mean()) if len(a) else np.nan, log_18=float(b.mean()) if len(b) else np.nan,
+                         log_diff=float(a.mean() - b.mean()) if len(a) and len(b) else np.nan))
+    cal = pd.DataFrame(rows)
+    c = cal.dropna(subset=['log_diff'])
+    pf = c.groupby('fly')['log_diff'].mean()
+    m, lo, hi = E79.fly_bootstrap(pf.to_numpy(), n_boot=E98.N_BOOT, seed=E98.SEED)
+    res = dict(ratio_id=rid, n_calyces=int(len(c)), n_higher_15=int((c['log_diff'] > 0).sum()), n_flies=int(len(pf)),
+               factor=float(np.exp(m[0])), lo90=float(np.exp(lo[0])), hi90=float(np.exp(hi[0])),
+               cls=z_rule(c['log_diff'].to_numpy(), float(np.exp(lo[0])), float(np.exp(hi[0]))))
+    alt = alternating_calyces(runs)
+    lr = e.set_index('recording')['log_ratio']
+    nb = []
+    for (fly, side), g in runs.groupby(['fly', 'side']):
+        if f'{fly}_{side}' not in alt:
+            continue
+        g = g.reset_index(drop=True)
+        for i in range(len(g) - 1):
+            a, b = g.iloc[i], g.iloc[i + 1]
+            if {a['plane_um'], b['plane_um']} != {15.0, 18.0}:
+                continue
+            r15, r18 = (a, b) if a['plane_um'] == 15.0 else (b, a)
+            d = (lr.get(r15['recording'], np.nan) - lr.get(r18['recording'], np.nan))
+            nb.append(dict(ratio_id=rid, calyx=f'{fly}_{side}', earlier=a['recording'], later=b['recording'],
+                           order='15 then 18' if a['plane_um'] == 15.0 else '18 then 15', log_diff_15_minus_18=float(d)))
+    nbt = pd.DataFrame(nb)
+    res['alternating_calyces'] = alt
+    if len(nbt):
+        res['neighbours_by_order'] = {o: dict(n=int(g['log_diff_15_minus_18'].notna().sum()),
+                                              mean_factor=float(np.exp(g['log_diff_15_minus_18'].mean())),
+                                              n_higher_15=int((g['log_diff_15_minus_18'] > 0).sum()))
+                                      for o, g in nbt.groupby('order')}
+    return cal, nbt, res
+
+
+def hallem_rows_e(intervals: Dict[str, Dict[str, Tuple[float, float]]]) -> pd.DataFrame:
+    """Q2 and F1 against the family's ratios on Hallem's rows (E98's B1 labels; as E98's V5 at 10^-4 and V3 at 10^-4),
+    at the blank's level, per set of flies (`intervals`: set -> ratio -> interval). Described."""
+    E98 = _e98()
+    lv = family_levels()['blank']
+    pairs = {'Q2': (E98.hallem_label('pa', -4), E98.hallem_label('ms', -4)),
+             'F1': (E98.hallem_label('ms', -4), E98.hallem_label('ms', -2))}
+    rows = []
+    for name, iv in intervals.items():
+        for rid, (num, den) in pairs.items():
+            lo, hi = iv[rid]
+            wc = wiring_classes(lv, num, den, lo, hi)
+            rows.append(dict(set=name, ratio_id=rid, numerator=num, denominator=den, flies_lo90=lo, flies_hi90=hi,
+                             n_wirings=int(len(wc)), category=comparison_class(wc['cls_ab']),
+                             category_linear=comparison_class(wc['cls_ab_linear']),
+                             model_linear_min=float(wc['ratio_linear'].min()) if len(wc) else np.nan,
+                             model_linear_max=float(wc['ratio_linear'].max()) if len(wc) else np.nan,
+                             **{f'n_{k}': int((wc['cls_ab'] == k).sum()) for k in X_CLASSES + ('mixed',)}))
+    return pd.DataFrame(rows)
+
+
+def alt_reading_x1(name: str, source: str = 'maps', three_vials: bool = False) -> Tuple[pd.DataFrame, str]:
+    """X1's rows under the carrying reading with all three vials averaged in place of vial 1, or from Yang's tables in
+    place of the maps (described), against the 12's locked carrying reading."""
+    f, pr = series_ratios('carrying', source=source, three_vials=three_vials)
+    r12, pf12 = twelve_side('carrying')
+    x = x1_rows(f, pr, r12, pf12)
+    return x.assign(reading=name, side=x1_side(x)), x1_side(x)
+
+
+def maps_vs_yang() -> dict:
+    """The series' calyx means from the maps against Yang's roi_peak_dff tables (every presentation of every run)."""
+    rows = series_rows(list(SERIES))
+    d = []
+    for st, row in rows.iterrows():
+        a, b = frame_means(row, 'maps'), frame_means(row, 'yang')
+        d.append(dict(recording=st, max_abs_diff=float(np.max(np.abs(a - b))), r=float(np.corrcoef(a, b)[0, 1])))
+    t = pd.DataFrame(d)
+    return dict(max_abs_diff=float(t['max_abs_diff'].max()), min_r=float(t['r'].min()))
 
 
 def part_e() -> dict:
-    """Part E, beside (Y2, Y3, Z, Hallem's input; not implemented yet)."""
-    return _later_part('E')
+    """Part E, beside (only Z has a class): Y2 (e_y2_repeats.csv, e_y2_p1.csv), Y3 (e_y3.csv, e_y3_summary.csv), Z
+    (e_z_calyces.csv, e_z_neighbours.csv, P1 carrying and P3 beside), Hallem's input (e_hallem.csv), all three vials
+    averaged and Yang's tables in place of the maps (e_alt_readings.csv); e_summary.json."""
+    _require_lock('E')
+    out = out_dir()
+    rep = y2_repeats()
+    write_table(rep, out / 'e_y2_repeats.csv')
+    drift = drift_per_block(rep)
+    drift_kind = {k: drift_per_block(g) for k, g in rep.groupby('kind')}
+    p1c, p1res = y2_p1_corrected(drift)
+    write_table(p1c, out / 'e_y2_p1.csv')
+    y3, y3s, y3res = y3_within_block()
+    write_table(y3, out / 'e_y3.csv')
+    write_table(y3s, out / 'e_y3_summary.csv')
+    zc, zn, zres = [], [], {}
+    for rid in ('P1', 'P3'):
+        c, n, r = z_tables(rid)
+        zc.append(c)
+        zn.append(n)
+        zres[rid] = r
+    write_table(pd.concat(zc, ignore_index=True), out / 'e_z_calyces.csv')
+    write_table(pd.concat(zn, ignore_index=True), out / 'e_z_neighbours.csv')
+    f, _ = series_ratios('carrying')
+    f = f.set_index('ratio_id')
+    r12, _ = twelve_side('carrying')
+    ivs = {'held-out flies (18 um, carrying)': {rid: (float(f.loc[rid, 'lo90']), float(f.loc[rid, 'hi90'])) for rid in ('Q2', 'F1')},
+           'the 12 (carrying)': {rid: (float(r12.loc[rid, 'lo90']), float(r12.loc[rid, 'hi90'])) for rid in ('Q2', 'F1')}}
+    hal = hallem_rows_e(ivs)
+    write_table(hal, out / 'e_hallem.csv')
+    alt, alt_sides = [], {}
+    for name, src, tv in (('all three vials averaged', 'maps', True), ("Yang's tables", 'yang', False)):
+        x, s = alt_reading_x1(name, src, tv)
+        alt.append(x)
+        alt_sides[name] = s
+    write_table(pd.concat(alt, ignore_index=True), out / 'e_alt_readings.csv')
+    summ = dict(caveat=QUALITY_CAVEAT, unmeasured=UNMEASURED,
+                y2=dict(drift_per_block=drift, drift_factor_per_block=float(np.exp(drift)), drift_by_kind=drift_kind,
+                        n_pairs=int(rep['log_later_over_first'].notna().sum()), p1=p1res),
+                y3=y3res, z=zres, hallem=hal.to_dict('records'), alt_readings_x1=alt_sides,
+                maps_vs_yang=maps_vs_yang())
+    _write_json(out / 'e_summary.json', summ)
+    provenance('E', z=zres['P1']['cls'])
+    return summ
 
 
 def main() -> None:

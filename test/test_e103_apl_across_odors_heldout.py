@@ -352,3 +352,141 @@ def test_eligibility_from_the_stimulus_files_equals_the_lists():
     assert lost['20211022_1FLfun2'] == 'pa_vial2 -4.863' and lost['20211022_1FLfun5'] == 'paa_vial2 -3.908'
     vi = M.vials_identity(el)
     assert vi['agrees'].all()
+
+
+# ---------------------------------------------------------------------------
+# parts B to E on made-up rows and maps
+
+def _resp_rows(rec, fly, plane, vals, baseline='order_matched', blocks=None, n_reps=2):
+    rows = []
+    for (o, c), v in vals.items():
+        rows.append(dict(recording=rec, fly=fly, side='L', pulse_s=0.5, plane_um=float(plane), role='series', odor=o,
+                         conc=float(c), vial=2 if '_vial2' in o else 3 if '_vial3' in o else 1, stimulus=f'{o} {c:g}',
+                         block=(blocks or {}).get((o, c), 1) - 1, block1=(blocks or {}).get((o, c), 1), baseline=baseline,
+                         blank_subtracted=False, blank=np.nan, response=v, rep1=v, rep2=v, n_reps=n_reps, source='maps'))
+    return rows
+
+
+def test_every_presentation_weights_blocks_by_presentations():
+    rows = _resp_rows('r1', 'f1', 18, {('pa', -5.34): 0.2}, blocks={('pa', -5.34): 2}, n_reps=4)
+    rows += _resp_rows('r1', 'f1', 18, {('pa', -5.34): 0.5}, blocks={('pa', -5.34): 18}, n_reps=2)
+    out = M.every_presentation(pd.DataFrame(rows))
+    assert len(out) == 1 and out['response'].iloc[0] == pytest.approx((0.2 * 4 + 0.5 * 2) / 6)
+    assert out['n_blocks'].iloc[0] == 2 and out['block1'].iloc[0] == 2
+
+
+def test_three_vial_odor_and_their_average():
+    assert M.three_vial_odor(['ms', 'paa', 'pa', 'pa_vial2', 'pa_vial3']) == 'pa'
+    assert M.three_vial_odor(['ms', 'paa', 'pa']) is None
+    vals = {('pa', -5.34): 0.3, ('pa_vial2', -5.34): 0.6, ('pa_vial3', -5.34): 0.9, ('ms', -2.0): 0.4}
+    out = M.average_three_vials(pd.DataFrame(_resp_rows('r1', 'f1', 18, vals))).set_index('odor')
+    assert out.loc['pa', 'response'] == pytest.approx(0.6) and out.loc['pa_vial2', 'response'] == pytest.approx(0.6)
+    assert out.loc['ms', 'response'] == pytest.approx(0.4)
+
+
+def test_reading_recordings_planes_marked_flies_and_the_solvent_block():
+    rows = _resp_rows('20211107_1FLfun2', '2021-11-07_fly1', 18, {('ms', -2.0): 0.3})           # marked
+    rows += _resp_rows('20211107_1FLfun3', '2021-11-07_fly1', 18, {('ms', -2.0): 0.3})
+    rows += _resp_rows('20211109_5FRfun1', '2021-11-09_fly5', 18, {('ms', -2.0): 0.3})
+    rows += _resp_rows('20211109_5FRfun3', '2021-11-09_fly5', 15, {('ms', -2.0): 0.3})
+    rows += _resp_rows('20211029_3FLfun2', '2021-10-29_fly3', 18, {('ms', -2.0): 0.3}, baseline='first_in_block')
+    r = pd.DataFrame(rows)
+    assert M.reading_recordings(r, 'carrying', 'order_matched') == ['20211107_1FLfun2', '20211107_1FLfun3', '20211109_5FRfun1']
+    assert M.reading_recordings(r, 'without_marked', 'order_matched') == ['20211107_1FLfun3', '20211109_5FRfun1']
+    assert M.reading_recordings(r, 'without 2021-11-07_fly1', 'order_matched') == ['20211109_5FRfun1']
+    assert M.reading_recordings(r, 'first_in_block', 'first_in_block') == ['20211029_3FLfun2']   # no solvent block
+    assert M.reading_recordings(r, 'carrying', 'order_matched', plane=None)[-1] == '20211109_5FRfun3'
+
+
+def test_y1_pairs_and_the_ten22_paa_runs():
+    vals = {('paa', -4.386): 0.2, ('paa_vial2', -4.386): 0.4, ('paa_vial3', -4.386): 0.01, ('ms', -2.0): 0.5}
+    blocks = {('paa', -4.386): 13, ('paa_vial2', -4.386): 1, ('paa_vial3', -4.386): 4, ('ms', -2.0): 12}
+    rows = _resp_rows('20211022_1FLfun4', '2021-10-22_fly1', 15, vals, blocks=blocks)                # vial 1 the other half
+    rows += _resp_rows('20211107_1FRfun3', '2021-11-07_fly1', 15, {**vals, ('paa_vial3', -4.386): 0.8}, blocks=blocks)
+    t = M.y1_rows(pd.DataFrame(rows), 'order_matched').set_index(['recording', 'pair'])
+    a = t.loc[('20211022_1FLfun4', '1/2')]
+    assert not a['carries'] and a['log2_ratio'] == pytest.approx(-1.0) and a['block_distance'] == 12
+    assert t.loc[('20211022_1FLfun4', '2/3'), 'carries'] and not t.loc[('20211022_1FLfun4', '2/3'), 'entered']   # the floor
+    b = t.loc[('20211107_1FRfun3', '2/3')]
+    assert b['carries'] and b['log2_ratio'] == pytest.approx(-1.0) and b['block_distance'] == 3
+    assert t.loc[('20211107_1FRfun3', '1/3'), 'carries']
+
+
+def _bm(odor_specific=True, seed=2, far=False):
+    pres, keys, vp, op, mask = _m_maps(odor_specific, seed)
+    slot = {'ms': 1, 'paa': 2, 'pa_vial2': 3, 'pa_vial3': 4, 'pa': 5}      # interleaved, every pair within four blocks
+    blocks = {k: slot[k[0]] + 5 * k[1] for k in pres}
+    if far:                                                          # vial 3 far from everything
+        for c in range(3):
+            blocks[('pa_vial3', c)] = 40 + c
+    conc = {0: -5.34, 1: -4.863, 2: -4.386}
+    return {(k[0], conc[k[1]]): dict(block1=blocks[k], maps=pres[k]) for k in pres}, mask
+
+
+def test_m_recording_pairs_filters_and_class():
+    bm, mask = _bm(True)
+    stim, pairs = M.m_recording(bm, mask, blur=2.0)
+    assert set(pairs['kind']) == {'vial', 'odor'} and (pairs['kind'] == 'vial').sum() == 3
+    assert (pairs['kind'] == 'odor').sum() == 3 * 2 * 2                    # 3 ranks x 2 vials x 2 other odors
+    assert stim['r_rep'].min() > 0.8
+    pairs = pairs.assign(recording='r', fly='f1', side='L')
+    cal = M.m_calyces(pairs)
+    assert cal['share'].iloc[0] > 0.8 and cal['vial_over_odor'].iloc[0]
+    # pairs farther apart than four blocks do not enter
+    bmf, _ = _bm(True, far=True)
+    _, pf = M.m_recording(bmf, mask, blur=2.0)
+    cf = M.m_calyces(pf.assign(recording='r', fly='f1', side='L'))
+    assert cf['n_vial_pairs'].iloc[0] == 0 and np.isnan(cf['share'].iloc[0])
+    # a stimulus with r_rep below 0.3 does not enter
+    low = pairs.copy()
+    low.loc[low['kind'] == 'vial', 'r_rep_a'] = 0.2
+    assert M.m_calyces(low)['n_vial_pairs'].iloc[0] == 0
+    # the class over calyces of eight flies: all shares near 1
+    many = pd.concat([pairs.assign(fly=f'f{i}') for i in range(8)], ignore_index=True)
+    res = M.m_result(M.m_calyces(many))
+    assert res['n_calyces'] == 8 and res['cls'] == "the odor's"
+    bmb, maskb = _bm(False)
+    _, pb = M.m_recording(bmb, maskb, blur=2.0)
+    resb = M.m_result(M.m_calyces(pd.concat([pb.assign(recording='r', fly=f'f{i}', side='L') for i in range(8)])))
+    assert resb['share'] < 0.25
+
+
+def test_alternating_calyces_and_drift():
+    runs = pd.DataFrame(dict(recording=[f'r{i}' for i in range(9)], fly=['a'] * 4 + ['b'] * 3 + ['c'] * 2,
+                             side='L', plane_um=[15, 18, 15, 18, 15, 18, 18, 18, 15], run=[1, 2, 3, 4, 1, 2, 3, 1, 3]))
+    assert M.alternating_calyces(runs) == ['a_L']
+    rep = pd.DataFrame(dict(block_distance=[16, 16, 8], log_later_over_first=[-0.32, -0.32, np.nan]))
+    assert M.drift_per_block(rep) == pytest.approx(-0.02)
+
+
+def test_widen_and_x_classes_on_made_up_wirings():
+    w = M.widen({'carrying': {'P1': (1.0, 2.0)}}, 1.0)
+    assert w['carrying']['P1'] == pytest.approx((0.5, 4.0))
+    wir = [f'w{i}' for i in range(8)]
+    on = pd.DataFrame([dict(wiring=x, stimulus=s, win=v, pre=1.0) for x in wir
+                       for s, v in (('paa', 3.0), ('ms', 2.0), ('ms2', 1.5))])     # paa over ms 2, over ms2 4 (linear)
+    ivs = {'carrying': {'P1': (1.5, 2.5), 'P2': (1.8, 2.2)}, 'first_in_block': {'P1': (1.5, 2.5), 'P2': (1.8, 2.2)},
+           't_interval': {'P1': (0.5, 1.0), 'P2': (0.6, 1.1)}}
+    readings = [('carrying', 'carrying', 'blank'), ('first_in_block', 'first_in_block', 'blank'),
+                ('settled', 'carrying', 'settled')]
+    cl, wcl, s = M.x_classes(ivs, readings, levels={'blank': on, 'settled': on}, num='paa',
+                             estimates={'e1': 'ms', 'e2': 'ms2'})
+    assert s['X3']['held_per_estimate'] == {'e1': 'inside', 'e2': 'above'} and s['X3']['over_estimates'] == 'inside'
+    cl2, _, s2 = M.x_classes(ivs, readings + [('t_interval', 't_interval', 'blank')], levels={'blank': on, 'settled': on},
+                             num='paa', estimates={'e1': 'ms', 'e2': 'ms2'})
+    assert s2['X3']['held_per_estimate']['e1'] == 'reading-dependent'      # the t interval puts it above
+    assert s2['X3']['over_estimates'] == 'not decided'
+
+
+def test_x1_rows_on_made_up_sets():
+    flies = [f'2021-11-0{i}_fly1' for i in range(1, 6)]
+    pr = pd.DataFrame([dict(ratio_id=rid, fly=f, recording=f, entered=True, log_ratio=np.log(2.0) + 0.01 * k)
+                       for rid in M.RATIO_IDS for k, f in enumerate(flies)])
+    fs = pd.DataFrame([dict(ratio_id=rid, numerator='a', denominator='b', ratio=2.0, lo90=1.9, hi90=2.1, sd_log2_flies=0.01,
+                            n_flies=5, n_recordings=5, num_how='imaged', den_how='imaged') for rid in M.RATIO_IDS])
+    r12 = pd.DataFrame([dict(ratio_id=rid, ratio=1.0, lo90=0.9, hi90=1.1) for rid in M.RATIO_IDS]).set_index('ratio_id')
+    pf12 = {rid: pd.Series(np.log(1.0) + 0.02 * np.arange(8), index=[f'g{i}' for i in range(8)]) for rid in M.RATIO_IDS}
+    x = M.x1_rows(fs, pr, r12, pf12)
+    assert x['differ'].all() and (x['n_splits'] == 1287).all()
+    # every one differs; toward set S for all but F1 (set S lower) and S1/S2 (not in X1): between
+    assert M.x1_side(x) == 'between'
