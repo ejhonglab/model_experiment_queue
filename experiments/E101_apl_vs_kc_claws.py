@@ -165,6 +165,9 @@ Deviations from the entry (each also in the note):
   E90's pre-odor mean, in E90's three claw versions) and Remy's claws for pa and ms (E90's readers, as measured and with the
   trial noise removed) as e_model_distances.csv, beside the flies'.
 - Parts C to E skip a recording that lacks one of the two channels' maps (listed in their outputs).
+- The green-only fly 2022-10-05 fly 1 (group G) is written '1MR' in Yang's processed files and '1FR' in its raw run folders,
+  whose Experiment.xml files viki copied; its pixel size is read from the run with the same date, fly, side and run number
+  (`experiment_xml_path`), with the frame size checked against the maps.
 - Yang answered question 18 (2026-11-15 17:53): no run is left out, so the runs at 925 nm and those marked as warped by 5 um
   or more stay in every carrying reading, as the entry has them; the score reports the sensitivity readings without them
   beside (and the planes apart, V0 as the repetition, X3 at 2 and 8 um), deciding nothing (`beside`). Whether C2 moved by
@@ -1587,10 +1590,29 @@ def channel_paths(row) -> dict:
     roi = next((f for f in ([folder / f'{stem}_{c1_tag}.roi'] if c1_tag else []) + [folder / f'{stem}.roi'] if f.exists()),
                None)
     yml = next((f for f in (folder / f'{stem}.yaml', folder / f'{stem}_copy.yaml') if f.exists()), None)
-    xml = next(iter(sorted(folder.glob(f'{stem}*Experiment.xml'))), None)
-    return dict(yaml=yml, roi=roi, experiment_xml=xml, C1=stack(c1_tag), C1_tag=c1_tag, C1_table=table(c1_tag),
+    xml, xml_from = experiment_xml_path(folder, stem)
+    return dict(yaml=yml, roi=roi, experiment_xml=xml, experiment_xml_from=xml_from, C1=stack(c1_tag), C1_tag=c1_tag,
+                C1_table=table(c1_tag),
                 C2=stack(c2_tag), C2_tag=c2_tag, C2_table=table(c2_tag),
                 registration_matched=bool(not c2_tag or not c1_tag or matching_c1_tag(c2_tag) == c1_tag))
+
+
+def experiment_xml_path(folder: Path, stem: str) -> Tuple[Optional[Path], str]:
+    """A recording's Experiment.xml in its folder ('<stem>*Experiment.xml'), and the stem it was found under. Where there is
+    none, the same date, fly, side and run with the other sex letter (Yang's processed files of 2022-10-05 fly 1, a male,
+    are named '1MR...' and its raw run folders '1FR...'; `read_two_channel` checks the frame size against the maps)."""
+    xml = next(iter(sorted(Path(folder).glob(f'{stem}*Experiment.xml'))), None)
+    if xml is not None:
+        return xml, stem
+    p = _stem_parts(stem)
+    for sx in ('F', 'M', ''):
+        if sx == p['sex']:
+            continue
+        alt = f"{p['date']}_{p['fly']}{sx}{p['side']}fun{p['run']}"
+        cand = sorted(Path(folder).glob(f'{alt}_Experiment.xml'))
+        if cand:
+            return cand[0], alt
+    return None, ''
 
 
 def read_two_channel(row, maps: bool = True) -> dict:
@@ -1632,10 +1654,18 @@ def read_two_channel(row, maps: bool = True) -> dict:
             if len(t) >= len(frames):
                 frames[f'yang_{c}'] = t['roi_peak_dff'].to_numpy(dtype=float)[:len(frames)]
     xml = E100.experiment_xml(f['experiment_xml']) if f['experiment_xml'] is not None else None
+    if xml is not None and f.get('experiment_xml_from', row['stem']) != row['stem']:
+        shape = next(iter(stacks.values())).shape[1:]
+        if (xml['pixel_y'], xml['pixel_x']) != tuple(shape):
+            raise ValueError(f"{row['stem']}: the Experiment.xml of {f['experiment_xml_from']} has frames "
+                             f"{xml['pixel_y']} x {xml['pixel_x']}, the maps {shape}")
     out = dict(stem=row['stem'], fly=fly_of(row['stem']), calyx=calyx_of(row['stem']), group=group_of(row['stem']),
                plane_um=row.get('plane_depth_um'), frames=frames, mask=mask, files=f, xml=xml, truncated=truncated,
                channels=sorted(stacks), registration_matched=f['registration_matched'],
+               experiment_xml_from=f.get('experiment_xml_from', ''),
                pixel_um=float(xml['pixel_um']) if xml is not None else float(row.get('pixel_size_um', np.nan)))
+    if not np.isfinite(out['pixel_um']):
+        raise ValueError(f"{row['stem']}: no pixel size (no Experiment.xml, none in recordings.csv)")
     if maps:
         out['stacks'] = stacks
     return out

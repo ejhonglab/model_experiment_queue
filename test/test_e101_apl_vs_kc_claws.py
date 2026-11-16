@@ -391,6 +391,16 @@ def test_cell_grid_and_maps():
     assert grid.shape == (4, 3) and np.isfinite(grid).all()
 
 
+def test_experiment_xml_path_other_sex_letter(tmp_path):
+    (tmp_path / '20221005_1FRfun2_Experiment.xml').write_text('<x/>')
+    (tmp_path / '20221005_2FLfun1_Experiment.xml').write_text('<x/>')
+    x, src = M.experiment_xml_path(tmp_path, '20221005_1MRfun2')
+    assert x.name == '20221005_1FRfun2_Experiment.xml' and src == '20221005_1FRfun2'
+    x, src = M.experiment_xml_path(tmp_path, '20221005_2FLfun1')
+    assert src == '20221005_2FLfun1'
+    assert M.experiment_xml_path(tmp_path, '20221005_1MRfun3') == (None, '')
+
+
 def test_cross_correlogram_and_common_share():
     rng = np.random.default_rng(0)
     a = M.smooth_field(rng, 15, 1.5).reshape(15, 15)
