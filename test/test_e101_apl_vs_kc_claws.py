@@ -747,6 +747,7 @@ def test_parts_b_to_e_and_score_on_made_up_recordings(tmp_path, monkeypatch):
         assert v['X2']['lines'][q].startswith(f'{q}: ') and "E90's level (decides nothing)" in v['X2']['lines'][q]
         qq = v['X2']['quantities'][q]
         assert qq['held'] == M.partner_held(qq['held_before_partner'], list(qq['partner_classes'].values()), q)
+        assert qq['n_unprobed_flies_min'] >= 0 and isinstance(qq['unprobed_classes'], list)
     assert set(v['X2']['quantities']['APL']['partner_classes']) == {'carrying b0', 'carrying b1'}
     assert (tmp_path / 'verdict.json').exists()
     with open(tmp_path / 'score_x2.csv') as f:

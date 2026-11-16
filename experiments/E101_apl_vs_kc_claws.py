@@ -2872,6 +2872,9 @@ def x2_levels(sets: pd.DataFrame, flies: pd.DataFrame, keys, cross: bool, unprob
         h0 = held(main)
         pc = [part[q]['by_reading'][f'{CARRYING} b{bm:g}']['cls'] for _, bm in CARRYING_KEYS]
         out[q] = dict(held=partner_held(h0, pc, q), held_before_partner=h0,
+                      set_l_classes=sorted({r['cls'] for r in main[q]['by_reading'].values()}),
+                      unprobed_classes=main[q]['unprobed_classes'],
+                      n_unprobed_flies_min=main[q]['n_unprobed_flies_min'],
                       partner_classes={f'{CARRYING} b{bm:g}': c for (_, bm), c in zip(CARRYING_KEYS, pc)},
                       e90_held=held(shown), carrying=main[q], partner=part[q], e90=shown[q])
         if lines:
