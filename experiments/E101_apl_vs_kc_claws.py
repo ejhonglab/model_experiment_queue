@@ -399,34 +399,203 @@ def part_a2() -> dict:
     raise NotImplementedError
 
 
+A3_CONDS = (('on', 'on'), ('off', 'acute_off'))          # (condition, its file tag; E90's and E98's)
+A3_STAGE_KEYS = ('claw_win', 'claw_pre', 'bouton_win', 'bouton_pre')
+A3_E98_KEYS = ('responses', 'spike_counts', 'pn_win', 'pn_pre', 'apl_trace')
+APL_TOL = 1e-9                           # A3: APL's means against E98's B1 (absolute)
+BLANK_LABEL = 'blank @ 0'                # E98's
+
+
 class StageExtendedRun:
     """E98's `ExtendedRun` (one wiring at its fit on B1's extended input, APL's activity saved) with E90's stage reading
     after each run: `run(cond)` returns E98's outputs plus E90's 'claw_win', 'claw_pre', 'bouton_win', 'bouton_pre' (units x
-    stimuli)."""
+    stimuli, columns the stimulus labels) and 'apl_stage' (APL's means as `read_stages` reads them, which must equal E98's
+    'apl')."""
 
     def __init__(self, label: str, orn: Optional[pd.DataFrame] = None):
-        raise NotImplementedError
+        from experiments import E98_apl_response_strength as E98
+        self.er = E98.ExtendedRun(label, orn)
+        self.label, self.W, self.labels = label, self.er.W, self.er.labels
+        wp = np.asarray(self.er.rv.kc.wPNKC, dtype=float)
+        if not (wp.shape == self.W.shape and np.array_equal(wp, self.W.to_numpy(dtype=float))):
+            raise RuntimeError(f"{label}: olfsysm's wPNKC differs from the wiring's claw x bouton matrix")
+
+    def params(self, cond: str) -> Dict[str, float]:
+        return self.er.params(cond)
 
     def run(self, cond: str) -> dict:
-        raise NotImplementedError
+        from experiments import E90_model_stages as E90
+        o = self.er.run(cond)
+        st = E90.read_stages(self.er.mp, self.er.rv, self.W, self.er.order, self.labels, E90.MODEL_WINDOW)
+        for k in A3_STAGE_KEYS:
+            o[k] = st[k]
+        o['apl_stage'] = st['apl']
+        d = (st['apl'][['win', 'pre']].astype(float) - o['apl'].loc[st['apl'].index, ['win', 'pre']].astype(float)).abs()
+        if float(d.to_numpy().max()) > APL_TOL:
+            raise RuntimeError(f"{self.label} {cond}: E90's and E98's readings of APL differ by {float(d.to_numpy().max())}")
+        return o
 
 
-def run_a3(label: str, force: bool = False) -> dict:
-    """A3 on one wiring: APL on and acutely off on B1's input with the stages saved (outputs/E101_apl_vs_kc_claws/A3/),
-    with the run's identities (`a3_identity`). Resumable."""
-    raise NotImplementedError
+def a3_dir() -> Path:
+    return local_dir('A3')
+
+
+def unit_meta(W: pd.DataFrame) -> dict:
+    """A wiring's claws: each claw's glomerulus (E90's `glomerulus_of_claws`) and KC, and each bouton's glomerulus."""
+    from experiments import E90_model_stages as E90
+    return dict(claw_glomerulus=[str(x) for x in E90.glomerulus_of_claws(W)],
+                kc_of_claw=[int(x) for x in W.index.get_level_values(H.KC_ID_LEVEL)],
+                bouton_glomerulus=[str(x) for x in W.columns.get_level_values('glomerulus')])
+
+
+def save_a3(d: Path, label: str, cond_tag: str, o: dict) -> None:
+    """One run's outputs under `d`: E98's B1 layout (`save_b1`: responses, spike counts, PN stage, APL's means and trace)
+    plus the claw and bouton stages (`<label>_<cond>_<stage>_<win|pre>.parquet`, E90's layout)."""
+    from experiments import E98_apl_response_strength as E98
+    E98.save_b1(d, label, cond_tag, o)
+    for k in A3_STAGE_KEYS:
+        x = o[k].copy()
+        x.columns = [str(c) for c in x.columns]
+        if isinstance(x.index, pd.MultiIndex):
+            x.index = x.index.set_names([str(n) for n in x.index.names])
+        x.to_parquet(d / f'{label}_{cond_tag}_{k}.parquet')
+
+
+def load_a3_run(label: str, d: Optional[Path] = None) -> Optional[Dict[str, dict]]:
+    """One wiring's saved A3 run ({cond_tag: {'apl', 'responses', 'spike_counts', 'pn_win', 'pn_pre', 'claw_win',
+    'claw_pre', 'bouton_win', 'bouton_pre'}}, and 'meta' the units' metadata), or None."""
+    d = a3_dir() if d is None else Path(d)
+    if not all((d / f'{label}_{ct}_claw_win.parquet').exists() for _, ct in A3_CONDS):
+        return None
+    out = {}
+    for _, ct in A3_CONDS:
+        o = {k: pd.read_parquet(d / f'{label}_{ct}_{k}.parquet') for k in
+             ('responses', 'spike_counts', 'pn_win', 'pn_pre') + A3_STAGE_KEYS}
+        o['apl'] = pd.read_csv(d / f'{label}_{ct}_apl.csv', index_col=0)
+        out[ct] = o
+    out['meta'] = {k: np.asarray(v) for k, v in json.loads((d / f'{label}_units.json').read_text()).items()}
+    return out
 
 
 def a3_identity(label: str, out: Dict[str, dict]) -> dict:
-    """A3's identities on one wiring: the 16 panel odors' counts and responses equal the saved fit's (0 differences), B1's
-    saved counts, responses and APL means equal (where E98 has the wiring's B1 run), and the blank's evoked APL and claw
-    change (E90's pre-odor window and the settled one)."""
-    raise NotImplementedError
+    """A3's identities on one wiring (`out`: {cond_tag: outputs}): the 16 panel odors' counts and responses equal the
+    saved fit's (E83's `saved_fit`; 0 differences); B1's saved counts and responses equal on every stimulus both carry (0
+    differences) and its APL means (within APL_TOL), where E98 has the wiring's B1 run (`load_b1_run`); the blank's evoked
+    APL (window minus E90's pre-odor mean, and minus the settled pre-odor mean) and its claw change summed over the claws
+    of the input's glomeruli and over all claws (window minus E90's pre-odor mean)."""
+    from experiments import E83_cross_wiring_fit as E83
+    from experiments import E98_apl_response_strength as E98
+    saved = E83.saved_fit(label)['saved']
+    b1 = E98.load_b1_run(label)
+    res = dict(wiring=label, b1_dir=None if b1 is None else b1['on']['dir'])
+    for c, ct in A3_CONDS:
+        o = out[ct]
+        rs, ss = (H.abbrev_columns(x.astype(float)) for x in saved[c])
+        s16 = o['spike_counts'][list(H.APL16_ODORS)].astype(float)
+        r16 = o['responses'][list(H.APL16_ODORS)].astype(float)
+        idx_ok = bool(len(s16) == len(ss) and np.array_equal(np.asarray(s16.index), np.asarray(ss.index)))
+        row = dict(index_equal=idx_ok,
+                   counts_differ=int((s16.to_numpy() != ss[list(H.APL16_ODORS)].to_numpy()).sum()) if idx_ok else -1,
+                   responses_differ=int((r16.to_numpy() != rs[list(H.APL16_ODORS)].to_numpy()).sum()) if idx_ok else -1)
+        if b1 is not None:
+            bo = b1[ct]
+            common = [s for s in o['spike_counts'].columns if s in bo['spike_counts'].columns]
+            same_idx = bool(np.array_equal(np.asarray(o['spike_counts'].index), np.asarray(bo['spike_counts'].index)))
+            row.update(b1_stimuli_compared=len(common), b1_index_equal=same_idx,
+                       b1_counts_differ=int((o['spike_counts'][common].astype(float).to_numpy()
+                                             != bo['spike_counts'][common].astype(float).to_numpy()).sum()) if same_idx else -1,
+                       b1_responses_differ=int((o['responses'][common].astype(float).to_numpy()
+                                                != bo['responses'][common].astype(float).to_numpy()).sum()) if same_idx else -1,
+                       b1_apl_win_max_abs_diff=float((o['apl'].loc[common, 'win'] - bo['apl'].loc[common, 'win']).abs().max()),
+                       b1_apl_pre_max_abs_diff=float((o['apl'].loc[common, 'pre'] - bo['apl'].loc[common, 'pre']).abs().max()))
+        a = o['apl']
+        if BLANK_LABEL in a.index:
+            b = a.loc[BLANK_LABEL]
+            row.update(blank_apl_evoked_e90_pre=float(b['win'] - b['pre']),
+                       blank_apl_evoked_settled_pre=float(b['win'] - b['pre_settled']) if 'pre_settled' in b.index else None,
+                       blank_response_rate=float(o['responses'][BLANK_LABEL].astype(float).mean()))
+            ch = o['claw_win'][BLANK_LABEL].astype(float) - o['claw_pre'][BLANK_LABEL].astype(float)
+            m = np.isin(np.asarray(out['meta']['claw_glomerulus']), list(H.apl16_orn_deltas().index))
+            row.update(blank_claw_change_input=float(ch.to_numpy()[m].sum()), blank_claw_change_all=float(ch.sum()),
+                       blank_claw_win_input=float(o['claw_win'][BLANK_LABEL].astype(float).to_numpy()[m].sum()))
+        res[c] = row
+    res['reproduces_fit'] = bool(all(res[c]['counts_differ'] == 0 and res[c]['responses_differ'] == 0 for c, _ in A3_CONDS))
+    if b1 is not None:
+        res['reproduces_b1'] = bool(all(res[c]['b1_counts_differ'] == 0 and res[c]['b1_responses_differ'] == 0
+                                        and res[c]['b1_apl_win_max_abs_diff'] <= APL_TOL
+                                        and res[c]['b1_apl_pre_max_abs_diff'] <= APL_TOL for c, _ in A3_CONDS))
+    return res
+
+
+def _process_commits() -> Dict[str, object]:
+    from experiments import E98_apl_response_strength as E98
+    return E98.process_commits()
+
+
+def run_a3(label: str, force: bool = False) -> dict:
+    """A3 on one wiring: APL on and acutely off on B1's input (E98's `b1_input`) with the stages saved
+    (outputs/E101_apl_vs_kc_claws/A3/, `save_a3`), the units' metadata (<label>_units.json), the stimulus table with every
+    input vector (a3_stimuli.csv), one row per condition in runs.csv (the absolute parameters, the input's hash, the
+    commits read at the process's start, host, time) and the run's identities (`a3_identity`, <label>_identity.json).
+    Resumable: a wiring whose runs exist is skipped unless `force`."""
+    import gc
+    import os
+    from experiments import E98_apl_response_strength as E98
+    d = a3_dir()
+    if not force and load_a3_run(label, d) is not None:
+        return _read_json(d / f'{label}_identity.json') or a3_identity(label, load_a3_run(label, d))
+    t0 = time.time()
+    orn, table = E98.b1_input()
+    table.to_csv(d / 'a3_stimuli.csv', index=False)
+    sr = StageExtendedRun(label, orn)
+    (d / f'{label}_units.json').write_text(json.dumps(unit_meta(sr.W)) + '\n')
+    commits = _process_commits()
+    for c, ct in A3_CONDS:
+        t1 = time.time()
+        o = sr.run(c)
+        save_a3(d, label, ct, o)
+        row = dict(wiring=label, cond=ct, n_stimuli=len(sr.labels), host=_host(), time=time.strftime('%Y-%m-%d %H:%M'),
+                   runtime_s=time.time() - t1, threads=os.environ.get('OMP_NUM_THREADS'),
+                   input_sha256=E98._frame_sha(orn), **{f'param_{k}': v for k, v in sr.params(c).items()}, **commits)
+        E98._append_csv(d / 'runs.csv', row)
+        print(f'{label} {ct}: {time.time() - t1:.0f} s', flush=True)
+        del o
+    del sr
+    gc.collect()
+    ident = a3_identity(label, load_a3_run(label, d))
+    _write_json(d / f'{label}_identity.json', ident)
+    print(f"{label}: A3 done in {time.time() - t0:.0f} s; reproduces the fit: {ident['reproduces_fit']}; B1: "
+          f"{ident.get('reproduces_b1', 'no B1 run')}", flush=True)
+    return ident
+
+
+def part_a3_runs(wirings: Sequence[str] = ALL_WIRINGS) -> dict:
+    """A3's runs (`run_a3`, the real wiring first), each checked; a wiring that does not reproduce its fit or B1 stops the
+    part. The provenance (`H.model_provenance` with B1's input) goes to outputs/.../A3/model_provenance.json."""
+    from experiments import E98_apl_response_strength as E98
+    d = a3_dir()
+    if not (d / 'model_provenance.json').exists():
+        _write_json(d / 'model_provenance.json', dict(script=H.script_path(__file__),
+                                                      model=H.model_provenance(orn_deltas=E98.b1_input()[0])))
+    out = {}
+    for w in wirings:
+        ident = run_a3(w)
+        if not ident.get('reproduces_fit') or ident.get('reproduces_b1') is False:
+            raise RuntimeError(f'{w}: the A3 run does not reproduce the saved fit or B1: {ident}')
+        out[w] = ident
+    return out
 
 
 def part_a3(wirings: Sequence[str] = ALL_WIRINGS) -> dict:
-    """A3: the runs (`run_a3`) and the tables a3_runs.csv, a3_stimuli.csv, a3_family.csv, a3_ratios.csv,
-    a3_identity.json."""
+    """A3: the runs (`part_a3_runs`) and the tables (`a3_tables`): a3_runs.csv, a3_stimuli.csv, a3_family.csv,
+    a3_ratios.csv, a3_lines.csv, a3_identity.json."""
+    ident = part_a3_runs(wirings)
+    _write_json(out_dir() / 'a3_identity.json', ident)
+    return a3_tables(wirings)
+
+
+def a3_tables(wirings: Sequence[str] = ALL_WIRINGS) -> dict:
+    """A3's tables from the saved runs."""
     raise NotImplementedError
 
 
@@ -662,6 +831,7 @@ def main() -> None:
     ap.add_argument('--part', required=True, choices=PARTS)
     ap.add_argument('--wirings', default=','.join(ALL_WIRINGS), help='A3: comma-separated wirings')
     ap.add_argument('--e90', action='store_true', help="part 0: also check against E90's saved stage matrices")
+    ap.add_argument('--runs-only', action='store_true', help="A3: the runs and their identities only, no tables")
     ap.add_argument('--n-flies', type=int, default=A4_N_FLIES, help='A4: made-up flies per condition')
     ap.add_argument('--n-perm', type=int, default=A4_N_PERM, help='A4: null assignments per made-up recording')
     ap.add_argument('--dry-run', action='store_true', help='say what the part reads and writes, and exit')
@@ -681,8 +851,10 @@ def main() -> None:
         print(json.dumps(part_a2(), indent=1, default=float), flush=True)
     elif a.part == 'A3':
         w = tuple(x for x in a.wirings.split(',') if x)
-        provenance('A3', wirings=list(w))
-        print(json.dumps(part_a3(w), indent=1, default=float), flush=True)
+        provenance('A3', wirings=list(w), runs_only=a.runs_only)
+        _process_commits()
+        res = part_a3_runs(w) if a.runs_only else part_a3(w)
+        print(json.dumps(res, indent=1, default=float), flush=True)
     elif a.part == 'A4':
         provenance('A4', n_flies=a.n_flies, n_perm=a.n_perm)
         print(json.dumps(part_a4(a.n_flies, a.n_perm), indent=1, default=float), flush=True)
