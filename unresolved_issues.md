@@ -27,6 +27,12 @@ directory's notes/ and are linked from here.
 - **Done.** E98 saves APL's settled pre-odor level and traces (5053e86) and makes the model's pre-odor level an explicit
   choice in part C (e90, settled, or the blank's window mean); on the real wiring the choice moves its ratios by about 0.02
   and changes no class. Which level carries E98's verdict is with a planning subagent from atlas.
+  2026-11-15 18:08 (hal): E100's model side and E101's X2 take the same rule as E98's amendment of 17:59, fixed before the
+  flies' values were seen (planned by a Fable subagent from hal 18:01; amendments in both entries): the blank's window mean
+  carries, APL's settled level is the partner, E90's level is shown and decides nothing. E101's claws have no saved settled
+  level, so they have no level partner; E101's part 0 blank item is replaced by E98's amended identity. E92 (hal): its part A
+  and verdicts rest on spike counts and are not affected; its part F (E92_gain, F3) reads E90's stages as window minus
+  pre-odor mean and is to be sized.
 - **Remains.** The check of E92 to E94 above; dated lines in the notes whose numbers move (E90, E95 at least) once sized; and
   E98's choice of level.
 
