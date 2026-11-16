@@ -120,6 +120,14 @@ Parts (CLI `--part`):
 - score (after the check passed): the verdicts (verdict.json, score_x2.csv, score_x3_flies.csv); X2 under the model's
   carrying level (A0_CARRYING) with its partner (A0_PARTNER) and E90's level shown (A0_SHOWN), with a verdict line per
   quantity; the readings beside.
+- A2-blank (no simulation; from A3's family table): A2's line and ratios again at the model's carrying level, with E90's
+  level beside, APL on and acutely off (a2_blank_lines.csv, a2_blank_ratios.csv, a2_blank.json).
+- C4-model (no simulation; from A3's family table): C4's model side, each condition at its own run's blank: Hallem's
+  input for pa and ms along concentration (c4_hallem_levels.csv, c4_hallem_ratios.csv) and X2's ratios with APL acutely
+  off beside APL on (c4_apl_off.csv); c4_model.json.
+- C-strengths (after the check passed): the flies' calyx responses per stimulus in sets L and V0, APL's and K_b's, and
+  each over its odor's 10^-2 (c_strengths.csv; described).
+- variants: variants.csv, the archive's params.csv source (one row per wiring's A3 runs, the absolute parameters).
 
 The channel check (Tom, 2026-11-15 17:33; thresholds fixed in code before any map of the controls was read, `channel_check`):
 per two-channel recording of the controls, under the carrying reading of calyx responses, the channel that must respond
@@ -192,6 +200,7 @@ CLI (from the repository root):
     ./venv/bin/python -u -m experiments.E101_apl_vs_kc_claws --part B           # after Yang's release (YANG_RELEASED)
     ./venv/bin/python -u -m experiments.E101_apl_vs_kc_claws --part C           # C, D, E and score: after the check passed
     ./venv/bin/python -u -m experiments.E101_apl_vs_kc_claws --part score
+    ./venv/bin/python -u -m experiments.E101_apl_vs_kc_claws --part A2-blank    # and C4-model, C-strengths, variants
     --dry-run lists what a part would read and write, and exits.
 
 Outputs: results/E101_apl_vs_kc_claws/ in the shared directory (the tables above, identity.json, verdict.json,
@@ -826,16 +835,18 @@ def _apl_levels(g: pd.Series, baseline: str, blank: Optional[pd.Series]) -> Tupl
     return float(g['apl_win']), float(blank['apl_win'])
 
 
-def ratio_sets(fam_w: pd.DataFrame, num: str, den: str, baselines: Sequence[str] = ('e90',)) -> pd.DataFrame:
-    """One wiring's ratios of stimulus `num` over `den` (APL on; `fam_w` one wiring's `family_table`): APL through E98's
-    indicator family (APL_NS, FORMS) and the claws through CLAW_NS and FORMS for each subset and version, each under the
-    `baselines` (A0_CHOICES: 'blank', the carrying level, the blank's window for APL and the claws; 'settled', the
-    partner, APL's settled pre-odor level with the claws at the blank's window, A3 having saved no settled level for the
-    claws; 'e90', E90's pre-odor mean for both, shown and deciding nothing; the amendment of 2026-11-15 18:08); n 1 with
-    the 'evoked' form is the linear ratio. A run without a blank is refused for 'blank' and 'settled'. Long rows: quantity
-    ('APL', 'claws'), baseline, subset, share, n, form, ratio."""
+def ratio_sets(fam_w: pd.DataFrame, num: str, den: str, baselines: Sequence[str] = ('e90',),
+               cond: str = 'on') -> pd.DataFrame:
+    """One wiring's ratios of stimulus `num` over `den` (in condition `cond`, APL on by default, 'off' the acute-off
+    run; `fam_w` one wiring's `family_table`): APL through E98's indicator family (APL_NS, FORMS) and the claws through
+    CLAW_NS and FORMS for each subset and version, each under the `baselines` (A0_CHOICES: 'blank', the carrying level,
+    the blank's window for APL and the claws in the same run and condition; 'settled', the partner, APL's settled
+    pre-odor level with the claws at the blank's window, A3 having saved no settled level for the claws; 'e90', E90's
+    pre-odor mean for both, shown and deciding nothing; the amendment of 2026-11-15 18:08); n 1 with the 'evoked' form
+    is the linear ratio. A run without a blank is refused for 'blank' and 'settled'. Long rows: quantity ('APL',
+    'claws'), baseline, subset, share, n, form, ratio."""
     from experiments import E98_apl_response_strength as E98
-    on = fam_w[fam_w['cond'] == 'on'].set_index('stimulus')
+    on = fam_w[fam_w['cond'] == cond].set_index('stimulus')
     blank = on.loc[BLANK_LABEL] if BLANK_LABEL in on.index else None
     a, b = on.loc[num], on.loc[den]
     rows = []
@@ -1245,6 +1256,282 @@ def a3_apl_tables(wirings: Sequence[str] = ALL_WIRINGS) -> dict:
     x2 = pd.DataFrame(rows)
     x2.to_csv(out / 'a3_apl_x2.csv', index=False)
     return dict(n_rows=len(b), n_x2_rows=len(x2), missing=b.attrs.get('missing'))
+
+
+# ---------------------------------------------------------------------------
+# A2 again at the model's carrying level, C4's model side and the archive's variants: from A3's tables (a3_family.csv,
+# a3_runs.csv, a3_identity.json), no simulation and no stage matrix read
+
+HALLEM_ODORS = ('pa', 'ms')
+HALLEM_CONCS = (-2.0, -4.0, -6.0, -8.0)  # B1's rows of Hallem's input (olfsysm's hc_data.csv)
+LEVELS_SHOWN = (A0_CARRYING, A0_SHOWN)   # A2 again: the carrying level ('blank'), E90's ('e90') beside
+
+
+def hallem_label(odor: str, conc: float) -> str:
+    """B1's label of a stimulus on Hallem's input ('pa [hallem] @ -4')."""
+    return f'{odor} [hallem] @ {int(round(conc))}'
+
+
+def blank_col(subset: str, share: float) -> str:
+    """A claw total's column at the blank's level: 'claw_<subset>_<share>_blank'."""
+    return claw_col(subset, share, 'blank')
+
+
+def at_blank(fam: pd.DataFrame, cond: str = 'on') -> pd.DataFrame:
+    """One condition's rows of a family table (`family_table`; A3's holds the blank) at the model's carrying level
+    (A0_CARRYING, the amendment of 2026-11-15 18:08): per wiring and stimulus, APL's response ('apl_blank': its window
+    mean minus the blank's window mean in the same run and condition), each claw total's (`blank_col`: its window minus
+    the blank's window, for each subset and claw version), the PN stage's total change minus the blank's ('pn_blank'),
+    and the KCs' response rate. A wiring whose run has no blank is refused."""
+    rows = []
+    for w, g in fam[fam['cond'] == cond].groupby('wiring', sort=False):
+        g = g.set_index('stimulus')
+        if BLANK_LABEL not in g.index:
+            raise ValueError(f'{w} {cond}: no blank ({BLANK_LABEL!r}) in the run')
+        b = g.loc[BLANK_LABEL]
+        d = pd.DataFrame(dict(apl_win=g['apl_win'], apl_blank=g['apl_win'] - float(b['apl_win'])), index=g.index)
+        for sub in CLAW_SUBSETS:
+            for sh in CLAW_SHARES:
+                c = claw_col(sub, sh, 'win')
+                d[blank_col(sub, sh)] = g[c] - float(b[c])
+        d['pn_blank'] = g['pn_total'] - float(b['pn_total'])
+        d['kc_rate'] = g['kc_rate']
+        rows.append(d.reset_index().assign(wiring=w, cond=cond))
+    out = pd.concat(rows, ignore_index=True)
+    return out[['wiring', 'cond', 'stimulus'] + [c for c in out.columns if c not in ('wiring', 'cond', 'stimulus')]]
+
+
+def ratio_table(fam: pd.DataFrame, pairs: Sequence[dict], baseline: str = 'blank', cond: str = 'on',
+                subset_q: str = 'input') -> pd.DataFrame:
+    """Per wiring and pair, in condition `cond` under the model's level `baseline` ('blank' or 'e90'): APL's and each claw
+    total's (subset, version) linear ratio and range over the indicator families (`ratio_sets`, `ratio_summary`); Q's,
+    APL's ratio over the claws' of `subset_q` (linear: with the drive alone; the range over every combination of the two
+    indicator families, their forms and the three claw versions, as `q_classes` reads it); the PN stage's total change
+    (minus the blank's under 'blank') and the KCs' response rates (linear). `pairs`: dicts with 'numerator',
+    'denominator' and any labels to carry (pair, ratio_id, estimate, role, series, ...); pairs a wiring's run lacks are
+    skipped. Long rows: the labels, wiring, cond, baseline, quantity, subset, share, linear, indicator_min, indicator_max,
+    kc_rate_num, kc_rate_den."""
+    if baseline not in ('blank', 'e90'):
+        raise ValueError(f'ratio_table reads the blank\'s level or E90\'s, not {baseline!r}')
+    lin = lambda x: float(x[(x['n'] == 1.0) & (x['form'] == 'evoked')]['ratio'].iloc[0])
+    rows = []
+    for w, g in fam.groupby('wiring', sort=False):
+        c = g[g['cond'] == cond].set_index('stimulus')
+        for p in pairs:
+            nu, de = p['numerator'], p['denominator']
+            if nu not in c.index or de not in c.index:
+                continue
+            key = dict(p, wiring=w, cond=cond, baseline=baseline, kc_rate_num=float(c.loc[nu, 'kc_rate']),
+                       kc_rate_den=float(c.loc[de, 'kc_rate']))
+            rs = ratio_sets(g, nu, de, (baseline,), cond=cond)
+            for r in ratio_summary(rs).to_dict('records'):
+                rows.append(dict(key, **{k: v for k, v in r.items() if k != 'baseline'}))
+            a = rs[rs['quantity'] == 'APL']
+            cl = rs[(rs['quantity'] == 'claws') & (rs['subset'] == subset_q)]
+            q = np.divide.outer(a['ratio'].to_numpy(float), cl['ratio'].to_numpy(float)).ravel()
+            q = q[np.isfinite(q)]
+            rows.append(dict(key, quantity='Q', subset=subset_q, share=np.nan, linear=lin(a) / lin(cl[cl['share'] == 0.0]),
+                             indicator_min=float(q.min()) if len(q) else np.nan,
+                             indicator_max=float(q.max()) if len(q) else np.nan))
+            pn = c['pn_total'] - (float(c.loc[BLANK_LABEL, 'pn_total']) if baseline == 'blank' else 0.0)
+            rows.append(dict(key, quantity='PN total', subset='', share=np.nan, linear=float(pn[nu] / pn[de]),
+                             indicator_min=np.nan, indicator_max=np.nan))
+            rows.append(dict(key, quantity='KC response rate', subset='', share=np.nan,
+                             linear=float(c.loc[nu, 'kc_rate'] / c.loc[de, 'kc_rate']) if c.loc[de, 'kc_rate'] > 0
+                             else np.nan, indicator_min=np.nan, indicator_max=np.nan))
+    return pd.DataFrame(rows)
+
+
+def ranges_over_wirings(t: pd.DataFrame, by: Sequence[str]) -> List[dict]:
+    """Per group of `by` (a `ratio_table`'s labels), the range over the wirings of the linear ratio and of the indicator
+    family's ends (the lowest minimum and the highest maximum), with the number of wirings."""
+    out = []
+    for key, g in t.groupby(list(by), dropna=False, sort=False):
+        out.append(dict(zip(by, key), n_wirings=int(g['wiring'].nunique()), linear_min=float(g['linear'].min()),
+                        linear_max=float(g['linear'].max()), indicator_min=float(g['indicator_min'].min()),
+                        indicator_max=float(g['indicator_max'].max())))
+    return out
+
+
+def part_a2_blank(wirings: Sequence[str] = ALL_WIRINGS) -> dict:
+    """A2 again at the model's carrying level (the amendment of 2026-11-15 18:08: "the note gives A2's line and the three
+    ratios again under the carrying level from A3's runs, which hold the 16 panel odors and the blank"), from A3's family
+    table (a3_family.csv; no simulation). A3's claw stage equals E90's on the 16 panel odors (part 0), so E90's level
+    here reproduces A2. Writes a2_blank_lines.csv (per level in LEVELS_SHOWN, the line of log2 APL on log2 of each claw
+    total and of the PN total over the 16 panel odors, `family_line`: slope, r and each odor's residual), a2_blank_ratios.csv
+    (pa over ms, paa over ms and paa over pa, `ratio_table`, APL on and acutely off, each condition at its own run's
+    blank, with E90's level beside) and a2_blank.json (the ranges over the wirings)."""
+    out = out_dir()
+    fam = pd.read_csv(out / 'a3_family.csv')
+    panel = list(H.APL16_ODORS)
+    fam = fam[fam['wiring'].isin(wirings) & fam['stimulus'].isin(panel + [BLANK_LABEL])]
+    lines = []
+    for level in LEVELS_SHOWN:
+        if level == 'blank':
+            f = at_blank(fam, 'on')
+            xs = [(blank_col(sub, sh), sub, sh) for sub in CLAW_SUBSETS for sh in CLAW_SHARES] + [('pn_blank', 'PN', np.nan)]
+            y = 'apl_blank'
+        else:
+            f = fam
+            xs = [(claw_col(sub, sh, 'change'), sub, sh) for sub in CLAW_SUBSETS for sh in CLAW_SHARES] + \
+                 [('pn_total', 'PN', np.nan)]
+            y = 'apl_evoked'
+        for x, sub, sh in xs:
+            lines.append(family_line(f, x=x, y=y, odors=panel).assign(level=level, subset=sub, share=sh))
+    lines = pd.concat(lines, ignore_index=True)
+    lines.to_csv(out / 'a2_blank_lines.csv', index=False)
+    pairs = [dict(pair=f'{a}/{b}', numerator=a, denominator=b) for a, b in X1_PAIRS]
+    ratios = pd.concat([ratio_table(fam, pairs, level, cond) for level in LEVELS_SHOWN for cond in ('on', 'off')],
+                       ignore_index=True)
+    ratios.to_csv(out / 'a2_blank_ratios.csv', index=False)
+    ln = lines.drop_duplicates(['level', 'subset', 'share', 'wiring'])
+    summ = dict(
+        note=("A2 at the model's carrying level (the blank's window mean in the same run and condition), from A3's runs "
+              "(16 panel odors and the blank); E90's level beside reproduces A2 (a2_lines.csv, a2_ratios.csv)"),
+        lines=[dict(level=lv, subset=sub, share=None if pd.isna(sh) else float(sh), n_wirings=int(g['wiring'].nunique()),
+                    slope_rma_min=float(g['slope_rma'].min()), slope_rma_max=float(g['slope_rma'].max()),
+                    r_min=float(g['r'].min()), r_max=float(g['r'].max()), n_odors_min=int(g['n_odors'].min()))
+               for (lv, sub, sh), g in ln.groupby(['level', 'subset', 'share'], dropna=False, sort=False)],
+        residual_extremes=[dict(level=lv, odor=o, residual_log2_min=float(g['residual_log2'].min()),
+                                residual_log2_max=float(g['residual_log2'].max()))
+                           for (lv, o), g in lines[(lines['subset'] == 'input') & (lines['share'] == 0.0)]
+                           .groupby(['level', 'odor'], sort=False)],
+        ratios=ranges_over_wirings(ratios, ['baseline', 'cond', 'pair', 'quantity', 'subset', 'share']))
+    _write_json(out / 'a2_blank.json', summ)
+    main = [r for r in summ['lines'] if r['subset'] == 'input' and r['share'] == 0.0]
+    return dict(n_lines=len(lines), n_ratios=len(ratios), lines_input_drive=main)
+
+
+def hallem_pairs() -> List[dict]:
+    """C4's pairs on Hallem's input: pa over ms at each concentration (HALLEM_CONCS), and each odor at each lower
+    concentration over the same odor at 10^-2."""
+    pairs = [dict(series='pa over ms', log10_conc=c, numerator=hallem_label('pa', c), denominator=hallem_label('ms', c))
+             for c in HALLEM_CONCS]
+    pairs += [dict(series=f'{o} over {o} at 10^-2', log10_conc=c, numerator=hallem_label(o, c),
+                   denominator=hallem_label(o, -2.0)) for o in HALLEM_ODORS for c in HALLEM_CONCS[1:]]
+    return pairs
+
+
+def x2_pairs() -> List[dict]:
+    """X2's model pairs (X2_MODEL, with X2_MODEL_BESIDE as role 'beside') as `ratio_table` pairs: ratio_id, role and the
+    estimate of the input (the denominator's for r1 and r2, the numerator's for r3)."""
+    pairs = []
+    for rid, (nums, dens) in X2_MODEL.items():
+        pairs += [dict(ratio_id=rid, role='main', estimate=de if rid in ('r1', 'r2') else nu, numerator=nu, denominator=de)
+                  for nu in nums for de in dens]
+        pairs += [dict(ratio_id=rid, role='beside', estimate=nu, numerator=nu, denominator=dens[0])
+                  for nu in X2_MODEL_BESIDE.get(rid, ())]
+    return pairs
+
+
+def part_c4_model(wirings: Sequence[str] = ALL_WIRINGS) -> dict:
+    """C4's model side (beside the verdicts, deciding nothing), from A3's family table (no simulation); each condition at
+    its own run's blank (the amendment of 2026-11-15 18:08: "C4's readings with APL off take the acute-off run's own
+    blank"), E90's level not read:
+    - Hallem's input for pa and ms along concentration (HALLEM_CONCS), APL on and acutely off: per stimulus APL's and the
+      claws' responses and the KCs' response rate (`at_blank`; c4_hallem_levels.csv, with the panel's pa and ms beside),
+      and pa over ms at each concentration and each odor over its 10^-2 for APL, the claws, Q, the PN total and the KCs'
+      response rate (`ratio_table`; c4_hallem_ratios.csv);
+    - X2's ratios (`x2_pairs`) with APL acutely off, beside the same with APL on (c4_apl_off.csv);
+    - c4_model.json, the ranges over the wirings."""
+    out = out_dir()
+    fam = pd.read_csv(out / 'a3_family.csv')
+    fam = fam[fam['wiring'].isin(wirings)]
+    hs = [hallem_label(o, c) for o in HALLEM_ODORS for c in HALLEM_CONCS]
+    lv = pd.concat([at_blank(fam, cond) for cond in ('on', 'off')], ignore_index=True)
+    lv = lv[lv['stimulus'].isin(hs + ['pa', 'ms'])]
+    lv.to_csv(out / 'c4_hallem_levels.csv', index=False)
+    hr = pd.concat([ratio_table(fam, hallem_pairs(), 'blank', cond) for cond in ('on', 'off')], ignore_index=True)
+    hr.to_csv(out / 'c4_hallem_ratios.csv', index=False)
+    off = pd.concat([ratio_table(fam, x2_pairs(), 'blank', cond) for cond in ('on', 'off')], ignore_index=True)
+    off.to_csv(out / 'c4_apl_off.csv', index=False)
+    neg = lv[(lv['apl_blank'] <= 0) | (lv[blank_col('input', 0.0)] <= 0)]
+    summ = dict(
+        note=("C4's model side, beside and deciding nothing: each condition at its own run's blank (APL acutely off: the "
+              "acute-off run's blank); Hallem's input is olfsysm's hc_data.csv (B1's rows)"),
+        hallem_levels=[dict(cond=c, stimulus=s, apl_blank_min=float(g['apl_blank'].min()),
+                            apl_blank_max=float(g['apl_blank'].max()),
+                            claws_input_drive_min=float(g[blank_col('input', 0.0)].min()),
+                            claws_input_drive_max=float(g[blank_col('input', 0.0)].max()),
+                            kc_rate_min=float(g['kc_rate'].min()), kc_rate_max=float(g['kc_rate'].max()))
+                       for (c, s), g in lv.groupby(['cond', 'stimulus'], sort=False)],
+        not_positive=sorted({f"{r['wiring']} {r['cond']} {r['stimulus']}" for _, r in neg.iterrows()}),
+        hallem_ratios=ranges_over_wirings(hr, ['cond', 'series', 'log10_conc', 'quantity', 'subset', 'share']),
+        x2_ratios=ranges_over_wirings(off, ['cond', 'ratio_id', 'role', 'estimate', 'quantity', 'subset', 'share']))
+    _write_json(out / 'c4_model.json', summ)
+    return dict(n_levels=len(lv), n_hallem_ratios=len(hr), n_x2_ratios=len(off), not_positive=summ['not_positive'])
+
+
+def flies_strengths(c: pd.DataFrame, groups: Sequence[str] = ('L', 'V0'), multiples: Sequence[float] = (0.0, 1.0),
+                    n_boot: int = N_BOOT) -> pd.DataFrame:
+    """The flies' calyx responses per stimulus (part C1's rows `c`, the carrying reading), described: per group, b and
+    stimulus the numbers of flies and recordings, the mean over flies (each fly's recordings averaged) of APL's response
+    and of K_b's (dF/F) with 90 % intervals, and each stimulus over its odor's 10^-2 for APL and for K_b (`flies_ratio`:
+    the geometric mean over flies, recordings whose responses are at most MIN_RESPONSE left out)."""
+    rows = []
+    for grp in groups:
+        for bm in multiples:
+            x = c[(c['group'] == grp) & (c['reading'] == CARRYING) & (c['b_mult'] == bm)]
+            fly = x.drop_duplicates('recording').set_index('recording')['fly']
+            for s, h in x.groupby('stim', sort=False):
+                odor, conc = str(h['odor'].iloc[0]), float(h['log10_conc'].iloc[0])
+                row = dict(group=grp, b_mult=float(bm), stim=s, odor=odor, log10_conc=conc,
+                           n_flies=int(h['fly'].nunique()), n_recordings=int(h['recording'].nunique()))
+                ref = x[(x['odor'] == odor) & np.isclose(x['log10_conc'], -2.0)].set_index('recording')
+                for col in ('apl', 'kc'):
+                    m, lo, hi = fly_mean_interval(h.groupby('fly')[col].mean().to_numpy(), n_boot)
+                    row.update({f'{col}_mean': m, f'{col}_lo': lo, f'{col}_hi': hi})
+                    pr = pd.DataFrame(dict(num=h.set_index('recording')[col], den=ref[col])).dropna()
+                    pr['fly'] = fly.reindex(pr.index).to_numpy()
+                    r = flies_ratio(pr, n_boot) if len(pr) else dict(ratio=np.nan, lo=np.nan, hi=np.nan, n_flies=0)
+                    row.update({f'{col}_over_2': r['ratio'], f'{col}_over_2_lo': r['lo'], f'{col}_over_2_hi': r['hi'],
+                                f'{col}_over_2_n_flies': r['n_flies']})
+                rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def part_c_strengths(n_boot: int = N_BOOT) -> dict:
+    """The flies' strengths per stimulus (`flies_strengths` on c_responses.csv, sets L and V0; c_strengths.csv, with
+    Yang's quality caveat first). Described: the APL channel's responses are what outcome (h) reports; the KC channel's
+    (K_b) are not shown to be told from the leak."""
+    _gate('C')
+    out = out_dir()
+    t = flies_strengths(read_table(out / 'c_responses.csv'), n_boot=n_boot)
+    write_table(t, out / 'c_strengths.csv')
+    return dict(n_rows=len(t))
+
+
+def write_variants(wirings: Sequence[str] = ALL_WIRINGS) -> pd.DataFrame:
+    """variants.csv (the archive's params.csv source; one row per wiring's A3 runs, tag = the wiring as in the archived
+    file names under A3/): the absolute parameters with APL on (a3_runs.csv; the acute-off run zeroes wAPLKC_scale and
+    wAPLPN_scale), the fit it runs at with nothing re-tuned (E83's `members`: E67's or E72's folder and tag), C2's
+    breadth exponent, KC-KC time constant and pulse (as E90's variants.csv gives them), the input's sha256, the number of
+    stimuli, the commits read at the run, the KCs' response rates over the 16 panel odors with APL on and acutely off,
+    and whether the runs reproduce the fit and E98's B1 (a3_identity.json)."""
+    from experiments import E83_cross_wiring_fit as E83
+    out = out_dir()
+    runs = pd.read_csv(out / 'a3_runs.csv')
+    fam = pd.read_csv(out / 'a3_family.csv')
+    ident = _read_json(out / 'a3_identity.json') or {}
+    mem = E83.members()
+    rows = []
+    for w in wirings:
+        r = runs[(runs['wiring'] == w) & (runs['cond'] == 'on')]
+        if r.empty:
+            continue
+        r = r.iloc[-1]
+        rate = fam[(fam['wiring'] == w) & fam['stimulus'].isin(list(H.APL16_ODORS))].groupby('cond')['kc_rate'].mean()
+        folder, tag = mem[w]
+        iw = ident.get(w) or {}
+        rows.append(dict(tag=w, variant=w, part='A3', wiring=w, ref_experiment=folder, ref_fit=tag, k=2.0, kc_kc_tau=0.05,
+                         time_stim_end=0.5, **{k[len('param_'):]: float(r[k]) for k in r.index if k.startswith('param_')},
+                         n_stimuli=int(r['n_stimuli']), input_sha256=r['input_sha256'], queue_commit=r['queue_commit'],
+                         pyolfsysm_commit=r['pyolfsysm_commit'], rate_on=float(rate['on']),
+                         rate_acute_off=float(rate['off']), reproduces_fit=iw.get('reproduces_fit'),
+                         reproduces_b1=iw.get('reproduces_b1')))
+    df = pd.DataFrame(rows)
+    df.to_csv(out / 'variants.csv', index=False)
+    return df
 
 
 def e90_claw_identity(wirings: Sequence[str] = ALL_WIRINGS, tol: float = 1e-9) -> dict:
@@ -3114,7 +3401,7 @@ def beside(sets: pd.DataFrame, keys, cross: bool, b_g_alone: bool, main: dict) -
     return dict(sensitivity=sens, V0=v0, alignment=align)
 
 
-PARTS = ('0', 'A1', 'A2', 'A3', 'A4', 'B', 'C', 'D', 'E', 'score')
+PARTS = ('0', 'A1', 'A2', 'A3', 'A4', 'B', 'C', 'D', 'E', 'score', 'A2-blank', 'C4-model', 'C-strengths', 'variants')
 READS = {
     '0': "one released 2021 recording (E100's reader); with --e90, E90's saved stage matrices",
     'A1': "viki's recordings.csv, the stimulus yaml files and Yang's date notes (no map values)",
@@ -3126,6 +3413,10 @@ READS = {
     'D': "viki's copy: sets L, L+ and V0, both channels' maps (after the channel check passed)",
     'E': "viki's copy: set L's maps; A3's claw stage; Remy's claw matrices (after the channel check passed)",
     'score': 'the tables of parts A3, A4, B, C and D (after the channel check passed)',
+    'A2-blank': "A3's family table (a3_family.csv; no simulation)",
+    'C4-model': "A3's family table (a3_family.csv; no simulation)",
+    'C-strengths': 'c_responses.csv (after the channel check passed)',
+    'variants': "a3_runs.csv, a3_family.csv, a3_identity.json and E83's members (the fits' folders and tags)",
 }
 WRITES = {
     '0': 'identity.json', 'A1': 'a1_recordings.csv, a1_groups.csv',
@@ -3139,6 +3430,10 @@ WRITES = {
     'D': 'd_x3.csv, d_x3_scan.csv, d_described.csv, d_left_out.csv',
     'E': 'e_claw_distances.csv, e_model_distances.csv',
     'score': 'verdict.json, score_x2.csv, score_x3_flies.csv',
+    'A2-blank': 'a2_blank_lines.csv, a2_blank_ratios.csv, a2_blank.json',
+    'C4-model': 'c4_hallem_levels.csv, c4_hallem_ratios.csv, c4_apl_off.csv, c4_model.json',
+    'C-strengths': 'c_strengths.csv',
+    'variants': 'variants.csv (the archive\'s params.csv source)',
 }
 
 
@@ -3182,6 +3477,14 @@ def main() -> None:
     elif a.part == 'A4':
         provenance('A4', n_flies=a.n_flies, n_perm=a.n_perm)
         print(json.dumps(part_a4(a.n_flies, a.n_perm), indent=1, default=float), flush=True)
+    elif a.part in ('A2-blank', 'C4-model', 'variants'):
+        provenance(a.part)
+        fn = {'A2-blank': part_a2_blank, 'C4-model': part_c4_model,
+              'variants': lambda: dict(n_rows=len(write_variants()))}[a.part]
+        print(json.dumps(fn(), indent=1, default=float), flush=True)
+    elif a.part == 'C-strengths':
+        provenance(a.part, **data_provenance())
+        print(json.dumps(part_c_strengths(), indent=1, default=float), flush=True)
     elif a.part == 'score':
         provenance('score', levels=dict(carrying=A0_CARRYING, partner=A0_PARTNER, shown=A0_SHOWN), **data_provenance())
         print(json.dumps(score(), indent=1, default=float), flush=True)

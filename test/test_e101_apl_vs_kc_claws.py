@@ -807,3 +807,146 @@ def test_a3_apl_tables_made_up(tmp_path, monkeypatch):
     r3 = x[(x['ratio_id'] == 'r3') & (x['a0'] == 'settled')].iloc[0]
     assert r3['apl_linear'] == pytest.approx((17.0 - 8.79) / (20.0 - 8.79)) and r3['kc_rate_num'] == 0.0
     assert set(x['ratio_id']) == {'r1', 'r2', 'r3'} and res['n_rows'] == 2 * len(stims)
+
+
+# ---------------------------------------------------------------------------
+# A2 again at the blank's level, C4's model side, the flies' strengths and the archive's variants
+
+def test_at_blank_and_ratio_table():
+    f = _fam_blank()
+    f.loc[f['stimulus'] == M.BLANK_LABEL, 'pn_total'] = 5.0
+    b = M.at_blank(f, 'on').set_index(['wiring', 'stimulus'])
+    assert b.loc[('real', M.BLANK_LABEL), 'apl_blank'] == 0.0
+    assert b.loc[('real', M.BLANK_LABEL), M.blank_col('input', 0.25)] == 0.0
+    pa = f[(f.wiring == 'real') & (f.stimulus == 'pa') & (f.cond == 'on')].iloc[0]
+    ms = f[(f.wiring == 'real') & (f.stimulus == 'ms') & (f.cond == 'on')].iloc[0]
+    col = M.claw_col('input', 0.0, 'win')
+    assert b.loc[('real', 'pa'), 'apl_blank'] == pytest.approx(pa.apl_win - 8.6)
+    assert b.loc[('real', 'pa'), M.blank_col('input', 0.0)] == pytest.approx(pa[col] - 60.0)
+    assert b.loc[('real', 'pa'), 'pn_blank'] == pytest.approx(pa.pn_total - 5.0)
+    with pytest.raises(ValueError, match='blank'):
+        M.at_blank(_fam(1.0), 'on')
+    with pytest.raises(ValueError, match='level'):
+        M.ratio_table(f, [dict(numerator='pa', denominator='ms')], 'settled')
+    # APL acutely off: its own run's blank, not APL on's
+    m = f['cond'] == 'off'
+    f.loc[m, 'apl_win'] += 3.0
+    f.loc[m & (f['stimulus'] == M.BLANK_LABEL), 'apl_win'] -= 2.0
+    pairs = [dict(pair='pa/ms', numerator='pa', denominator='ms'), dict(pair='x/ms', numerator='x', denominator='ms')]
+    t = pd.concat([M.ratio_table(f, pairs, 'blank', c) for c in ('on', 'off')])
+    t = t[t['wiring'] == 'real']
+    assert set(t['pair']) == {'pa/ms'}                                  # a pair the run lacks is skipped
+    apl_on = (pa.apl_win - 8.6) / (ms.apl_win - 8.6)
+    claws = (pa[col] - 60.0) / (ms[col] - 60.0)
+    assert t[(t.cond == 'on') & (t.quantity == 'APL')]['linear'].iloc[0] == pytest.approx(apl_on)
+    assert t[(t.cond == 'off') & (t.quantity == 'APL')]['linear'].iloc[0] == \
+        pytest.approx((pa.apl_win + 3 - 9.6) / (ms.apl_win + 3 - 9.6))
+    assert t[(t.cond == 'on') & (t.quantity == 'claws') & (t.subset == 'input') & (t.share == 0.0)]['linear'].iloc[0] == \
+        pytest.approx(claws)
+    q = t[(t.cond == 'on') & (t.quantity == 'Q')].iloc[0]
+    assert q['linear'] == pytest.approx(apl_on / claws) and q['indicator_min'] <= q['linear'] <= q['indicator_max']
+    pn = t[(t.cond == 'on') & (t.quantity == 'PN total')].iloc[0]
+    assert pn['linear'] == pytest.approx((pa.pn_total - 5.0) / (ms.pn_total - 5.0))
+    kc = t[(t.cond == 'on') & (t.quantity == 'KC response rate')].iloc[0]
+    assert kc['linear'] == pytest.approx(pa.kc_rate / ms.kc_rate) and kc['kc_rate_num'] == pa.kc_rate
+    e = M.ratio_table(f, pairs[:1], 'e90', 'on')
+    assert e[e.quantity == 'APL']['linear'].iloc[0] == pytest.approx((pa.apl_win - 8.0) / (ms.apl_win - 8.0))
+    assert e[e.quantity == 'PN total']['linear'].iloc[0] == pytest.approx(pa.pn_total / ms.pn_total)
+
+
+def _fam_full(stims, wirings=('real', 'P1')):
+    """A made-up A3 family table: per stimulus a claw drive c (0 for the blank); at the blank's level the claws read c and
+    APL sqrt(c / 100) with APL on, c / 100 acutely off; E90's pre-odor means sit below the blank's windows."""
+    rows = []
+    for w in wirings:
+        for i, s in enumerate(stims):
+            c = 0.0 if s == M.BLANK_LABEL else 100.0 * (1 + i)
+            for cond in ('on', 'off'):
+                win = (8.6 + np.sqrt(c / 100.0)) if cond == 'on' else (9.0 + c / 100.0)
+                rows.append(dict(wiring=w, cond=cond, stimulus=s, apl_win=win, apl_pre=8.0, apl_pre_settled=8.6,
+                                 apl_evoked=win - 8.0, pn_total=10.0 + c, kc_rate=0.05 + c / 1e5,
+                                 **{M.claw_col(sub, sh, k): (60.0 + c if k == 'win' else 50.0 if k == 'pre' else 10.0 + c)
+                                    for sub in M.CLAW_SUBSETS for sh in M.CLAW_SHARES for k in ('win', 'pre', 'change')}))
+    return pd.DataFrame(rows)
+
+
+def test_part_a2_blank_and_c4_model_made_up(tmp_path, monkeypatch):
+    import json
+    hs = [M.hallem_label(o, c) for o in M.HALLEM_ODORS for c in M.HALLEM_CONCS]
+    stims = list(M.H.APL16_ODORS) + hs + ['paa [validation2/diag] @ -5', 'ms [megamat/diag] @ -3', M.BLANK_LABEL]
+    fam = _fam_full(stims)
+    fam.to_csv(tmp_path / 'a3_family.csv', index=False)
+    monkeypatch.setattr(M, 'out_dir', lambda: tmp_path)
+    a2 = M.part_a2_blank(('real', 'P1'))
+    ln = pd.read_csv(tmp_path / 'a2_blank_lines.csv')
+    b = ln[(ln.level == 'blank') & (ln.subset == 'input') & (ln.share == 0.0)]
+    assert np.allclose(b['slope_rma'], 0.5) and np.allclose(b['residual_log2'], 0.0, atol=1e-12)
+    assert len(b) == 2 * 16 and set(ln['level']) == {'blank', 'e90'}
+    e = ln[(ln.level == 'e90') & (ln.subset == 'input') & (ln.share == 0.0)]
+    want = M.family_line(fam[fam['stimulus'].isin(list(M.H.APL16_ODORS) + [M.BLANK_LABEL])])
+    assert np.allclose(e['slope_rma'].to_numpy(), want['slope_rma'].to_numpy())
+    r = pd.read_csv(tmp_path / 'a2_blank_ratios.csv')
+    assert set(r['pair']) == {'pa/ms', 'paa/ms', 'paa/pa'} and set(r['cond']) == {'on', 'off'}
+    i_pa, i_ms = stims.index('pa'), stims.index('ms')
+    apl = r[(r.baseline == 'blank') & (r.cond == 'on') & (r.pair == 'pa/ms') & (r.quantity == 'APL')]
+    assert np.allclose(apl['linear'], np.sqrt((1 + i_pa) / (1 + i_ms)))
+    apl_off = r[(r.baseline == 'blank') & (r.cond == 'off') & (r.pair == 'pa/ms') & (r.quantity == 'APL')]
+    assert np.allclose(apl_off['linear'], (1 + i_pa) / (1 + i_ms))
+    s = json.loads((tmp_path / 'a2_blank.json').read_text())
+    assert any(x['level'] == 'blank' and x['subset'] == 'input' and x['share'] == 0.0
+               and x['slope_rma_min'] == pytest.approx(0.5) for x in s['lines'])
+    assert a2['lines_input_drive']
+    c4 = M.part_c4_model(('real', 'P1'))
+    h = pd.read_csv(tmp_path / 'c4_hallem_ratios.csv')
+    i4p, i4m = stims.index(M.hallem_label('pa', -4)), stims.index(M.hallem_label('ms', -4))
+    x = h[(h.series == 'pa over ms') & (h.log10_conc == -4) & (h.cond == 'on')]
+    assert np.allclose(x[x.quantity == 'APL']['linear'], np.sqrt((1 + i4p) / (1 + i4m)))
+    assert np.allclose(x[(x.quantity == 'claws') & (x.share == 0.0) & (x.subset == 'input')]['linear'], (1 + i4p) / (1 + i4m))
+    i2p = stims.index(M.hallem_label('pa', -2))
+    y = h[(h.series == 'pa over pa at 10^-2') & (h.log10_conc == -4) & (h.cond == 'off') & (h.quantity == 'APL')]
+    assert np.allclose(y['linear'], (1 + i4p) / (1 + i2p))
+    lv = pd.read_csv(tmp_path / 'c4_hallem_levels.csv')
+    assert set(lv['stimulus']) == set(hs) | {'pa', 'ms'} and set(lv['cond']) == {'on', 'off'}
+    off = pd.read_csv(tmp_path / 'c4_apl_off.csv')
+    assert set(off['ratio_id']) == {'r1', 'r2', 'r3'} and set(off['cond']) == {'on', 'off'}
+    r3 = off[(off.ratio_id == 'r3') & (off.cond == 'off') & (off.quantity == 'APL')]
+    i5, ipaa = stims.index('paa [validation2/diag] @ -5'), stims.index('paa')
+    assert np.allclose(r3['linear'], (1 + i5) / (1 + ipaa))
+    assert c4['not_positive'] == [] and (tmp_path / 'c4_model.json').exists()
+
+
+def test_flies_strengths():
+    rows = []
+    for fly, k in (('f1', 1.0), ('f2', 2.0)):
+        for rec in (f'{fly}_r1', f'{fly}_r2'):
+            for conc, a in ((-2.0, 0.8), (-4.0, 0.2)):
+                for bm in (0.0, 1.0):
+                    rows.append(dict(recording=rec, fly=fly, group='L', reading='carrying', b_mult=bm, stim=f'pa @ {conc:g}',
+                                     odor='pa', log10_conc=conc, apl=a * k, kc=0.1 * k * (1 if conc == -2 else 0.5),
+                                     kept=True))
+    t = M.flies_strengths(pd.DataFrame(rows), groups=('L',), n_boot=200).set_index(['b_mult', 'stim'])
+    assert t.loc[(0.0, 'pa @ -4'), 'apl_mean'] == pytest.approx((0.2 + 0.4) / 2)
+    assert t.loc[(0.0, 'pa @ -4'), 'apl_over_2'] == pytest.approx(0.25)
+    assert t.loc[(0.0, 'pa @ -4'), 'kc_over_2'] == pytest.approx(0.5) and t.loc[(0.0, 'pa @ -2'), 'apl_over_2'] == 1.0
+    assert t.loc[(1.0, 'pa @ -4'), 'n_flies'] == 2 and t.loc[(1.0, 'pa @ -4'), 'n_recordings'] == 4
+
+
+def test_write_variants(tmp_path, monkeypatch):
+    import json
+    from experiments import E83_cross_wiring_fit as E83
+    monkeypatch.setattr(M, 'out_dir', lambda: tmp_path)
+    monkeypatch.setattr(E83, 'members', lambda: {'real': ('E67_apl_effect_fits', 'fit_real'), 'P1': ('E72_x', 'fit_P1')})
+    runs = pd.DataFrame([dict(wiring=w, cond=c, n_stimuli=52, input_sha256='abc', param_fixed_thr=100.0 + i,
+                              param_wAPLKC_scale=0.1 if c == 'on' else 0.0, queue_commit='q', pyolfsysm_commit='p')
+                         for i, w in enumerate(('real', 'P1')) for c in ('on', 'acute_off')])
+    runs.to_csv(tmp_path / 'a3_runs.csv', index=False)
+    _fam_full(list(M.H.APL16_ODORS) + [M.BLANK_LABEL]).to_csv(tmp_path / 'a3_family.csv', index=False)
+    (tmp_path / 'a3_identity.json').write_text(json.dumps({'real': dict(reproduces_fit=True, reproduces_b1=True)}))
+    v = M.write_variants(('real', 'P1')).set_index('tag')
+    assert v.loc['real', 'fixed_thr'] == 100.0 and v.loc['P1', 'fixed_thr'] == 101.0
+    assert v.loc['real', 'wAPLKC_scale'] == 0.1                       # the APL-on run's parameters
+    assert v.loc['P1', 'ref_experiment'] == 'E72_x' and v.loc['real', 'ref_fit'] == 'fit_real'
+    assert v.loc['real', 'reproduces_fit'] == True and pd.isna(v.loc['P1', 'reproduces_fit'])   # noqa: E712
+    fam = _fam_full(list(M.H.APL16_ODORS))
+    assert v.loc['real', 'rate_on'] == pytest.approx(fam[(fam.wiring == 'real') & (fam.cond == 'on')]['kc_rate'].mean())
+    assert (tmp_path / 'variants.csv').exists()
