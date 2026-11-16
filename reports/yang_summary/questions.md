@@ -167,3 +167,31 @@ On the main page this heading reads "What blocking APL output does, mostly: a un
 **What "uniform" adds.** It does not say that every pair is decorrelated by the same amount. It says that one rule holds for all pairs: how much APL decorrelates a pair depends only on how correlated the pair is without APL, not on which two odors they are. That is what the monotone fit of the next sentence tests (isotonic R² {{data:iso_r2 ~ .2f}}).
 
 **What "mostly" leaves out.** The nine fruity × small-ester pairs, which APL decorrelates more than that rule gives: the block of the paragraph after next ([which pairs deviate from the fit, and how consistently](#yq-pairs-off-the-monotone-fit)).
+## orn-rho-and-natural-source-alignment
+asked: 2026-11-16
+sentence: The code with APL output blocked (TNT) is more ORN-like than the control code (ρ on odor-odor correlations with the ORN input 0.73 instead of 0.65), yet it keeps structure the ORN input does not predict: its natural-source alignment is 0.36, which a linear model of the circuit does not reproduce.
+sentence_main: The code with APL output blocked (TNT) is more ORN-like than the control code (ρ on odor-odor distances with the ORN input 0.73 instead of 0.65), yet it keeps structure the ORN input does not predict: its natural-source alignment is 0.36, which a linear model of the circuit does not reproduce.
+question: How is the ORN input correlation computed? Also, the natural-source alignment of 0.36 with APL output blocked (TNT) is different from my own calculation: my Spearman correlation between the KC RDM (1 - cosine similarity) and the VCF space (either embedded or raw data) is about 0.2 on the APL16 odor panel.
+
+**The ρ with the ORN input.** Each ORN pair value is the Pearson correlation, across the 36 glomeruli imaged in both ORN panels, between the two odors' fly-mean responses (a glomerulus's response averaged over a fly's trials, then over the flies of the odor's panel). The ρ of the sentence is the Spearman correlation, across all 120 pairs, between those and the KC pair values (the cosine similarity per recording, averaged over recordings): {{data:rho_ctrl_orn ~ .2f}} for the control flies and {{data:rho_tnt_orn ~ .2f}} with APL output blocked (TNT). paa, euc and -aPine are at substituted ORN concentrations, and the two ORN panels were imaged in different flies.
+
+**The natural-source alignment is not the correlation of the KC matrix with the VCF space.** It differs from the calculation in the question in three ways:
+
+1. It is computed on a residual. The KC pair values are first fitted with a straight line on the ORN pair values, and only each pair's departure from that line is correlated with the natural-source values ([how the structure beyond the ORN input is computed](#fn-orn-residual)).
+2. It uses 66 pairs, not 120. The natural-source table behind the page holds the 12 odors shared with the megamat panel, so paa, -aPine, euc and B-myr are left out, and 3 of the 66 pairs have no raw value and are filled by the embedding.
+3. It uses the hyperbolic embedding (three dimensions, the mean of 10 seeds), not the raw co-occurrence values.
+
+The same recordings with each choice, over those 66 pairs:
+
+| ρ over the 66 megamat pairs | control flies | APL output blocked (TNT) |
+|---|---|---|
+| KC matrix with the raw natural-source values | {{lit:0.21 # kcq.harness.compare_to_references(H.yang_mean_rdm('TNT3c', 'cosine'))['spearman_vcf_raw'], computed 2026-11-16 in viki's session for Yang's question; not a registry entry}} | {{lit:0.19 # the same for H.yang_mean_rdm('TNT', 'cosine'), spearman_vcf_raw}} |
+| KC matrix with the hyperbolic embedding | {{lit:0.55 # kcq.harness.compare_to_references(H.yang_mean_rdm('TNT3c', 'cosine'))['spearman_vcf_hyp'], computed 2026-11-16 in viki's session for Yang's question; not a registry entry}} | {{lit:0.42 # the same for H.yang_mean_rdm('TNT', 'cosine'), spearman_vcf_hyp}} |
+| residual around the ORN prediction with the hyperbolic embedding (the page's natural-source alignment) | {{data:ctrl_vcf ~ .2f}} | {{data:tnt_vcf ~ .2f}} |
+| residual around the ORN prediction with the raw natural-source values | {{lit:−0.09 # kcq.harness.compare_to_references(H.yang_mean_rdm('TNT3c', 'cosine'))['spearman_resid_vs_vcf_raw'], computed 2026-11-16 in viki's session for Yang's question; not a registry entry}} | {{lit:−0.10 # the same for H.yang_mean_rdm('TNT', 'cosine'), spearman_resid_vs_vcf_raw}} |
+
+**The first row is the calculation in the question, and it gives about 0.2 here too.** With the raw values, taking the ORN prediction out leaves no alignment at all. The page's {{data:tnt_vcf ~ .2f}} (90 % interval {{data:tnt_vcf.lo ~ .2f}} to {{data:tnt_vcf.hi ~ .2f}}) exists only with the hyperbolic embedding.
+
+**How much rests on the embedding.** Over these 66 pairs the embedded and the raw natural-source values agree with each other at only ρ={{lit:0.30 # Spearman between the vcf_hyp and vcf_raw columns of kcq.harness.reference_pairs() (the 66 megamat pairs), computed 2026-11-16 in viki's session for Yang's question}}. The alignment is therefore a statement about that embedding of 12 odors more than about the natural-source statistics themselves, which the page says in the definition of the statistic.
+
+**What stays open.** With an embedding the question reports about 0.2, where the page's embedding gives 0.42 before the ORN prediction is taken out. The two embeddings, or their sets of odors, must differ; the page's is the one in al_analysis's scripts/corr_minus_orn_vs_vcf_repro/data/tidy_abbrev_dists.tsv (columns vcf5q_ND030_D03_seed01 to seed10, averaged; raw values in vcf5q_dat). This has not been compared with Yang's own natural-source file.
