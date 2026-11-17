@@ -8,7 +8,8 @@ which E98's loader reads, the check that the extended run's panel columns equal 
 identity, resuming); the chain of totals and its ratios; the results tables' caveat line; part D's refits: the init
 file (read back exactly by E10's `read_params`), the options and the tag E10's own main gives each kind of wiring, the
 start identity and the start check's stop on a difference, the refit's parameters from its history, which refits are
-due, the per-wiring class counts and the comparison table."""
+due, the per-wiring class counts and the comparison table; part E's points (their starts, kwargs, changes and inputs),
+the uniform component added in place, the references' copies, the pulse window's ratios and the table."""
 
 import json
 import sys
@@ -760,3 +761,124 @@ def test_compare_table():
     assert t['cal_z8_pattern'].iloc[3] == pytest.approx(H.data_target('apl_effect_pattern_floor'))
     t = M.compare_table(rd, None, 1000.0, ['S'])
     assert len(t) == 3
+
+
+# ---------------------------------------------------------------------------
+# part E: the beside-points
+
+F1 = dict(p=dict(PARAMS, wAPLPN_scale=0.0376, wAPLKC_scale=0.087), size=2.0, unit=3.0, aplpn_hold=0.28)
+
+
+@pytest.fixture
+def especs(monkeypatch):
+    from experiments import E83_cross_wiring_fit as E83
+    from experiments import E98_apl_response_strength as E98
+    monkeypatch.setattr(M, 'e95_f1', lambda: {k: (dict(v) if isinstance(v, dict) else v) for k, v in F1.items()})
+    monkeypatch.setattr(M, 'refit_tag', lambda level, w: 'tag')
+    monkeypatch.setattr(M, 'refit_params', lambda tag: dict(PARAMS, fixed_thr=109.0))
+    monkeypatch.setattr(E83, 'saved_fit', lambda w: dict(p=dict(PARAMS, fixed_thr=102.0)))
+    monkeypatch.setattr(E98, 'e93_f_frame', lambda: 'F-frame')
+
+
+def test_e_spec(especs):
+    """Each point's start, PN kwargs, change and input: the unchanged fit at olfsysm's normalization, the refit and E95's
+    refit at the level's; 'b' takes E95's APL->bouton scale and component on the start's other parameters; 'p' adds the
+    1 s pulse's timing and window; 'F' E93's input."""
+    kws = M.step_kws(1000.0)
+    s = M.e_spec('unchanged_F', 1000.0)
+    assert (s['step'], s['kws'], s['input'], s['orn16'], s['flat']) == (M.STEP_IDENTITY, {}, 'F', 'F-frame', None)
+    assert s['params']['fixed_thr'] == 102.0
+    s = M.e_spec('refit_b', 1000.0)
+    assert s['kws'] == kws and s['flat'] == (2.0, 3.0) and s['input'] == 'lab'
+    assert s['params']['wAPLPN_scale'] == 0.0376 and s['params']['fixed_thr'] == 109.0
+    assert s['params']['wAPLKC_scale'] == PARAMS['wAPLKC_scale']                       # the refit's, not E95's
+    s = M.e_spec('refit_p', 1000.0)
+    assert s['kws'] == dict(kws, time_stim_end=1.0, time_end=1.25) and s['pulse_window'] == (0.0, 1.0)
+    s = M.e_spec('unchanged_p', 1000.0)
+    assert s['kws'] == dict(time_stim_end=1.0, time_end=1.25) and s['step'] == M.STEP_IDENTITY
+    s = M.e_spec('E95f1_level', 1000.0)
+    assert s['params'] == F1['p'] and s['kws'] == kws and s['flat'] == (2.0, 3.0)
+    s = M.e_spec('refit_none', 1000.0)
+    assert s['kws'] == kws and s['flat'] is None and s['change'] is None and s['params']['fixed_thr'] == 109.0
+    assert set(sum(M.E_LANES.values(), ())) == set(M.E_POINTS)
+
+
+def test_e_builder_adds_the_uniform_component(monkeypatch):
+    """The component is added to the simulator's unscaled APL->KC weights in place, as E98's E95_f1 point builds it
+    (weight + size x (unit x component)); without a component the weights are left as built."""
+    from experiments import E10_joint_fit as J
+    from experiments import E83_cross_wiring_fit as E83
+    n = 5
+    w0 = pd.Series(np.linspace(1.0, 2.0, n))
+    seen = {}
+
+    def fake_build(label, orn=None, breadth=None, params=None, extra_kws=None):
+        seen.update(label=label, orn=orn, extra_kws=extra_kws, params=params)
+        cell = type('C', (), {})()
+        cell.cell_contents = w0.to_numpy().copy().reshape(n, 1)
+        return 'sim', dict(cells={'wAPLKC_unscaled': cell}, wAPLKC=w0)
+
+    monkeypatch.setattr(E83, 'build_simulator', fake_build)
+    monkeypatch.setattr(E83, 'wiring_parts', lambda w: dict(wnorm={'wAPLKC': w0}))
+    monkeypatch.setattr(J, 'aplkc_flat_component', lambda wn, kind: np.full(n, 0.5))
+    spec = dict(params=PARAMS, orn16=None, kws={}, flat=(2.0, 3.0))
+    _, info = M.e_builder(spec, pd.Series(np.ones(n)))()
+    assert np.allclose(info['cells']['wAPLKC_unscaled'].cell_contents.ravel(), w0.to_numpy() + 2.0 * (3.0 * 0.5))
+    assert seen['extra_kws'] is None and seen['orn'] is None and seen['params'] == PARAMS
+    _, info = M.e_builder(dict(spec, flat=None, kws=dict(time_end=1.25)), pd.Series(np.ones(n)))('ext')
+    assert np.array_equal(info['cells']['wAPLKC_unscaled'].cell_contents.ravel(), w0.to_numpy())
+    assert seen['orn'] == 'ext' and seen['extra_kws'] == dict(time_end=1.25)
+
+
+def test_copy_reference(tmp_path):
+    src, d = tmp_path / 'src', tmp_path / 'd'
+    src.mkdir()
+    d.mkdir()
+    for f in ('real_on_apl.csv', 'real_acute_off_spike_counts.parquet', 'real_family.csv', 'real_units.json',
+              'real_held_on_responses.parquet', 'real_point.json', 'real_runs.csv', 'realx_on_apl.csv'):
+        (src / f).write_text(f)
+    M._copy_reference((src, 'real'), d, 'refit_D')
+    assert sorted(p.name for p in d.iterdir()) == ['refit_D_acute_off_spike_counts.parquet', 'refit_D_family.csv',
+                                                    'refit_D_on_apl.csv', 'refit_D_units.json']
+    assert (d / 'refit_D_on_apl.csv').read_text() == 'real_on_apl.csv'
+
+
+def test_e_pulse_window(tmp_path):
+    from experiments import E98_apl_response_strength as E98
+    labs = [E98.V1_NUM, 'ms', E98.V1_ESTIMATES['kiwi-control/control'], E98.V2_NUM, E98.BLANK_LABEL]
+    a = pd.DataFrame(dict(win=[3.0, 2.0, 2.5, 2.0, 1.0], win_pulse=[4.0, 2.5, 3.0, 2.5, 1.0], pre=0.5, pre_settled=0.6),
+                     index=pd.Index(labs, name='stimulus'))
+    a.to_csv(tmp_path / 'refit_p_on_apl.csv')
+    a.drop(columns=['win_pulse']).to_csv(tmp_path / 'refit_none_on_apl.csv')
+    r = M.e_pulse_window(tmp_path, ['refit_p', 'refit_none', 'absent'])
+    assert set(r['point']) == {'refit_p'} and len(r) == 6
+    v2 = r[(r['comparison'] == 'V2') & (r['window'] == 'win_pulse')].iloc[0]
+    assert v2['ratio_linear'] == pytest.approx((2.5 - 1.0) / (4.0 - 1.0))                # over the blank
+    assert v2['ratio_min'] <= v2['ratio_linear'] <= v2['ratio_max']
+
+
+def test_e_table():
+    rows = []
+    for n, v in (('none', 0.05), ('refit_F', 0.06)):
+        for ro in ('cal', 'raw'):
+            rows.append(dict(change=n, unit='real', readout=ro, **{c: v for c in M.E_COLS_CAL}))
+    rd = pd.DataFrame(rows)
+    rd.loc[rd['change'] == 'none', 'change'] = 'unchanged_none'
+    realism = pd.DataFrame(dict(point=['unchanged_none', 'refit_F'], rate_on=[0.068, 0.069], realism_flag=['', 'rate']))
+    w98 = pd.DataFrame(dict(comparison=['V2, paa at 10^-5 from validation2/diag', "V1, ms's input from megamat/megamat (the panel)",
+                                        'V2 beside, paa at 10^-5 from megamat/diag'] * 2, reading_set='carrying',
+                            wiring=['unchanged_none'] * 3 + ['refit_F'] * 3, cls=['flatter', 'inside', 'inside', 'inside', 'steeper', 'inside'],
+                            ratio_linear=[0.9, 1.3, 0.7, 0.78, 1.4, 0.6], flies_lo90=[0.46, 0.67, 0.46] * 2,
+                            flies_hi90=[0.61, 1.26, 0.61] * 2))
+    w100 = pd.DataFrame(dict(wiring='refit_F', a0_level='blank', stimulus=['2h', '2h', 'ma'], estimate=['a', 'b', 'a'],
+                             cls=['flatter', 'inside', 'flatter']))
+    low = pd.DataFrame(dict(wiring=['unchanged_none', 'refit_F'], stimulus=M.LOW_CARRYING, rate_on=[0.016, 0.007],
+                            rate_off=[0.056, 0.039], flies_on=0.05, flies_off=0.114))
+    t = M.e_table(rd, realism, dict(e98_wirings=w98, e100_wirings=w100, low=low), ['unchanged_none', 'refit_F']).set_index('point')
+    assert t.loc['refit_F', 'cal_z8_pattern'] == 0.06 and t.loc['unchanged_none', 'raw_z8_loss'] == 0.05
+    assert t.loc['refit_F', 'V2 class'] == 'inside' and t.loc['refit_F', 'V1 megamat/megamat class'] == 'steeper'
+    assert t.loc['refit_F', 'realism_flag'] == 'rate' and t.loc['refit_F', 'W1 ratios inside under some estimate'] == '1 of 2'
+    assert t.loc['refit_F', 'low_on'] == 0.007 and t.loc['the flies', 'low_off'] == 0.114
+    assert t.loc['the flies', 'V2 linear'] == '0.460 to 0.610'
+    assert t.loc['the flies', 'cal_mean_effect'] == pytest.approx(H.data_target('apl_effect_mean'))
+    assert t.loc['refit_F', 'start'] == 'refit' and t.loc['refit_F', 'change'] == 'F' and t.loc['unchanged_none', 'start'] == 'reference'
