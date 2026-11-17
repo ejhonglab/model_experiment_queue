@@ -129,3 +129,60 @@ def test_paa_substitution_changes_exactly_the_paa_pairs():
     assert s['res_raw_paa_acid_120'] == pytest.approx(Y.rho(Y.resid(kc[m], orn[m]), vec['raw_paa_acid'][m]))
     assert s['kc_d3mean_120'] == pytest.approx(Y.rho(kc, vec['d3mean']))
     assert np.allclose(Y.upper(Y.triangle_matrix(vec['d3mean'], len(odors))), vec['d3mean'])
+
+
+def test_genotype_difference_of_identical_groups_is_not_significant():
+    rng = np.random.default_rng(10)
+    G = rng.uniform(0, 1, size=(4, 10))
+    stats = lambda kc: dict(m=float(kc.mean()), first=float(kc[0]))   # noqa: E731
+    tab = Y.genotype_difference(G, G.copy(), stats, dict(m=10, first=1), n_boot=50, boot_seed=1, n_perm=200, perm_seed=2)
+    assert list(tab.statistic) == ['m', 'first'] and (tab.control_minus_tnt == 0).all()
+    assert (tab.p_two_sided == 1.0).all() and (tab.lo <= 0).all() and (tab.hi >= 0).all()
+    # two groups drawn alike: not small either
+    tab = Y.genotype_difference(rng.uniform(0, 1, (6, 10)), rng.uniform(0, 1, (5, 10)), stats, dict(m=10, first=1),
+        n_boot=50, boot_seed=1, n_perm=500, perm_seed=2)
+    assert (tab.p_two_sided > 0.05).all()
+    # |-0.5| >= |0.3| once in three: (1 + 1) / (3 + 1)
+    assert np.allclose(Y.two_sided_p(np.array([[0.1], [-0.5], [0.2]]), [0.3]), [0.5])
+
+
+def apl_part_world(n_odors=6, levels=5, k=0.05, seed=11):
+    """TNT distances at a few increasing levels, the natural-source vector centred within each level, control = TNT +
+    k x that vector: the APL part is k x the vector for every fit."""
+    rng = np.random.default_rng(seed)
+    n = n_odors * (n_odors - 1) // 2
+    t = np.repeat(np.linspace(0.2, 0.8, levels), n // levels)
+    v = rng.normal(size=n)
+    for lv in np.unique(t):
+        v[t == lv] -= v[t == lv].mean()
+    return t, v, t + k * v
+
+
+def test_apl_part_proportional_to_the_vector_gives_rho_one():
+    t, v, c = apl_part_world()
+    for fit in Y.FITS:
+        assert np.allclose(Y.apl_part(c, t, fit), 0.05 * v), fit
+    a, b, r2 = Y.linear_fit(c, t)
+    assert a == pytest.approx(0) and b == pytest.approx(1) and 0 < r2 < 1
+    C, T = np.tile(c, (3, 1)), np.tile(t, (2, 1))
+    tab = Y.control_on_tnt(C, T, {'all': (np.ones(len(t), bool), {'ns': v})}, n_boot=20, n_perm=100)
+    assert list(tab.fit) == list(Y.FITS) and np.allclose(tab.rho, 1.0) and np.allclose(tab.lo, 1.0)
+    assert (tab.p_two_sided < 0.05).all() and (tab.n_pairs == len(t)).all()
+    with pytest.raises(ValueError):
+        Y.apl_part(c, t, 'quadratic')
+
+
+def test_nan_natural_source_pairs_are_dropped_from_rho_only():
+    rng = np.random.default_rng(12)
+    t = rng.uniform(0, 1, 15)
+    c = 0.3 + 0.8 * t + rng.normal(0, 0.05, 15)
+    v = rng.uniform(0, 1, 15)
+    v_nan = v.copy()
+    v_nan[[2, 9]] = np.nan
+    C, T = np.tile(c, (2, 1)), np.tile(t, (2, 1))
+    tab = Y.control_on_tnt(C, T, {'all': (np.ones(15, bool), {'ns': v_nan})}, n_boot=5, n_perm=20).set_index('fit')
+    keep = ~np.isnan(v_nan)
+    for fit in Y.FITS:
+        e = Y.apl_part(c, t, fit)   # fitted on all 15 pairs
+        assert tab.loc[fit, 'rho'] == pytest.approx(Y.rho(e[keep], v[keep])) and tab.loc[fit, 'n_pairs'] == 13
+    assert tab.loc['linear', 'rho'] != pytest.approx(Y.rho(Y.apl_part(c[keep], t[keep], 'linear'), v[keep]))

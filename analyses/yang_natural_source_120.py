@@ -33,9 +33,20 @@ the KC distances and of their residual around the ORN prediction with it (kc_<v>
 where it exists, with a 90 % interval from 1000 resamples of the recordings (seed 15) and, for d3mean, a permutation
 test of the 16 odors' labels (seed 17).
 
+Two questions of Yang's on the same page (added 2026-11-16), with d3mean and raw with paa as phenylacetaldehyde:
+- apl_difference.csv: whether APL changes the alignment: each statistic (res_ / kc_ on the 66 megamat pairs with the
+  page's embedding, and on the 120 pairs with d3mean and with raw) for control minus TNT, with a 90 % interval from
+  2000 resamples of the recordings (seed 21) and a two-sided p from 5000 shuffles of the 19 recordings' genotype labels
+  (seed 22; the first 11 of a shuffle are taken as control);
+- control_on_tnt.csv: what APL adds beyond the TNT matrix: the control mean matrix's part not predicted from the TNT
+  mean matrix (around a straight line, around the isotonic fit, or the plain difference control minus TNT), within the
+  66 megamat pairs or the 120 pairs, correlated (Spearman) with the natural-source measure; 90 % intervals from 1000
+  resamples of the recordings (seed 31) and a two-sided p from 5000 permutations of the odors' labels of the
+  natural-source matrix per pair set (seed 32), with the straight line's intercept, slope and R².
+
 The odors' InChIs are olfdb's (below); (-)-alpha-pinene is in Anoop's matrix without its stereo layers and is matched
 by its InChI cut before "/t" (recorded in provenance.json). Writes <shared>/results/yang_natural_source_120/:
-alignment.csv, pairs.csv, embeddings.csv and provenance.json.
+alignment.csv, pairs.csv, embeddings.csv, apl_difference.csv, control_on_tnt.csv and provenance.json.
 Usage: ./venv/bin/python analyses/yang_natural_source_120.py
 """
 from __future__ import annotations
@@ -51,6 +62,7 @@ from typing import Callable, Dict, List, Sequence, Tuple
 import numpy as np
 import pandas as pd
 from scipy.stats import rankdata, spearmanr
+from sklearn.isotonic import IsotonicRegression
 
 from kcq import harness as H
 
@@ -80,7 +92,12 @@ VCF_VECTORS = {'d3mean': ('page_d3_mean10', 'phenylacetaldehyde'), 'd3mean_paa_a
     'raw': ('page_raw', 'phenylacetaldehyde'), 'raw_paa_acid': ('page_raw', 'phenylacetic acid')}
 PAA_ACID = 'InChI=1S/C8H8O2/c9-8(10)6-7-4-2-1-3-5-7/h1-5H,6H2,(H,9,10)'   # phenylacetic acid
 GENOTYPES = ('TNT3c', 'TNT')   # control, APL output blocked (TNT)
-SEEDS = dict(bootstrap=5, permutations_16=7, permutations_12=8, bootstrap_vcf120=15, permutations_vcf120=17)
+SEEDS = dict(bootstrap=5, permutations_16=7, permutations_12=8, bootstrap_vcf120=15, permutations_vcf120=17,
+    difference_bootstrap=21, difference_labels=22, control_on_tnt_bootstrap=31, control_on_tnt_permutations=32)
+DIFF_STATS = ('res_emb_66', 'kc_emb_66', 'res_emb_120', 'kc_emb_120', 'res_raw_120', 'kc_raw_120')
+N_DIFF_BOOT, N_DIFF_PERM = 2000, 5000
+FITS = ('linear', 'isotonic', 'difference')
+N_COT_BOOT, N_COT_PERM = 1000, 5000
 N_BOOT, N_PERM = 1000, 10000
 PAGE_SEEDS = [f'vcf5q_ND030_D03_seed{k:02d}' for k in range(1, 11)]   # the page's embedding is their mean
 
@@ -275,6 +292,125 @@ def seed_agreement(tidy: pd.DataFrame, pairs: Sequence[Tuple[str, str]], cols: S
     return float(np.mean([rho(vals[a], vals[b]) for a, b in combinations(cols, 2)]))
 
 
+def make_diff_stats(emb120: np.ndarray, raw120: np.ndarray, orn: np.ndarray, is66: np.ndarray, orn66: np.ndarray,
+        emb66: np.ndarray) -> Callable[[np.ndarray], Dict[str, float]]:
+    """DIFF_STATS of a vector of 120 KC distances, as the per-genotype statistics compute them (res_emb_66 is
+    res_d3_66, the page's alignment; res_emb_120 is res_d3mean_120; the raw ones over the pairs that have a value)."""
+    m = ~np.isnan(raw120)
+
+    def stats(kc: np.ndarray) -> Dict[str, float]:
+        return dict(res_emb_66=rho(resid(kc[is66], orn66), emb66), kc_emb_66=rho(kc[is66], emb66),
+            res_emb_120=rho(resid(kc, orn), emb120), kc_emb_120=rho(kc, emb120),
+            res_raw_120=rho(resid(kc[m], orn[m]), raw120[m]), kc_raw_120=rho(kc[m], raw120[m]))
+    return stats
+
+
+def two_sided_p(null: np.ndarray, observed) -> np.ndarray:
+    """(number of |null| >= |observed| + 1) / (n + 1), per column of `null` (resamples x statistics)."""
+    null = np.asarray(null, float)
+    return (np.sum(np.abs(null) >= np.abs(np.asarray(observed, float)) - 1e-12, axis=0) + 1) / (len(null) + 1)
+
+
+def genotype_difference(C: np.ndarray, T: np.ndarray, stats: Callable[[np.ndarray], Dict[str, float]],
+        n_pairs: Dict[str, int], *, n_boot: int = N_DIFF_BOOT, boot_seed: int = SEEDS['difference_bootstrap'],
+        n_perm: int = N_DIFF_PERM, perm_seed: int = SEEDS['difference_labels']) -> pd.DataFrame:
+    """apl_difference.csv: each statistic for control, for TNT and their difference, with the difference's 5th / 95th
+    percentiles over resamples of the recordings (one draw of each genotype per resample, control first) and a
+    two-sided p from shuffles of the recordings' genotype labels (the first len(C) of a shuffle taken as control)."""
+    obs_c, obs_t = stats(C.mean(0)), stats(T.mean(0))
+    keys = list(obs_c)
+    diff = np.array([obs_c[k] - obs_t[k] for k in keys])
+    rng = np.random.default_rng(boot_seed)
+    boot = []
+    for _ in range(n_boot):
+        sc = stats(C[rng.integers(0, len(C), len(C))].mean(0))
+        st = stats(T[rng.integers(0, len(T), len(T))].mean(0))
+        boot.append([sc[k] - st[k] for k in keys])
+    rng = np.random.default_rng(perm_seed)
+    both, nc = np.vstack([C, T]), len(C)
+    null = []
+    for _ in range(n_perm):
+        p = rng.permutation(len(both))
+        sc, st = stats(both[p[:nc]].mean(0)), stats(both[p[nc:]].mean(0))
+        null.append([sc[k] - st[k] for k in keys])
+    lo, hi = np.percentile(np.array(boot), [5, 95], axis=0)
+    p = two_sided_p(np.array(null), diff)
+    return pd.DataFrame(dict(statistic=keys, n_pairs=[n_pairs[k] for k in keys], control=[obs_c[k] for k in keys],
+        tnt=[obs_t[k] for k in keys], control_minus_tnt=diff, lo=lo, hi=hi, p_two_sided=p, n_permutations=n_perm))
+
+
+def apl_part(c: np.ndarray, t: np.ndarray, fit: str) -> np.ndarray:
+    """The control matrix's part not predicted from the TNT matrix (pairs of one set): around the least-squares
+    straight line ('linear'), around the increasing isotonic fit ('isotonic'), or c - t ('difference')."""
+    if fit == 'linear':
+        b, a = np.polyfit(t, c, 1)
+        return c - (a + b * t)
+    if fit == 'isotonic':
+        return c - IsotonicRegression(increasing=True, out_of_bounds='clip').fit(t, c).predict(t)
+    if fit == 'difference':
+        return c - t
+    raise ValueError(fit)
+
+
+def linear_fit(c: np.ndarray, t: np.ndarray) -> Tuple[float, float, float]:
+    """(intercept, slope, R²) of the least-squares straight line of c on t."""
+    b, a = np.polyfit(t, c, 1)
+    e = c - (a + b * t)
+    return float(a), float(b), float(1 - e.var() / c.var())
+
+
+def control_on_tnt(C: np.ndarray, T: np.ndarray, sets: Dict[str, Tuple[np.ndarray, Dict[str, np.ndarray]]], *,
+        n_boot: int = N_COT_BOOT, boot_seed: int = SEEDS['control_on_tnt_bootstrap'], n_perm: int = N_COT_PERM,
+        perm_seed: int = SEEDS['control_on_tnt_permutations']) -> pd.DataFrame:
+    """control_on_tnt.csv: Spearman ρ of the APL part (apl_part, per fit, within each pair set) with each natural-source
+    vector over the pairs where it has a value.
+
+    Args:
+        C, T: recordings x pairs distances of control and TNT.
+        sets: pair set -> (its pairs' mask over C's columns, natural-source name -> its vector over the set's pairs).
+            A set's pairs are the combinations of its odors in order, so that a vector is the upper triangle of the
+            odors' matrix.
+    Lo / hi from resamples of the recordings (control first per resample, every statistic from the same draws); a
+    two-sided p and the null's SD from permutations of the odors' labels of the natural-source matrix, the APL part
+    fixed (one generator, the sets in the order of `sets`, the same permutations for all statistics of a set).
+    """
+    def stats(c_all, t_all):
+        out = {}
+        for ps, (sel, vecs) in sets.items():
+            for fit in FITS:
+                e = apl_part(c_all[sel], t_all[sel], fit)
+                for ns, v in vecs.items():
+                    out[(ps, ns, fit)] = rho(e, v)
+        return out
+    obs = stats(C.mean(0), T.mean(0))
+    rng = np.random.default_rng(boot_seed)
+    boot = []
+    for _ in range(n_boot):
+        c = C[rng.integers(0, len(C), len(C))].mean(0)
+        t = T[rng.integers(0, len(T), len(T))].mean(0)
+        boot.append(stats(c, t))
+    boot = pd.DataFrame(boot)
+    rng = np.random.default_rng(perm_seed)
+    rows = []
+    for ps, (sel, vecs) in sets.items():
+        n_odors = int(round((1 + np.sqrt(1 + 8 * sel.sum())) / 2))
+        iu = np.triu_indices(n_odors, 1)
+        perms = [rng.permutation(n_odors) for _ in range(n_perm)]
+        c, t = C.mean(0)[sel], T.mean(0)[sel]
+        a, b, r2 = linear_fit(c, t)
+        parts = {fit: apl_part(c, t, fit) for fit in FITS}
+        for ns, v in vecs.items():
+            V = triangle_matrix(v, n_odors)
+            null = np.array([[rho(parts[fit], V[np.ix_(q, q)][iu]) for fit in FITS] for q in perms])
+            for k, fit in enumerate(FITS):
+                o = obs[(ps, ns, fit)]
+                rows.append(dict(pairset=ps, natural_source=ns, fit=fit, n_pairs=int((~np.isnan(v)).sum()), rho=o,
+                    lo=np.percentile(boot[(ps, ns, fit)], 5), hi=np.percentile(boot[(ps, ns, fit)], 95),
+                    p_two_sided=float(two_sided_p(null[:, k], o)), null_sd=float(np.nanstd(null[:, k])),
+                    n_permutations=n_perm, intercept=a, slope=b, r2=r2))
+    return pd.DataFrame(rows)
+
+
 def _sha256(p: Path) -> str:
     return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 
@@ -380,11 +516,29 @@ def main() -> None:
         n_pairs_without_raw_120_paa_acid=int(np.isnan(vec['raw_paa_acid']).sum()),
         paa_acid_vs_aldehyde_d3mean_15=rho(vec['d3mean'][is_paa], vec['d3mean_paa_acid'][is_paa]),
         paa_acid_vs_aldehyde_raw_15=rho(vec['raw'][is_paa], vec['raw_paa_acid'][is_paa])).items()])
+    # does APL change the alignment (control minus TNT), and what APL adds beyond the TNT matrix
+    has_raw120 = ~np.isnan(vec['raw'])
+    diff_n = dict(res_emb_66=int(is66.sum()), kc_emb_66=int(is66.sum()), res_emb_120=len(pairs), kc_emb_120=len(pairs),
+        res_raw_120=int(has_raw120.sum()), kc_raw_120=int(has_raw120.sum()))
+    apl_difference = genotype_difference(X['TNT3c'], X['TNT'],
+        make_diff_stats(vec['d3mean'], vec['raw'], orn, is66, orn66, hyp66), diff_n)
+    for g, col in (('TNT3c', 'control'), ('TNT', 'tnt')):
+        a_ = alignment.set_index(['genotype', 'statistic'])
+        d_ = apl_difference.set_index('statistic')[col]
+        for k, old in (('res_emb_66', 'res_d3_66'), ('kc_emb_66', 'kc_d3_66'), ('res_emb_120', 'res_d3mean_120'),
+                ('kc_emb_120', 'kc_d3mean_120'), ('res_raw_120', 'res_raw_120'), ('kc_raw_120', 'kc_raw_120')):
+            assert abs(d_[k] - a_.loc[(g, old), 'value']) < 1e-12, f'{k} of {g} is not {old}'
+    sets = {'megamat66': (is66, {'embedding': vec['d3mean'][is66], 'raw': vec['raw'][is66]}),
+        'all120': (np.ones(len(pairs), bool), {'embedding': vec['d3mean'], 'raw': vec['raw']})}
+    assert np.allclose(vec['d3mean'][is66], hyp66)
+    cot = control_on_tnt(X['TNT3c'], X['TNT'], sets)
     out = H.shared_dir() / 'results' / 'yang_natural_source_120'
     out.mkdir(parents=True, exist_ok=True)
     alignment.to_csv(out / 'alignment.csv', index=False)
     pairs_tab.to_csv(out / 'pairs.csv', index=False)
     embeddings.to_csv(out / 'embeddings.csv', index=False)
+    apl_difference.to_csv(out / 'apl_difference.csv', index=False)
+    cot.to_csv(out / 'control_on_tnt.csv', index=False)
     inputs = dict(hallem_d4_embedding=embedding_path(), page_reference_pairs=H.apl_pair_dir() / 'shared12_pairs.csv',
         page_embedding_seeds=tidy_path(), per_recording_rdms=H.yang_data_dir() / 'computed' / 'rdm_per_recording_long.csv',
         orn16=H.shared_dir() / 'data' / 'model_outputs' / 'inputs' / 'orn16_corrdist_olfdb_36glom_flymean.csv',
@@ -397,6 +551,8 @@ def main() -> None:
         odor_keys={o: dict(inchi=ODOR_INCHI[o], embedding_key=k, match=m) for o, (k, m) in keys.items()},
         stereo_layers_dropped=[o for o, (_, m) in keys.items() if m != 'exact'],
         seeds=SEEDS, n_bootstrap=N_BOOT, n_permutations=N_PERM, page_embedding_seed_columns=PAGE_SEEDS,
+        apl_difference=dict(n_bootstrap=N_DIFF_BOOT, n_label_shuffles=N_DIFF_PERM),
+        control_on_tnt=dict(n_bootstrap=N_COT_BOOT, n_odor_permutations=N_COT_PERM),
         paa_acid_inchi=PAA_ACID,
         generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip())
@@ -404,6 +560,8 @@ def main() -> None:
     pd.set_option('display.width', 220)
     print(alignment.round(4).to_string(index=False))
     print(embeddings.round(4).to_string(index=False))
+    print(apl_difference.round(4).to_string(index=False))
+    print(cot.round(4).to_string(index=False))
     print(f'written to {out}')
 
 
