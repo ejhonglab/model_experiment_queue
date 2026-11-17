@@ -2954,14 +2954,14 @@ def _variant_row(tag: str, part: str, point: str, rec: dict, held: Optional[Dict
     re-holding factors, the PN kwargs, the response rates of its 16-odor run (`held`)."""
     from experiments import E10_joint_fit as J
     p = rec['params']
-    row = dict(tag=tag, variant=tag, part=part, point=point, config=config,
+    row = dict(tag=tag, variant=tag, base='bouton', apl_drive='claws', part=part, point=point, config=config,
                **{k: float(p[k]) for k in REFIT_PARAM_KEYS}, kc_kc_inh=float(p['wKCKC_scale']), kc_kc_tau=J.TAU, k=2.0,
                fixed_thr_off=float(rec['params_off']['fixed_thr']) if rec.get('params_off') else None,
                thr_factor=rec.get('thr_factor'), apl_factor=rec.get('apl_factor'), pn_inhadd=float(rec['pn_inhadd']),
                pn_inhsc=float(rec['pn_inhsc']))
     if held is not None:
         row.update(rate_on=float(held['on'][0].to_numpy(dtype=float).mean()),
-                   rate_off=float(held['off'][0].to_numpy(dtype=float).mean()))
+                   rate_off=float(held['off'][0].to_numpy(dtype=float).mean()), n_kcs=int(len(held['on'][0])))
     row.update(extra)
     return row
 
@@ -3030,7 +3030,7 @@ def variants_table() -> pd.DataFrame:
                   f"wiring-{_wiring_cols(lab)['wiring_tag']}_" in stem + '_'), 'real')
         r = pd.read_parquet(f.with_name(f.name.replace('spike_counts', 'responses')))
         kws = step_kws(a) if np.isclose(step_kws(a)['pn_inhsc'], sc, rtol=1e-5) else dict(pn_inhadd=a, pn_inhsc=sc)
-        rows.append(dict(tag=stem, variant=stem, part='D', point='breadth run',
+        rows.append(dict(tag=stem, variant=stem, base='bouton', apl_drive='claws', part='D', point='breadth run', n_kcs=int(len(r)),
                          config=f"the bouton base at E3's parameters, APL off, on {w} with the PN normalization: the breadth "
                                 "behind the refit's APL->KC weights (E10_joint_fit.bouton_base's cache)",
                          fixed_thr=float(init['fixed_thr']), wAPLKC_scale=0.0, wKCAPL_scale=float(init['wKCAPL_scale']),

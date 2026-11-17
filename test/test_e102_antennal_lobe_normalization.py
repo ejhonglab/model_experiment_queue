@@ -899,6 +899,7 @@ def test_variant_row():
     assert {k: r[k] for k in M.REFIT_PARAM_KEYS} == PARAMS and r['kc_kc_inh'] == PARAMS['wKCKC_scale']
     assert r['fixed_thr_off'] == PARAMS['fixed_thr'] and (r['pn_inhadd'], r['pn_inhsc']) == (1000.0, 544.4)
     assert r['rate_on'] == pytest.approx(held['on'][0].to_numpy().mean()) and r['k'] == 2.0
+    assert (r['base'], r['apl_drive'], r['n_kcs']) == ('bouton', 'claws', N_KC)
 
 
 def test_variant_tags_name_the_archived_files():
