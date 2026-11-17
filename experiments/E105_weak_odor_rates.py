@@ -2197,9 +2197,80 @@ def part_d(sub: str) -> dict:
     return res
 
 
+# ---------------------------------------------------------------------------
+# figure (from part A's saved table)
+
+FIG_ESTIMATE_COLORS = {'kiwi-control': '#2a78d6', 'megamat': '#eb6834', 'validation2': '#1baf7a'}   # categorical 1-3
+FIG_PANELS = (('carried_so_far', POOLED_SET, 'on', 'the reading carried so far, control flies D1+D2 / APL on'),
+              ('carried_so_far', POOLED_SET, 'off', 'the reading carried so far, APL output blocked (TNT) / APL off'),
+              ('carrying', 'D1', 'on', 'set D1, control flies / APL on'),
+              ('carrying', 'D1', 'off', 'set D1, APL output blocked (TNT) / APL off'),
+              ('carrying', 'D2', 'on', 'set D2, control flies / APL on'),
+              ('carrying', 'N', 'on', 'set N, control flies / APL on'))
+
+
+def figure_cells(path: Optional[Path] = None) -> Path:
+    """E105_cells.png: per panel (FIG_PANELS) and weak odor the flies' value (line) and 90 % interval (band) against
+    the eight wirings' values (dots) and their median (bar) under each estimate; the carried reading first. From
+    a3_cells.csv."""
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
+    c = read_table(out_dir() / 'a3_cells.csv')
+    path = out_dir() / 'E105_cells.png' if path is None else Path(path)
+    fig, axes = plt.subplots(3, 2, figsize=(11, 10.5), sharey=False)
+    ink, muted = '#2b2b29', '#6b6a64'
+    for ax, (rd, s, cond, title) in zip(axes.ravel(), FIG_PANELS):
+        x = c[(c['reading'] == rd) & (c['set'] == s) & (c['condition'] == cond)]
+        ests = [e for e in ESTIMATES if e in set(x['estimate'])]
+        for i, o in enumerate(WEAK_ODORS):
+            g = x[x['odor'] == o]
+            if not len(g):
+                continue
+            f = g.iloc[0]
+            x0, x1 = i - 0.42, i + 0.42
+            ax.fill_between([x0, x1], f['flies_lo90'], f['flies_hi90'], color='#d9d8d2', lw=0, zorder=1)
+            ax.plot([x0, x1], [f['flies_value']] * 2, color=muted, lw=1.5, zorder=2)
+            for j, e in enumerate(ests):
+                r = g[g['estimate'] == e]
+                if not len(r):
+                    continue
+                r = r.iloc[0]
+                xe = i + (j - (len(ests) - 1) / 2) * 0.26
+                v = [r[f'w_{w}'] for w in ALL_WIRINGS]
+                jit = np.linspace(-0.06, 0.06, len(v))
+                ax.scatter(xe + jit, v, s=22, color=FIG_ESTIMATE_COLORS[e], edgecolor='white', linewidth=0.8, zorder=3)
+                ax.plot([xe - 0.09, xe + 0.09], [r['median']] * 2, color=ink, lw=2, zorder=4)
+                ax.annotate(r['cls'], (xe, 0), xycoords=('data', 'axes fraction'), xytext=(0, 3),
+                            textcoords='offset points', ha='center', va='bottom', fontsize=7, color=muted, rotation=90)
+        ax.set_xticks(range(len(WEAK_ODORS)))
+        ax.set_xticklabels([f'{o}\n(flies {FLIES_STIM[o].split(" @ ")[1]})' for o in WEAK_ODORS], fontsize=9, color=ink)
+        ax.set_title(title, fontsize=9.5, color=ink, loc='left')
+        meas = 'response rate' if rd == 'carried_so_far' else 'evoked response rate'
+        ax.set_ylabel(meas, fontsize=9, color=ink)
+        ax.axhline(0, color='#bdbcb5', lw=0.8, zorder=0)
+        for sp in ('top', 'right'):
+            ax.spines[sp].set_visible(False)
+        ax.tick_params(colors=muted, labelsize=8)
+        ax.set_xlim(-0.6, len(WEAK_ODORS) - 0.4)
+    handles = [Line2D([], [], marker='o', ls='', color=FIG_ESTIMATE_COLORS[e], label=f"{e}'s estimate of the input")
+               for e in ESTIMATES]
+    handles += [Line2D([], [], color=ink, lw=2, label='median of the eight wirings'),
+                Line2D([], [], color=muted, lw=1.5, label="the flies' value (band: 90 % interval)")]
+    fig.legend(handles=handles, loc='lower center', ncol=3, fontsize=8.5, frameon=False)
+    fig.suptitle("The family's KCs at the weak odors against the flies', set by set (carrying reading: evoked, "
+                 "trial-noise unit, all trials;\nfamily: two spikes or more). Labels: the cell's class", fontsize=10,
+                 color=ink, x=0.02, ha='left')
+    fig.tight_layout(rect=(0, 0.05, 1, 0.95))
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+    return path
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
-    ap.add_argument('--part', required=True, choices=['0', 'A', 'B', 'C', 'D'])
+    ap.add_argument('--part', required=True, choices=['0', 'A', 'B', 'C', 'D', 'figures'])
     ap.add_argument('--write-lock', action='store_true')
     ap.add_argument('--sub', default='all', choices=['D1', 'D2', 'D3', 'score', 'all'])
     a = ap.parse_args()
@@ -2211,6 +2282,8 @@ def main() -> None:
         r = part_b()
     elif a.part == 'C':
         r = part_c()
+    elif a.part == 'figures':
+        r = dict(cells=str(figure_cells()))
     else:
         r = part_d(a.sub)
     print(json.dumps(r, indent=1, default=_json_default))
