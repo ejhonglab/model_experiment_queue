@@ -1607,10 +1607,594 @@ def part_c() -> dict:
 
 
 # ---------------------------------------------------------------------------
-# part D (simulations; beside)
+# part D (simulations at fixed parameters; beside: no class rests on these)
+
+D_RUNS = 'D/runs'
+D3_DIR = 'D/D3'
+D_TAG = 'D_{wiring}'                 # the part-D runs' variant names (D1 and D2 read the same runs)
+D3_TAG = 'D3_real'
+D_STEM = '{tag}_{cond}'              # E98's B1 layout under outputs/E105_weak_odor_rates/D/runs/
+ADDED_PANEL = 'E105'
+MIXES = (('2h', 'ma'), ('2h', 'farn'), ('ma', 'farn'))
+EA4_LABEL = 'ea [kiwi-control/kiwi] @ -4.2'
+D2_MAPS = ('linear', 'saturating')   # E73's kept map for C2 is linear (map_choice.csv); the saturating beside
+D2_RULES = ('as_blank', 'as_above')  # 2h at 10^-8 and farn at 10^-4: as the blank, or as the stimulus a log unit above
+FACTORS_ALL = tuple(sorted(set(FACTORS) | {1.0}))
+
+
+def _e98():
+    return _e104()._e98()
+
+
+def scaled_label(odor: str, estimate: str, factor: float) -> str:
+    """A D1 column: a weak stimulus's input under an estimate times `factor` on every glomerulus (one ' @ ')."""
+    o, c = MODEL_STIM[odor]
+    return f'{o} [{estimate}/diag x{factor:g}] @ {c:g}'
+
+
+def mix_label(a: str, b: str, estimate: str) -> str:
+    """A mixture column (the per-glomerulus maximum of the two components' inputs under an estimate)."""
+    (oa, ca), (ob, cb) = MODEL_STIM[a], MODEL_STIM[b]
+    return f'{oa}{ca:g}+{ob}{cb:g} [{estimate}/diag max] @ 0'
+
+
+def ea8_label(estimate: str) -> str:
+    E98 = _e98()
+    return E98.session_label('ea', -8, estimate, E98.DIAG)
+
+
+def d_input() -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Part D's input (the lab's 36 glomeruli): the 16 panel odors (unchanged, first), the nine weak stimuli under the
+    three estimates (B1's columns), each times FACTORS (D1), the mixtures by the per-glomerulus maximum under each
+    estimate (D2), ea at 10^-8 under each estimate's diagnostics, 2h at 10^-5 (kiwi-control's control panel), ea at
+    10^-4.2 (kiwi-control's kiwi panel) and the blank. Returns (input, table: label, role, odor, estimate, factor,
+    source, the input total and its positive part)."""
+    E98 = _e98()
+    b1, _ = E98.b1_input()
+    labels = E98.input_labels(b1)
+    col = {lab: b1.iloc[:, i].astype(float) for i, lab in enumerate(labels)}
+    panel = H.apl16_orn_deltas()
+    gl = list(panel.index)
+    sess = E98.session_inputs()
+    rows, extra = [], {}
+
+    def add(label, v, **kw):
+        extra[label] = pd.Series(np.asarray(v, float), index=panel.index)
+        rows.append(dict(label=label, input_total=float(np.sum(v)), input_total_pos=float(np.clip(v, 0, None).sum()), **kw))
+
+    for o in H.APL16_ODORS:
+        rows.append(dict(label=o, role='panel', odor=o, estimate='', factor=1.0, source='panel',
+                         input_total=float(col[o].sum()), input_total_pos=float(col[o].clip(lower=0).sum())))
+    for e in ESTIMATES:
+        for o in WEAK_ODORS:
+            lab = model_label(o, e)
+            add(lab, col[lab].to_numpy(), role='weak', odor=o, estimate=e, factor=1.0, source=f'B1:{lab}')
+            for f in FACTORS:
+                add(scaled_label(o, e, f), f * col[lab].to_numpy(), role='scaled', odor=o, estimate=e, factor=float(f),
+                    source=f'{f:g} x B1:{lab}')
+        for a, b in MIXES:
+            add(mix_label(a, b, e), np.maximum(col[model_label(a, e)].to_numpy(), col[model_label(b, e)].to_numpy()),
+                role='mixture', odor=f'{a}+{b}', estimate=e, factor=1.0, source=f'max(B1:{model_label(a, e)}, '
+                f'B1:{model_label(b, e)})')
+        lab = ea8_label(e)
+        if lab in col:
+            v = col[lab].to_numpy()
+        else:
+            raw = sess[e][(E98.DIAG, 'ea @ -8')]
+            v = raw.reindex(gl).fillna(0.0).astype(float).to_numpy()
+        add(lab, v, role='ea8', odor='ea', estimate=e, factor=1.0, source=f'{e}/diag ea @ -8')
+    lab = BESIDE_STIM[0][2]
+    add(lab, col[lab].to_numpy(), role='beside', odor='2h', estimate='kiwi-control', factor=1.0, source=f'B1:{lab}')
+    raw = sess['kiwi-control'][('kiwi', 'ea @ -4.2')]
+    add(EA4_LABEL, raw.reindex(gl).fillna(0.0).astype(float).to_numpy(), role='ea4.2', odor='ea',
+        estimate='kiwi-control', factor=1.0, source='kiwi-control/kiwi ea @ -4.2')
+    add(BLANK, np.zeros(len(gl)), role='blank', odor='blank', estimate='', factor=1.0, source='blank')
+    ex = pd.DataFrame(extra, index=panel.index)
+    ex.columns = pd.MultiIndex.from_tuples([(ADDED_PANEL, k) for k in ex.columns], names=panel.columns.names)
+    orn = pd.concat([panel.astype(float), ex], axis='columns')
+    orn.index.name = panel.index.name
+    return orn, pd.DataFrame(rows)
+
+
+def _clean_commits() -> dict:
+    c = _commits()
+    if c.get('queue_dirty') or c.get('pyolfsysm_dirty'):
+        raise RuntimeError(f'part D runs from clean checkouts only: {c}')
+    return c
+
+
+def _save_run(d: Path, stem: str, o: dict) -> None:
+    for k in ('responses', 'spike_counts'):
+        x = o[k].copy()
+        x.columns = [str(c) for c in x.columns]
+        x.to_parquet(d / f'{stem}_{k}.parquet')
+    o['apl'].to_csv(d / f'{stem}_apl.csv')
+
+
+def run_d(wirings: Sequence[str] = ALL_WIRINGS, force: bool = False) -> pd.DataFrame:
+    """D1's and D2's runs (resumable): per wiring, `d_input` at its fit, APL on and acutely off (E98's `ExtendedRun`),
+    saved under outputs/E105_weak_odor_rates/D/runs/ (D_<wiring>_<on|acute_off>_{spike_counts,responses}.parquet,
+    _apl.csv) with a runs.csv row each (every parameter, absolute, the commits, threads). The columns the saved B1 run
+    has must reproduce it exactly (0 count differences), else the run stops."""
+    import gc
+    E98 = _e98()
+    d = local_dir(D_RUNS)
+    commits = _clean_commits()
+    orn, tab = d_input()
+    tab.to_csv(d / 'd_stimuli.csv', index=False)
+    for w in wirings:
+        tag = D_TAG.format(wiring=w)
+        if not force and all((d / f'{D_STEM.format(tag=tag, cond=ct)}_spike_counts.parquet').exists()
+                             for ct in CONDITION_RUN.values()):
+            continue
+        t0 = time.time()
+        er = E98.ExtendedRun(w, orn)
+        saved = _e104().saved_run(w)
+        for cond, ct in CONDITION_RUN.items():
+            t1 = time.time()
+            o = er.run('on' if cond == 'on' else 'off')
+            s_new = o['spike_counts'].astype(float)
+            s_old = saved[ct]['spike_counts'].astype(float)
+            common = [c for c in s_old.columns if c in s_new.columns]
+            same_idx = bool(np.array_equal(np.asarray(s_new.index), np.asarray(s_old.index)))
+            nd = int((s_new[common].to_numpy() != s_old[common].to_numpy()).sum()) if same_idx else -1
+            ident = dict(wiring=w, condition=ct, n_common=len(common), index_equal=same_idx, counts_differ=nd)
+            _write_json(d / f'{D_STEM.format(tag=tag, cond=ct)}_identity.json', ident)
+            if nd != 0:
+                raise RuntimeError(f'{w} {ct}: the part-D run does not reproduce the saved B1 run ({ident})')
+            stem = D_STEM.format(tag=tag, cond=ct)
+            _save_run(d, stem, o)
+            p = er.params('on' if cond == 'on' else 'off')
+            row = dict(tag=tag, wiring=w, condition=ct, n_stimuli=int(s_new.shape[1]), n_common_with_b1=len(common),
+                       max_spike_count=float(s_new.to_numpy().max()),
+                       params_json=json.dumps({k: float(v) for k, v in p.items()}, sort_keys=True),
+                       **{k: float(v) for k, v in p.items()}, runtime_s=round(time.time() - t1, 1), host=_host(),
+                       time=time.strftime('%Y-%m-%d %H:%M'), threads=os.environ.get('OMP_NUM_THREADS'),
+                       thread_limit=os.environ.get('OMP_THREAD_LIMIT'), **commits)
+            pd.DataFrame([row]).to_csv(d / 'runs.csv', mode='a', header=not (d / 'runs.csv').exists(), index=False)
+            print(f"{time.strftime('%H:%M:%S')} {w} {ct}: {time.time() - t1:.0f} s, {len(common)} B1 columns reproduced",
+                  flush=True)
+            del o
+        del er
+        gc.collect()
+        print(f"{time.strftime('%H:%M:%S')} {w}: done in {time.time() - t0:.0f} s", flush=True)
+    return pd.read_csv(d / 'runs.csv')
+
+
+def d_runs(wirings: Sequence[str] = ALL_WIRINGS) -> Dict[str, Dict[str, dict]]:
+    """The saved part-D runs ({wiring: {'on', 'acute_off': {'spike_counts', 'responses', 'apl'}}})."""
+    d = local_dir(D_RUNS)
+    out = {}
+    for w in wirings:
+        tag = D_TAG.format(wiring=w)
+        out[w] = {}
+        for ct in CONDITION_RUN.values():
+            stem = D_STEM.format(tag=tag, cond=ct)
+            out[w][ct] = dict(spike_counts=pd.read_parquet(d / f'{stem}_spike_counts.parquet'),
+                              responses=pd.read_parquet(d / f'{stem}_responses.parquet'),
+                              apl=pd.read_csv(d / f'{stem}_apl.csv', index_col=0), dir=str(d))
+    return out
+
+
+def _log_inverse(x: np.ndarray, y: np.ndarray, target: float) -> Tuple[float, str]:
+    """The factor at which y (made non-decreasing in x, interpolated linearly in log x) reaches `target`: the midpoint of
+    the first and last such x (E104's `_inverse`); censored below or above the ladder."""
+    E104 = _e104()
+    o = np.argsort(x)
+    lx, f = np.log(np.asarray(x, float)[o]), E104.isotonic(np.asarray(y, float)[o], True)
+    if not np.isfinite(target):
+        return np.nan, 'no target'
+    a, b = E104._inverse(lx, f, target, 'left'), E104._inverse(lx, f, target, 'right')
+    if np.isinf(a) and a < 0:
+        return float(np.exp(lx[0])), f'below {np.exp(lx[0]):g}'
+    if np.isinf(b) and b > 0:
+        return float(np.exp(lx[-1])), f'above {np.exp(lx[-1]):g}'
+    return float(np.exp(0.5 * (a + b))), ''
+
+
+def d1_tables(lock: Mapping[str, object], fam: pd.DataFrame, tab: pd.DataFrame, fl: 'Flies') -> Tuple[pd.DataFrame,
+                                                                                                         pd.DataFrame]:
+    """D1: per wiring, condition, estimate, odor and factor the evoked response rate (two spikes) and the largest count
+    (d1_rates.csv); per set, condition, estimate and odor the factor at which each wiring's rate meets the flies'
+    evoked value (carrying reading), their median, and the estimates' input totals and the factor between them
+    (d1_factors.csv)."""
+    spec = reading_spec('carrying', lock)
+    flies = fl.cells(spec, [FLIES_STIM[o] for o in WEAK_ODORS])
+    rows = []
+    for e in ESTIMATES:
+        for o in WEAK_ODORS:
+            for f in FACTORS_ALL:
+                lab = model_label(o, e) if f == 1.0 else scaled_label(o, e, f)
+                x = fam[fam['stimulus'] == lab]
+                for r in x.itertuples(index=False):
+                    rows.append(dict(estimate=e, odor=o, factor=f, stimulus=lab, wiring=r.wiring, condition=r.condition,
+                                     evoked=r.evoked, rate=r.rate, max_count=r.max_count))
+    rates = pd.DataFrame(rows)
+    tot = tab[tab['role'] == 'weak'].set_index(['odor', 'estimate'])
+    frows = []
+    for fr in flies.itertuples(index=False):
+        cond = 'on' if fr.group == 'control' else 'off'
+        for e in ESTIMATES:
+            for o in WEAK_ODORS:
+                if FLIES_STIM[o] != fr.stimulus:
+                    continue
+                g = rates[(rates['estimate'] == e) & (rates['odor'] == o) & (rates['condition'] == cond)]
+                facs, cens = {}, {}
+                for w, gw in g.groupby('wiring', sort=False):
+                    facs[w], cens[w] = _log_inverse(gw['factor'].to_numpy(), gw['evoked'].to_numpy(), fr.value)
+                v = np.array([facs[w] for w in ALL_WIRINGS])
+                tots = {s: float(tot.loc[(o, s), 'input_total']) for s in ESTIMATES}
+                frows.append(dict(set=fr.set, condition=cond, estimate=e, odor=o, flies_value=fr.value,
+                                  flies_lo90=fr.lo90, flies_hi90=fr.hi90, median_factor=float(np.median(v)),
+                                  n_censored_below=sum(c.startswith('below') for c in cens.values()),
+                                  n_censored_above=sum(c.startswith('above') for c in cens.values()),
+                                  input_total=tots[e], input_total_over_lowest=tots[e] / min(tots.values()),
+                                  sessions_factor_max=max(tots.values()) / min(tots.values()),
+                                  max_count=float(g['max_count'].max()),
+                                  **{f'factor_{w}': facs[w] for w in ALL_WIRINGS},
+                                  **{f'censored_{w}': cens[w] for w in ALL_WIRINGS}))
+    return rates, pd.DataFrame(frows)
+
+
+# D2: the sessions as the recordings were made
+
+def stim_input(stim: str, estimate: str, rule: str) -> Optional[List[str]]:
+    """The model columns whose per-glomerulus maximum is a flies' stimulus's input under an estimate, or None (no
+    input: the stimulus enters the session as a blank). Tom's rule (within one log unit) where the concentration has no
+    ORN data: ma at 10^-8 takes ma at 10^-7; 2h at 10^-7 takes 2h at 10^-6; farn at 10^-3 and 10^-2.5 take farn at
+    10^-2; ea at 10^-7 takes ea at 10^-8 (the estimate's diagnostics); ea at 10^-5 takes ea at 10^-4.2
+    (kiwi-control's kiwi panel); IaA at 10^-2 takes the panel's IaA (10^-3). 2h at 10^-8 and farn at 10^-4 (no ORN data
+    within one log unit): the blank under rule 'as_blank', the stimulus a log unit above under 'as_above'. 1o3ol at
+    10^-5, eb at 10^-7 and 10^-5, ban, Bmix28, air and the solvent have none. A mixture: its components'."""
+    if ' + ' in stim:
+        parts = [stim_input(c.strip(), estimate, rule) for c in stim.split(' + ')]
+        cols = [c for p in parts if p for c in p]
+        return cols or None
+    single = {'2h @ -7': model_label('2h', estimate), 'ma @ -7': model_label('ma', estimate),
+              'ma @ -8': model_label('ma', estimate), 'farn @ -3': model_label('farn', estimate),
+              'farn @ -2.5': model_label('farn', estimate), '2h @ -5': BESIDE_STIM[0][2], 'ea @ -7': ea8_label(estimate),
+              'ea @ -5': EA4_LABEL, 'IaA @ -2': 'IaA'}
+    if stim in ('2h @ -8', 'farn @ -4'):
+        if rule == 'as_blank':
+            return None
+        return [model_label('2h' if stim.startswith('2h') else 'farn', estimate)]
+    if stim in single:
+        return [single[stim]]
+    return None
+
+
+def recording_designs(trials: pd.DataFrame) -> pd.DataFrame:
+    """Per recording of the three sets: its set, group, fly and design (the stimuli it presents with their trial
+    numbers, as a JSON list of [stimulus, n_trials] pairs, sorted)."""
+    t = trials[trials['set'].isin(SETS)]
+    n = t.groupby(['set', 'recording', 'genotype_group', 'fly', 'odor'], sort=True)['repeat'].nunique().reset_index()
+    rows = []
+    for (s, rec, g, fly), x in n.groupby(['set', 'recording', 'genotype_group', 'fly'], sort=True):
+        rows.append(dict(set=s, recording=rec, genotype_group=g, fly=fly,
+                         design=json.dumps(sorted([[o, int(k)] for o, k in zip(x['odor'], x['repeat'])]))))
+    return pd.DataFrame(rows)
+
+
+def _session_columns(design: Sequence[Sequence], estimate: str, rule: str, counts: pd.DataFrame
+                     ) -> Tuple[pd.DataFrame, List[dict], int, int]:
+    """A design's session for `session_zscore`: the stimuli with input as columns (mixtures as the maximum of the
+    components' inputs: the D2 mixture columns of the run where both components have input), each repeated by its trial
+    number over the design's greatest common divisor of trial numbers (so that the session's means weight the stimuli
+    by their trials), and the blank stimuli's count in those units. Returns (counts, per-stimulus records with the
+    column and trial number, the unit of trials, the blank's multiplicity)."""
+    from math import gcd
+    from functools import reduce
+    g = reduce(gcd, [int(k) for _, k in design])
+    cols, recs, n_blank = [], [], 0
+    for stim, k in design:
+        inp = stim_input(stim, estimate, rule)
+        m = int(k) // g
+        if inp is None:
+            n_blank += m
+            recs.append(dict(stimulus=stim, n_trials=int(k), column=None, input='none (blank)'))
+            continue
+        if len(inp) == 1:
+            col = inp[0]
+        else:
+            pair = tuple(next(o for o in WEAK_ODORS if model_label(o, estimate) == c) for c in inp)
+            col = mix_label(*pair, estimate) if pair in MIXES else mix_label(*pair[::-1], estimate)
+        recs.append(dict(stimulus=stim, n_trials=int(k), column=col, input=' max '.join(inp)))
+        cols += [col] * m
+    c = counts[cols].copy()
+    c.columns = [f'{x}#{i}' for i, x in enumerate(cols)]
+    return c, recs, g, n_blank
+
+
+def d2_reading(counts: pd.DataFrame, design: Sequence[Sequence], estimate: str, rule: str, cal: dict,
+               q: float, drift: float) -> List[dict]:
+    """One design's session read as E73 reads a recording (`session_zscore` with the wiring's panel calibration, carried
+    unchanged): per stimulus the expected share of KCs whose trial mean (over the stimulus's trials) is above 1 z."""
+    c, recs, g, n_blank = _session_columns(design, estimate, rule, counts)
+    z = H.session_zscore(c, q=q, noise=cal['noise'], amp=cal['amp'], K=cal['K'], noise_ratio=cal['noise_ratio'],
+                         n_trials=g, n_blank=n_blank, drift=drift)
+    out = []
+    first = {}
+    for j, name in enumerate(c.columns):
+        first.setdefault(name.split('#')[0], j)
+    for r in recs:
+        sd = (z['trial_sd'] / np.sqrt(r['n_trials']))[:, :, None]
+        if r['column'] is None:
+            C = z['blank'][:, :, None]
+        else:
+            C = z['center'][:, :, [first[r['column']]]]
+        P = H._tail_moments(C, sd, Z1)[0]
+        out.append(dict(r, rate_z=float(P.mean()),
+                        rate_two_spikes=float((counts[r['column']] >= SPIKES).mean()) if r['column'] else 0.0))
+    return out
+
+
+def d2_tables(lock: Mapping[str, object], runs: Mapping[str, Mapping[str, dict]], fl: 'Flies'
+              ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """D2: per set, design, estimate, rule, map, wiring, condition and stimulus the model's rate under E73's per-KC
+    session reading (d2_rates.csv); the calibration per wiring and map (d2_calibration.csv); per set, condition,
+    estimate, rule, map and stimulus the set's value (mean over its flies of their recordings' designs) as recorded
+    and evoked against the flies' at 1 z, with the wirings' values and the class (described; d2_cells.csv)."""
+    from experiments import E73_per_kc_normalization as E73
+    dt = H.data_target
+    q = E73.q_values()[0]
+    drift = E73.drift_ratio()
+    targets = dict(rate=dt('ctrl_frac'), amp=dt('ctrl_resp_amp_mean_z'), silent_sd=dt('ctrl_trial_noise_sd'))
+    designs = recording_designs(read_all_trials())
+    cal_rows, rows = [], []
+    for w, run in runs.items():
+        on16 = run['on']['spike_counts'][list(H.APL16_ODORS)].astype(float)
+        for a_map in D2_MAPS:
+            cal = H.calibrate_session_zscore(on16, q=q, amp=a_map, target_rate=targets['rate'],
+                                             target_amp=targets['amp'] if a_map == 'saturating' else None,
+                                             target_silent_sd=targets['silent_sd'], drift=drift)
+            cal = dict(cal, amp=a_map)
+            cal_rows.append(dict(wiring=w, map=a_map, q=q, drift=drift, **{k: cal.get(k) for k in (
+                'noise', 'K', 'noise_ratio', 'rate', 'resp_amp_mean', 'nonresp_trial_sd', 'noise_at_bound', 'K_at_bound',
+                'converged')}))
+            for cond, ct in CONDITION_RUN.items():
+                counts = run[ct]['spike_counts'].astype(float)
+                g = CONDITION_GROUP[cond]
+                for design, x in designs[designs['genotype_group'] == g].groupby('design', sort=False):
+                    dsg = json.loads(design)
+                    for e in ESTIMATES:
+                        for rule in D2_RULES:
+                            for r in d2_reading(counts, dsg, e, rule, cal, q, drift):
+                                rows.append(dict(r, wiring=w, map=a_map, condition=cond, estimate=e, rule=rule,
+                                                 design=design, sets=';'.join(sorted(set(x['set']))),
+                                                 recordings=';'.join(x['recording'])))
+    rates = pd.DataFrame(rows)
+    # the set values: each recording takes its design's value; a fly the mean of its recordings; the set the flies' mean
+    sol = rates[rates['stimulus'] == SOLVENT][['wiring', 'map', 'condition', 'estimate', 'rule', 'design', 'rate_z']]
+    rates = rates.merge(sol.rename(columns={'rate_z': 'solvent_z'}), on=['wiring', 'map', 'condition', 'estimate', 'rule',
+                                                                        'design'], how='left')
+    rates['evoked_z'] = rates['rate_z'] - rates['solvent_z']
+    spec_r = dict(unit='z1', first_n=None, evoked=False, relative=False, spikes=SPIKES, drop_fly=None, pooled=False)
+    spec_e = dict(spec_r, evoked=True)
+    stims = sorted(set(rates['stimulus']) - {SOLVENT})
+    fr, fe = fl.cells(spec_r, stims + [SOLVENT]), fl.cells(spec_e, stims)
+    crows = []
+    for (s, cond), d in designs.groupby(['set', 'genotype_group'], sort=False):
+        c = 'on' if cond == 'control' else 'off'
+        for (e, rule, a_map), rr in rates[rates['condition'] == c].groupby(['estimate', 'rule', 'map'], sort=False):
+            for stim in sorted(set(rr['stimulus'])):
+                vals = {}
+                for meas in ('rate_z', 'evoked_z'):
+                    per_rec = []
+                    for rec in d.itertuples(index=False):
+                        v = rr[(rr['design'] == rec.design) & (rr['stimulus'] == stim)]
+                        if len(v):
+                            per_rec.append(dict(fly=rec.fly, **v.set_index('wiring')[meas].reindex(list(ALL_WIRINGS))
+                                                .rename(lambda w: f'w_{w}').to_dict()))
+                    if not per_rec:
+                        continue
+                    pr = pd.DataFrame(per_rec).groupby('fly').mean()
+                    vals[meas] = pr.mean()
+                if not vals:
+                    continue
+                for meas, ff in (('rate_z', fr), ('evoked_z', fe)):
+                    if meas not in vals or (meas == 'evoked_z' and stim == SOLVENT):
+                        continue
+                    f = ff[(ff['set'] == s) & (ff['group'] == cond) & (ff['stimulus'] == stim)]
+                    v = vals[meas].reindex([f'w_{w}' for w in ALL_WIRINGS]).to_numpy(float)
+                    lo = float(f['lo90'].iloc[0]) if len(f) else np.nan
+                    hi = float(f['hi90'].iloc[0]) if len(f) else np.nan
+                    crows.append(dict(set=s, condition=c, estimate=e, rule=rule, map=a_map, stimulus=stim, measure=meas,
+                                      flies_value=float(f['value'].iloc[0]) if len(f) else np.nan, flies_lo90=lo,
+                                      flies_hi90=hi, median=float(np.median(v)), cls_described=cell_class(v, lo, hi),
+                                      **{f'w_{w}': x for w, x in zip(ALL_WIRINGS, v)}))
+    return rates, pd.DataFrame(cal_rows), pd.DataFrame(crows)
+
+
+# D3: the trial noise on the real wiring
+
+D3_STIMULI = tuple(H.APL16_ODORS) + tuple(model_label(o, e) for e in ESTIMATES for o in WEAK_ODORS) + (
+    BESIDE_STIM[0][2], 'ea [kiwi-control/diag] @ -8', BLANK)
+
+
+def run_d3(force: bool = False) -> dict:
+    """D3: the real wiring at its fit through C2's matched threshold jitter (E72's part F: E49's `matched_noise`
+    ('c2_68'), E49's `noisy_trials` scheme: thr = max(thr0 (1 + sigma xi), 0.01 thr0), thr0 = fixed_thr x ratio + 2
+    spont_in, one xi per KC and trial, the same thresholds with APL on and acutely off), D3_RECORDINGS pseudo-recordings
+    of D3_TRIALS trials, on the panel's 16 odors, the nine weak stimuli under the three estimates, 2h at 10^-5, ea at
+    10^-8 and the blank (the part-D input's columns). Saves outputs/E105_weak_odor_rates/D/D3/D3_real_trials.npz (uint16
+    spike counts, conditions x recordings x trials x KCs x stimuli) and D3_real.json (sigma, the ratio, the absolute
+    thresholds and scales, the seed)."""
+    from experiments import E49_low_conc_kc as E49
+    from experiments import E43_model_trial_noise as E43
+    E98 = _e98()
+    d = local_dir(D3_DIR)
+    npz = d / f'{D3_TAG}_trials.npz'
+    if npz.exists() and not force:
+        return _read_json(d / f'{D3_TAG}.json')
+    commits = _clean_commits()
+    orn, _ = d_input()
+    labs = E98.input_labels(orn)
+    keep = [i for i, lab in enumerate(labs) if lab in set(D3_STIMULI)]
+    orn = orn.iloc[:, keep]
+    er = E98.ExtendedRun('real', orn)
+    labels = list(er.labels)
+    mn = E49.matched_noise('c2_68')
+    sigma, ratio = float(mn['sigma']), float(mn['fixed_thr_ratio'])
+    spont = np.asarray(er.rv.kc.spont_in, dtype=float).ravel()
+    f0 = float(er.p['fixed_thr']) * ratio
+    thr0 = f0 + 2.0 * spont
+    rng = np.random.default_rng(SEED)
+    n_kcs = spont.size
+    spk = np.zeros((2, D3_RECORDINGS, D3_TRIALS, n_kcs, len(labels)), dtype=np.uint16)
+    t0 = time.time()
+    for rep in range(D3_RECORDINGS):
+        for tr in range(D3_TRIALS):
+            xi = rng.standard_normal(n_kcs)
+            thr = np.maximum(thr0 * (1.0 + sigma * xi), 0.01 * thr0)
+            with E43.kc_threshold_override(thr):
+                for i, cond in enumerate(('on', 'off')):
+                    p = dict(er.params(cond), fixed_thr=f0)
+                    _, s = er.sim(p)
+                    o = E98.relabel(s, s, labels)
+                    spk[i, rep, tr] = o['spike_counts'].astype(float).to_numpy().astype(np.uint16)
+        print(f"{time.strftime('%H:%M:%S')} D3 pseudo-recording {rep + 1} of {D3_RECORDINGS} ({time.time() - t0:.0f} s)",
+              flush=True)
+    np.savez_compressed(npz, spike_counts=spk, conditions=np.array(['on', 'acute_off']), stimuli=np.array(labels),
+                        kcs=np.array([str(x) for x in o['spike_counts'].index]))
+    rec = dict(tag=D3_TAG, wiring='real', sigma=sigma, fixed_thr_ratio=ratio, fixed_thr_fit=float(er.p['fixed_thr']),
+               fixed_thr=f0, thr_min_frac=0.01, noise_source=mn['source'], seed=SEED, n_recordings=D3_RECORDINGS,
+               n_trials=D3_TRIALS, stimuli=labels, params_on=dict(er.params('on'), fixed_thr=f0),
+               params_off=dict(er.params('off'), fixed_thr=f0), max_spike_count=int(spk.max()),
+               runtime_s=round(time.time() - t0, 1), host=_host(), time=time.strftime('%Y-%m-%d %H:%M'),
+               threads=os.environ.get('OMP_NUM_THREADS'), thread_limit=os.environ.get('OMP_THREAD_LIMIT'), **commits)
+    _write_json(d / f'{D3_TAG}.json', rec)
+    return rec
+
+
+def d3_tables(lock: Mapping[str, object], fl: 'Flies') -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """D3's readings: per condition, pseudo-recording, trials (all six, the first three) and stimulus the response rate
+    by the trial-mean spike count at one or more ('count1', E49's data rule) and at two or more ('count2'), and per
+    trial at two spikes ('trial2'), each also evoked (minus the blank's), and over the panel's 16 odors
+    (d3_recordings.csv); per condition, estimate, odor and reading their mean and SD over pseudo-recordings beside the
+    flies' values per set (carrying reading, and 1 z as recorded; d3_summary.csv)."""
+    d = local_dir(D3_DIR)
+    z = np.load(d / f'{D3_TAG}_trials.npz')
+    spk = z['spike_counts'].astype(float)
+    labels = [str(x) for x in z['stimuli']]
+    bi = labels.index(BLANK)
+    p16 = [labels.index(o) for o in H.APL16_ODORS]
+    rows = []
+    for i, cond in enumerate(('on', 'off')):
+        for rep in range(spk.shape[1]):
+            for nt in (D3_TRIALS, FIRST_TRIALS):
+                x = spk[i, rep, :nt]
+                m = x.mean(axis=0)
+                rd = {'count1': (m >= 1).mean(axis=0), 'count2': (m >= 2).mean(axis=0),
+                      'trial2': (x >= SPIKES).mean(axis=(0, 1))}
+                for name, v in rd.items():
+                    for j, lab in enumerate(labels):
+                        rows.append(dict(condition=cond, recording=rep, n_trials=nt, reading=name, stimulus=lab,
+                                         rate=float(v[j]), evoked=float(v[j] - v[bi]), panel_rate=float(v[p16].mean())))
+    t = pd.DataFrame(rows)
+    spec = reading_spec('carrying', lock)
+    fc = fl.cells(spec, [FLIES_STIM[o] for o in WEAK_ODORS])
+    fz = fl.cells(dict(spec, unit='z1', evoked=False), [FLIES_STIM[o] for o in WEAK_ODORS])
+    srows = []
+    for (cond, nt, name), g in t.groupby(['condition', 'n_trials', 'reading'], sort=False):
+        for e in ESTIMATES:
+            for o in WEAK_ODORS:
+                x = g[g['stimulus'] == model_label(o, e)]
+                grp = CONDITION_GROUP[cond]
+                row = dict(condition=cond, n_trials=nt, reading=name, estimate=e, odor=o, stimulus=model_label(o, e),
+                           rate_mean=float(x['rate'].mean()), rate_sd=float(x['rate'].std(ddof=1)),
+                           evoked_mean=float(x['evoked'].mean()), evoked_sd=float(x['evoked'].std(ddof=1)),
+                           panel_rate_mean=float(x['panel_rate'].mean()))
+                for s in SETS:
+                    a = fc[(fc['set'] == s) & (fc['group'] == grp) & (fc['stimulus'] == FLIES_STIM[o])]
+                    b = fz[(fz['set'] == s) & (fz['group'] == grp) & (fz['stimulus'] == FLIES_STIM[o])]
+                    row[f'flies_{s}_carrying'] = float(a['value'].iloc[0]) if len(a) else np.nan
+                    row[f'flies_{s}_z1_as_recorded'] = float(b['value'].iloc[0]) if len(b) else np.nan
+                srows.append(row)
+    return t, pd.DataFrame(srows)
+
+
+def write_variants(runs: pd.DataFrame, d3: Optional[dict]) -> pd.DataFrame:
+    """results/E105_weak_odor_rates/variants.csv, which the archive builds params.csv from: one row per saved run (tag
+    = the files' variant), with every factor, the absolute threshold and scales, all parameters (base_params, JSON),
+    the stimuli and the largest spike counts."""
+    rows = []
+    for (tag, w), g in runs.drop_duplicates(['tag', 'condition'], keep='last').groupby(['tag', 'wiring'], sort=False):
+        on = g[g['condition'] == 'on'].iloc[0]
+        off = g[g['condition'] == 'acute_off'].iloc[0]
+        rows.append(dict(tag=tag, variant=tag, part='D1/D2', wiring=w, ref_experiment='E72_wiring_population (part B '
+                         'fits; E83 wiring labels), E98 ExtendedRun', factor=';'.join(f'{f:g}' for f in FACTORS_ALL),
+                         scaled_odors=';'.join(f'{model_label(o, e)}' for e in ESTIMATES for o in WEAK_ODORS),
+                         fixed_thr=on['fixed_thr'], wAPLKC_scale=on['wAPLKC_scale'], wKCAPL_scale=on['wKCAPL_scale'],
+                         wAPLPN_scale=on['wAPLPN_scale'], wPNAPL_scale=on['wPNAPL_scale'],
+                         kc_kc_inh=on.get('wKCKC_scale', np.nan), base_params=on['params_json'],
+                         stimuli=f"{int(on['n_stimuli'])} columns: outputs/{EXPERIMENT}/{D_RUNS}/d_stimuli.csv",
+                         max_count_on=on['max_spike_count'], max_count_off=off['max_spike_count'], host=on['host'],
+                         queue_commit=on.get('queue_commit'), pyolfsysm_commit=on.get('pyolfsysm_commit')))
+    if d3:
+        p = d3['params_on']
+        rows.append(dict(tag=d3['tag'], variant=d3['tag'], part='D3', wiring='real', ref_experiment='E72 part F matched '
+                         f"threshold jitter ({d3['noise_source']})", fixed_thr=d3['fixed_thr'],
+                         thr_factor=d3['fixed_thr_ratio'], wAPLKC_scale=p['wAPLKC_scale'], wKCAPL_scale=p['wKCAPL_scale'],
+                         wAPLPN_scale=p['wAPLPN_scale'], wPNAPL_scale=p['wPNAPL_scale'],
+                         kc_kc_inh=p.get('wKCKC_scale', np.nan), seed=d3['seed'],
+                         base_params=json.dumps(dict(sigma=d3['sigma'], fixed_thr_ratio=d3['fixed_thr_ratio'],
+                                                     fixed_thr_fit=d3['fixed_thr_fit'], thr_min_frac=d3['thr_min_frac'],
+                                                     n_recordings=d3['n_recordings'], n_trials=d3['n_trials'],
+                                                     params_on=d3['params_on'], params_off=d3['params_off']),
+                                                sort_keys=True),
+                         stimuli=';'.join(d3['stimuli']), max_count_on=d3['max_spike_count'], host=d3['host'],
+                         queue_commit=d3.get('queue_commit'), pyolfsysm_commit=d3.get('pyolfsysm_commit')))
+    v = pd.DataFrame(rows)
+    v.to_csv(out_dir() / 'variants.csv', index=False)
+    return v
+
 
 def part_d(sub: str) -> dict:
-    raise NotImplementedError('part D: next commit')
+    """Part D (`sub`): 'D1' (the runs D1 and D2 read: `run_d`), 'D3' (`run_d3`), 'score' (no simulation: d1_rates.csv,
+    d1_factors.csv, d2_rates.csv, d2_calibration.csv, d2_cells.csv, d3_recordings.csv, d3_summary.csv, d_family.csv,
+    variants.csv and d_summary.json), 'all' (the three in turn)."""
+    lock = require_lock()
+    out = out_dir()
+    res = {}
+    if sub in ('D1', 'D2', 'all'):
+        runs = run_d()
+        res['runs'] = int(len(runs))
+        provenance('D_runs', model=H.model_provenance(orn_deltas=d_input()[0]), threads=os.environ.get('OMP_NUM_THREADS'))
+    if sub in ('D3', 'all'):
+        res['d3'] = {k: v for k, v in run_d3().items() if k not in ('stimuli',)}
+        provenance('D3_runs', threads=os.environ.get('OMP_NUM_THREADS'))
+    if sub in ('score', 'all'):
+        fl = Flies(lock['cstar'])
+        runs = d_runs()
+        fam = family_table(runs, source='E105:D/runs')
+        write_table(fam, out / 'd_family.csv')
+        _, tab = d_input()
+        write_table(tab, out / 'd_stimuli.csv')
+        rates, factors = d1_tables(lock, fam, tab, fl)
+        write_table(rates, out / 'd1_rates.csv')
+        write_table(factors, out / 'd1_factors.csv')
+        r2, cal, c2 = d2_tables(lock, runs, fl)
+        write_table(r2, out / 'd2_rates.csv')
+        write_table(cal, out / 'd2_calibration.csv')
+        write_table(c2, out / 'd2_cells.csv')
+        d3 = _read_json(local_dir(D3_DIR) / f'{D3_TAG}.json')
+        if d3 is not None:
+            t3, s3 = d3_tables(lock, fl)
+            write_table(t3, out / 'd3_recordings.csv')
+            write_table(s3, out / 'd3_summary.csv')
+            _write_json(out / 'd3_run.json', {k: v for k, v in d3.items()})
+        runs_csv = pd.read_csv(local_dir(D_RUNS) / 'runs.csv')
+        write_variants(runs_csv, d3)
+        summ = dict(factors_median=factors[['set', 'condition', 'estimate', 'odor', 'flies_value', 'median_factor',
+                                            'n_censored_below', 'n_censored_above', 'sessions_factor_max',
+                                            'max_count']].to_dict('records'),
+                    max_count_d1=float(rates['max_count'].max()), max_count_all=float(fam['max_count'].max()),
+                    d2_calibration=cal.to_dict('records'), d3=None if d3 is None else
+                    dict(sigma=d3['sigma'], fixed_thr_ratio=d3['fixed_thr_ratio'], max_spike_count=d3['max_spike_count']))
+        _write_json(out / 'd_summary.json', summ)
+        provenance('D_score', lock_sha256=json.loads(LOCK.read_text())['sha256'])
+        res['score'] = dict(n_factor_rows=int(len(factors)), n_d2_cells=int(len(c2)))
+    return res
 
 
 def main() -> None:

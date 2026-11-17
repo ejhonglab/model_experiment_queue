@@ -282,3 +282,35 @@ def test_sets_counts_from_the_data():
             assert c[k] == v
     # no recording is in two sets
     assert (t.groupby('recording')['set'].nunique() == 1).all()
+
+
+# ---------------------------------------------------------------------------
+# part D's helpers
+
+def test_stim_input_rules():
+    k = M.model_label('2h', 'megamat')
+    assert M.stim_input('2h @ -8', 'megamat', 'as_blank') is None
+    assert M.stim_input('2h @ -8', 'megamat', 'as_above') == [k]
+    assert M.stim_input('ma @ -8', 'megamat', 'as_blank') == [M.model_label('ma', 'megamat')]
+    assert M.stim_input('2h @ -7 + farn @ -2.5', 'kiwi-control', 'as_blank') == [
+        M.model_label('2h', 'kiwi-control'), M.model_label('farn', 'kiwi-control')]
+    assert M.stim_input('2h @ -5 + 1o3ol @ -5', 'megamat', 'as_blank') == [M.BESIDE_STIM[0][2]]
+    for s in (M.SOLVENT, 'ban', 'Bmix28', 'air', 'eb @ -7', '1o3ol @ -5'):
+        assert M.stim_input(s, 'megamat', 'as_above') is None
+
+
+def test_log_inverse():
+    x, y = np.array([0.5, 1.0, 2.0]), np.array([0.01, 0.02, 0.04])
+    assert M._log_inverse(x, y, 0.02) == (pytest.approx(1.0), '')
+    f, c = M._log_inverse(x, y, 0.03)
+    assert f == pytest.approx(np.sqrt(2.0)) and c == ''
+    assert M._log_inverse(x, y, 0.001)[1] == 'below 0.5'
+    assert M._log_inverse(x, y, 0.1)[1] == 'above 2'
+
+
+def test_session_columns_weight_by_trials():
+    lab = M.model_label('2h', 'kiwi-control')
+    counts = pd.DataFrame({lab: [0.0, 3.0], 'other': [1.0, 1.0]})
+    c, recs, g, n_blank = M._session_columns([['2h @ -7', 6], [M.SOLVENT, 3]], 'kiwi-control', 'as_blank', counts)
+    assert g == 3 and n_blank == 1 and c.shape[1] == 2            # 2h's six trials: two units of three
+    assert [r['column'] for r in recs] == [lab, None]
