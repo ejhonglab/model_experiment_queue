@@ -819,35 +819,486 @@ def status(paths: Paths = Paths()) -> dict:
     by_section: Dict[str, List[int]] = {}
     for ln in missing:
         by_section.setdefault(ln.section, []).append(ln.n)
+    # entries made by `carry` (by their `by`), and the stale entries they were carried from
+    origin = {m.group(1) for e in mem.values() for m in [CARRIED.match(e['by'])] if m}
     return dict(lines=sum(ln.kind != 'blank' for ln in lines), starred=len(star), converted=len(conv), keep=len(keep),
-        missing=len(missing), stale=sorted(e['line'] for s, e in mem.items() if s not in shas), by_section=by_section)
+        missing=len(missing), stale=sorted(e['line'] for s, e in mem.items() if s not in shas), by_section=by_section,
+        carried=sum(s in shas and bool(CARRIED.match(e['by'])) for s, e in mem.items()),
+        stale_carried=sorted(e['line'] for s, e in mem.items() if s not in shas and s in origin))
 
 
 # ---------------------------------------------------------------- carry
 
+CARRIED = re.compile(r'^carried over from ([0-9a-f]{40}) by yang_summary\.py carry')
+_ORIGIN = re.compile(r' \((from an entry by .*)\)$', re.S)
+# where a sentence ends: . ! or ? (also : and ; when read loosely), with any closing brackets, quotes, * or _ after it,
+# before whitespace
+_END = {False: re.compile(r'[.!?][)\]"\'’”*_]*(?=\s)'), True: re.compile(r'[.!?:;][)\]"\'’”*_]*(?=\s)')}
+_CODE = re.compile(r'`[^`]*`')
+_LIT_REWRITE = re.compile(r'^lit:(.*?) # Yang\'s version, rewritten from "(.*?)";\s?(.*)$', re.S)
+
+
+def _mask(text: str) -> str:
+    """`text` with placeholders and inline code blanked out (same length), so that no sentence end is found inside."""
+    for rx in (PH, _CODE):
+        text = rx.sub(lambda m: 'x' * len(m.group(0)), text)
+    return text
+
+
+def sentence_spans(text: str, loose: bool = False) -> List[Tuple[int, int]]:
+    """(start, end) of each sentence of a line's text (the text after its list marker), by the ends in `_END`; the
+    whitespace between sentences belongs to none."""
+    end = len(text.rstrip())
+    spans, start = [], len(text) - len(text.lstrip())
+    for m in _END[loose].finditer(_mask(text), 0, end):
+        if m.end() > start:
+            spans.append((start, m.end()))
+        start = m.end()
+        while start < end and text[start].isspace():
+            start += 1
+    if start < end:
+        spans.append((start, end))
+    return spans
+
+
+def _parts(text: str, kind: str) -> Tuple[str, str]:
+    """(prefix, content) of a paragraph or list line: its indentation and list marker, and the rest, stripped."""
+    if kind == 'list':
+        m = LIST.match(text)
+        return m.group(0), text[m.end():].strip()
+    return text[:len(text) - len(text.lstrip())], text.strip()
+
+
+def _nb(s: str) -> str:
+    return s.replace('**', '')
+
+
+def _offsets(contents: Sequence[str], body: str) -> Optional[List[int]]:
+    """Where each of `contents` starts in `body` if `body` is `contents` in order, separated by whitespace and by
+    nothing else; else None."""
+    pos, starts = 0, []
+    for k, c in enumerate(contents):
+        if not c or not body.startswith(c, pos):
+            return None
+        starts.append(pos)
+        pos += len(c)
+        if k < len(contents) - 1:
+            if pos >= len(body) or not body[pos].isspace():
+                return None
+            while pos < len(body) and body[pos].isspace():
+                pos += 1
+    return starts if pos == len(body) else None
+
+
+def _joins(contents: Sequence[str], body: str) -> bool:
+    """Whether `body` is `contents` in order, separated by whitespace and by nothing else."""
+    return _offsets(contents, body) is not None
+
+
+def _bold_marks(text: str) -> List[int]:
+    """Offsets of the `**` of a text, outside placeholders and inline code."""
+    return [m.start() for m in re.finditer(r'\*\*', _mask(text))]
+
+
+@dataclass
+class Split:
+    """A run of template lines that is a pure split of a stale entry's source line."""
+    idx: List[int]                        # indices into the template's lines of the pieces (blank lines skipped)
+    contents: List[str]                   # the pieces' contents (after the list marker), the moved ** taken out
+    body: str                             # the source's content as the pieces give it back (its closing ** dropped if moved)
+    # (piece, offset in its content, which bold span of the line: 0 the first) of a closing ** moved earlier, else None
+    moved: Optional[Tuple[int, int, int]] = None
+
+
+class _Source:
+    """The kind, prefix and content of a stale entry's source line, and the rule for which lines may be its pieces."""
+
+    def __init__(self, src: str):
+        self.kind = classify(src)
+        self.ok = self.kind in ('para', 'list')
+        if self.ok:
+            self.prefix, self.body = _parts(src, self.kind)
+            self.indent = len(LIST.match(src).group(1)) if self.kind == 'list' else len(self.prefix)
+
+    def fits(self, ln: Line, first: bool) -> bool:
+        """Whether a template line may be a piece: of a paragraph, a paragraph or a "- " / "* " item at its
+        indentation; of a list item, the item itself (same marker) first, then items indented deeper."""
+        if ln.kind not in ('para', 'list'):
+            return False
+        pre, _ = _parts(ln.text, ln.kind)
+        if self.kind == 'para':
+            return pre == self.prefix if ln.kind == 'para' else pre in (self.prefix + '- ', self.prefix + '* ')
+        if first:
+            return ln.kind == 'list' and pre == self.prefix
+        m = LIST.match(ln.text)
+        return ln.kind == 'list' and len(m.group(1)) > self.indent and m.group(2) in ('- ', '* ')
+
+
+def _runs(lines: Sequence[Line], s: _Source) -> List[List[int]]:
+    """The runs of consecutive lines (blank lines between them allowed) that may be pieces of `s` and whose contents,
+    with every ** dropped, give its content back (likewise): the candidates, checked exactly by `_split`."""
+    target = _nb(s.body).strip()
+    out = []
+    for k, ln in enumerate(lines):
+        if not s.fits(ln, True) or not target.startswith(_nb(_parts(ln.text, ln.kind)[1]).strip() or '\0'):
+            continue
+        run, pos = [], 0
+        for i in range(k, len(lines)):
+            ln2 = lines[i]
+            if ln2.kind == 'blank':
+                continue
+            c = _nb(_parts(ln2.text, ln2.kind)[1]).strip()
+            if not s.fits(ln2, not run) or not c or not target.startswith(c, pos):
+                break
+            run.append(i)
+            pos += len(c)
+            if pos == len(target):
+                out.append(run)
+                break
+            if not target[pos].isspace():
+                break
+            while pos < len(target) and target[pos].isspace():
+                pos += 1
+    return out
+
+
+def _split(lines: Sequence[Line], run: List[int], s: _Source) -> Tuple[Optional[Split], str]:
+    """(the Split, '') if a candidate run is a pure split of `s` exactly, else (None, why not)."""
+    contents = [_parts(lines[i].text, lines[i].kind)[1] for i in run]
+    odd = [lines[i].n for i, c in zip(run, contents) if PH.sub(' ', c).count('**') % 2]
+    if odd:
+        return None, f'** occurs an odd number of times in line(s) {", ".join(map(str, odd))}'
+    if _joins(contents, s.body):
+        if len(run) == 1:
+            return None, f'line {lines[run[0]].n} differs from the source only in its list marker or indentation'
+        return Split(list(run), contents, s.body), ''
+    # a bold span (a whole bold paragraph, or a long bold lead) whose closing ** moved earlier, to the end of a word
+    b = s.body
+    marks = _bold_marks(b)
+    for k in range(0, len(marks) - 1, 2):
+        o, c_ = marks[k], marks[k + 1]
+        bw = b[:c_] + b[c_ + 2:]
+        for p, c in enumerate(contents):
+            for j in _bold_marks(c):
+                if j + 2 < len(c) and not c[j + 2].isspace():
+                    continue
+                cs = contents[:p] + [c[:j] + c[j + 2:]] + contents[p + 1:]
+                starts = _offsets(cs, bw)
+                if starts is not None and o < starts[p] + j < c_:
+                    if len(run) == 1 and _parts(lines[run[0]].text, lines[run[0]].kind)[0] != s.prefix:
+                        return None, f'line {lines[run[0]].n} changes the list marker or indentation'
+                    return Split(list(run), cs, bw, (p, j, k // 2)), ''
+    return None, ('the lines join back to the source only with its ** changed beyond the closing ** of a bold span '
+        'moved earlier')
+
+
+def find_split(lines: Sequence[Line], src: str) -> Tuple[List[Split], str, List[int]]:
+    """The pure splits of a stale source line in the template.
+
+    Returns:
+        (the splits found (usually one), why none was found if none was, the line indices to show with that reason).
+    """
+    s = _Source(src)
+    if not s.ok:
+        return [], f'a {s.kind} line: only paragraphs and list items are split', []
+    runs = _runs(lines, s)
+    found, why, shown = [], '', []
+    for run in runs:
+        sp, reason = _split(lines, run, s)
+        if sp:
+            found.append(sp)
+        elif not why:
+            why, shown = reason, run
+    if not found and not runs:
+        why = 'no run of consecutive template lines joins back to the source line (not a pure split)'
+    return found, why, shown
+
+
+def _out_pieces(sp: Split, s: _Source, out: str) -> Tuple[Optional[List[str]], str]:
+    """The contents of a converted line's pieces: its text cut at the sentence boundaries at which the source was
+    split (with the moved ** at the end of the same sentence), or (None, why not)."""
+    kind = classify(out)
+    if kind != s.kind:
+        return None, f'the converted line is a {kind} line, its source a {s.kind} line'
+    _, ob = _parts(out, kind)
+    if sp.moved is not None:
+        marks = _bold_marks(ob)
+        k = 2 * sp.moved[2] + 1
+        if len(marks) <= k:
+            return None, (f'the closing ** of bold span {sp.moved[2] + 1} of the source moved, but the converted line '
+                'has no such span')
+        ob = ob[:marks[k]] + ob[marks[k] + 2:]
+    for loose in (False, True):
+        sent = [sp.body[a:b] for a, b in sentence_spans(sp.body, loose)]
+        per = [[c[a:b] for a, b in sentence_spans(c, loose)] for c in sp.contents]
+        if sum(per, []) == sent:
+            break
+    else:
+        return None, 'a split falls inside a sentence (by the sentence ends . ! ? : ;)'
+    ends = '. ! ? : ;' if loose else '. ! ?'
+    os_ = sentence_spans(ob, loose)
+    if len(os_) != len(sent):
+        return None, (f'the converted line has {len(os_)} sentences where its source has {len(sent)} (by the sentence '
+            f'ends {ends}), so the pieces cannot be matched')
+    first = [sum(len(x) for x in per[:p]) for p in range(len(per))]
+    if sp.moved is not None:
+        p, j, _ = sp.moved
+        t = [b for _, b in sentence_spans(sp.contents[p], loose)]
+        if j not in t:
+            return None, 'the moved closing ** does not end a sentence'
+        at = os_[first[p] + t.index(j)][1]
+        ob = ob[:at] + '**' + ob[at:]
+        os_ = [(a + 2 * (a >= at), b + 2 * (b >= at)) for a, b in os_]
+    return [ob[os_[f][0]:os_[f + len(x) - 1][1]] for f, x in zip(first, per)], ''
+
+
+def as_answer(out: str, src: str) -> Tuple[str, List[str]]:
+    """The answer, in compact form against the template line `src`, that `expand` turns back into the converted line
+    `out` (kept placeholders as ⟨k⟩, inv: and neg: as ⟨k|inv⟩ and ⟨k|neg⟩, a rewritten lit: as ⟨k|lit|text⟩, each k
+    the placeholder's number in `src`), and the placeholders of `out` that match none of `src`'s."""
+    phs = list(PH.finditer(src))
+    keys = [F.split_placeholder(m.group(1)) for m in phs]
+    used: Set[int] = set()
+    errors: List[str] = []
+
+    def sub(m):
+        key, spec = F.split_placeholder(m.group(1))
+        t, base = split_transform(key)
+        lit = _LIT_REWRITE.match(key)
+        for k, (pm, (pk, ps)) in enumerate(zip(phs, keys)):
+            if k in used:
+                continue
+            if m.group(0) == pm.group(0):
+                tok = f'⟨{k + 1}⟩'
+            elif t and base == pk and spec == ps:
+                tok = f'⟨{k + 1}|{t}⟩'
+            elif lit and pk.startswith('lit:') and spec == ps and [x.strip() for x in pk[4:].partition('#')[::2]] == [
+                    lit.group(2).strip(), lit.group(3).strip()]:
+                tok = f'⟨{k + 1}|lit|{lit.group(1).strip()}⟩'
+            else:
+                continue
+            used.add(k)
+            return tok
+        errors.append(f'{m.group(0)} is none of the placeholders of its piece of the template')
+        return m.group(0)
+    return PH.sub(sub, out), errors
+
+
+def _questions_split(questions: Sequence[dict], before: Tuple[str, str], after: Sequence[Tuple[str, str]],
+        filler: Filler, main: bool) -> List[str]:
+    """The ids of the questions whose sentence is found in a line (`before`: text, kind) but in none of its pieces
+    (`after`), as `locate` finds sentences (filled values, every number a wildcard)."""
+    field_ = 'sentence_main' if main else 'sentence'
+
+    def lt(text, kind):
+        return LineText(filler.line(text, '', tooltips=False), kind)
+    whole, pieces = lt(*before), [lt(*a) for a in after]
+    out = []
+    for q in questions:
+        sent = norm_sentence(q[field_]) if q[field_] else ''
+        if sent and whole.find(sent) and not any(p.find(sent) for p in pieces):
+            out.append(q['id'])
+    return out
+
+
 def carry(paths: Paths = Paths(), *, dry_run: bool = False) -> dict:
     """Carries stale memory entries over a pure split of their source line.
 
-    A pure split breaks a paragraph or a list item only between sentences, changing no word: a blank line between two
-    sentences, a run of sentences turned into a bullet list ("- " before each), a list item broken into sub-bullets
-    (deeper indentation), and, where a whole paragraph was bold, its closing ** moved to the end of its first
-    sentence. For every entry whose `src` is no longer a template line, the run of consecutive template lines that
-    joins back to `src` is found; a KEEP entry gives KEEP entries to its starred pieces, a converted entry gives
-    converted pieces where its `out` splits at the same sentence boundaries, each checked as `import` checks an answer.
+    A pure split breaks a paragraph or a list item only between sentences and changes no word: a blank line between
+    two sentences, a run of sentences turned into a bullet list ("- " before each, at the paragraph's indentation), a
+    list item broken into sub-bullets ("- " items indented deeper than it), and, where a whole paragraph or a long
+    lead of a line was bold, its closing ** moved earlier, to the end of its first sentence (or another sentence of
+    the span). For every memory entry whose `src` is no longer a line of the template, the runs of consecutive
+    template lines (blank lines between them allowed) that are a pure split of it are found: their contents, list
+    markers and indentation dropped, joined by whitespace, give `src`'s content back exactly, allowing for the moved
+    **. Then:
+
+    - a KEEP entry gives a KEEP entry to each piece that export would star (`starred`: WATCH after the pre-pass), and
+      to an unstarred piece only if the pre-pass would change it (so that the page shows each piece as it showed the
+      line); the other pieces need none;
+    - a converted entry gives converted pieces when its `out` has the same number of sentences as `src` (sentence ends
+      . ! ?, else also : and ;) and the pieces cover the same sentences of each: `out` is cut where `src` was cut, the
+      pieces' own list markers and indentation put back, and the closing ** of the same bold span of `out` moved to the
+      end of the same sentence. Each piece is then checked as `import` checks an answer: it is turned into an answer
+      in compact form against its template line (`as_answer`; its placeholders renumbered per piece) and run through
+      `expand` and `structure_errors`. A piece whose text equals its template line is treated as KEEP above.
+
+    A new entry has the memory's usual fields: `line` the piece's line, `src` the piece, `by` "carried over from <old
+    sha> by yang_summary.py carry (from an entry by <the old entry's by>, <its when>)", `when` now. A piece that has an
+    entry already keeps it (a different wording is reported as a warning). The stale entries are left in place, since
+    the memory's lines have fixed fields (`MEMORY_KEYS`) and `write_memory` would drop a new one; `status` counts the
+    carried entries by their `by`. Running carry again carries nothing twice.
+
+    What cannot be carried (a stale entry with no pure-split run, a split inside a sentence, sentences that do not
+    match, a piece that fails the checks, two stale entries giving one piece two wordings) is listed in
+    convert/carry_failures.md with the old sha, the reason and the template lines.
+
+    Yang's questions (questions.md) need nothing: `locate` finds a question's sentence within one line (one table cell)
+    of the page, and a pure split keeps every sentence whole, in a line of its own or with its neighbours, so a
+    sentence is found in its piece as it was in the line, with its numbers; a moved ** is not part of the visible text
+    it is matched on. Only a question whose quoted text runs across a split point would be lost; carry checks every
+    carried line for this and warns. None of questions.md's 9 questions on 2026-11-17 quotes across a sentence end
+    (. ! ?); three quote across a colon or a semicolon, which a split between sentences does not cut.
 
     Args:
-        paths: the template, the data folder (memory) and the output folder (convert/carry_failures.md).
-        dry_run: write nothing (neither the memory nor the report).
+        paths: the template, the data folder (memory, questions.md) and the output folder (convert/carry_failures.md).
+        dry_run: write nothing (neither the memory nor the report); the result says what would be done.
 
     Returns:
-        dict with `carried` (new entries), `failures`, `skipped` and `warnings`.
+        dict: `stale` (number of stale entries), `carried` (one dict per stale entry carried: sha, line, splits, the
+        actions per piece), `entries` (the new memory entries), `failures` (sha, line, reason, src, out, the template
+        lines shown) and `warnings`.
     """
-    raise NotImplementedError
+    template = paths.template.read_text()
+    lines = analyze(template)
+    star = starred(lines)
+    mem = load_memory(paths.memory)
+    shas = {sha(ln.text) for ln in lines}
+    filler = Filler()
+    q_path = paths.data / 'questions.md'
+    warnings: List[str] = []
+    try:
+        questions = parse_questions(q_path.read_text()) if q_path.exists() else []
+    except InputError as e:
+        questions = []
+        warnings.append(f'questions.md not checked: {e}')
+    now = datetime.now().strftime('%Y-%m-%d %H:%M')
+    new: Dict[str, dict] = {}
+    carried, failures = [], []
+    stale = sorted((e for s, e in mem.items() if s not in shas), key=lambda e: (e['line'], e['sha']))
+    for e in stale:
+        src, keep = e['src'], e['keep']
+        s = _Source(src)
+        splits, why, shown = find_split(lines, src)
+
+        def fail(reason, idx=None):
+            idx = shown if idx is None else idx
+            failures.append(dict(sha=e['sha'], line=e['line'], reason=reason, src=src, out=None if keep else e['out'],
+                lines=[(lines[i].n, lines[i].text) for i in (idx or _near(lines, src))]))
+        if not splits:
+            fail(why)
+            continue
+        origin = _ORIGIN.search(e['by']) if CARRIED.match(e['by']) else None
+        by = (f'carried over from {e["sha"]} by yang_summary.py carry ('
+            + (origin.group(1) if origin else f'from an entry by {e["by"]}, {e["when"]}') + ')')
+        plan, reason = [], ''
+        for sp in splits:
+            if keep:
+                outs = [lines[i].text for i in sp.idx]
+            else:
+                pieces, reason = _out_pieces(sp, s, e['out'])
+                if pieces is None:
+                    fail(reason, sp.idx)
+                    break
+                outs = []
+                for i, c in zip(sp.idx, pieces):
+                    ln = lines[i]
+                    piece = _parts(ln.text, ln.kind)[0] + c
+                    answer, errs = as_answer(piece, ln.text)
+                    out2, errs2, warn = (None, [], []) if errs else expand(answer, ln.text, filler)
+                    errs = errs or errs2 or structure_errors(ln, out2)
+                    if errs:
+                        reason = f'line {ln.n}: ' + '; '.join(errs) + f' (the piece: {piece})'
+                        break
+                    warnings += [f'{e["sha"][:8]}, line {ln.n}: {w}' for w in warn]
+                    if out2 != piece:
+                        warnings.append(f'{e["sha"][:8]}, line {ln.n}: the piece was rebuilt from its template line as '
+                            f'{out2} (cut from the converted line: {piece})')
+                    outs.append(out2)
+                if reason:
+                    fail(reason, sp.idx)
+                    break
+            # Yang's questions: still found in a piece wherever they were found in the line
+            yang_src = src if keep else e['out']
+            for main_side, before, after in ((True, src, [lines[i].text for i in sp.idx]), (False, yang_src, outs)):
+                lost = _questions_split(questions, (before, s.kind),
+                    [(t, lines[i].kind) for t, i in zip(after, sp.idx)], filler, main_side)
+                warnings += [f'{e["sha"][:8]}: question {qid}: its sentence runs across the split at lines '
+                    f'{lines[sp.idx[0]].n}-{lines[sp.idx[-1]].n} and will no longer be found' for qid in lost]
+            plan.append((sp, outs))
+        if reason:
+            continue
+        actions, pending, conflict = [], {}, None
+        for sp, outs in plan:
+            for i, o in zip(sp.idx, outs):
+                ln = lines[i]
+                h = sha(ln.text)
+                if o == ln.text and ln.n not in star and prepass(ln.text) == ln.text:
+                    actions.append((ln.n, 'no entry needed'))
+                elif h in mem:
+                    same = mem[h]['out'] == o
+                    actions.append((ln.n, 'has this entry already' if same else 'has an entry of its own (kept)'))
+                    if not same:
+                        warnings.append(f'{e["sha"][:8]}: line {ln.n} has an entry of its own, which is kept; the '
+                            f'carried wording would be: {o}')
+                elif (h in new and new[h]['out'] != o) or (h in pending and pending[h]['out'] != o):
+                    conflict = conflict or (ln.n, sp.idx)
+                else:
+                    pending.setdefault(h, dict(sha=h, line=ln.n, src=ln.text, out=o, keep=o == ln.text, by=by,
+                        when=now))
+                    actions.append((ln.n, 'KEEP' if o == ln.text else 'converted'))
+        if conflict:
+            fail(f'line {conflict[0]} is a piece of another stale entry too, which gives it another wording', conflict[1])
+            continue
+        for h, x in pending.items():
+            new.setdefault(h, x)
+        carried.append(dict(sha=e['sha'], line=e['line'], keep=keep, actions=actions,
+            runs=[[lines[i].n for i in sp.idx] for sp, _ in plan]))
+    if not dry_run:
+        if new:
+            write_memory(paths.memory, {**mem, **new}, lines)
+        paths.convert.mkdir(parents=True, exist_ok=True)
+        _write_report(paths.convert / 'carry_failures.md', failures and _carry_failures_md(failures, now))
+    return dict(stale=len(stale), carried=carried, entries=list(new.values()), failures=failures, warnings=warnings)
+
+
+def _words(text: str) -> Set[str]:
+    return set(re.findall(r'\w+', PH.sub(' ', text).lower()))
+
+
+def _near(lines: Sequence[Line], src: str) -> List[int]:
+    """Indices of the template line most like `src` (by the overlap of their sets of words) and of the paragraph and
+    list lines around it made mostly of `src`'s words: where a line that changed, or was split with a change, probably
+    went."""
+    a = _words(src)
+    if not a:
+        return []
+    best, score = None, 0.0
+    for k, ln in enumerate(lines):
+        b = _words(ln.text) if ln.kind != 'blank' else set()
+        if b and len(a & b) / len(a | b) > score:
+            best, score = k, len(a & b) / len(a | b)
+    if best is None or score < 0.3:
+        return []
+    out = [best]
+    for step in (-1, 1):
+        k, n = best + step, 0
+        while 0 <= k < len(lines) and lines[k].kind in ('blank', 'para', 'list') and n < 8:
+            if lines[k].kind != 'blank':
+                b = _words(lines[k].text)
+                if not b or len(a & b) / len(b) < 0.8:
+                    break
+                out.append(k)
+                n += 1
+            k += step
+    return sorted(out)
+
+
+def _carry_failures_md(failures: List[dict], now: str) -> str:
+    out = [f'# Memory entries that were not carried over ({now})\n\nEach entry: the stale memory entry (its sha and the '
+        'line it was recorded at), why it was not carried, its source line, its converted line (or KEEP) and the '
+        'template lines it was matched against (or, if no run was found, the most similar line and those after it). '
+        'Convert the lines anew (`export`, then `import`), or fix the split.\n']
+    for x in failures:
+        out.append(f'\n## {x["sha"]} (recorded line {x["line"]})\n\nreason: {x["reason"]}\n\nsource:\n\n{x["src"]}\n\n'
+            f'converted:\n\n{x["out"] if x["out"] is not None else "KEEP"}\n\ntemplate lines:\n\n'
+            + (''.join(f'@@ {n}\n{t}\n' for n, t in x['lines']) or '(none found)\n'))
+    return ''.join(out)
 
 
 # ---------------------------------------------------------------- questions
 
-FIELDS =('asked', 'sentence', 'sentence_main', 'question')
+FIELDS = ('asked', 'sentence', 'sentence_main', 'question')
 
 
 def parse_questions(text: str) -> List[dict]:
@@ -1702,13 +2153,29 @@ def main() -> None:
             sys.exit(1)
     elif args.cmd == 'status':
         s = status(paths)
+        rest = sorted((Counter(s['stale']) - Counter(s['stale_carried'])).elements())
         print(f'{s["lines"]} non-blank template lines, {s["starred"]} starred; memory: {s["converted"]} converted, '
-            f'{s["keep"]} KEEP; {s["missing"]} starred lines not in the memory; {len(s["stale"])} stale entries'
-            + (f' (recorded lines {", ".join(map(str, s["stale"]))})' if s['stale'] else ''))
+            f'{s["keep"]} KEEP' + (f' ({s["carried"]} of them carried over by carry)' if s['carried'] else '')
+            + f'; {s["missing"]} starred lines not in the memory; {len(s["stale"])} stale entries'
+            + (f', {len(s["stale_carried"])} of them carried over' if s['stale_carried'] else '')
+            + (f' ({"others: " if s["stale_carried"] else ""}recorded lines {", ".join(map(str, rest))})' if rest else ''))
         for sec, ns in s['by_section'].items():
             print(f'  {sec[:90]}: {", ".join(map(str, ns))}')
     elif args.cmd == 'carry':
-        carry(paths, dry_run=args.dry_run)
+        r = carry(paths, dry_run=args.dry_run)
+        would = 'would be ' if args.dry_run else ''
+        for c in r['carried']:
+            print(f'{"WOULD CARRY" if args.dry_run else "CARRIED"} {c["sha"][:8]} (recorded line {c["line"]}, '
+                f'{"KEEP" if c["keep"] else "converted"}) -> ' + ', '.join(f'line {n}: {a}' for n, a in c['actions']))
+        for x in r['failures']:
+            print(f'NOT CARRIED {x["sha"][:8]} (recorded line {x["line"]}): {x["reason"]}')
+        for w in r['warnings']:
+            print(f'WARNING {w}')
+        print(f'{r["stale"]} stale entries: {len(r["carried"])} carried over, {len(r["failures"])} not; '
+            f'{len(r["entries"])} new entries {would}written to {_rel(paths.memory)}'
+            + (f'; failures {would}listed in {_rel(paths.convert / "carry_failures.md")}' if r['failures'] else ''))
+        if r['failures']:
+            sys.exit(1)
     else:
         try:
             ok, rep = build(paths, skip_figure=args.skip_figure)

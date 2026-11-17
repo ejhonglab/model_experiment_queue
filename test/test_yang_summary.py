@@ -563,3 +563,245 @@ def test_build_end_to_end(tmp_path, fake_world):
     with pytest.raises(KeyError) as e:
         Y.build(p, skip_figure=True, shared=fake_world)
     assert 'line 9: inv:data:nope' in e.value.args[0] and 'line 9: neg:lit:abc # s' in e.value.args[0]
+
+
+# ---------------------------------------------------------------- carry
+
+# the template before the split (one line per case) and after it; the memory holds entries for the old lines
+OLD = {
+    'para': 'The pairs are {{data:a_dist ~ .2f}} apart. They move closer with APL off. The ρ is {{data:rho ~ .2f}}.',
+    'list': 'Three things follow. First, the pairs move apart. Second, the noise floor rises. Third, nothing else.',
+    'sub': '- **Lead:** the distance is {{data:a_dist ~ .2f}}. It is far from {{data:b_dist ~ .2f}} and {{lit:0.88 # src}}.',
+    'bold': '**The block is large. It sits above the curve. More text here, not about the block.**',
+    'lead': '**The lead is long. It says the pairs move apart.** The rest is plain. It ends here.',
+    'renum': 'A plain first sentence. The distances run from {{data:a_dist ~ .2f}} to {{data:b_dist ~ .2f}} ({{data:count ~ .0f}} pairs).',
+    'nomatch': 'The pairs are far apart. The noise floor is low.',
+    'inside': 'The pairs are far apart and the noise floor is low, which is all.',
+    'changed': 'The old wording of a line about the distance.',
+}
+OUT = {
+    'para': 'The pairs have a correlation of {{inv:data:a_dist ~ .2f}}. They become more correlated with APL off. '
+        'The ρ is {{data:rho ~ .2f}}.',
+    'list': None,   # KEEP
+    'sub': '- **Lead:** the correlation is {{inv:data:a_dist ~ .2f}}. It is weakly correlated with '
+        '{{inv:data:b_dist ~ .2f}} and {{lit:0.12 # Yang\'s version, rewritten from "0.88"; src}}.',
+    'bold': '**The block is large. It sits below the curve. More text here, not about the block.**',
+    'lead': '**The lead is long. It says the pairs are decorrelated.** The rest is plain. It ends here.',
+    'renum': 'A plain first sentence. The correlations run from {{inv:data:b_dist ~ .2f}} to {{inv:data:a_dist ~ .2f}} '
+        '({{data:count ~ .0f}} pairs).',
+    'nomatch': 'The pairs are decorrelated and the noise ceiling is high.',
+    'inside': 'The pairs are decorrelated and the noise ceiling is high, which is all.',
+    'changed': 'The old wording of a line about the correlation.',
+}
+NEW = """# Title
+
+## Data
+
+The pairs are {{data:a_dist ~ .2f}} apart. They move closer with APL off.
+
+The ρ is {{data:rho ~ .2f}}.
+
+Three things follow.
+
+- First, the pairs move apart.
+- Second, the noise floor rises.
+- Third, nothing else.
+
+- **Lead:** the distance is {{data:a_dist ~ .2f}}.
+  - It is far from {{data:b_dist ~ .2f}} and {{lit:0.88 # src}}.
+
+**The block is large.** It sits above the curve.
+
+More text here, not about the block.
+
+**The lead is long.** It says the pairs move apart.
+
+The rest is plain. It ends here.
+
+A plain first sentence.
+
+The distances run from {{data:a_dist ~ .2f}} to {{data:b_dist ~ .2f}} ({{data:count ~ .0f}} pairs).
+
+The pairs are far apart.
+
+The noise floor is low.
+
+The pairs are far apart
+
+and the noise floor is low, which is all.
+
+The new wording of a line about the distance.
+"""
+
+
+def carry_world(tmp_path, cases=tuple(OLD)):
+    p = paths(tmp_path, NEW)
+    mem = {}
+    for c in cases:
+        src, out = OLD[c], OUT[c] or OLD[c]
+        mem[Y.sha(src)] = dict(sha=Y.sha(src), line=1, src=src, out=out, keep=OUT[c] is None, by='a converter',
+            when='2026-11-16 15:34')
+    Y.write_memory(p.memory, mem, Y.analyze(NEW))
+    return p
+
+
+def new_entries(p):
+    """sha -> entry of the memory's entries made by carry."""
+    return {e['sha']: e for e in map(json.loads, p.memory.read_text().splitlines()) if Y.CARRIED.match(e['by'])}
+
+
+def line_no(text):
+    return NEW.split('\n').index(text) + 1
+
+
+def test_find_split_forms():
+    lines = Y.analyze(NEW)
+    # a paragraph split in two, turned into a list, a list item into sub-bullets, a moved bold
+    for case, first, n in (('para', 'The pairs are', 2), ('list', 'Three things', 4), ('sub', '- **Lead:**', 2),
+            ('bold', '**The block', 2), ('lead', '**The lead', 2)):
+        splits, why, _ = Y.find_split(lines, OLD[case])
+        assert len(splits) == 1 and why == '', (case, why)
+        assert len(splits[0].idx) == n and lines[splits[0].idx[0]].text.startswith(first)
+    assert Y.find_split(lines, OLD['bold'])[0][0].moved == (0, len('**The block is large.'), 0)
+    # a long bold lead whose closing ** moved to the end of its first sentence: the line's first bold span
+    assert Y.find_split(lines, OLD['lead'])[0][0].moved == (0, len('**The lead is long.'), 0)
+    assert Y.find_split(Y.analyze('A **b.** C. **D e.** F g.\n\nH.\n'), 'A **b.** C. **D e. F g.** H.')[0][0].moved[2] == 1
+    # a change that is not a split, and kinds that are never split
+    assert 'not a pure split' in Y.find_split(lines, OLD['changed'])[1]
+    assert 'only paragraphs and list items' in Y.find_split(lines, '| a | b |')[1]
+    # the same text with its bold dropped is not a pure split; nor is a paragraph that became one list item, or a list
+    # item that became a paragraph
+    assert '** changed' in Y.find_split(Y.analyze('A b. C d.\n\nE f.\n'), '**A b. C d. E f.**')[1]
+    assert 'list marker' in Y.find_split(Y.analyze('- A b. C d.\n'), 'A b. C d.')[1]
+    assert 'not a pure split' in Y.find_split(Y.analyze('A b. C d.\n'), '- A b. C d.')[1]
+    # a sibling list item is not a sub-bullet
+    assert not Y.find_split(Y.analyze('- A b.\n- C d.\n'), '- A b. C d.')[0]
+    # a wholly bold paragraph whose closing ** moved, without a split
+    one = Y.find_split(Y.analyze('**A b.** C d.\n'), '**A b. C d.**')[0]
+    assert len(one) == 1 and one[0].moved == (0, len('**A b.'), 0)
+    # a bold lead's closing ** moved earlier in one line; a closing ** may only move earlier, inside its span
+    assert Y.find_split(Y.analyze('**A b.** C d. E f.\n'), '**A b. C d.** E f.')[0][0].moved == (0, len('**A b.'), 0)
+    assert '** changed' in Y.find_split(Y.analyze('**A b. C d. E f.**\n'), '**A b. C d.** E f.')[1]
+
+
+def test_carry_paragraph_list_sub_bullets_and_bold(tmp_path):
+    p = carry_world(tmp_path, ('para', 'list', 'sub', 'bold', 'lead'))
+    r = Y.carry(p)
+    assert r['failures'] == [] and r['stale'] == 5 and len(r['carried']) == 5
+    got = {e['src']: e for e in new_entries(p).values()}
+    # a paragraph split in two: the converted sentences go with their piece, the unstarred unchanged piece needs none
+    e = got['The pairs are {{data:a_dist ~ .2f}} apart. They move closer with APL off.']
+    assert e['out'] == 'The pairs have a correlation of {{inv:data:a_dist ~ .2f}}. They become more correlated with APL off.'
+    assert not e['keep'] and e['line'] == line_no(e['src'])
+    assert e['by'] == f'carried over from {Y.sha(OLD["para"])} by yang_summary.py carry (from an entry by a converter, 2026-11-16 15:34)'
+    assert re.fullmatch(r'\d{4}-\d\d-\d\d \d\d:\d\d', e['when']) and list(e) == list(Y.MEMORY_KEYS)
+    assert 'The ρ is {{data:rho ~ .2f}}.' not in got
+    # a paragraph turned into a list (KEEP): KEEP entries for the starred pieces only
+    assert {s for s, e in got.items() if e['keep']} == {'- First, the pairs move apart.', '- Second, the noise floor rises.'}
+    assert all(got[s]['out'] == s for s in ('- First, the pairs move apart.', '- Second, the noise floor rises.'))
+    # a list item turned into sub-bullets: each piece keeps its own marker and indentation, a rewritten lit: kept
+    assert got['- **Lead:** the distance is {{data:a_dist ~ .2f}}.']['out'] == '- **Lead:** the correlation is {{inv:data:a_dist ~ .2f}}.'
+    assert got['  - It is far from {{data:b_dist ~ .2f}} and {{lit:0.88 # src}}.']['out'] == (
+        '  - It is weakly correlated with {{inv:data:b_dist ~ .2f}} and {{lit:0.12 # Yang\'s version, rewritten from '
+        '"0.88"; src}}.')
+    # a moved bold: the converted line's closing ** moves to the end of the same sentence
+    assert got['**The block is large.** It sits above the curve.']['out'] == '**The block is large.** It sits below the curve.'
+    assert 'More text here, not about the block.' not in got
+    assert got['**The lead is long.** It says the pairs move apart.']['out'] == '**The lead is long.** It says the pairs are decorrelated.'
+    assert 'The rest is plain. It ends here.' not in got
+    # the page shows the carried pieces; the old entries stay in the memory, stale, and status counts both
+    lines = Y.analyze(NEW)
+    out, info = Y.yang_lines(lines, Y.load_memory(p.memory), Y.starred(lines))
+    assert out[line_no('The pairs are {{data:a_dist ~ .2f}} apart. They move closer with APL off.') - 1].startswith('The pairs have')
+    assert not any(Y.YDIST in t for t in out[:line_no('More text here, not about the block.')])
+    s = Y.status(p)
+    assert s['carried'] == 7 and len(s['stale']) == 5 and len(s['stale_carried']) == 5   # the KEEP paragraph's too
+    assert not (p.convert / 'carry_failures.md').exists()
+    # carrying again changes nothing
+    before = p.memory.read_text()
+    r2 = Y.carry(p)
+    assert r2['entries'] == [] and r2['failures'] == [] and p.memory.read_text() == before
+    assert all(a in ('has this entry already', 'no entry needed') for c in r2['carried'] for _, a in c['actions'])
+
+
+def test_carry_renumbers_placeholders(tmp_path):
+    p = carry_world(tmp_path, ('renum',))
+    lines = Y.analyze(NEW)
+    piece = 'The distances run from {{data:a_dist ~ .2f}} to {{data:b_dist ~ .2f}} ({{data:count ~ .0f}} pairs).'
+    # in the source the placeholders are 1-3 of the line and so in the piece, which is the whole second sentence;
+    # the converted piece, its range swapped, is the answer ⟨2|inv⟩ ... ⟨1|inv⟩ ... ⟨3⟩ against the piece
+    conv = 'The correlations run from {{inv:data:b_dist ~ .2f}} to {{inv:data:a_dist ~ .2f}} ({{data:count ~ .0f}} pairs).'
+    assert Y.as_answer(conv, piece) == ('The correlations run from ⟨2|inv⟩ to ⟨1|inv⟩ (⟨3⟩ pairs).', [])
+    # with a placeholder before it in the line, the numbers shift by one: ⟨2⟩-⟨4⟩ of the line are ⟨1⟩-⟨3⟩ of the piece
+    line = 'Value {{data:rho ~ .2f}}. ' + piece
+    c = Y.compact(line, Y.Filler())
+    assert '⟨2|0.12|a_dist⟩' in c and Y.compact(piece, Y.Filler()).startswith('The distances run from ⟨1|0.12|a_dist⟩')
+    assert Y.as_answer('{{inv:data:nope ~ .2f}}', piece)[1]
+    r = Y.carry(p)
+    assert r['failures'] == []
+    got = {e['src']: e['out'] for e in new_entries(p).values()}
+    assert got == {piece: conv}
+    assert Y.Filler().line(conv, 't', tooltips=False) == 'The correlations run from 0.50 to 0.88 (92 pairs).'
+    del lines
+
+
+def test_carry_failures(tmp_path):
+    p = carry_world(tmp_path, ('nomatch', 'inside', 'changed', 'list'))
+    r = Y.carry(p)
+    reasons = {x['src']: x['reason'] for x in r['failures']}
+    assert set(reasons) == {OLD['nomatch'], OLD['inside'], OLD['changed']}
+    # sentence boundaries that do not match, a split inside a sentence, a change that is not a split
+    assert 'has 1 sentences where its source has 2' in reasons[OLD['nomatch']]
+    assert 'inside a sentence' in reasons[OLD['inside']]
+    assert 'not a pure split' in reasons[OLD['changed']]
+    # none of them gets entries; the KEEP paragraph is carried (a KEEP split inside a sentence would be too)
+    assert {e['src'] for e in new_entries(p).values()} == {'- First, the pairs move apart.', '- Second, the noise floor rises.'}
+    md = (p.convert / 'carry_failures.md').read_text()
+    assert f'## {Y.sha(OLD["nomatch"])} (recorded line 1)' in md
+    assert f'@@ {line_no("The pairs are far apart.")}\nThe pairs are far apart.\n@@ {line_no("The noise floor is low.")}' in md
+    assert f'converted:\n\n{OUT["changed"]}' in md
+    # for a change that is not a split, the most similar line is shown
+    assert f'@@ {line_no("The new wording of a line about the distance.")}\nThe new wording' in md
+    # a converted piece that fails import's checks is not carried either
+    (tmp_path / 'q').mkdir()
+    q = carry_world(tmp_path / 'q', ('para',))
+    mem = Y.load_memory(q.memory)
+    mem[Y.sha(OLD['para'])]['out'] = OUT['para'].replace('{{inv:data:a_dist ~ .2f}}. They', 'nothing. They {{inv:data:a_dist ~ .2f}}', 1).replace(
+        'The ρ is {{data:rho ~ .2f}}.', 'The ρ {{inv:data:a_dist ~ .2f}} is {{data:rho ~ .2f}}.')
+    Y.write_memory(q.memory, mem, Y.analyze(NEW))
+    r = Y.carry(q)
+    assert len(r['failures']) == 1 and 'none of the placeholders of its piece' in r['failures'][0]['reason']
+    assert new_entries(q) == {}
+
+
+def test_carry_dry_run_and_command(tmp_path, monkeypatch, capsys):
+    p = carry_world(tmp_path)
+    before = p.memory.read_text()
+    r = Y.carry(p, dry_run=True)
+    assert r['entries'] and r['failures'] and p.memory.read_text() == before and not p.convert.exists()
+    monkeypatch.setattr(Y, 'Paths', lambda: p)
+    monkeypatch.setattr('sys.argv', ['yang_summary.py', 'carry', '--dry-run'])
+    with pytest.raises(SystemExit) as e:
+        Y.main()
+    assert e.value.code == 1 and p.memory.read_text() == before and not p.convert.exists()
+    out = capsys.readouterr().out
+    assert 'WOULD CARRY' in out and 'NOT CARRIED' in out and 'would be written' in out
+    monkeypatch.setattr('sys.argv', ['yang_summary.py', 'carry'])
+    with pytest.raises(SystemExit):
+        Y.main()
+    assert p.memory.read_text() != before and (p.convert / 'carry_failures.md').exists()
+    monkeypatch.setattr('sys.argv', ['yang_summary.py', 'status'])
+    Y.main()
+    assert 'carried over by carry' in capsys.readouterr().out
+
+
+def test_carry_warns_on_questions_across_a_split(tmp_path):
+    p = carry_world(tmp_path, ('para',))
+    (p.data / 'questions.md').write_text(
+        '# Q\n\n## q-within\nsentence_main: They move closer with APL off.\nquestion: Why?\n\nBecause.\n\n'
+        '## q-across\nsentence_main: closer with APL off. The ρ is 0.7\nquestion: Across?\n\nYes.\n\n'
+        '## q-yang\nsentence: more correlated with APL off. The ρ\nquestion: Yang side?\n\nYes.\n')
+    r = Y.carry(p, dry_run=True)
+    warned = [w for w in r['warnings'] if 'question' in w]
+    assert len(warned) == 2 and any('q-across' in w for w in warned) and any('q-yang' in w for w in warned)
+    assert not any('q-within' in w for w in warned)

@@ -46,6 +46,14 @@ in correlations with its numbers as placeholders. Then build. A question Yang wi
 ./venv/bin/python reports/yang_summary.py build
 ```
 
+When template lines were only split (between sentences, into paragraphs, a bullet list or sub-bullets, no word
+changed), carry their entries over to the pieces first, so that only what changed is converted anew:
+
+```
+./venv/bin/python reports/yang_summary.py carry --dry-run   # what would be carried, what not
+./venv/bin/python reports/yang_summary.py carry             # writes the entries; the rest in convert/carry_failures.md
+```
+
 Rewording is summary text, so on a queue host it is a Fable subagent's work (CLAUDE.md, "Permissions by model and
 effort"); the tool's code is Opus work.
 
