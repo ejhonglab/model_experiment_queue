@@ -321,3 +321,47 @@ The best family of the later fits is built on the rule at exponent 2, with inhib
 - **Probably not the form of APL.** Read on the flies' own responses, the inhibition that turns the responses with APL output blocked (TNT) into the control flies' grows with the odor's response over all KCs and only weakly with a KC's breadth. Put into the models, that form does no better than the models' own APL, so the page reads the error that is left as lying in which KCs respond without APL ([the form of APL's inhibition in the flies' own responses](#inhibition-form)).
 
 The rows of the first table are from the breadth-weighted APL experiment (E12), the experiment on APL's inhibition of the PN boutons (E3) and the divisive APL inhibition experiment (E35), all on the same baseline.
+
+## baseline-model-scheme
+asked: 2026-11-17
+sentence: The model (olfsysm) runs ORNs → projection neurons (with antennal-lobe inhibition) → PN boutons (443 hemibrain boutons) → KC claws (hemibrain claws, about 9,500 claws on 1,732 KCs, about 6 claws per KC) → KC somata, with one APL neuron inhibiting claws and boutons through connectome synapse counts as weights, and somatic thresholds tuned so that 5 % of KCs respond to an odor.
+sentence_main: The model (olfsysm) runs ORNs → projection neurons (with antennal-lobe inhibition) → PN boutons (443 hemibrain boutons) → KC claws (hemibrain claws, about 9,500 claws on 1,732 KCs, about 6 claws per KC) → KC somata, with one APL neuron inhibiting claws and boutons through connectome synapse counts as weights, and somatic thresholds tuned so that 5 % of KCs respond to an odor.
+question: Create a scheme showing the original version of the model, the connectivity, and the transformation at each step.
+
+The scheme is of the baseline model, the bouton model: the model that every later change on this page starts from. A click on the figure opens it full screen.
+
+![The baseline model (the bouton model). Top: the chain from ORNs to the read-out, with the number of units at each stage, the wiring between stages, the LNs of the antennal lobe and APL. Below: the transformation at each stage as the simulator computes it, APL's own equation, and the two numbers that are tuned.](results/summary_yang/model_scheme.png)
+
+**The steps in words.**
+
+| step | units | what feeds it | what it does |
+|---|---|---|---|
+| ORNs (step 1) | {{lit:54 # the glomeruli with claws in the model's wiring: rows with model_n_claws above 0 in results/E29_oracle_substrate/glomerulus_substrate.csv, counted by reports/yang_model_scheme.py}} glomeruli, {{lit:36 # the glomeruli with ORN input (driven) among those with claws in results/E29_oracle_substrate/glomerulus_substrate.csv, counted by reports/yang_model_scheme.py; kcq/harness.py asserts the same number for the ORN input}} of them with measured odor responses | the lab's ORN data: for each odor, the change of each glomerulus's firing rate | the spontaneous rate plus the odor's change of rate, as a step for the {{lit:0.5 s # the simulator's default odor pulse, p.time.stim.start = 0.0 and p.time.stim.end = 0.5 in olfsysm/libolfsysm/src/olfsysm.cpp, read 2026-11-17}} of the odor, low-pass filtered ({{lit:10 ms # p.orn.taum = 0.01 in olfsysm/libolfsysm/src/olfsysm.cpp, read 2026-11-17}}) |
+| PNs (step 2) | {{lit:111 # the sum of model_n_pn over the glomeruli with claws in results/E29_oracle_substrate/glomerulus_substrate.csv, by reports/yang_model_scheme.py}} PNs, one rate per glomerulus | the ORNs of its own glomerulus; the LNs, which are driven by the mean ORN rate over all glomeruli | a saturating (tanh) function of the ORNs' change of rate, with a gain that the LNs divide: the more of the antennal lobe an odor drives, the lower every PN's gain |
+| PN boutons (step 3) | {{E94/a1_path.csv:wiring=real:n_boutons ~ .0f}} | the PN rate of its own glomerulus | that rate minus APL's inhibition of the bouton, floored at 0 |
+| KC claws (step 4) | {{E94/a1_path.csv:wiring=real:n_claws ~ ,.0f}} | one bouton each, with weight 1 | the bouton's rate minus APL's inhibition of the claw, floored at 0, at each claw separately |
+| KC somata (step 5) | {{E94/a1_path.csv:wiring=real:n_kcs ~ ,.0f}} | its own claws, {{E13/stats_variants.csv:bouton_base:mean_claws_per_kc ~ .1f}} on average | the sum of its claws, leaky integration ({{lit:10 ms # p.kc.taum = 0.01 in olfsysm/libolfsysm/src/olfsysm.cpp, read 2026-11-17}}), a spike at the threshold, then a reset; no refractory period and no adaptation |
+| Read-out (step 6) | 16 odors × {{E94/a1_path.csv:wiring=real:n_kcs ~ ,.0f}} KCs | the spikes | the spike count of each KC for each odor; a response is two or more spikes; the correlation of two odors is the cosine similarity of their spike counts across the KCs |
+| APL | one neuron | every claw and every bouton, weighted by the claw→APL and bouton→APL synapse counts | a leaky sum ({{lit:50 ms # p.kc.apl_taum = 0.05 in olfsysm/libolfsysm/src/olfsysm.cpp, read 2026-11-17}}) of what is left of the claws' and the boutons' drive; that one value is subtracted from every bouton and every claw, weighted by the APL→bouton and APL→claw synapse counts |
+
+APL's four sets of weights are synapse counts of the hemibrain, each scaled to a mean of 1 and multiplied by one gain. APL sums the drive that is left after its own inhibition, so it is a feedback loop, and it is driven by the input to the claws and not by the KCs' spikes.
+
+**What is tuned.** Two numbers, on all 16 odors. First the constant of the somatic threshold, with APL's weights at zero, so that {{lit:10 % # the tuning target with APL's weights at zero: TARGET = 0.05 in experiments/E3_drive_dependent_gain.py times p.kc.sp_factor_pre_apl = 2.0 in olfsysm/libolfsysm/src/olfsysm.cpp, read 2026-11-17}} of the KC × odor entries respond. Then APL's one gain, until {{lit:5 % # the tuning target with APL on: TARGET = 0.05 in experiments/E3_drive_dependent_gain.py, read 2026-11-17}} respond. APL off is the same model with APL's output weights set to zero and nothing tuned again, so 10 % respond. The saved run has {{apl_effect/by_variant.csv:folder=E13_bouton_coincidence;tag=bouton_base:rate_on ~ .3f}} with APL on and {{apl_effect/by_variant.csv:folder=E13_bouton_coincidence;tag=bouton_base:rate_off ~ .3f}} with APL off.
+
+**Where the scheme is more exact than the sentence it is attached to.**
+
+- **Boutons and claws.** The saved runs have {{E94/a1_path.csv:wiring=real:n_boutons ~ .0f}} boutons and {{E94/a1_path.csv:wiring=real:n_claws ~ ,.0f}} claws ({{E13/stats_variants.csv:bouton_base:mean_claws_per_kc ~ .1f}} per KC); the sentence says 443 boutons and about 9,500 claws.
+- **Glomeruli without data.** {{lit:18 # the glomeruli without ORN input among those with claws in results/E29_oracle_substrate/glomerulus_substrate.csv, counted by reports/yang_model_scheme.py}} of the wiring's glomeruli have no measured ORN response: for every odor their ORNs stay at the spontaneous rate.
+- **The threshold.** It is not one number for all KCs: each KC's threshold is the tuned constant plus twice the KC's summed claw input before the odor.
+- **The spike count.** It is taken over the whole simulated window, from {{lit:0.5 s before the odor's onset to 0.25 s after its end # p.time.start = -0.5, p.time.end = 0.75 and p.time.stim.end = 0.5 in olfsysm/libolfsysm/src/olfsysm.cpp, read 2026-11-17; the KCs are simulated from p.time.start and their spikes are summed over that window}}, not over the odor alone.
+
+**Where the later changes of this page act on the scheme.**
+
+- The per-claw threshold: between steps 4 and 5, on each claw's drive before the KC sums its claws.
+- Breadth-weighted APL: the APL→claw weights of step 4, multiplied for each KC by a power of how broadly it responds.
+- Inhibition among KCs: added at step 5.
+- Glomerulus-specific claw strength: the bouton→claw weight of step 4, for the claws of eight glomeruli.
+- APL driven by the KCs' spikes: APL's input, in place of the claws' drive.
+- The firing ceiling: step 5, a refractory period and an adaptation of the threshold.
+
+The equations were read on 2026-11-17 in the simulator's source (olfsysm), with the settings of the bouton baseline; the counts are from the model's own wiring tables. Script: `reports/yang_model_scheme.py`.
