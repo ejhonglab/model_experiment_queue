@@ -1,0 +1,280 @@
+{
+ "experiment": "E105_weak_odor_rates",
+ "sha256": "ebaee5b3fec262f7d2a36943a68a824274e8a8fdc31a66b9802da321bf395128",
+ "values_sha256": "71e2da52989903a8d0e0eb0c62162996927eae72ccd55f4ae55840d2995e41ef",
+ "definitions": {
+  "experiment": "E105_weak_odor_rates",
+  "sets": {
+   "rules": {
+    "D1": [
+     "diag_mix",
+     null,
+     "2025-02-24"
+    ],
+    "D2": [
+     "diag_mix",
+     "2025-03-20",
+     null
+    ],
+    "N": [
+     "natmix_dilute",
+     "2026-01-16",
+     "2026-02-10"
+    ]
+   },
+   "counts": {
+    "D1|control": [
+     9,
+     7
+    ],
+    "D1|apl_output_blocked": [
+     3,
+     2
+    ],
+    "D2|control": [
+     7,
+     5
+    ],
+    "N|control": [
+     9,
+     5
+    ],
+    "APL16|control": [
+     11,
+     8
+    ],
+    "APL16|apl_output_blocked": [
+     8,
+     7
+    ]
+   },
+   "never_pooled": [
+    "D1",
+    "D2",
+    "N"
+   ],
+   "fly": "a date and a fly number; its recordings averaged",
+   "apl16": {
+    "files": {
+     "control": [
+      "TNT3c",
+      "dataset_20_long.csv"
+     ],
+     "apl_output_blocked": [
+      "TNT",
+      "dataset_19_long.csv"
+     ]
+    }
+   },
+   "reader": "refuses paths outside the shared directory, recordings outside the panel's computed/recordings.csv and recordings data/yang_apl_recordings/recordings.csv marks raw only"
+  },
+  "stimuli": {
+   "estimates": [
+    "kiwi-control",
+    "megamat",
+    "validation2"
+   ],
+   "odors": [
+    "ma",
+    "2h",
+    "farn"
+   ],
+   "flies": {
+    "ma": "ma @ -7",
+    "2h": "2h @ -7",
+    "farn": "farn @ -3"
+   },
+   "model": {
+    "ma": [
+     "ma",
+     -7.0
+    ],
+    "2h": [
+     "2h",
+     -6.0
+    ],
+    "farn": [
+     "farn",
+     -2.0
+    ]
+   },
+   "input_role": {
+    "ma": "exact input",
+    "2h": "input at 10^-6 for the flies' 10^-7",
+    "farn": "input at 10^-2 for the flies' 10^-3"
+   },
+   "lower": {
+    "ma": "ma @ -8",
+    "2h": "2h @ -8",
+    "farn": "farn @ -4"
+   },
+   "beside": [
+    [
+     "2h",
+     "2h @ -5",
+     "2h [kiwi-control/control] @ -5",
+     "N",
+     "exact input, one estimate"
+    ],
+    [
+     "ea",
+     "ea @ -7",
+     "ea [kiwi-control/diag] @ -8",
+     "N",
+     "input a log unit lower: only inside or over is safe"
+    ]
+   ],
+   "a1": [
+    "ma @ -7",
+    "2h @ -7",
+    "farn @ -3",
+    "ma @ -8",
+    "2h @ -8",
+    "farn @ -4",
+    "2h @ -5",
+    "ea @ -7",
+    "pfo @ 0"
+   ],
+   "solvent": "pfo @ 0",
+   "blank": "blank @ 0",
+   "model_label": "E98's session_label(odor, conc, estimate, glomeruli_diagnostics)"
+  },
+  "response": {
+   "unit": "trial-noise unit: the trial mean over the pooled SD of the KC's single trials around their own stimulus means (every stimulus of the recording, the solvent included; sum of squares over the trials minus the stimuli), from the reading's own trials",
+   "cstar": "the smallest criterion (bisection to cstar_tol over cstar_bracket) at which the APL16 control flies' mean over recordings of each recording's share of KC x odor entries above it over the 16 odors is at most their value at 1 z",
+   "cstar_bracket": [
+    0.5,
+    6.0
+   ],
+   "cstar_tol": 1e-06,
+   "z1": 1.0,
+   "unit_check": {
+    "tol_rms": 0.01,
+    "baseline_noise_threshold": 1.9684,
+    "rule": "the 16 per-odor rates (means over the 11 control recordings) at c* against frac_noise of data/yang_apl16_kc_noise_units/; failing it, 1 z carries and the trial-noise unit is partner (1)"
+   },
+   "evoked": "a recording's rate minus its solvent's, same unit and trials",
+   "first_trials": 3,
+   "yang_trial_share": 0.5,
+   "family": "2 spikes or more; evoked = rate minus the blank's",
+   "family_partner": 1
+  },
+  "values": {
+   "set": "mean over flies; 90 % interval from n_boot bootstrap draws of flies",
+   "n_boot": 10000,
+   "seed": 0,
+   "ci": [
+    5.0,
+    95.0
+   ],
+   "blocked": "value over and times exp(h), h = (ln hi - ln lo) / 2 of set D1's control flies' interval at the same stimulus and reading; the recordings' range beside",
+   "carried_so_far": "the solvent not removed, 1 z, all trials, D1 and D2 pooled as recording means (interval: bootstrap of their flies, a fly bringing its recordings), the three blocked recordings' mean, kiwi-control's estimate"
+  },
+  "classes": {
+   "min_wirings": 6,
+   "labels": [
+    "short",
+    "over",
+    "inside",
+    "not decided"
+   ],
+   "cell": "short if >= min_wirings of 8 below the interval; over if >= min_wirings above; inside if >= min_wirings inside (ends included) or, neither, the median inside; else not decided; APL on against control flies, APL off against APL output blocked (TNT), set D1 only",
+   "w": "short if ma short or 2h and farn both short; not short if ma inside or over and 2h and farn not both short; else not decided",
+   "w_labels": [
+    "short",
+    "not short",
+    "not decided"
+   ]
+  },
+  "held": {
+   "carrying": "evoked, the trial-noise unit, all trials",
+   "partners": [
+    "unit",
+    "first_three_trials",
+    "yang_definition",
+    "one_spike",
+    "relative_to_panel",
+    "fly_left_out"
+   ],
+   "rule": "W the same under the carrying reading and every partner; partner fly_left_out: one reading per control fly of the set left out (for APL off, set D1's), each must agree",
+   "relative_to_panel": "the set's evoked value and interval over the APL16 flies' evoked panel value of the same group (mean over flies of each recording's mean over the 16 odors of its evoked rates); the family's evoked rate over its 16 panel odors' mean rate in the same run and condition"
+  },
+  "outcomes": {
+   "turns": "strict: both short and not short among the values (decides the outcome); loose: any difference (beside)",
+   "counting_partners": [
+    "unit",
+    "first_three_trials",
+    "yang_definition",
+    "one_spike",
+    "relative_to_panel"
+   ]
+  },
+  "split_rule": {
+   "share": 0.1,
+   "values": "per-fly evoked rates (arithmetic), E103's split_share",
+   "ratio": "D1 over the other set, joint bootstrap of both sets' flies (E104's q_of_fall, arithmetic)"
+  },
+  "part_b": {
+   "steps": [
+    "identity",
+    "inhadd100",
+    "inhadd314",
+    "inhadd1000",
+    "inhadd3141",
+    "inhadd10000",
+    "gain_fixed"
+   ],
+   "unchanged": "identity",
+   "further": 1.25,
+   "nearer": 0.8,
+   "outcome_step": "inhadd1000",
+   "rule": "|ln(median of the wirings' evoked rates / the set's evoked value)| over the unchanged fits' (E102's identity step): further at >= 1.25, nearer at <= 0.8; E102's own rule beside",
+   "stands": "ma at pn_inhadd 1000 further in both conditions under every estimate and against every set",
+   "refits": [
+    "real",
+    "P1",
+    "P2",
+    "M1"
+   ]
+  },
+  "part_c": {
+   "ratio": "APL output blocked (TNT) over set D1's control flies alone (E104's flies_rate_ratio), evoked and as recorded",
+   "d_star": "E104's d_star on its saved b_model.csv",
+   "y2": "E104's y_class, y_over_wirings, y_over_estimates and y_verdict"
+  },
+  "part_d": {
+   "factors": [
+    0.5,
+    0.71,
+    1.41,
+    2.0,
+    2.83,
+    4.0
+   ],
+   "d3_recordings": 10,
+   "d3_trials": 6
+  },
+  "identity_tol": 1e-12
+ },
+ "values": {
+  "cstar": 1.9338545203208923,
+  "carrying_unit": "trial_noise",
+  "partner_unit": "z1",
+  "unit_check_rms": 0.0047081094593073225,
+  "unit_check_passed": true,
+  "cstar_target": 0.06830776097367851
+ },
+ "host": "viki",
+ "time": "2026-11-17 01:59",
+ "commits": {
+  "queue_commit": "a746b65ab1587d03514c80c59a5ab293db5db11e",
+  "queue_dirty": false,
+  "pyolfsysm_commit": "13bf1a8a2720992d4d6b5bbe8d011b857ed361e1",
+  "pyolfsysm_dirty": false,
+  "al_analysis_commit": "7b25156efd9e12b0fd9529ab6144228ebced2599",
+  "al_analysis_dirty": false,
+  "hong2p_commit": "ae2abda6bd6e9df4b6475a243c286dfeeb09ac70",
+  "hong2p_dirty": false
+ },
+ "note": "Written by part 0 before any class was computed. `require_lock` refuses parts A to C until this file is committed, its sha256s are its contents' and its definitions equal the module's."
+}
