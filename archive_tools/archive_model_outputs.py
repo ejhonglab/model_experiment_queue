@@ -17,13 +17,19 @@ README.md listing the variants. The top-level README.md gets one row per experim
     ./venv/bin/python archive_tools/archive_model_outputs.py --all --params-only   # rebuild every params.csv
     ./venv/bin/python archive_tools/archive_model_outputs.py E98_apl_response_strength --exclude tmp,cache,B/old_46stim
         # leave out folders under outputs/<name>/ that hold no model outputs of the experiment (pytest temp
-        # folders, caches of other experiments' runs, superseded runs)
+        # folders, caches of other experiments' runs, superseded runs); glob patterns allowed (B/*/*_held_*)
+
+Experiments whose step folders repeat their files' names (FOLDER_PREFIXES; E102's B/<step>/<wiring>_...) have the
+step put before each name in the archive, so that every variant's name is unique (olfdb finds a model's files by its
+tag in their names, not by their folder); a copy archived earlier under the bare name is removed. DEFAULT_EXCLUDE
+lists, per experiment, what is never copied (scratch checks, copies of runs archived elsewhere).
 
 File and folder names are ASCII only (CLAUDE.md); names with other characters are rejected.
 """
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import shutil
 import socket
@@ -58,6 +64,7 @@ PARAM_COLS = ['tag', 'variant', 'base', 'config', 'kind', 'point', 'part', 'seed
     'kc_thr_input_exp', 'breadth_kept', 'prepass_thr_factor', 'prepass_fixed_thr',
     'rel', 'start_experiment', 'start_tag', 'breadth_from', 'kckc', 'kckc_factor',
     'max_count_on', 'max_count_off', 'claw_inh_pool', 'allow_net_inh_per_claw', 'ext_inh_kc_max',
+    'aplpn_hold', 'aplkc_flat', 'aplkc_flat_size', 'aplkc_flat_unit', 'stimuli',
     'init_from', 'init_thr', 'loss_variant', 'method', 'maxfev', 'kckc0', 'thr0_factor',
     'n_kcs', 'n_glomeruli', 'rate_on', 'rate_off', 'rate_acute_off', 'rate_homeo_full_off',
     'rate_homeo_data_off', 'error']
@@ -72,6 +79,36 @@ HAND_BUILT = {
     'E43_model_trial_noise': 'params.csv is the two models ref40 / base70; the noise statistics are in noise_statistics_rows.csv (2026-11-09)',
     'E49_low_conc_kc': 'params.csv written by hand: E49 has none of the tables params.csv is built from (2026-11-09)',
 }
+
+# experiments whose step folders repeat their files' names: per folder pattern (fnmatch on the file's folder under
+# outputs/<name>/), the prefix put before the file's name in the archive, '{0}', '{1}', ... the folder's path parts,
+# so that each variant's name is unique (E102: B/<step>/<wiring>_held_on_... in every step's folder)
+FOLDER_PREFIXES = {
+    'E102_antennal_lobe_normalization': (('B/*', 'B_{1}_'), ('D/runs/B/*', 'D_{3}_'), ('E/B/*', 'E_{2}_')),
+}
+# per experiment, the paths under outputs/<name>/ never copied (as --exclude, which adds to them): E102's start checks
+# (one evaluation of E10 each, in a scratch folder whose file names are the refits'), the refits' 16-odor copies under
+# D/runs (E10's own outputs are archived at the top) and the references part E's score copies beside its points
+DEFAULT_EXCLUDE = {
+    'E102_antennal_lobe_normalization': ('D/start_check', 'D/runs/B/*/*_held_*', 'E/B/*/unchanged_none_*',
+                                         'E/B/*/refit_D_*', 'E/B/*/E95_f1_*'),
+}
+
+
+def excluded(rel: str, exclude) -> bool:
+    """Whether the path `rel` (relative to outputs/<name>/) is excluded: equal to or under one of `exclude`, or
+    matching one as a glob pattern."""
+    return any(rel == x or rel.startswith(x.rstrip('/') + '/') or fnmatch.fnmatchcase(rel, x) for x in exclude)
+
+
+def archive_rel(name: str, rel: Path) -> Path:
+    """Where a file of outputs/<name>/ goes in the archive: `rel`, with FOLDER_PREFIXES' prefix for its folder put
+    before its name when one applies."""
+    folder = rel.parent.as_posix()
+    for pattern, prefix in FOLDER_PREFIXES.get(name, ()):
+        if fnmatch.fnmatchcase(folder, pattern):
+            return rel.parent / (prefix.format(*rel.parent.parts) + rel.name)
+    return rel
 
 
 # condition names used in the output file names (longest first, so 'acute_off' wins over 'off')
@@ -122,17 +159,22 @@ def archive_experiment(name: str, host: str, params_only: bool = False, force_ha
         raise FileNotFoundError(src)
     dst.mkdir(parents=True, exist_ok=True)
     n_files = 0
+    exclude = tuple(DEFAULT_EXCLUDE.get(name, ())) + tuple(exclude)
     for p in ([] if params_only else sorted(src.rglob('*'))):
         if not p.is_file() or p.suffix in ('.pyc', '.html'):
             continue   # .html: artifact pages live in reports/, not here
         rel = p.relative_to(src)
-        if any(rel.as_posix() == x or rel.as_posix().startswith(x.rstrip('/') + '/') for x in exclude):
+        if excluded(rel.as_posix(), exclude):
             continue
         ascii_only(rel.as_posix())
-        target = dst / rel
+        arel = archive_rel(name, rel)
+        target = dst / arel
         target.parent.mkdir(parents=True, exist_ok=True)
         if not target.exists() or target.stat().st_size != p.stat().st_size:
             shutil.copy2(p, target)
+        if arel != rel and (dst / rel).is_file():
+            # the copy archived before the folder prefix applied
+            (dst / rel).unlink()
         n_files += 1
     # parameters: the stats tables' identifying / parameter columns
     frames = []
@@ -187,6 +229,10 @@ def archive_experiment(name: str, host: str, params_only: bool = False, force_ha
         'provenance.json at the recorded commit (`queue_commit`, of ejhonglab/model_experiment_queue; in provenance '
         'written before 2026-11-11, `al_analysis_commit`, of al_analysis, where the scripts were), with the base kwargs '
         'there and the tuned parameters in params.csv.', '']
+    if name in FOLDER_PREFIXES:
+        lines += ['In ' + ', '.join(f'`{pat}`' for pat, _ in FOLDER_PREFIXES[name]) + ' each file\'s name begins with its folder\'s '
+                  'step (' + ', '.join(f'`{pre}`' for _, pre in FOLDER_PREFIXES[name]) + ', the folder\'s path parts from 0), '
+                  f'which `outputs/{name}/` does not have: the same names repeat in every step\'s folder there.', '']
     if variants:
         lines += ['Variants:', ''] + [f'- `{v}`' for v in variants] + ['']
     (dst / 'README.md').write_text('\n'.join(lines))

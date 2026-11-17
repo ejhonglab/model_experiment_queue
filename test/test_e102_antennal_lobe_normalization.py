@@ -9,7 +9,8 @@ identity, resuming); the chain of totals and its ratios; the results tables' cav
 file (read back exactly by E10's `read_params`), the options and the tag E10's own main gives each kind of wiring, the
 start identity and the start check's stop on a difference, the refit's parameters from its history, which refits are
 due, the per-wiring class counts and the comparison table; part E's points (their starts, kwargs, changes and inputs),
-the uniform component added in place, the references' copies, the pulse window's ratios and the table."""
+the uniform component added in place, the references' copies, the pulse window's ratios and the table; the archive's
+variant rows and their tags against the archived file names."""
 
 import json
 import sys
@@ -882,3 +883,33 @@ def test_e_table():
     assert t.loc['the flies', 'V2 linear'] == '0.460 to 0.610'
     assert t.loc['the flies', 'cal_mean_effect'] == pytest.approx(H.data_target('apl_effect_mean'))
     assert t.loc['refit_F', 'start'] == 'refit' and t.loc['refit_F', 'change'] == 'F' and t.loc['unchanged_none', 'start'] == 'reference'
+
+
+# ---------------------------------------------------------------------------
+# the archive's variants
+
+def test_variant_row():
+    rec = dict(params=PARAMS, params_off=dict(PARAMS, wAPLKC_scale=0.0, wAPLPN_scale=0.0), thr_factor=1.1, apl_factor=0.9,
+               pn_inhadd=1000.0, pn_inhsc=544.4)
+    held = _held16()
+    r = M._variant_row('B_inhadd1000_P1', 'B', 'inhadd1000', rec, held, 'cfg', wiring='P1')
+    assert r['tag'] == r['variant'] == 'B_inhadd1000_P1' and r['wiring'] == 'P1'
+    assert {k: r[k] for k in M.REFIT_PARAM_KEYS} == PARAMS and r['kc_kc_inh'] == PARAMS['wKCKC_scale']
+    assert r['fixed_thr_off'] == PARAMS['fixed_thr'] and (r['pn_inhadd'], r['pn_inhsc']) == (1000.0, 544.4)
+    assert r['rate_on'] == pytest.approx(held['on'][0].to_numpy().mean()) and r['k'] == 2.0
+
+
+def test_variant_tags_name_the_archived_files():
+    """Each kind of variant's tag is, as whole '_'-separated parts, in the names the archive gives its files (olfdb
+    finds a model's files that way), and in no other step's."""
+    A = pytest.importorskip('archive_tools.archive_model_outputs')
+
+    def parts_in(stem, name):
+        i = stem.find(name)
+        return i >= 0 and (i == 0 or stem[i - 1] == '_') and (i + len(name) == len(stem) or stem[i + len(name)] == '_')
+    for rel, tag, other in (('B/inhadd1000/real_held_on_spike_counts.parquet', 'B_inhadd1000_real', 'B_inhadd100_real'),
+                            ('B/inhadd1000/real_on_spike_counts.parquet', 'B_inhadd1000_real', 'B_identity_real'),
+                            ('D/runs/B/inhadd1000/M1_on_spike_counts.parquet', 'D_inhadd1000_M1', 'B_inhadd1000_M1'),
+                            ('E/B/inhadd1000/refit_p_held_on_spike_counts.parquet', 'E_inhadd1000_refit_p', 'E_inhadd1000_refit_none')):
+        stem = A.archive_rel(M.EXPERIMENT, Path(rel)).name[:-len('_spike_counts.parquet')]
+        assert parts_in(stem, tag) and not parts_in(stem, other)

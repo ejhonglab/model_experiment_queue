@@ -2927,6 +2927,125 @@ def part_score_e(level, out: Optional[Path] = None) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------------
+# the archive's variants
+
+def _wiring_cols(w: str) -> dict:
+    """A wiring's identification as the archive's columns: 'wiring' its label (real, P1 to P4, M1 to M3), 'wiring_seed'
+    and 'wiring_tag' (E10_joint_fit's shuffle and seed, or the matched curveball's tag) and 'wiring_file'."""
+    from experiments import E91_summed_drive_inhibition as E91
+    a = E91.d_member(w)['wiring_args']
+    out = dict(wiring=w, wiring_seed=None, wiring_tag=None, wiring_file=None)
+    if '--wiring' in a:
+        out.update(wiring_seed=int(a[a.index('--wiring-seed') + 1]),
+                   wiring_tag=f"{a[a.index('--wiring') + 1]}-seed{a[a.index('--wiring-seed') + 1]}")
+    if '--wiring-file' in a:
+        out.update(wiring_file=a[a.index('--wiring-file') + 1], wiring_tag=a[a.index('--wiring-tag') + 1])
+    return out
+
+
+def _variant_row(tag: str, part: str, point: str, rec: dict, held: Optional[Dict[str, tuple]], config: str, **extra) -> dict:
+    """One archive variant: its absolute parameters with APL on (`rec['params']`), the APL-off run's threshold, the
+    re-holding factors, the PN kwargs, the response rates of its 16-odor run (`held`)."""
+    from experiments import E10_joint_fit as J
+    p = rec['params']
+    row = dict(tag=tag, variant=tag, part=part, point=point, config=config,
+               **{k: float(p[k]) for k in REFIT_PARAM_KEYS}, kc_kc_inh=float(p['wKCKC_scale']), kc_kc_tau=J.TAU, k=2.0,
+               fixed_thr_off=float(rec['params_off']['fixed_thr']) if rec.get('params_off') else None,
+               thr_factor=rec.get('thr_factor'), apl_factor=rec.get('apl_factor'), pn_inhadd=float(rec['pn_inhadd']),
+               pn_inhsc=float(rec['pn_inhsc']))
+    if held is not None:
+        row.update(rate_on=float(held['on'][0].to_numpy(dtype=float).mean()),
+                   rate_off=float(held['off'][0].to_numpy(dtype=float).mean()))
+    row.update(extra)
+    return row
+
+
+def variants_table() -> pd.DataFrame:
+    """Every saved model of this experiment as the archive's variants (one row each, its absolute parameters; tags
+    unique over the step folders, as the archive names the files: FOLDER_PREFIXES of archive_model_outputs.py):
+    - part B's points ('B_<step>_<wiring>': its 16-odor run <tag>_held_<condition> and its run on E98's extended input
+      <tag>_<condition>), part 0's identity point included (step 'identity');
+    - part D's refits' extended runs ('D_<step>_<wiring>'; the refits' 16-odor outputs are E10's, archived at the top
+      under E10's tags, with fits.csv's rows);
+    - part E's points ('E_<step>_<point>', as part B's);
+    - the breadth runs E10 cached for the refits (the bouton base at E3's parameters, APL off, with the level's PN
+      kwargs, on each wiring: <E10's cache name>_acute_off).
+    The fixed settings shared by all (base kwargs, the breadth exponent 2, KC-KC tau) are E10's and E83's."""
+    from experiments import E83_cross_wiring_fit as E83
+    from experiments.E12_breadth_apl import e3_bouton_params
+    rows = []
+    for tag in [step_tag(STEP_IDENTITY)] + [step_tag(a) for a in LADDER]:
+        for w in ALL_WIRINGS:
+            rec = load_point(step_of_tag(tag), w)
+            if rec is None or not rec.get('complete'):
+                continue
+            S = E83.saved_fit(w)
+            rows.append(_variant_row(f'B_{tag}_{w}', 'B', tag, rec, load_held(step_of_tag(tag), w),
+                                     f"C2's family on {w} at pn_inhadd {rec['pn_inhadd']:g}, both response rates re-held "
+                                     f"(part B); runs: 16 odors (held_*) and E98's extended input",
+                                     ref_experiment=S['folder'], ref_fit=S['tag'], stimuli='APL16 panel; E98 B1 extended input',
+                                     **_wiring_cols(w)))
+    for d in sorted((refit_root() / 'B').glob('*')):
+        for f in sorted(d.glob('*_point.json')):
+            rec = _read_json(f)
+            if not rec.get('complete'):
+                continue
+            w = rec['wiring']
+            rows.append(_variant_row(f"D_{d.name}_{w}", 'D', d.name, rec, load_held(step_of_tag(d.name), w, refit_root()),
+                                     f"part D's refit on {w} (E10 fit {rec['tag']}, its 16-odor outputs archived under that "
+                                     "tag); runs: E98's extended input", ref_experiment=EXPERIMENT, ref_fit=rec['tag'],
+                                     n_evals=rec.get('n_evals'), stimuli='E98 B1 extended input', **_wiring_cols(w)))
+    for d in sorted((e_root() / 'B').glob('*')):
+        for f in sorted(d.glob('*_point.json')):
+            rec = _read_json(f)
+            if rec is None or 'point' not in rec or not rec.get('complete'):
+                continue
+            x = rec['point']
+            fl = rec.get('flat_component')
+            extra = dict(ref_experiment=EXPERIMENT if rec['start'] == 'refit' else (
+                             'E95_static_apl' if rec['start'] == 'E95f1' else E83.saved_fit(E_WIRING)['folder']),
+                         ref_fit=(refit_tag(step_of_tag(d.name), E_WIRING) if rec['start'] == 'refit' else
+                                  E95_F1_TAG if rec['start'] == 'E95f1' else E83.saved_fit(E_WIRING)['tag']),
+                         stimuli='APL16 panel; E98 B1 extended input' + (" (on E93's 46 glomeruli)" if rec['input'] == 'F' else ''),
+                         **_wiring_cols(E_WIRING))
+            if fl:
+                extra.update(aplkc_flat='uniform', aplkc_flat_size=float(fl[0]), aplkc_flat_unit=float(fl[1]))
+            if rec.get('input') == 'F':
+                extra['orn_input'] = 'results/E93_missing_glomeruli_input/inputs/F.csv'
+            if rec.get('change') == 'p':
+                extra.update(time_stim_end=float(rec['pulse_s']), time_end=float(rec['pulse_s']) + 0.25)
+            rows.append(_variant_row(f'E_{d.name}_{x}', 'E', x, rec, load_held(step_of_tag(d.name), x, e_root()),
+                                     rec['description'] + '; both response rates re-held to the unchanged fit\'s counts', **extra))
+    init = e3_bouton_params()
+    for f in sorted(local_dir().glob('pnadd*_base_acute_off_spike_counts.parquet')):
+        stem = f.name[:-len('_acute_off_spike_counts.parquet')]
+        a, sc = (float(x) for x in stem.split('_')[0][len('pnadd'):].split('sc'))
+        w = next((lab for lab in ALL_WIRINGS if lab != 'real' and _wiring_cols(lab)['wiring_tag'] and
+                  f"wiring-{_wiring_cols(lab)['wiring_tag']}_" in stem + '_'), 'real')
+        r = pd.read_parquet(f.with_name(f.name.replace('spike_counts', 'responses')))
+        kws = step_kws(a) if np.isclose(step_kws(a)['pn_inhsc'], sc, rtol=1e-5) else dict(pn_inhadd=a, pn_inhsc=sc)
+        rows.append(dict(tag=stem, variant=stem, part='D', point='breadth run',
+                         config=f"the bouton base at E3's parameters, APL off, on {w} with the PN normalization: the breadth "
+                                "behind the refit's APL->KC weights (E10_joint_fit.bouton_base's cache)",
+                         fixed_thr=float(init['fixed_thr']), wAPLKC_scale=0.0, wKCAPL_scale=float(init['wKCAPL_scale']),
+                         wAPLPN_scale=0.0, wPNAPL_scale=float(init['wPNAPL_scale']), wKCKC_scale=0.0, kc_kc_inh=0.0,
+                         pn_inhadd=float(kws['pn_inhadd']), pn_inhsc=float(kws['pn_inhsc']),
+                         rate_off=float(r.to_numpy(dtype=float).mean()), stimuli='APL16 panel', **_wiring_cols(w)))
+    out = pd.DataFrame(rows)
+    if out['tag'].duplicated().any():
+        raise RuntimeError(f"repeated variant tags: {sorted(out.loc[out['tag'].duplicated(), 'tag'])}")
+    return out
+
+
+def write_variants(out: Optional[Path] = None) -> pd.DataFrame:
+    """variants.csv in results/E102_antennal_lobe_normalization/ (`variants_table`), which the archive's params.csv is
+    built from (archive_tools/archive_model_outputs.py)."""
+    v = variants_table()
+    v.to_csv((out_dir() if out is None else Path(out)) / 'variants.csv', index=False)
+    return v
+
+
+# ---------------------------------------------------------------------------
 # the CLI
 
 def _wirings(arg: str) -> Tuple[str, ...]:
@@ -2951,7 +3070,7 @@ def _steps(arg: str) -> Tuple:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0], formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('--part', required=True, choices=['0', 'A', 'B', 'score', 'D', 'E'])
+    ap.add_argument('--part', required=True, choices=['0', 'A', 'B', 'score', 'D', 'E', 'variants'])
     ap.add_argument('--wirings', default='all8', help="'S', 'T', 'all8' or a comma-separated list (part D: default S)")
     ap.add_argument('--steps', default='ladder', help="'ladder' or comma-separated pn_inhadd values ('identity' allowed)")
     ap.add_argument('--root', default=None, help="part B: put the runs under another folder (default the local outputs)")
@@ -2987,6 +3106,9 @@ def main() -> None:
             print(json.dumps(part_score_refits(a.level, Path(a.out) if a.out else None), indent=1, default=str))
         else:
             part_d(a.level, wirings, root, force=a.force, check_only=a.check_only)
+    elif a.part == 'variants':
+        v = write_variants()
+        print(f"variants.csv: {len(v)} rows ({', '.join(f'{k} {n}' for k, n in v['part'].value_counts().items())})")
     elif a.part == 'E':
         if a.level is None:
             raise SystemExit('--part E needs --level')
