@@ -491,17 +491,19 @@ def find_cstar(kc: pd.DataFrame, target: float, odors: Sequence[str], bracket: T
                 n_recordings=int(len(recs)))
 
 
-def unit_check(kc_ctrl: pd.DataFrame, cstar: float, odors: Sequence[str], noise_path: Optional[Path] = None) -> dict:
+def unit_check(kc_ctrl: pd.DataFrame, cstar: float, odors: Sequence[str], noise_path: Optional[Path] = None,
+               group: str = 'control') -> dict:
     """The APL16 control flies' 16 per-odor response rates (means over their recordings) in the trial-noise unit at c*
     against those in baseline-noise units (data/yang_apl16_kc_noise_units/response_fraction_per_recording.csv,
     frac_noise: above the registry's 1.9684), and at 1 z beside: the table, the RMS and whether it is within
-    UNIT_RMS_TOL."""
+    UNIT_RMS_TOL. `group` 'apl_output_blocked' (with that group's rows as `kc_ctrl`): the same for the flies with APL
+    output blocked (TNT), beside (part A; the entry's check is the control flies')."""
     rr = response_rates(kc_ctrl[kc_ctrl['odor'].isin(list(odors))], 'trial_noise', cstar)
     rz = response_rates(kc_ctrl[kc_ctrl['odor'].isin(list(odors))], 'z1')
     p = H.shared_dir().joinpath(*NOISE_UNITS_DIR, 'response_fraction_per_recording.csv') if noise_path is None \
         else check_path(noise_path)
     nu = pd.read_csv(p)
-    nu = nu[nu['genotype'] == APL16_GENOTYPE['control']]
+    nu = nu[nu['genotype'] == APL16_GENOTYPE[group]]
     rows = []
     for o in odors:
         a = o.split(' @ ')[0]
@@ -1451,12 +1453,18 @@ def part_a() -> dict:
     write_table(pd.DataFrame(beside_rows(fam, fl, spec)), out / 'a4_beside.csv')
     real = realism_rows(fam)
     write_table(real, out / 'a_realism.csv')
+    # beside: the unit check on the APL16 flies with APL output blocked (TNT) (the entry's check is the control flies')
+    kc16 = fl.kc[None]
+    uc_tnt = unit_check(kc16[(kc16['set'] == 'APL16') & (kc16['genotype_group'] == 'apl_output_blocked')],
+                        lock['cstar'], fl.odors16, group='apl_output_blocked')
+    write_table(uc_tnt['table'], out / 'a0_unit_check_tnt_beside.csv')
     oc = outcomes(held)
     pv = {u: fl.panel_values(u) for u in ('trial_noise', 'z1')}
     summ = dict(lock=lock, outcomes=oc, w_carried_so_far=w[w['reading'] == 'carried_so_far'][
         ['estimate', 'condition', 'set', 'W']].to_dict('records'),
         held=held[['estimate', 'condition', 'set', 'carrying', 'held', 'differ', 'flips']].to_dict('records'),
-        apl16_panel_values=pv, realism=real.to_dict('records'))
+        apl16_panel_values=pv, realism=real.to_dict('records'),
+        unit_check_tnt_beside={k: v for k, v in uc_tnt.items() if k != 'table'})
     _write_json(out / 'a_summary.json', summ)
     provenance('A', lock_sha256=json.loads(LOCK.read_text())['sha256'])
     return dict(outcomes=oc, held=summ['held'])
