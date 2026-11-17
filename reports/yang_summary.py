@@ -18,6 +18,10 @@ reports/yang_summary/conversion_rules.md; this script only moves lines out and b
   default: every convert/chunk_*.out.md), checks each against its template line and writes the valid ones to the
   memory; failures go to convert/import_failures.md (exit status 1), warnings to convert/import_warnings.md.
 - status: lines converted / KEEP / starred and not in the memory, stale memory entries, the missing lines by section.
+- carry [--dry-run]: carries memory entries over a pure split of their template line (a paragraph or list item broken
+  between sentences into paragraphs, a bullet list or sub-bullets; see `carry`): each piece gets an entry of its own,
+  `by` "carried over from <old sha> by yang_summary.py carry"; what cannot be carried goes to convert/carry_failures.md
+  (exit status 1). --dry-run writes nothing and prints what it would do.
 - build [--skip-figure]: draws the background figure in correlations (results/summary_yang/ in the shared
   directory), builds Yang's lines (memory, else the pre-pass, unreviewed starred lines marked "distances"), inserts
   reports/yang_summary/intro.md and the list of Yang's questions before the table of contents, fills, marks the
@@ -39,7 +43,7 @@ and/or `sentence_main:` (the main page's), `question:` header lines up to the fi
 (markdown, placeholders allowed) up to the next `## ` line. A sentence is found in the page's visible text with every
 number a wildcard; failing that, in the main page's text of a line (the whole line, or table cell, is then marked).
 Usage: ./venv/bin/python reports/yang_summary.py {export [--all] [--chunk-kb N] | import [FILE ...] [--by TEXT] |
-       status | build [--skip-figure]}
+       status | carry [--dry-run] | build [--skip-figure]}
 """
 from __future__ import annotations
 
@@ -819,9 +823,31 @@ def status(paths: Paths = Paths()) -> dict:
         missing=len(missing), stale=sorted(e['line'] for s, e in mem.items() if s not in shas), by_section=by_section)
 
 
+# ---------------------------------------------------------------- carry
+
+def carry(paths: Paths = Paths(), *, dry_run: bool = False) -> dict:
+    """Carries stale memory entries over a pure split of their source line.
+
+    A pure split breaks a paragraph or a list item only between sentences, changing no word: a blank line between two
+    sentences, a run of sentences turned into a bullet list ("- " before each), a list item broken into sub-bullets
+    (deeper indentation), and, where a whole paragraph was bold, its closing ** moved to the end of its first
+    sentence. For every entry whose `src` is no longer a template line, the run of consecutive template lines that
+    joins back to `src` is found; a KEEP entry gives KEEP entries to its starred pieces, a converted entry gives
+    converted pieces where its `out` splits at the same sentence boundaries, each checked as `import` checks an answer.
+
+    Args:
+        paths: the template, the data folder (memory) and the output folder (convert/carry_failures.md).
+        dry_run: write nothing (neither the memory nor the report).
+
+    Returns:
+        dict with `carried` (new entries), `failures`, `skipped` and `warnings`.
+    """
+    raise NotImplementedError
+
+
 # ---------------------------------------------------------------- questions
 
-FIELDS = ('asked', 'sentence', 'sentence_main', 'question')
+FIELDS =('asked', 'sentence', 'sentence_main', 'question')
 
 
 def parse_questions(text: str) -> List[dict]:
@@ -1648,6 +1674,8 @@ def main() -> None:
     p.add_argument('files', nargs='*', type=Path, help='default: every convert/chunk_*.out.md')
     p.add_argument('--by', default='unspecified', help='who converted them (recorded with each entry)')
     sub.add_parser('status', help='progress of the conversion')
+    p = sub.add_parser('carry', help='carry memory entries over pure splits of their template lines')
+    p.add_argument('--dry-run', action='store_true', help='write nothing, print what would be done')
     p = sub.add_parser('build', help="build Yang's page")
     p.add_argument('--skip-figure', action='store_true')
     args = ap.parse_args()
@@ -1679,6 +1707,8 @@ def main() -> None:
             + (f' (recorded lines {", ".join(map(str, s["stale"]))})' if s['stale'] else ''))
         for sec, ns in s['by_section'].items():
             print(f'  {sec[:90]}: {", ".join(map(str, ns))}')
+    elif args.cmd == 'carry':
+        carry(paths, dry_run=args.dry_run)
     else:
         try:
             ok, rep = build(paths, skip_figure=args.skip_figure)
