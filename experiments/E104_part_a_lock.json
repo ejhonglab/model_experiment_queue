@@ -1,0 +1,456 @@
+{
+ "experiment": "E104_kc_calyx_vs_apl",
+ "part": "A",
+ "sha256": "a3f052e946434084e80bf36941effe191cc9372a278a3accbf798b1a27cdeee2",
+ "definitions": {
+  "experiment": "E104_kc_calyx_vs_apl",
+  "recordings": {
+   "K6F": [
+    "20220918_1FLfun1",
+    "20220918_1FLfun2",
+    "20220918_1FLfun3",
+    "20220918_1FLfun4",
+    "20220918_1FLfun5",
+    "20220918_1FRfun1",
+    "20220918_1FRfun2",
+    "20220918_1FRfun3",
+    "20221019_1FLfun1",
+    "20221019_1FLfun2",
+    "20221019_1FLfun4",
+    "20221019_1FLfun5",
+    "20221019_1FLfun6",
+    "20221019_1FLfun7",
+    "20221019_1FLfun8",
+    "20221019_1FLfun9",
+    "20221019_1FRfun1",
+    "20221019_1FRfun2",
+    "20221019_1FRfun3",
+    "20221019_1FRfun4",
+    "20221104_1FLfun1",
+    "20221104_1FLfun2",
+    "20221104_1FLfun3",
+    "20221104_1FLfun4",
+    "20221104_1FLfun5",
+    "20221104_1FLfun6",
+    "20221104_1FLfun7",
+    "20221104_1FLfun8",
+    "20221104_1FRfun1",
+    "20221104_1FRfun2",
+    "20221104_1FRfun3",
+    "20221104_1FRfun4",
+    "20221201_1FLfun1",
+    "20221201_1FLfun2",
+    "20221201_1FLfun3",
+    "20221201_1FLfun4",
+    "20221201_1FLfun5",
+    "20221201_1FLfun6",
+    "20221201_1FLfun7",
+    "20221201_1FLfun8",
+    "20221201_1FLfun9",
+    "20221202_1FLfun1",
+    "20221202_1FLfun2",
+    "20221202_1FLfun3",
+    "20221202_1FLfun4",
+    "20221202_1FLfun5",
+    "20221202_1FLfun6",
+    "20221202_1FLfun7",
+    "20221202_1FLfun8",
+    "20221202_1FLfun9",
+    "20221202_1FRfun1",
+    "20221202_1FRfun2",
+    "20221202_1FRfun3",
+    "20221202_1FRfun4",
+    "20221202_1FRfun5"
+   ],
+   "K1020": [
+    "20221020_1FLfun1",
+    "20221020_1FLfun2",
+    "20221020_1FLfun3",
+    "20221020_1FLfun4",
+    "20221020_1FLfun5",
+    "20221020_1FLfun6",
+    "20221020_1FLfun7",
+    "20221020_1FRfun2",
+    "20221020_1FRfun3",
+    "20221020_1FRfun4"
+   ],
+   "K7F": [
+    "20220125_1FRfun1",
+    "20220125_1FRfun3",
+    "20220125_1FRfun4",
+    "20220126_1FLfun1",
+    "20220126_1FLfun2",
+    "20220126_1FLfun3",
+    "20220126_1FRfun1",
+    "20220126_1FRfun2",
+    "20220126_1FRfun3",
+    "20220127_1MLfun1",
+    "20220127_1MLfun2",
+    "20220127_1MLfun3",
+    "20220127_1MLfun4",
+    "20220127_1MRfun1",
+    "20220127_1MRfun2",
+    "20220127_1MRfun3",
+    "20220127_2FLfun1",
+    "20220127_2FLfun2",
+    "20220127_2FLfun3",
+    "20220127_2FRfun1",
+    "20220127_2FRfun2",
+    "20220127_2FRfun3"
+   ],
+   "K7F_left_out": [
+    "20220125_1FLfun1",
+    "20220125_1FLfun2",
+    "20220125_1FLfun3",
+    "20220125_1FLfun4",
+    "20220125_1FLfun5"
+   ],
+   "S": [
+    "20221031_1FLfun1",
+    "20221031_1FLfun2",
+    "20221031_1FLfun3",
+    "20221031_1FLfun4",
+    "20221031_1FLfun5",
+    "20221031_1FLfun6",
+    "20221103_1FRfun2",
+    "20221103_1FRfun3",
+    "20221103_1FRfun4",
+    "20221103_1FRfun5",
+    "20221103_1FRfun6",
+    "20221103_1FRfun7",
+    "20221103_1FRfun8",
+    "20221103_2FLfun1",
+    "20221103_2FLfun2",
+    "20221103_2FLfun3",
+    "20221103_2FLfun4",
+    "20221103_2FLfun5",
+    "20221103_2FLfun6",
+    "20221103_2FLfun7",
+    "20221103_2FRfun1",
+    "20221103_2FRfun2",
+    "20221103_2FRfun3",
+    "20221103_2FRfun4",
+    "20221103_2FRfun5",
+    "20221103_2FRfun6",
+    "20221103_2FRfun7",
+    "20221103_2FRfun8",
+    "20221103_2FRfun9"
+   ],
+   "roles": {
+    "K6F": "the KCs, carrying (set K's GCaMP6f flies)",
+    "K1020": "2022-10-20: partner (7) as a KC fly, and described as an APL fly; in no carrying set",
+    "K7F": "beside (A5), against set H",
+    "S": "APL, carrying, with L",
+    "L": "APL, carrying, with S: E101's c_responses.csv, group 'L', not read again",
+    "H": "beside (A5): E100's b_per_stimulus.csv, set H, label_unsure False, not read again"
+   },
+   "L": {
+    "source": "results/E101_apl_vs_kc_claws/c_responses.csv",
+    "group": "L",
+    "b_mult": 0.0,
+    "column": "apl",
+    "carrying": "carrying",
+    "block_solvent": "block",
+    "first_presentation": "first_two (E101 saved no single first presentation)"
+   },
+   "H": {
+    "source": "results/E100_apl_weak_odors/b_per_stimulus.csv",
+    "set": "H",
+    "label_unsure": false,
+    "carrying": "yang_order_matched",
+    "block_solvent": "yang_minus_block"
+   },
+   "beside": {
+    "twelve_2021": "E98's a1_responses.csv",
+    "V0": "E101's c_responses.csv, group 'V0'"
+   }
+  },
+  "marked": {
+   "rules": [
+    [
+     "aborted",
+     "abort"
+    ],
+    [
+     "significant warping",
+     "sign\\w*cant\\s+warp"
+    ],
+    [
+     "dim",
+     "\\bdim\\b"
+    ]
+   ],
+   "runs": {
+    "20220918_1FLfun1": "significant warping",
+    "20221019_1FLfun1": "significant warping",
+    "20221019_1FLfun2": "significant warping",
+    "20221104_1FLfun1": "aborted",
+    "20221104_1FLfun3": "aborted",
+    "20221201_1FLfun1": "significant warping",
+    "20221202_1FLfun1": "significant warping",
+    "20221202_1FLfun3": "dim"
+   }
+  },
+  "response": {
+   "table": "Yang's `<stem>_<tag>_roi_peak_dff.csv`, column roi_peak_dff, one row per presentation in the yaml's odor_stim_seq order (rows and pins must match the yaml's, else the recording has no value)",
+   "table_tag_order": [
+    "rig_moco",
+    "moco",
+    "els_moco",
+    ""
+   ],
+   "carrying": "order_matched: each presentation minus the mean of the solvent-only blocks' presentations at the same position in the block (E100's `presentation_readings`); a stimulus's response the mean over its presentations (both passes where a run has two); no value in a run without a solvent-only block",
+   "block_solvent": "minus_block: each presentation minus its own block's solvent presentation(s)",
+   "first_presentation": "the order-matched value of the stimulus's first presentation (its first block)",
+   "min_response": 0.02,
+   "interpolation": "E98's `value_at` on log10 concentration inside a recording's imaged range; outside it the nearest end within one log unit, inclusive"
+  },
+  "fly": {
+   "id": "date and fly number (E98's `fly_id`)",
+   "recordings": "all planes; a fly's falls are the mean of its recordings' natural-log falls (both responses above min_response)",
+   "value": "the geometric mean over flies (the arithmetic mean for the 10^-7 / 10^-3 falls, WEAK_FALL_IDS, and for X3's responses)",
+   "n_boot": 10000,
+   "seed": 0,
+   "ci_level": 0.9,
+   "bootstrap": "E98's `fly_ratio` (E79's `fly_bootstrap`)"
+  },
+  "falls": [
+   [
+    "G1",
+    [
+     "paa",
+     -5.0
+    ],
+    [
+     "paa",
+     -4.0
+    ]
+   ],
+   [
+    "G2",
+    [
+     "pa",
+     -5.0
+    ],
+    [
+     "pa",
+     -4.0
+    ]
+   ],
+   [
+    "G3",
+    [
+     "ms",
+     -4.0
+    ],
+    [
+     "ms",
+     -3.0
+    ]
+   ]
+  ],
+  "falls_beside": [
+   [
+    "paa_-4_over_-3",
+    [
+     "paa",
+     -4.0
+    ],
+    [
+     "paa",
+     -3.0
+    ]
+   ],
+   [
+    "pa_-6_over_-4",
+    [
+     "pa",
+     -6.0
+    ],
+    [
+     "pa",
+     -4.0
+    ]
+   ],
+   [
+    "ms_-4_over_-2",
+    [
+     "ms",
+     -4.0
+    ],
+    [
+     "ms",
+     -2.0
+    ]
+   ],
+   [
+    "paa_-7_over_-3",
+    [
+     "paa",
+     -7.0
+    ],
+    [
+     "paa",
+     -3.0
+    ]
+   ],
+   [
+    "pa_-7_over_-3",
+    [
+     "pa",
+     -7.0
+    ],
+    [
+     "pa",
+     -3.0
+    ]
+   ],
+   [
+    "ms_-7_over_-3",
+    [
+     "ms",
+     -7.0
+    ],
+    [
+     "ms",
+     -3.0
+    ]
+   ]
+  ],
+  "weak_fall_ids": [
+   "paa_-7_over_-3",
+   "pa_-7_over_-3",
+   "ms_-7_over_-3"
+  ],
+  "q": {
+   "definition": "APL's fall over the KCs' (geometric means over flies)",
+   "interval": "joint bootstrap: n_boot draws, each resampling both sets' flies with replacement; the 5th and 95th percentiles"
+  },
+  "split_rule": {
+   "share": 0.1,
+   "definition": "two sets differ on a fall if fewer than share of the splits of all their flies into sets of the same sizes give a difference of mean log falls at least as large (absolute; E98's `pulse_permutation`)"
+  },
+  "classes": {
+   "apl_steeper": 0.8,
+   "kcs_steeper": 1.25,
+   "one_function": [
+    0.67,
+    1.5
+   ],
+   "labels": [
+    "APL steeper",
+    "KCs steeper",
+    "one function",
+    "not decided"
+   ]
+  },
+  "x1": {
+   "min_falls": 2,
+   "rule": "'APL steeper' if at least min_falls of G1 to G3 are held APL steeper and none KCs steeper; 'one function' if at least min_falls are held one function and none steeper either way; otherwise not decided"
+  },
+  "held": {
+   "partners": [
+    "set_S_alone",
+    "block_solvent",
+    "first_presentation",
+    "plane_18",
+    "without_marked",
+    "kc_fly_left_out",
+    "k1020_as_kc"
+   ],
+   "plane_um": 18.0,
+   "plane": "recordings.csv's plane_depth_um (Yang's yaml / date note), the Experiment.xml's piezo position where it has none; partner (4) leaves out PLANE_UNCERTAIN (yaml and xml disagree)",
+   "plane_uncertain": [
+    "20221019_1FRfun3",
+    "20221104_1FLfun2",
+    "20221104_1FLfun6"
+   ],
+   "rule": "a class counts only if the carrying reading and every partner give it; partner (6) is one reading per KC fly left out, each of which must give it"
+  },
+  "x2": {
+   "table": "results/E101_apl_vs_kc_claws/a3_family.csv",
+   "cond": "on",
+   "columns": [
+    "claw_all_00",
+    "claw_all_25",
+    "claw_all_50"
+   ],
+   "level": "the window mean minus the blank's (same wiring and condition)",
+   "fall": "G1",
+   "numerator": "paa at 10^-5 under each of the three sessions' estimates",
+   "denominator": "the panel's paa",
+   "indicator_ns": [
+    1.0,
+    1.25,
+    1.5,
+    1.75,
+    2.0,
+    2.25,
+    2.5
+   ],
+   "forms": [
+    "baseline",
+    "evoked"
+   ],
+   "min_wirings": 6,
+   "rule": "per wiring E98's `classify` of the model's ratio set (the three claw versions through E98's indicator family) against set K's G1 interval (inside, flatter, steeper); a class takes min_wirings of 8; over the estimates E100's rule (inside if inside under any; flatter or steeper only if so under all)"
+  },
+  "x3": {
+   "conc": -7.0,
+   "reference_conc": -3.0,
+   "min_flies": 4,
+   "min_odors": 2,
+   "rule": "an odor's KC response at 10^-7 (carrying reading) is above the solvent's if it is positive in at least min_flies of the 5 KC flies; X3 holds if so for at least min_odors of paa, pa and ms"
+  },
+  "a5": {
+   "odors": [
+    "2h",
+    "ma",
+    "pa",
+    "paa"
+   ],
+   "across": [
+    [
+     "pa_over_ms",
+     [
+      "pa",
+      -3.0
+     ],
+     [
+      "ms",
+      -3.0
+     ]
+    ],
+    [
+     "paa_over_ms",
+     [
+      "paa",
+      -3.0
+     ],
+     [
+      "ms",
+      -3.0
+     ]
+    ]
+   ],
+   "rule": "K7F against set H by the same rules (described; changes no class)"
+  }
+ },
+ "part_0_files": {
+  "p0_eligibility.csv": "d73ba61d6bbe06c4a04a88a78fa9ff6e752e5863c3b33fb7be6a0e3f2ae53b96",
+  "p0_identity.json": "10d7578a4a89c7cff989c74129a10b2a5240c6e9640fa4a12d5d35a87fc6dbd6"
+ },
+ "host": "atlas",
+ "time": "2026-11-16 20:29",
+ "commits": {
+  "queue_commit": "c39c0bcd38e7a26e2c950949eb8917d4a95f0996",
+  "queue_dirty": false,
+  "pyolfsysm_commit": "13bf1a8a2720992d4d6b5bbe8d011b857ed361e1",
+  "pyolfsysm_dirty": false,
+  "al_analysis_commit": "7b25156efd9e12b0fd9529ab6144228ebced2599",
+  "al_analysis_dirty": false,
+  "hong2p_commit": "ae2abda6bd6e9df4b6475a243c286dfeeb09ac70",
+  "hong2p_dirty": false
+ },
+ "note": "Part A's definitions, written by part 0 before any response table of set K was opened. `require_part_a` refuses to open set K's tables until this file is committed, its sha256 is its definitions' and they equal the module's `part_a_definitions()`."
+}
