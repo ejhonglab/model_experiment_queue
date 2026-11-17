@@ -2075,7 +2075,7 @@ def d3_tables(lock: Mapping[str, object], fl: 'Flies') -> Tuple[pd.DataFrame, pd
     by the trial-mean spike count at one or more ('count1', E49's data rule) and at two or more ('count2'), and per
     trial at two spikes ('trial2'), each also evoked (minus the blank's), and over the panel's 16 odors
     (d3_recordings.csv); per condition, estimate, odor and reading their mean and SD over pseudo-recordings beside the
-    flies' values per set (carrying reading, and 1 z as recorded; d3_summary.csv)."""
+    flies' values per set (carrying reading, and 1 z as recorded; d3_means.csv)."""
     d = local_dir(D3_DIR)
     z = np.load(d / f'{D3_TAG}_trials.npz')
     spk = z['spike_counts'].astype(float)
@@ -2155,7 +2155,7 @@ def write_variants(runs: pd.DataFrame, d3: Optional[dict]) -> pd.DataFrame:
 
 def part_d(sub: str) -> dict:
     """Part D (`sub`): 'D1' (the runs D1 and D2 read: `run_d`), 'D3' (`run_d3`), 'score' (no simulation: d1_rates.csv,
-    d1_factors.csv, d2_rates.csv, d2_calibration.csv, d2_cells.csv, d3_recordings.csv, d3_summary.csv, d_family.csv,
+    d1_factors.csv, d2_rates.csv, d2_calibration.csv, d2_cells.csv, d3_recordings.csv, d3_means.csv, d_family.csv,
     variants.csv and d_summary.json), 'all' (the three in turn)."""
     lock = require_lock()
     out = out_dir()
@@ -2183,9 +2183,10 @@ def part_d(sub: str) -> dict:
         write_table(c2, out / 'd2_cells.csv')
         d3 = _read_json(local_dir(D3_DIR) / f'{D3_TAG}.json')
         if d3 is not None:
+            # (not *_summary.csv: archive_model_outputs.py reads every such table as a plain csv for params.csv)
             t3, s3 = d3_tables(lock, fl)
             write_table(t3, out / 'd3_recordings.csv')
-            write_table(s3, out / 'd3_summary.csv')
+            write_table(s3, out / 'd3_means.csv')
             _write_json(out / 'd3_run.json', {k: v for k, v in d3.items()})
         runs_csv = pd.read_csv(local_dir(D_RUNS) / 'runs.csv')
         write_variants(runs_csv, d3)
