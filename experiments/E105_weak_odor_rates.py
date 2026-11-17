@@ -1614,7 +1614,7 @@ D3_DIR = 'D/D3'
 D_TAG = 'D_{wiring}'                 # the part-D runs' variant names (D1 and D2 read the same runs)
 D3_TAG = 'D3_real'
 D_STEM = '{tag}_{cond}'              # E98's B1 layout under outputs/E105_weak_odor_rates/D/runs/
-ADDED_PANEL = 'E105'
+ADDED_PANEL = 'E98'                 # E98's: its `input_labels` reads an added column's label only under this panel
 MIXES = (('2h', 'ma'), ('2h', 'farn'), ('ma', 'farn'))
 EA4_LABEL = 'ea [kiwi-control/kiwi] @ -4.2'
 D2_MAPS = ('linear', 'saturating')   # E73's kept map for C2 is linear (map_choice.csv); the saturating beside
@@ -1738,8 +1738,12 @@ def run_d(wirings: Sequence[str] = ALL_WIRINGS, force: bool = False) -> pd.DataF
             common = [c for c in s_old.columns if c in s_new.columns]
             same_idx = bool(np.array_equal(np.asarray(s_new.index), np.asarray(s_old.index)))
             nd = int((s_new[common].to_numpy() != s_old[common].to_numpy()).sum()) if same_idx else -1
-            ident = dict(wiring=w, condition=ct, n_common=len(common), index_equal=same_idx, counts_differ=nd)
+            want = [c for c in s_old.columns if c in set(tab['label'])]
+            ident = dict(wiring=w, condition=ct, n_common=len(common), n_expected=len(want), index_equal=same_idx,
+                         counts_differ=nd, labels_equal=bool(list(s_new.columns) == list(tab['label'])))
             _write_json(d / f'{D_STEM.format(tag=tag, cond=ct)}_identity.json', ident)
+            if not ident['labels_equal'] or len(common) != len(want):
+                raise RuntimeError(f'{w} {ct}: the run\'s stimulus labels are not the input\'s ({ident})')
             if nd != 0:
                 raise RuntimeError(f'{w} {ct}: the part-D run does not reproduce the saved B1 run ({ident})')
             stem = D_STEM.format(tag=tag, cond=ct)
