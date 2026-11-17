@@ -3,8 +3,10 @@
 made-up rows and tables: the reader refuses raw-only rows, recordings outside the lists and set K without part A's
 lock; the lock's sha256 round trip and its refusals (another sha, other definitions, not committed); the committed lock
 matches the module's definitions; the groups of set K's rows; the entry's counts on a made-up eligibility table; the
-marked-run rules; the ladder's parameters at m = 0, 1 and between; the readings of a made-up recording; and, with the
-shared directory, the eligibility table's counts and lists and the reader against E100's saved set S values."""
+marked-run rules; the ladder's parameters at m = 0, 1 and between; the readings of a made-up recording; part D's counts
+(the class probabilities against `fall_class` on simulated estimates, the counts against E98's `flies_needed`, the split
+rule's check, the Y thresholds against `y_class` on `d_star`); and, with the shared directory, the eligibility table's
+counts and lists and the reader against E100's saved set S values."""
 
 import json
 
@@ -407,3 +409,109 @@ def test_add_d_made_up():
 def test_widened():
     lo, hi = M.widened(0.2, 0.3, 0.45)
     assert lo < 0.2 and hi > 0.45
+
+
+# ---------------------------------------------------------------------------
+# part D: the counts
+
+def test_fall_class_probabilities_match_fall_class():
+    rng = np.random.default_rng(1)
+    z = M.NORMAL_Z90
+    for delta, se in ((np.log(0.7), 0.1), (np.log(0.9), 0.05), (0.0, 0.12), (np.log(1.4), 0.08), (np.log(0.78), 0.3)):
+        p = M.fall_class_probabilities(delta, se)
+        assert sum(float(v) for v in p.values()) == pytest.approx(1.0)
+        est = rng.normal(delta, se, 20000)              # the estimate of ln Q; the split rule and Q's interval from it
+        cls = [M.fall_class(abs(e) > z * se, np.exp(e), np.exp(e - z * se), np.exp(e + z * se)) for e in est]
+        for c in M.FALL_CLASSES:
+            assert np.mean([x == c for x in cls]) == pytest.approx(float(p[c]), abs=0.015)
+    with pytest.raises(ValueError):
+        M.fall_class_probabilities(0.1, 0.0)
+
+
+def test_limit_class():
+    assert M.limit_class(0.7) == 'APL steeper' and M.limit_class(1.3) == 'KCs steeper'
+    assert M.limit_class(0.9) == 'not decided' and M.limit_class(1.0) == 'one function'
+
+
+def test_flies_to_decide_against_e98_flies_needed():
+    E98 = pytest.importorskip('experiments.E98_apl_response_strength')
+    u = np.array([-1.0, 0.0, 1.0])                    # mean 0, SD 1
+    delta, s = np.log(0.25), 1.0                       # Q far below the cut: the split rule alone decides
+    t = M.flies_to_decide(delta + s * u, s * u, n_max=200).set_index(['scenario', 'cls'])
+    r = t.loc[('both', 'APL steeper')]
+    assert r['q'] == pytest.approx(0.25) and r['limit'] == 'APL steeper'
+    # two sets of n flies each: one set's count at sd * sqrt(2)
+    assert r['kc_flies_p80'] == r['apl_flies_p80'] == E98.flies_needed(delta / M.LN2, np.sqrt(2) * s / M.LN2)
+    assert r['new_flies_p50'] <= r['new_flies_p80'] and r['p_max'] > 0.99
+    # KC flies alone cannot shrink the APL set's part: the chance stays below 80 %
+    k = t.loc[('kc', 'APL steeper')]
+    assert k['new_flies_p80'] == np.inf and k['p_max'] < 0.8
+    # Q in the dead zone between the cuts: one function only in a window of counts, never a steeper class
+    t2 = M.flies_to_decide(np.log(0.88) + 0.3 * u, 0.3 * u, n_max=2000).set_index(['scenario', 'cls'])
+    w = t2.loc[('both', 'one function')]
+    assert t2.loc[('both', 'APL steeper'), 'new_flies_p50'] == np.inf
+    assert t2.loc[('both', 'APL steeper'), 'limit'] == 'not decided'
+    assert np.isfinite(w['new_flies_p50']) and np.isfinite(w['new_flies_p50_last']) and w['new_flies_p50_last'] >= w['new_flies_p50']
+    with pytest.raises(ValueError):
+        M.flies_to_decide([0.1], [0.2, 0.3])
+
+
+def test_split_rule_check_made_up():
+    a = np.array([-2.1, -2.0, -1.9, -2.05])
+    k = np.array([0.0, 0.1, -0.1, 0.05])
+    r = M.split_rule_check(a, k)
+    assert r['n_kc_split_rule'] == 4 and r['ldd_q_present'] > np.exp(a.mean() - k.mean())
+    r = M.split_rule_check(a, a + 0.01, max_splits=100)  # a tiny difference: not found within the search
+    assert r['n_kc_split_rule'] == np.inf
+
+
+def _curves():
+    """Made-up ladder curves: three estimates, eight wirings, the ratio rising in d at different slopes."""
+    rows = []
+    for j, s in enumerate(('e1', 'e2', 'e3')):
+        for i in range(8):
+            for m, d in enumerate(np.linspace(0.0, 1.6, 9)):
+                rows.append(dict(stimulus=f'2h:{s}', wiring=f'w{i}', m=float(m), dd=d,
+                                 rr=1.0 + (1.2 + 0.15 * i + 0.3 * j) * d + (0.05 if m == 3 else 0.0)))
+    return pd.DataFrame(rows), {s: f'2h:{s}' for s in ('e1', 'e2', 'e3')}
+
+
+def test_y_bounds_match_y_class_on_d_star():
+    y, labels = _curves()
+    rng = np.random.default_rng(2)
+    for _ in range(60):
+        s_lo = rng.uniform(0.1, 0.8)
+        s_hi = s_lo + rng.uniform(0.0, 0.5)
+        bd = M.y_wiring_bounds(y, '2h', lambda w, g: (s_lo, s_hi), labels=labels)
+        A, B = M.y_thresholds(bd)
+        lo = rng.uniform(1.0, 3.0)
+        hi = lo * rng.uniform(1.0, 1.6)
+        per_est = {}
+        for s, lab in labels.items():
+            cls = [M.y_class((s_lo, s_hi), (lambda r: (r['d_star_lo'], r['d_star_hi']))(
+                M.d_star(g['dd'], g['rr'], np.sqrt(lo * hi), lo, hi))) for _, g in y[y['stimulus'] == lab].groupby('wiring')]
+            per_est[s] = M.y_over_wirings(cls)
+        want = M.y_over_estimates(per_est)
+        assert M.y_odor_class(lo, hi, bd) == want
+        assert (want == 'too weak') == (lo > A) and (want == 'too strong') == (hi < B)
+
+
+def test_se_y_and_ratio_spread():
+    sp = dict(se_ctrl=0.1, cv_tnt_own=0.08, cv_ctrl_flies=0.4, n_ctrl_flies=12, n_tnt_recordings=3)
+    m = np.arange(0, 2001)
+    se = M._se_y(sp, 'tnt_own', m)
+    assert se[0] == pytest.approx(np.sqrt(0.01 + 0.08 ** 2 / 3)) and se[-1] > 0.1 and np.all(np.diff(se) <= 0)
+    assert M._se_y(sp, 'tnt_ctrl_spread', m)[0] == pytest.approx(np.sqrt(0.01 + 0.16 / 3))
+    b = M._se_y(sp, 'both_own', m)
+    assert b[0] == pytest.approx(se[0]) and b[-1] < 0.01
+    rows = []
+    for k, (g, fly, r) in enumerate([('control', 'c1', 0.05), ('control', 'c1', 0.07), ('control', 'c2', 0.06),
+                                     ('control', 'c3', 0.06), ('apl_output_blocked', 't1', 0.15),
+                                     ('apl_output_blocked', 't1', 0.17), ('apl_output_blocked', 't2', 0.19)]):
+        rows.append(dict(recording=f'r{k}', genotype_group=g, fly=fly, odor='2h @ -7', rate=r))
+        rows.append(dict(recording=f'r{k}', genotype_group=g, fly=fly, odor='pfo @ 0', rate=0.01))
+    rates = pd.DataFrame(rows)
+    s = M.ratio_spread(rates, '2h @ -7', n_boot=2000)
+    assert s['ratio'] == pytest.approx(M.flies_rate_ratio(rates, '2h @ -7', n_boot=2000)['ratio'])
+    assert s['cv_tnt_own'] == pytest.approx(0.02 / 0.17) and s['cv_ctrl_flies'] == pytest.approx(0.0)
+    assert s['n_ctrl_flies'] == 3 and s['n_tnt_recordings'] == 3 and s['se_ctrl'] == pytest.approx(0.0)

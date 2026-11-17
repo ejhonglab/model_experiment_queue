@@ -60,6 +60,13 @@ Parts (CLI `--part`):
   B1 (the response rate with APL on as a function of d), B2 (d*, the strength the KCs imply), Y1 and Y2 with their
   held rule, B3 described.
 - C: the verdicts X1, X2, X3, Y1 and Y2 in one table with every partner reading.
+- D (added with the write-up; no simulation, from parts A's and B's saved tables): the counts outcomes (e) and (f) ask
+  for. X1: per fall and reading, the new flies (KC flies alone, or the same number in each set) at which a class would
+  be reached by the typical draw and with 80 % power if the present Q and between-fly SDs were the truth
+  (`flies_to_decide`, the normal approximation of the split rule and of Q's interval, as E98's `flies_needed`; checked
+  against the split rule itself, E103's `least_detectable`). Y1 (and Y2): the flies' ratio above which an odor is too
+  weak (`y_thresholds`), and the new blocked recordings (the control flies as they are) or new flies of each genotype at
+  which it would be (`y_counts`). d_x1_counts.csv, d_y_counts.csv, d_summary.json.
 
 Readings of the entry (fixed in part 0, before any response of set K; each also in p0_identity.json or the lock):
 - "45 hold a paa series, 46 pa and 37 ms" are the K6F recordings whose stimulus file presents the odor ('n_holding').
@@ -103,6 +110,8 @@ Usage (from the repository root):
     ./venv/bin/python -u -m experiments.E104_kc_calyx_vs_apl --part A
     env OMP_NUM_THREADS=11 OMP_THREAD_LIMIT=11 PYTHONUNBUFFERED=1 nice -n 10 ./venv/bin/python -u \\
         -m experiments.E104_kc_calyx_vs_apl --part B --threads 11
+    ./venv/bin/python -u -m experiments.E104_kc_calyx_vs_apl --part C
+    ./venv/bin/python -u -m experiments.E104_kc_calyx_vs_apl --part D
 
 Outputs: results/E104_kc_calyx_vs_apl/ in the shared directory; part B's runs under outputs/E104_kc_calyx_vs_apl/B/,
 archived to data/model_outputs/E104_kc_calyx_vs_apl/ (m and the absolute APL scales of every run in params.csv).
@@ -112,6 +121,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import re
 import socket
@@ -1959,6 +1969,337 @@ def part_b(wirings: Sequence[str] = ALL_WIRINGS, runs: bool = True) -> dict:
     return summ
 
 
+# ---------------------------------------------------------------------------
+# part D: the counts that outcomes (e) and (f) ask for (no simulation; added with the write-up, 2026-11-17). How many
+# flies would decide X1 on each fall, and how many recordings with APL output blocked would bound Y1, if the present
+# means and between-fly spreads were the truth (normal approximations, as E98's `flies_needed`)
+
+POWER_Z_B = 0.8416            # one-sided 80 % (E98's POWER_Z)
+DECIDE_P = (0.5, 0.8)         # a class reached by the typical draw (P 0.5: the next flies like the present), or 80 % power
+COUNT_MAX = 5000              # the most new flies (or recordings) searched
+SPLIT_CHECK_MAX_SPLITS = 300_000   # the exact split rule's check (E103's `least_detectable`) while the splits number this
+X_ROUTES = ('APL steeper', 'one function', 'KCs steeper')
+Y_SCENARIOS = ('tnt_own', 'tnt_ctrl_spread', 'both_own', 'both_ctrl_spread')
+LN2 = float(np.log(2.0))
+
+
+def fall_class_probabilities(delta: float, se, z: float = NORMAL_Z90) -> Dict[str, np.ndarray]:
+    """The chance of each class of a fall (`fall_class`) when the estimate of ln Q is normal about `delta` (the true ln
+    Q) with SD `se` (scalar or array): the split rule says differ when |estimate| > z se (two-sided 10 %, the normal
+    approximation E98's `flies_needed` makes), and Q's 90 % interval is the estimate +- z se. 'APL steeper': the
+    estimate below both ln Q_APL_STEEPER and -z se; 'KCs steeper': above both ln Q_KC_STEEPER and z se; 'one function':
+    within +- z se with the interval inside Q_ONE_FUNCTION; 'not decided': the rest."""
+    from scipy.stats import norm
+    d = float(delta)
+    s = np.asarray(se, dtype=float)
+    if not np.isfinite(d) or np.any(~np.isfinite(s) | (s <= 0)):
+        raise ValueError(f'delta must be finite and se positive: {delta}, {se}')
+    zs = z * s
+    p_apl = norm.cdf((np.minimum(np.log(Q_APL_STEEPER), -zs) - d) / s)
+    p_kc = norm.sf((np.maximum(np.log(Q_KC_STEEPER), zs) - d) / s)
+    lo = np.maximum(-zs, np.log(Q_ONE_FUNCTION[0]) + zs)
+    hi = np.minimum(zs, np.log(Q_ONE_FUNCTION[1]) - zs)
+    p_one = np.where(hi > lo, norm.cdf((hi - d) / s) - norm.cdf((lo - d) / s), 0.0)
+    return {'APL steeper': p_apl, 'KCs steeper': p_kc, 'one function': p_one,
+            'not decided': np.clip(1.0 - p_apl - p_kc - p_one, 0.0, 1.0)}
+
+
+def limit_class(q: float) -> str:
+    """The class of a fall once the split rule detects every difference (flies without bound): 'APL steeper' below
+    Q_APL_STEEPER, 'KCs steeper' above Q_KC_STEEPER, 'one function' at Q = 1 exactly, otherwise 'not decided' (Q between
+    the cuts: the sets differ, and Q is too near 1 for either steeper class)."""
+    if q < Q_APL_STEEPER:
+        return 'APL steeper'
+    if q > Q_KC_STEEPER:
+        return 'KCs steeper'
+    return 'one function' if q == 1.0 else 'not decided'
+
+
+def _reach(m: np.ndarray, p: np.ndarray, level: float) -> Tuple[float, float]:
+    """The first and the last count in `m` at which `p` is at least `level` (inf, inf if never; the last is inf while p
+    is still at the level at the search's end)."""
+    i = np.flatnonzero(p >= level)
+    if not len(i):
+        return np.inf, np.inf
+    return float(m[i[0]]), (np.inf if i[-1] == len(m) - 1 else float(m[i[-1]]))
+
+
+def flies_to_decide(apl_log: Sequence[float], kc_log: Sequence[float], n_max: int = COUNT_MAX) -> pd.DataFrame:
+    """How many flies would decide a fall if the present flies were typical: ln Q's true value the present difference
+    of mean (natural) log falls, each set's between-fly SD its present one (`fall_class_probabilities`). Scenarios:
+    'kc', more KC flies with the APL set as it is; 'both', the same number of new flies in each set. Per scenario and
+    route (X_ROUTES): the chance at the present flies; per level of DECIDE_P the least number of new flies at which the
+    route reaches it ('new_flies_p50', with each set's flies in all) and the last ('_last', inf while it still holds at
+    `n_max`); the largest chance and where. With the present Q, the SDs (log2) and the class at many flies ('limit')."""
+    a = np.asarray(apl_log, dtype=float)
+    k = np.asarray(kc_log, dtype=float)
+    a, k = a[np.isfinite(a)], k[np.isfinite(k)]
+    na, nk = len(a), len(k)
+    if na < 2 or nk < 2:
+        raise ValueError(f'need two flies or more in each set: {na} APL, {nk} KC')
+    delta = float(a.mean() - k.mean())
+    sa, sk = float(a.std(ddof=1)), float(k.std(ddof=1))
+    if sa == 0 and sk == 0:
+        raise ValueError('both sets have no spread')
+    meta = dict(n_apl=na, n_kc=nk, q=float(np.exp(delta)), sd_apl_log2=sa / LN2, sd_kc_log2=sk / LN2,
+                limit=limit_class(float(np.exp(delta))))
+    m = np.arange(0, int(n_max) + 1)
+    p_now = fall_class_probabilities(delta, np.sqrt(sa ** 2 / na + sk ** 2 / nk))
+    rows = []
+    for sc, n_a, n_k in (('kc', np.full(m.shape, na), nk + m), ('both', na + m, nk + m)):
+        p = fall_class_probabilities(delta, np.sqrt(sa ** 2 / n_a + sk ** 2 / n_k))
+        for c in X_ROUTES:
+            row = dict(scenario=sc, cls=c, **meta, p_present=float(p_now[c]))
+            for lev in DECIDE_P:
+                tag = f'p{int(round(100 * lev))}'
+                first, last = _reach(m, p[c], lev)
+                row[f'new_flies_{tag}'] = first
+                row[f'apl_flies_{tag}'] = float(na + (first if sc == 'both' else 0))
+                row[f'kc_flies_{tag}'] = float(nk + first)
+                row[f'new_flies_{tag}_last'] = last
+            j = int(np.argmax(p[c]))
+            row.update(p_max=float(p[c][j]), new_flies_at_max=float(m[j]))
+            rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def split_rule_check(apl_log: Sequence[float], kc_log: Sequence[float],
+                     max_splits: int = SPLIT_CHECK_MAX_SPLITS) -> dict:
+    """The normal approximation against the split rule itself (E103's `least_detectable`): the APL flies as they are,
+    n KC flies spread like the present ones (normal scores at their SD) about APL's mean shifted toward the KCs' side.
+    The least detectable Q at the present KC count, and the least KC count (searched while the splits number at most
+    `max_splits`) at which the present Q is detected: the typical draw's count for 'differ', which both steeper classes
+    need (inf if not found in the search)."""
+    from experiments import E103_apl_across_odors_heldout as E103
+    a = np.asarray(apl_log, dtype=float)
+    k = np.asarray(kc_log, dtype=float)
+    a, k = a[np.isfinite(a)] / LN2, k[np.isfinite(k)] / LN2
+    obs = float(k.mean() - a.mean())             # log2, positive when APL's fall is the steeper
+    key = 'ldd_up_log2' if obs >= 0 else 'ldd_down_log2'
+    sd = float(k.std(ddof=1))
+
+    def ldd(n):
+        return float(E103.least_detectable(a, n_new=n, sd_log2=sd).get(key, np.nan))
+
+    def q_of(v):
+        return float(2 ** (-v)) if obs >= 0 else float(2 ** v)
+    now = ldd(len(k))
+    out = dict(ldd_q_present=q_of(now), n_kc_split_rule=np.inf, n_kc_searched=len(k))
+    n = len(k)
+    while math.comb(len(a) + n, n) <= max_splits:
+        v = ldd(n) if n != len(k) else now
+        out['n_kc_searched'] = n
+        if np.isfinite(v) and v <= abs(obs):
+            out['n_kc_split_rule'] = float(n)
+            break
+        n += 1
+    return out
+
+
+def x1_counts(vals: pd.DataFrame, n_max: int = COUNT_MAX, split_check: Sequence[str] = ('carrying',)
+              ) -> Tuple[pd.DataFrame, dict]:
+    """Per reading of `reading_specs` and fall of FALLS, `flies_to_decide` on the per-fly log falls (with
+    `split_rule_check` for the readings in `split_check`). The summary: per reading, scenario and level the new flies at
+    which X1 would reach each route on X1_MIN falls (the X1_MIN-th smallest over the falls), and held, the most over the
+    readings (new flies count alike in every reading: a reading that leaves a KC fly out still gains the same new
+    ones)."""
+    kc_flies = sorted(vals.loc[vals['set'].isin(KC_SETS_CARRYING), 'fly'].unique())
+    specs = reading_specs(kc_flies)
+    rows = []
+    for name, spec in specs.items():
+        for fall in FALLS:
+            a = select(vals, spec['apl_sets'], spec, 'apl')
+            k = select(vals, spec['kc_sets'], spec, 'kc')
+            fa = fly_falls(recording_falls(a, [fall], spec['value']))
+            fk = fly_falls(recording_falls(k, [fall], spec['value']))
+            t = flies_to_decide(fa.to_numpy(float), fk.to_numpy(float), n_max)
+            t.insert(0, 'fall', fall[0])
+            t.insert(0, 'reading', name)
+            if name in split_check:
+                sc = split_rule_check(fa.to_numpy(float), fk.to_numpy(float))
+                for c, v in sc.items():
+                    t[f'split_rule_{c}'] = v
+            rows.append(t)
+    t = pd.concat(rows, ignore_index=True)
+    summ = {}
+    for (rd, sc), g in t.groupby(['reading', 'scenario'], sort=False):
+        d = {}
+        for c in X_ROUTES:
+            x = g[g['cls'] == c]
+            d[c] = {f'p{int(round(100 * lev))}': float(np.sort(x[f'new_flies_p{int(round(100 * lev))}'])[X1_MIN - 1])
+                    for lev in DECIDE_P}
+        summ.setdefault(rd, {})[sc] = d
+    held = {sc: {c: {lv: max(summ[rd][sc][c][lv] for rd in summ) for lv in summ['carrying'][sc][c]}
+                 for c in X_ROUTES} for sc in ('kc', 'both')}
+    return t, dict(by_reading=summ, held=held)
+
+
+def ratio_spread(rates: pd.DataFrame, odor_label: str, solvent: bool = False, n_boot: int = N_BOOT,
+                 seed: int = SEED) -> dict:
+    """The parts of the flies' response-rate ratio's spread (`flies_rate_ratio`'s reading, its control draws): the
+    ratio; 'se_ctrl', the SD of the log of the control flies' mean rate over `n_boot` bootstrap draws of flies;
+    'cv_tnt_own', the blocked recordings' SD over their mean; 'cv_ctrl_flies', the control flies' (SD of fly means over
+    their mean), the spread new blocked flies would have if they varied as the control flies do; the counts."""
+    x = rates[rates['odor'] == odor_label].set_index('recording')
+    if solvent:
+        s = rates[rates['odor'] == SOLVENT_ODOR].set_index('recording')['rate']
+        x = x.assign(rate=x['rate'] - s.reindex(x.index).to_numpy(float))
+    c = x[x['genotype_group'] == 'control']
+    b = x[x['genotype_group'] == 'apl_output_blocked']
+    flies = sorted(c['fly'].unique())
+    by_fly = [c.loc[c['fly'] == f, 'rate'].to_numpy(float) for f in flies]
+    rng = np.random.default_rng(seed)
+    idx = rng.integers(0, len(flies), size=(n_boot, len(flies)))
+    sums = np.array([v.sum() for v in by_fly])
+    ns = np.array([len(v) for v in by_fly])
+    ctrl_b = sums[idx].sum(axis=1) / ns[idx].sum(axis=1)
+    fm = np.array([v.mean() for v in by_fly])
+    ctrl, tnt = float(c['rate'].mean()), float(b['rate'].mean())
+    return dict(stimulus=odor_label, ratio=tnt / ctrl, se_ctrl=float(np.std(np.log(ctrl_b))),
+                cv_tnt_own=float(b['rate'].std(ddof=1) / tnt), cv_ctrl_flies=float(fm.std(ddof=1) / fm.mean()),
+                n_ctrl_flies=len(flies), n_tnt_recordings=int(len(b)), n_tnt_flies=int(b['fly'].nunique()))
+
+
+def y_wiring_bounds(y: pd.DataFrame, odor: str, strength, labels: Optional[Dict[str, str]] = None) -> pd.DataFrame:
+    """Per estimate and wiring the family's response-rate ratio (`reading_curve`'s 'rr' against 'dd', made
+    non-decreasing) at a strength's two ends: 'a' at its top, 'b' at its bottom, each clipped to the ladder's range.
+    `strength(wiring, g)` gives (lo, hi); `labels` maps each estimate to the odor's stimulus label (default
+    `model_label`). A flies' ratio interval [lo, hi] makes a wiring 'too weak' when lo > a (then d*'s lower end lies
+    above the strength), 'too strong' when hi < b, as `y_class` on `d_star` does."""
+    labels = {s: model_label(odor, s) for s in X2_ESTIMATE_SESSIONS} if labels is None else labels
+    rows = []
+    for s, lab in labels.items():
+        for w, g in y[y['stimulus'] == lab].groupby('wiring', sort=False):
+            lo, hi = strength(w, g)
+            dd = g['dd'].to_numpy(float)
+            rr = g['rr'].to_numpy(float)
+            ok = np.isfinite(dd) & np.isfinite(rr)
+
+            def f(v):
+                return interp_monotone(dd, rr, float(np.clip(v, dd[ok].min(), dd[ok].max())), increasing=True)
+            rows.append(dict(estimate=s, wiring=w, s_lo=float(lo), s_hi=float(hi), a=f(hi), b=f(lo)))
+    return pd.DataFrame(rows)
+
+
+def y_odor_class(lo: float, hi: float, bounds: pd.DataFrame) -> str:
+    """An odor's class from a flies' ratio interval [lo, hi] and `y_wiring_bounds`: per wiring too weak, too strong or
+    inside; over the wirings (`y_over_wirings`) and the estimates (`y_over_estimates`)."""
+    per_est = {}
+    for s, g in bounds.groupby('estimate', sort=False):
+        cls = np.where(lo > g['a'], 'too weak', np.where(hi < g['b'], 'too strong', 'inside'))
+        per_est[s] = y_over_wirings(list(cls))
+    return y_over_estimates(per_est)
+
+
+def y_thresholds(bounds: pd.DataFrame, min_wirings: int = X2_MIN_WIRINGS) -> Tuple[float, float]:
+    """The flies' ratio above which an odor is too weak under every estimate (A: the most over the estimates of the
+    `min_wirings`-th smallest 'a') and below which it is too strong under every estimate (B: the least of the
+    (n - `min_wirings` + 1)-th smallest 'b'); `y_odor_class` gives 'too weak' iff lo > A and 'too strong' iff hi < B."""
+    A, B = -np.inf, np.inf
+    for _, g in bounds.groupby('estimate', sort=False):
+        a, b = np.sort(g['a'].to_numpy(float)), np.sort(g['b'].to_numpy(float))
+        A = max(A, float(a[min_wirings - 1]))
+        B = min(B, float(b[len(b) - min_wirings]))
+    return A, B
+
+
+def _se_y(sp: dict, scenario: str, m: np.ndarray) -> np.ndarray:
+    """The SD of the log of the flies' ratio with `m` new blocked recordings ('tnt_*': the control flies as they are)
+    or `m` new flies of each genotype ('both_*'), new blocked flies spread as the present three ('_own') or as the
+    control flies ('_ctrl_spread')."""
+    cv = sp['cv_tnt_own'] if scenario.endswith('_own') else sp['cv_ctrl_flies']
+    nb = sp['n_tnt_recordings'] + m
+    if scenario.startswith('tnt'):
+        sc2 = np.full(m.shape, sp['se_ctrl'] ** 2)
+    else:
+        sc2 = sp['se_ctrl'] ** 2 * sp['n_ctrl_flies'] / (sp['n_ctrl_flies'] + m)
+    return np.sqrt(sc2 + cv ** 2 / nb)
+
+
+def y_counts(x: pd.DataFrame, panel: pd.DataFrame, targets: pd.DataFrame, apl: pd.DataFrame,
+             rates_all: Optional[pd.DataFrame] = None, rates_first: Optional[pd.DataFrame] = None,
+             n_max: int = COUNT_MAX) -> Tuple[pd.DataFrame, dict]:
+    """How many blocked recordings would bound Y1 (and Y2) if the flies' present ratio were the truth: per Y reading,
+    verdict and odor, the thresholds A and B (`y_thresholds`), the class now (the saved interval, `y_odor_class`; the
+    identity with part B is checked) and at the limit (lo = hi = the ratio), and per scenario (Y_SCENARIOS, `_se_y`) and
+    class (too weak, too strong) the chance with nothing added and the least m at which it reaches each of DECIDE_P (the
+    ratio's estimate lognormal about the present one with SD `_se_y`, its 90 % interval +- NORMAL_Z90 SD). The summary:
+    per reading, verdict, scenario and level the m at which Y_MIN_ODORS odors are too weak (the Y_MIN_ODORS-th smallest
+    over the odors), and held, the most over the readings."""
+    from scipy.stats import norm
+    rates_all = weak_kc_rates() if rates_all is None else rates_all
+    rates_first = weak_kc_rates(FIRST_TRIALS) if rates_first is None else rates_first
+    saved = _read_json(out_dir() / 'b_summary.json')
+    m = np.arange(0, int(n_max) + 1)
+    rows = []
+    for rd in Y_READINGS:
+        y = reading_curve(x, rd, panel)
+        for o in FLIES_WEAK:
+            lab = flies_stim_label(o)
+            t = targets[(targets['odor'] == o) & (targets['reading'] == rd)].iloc[0]
+            sp = ratio_spread(rates_first if rd == 'first_three_trials' else rates_all, lab,
+                              solvent=rd == 'solvent_subtracted')
+            r = float(t['ratio'])
+            ap = apl[apl['odor'] == o].iloc[0]
+            for yk, strength in (('y1', lambda w, g, ap=ap: (ap['apl_lo90'], ap['apl_hi90'])),
+                                 ('y2', lambda w, g: (float(g.loc[g['m'] == 1.0, 'dd'].iloc[0]),) * 2)):
+                bd = y_wiring_bounds(y, o, strength)
+                A, B = y_thresholds(bd)
+                now = y_odor_class(float(t['lo90']), float(t['hi90']), bd)
+                part_b = (saved or {}).get(yk, {}).get('by_reading', {}).get(rd, {}).get('per_odor', {}).get(o, {})
+                base = dict(reading=rd, verdict=yk.upper(), odor=o, flies_ratio=r, flies_lo90=float(t['lo90']),
+                            flies_hi90=float(t['hi90']), A_too_weak_above=A, B_too_strong_below=B, class_now=now,
+                            class_part_b=part_b.get('over_estimates', ''), class_limit=y_odor_class(r, r, bd),
+                            se_ctrl=sp['se_ctrl'], cv_tnt_own=sp['cv_tnt_own'], cv_ctrl_flies=sp['cv_ctrl_flies'],
+                            n_ctrl_flies=sp['n_ctrl_flies'], n_tnt_recordings=sp['n_tnt_recordings'])
+                for scn in Y_SCENARIOS:
+                    se = _se_y(sp, scn, m)
+                    for cls, gap in (('too weak', np.log(r) - np.log(A)), ('too strong', np.log(B) - np.log(r))):
+                        p = norm.cdf((gap - NORMAL_Z90 * se) / se) if np.isfinite(gap) else np.zeros(m.shape)
+                        row = dict(base, scenario=scn, cls=cls, log_gap=float(gap), se_present=float(se[0]),
+                                   p_present=float(p[0]))
+                        for lev in DECIDE_P:
+                            row[f'new_p{int(round(100 * lev))}'] = _reach(m, p, lev)[0]
+                        row['se_floor'] = sp['se_ctrl'] if scn.startswith('tnt') else 0.0
+                        rows.append(row)
+    t = pd.DataFrame(rows)
+    ident = bool((t['class_now'] == t['class_part_b']).all()) if saved else None
+    summ = {}
+    for (rd, yk, scn), g in t[t['cls'] == 'too weak'].groupby(['reading', 'verdict', 'scenario'], sort=False):
+        summ.setdefault(yk, {}).setdefault(rd, {})[scn] = {
+            f'p{int(round(100 * lev))}': float(np.sort(g[f'new_p{int(round(100 * lev))}'])[Y_MIN_ODORS - 1])
+            for lev in DECIDE_P}
+    held = {yk: {scn: {lv: max(summ[yk][rd][scn][lv] for rd in summ[yk]) for lv in summ[yk]['carrying'][scn]}
+                 for scn in Y_SCENARIOS} for yk in summ}
+    limit = {yk: {rd: y_verdict(dict(zip(g['odor'], g['class_limit'])))
+                  for rd, g in t[(t['verdict'] == yk) & (t['scenario'] == Y_SCENARIOS[0]) & (t['cls'] == 'too weak')]
+                  .groupby('reading', sort=False)} for yk in ('Y1', 'Y2')}
+    return t, dict(identity_with_part_b=ident, too_weak_by_reading=summ, too_weak_held=held, limit=limit)
+
+
+def part_d() -> dict:
+    """Part D (no simulation): the counts that outcomes (e) and (f) ask for, from part A's and part B's saved tables:
+    d_x1_counts.csv (`x1_counts`), d_y_counts.csv (`y_counts`) and d_summary.json."""
+    out = out_dir()
+    vals = read_table(out / 'a_per_stimulus.csv')
+    x1t, x1s = x1_counts(vals)
+    write_table(x1t, out / 'd_x1_counts.csv')
+    x = read_table(out / 'b_model.csv')
+    panel = read_table(out / 'b_panel.csv')
+    targets = read_table(out / 'b_flies.csv')
+    apl = read_table(out / 'b_flies_apl.csv')
+    yt, ys = y_counts(x, panel, targets, apl)
+    write_table(yt, out / 'd_y_counts.csv')
+    summ = dict(caveat=QUALITY_CAVEAT, decide_p=list(DECIDE_P), count_max=COUNT_MAX,
+                note=('normal approximations with the present means and between-fly spreads as the truth; new flies '
+                      '(X1: per set; Y: blocked recordings, or flies of each genotype) beyond the present ones; inf: '
+                      'not reached within count_max'),
+                x1=x1s, y=ys)
+    _write_json(out / 'd_summary.json', summ)
+    provenance('D')
+    return summ
+
+
 VARIANT_PARAM_COLS = ('fixed_thr', 'wAPLKC_scale', 'wKCAPL_scale', 'wAPLPN_scale', 'wPNAPL_scale', 'kc_kc_inh',
                       'kc_kc_tau', 'pn_inhadd', 'pn_inhsc', 'k')
 
@@ -2026,7 +2367,7 @@ def part_c() -> dict:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
-    ap.add_argument('--part', required=True, choices=('0', 'A', 'B', 'C', 'variants'))
+    ap.add_argument('--part', required=True, choices=('0', 'A', 'B', 'C', 'D', 'variants'))
     ap.add_argument('--runs', action='store_true', help="part 0: also the runner's identities on the real wiring")
     ap.add_argument('--write-lock', action='store_true',
                     help="part 0: write part A's lock once every identity passes (commit it before part A)")
@@ -2049,6 +2390,8 @@ def main() -> None:
     elif a.part == 'B':
         print(json.dumps(part_b(tuple(x for x in a.wirings.split(',') if x), runs=not a.no_runs), indent=1,
                          default=_json_default), flush=True)
+    elif a.part == 'D':
+        print(json.dumps(part_d(), indent=1, default=_json_default), flush=True)
     elif a.part == 'variants':
         v = write_variants()
         print(f'variants.csv: {len(v)} rows', flush=True)
