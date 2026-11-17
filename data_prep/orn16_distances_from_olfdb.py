@@ -32,6 +32,9 @@ orn_deltas_apl16*.csv files there are not touched):
                                            its values change, so that a process reading it keeps them
   orn16_corrdist_olfdb_36glom_pairs.csv    120 pairs: the reference, the mixed recipe, the method each used,
                                            and the zero-filled value of the original report
+  orn16_flymean_vectors_olfdb_36glom.csv   36 glomeruli x 16 odors, the fly-mean vectors the reference correlates
+                                           (since 2026-11-17, for the registry's ORN cosine distance,
+                                           `orn_mean_dist_cosine` in kcq/data_targets.py)
   orn16_corrdist_olfdb_36glom.json       provenance (olfdb dataset ids and sha256, glomeruli, odors,
                                          this repository's and al_analysis's commits)
 Usage: ./venv/bin/python data_prep/orn16_distances_from_olfdb.py
@@ -54,6 +57,7 @@ OLFDB = 'http://hal:8080'
 DATASETS = {'megamat': 1, 'validation2': 4}
 OUT = H.shared_dir() / 'data' / 'model_outputs' / 'inputs'
 STEM = 'orn16_corrdist_olfdb_36glom'
+VECTORS = 'orn16_flymean_vectors_olfdb_36glom.csv'
 
 
 def fetch(ds_id: int) -> tuple:
@@ -129,6 +133,7 @@ def main() -> None:
         return sq
     OUT.mkdir(parents=True, exist_ok=True)
     square('distance').to_csv(OUT / f'{STEM}_flymean.csv')
+    V.to_csv(OUT / VECTORS)
     mixed_sq, mixed_path = square('distance_mixed'), OUT / f'{STEM}.csv'
     if not (mixed_path.exists() and np.allclose(pd.read_csv(mixed_path, index_col=0).loc[H.APL16_ODORS, H.APL16_ODORS].to_numpy(),
                                                 mixed_sq.to_numpy(), rtol=0, atol=1e-12)):
@@ -140,6 +145,7 @@ def main() -> None:
             for p in DATASETS},
         glomeruli=gloms, odors={o: f'{o} @ {H.ORN_INPUT_CONC[o]:g}' for o in H.APL16_ODORS},
         reference=f'{STEM}_flymean.csv: 1 - Pearson r between fly-mean glomerulus vectors (36 glomeruli; trial means per fly, then the mean over the panel\'s flies), all 120 pairs (since 2026-11-13)',
+        vectors=f'{VECTORS}: the fly-mean glomerulus vectors the reference correlates (glomeruli x odors)',
         mixed=f'{STEM}.csv (until 2026-11-13): within a panel al_analysis.al_util.mean_of_fly_corrs (trial means; per-fly Pearson r across that fly\'s ROIs among the 36; mean over flies ignoring NaN), distance = 1 - mean r; across panels the fly-mean vectors',
         approx_conc_note=H.APPROX_CONC_NOTE)
     (OUT / f'{STEM}.json').write_text(json.dumps(prov, indent=1, default=str) + '\n')

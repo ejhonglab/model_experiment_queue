@@ -38,6 +38,8 @@ INPUTS = {
     'kc_fractions': YANG / 'response_fraction_per_recording.csv',
     'kc_trialmeans': YANG / 'trialmean_responses_long.parquet',
     'orn': H.shared_dir() / 'data' / 'model_outputs' / 'inputs' / 'orn16_corrdist_olfdb_36glom_flymean.csv',
+    # the fly-mean glomerulus vectors that matrix correlates (data_prep/orn16_distances_from_olfdb.py)
+    'orn_vectors': H.shared_dir() / 'data' / 'model_outputs' / 'inputs' / 'orn16_flymean_vectors_olfdb_36glom.csv',
     'ref66': H.apl_pair_dir() / 'shared12_pairs.csv',
     'e7_blocks': H.shared_dir() / 'results' / 'E7_confound_controls' / 'B_blocks_graded.csv',
     'kc_trials_ctrl': H.yang_data_dir() / 'TNT3c' / 'dataset_20_long.csv',
@@ -53,6 +55,16 @@ INPUTS = {
 
 def _sha(p: Path) -> str:
     return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+
+
+def orn_cosine_pairs(path: Optional[Path] = None) -> pd.Series:
+    """The 120 ORN pair distances as 1 - cosine similarity between the two odors' fly-mean glomerulus vectors,
+    indexed by (odor_a, odor_b) in the APL16 order; the vectors are those `kcq.harness.orn16_consensus_pairs()`
+    correlates."""
+    V = pd.read_csv(path or INPUTS['orn_vectors'], index_col=0)[list(H.APL16_ODORS)].astype(float)
+    odors = list(H.APL16_ODORS)
+    return pd.Series({(a, b): 1.0 - float(V[a] @ V[b]) / float(np.linalg.norm(V[a]) * np.linalg.norm(V[b]))
+        for i, a in enumerate(odors) for b in odors[i + 1:]})
 
 
 def apl_effect_resamples(recs: dict, seed: int = 0, parts: Optional[dict] = None) -> tuple:
@@ -311,6 +323,17 @@ def build() -> dict:
         add(f'{name}_n_gt08', int((m > 0.8).sum()), f'{lab}: number of pairs more than 0.8 apart', fn, inp)
         add(f'{name}_within_mean', m[within].mean(), f'{lab}: mean distance of pairs within a chemical group', fn, inp)
         add(f'{name}_fruity_small_mean', m[block].mean(), f'{lab}: mean distance of the 9 fruity x small-ester pairs', fn, inp)
+    # the level of the KCs against the ORNs with one measure on both sides (Yang's question of 2026-11-16;
+    # unresolved_issues.md): the entries above give the ORNs as 1 - Pearson r and the KCs as 1 - cosine
+    fn = 'data_targets.build (one measure on both sides)'
+    add('orn_mean_dist_cosine', orn_cosine_pairs().mean(),
+        'ORNs: mean pair distance over the 120 pairs as 1 - cosine similarity between the two odors\' fly-mean glomerulus '
+        'vectors (36 glomeruli; the vectors orn_mean_dist correlates), the measure of the KC entries', fn, ['orn_vectors'])
+    for g, name in (('TNT3c', 'ctrl'), ('TNT', 'tnt')):
+        lab = 'control flies' if g == 'TNT3c' else 'APL output blocked (TNT)'
+        add(f'{name}_mean_dist_pearson', H.yang_recording_rdms(g, 'pearson').mean().mean(),
+            f'KCs, {lab}: mean pair distance over the 120 pairs as 1 - Pearson r across all KCs of a recording, mean over '
+            'recordings, the measure of the ORN entries', fn, ['kc_rdms'])
     add('rho_ctrl_orn', H.spearman(kc['TNT3c'], orn), 'ρ on odor-odor distances, KCs in control flies vs ORNs (120 pairs)', 'harness.spearman', ['kc_rdms', 'orn'])
     add('rho_tnt_orn', H.spearman(kc['TNT'], orn), 'ρ on odor-odor distances, KCs with APL output blocked (TNT) vs ORNs', 'harness.spearman', ['kc_rdms', 'orn'])
 
