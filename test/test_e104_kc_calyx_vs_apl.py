@@ -234,3 +234,175 @@ def test_eligibility_on_the_copy():
 def test_reader_reproduces_e100_set_s():
     res, _ = M.s_identity()
     assert res['passed'] and res['max_abs_diff'] == 0.0 and res['n_recordings'] == 29
+
+
+# ---------------------------------------------------------------------------
+# part A on made-up sets
+
+def test_fall_class():
+    assert M.fall_class(True, 0.5, 0.4, 0.7) == 'APL steeper'
+    assert M.fall_class(True, 1.5, 1.3, 1.8) == 'KCs steeper'
+    assert M.fall_class(True, 0.9, 0.7, 1.1) == 'not decided'           # they differ but Q is near 1
+    assert M.fall_class(False, 1.0, 0.7, 1.4) == 'one function'
+    assert M.fall_class(False, 1.0, 0.6, 1.4) == 'not decided'          # Q's interval reaches outside 0.67 to 1.5
+    assert M.fall_class(False, 0.5, 0.3, 0.8) == 'not decided'          # steep, but the sets do not differ
+    assert M.fall_class(False, np.nan, np.nan, np.nan) == 'not decided'
+
+
+def test_split_rule_on_known_sets():
+    a = pd.Series(np.log([0.3, 0.32, 0.28, 0.31, 0.29, 0.3, 0.33, 0.27, 0.3, 0.31]), index=[f'a{i}' for i in range(10)])
+    b = pd.Series(np.log([0.9, 0.85, 0.95, 0.88, 0.92]), index=[f'b{i}' for i in range(5)])
+    r = M.split_rule(a, b)
+    assert r['differ'] and r['n_splits'] == 3003 and r['share'] < 0.01
+    same = M.split_rule(a.iloc[:5], pd.Series(a.iloc[5:].to_numpy(), index=[f'c{i}' for i in range(5)]))
+    assert not same['differ']
+    # the vectorized share is E98's `pulse_permutation`'s
+    E98 = pytest.importorskip('experiments.E98_apl_response_strength')
+    s = pd.concat([a.iloc[:4], b.iloc[:3]])
+    assert M.split_rule(a.iloc[:4], b.iloc[:3])['share'] == pytest.approx(E98.pulse_permutation(s, list(b.index[:3]))['share'])
+
+
+def test_q_of_fall_and_set_value():
+    a = pd.Series(np.log([0.4, 0.5, 0.45, 0.55]), index=list('abcd'))
+    k = pd.Series(np.log([0.8, 0.9, 0.85]), index=list('xyz'))
+    q = M.q_of_fall(a, k, n_boot=2000)
+    assert q['q'] == pytest.approx(np.exp(a.mean() - k.mean()))
+    assert q['q_lo90'] <= q['q'] <= q['q_hi90'] and q == M.q_of_fall(a, k, n_boot=2000)     # seeded
+    v = M.set_value(a, n_boot=2000)
+    assert v['value'] == pytest.approx(np.exp(a.mean())) and v['n_flies'] == 4
+    q2 = M.q_of_fall(pd.Series([0.4, 0.6]), pd.Series([0.8, 0.8]), arithmetic=True, n_boot=500)
+    assert q2['q'] == pytest.approx(0.5 / 0.8)
+
+
+def test_held_x1_x3():
+    assert M.held_class({'carrying': 'APL steeper', 'p1': 'APL steeper'}) == 'APL steeper'
+    assert M.held_class({'carrying': 'APL steeper', 'p1': 'not decided'}) == 'not decided'
+    assert M.x1_verdict({'G1': 'APL steeper', 'G2': 'APL steeper', 'G3': 'not decided'}) == 'APL steeper'
+    assert M.x1_verdict({'G1': 'APL steeper', 'G2': 'APL steeper', 'G3': 'KCs steeper'}) == 'not decided'
+    assert M.x1_verdict({'G1': 'one function', 'G2': 'one function', 'G3': 'not decided'}) == 'one function'
+    assert M.x1_verdict({'G1': 'one function', 'G2': 'one function', 'G3': 'APL steeper'}) == 'not decided'
+    assert M.x1_verdict({'G1': 'APL steeper', 'G2': 'one function', 'G3': 'not decided'}) == 'not decided'
+    assert M.x3_verdict({'paa': 4, 'pa': 5, 'ms': 2})['verdict'] == 'holds'
+    assert M.x3_verdict({'paa': 3, 'pa': 5, 'ms': 2})['verdict'] == 'fails'
+
+
+def _vals(set_, flies, falls_by_fly, odor='paa', concs=(-5.0, -4.0), extra=None):
+    """Made-up per-recording values: per fly one recording with the odor's two concentrations, the higher at 1.0 and
+    the lower at the fly's fall."""
+    rows = []
+    for f, fall in zip(flies, falls_by_fly):
+        for c, v in zip(concs, (fall, 1.0)):
+            rows.append(dict(set=set_, recording=f'{set_}_{f}', fly=f, calyx='', plane_um=18.0, plane_uncertain=False,
+                             marked='', odor=odor, conc=c, stim=f'{odor} @ {c:g}', carrying=v, block_solvent=v,
+                             first_presentation=v, raw=v + 1, **(extra or {})))
+    return pd.DataFrame(rows)
+
+
+def test_fall_reading_made_up():
+    rng = np.random.default_rng(1)
+    apl = _vals('S', [f's{i}' for i in range(10)], np.exp(np.log(0.4) + 0.05 * rng.standard_normal(10)))
+    kc = _vals('K6F', [f'k{i}' for i in range(5)], np.exp(np.log(0.9) + 0.05 * rng.standard_normal(5)))
+    vals = pd.concat([apl, kc], ignore_index=True)
+    spec = M.reading_specs(['k0'])['carrying']
+    r = M.fall_reading(vals, M.FALLS[0], dict(spec, apl_sets=('S',)))
+    assert r['cls'] == 'APL steeper' and r['apl_n_flies'] == 10 and r['kc_n_flies'] == 5
+    kc2 = _vals('K6F', [f'k{i}' for i in range(5)], np.exp(np.log(0.4) + 0.05 * rng.standard_normal(5)))
+    r2 = M.fall_reading(pd.concat([apl, kc2], ignore_index=True), M.FALLS[0], dict(spec, apl_sets=('S',)))
+    assert r2['cls'] == 'one function'
+    # the floor: a recording whose lower response is below MIN_RESPONSE enters no geometric fall
+    f = M.recording_fall(_vals('K6F', ['k'], [0.01]), ('paa', -5.0), ('paa', -4.0), 'carrying')
+    assert np.isnan(f['log_fall']) and f['ratio'] == pytest.approx(0.01)
+    g = M.recording_fall(_vals('K6F', ['k'], [0.5], concs=(-6.0, -4.0)), ('paa', -5.0), ('paa', -4.0), 'carrying')
+    assert g['num_how'] == 'interpolated' and g['num'] == pytest.approx(0.75)
+
+
+def test_reading_specs_and_select():
+    specs = M.reading_specs(['f1', 'f2'])
+    assert list(specs)[:6] == ['carrying', 'set_S_alone', 'block_solvent', 'first_presentation', 'plane_18',
+                               'without_marked']
+    assert 'kc_fly_left_out:f1' in specs and 'k1020_as_kc' in specs and len(specs) == 9
+    v = pd.DataFrame(dict(set=['K6F'] * 4, fly=['f1', 'f1', 'f2', 'f2'], plane_um=[18.0, 15.0, 18.0, 18.0],
+                          plane_uncertain=[False, False, True, False], marked=['', '', '', 'dim']))
+    assert len(M.select(v, ('K6F',), specs['plane_18'], 'kc')) == 2
+    assert len(M.select(v, ('K6F',), specs['without_marked'], 'kc')) == 3
+    assert len(M.select(v, ('K6F',), specs['kc_fly_left_out:f1'], 'kc')) == 2
+    assert len(M.select(v, ('K6F',), specs['kc_fly_left_out:f1'], 'apl')) == 4      # leaves APL sets alone
+
+
+# ---------------------------------------------------------------------------
+# part B on made-up curves
+
+def test_isotonic_and_interp_monotone():
+    assert np.allclose(M.isotonic([1, 3, 2, 4]), [1, 2.5, 2.5, 4])
+    assert np.all(np.diff(M.isotonic([5, 1, 4, 2, 8, 3])) >= 0)
+    assert np.all(np.diff(M.isotonic([1, 3, 2, 0], increasing=False)) <= 0)
+    x = [0, 1, 2, 3]
+    assert M.interp_monotone(x, [0, 2, 1, 3], 1.5) == pytest.approx(1.5)
+    assert np.isnan(M.interp_monotone(x, [0, 1, 2, 3], 4.0))
+    vals = [M.interp_monotone(x, [0, 2, 1, 3], t) for t in np.linspace(0, 3, 31)]
+    assert np.all(np.diff(vals) >= -1e-12)
+
+
+def test_d_star_on_a_made_up_curve():
+    d = [0.0, 0.5, 1.0, 1.5, 2.0]
+    ratio = [1.0, 1.5, 2.0, 2.5, 3.0]
+    r = M.d_star(d, ratio, 2.0, 1.5, 2.5)
+    assert r['d_star'] == pytest.approx(1.0) and r['d_star_lo'] == pytest.approx(0.5) and r['d_star_hi'] == pytest.approx(1.5)
+    r = M.d_star(d, ratio, 2.75, 2.5, 3.5)                    # the interval's top beyond the ladder
+    assert r['d_star'] == pytest.approx(1.75) and r['d_star_hi'] == np.inf and r['censored']
+    r = M.d_star(d[::-1], ratio[::-1], 2.0)                    # order does not matter
+    assert r['d_star'] == pytest.approx(1.0)
+    r = M.d_star(d, [1.0, 1.6, 1.4, 2.5, 3.0], 1.5)           # a non-monotone point is pooled first
+    assert 0.5 <= r['d_star'] <= 1.5
+
+
+def test_y_classes():
+    assert M.y_class((0.2, 0.4), (0.5, 0.8)) == 'too weak'
+    assert M.y_class((0.9, 1.0), (0.5, 0.8)) == 'too strong'
+    assert M.y_class((0.4, 0.6), (0.5, 0.8)) == 'inside'
+    assert M.y_class((0.7, 0.7), (0.5, np.inf)) == 'inside'
+    assert M.y_class((0.3, 0.3), (0.5, np.inf)) == 'too weak'
+    assert M.y_over_wirings(['too weak'] * 6 + ['inside'] * 2) == 'too weak'
+    assert M.y_over_wirings(['too weak'] * 5 + ['inside'] * 3) == 'not decided'
+    assert M.y_over_estimates({'a': 'too weak', 'b': 'inside'}) == 'inside'
+    assert M.y_over_estimates({'a': 'too weak', 'b': 'too weak'}) == 'too weak'
+    assert M.y_over_estimates({'a': 'too weak', 'b': 'not decided'}) == 'not decided'
+    assert M.y_verdict({'2h': 'too weak', 'ma': 'too weak', 'farn': 'inside'}) == 'too weak'
+    assert M.y_verdict({'2h': 'too weak', 'ma': 'too weak', 'farn': 'too strong'}) == 'not decided'
+    assert M.y_verdict({'2h': 'inside', 'ma': 'inside', 'farn': 'too weak'}) == 'inside'
+    # Y's held rule on made-up readings
+    assert M.held_class({'carrying': 'too weak', 'one_spike': 'too weak', 'settled': 'inside'}) == 'not decided'
+
+
+def test_flies_rate_ratio_made_up():
+    rows = []
+    for k, (g, fly, r) in enumerate([('control', 'c1', 0.05), ('control', 'c1', 0.07), ('control', 'c2', 0.06),
+                                     ('control', 'c3', 0.06), ('apl_output_blocked', 't1', 0.15),
+                                     ('apl_output_blocked', 't1', 0.17), ('apl_output_blocked', 't2', 0.19)]):
+        rows.append(dict(recording=f'r{k}', genotype_group=g, fly=fly, odor='2h @ -7', rate=r))
+        rows.append(dict(recording=f'r{k}', genotype_group=g, fly=fly, odor='pfo @ 0', rate=0.01))
+    rates = pd.DataFrame(rows)
+    r = M.flies_rate_ratio(rates, '2h @ -7', n_boot=2000)
+    assert r['ratio'] == pytest.approx(0.17 / 0.06) and r['lo90'] < r['ratio'] < r['hi90']
+    assert r['n_ctrl_flies'] == 3 and r['n_tnt_recordings'] == 3
+    s = M.flies_rate_ratio(rates, '2h @ -7', solvent=True, n_boot=2000)
+    assert s['ratio'] == pytest.approx(0.16 / 0.05)
+
+
+def test_add_d_made_up():
+    rows = []
+    for m, paa, w2h, blank, rate in ((0.0, 10.0, 9.0, 8.0, 0.2), (0.5, 12.0, 9.5, 8.0, 0.12), (1.0, 14.0, 10.0, 8.0, 0.08)):
+        for s, win, rt in (('paa', paa, 0.1), ('2h [x/diag] @ -6', w2h, rate), ('blank @ 0', blank, 0.0)):
+            rows.append(dict(wiring='w', m=m, source='', stimulus=s, win=win, pre=7.0, pre_settled=7.5, rate=rt,
+                             rate_1spike=min(1.0, 2 * rt), max_spike_count=3.0))
+    x = M.add_d(pd.DataFrame(rows))
+    g = x[x['stimulus'] == '2h [x/diag] @ -6'].set_index('m')
+    assert g.loc[1.0, 'd'] == pytest.approx((10.0 - 8.0) / (14.0 - 8.0))
+    assert g.loc[0.5, 'd'] == pytest.approx(0.5 * 1.5 / 6.0) and g.loc[0.0, 'd'] == 0.0
+    assert g.loc[1.0, 'ratio'] == pytest.approx(0.2 / 0.08) and g.loc[0.0, 'ratio'] == pytest.approx(1.0)
+    assert g.loc[1.0, 'd_settled'] == pytest.approx((10.0 - 7.5) / (14.0 - 7.5))
+
+
+def test_widened():
+    lo, hi = M.widened(0.2, 0.3, 0.45)
+    assert lo < 0.2 and hi > 0.45

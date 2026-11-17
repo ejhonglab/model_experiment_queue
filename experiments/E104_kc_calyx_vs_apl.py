@@ -968,91 +968,1009 @@ def part_0(runs: bool = False, lock: bool = False) -> dict:
 # ---------------------------------------------------------------------------
 # part A: the flies' KCs' calyx signal against their APL
 
-def fly_falls(per_stim: pd.DataFrame, fall: Tuple[str, Stim, Stim], value: str) -> pd.Series:
-    """Per fly, the mean (natural) log fall over its recordings (`E98.value_at` per recording; both above
-    MIN_RESPONSE)."""
-    raise NotImplementedError
+READINGS_A = ('carrying', 'block_solvent', 'first_presentation')     # the value columns of a_per_stimulus.csv
+KC_SETS_CARRYING = ('K6F',)
+APL_SETS_CARRYING = ('S', 'L')
+E101_C = ('results', 'E101_apl_vs_kc_claws', 'c_responses.csv')
+E101_A3_FAMILY = ('results', 'E101_apl_vs_kc_claws', 'a3_family.csv')
+E100_B = ('results', 'E100_apl_weak_odors')
+E101_READINGS = {'carrying': 'carrying', 'block_solvent': 'block', 'first_presentation': 'first_two'}
+X2_ESTIMATE_SESSIONS = ('kiwi-control', 'megamat', 'validation2')
+HALLEM_BESIDE = (('pa_-6_over_-4', 'pa [hallem] @ -6', 'pa [hallem] @ -4'),
+                 ('ms_-4_over_-2', 'ms [hallem] @ -4', 'ms [hallem] @ -2'))
+
+
+def _ci(x: np.ndarray) -> Tuple[float, float]:
+    lo, hi = np.percentile(x, [100 * (1 - CI_LEVEL) / 2, 100 * (1 + CI_LEVEL) / 2])
+    return float(lo), float(hi)
+
+
+def read_flies_k_s(stems: Optional[Sequence[str]] = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Part A's reading of sets K and S from Yang's tables (`read_table_k`; the lock is required for set K): per
+    recording and stimulus the readings (READINGS_A as columns 'carrying' (order-matched), 'block_solvent' (minus its
+    block's solvent), 'first_presentation' and 'raw'), with set, fly, calyx, plane and marked; and every file read with
+    its sha256 and the table's status."""
+    stems = list(K6F + K1020 + K7F + S_STEMS) if stems is None else list(stems)
+    rows = recording_rows(stems)
+    out, files = [], []
+    for st, row in rows.iterrows():
+        fr, status = read_table_k(row)
+        p = yang_table_path(row)
+        files.append(dict(recording=st, set=row['role'], kind='yang_table', path=str(p) if p else '',
+                          sha256=_sha256(p) if p else '', status=status, n_presentations=int(len(fr))))
+        y = yaml_path(row)
+        files.append(dict(recording=st, set=row['role'], kind='yaml', path=str(y), sha256=_sha256(y), status='',
+                          n_presentations=int(len(fr))))
+        if status != 'ok':
+            continue
+        plane = float(row['plane_depth_um']) if pd.notna(row.get('plane_depth_um')) else xml_plane_um(row)
+        _, st_tab = recording_readings(fr)
+        for x in st_tab.to_dict('records'):
+            out.append(dict(set=row['role'], recording=st, fly=row['fly_id'], calyx=row['calyx'], plane_um=plane,
+                            plane_uncertain=st in PLANE_UNCERTAIN, marked=MARKED.get(st, ''), odor=x['odor'],
+                            conc=float(x['conc']), stim=x['stim'], carrying=x['yang_order_matched'],
+                            block_solvent=x['yang_minus_block'], first_presentation=x['yang_first'],
+                            raw=x['yang_raw'], n_presentations=int(x['n_presentations'])))
+        print(f"{time.strftime('%H:%M:%S')} {st} ({row['role']}): Yang's table {status}", flush=True)
+    return pd.DataFrame(out), pd.DataFrame(files)
+
+
+def read_set_l(path: Optional[Path] = None) -> pd.DataFrame:
+    """Set L from E101's c_responses.csv (group 'L', b = 0): the APL channel's 'apl' under E101's readings mapped to
+    READINGS_A (E101_READINGS), and the KC channel's 'kc' at b = 0 and b_G (for E101's Q, A5); fly ids E101's."""
+    p = H.shared_dir().joinpath(*E101_C) if path is None else Path(path)
+    c = pd.read_csv(p, comment='#')
+    c = c[c['group'] == 'L']
+    out = []
+    for (rec, fly, plane, stim, odor, conc), g in c.groupby(['recording', 'fly', 'plane_um', 'stim', 'odor', 'log10_conc'],
+                                                            sort=False):
+        d = dict(set='L', recording=rec, fly=str(fly), calyx='', plane_um=float(plane), plane_uncertain=False, marked='',
+                 odor=odor, conc=float(conc), stim=stim, raw=np.nan, n_presentations=np.nan)
+        for ours, theirs in E101_READINGS.items():
+            x = g[(g['reading'] == theirs) & (g['b_mult'] == 0.0)]
+            d[ours] = float(x['apl'].iloc[0]) if len(x) else np.nan
+            for bm in (0.0, 1.0):
+                y = g[(g['reading'] == theirs) & (g['b_mult'] == bm)]
+                d[f'kc_{ours}_b{bm:g}'] = float(y['kc'].iloc[0]) if len(y) else np.nan
+        out.append(d)
+    return pd.DataFrame(out)
+
+
+def read_set_h() -> pd.DataFrame:
+    """Set H from E100's b_per_stimulus.csv (label_unsure False): carrying = yang_order_matched, block_solvent =
+    yang_minus_block, raw = yang_raw (A5, beside; first_presentation not saved)."""
+    b = pd.read_csv(H.shared_dir().joinpath(*E100_B, 'b_per_stimulus.csv'), float_precision='round_trip')
+    b = b[(b['set'] == 'H') & ~b['label_unsure'].astype(bool)]
+    return pd.DataFrame(dict(set='H', recording=b['recording'], fly=[_fly_from_e100(f) for f in b['fly']], calyx='',
+                             plane_um=b['plane_um'].astype(float), plane_uncertain=False, marked='', odor=b['odor'],
+                             conc=b['conc'].astype(float), stim=b['stim'], carrying=b['yang_order_matched'],
+                             block_solvent=b['yang_minus_block'], first_presentation=np.nan, raw=b['yang_raw'],
+                             n_presentations=b['n_presentations']))
+
+
+def _fly_from_e100(f: str) -> str:
+    d, n = str(f).split('_')
+    return f'{d[:4]}-{d[4:6]}-{d[6:8]}_fly{int(n)}'
+
+
+def recording_fall(g: pd.DataFrame, num: Stim, den: Stim, value: str) -> dict:
+    """One recording's fall num / den on `value` (E98's `value_at` on each odor's imaged concentrations of the
+    recording): the two values and how each was read; 'log_fall' when both exceed MIN_RESPONSE, 'ratio' (arithmetic)
+    when the denominator does."""
+    E98 = _e98()
+    out = {}
+    for k, (o, c) in (('num', num), ('den', den)):
+        x = g[(g['odor'] == o) & g[value].notna()]
+        v, how = E98.value_at(x['conc'].to_numpy(float), x[value].to_numpy(float), c) if len(x) else (np.nan, 'missing')
+        out[k], out[f'{k}_how'] = v, how
+    ok = bool(np.isfinite(out['num']) and np.isfinite(out['den']))
+    out['ratio'] = out['num'] / out['den'] if ok and out['den'] > MIN_RESPONSE else np.nan
+    out['log_fall'] = float(np.log(out['num'] / out['den'])) if ok and out['num'] > MIN_RESPONSE and \
+        out['den'] > MIN_RESPONSE else np.nan
+    return out
+
+
+def recording_falls(vals: pd.DataFrame, falls: Sequence[Tuple[str, Stim, Stim]], value: str) -> pd.DataFrame:
+    """`recording_fall` for every recording of `vals` and every fall (rows: set, recording, fly, plane, fall, ...)."""
+    rows = []
+    for (set_, rec), g in vals.groupby(['set', 'recording'], sort=False):
+        for fid, num, den in falls:
+            r = recording_fall(g, num, den, value)
+            rows.append(dict(set=set_, recording=rec, fly=g['fly'].iloc[0], plane_um=g['plane_um'].iloc[0],
+                             plane_uncertain=bool(g['plane_uncertain'].iloc[0]), marked=g['marked'].iloc[0],
+                             fall=fid, value=value, **r))
+    return pd.DataFrame(rows)
+
+
+def fly_falls(rec_falls: pd.DataFrame, arithmetic: bool = False) -> pd.Series:
+    """Per fly the mean of its recordings' natural-log falls (`arithmetic`: of their ratios), recordings without one
+    left out; a Series indexed by fly."""
+    col = 'ratio' if arithmetic else 'log_fall'
+    d = rec_falls.dropna(subset=[col])
+    return d.groupby('fly')[col].mean()
+
+
+def set_value(per_fly: pd.Series, arithmetic: bool = False, n_boot: int = N_BOOT, seed: int = SEED) -> dict:
+    """A set's value from per-fly falls: the geometric mean over flies (per-fly log falls) or the arithmetic mean
+    (`arithmetic`), its 90 % interval from `n_boot` bootstrap draws of flies (E79's `fly_bootstrap`), the counts."""
+    x = per_fly.dropna().to_numpy(float)
+    if len(x) == 0:
+        return dict(value=np.nan, lo90=np.nan, hi90=np.nan, n_flies=0)
+    from experiments import E79_apl_calyx_constraints as E79
+    m, lo, hi = E79.fly_bootstrap(x, n_boot=n_boot, seed=seed)
+    f = (lambda v: float(v)) if arithmetic else (lambda v: float(np.exp(v)))
+    return dict(value=f(m[0]), lo90=f(lo[0]), hi90=f(hi[0]), n_flies=int(len(x)))
 
 
 def split_rule(a: pd.Series, b: pd.Series) -> dict:
-    """E98's split rule on two sets of flies' mean log falls (E103's `split_rule`)."""
-    raise NotImplementedError
+    """E98's split rule on two sets of flies' mean log falls (E103's `split_share`, the same count as E98's
+    `pulse_permutation`): the share of the splits of all flies into sets of the two sizes whose difference of means is at
+    least the observed (absolute); 'differ' when below SPLIT_SHARE."""
+    from experiments import E103_apl_across_odors_heldout as E103
+    a, b = a.dropna(), b.dropna()
+    if len(a) == 0 or len(b) == 0:
+        return dict(share=np.nan, n_splits=0, differ=False, n_a=int(len(a)), n_b=int(len(b)))
+    share, n = E103.split_share(a.to_numpy(float), b.to_numpy(float))
+    return dict(share=share, n_splits=n, differ=bool(share < SPLIT_SHARE), n_a=int(len(a)), n_b=int(len(b)))
 
 
-def q_of_fall(apl: pd.Series, kc: pd.Series, n_boot: int = N_BOOT, seed: int = SEED) -> dict:
-    """Q = APL's fall over the KCs' (geometric means over flies) with its 90 % interval from joint bootstrap draws of
-    both sets' flies."""
-    raise NotImplementedError
+def q_of_fall(apl: pd.Series, kc: pd.Series, arithmetic: bool = False, n_boot: int = N_BOOT, seed: int = SEED) -> dict:
+    """Q = APL's fall over the KCs' (geometric means over flies of per-fly log falls; `arithmetic`: the arithmetic
+    means' quotient) with its 90 % interval from joint bootstrap draws (each draw resamples both sets' flies with
+    replacement)."""
+    a, k = apl.dropna().to_numpy(float), kc.dropna().to_numpy(float)
+    if len(a) == 0 or len(k) == 0:
+        return dict(q=np.nan, q_lo90=np.nan, q_hi90=np.nan)
+    rng = np.random.default_rng(seed)
+    ia = rng.integers(0, len(a), size=(n_boot, len(a)))
+    ik = rng.integers(0, len(k), size=(n_boot, len(k)))
+    if arithmetic:
+        q = a.mean() / k.mean()
+        qb = a[ia].mean(axis=1) / k[ik].mean(axis=1)
+    else:
+        q = float(np.exp(a.mean() - k.mean()))
+        qb = np.exp(a[ia].mean(axis=1) - k[ik].mean(axis=1))
+    lo, hi = _ci(qb)
+    return dict(q=float(q), q_lo90=lo, q_hi90=hi)
 
 
 def fall_class(differ: bool, q: float, q_lo: float, q_hi: float) -> str:
     """The class of a fall (FALL_CLASSES) from the split rule's verdict and Q with its interval."""
-    raise NotImplementedError
+    if not np.isfinite(q):
+        return 'not decided'
+    if differ and q < Q_APL_STEEPER:
+        return 'APL steeper'
+    if differ and q > Q_KC_STEEPER:
+        return 'KCs steeper'
+    if not differ and np.isfinite(q_lo) and np.isfinite(q_hi) and Q_ONE_FUNCTION[0] <= q_lo and q_hi <= Q_ONE_FUNCTION[1]:
+        return 'one function'
+    return 'not decided'
 
 
-def held_class(by_reading: Dict[str, str]) -> str:
-    """The carrying reading's class if every partner gives the same, else 'not decided'."""
-    raise NotImplementedError
+def held_class(by_reading: Dict[str, str], carrying: str = 'carrying') -> str:
+    """The carrying reading's class if every other reading in `by_reading` gives the same; else 'not decided'."""
+    c = by_reading.get(carrying, 'not decided')
+    return c if all(v == c for v in by_reading.values()) else 'not decided'
 
 
 def x1_verdict(classes: Dict[str, str]) -> str:
-    """X1 from the held classes of G1, G2 and G3."""
-    raise NotImplementedError
+    """X1 from the (held) classes of G1, G2 and G3: 'APL steeper' if at least X1_MIN are APL steeper and none KCs
+    steeper; 'one function' if at least X1_MIN are one function and none steeper either way; otherwise 'not decided'."""
+    v = list(classes.values())
+    n = {k: sum(x == k for x in v) for k in FALL_CLASSES}
+    if n['APL steeper'] >= X1_MIN and n['KCs steeper'] == 0:
+        return 'APL steeper'
+    if n['one function'] >= X1_MIN and n['APL steeper'] == 0 and n['KCs steeper'] == 0:
+        return 'one function'
+    return 'not decided'
 
 
-def x3_verdict(per_odor_positive: Dict[str, int]) -> dict:
-    """X3 from the number of KC flies whose response at 10^-7 is positive, per odor."""
-    raise NotImplementedError
+def x3_verdict(per_odor_positive: Dict[str, int], min_flies: int = X3_MIN_FLIES, min_odors: int = X3_MIN_ODORS) -> dict:
+    """X3 from the number of KC flies whose response at 10^-7 is positive, per odor: an odor is above the solvent with
+    at least `min_flies`; X3 'holds' with at least `min_odors` such odors, else 'fails'."""
+    above = {o: bool(n >= min_flies) for o, n in per_odor_positive.items()}
+    return dict(above=above, n_above=int(sum(above.values())),
+                verdict='holds' if sum(above.values()) >= min_odors else 'fails')
+
+
+def reading_specs(kc_flies: Sequence[str]) -> Dict[str, dict]:
+    """The carrying reading and the partners (PARTNERS; partner (6) one reading per KC fly left out): the value
+    column, the APL and KC sets, the plane, the marked runs, the KC fly left out."""
+    base = dict(value='carrying', apl_sets=APL_SETS_CARRYING, kc_sets=KC_SETS_CARRYING, plane=None,
+                without_marked=False, drop_kc_fly=None)
+    out = {'carrying': base,
+           'set_S_alone': dict(base, apl_sets=('S',)),
+           'block_solvent': dict(base, value='block_solvent'),
+           'first_presentation': dict(base, value='first_presentation'),
+           'plane_18': dict(base, plane=CARRYING_PLANE_PARTNER),
+           'without_marked': dict(base, without_marked=True)}
+    for f in sorted(kc_flies):
+        out[f'kc_fly_left_out:{f}'] = dict(base, drop_kc_fly=f)
+    out['k1020_as_kc'] = dict(base, kc_sets=('K6F', 'K1020'))
+    return out
+
+
+def select(vals: pd.DataFrame, sets: Sequence[str], spec: dict, side: str) -> pd.DataFrame:
+    """The rows of `vals` of `sets` under a reading's spec (plane, marked runs, the KC fly left out)."""
+    v = vals[vals['set'].isin(sets)]
+    if spec.get('plane') is not None:
+        v = v[np.isclose(v['plane_um'].astype(float), float(spec['plane'])) & ~v['plane_uncertain'].astype(bool)]
+    if spec.get('without_marked'):
+        v = v[v['marked'].fillna('').astype(str) == '']
+    if side == 'kc' and spec.get('drop_kc_fly'):
+        v = v[v['fly'] != spec['drop_kc_fly']]
+    return v
+
+
+def fall_reading(vals: pd.DataFrame, fall: Tuple[str, Stim, Stim], spec: dict, arithmetic: bool = False,
+                 apl_sets: Optional[Sequence[str]] = None, kc_sets: Optional[Sequence[str]] = None) -> dict:
+    """One fall under one reading: each set's value with its interval (`set_value`), the split rule, Q and the class."""
+    a = select(vals, apl_sets or spec['apl_sets'], spec, 'apl')
+    k = select(vals, kc_sets or spec['kc_sets'], spec, 'kc')
+    fa = fly_falls(recording_falls(a, [fall], spec['value']), arithmetic)
+    fk = fly_falls(recording_falls(k, [fall], spec['value']), arithmetic)
+    va, vk = set_value(fa, arithmetic), set_value(fk, arithmetic)
+    sr = split_rule(fa, fk)
+    q = q_of_fall(fa, fk, arithmetic)
+    cls = fall_class(sr['differ'], q['q'], q['q_lo90'], q['q_hi90']) if not arithmetic else 'described'
+    return dict(fall=fall[0], apl=va['value'], apl_lo90=va['lo90'], apl_hi90=va['hi90'], apl_n_flies=va['n_flies'],
+                kc=vk['value'], kc_lo90=vk['lo90'], kc_hi90=vk['hi90'], kc_n_flies=vk['n_flies'],
+                split_share=sr['share'], n_splits=sr['n_splits'], differ=sr['differ'], **q, cls=cls,
+                mean='arithmetic' if arithmetic else 'geometric')
+
+
+def falls_table(vals: pd.DataFrame) -> pd.DataFrame:
+    """A2 (and the beside falls): every fall of FALLS and FALLS_BESIDE under the carrying reading and every partner
+    (`reading_specs`); the 10^-7 / 10^-3 falls with arithmetic means (described); 2022-10-20 as an APL fly beside."""
+    kc_flies = sorted(vals.loc[vals['set'].isin(KC_SETS_CARRYING), 'fly'].unique())
+    specs = reading_specs(kc_flies)
+    rows = []
+    for fall in FALLS + FALLS_BESIDE:
+        arith = fall[0] in WEAK_FALL_IDS
+        for name, spec in specs.items():
+            rows.append(dict(reading=name, beside=fall[0] not in dict((f, 1) for f, _, _ in FALLS),
+                             **fall_reading(vals, fall, spec, arith)))
+        rows.append(dict(reading='k1020_as_apl (described)', beside=True,
+                         **fall_reading(vals, fall, specs['carrying'], arith, apl_sets=('S', 'L', 'K1020'))))
+    return pd.DataFrame(rows)
+
+
+def x1_table(falls: pd.DataFrame) -> Tuple[pd.DataFrame, dict]:
+    """Per reading the classes of G1 to G3 and X1 under it; the held class of each fall and the held X1 (`x1_verdict`
+    of the held classes)."""
+    g = falls[falls['fall'].isin([f for f, _, _ in FALLS]) & ~falls['reading'].str.contains('described')]
+    rows = []
+    for rd, x in g.groupby('reading', sort=False):
+        cls = dict(zip(x['fall'], x['cls']))
+        rows.append(dict(reading=rd, **cls, x1=x1_verdict(cls)))
+    t = pd.DataFrame(rows)
+    held = {f: held_class(dict(zip(t['reading'], t[f]))) for f, _, _ in FALLS}
+    return t, dict(held_falls=held, x1=x1_verdict(held), x1_carrying=t.loc[t['reading'] == 'carrying', 'x1'].iloc[0])
+
+
+def x2_family(path: Optional[Path] = None) -> pd.DataFrame:
+    """E101's a3_family.csv, APL on: per wiring and stimulus the claw columns' window means (X2_CLAW_COLUMNS)."""
+    p = H.shared_dir().joinpath(*E101_A3_FAMILY) if path is None else Path(path)
+    a = pd.read_csv(p, comment='#', float_precision='round_trip')
+    return a[a['cond'] == 'on']
+
+
+def x2_wiring_ratios(fam: pd.DataFrame, num: str, den: str) -> pd.DataFrame:
+    """Per wiring the model ratio set of `num` over `den`: each claw version's window means with the blank's window
+    mean as the level, through E98's indicator family (`model_ratio_set`); the positive finite ratios kept."""
+    E98 = _e98()
+    rows = []
+    for w, g in fam.groupby('wiring', sort=False):
+        g = g.set_index('stimulus')
+        for col in X2_CLAW_COLUMNS:
+            a1, a2, a0 = (float(g.loc[s, f'{col}_win']) for s in (num, den, _e98().BLANK_LABEL))
+            rs = E98.model_ratio_set(a1, a2, a0, INDICATOR_NS, ('baseline', 'evoked'))
+            for r in rs.to_dict('records'):
+                rows.append(dict(wiring=w, claw=col, a_num=a1, a_den=a2, a_blank=a0, **r))
+    return pd.DataFrame(rows)
+
+
+def x2_classes(ratios: pd.DataFrame, lo: float, hi: float) -> pd.DataFrame:
+    """Per wiring E98's `classify` of its ratio set (positive finite ratios) against [lo, hi]; 'no ratio' if none."""
+    E98 = _e98()
+    rows = []
+    for w, g in ratios.groupby('wiring', sort=False):
+        r = g['ratio'].to_numpy(float)
+        r = r[np.isfinite(r) & (r > 0)]
+        lin = g[(g['n'] == 1.0) & (g['form'] == 'evoked')]['ratio']
+        rows.append(dict(wiring=w, ratio_min=float(r.min()) if len(r) else np.nan,
+                         ratio_max=float(r.max()) if len(r) else np.nan,
+                         ratio_linear_min=float(lin.min()), ratio_linear_max=float(lin.max()),
+                         n_ratios=int(len(r)), cls=E98.classify(r, lo, hi) if len(r) and np.isfinite(lo) and
+                         np.isfinite(hi) and lo > 0 else 'no ratio'))
+    return pd.DataFrame(rows)
+
+
+def x2_table(vals: pd.DataFrame, fam: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame, dict]:
+    """X2: per reading of set K (`reading_specs`; partner (1) changes no KC value), set K's G1 interval, per session's
+    estimate of paa at 10^-5 the classes of the eight wirings and E98's comparison verdict (X2_MIN_WIRINGS), and the
+    verdict over the estimates (E100's `ratio_over_estimates`); the held X2. Beside, on Hallem's input: pa 10^-6 /
+    10^-4 and ms 10^-4 / 10^-2 against set K's beside falls (carrying reading)."""
+    E98, E100 = _e98(), _e100()
+    kc_flies = sorted(vals.loc[vals['set'].isin(KC_SETS_CARRYING), 'fly'].unique())
+    g1 = FALLS[0]
+    per_w, rows, by_reading = [], [], {}
+    for rd, spec in reading_specs(kc_flies).items():
+        k = select(vals, spec['kc_sets'], spec, 'kc')
+        v = set_value(fly_falls(recording_falls(k, [g1], spec['value'])))
+        per_est = {}
+        for s in X2_ESTIMATE_SESSIONS:
+            num = E98.session_label('paa', -5, s, E98.DIAG)
+            c = x2_classes(x2_wiring_ratios(fam, num, 'paa'), v['lo90'], v['hi90'])
+            per_w.append(c.assign(reading=rd, estimate=s, kc_g1=v['value'], kc_lo90=v['lo90'], kc_hi90=v['hi90']))
+            per_est[s] = E98.comparison_verdict(c['cls'], X2_MIN_WIRINGS)
+        verdict = E100.ratio_over_estimates(per_est)
+        by_reading[rd] = verdict
+        rows.append(dict(reading=rd, kc_g1=v['value'], kc_lo90=v['lo90'], kc_hi90=v['hi90'], kc_n_flies=v['n_flies'],
+                         **{f'verdict_{s}': x for s, x in per_est.items()}, x2=verdict))
+    t = pd.DataFrame(rows)
+    hall = []
+    spec = reading_specs(kc_flies)['carrying']
+    k = select(vals, spec['kc_sets'], spec, 'kc')
+    for fid, num, den in HALLEM_BESIDE:
+        fall = next(f for f in FALLS_BESIDE if f[0] == fid)
+        v = set_value(fly_falls(recording_falls(k, [fall], 'carrying')))
+        c = x2_classes(x2_wiring_ratios(fam, num, den), v['lo90'], v['hi90'])
+        hall.append(c.assign(fall=fid, source="Hallem's receptor data (another laboratory)", kc=v['value'],
+                             kc_lo90=v['lo90'], kc_hi90=v['hi90'],
+                             verdict=E98.comparison_verdict(c['cls'], X2_MIN_WIRINGS)))
+    return t, pd.concat(per_w + hall, ignore_index=True), dict(x2=held_class(by_reading), x2_carrying=by_reading['carrying'],
+                                                               by_reading=by_reading)
+
+
+def x3_table(vals: pd.DataFrame) -> Tuple[pd.DataFrame, dict]:
+    """X3: per reading (partners (2) to (7); (1) changes no KC value) and odor, each KC fly's response at 10^-7 (the
+    mean over its recordings that imaged it), the flies with a positive one; X3 per reading and held."""
+    kc_flies = sorted(vals.loc[vals['set'].isin(KC_SETS_CARRYING), 'fly'].unique())
+    rows, by_reading = [], {}
+    for rd, spec in reading_specs(kc_flies).items():
+        k = select(vals, spec['kc_sets'], spec, 'kc')
+        pos = {}
+        for o in ODORS:
+            x = k[(k['odor'] == o) & np.isclose(k['conc'], WEAK_CONC)].dropna(subset=[spec['value']])
+            per_fly = x.groupby('fly')[spec['value']].mean()
+            pos[o] = int((per_fly > 0).sum())
+            rows.append(dict(reading=rd, odor=o, n_flies=int(len(per_fly)), n_positive=pos[o],
+                             fly_values=';'.join(f'{f}:{v:.4f}' for f, v in per_fly.items())))
+        x3 = x3_verdict(pos)
+        by_reading[rd] = x3['verdict']
+        for r in rows[-len(ODORS):]:
+            r.update(above=x3['above'][r['odor']], x3=x3['verdict'])
+    return pd.DataFrame(rows), dict(x3=held_class(by_reading), x3_carrying=by_reading['carrying'], by_reading=by_reading)
+
+
+def a1_strengths(vals: pd.DataFrame) -> pd.DataFrame:
+    """A1: per set, odor and concentration the carrying response (arithmetic mean over flies of each fly's mean over
+    its recordings) with its 90 % interval from bootstrap draws of flies, and the raw dF/F's mean beside."""
+    rows = []
+    for (set_, o, c), g in vals.groupby(['set', 'odor', 'conc']):
+        pf = g.groupby('fly')['carrying'].mean().dropna()
+        v = set_value(pf, arithmetic=True)
+        raw = g.groupby('fly')['raw'].mean().dropna()
+        rows.append(dict(set=set_, odor=o, conc=float(c), response=v['value'], lo90=v['lo90'], hi90=v['hi90'],
+                         n_flies=v['n_flies'], n_recordings=int(g['recording'].nunique()),
+                         raw_dff=float(raw.mean()) if len(raw) else np.nan,
+                         raw_dff_max_recording=float(g['raw'].max()) if g['raw'].notna().any() else np.nan))
+    return pd.DataFrame(rows)
+
+
+def a5_falls() -> Tuple[Tuple[str, Stim, Stim], ...]:
+    """A5's falls (K7F against set H): each odor's lower concentrations of the SytGCaMP7f design over its highest."""
+    design = {'2h': (-6.771, -5.34, -4.386, -3.908), 'ma': (-7.248, -5.817, -4.863, -3.908),
+              'pa': (-6.194, -5.495, -4.796, -4.097), 'paa': (-4.863, -4.386, -3.908, -3.431)}
+    out = []
+    for o in A5_ODORS:
+        cs = design[o]
+        for c in cs[:-1]:
+            out.append((f'{o}_{c:g}_over_{cs[-1]:g}', (o, c), (o, cs[-1])))
+    return tuple(out)
+
+
+def a5_tables(vals: pd.DataFrame) -> pd.DataFrame:
+    """A5 (described): K7F against set H on A5's falls; pa / ms and paa / ms at 10^-3 per set (K6F, S, L); E101's Q in
+    the dual-colour flies (set L's APL channel against its KC channel at b = 0 and b_G) on G1 to G3."""
+    spec = reading_specs([])['carrying']
+    rows = []
+    for fall in a5_falls():
+        rows.append(dict(part='K7F vs H', **fall_reading(vals, fall, spec, apl_sets=('H',), kc_sets=('K7F',))))
+    for fid, num, den in A5_ACROSS:
+        for set_ in ('K6F', 'S', 'L'):
+            v = set_value(fly_falls(recording_falls(vals[vals['set'] == set_], [(fid, num, den)], 'carrying')))
+            rows.append(dict(part=f'across odors, {set_}', fall=fid, apl=v['value'], apl_lo90=v['lo90'],
+                             apl_hi90=v['hi90'], apl_n_flies=v['n_flies'], cls='described'))
+    lv = vals[vals['set'] == 'L']
+    for bm in (0.0, 1.0):
+        kcv = lv.assign(carrying=lv[f'kc_carrying_b{bm:g}'], set='L_kc')
+        both = pd.concat([lv, kcv], ignore_index=True)
+        for fall in FALLS:
+            rows.append(dict(part=f"E101's Q, dual-colour flies (KC at b = {bm:g} b_G)",
+                             **fall_reading(both, fall, spec, apl_sets=('L',), kc_sets=('L_kc',))))
+    return pd.DataFrame(rows)
 
 
 def part_a() -> dict:
-    """Part A (A1 to A5): refuses to run until `part_a_locked()`."""
-    raise NotImplementedError
+    """Part A (A1 to A5): refuses to run until `part_a_locked()`; reads sets K and S from Yang's tables, sets L and H
+    from E101's and E100's saved tables; writes a_per_stimulus.csv, a_inputs.csv, a1_strengths.csv, a2_falls.csv,
+    a2_x1.csv, a3_x2.csv, a3_x2_wirings.csv, a4_x3.csv, a5_beside.csv and a_summary.json."""
+    if not part_a_locked():
+        raise PermissionError(f"part A's lock ({PART_A_LOCK.name}) is not committed or does not match the definitions")
+    lock = json.loads(PART_A_LOCK.read_text())
+    out = out_dir()
+    t0 = time.time()
+    ks, files = read_flies_k_s()
+    vals = pd.concat([ks, read_set_l(), read_set_h()], ignore_index=True)
+    for p, k in ((H.shared_dir().joinpath(*E101_C), 'E101 c_responses'),
+                 (H.shared_dir().joinpath(*E100_B, 'b_per_stimulus.csv'), 'E100 b_per_stimulus'),
+                 (H.shared_dir().joinpath(*E101_A3_FAMILY), 'E101 a3_family')):
+        files = pd.concat([files, pd.DataFrame([dict(recording='', set='', kind=k, path=str(p), sha256=_sha256(p),
+                                                     status='', n_presentations=np.nan)])], ignore_index=True)
+    write_table(vals, out / 'a_per_stimulus.csv')
+    write_table(files, out / 'a_inputs.csv')
+    a1 = a1_strengths(vals)
+    write_table(a1, out / 'a1_strengths.csv')
+    falls = falls_table(vals)
+    write_table(falls, out / 'a2_falls.csv')
+    x1t, x1 = x1_table(falls)
+    write_table(x1t, out / 'a2_x1.csv')
+    x2t, x2w, x2 = x2_table(vals, x2_family())
+    write_table(x2t, out / 'a3_x2.csv')
+    write_table(x2w, out / 'a3_x2_wirings.csv')
+    x3t, x3 = x3_table(vals)
+    write_table(x3t, out / 'a4_x3.csv')
+    a5 = a5_tables(vals)
+    write_table(a5, out / 'a5_beside.csv')
+    st = files[files['kind'] == 'yang_table']
+    summ = dict(caveat=QUALITY_CAVEAT, unmeasured=UNMEASURED, lock_sha256=lock['sha256'],
+                lock_file_sha256=_sha256(PART_A_LOCK),
+                tables=dict(n=int(len(st)), status=st['status'].value_counts().to_dict(),
+                            not_ok=st.loc[st['status'] != 'ok', 'recording'].tolist()),
+                n_flies={s: int(vals.loc[vals['set'] == s, 'fly'].nunique()) for s in vals['set'].unique()},
+                x1=x1, x2=x2, x3=x3, seconds=round(time.time() - t0, 1))
+    _write_json(out / 'a_summary.json', summ)
+    provenance('A', lock_sha256=lock['sha256'], lock_file_sha256=_sha256(PART_A_LOCK),
+               inputs_sha256={r['kind'] if not r['recording'] else f"{r['recording']}:{r['kind']}": r['sha256']
+                              for r in files.to_dict('records')})
+    return summ
 
 
 # ---------------------------------------------------------------------------
 # part B: the KCs' somata at the weak odors
 
-def d_of_m(apl: pd.DataFrame, m: float, stim: str) -> float:
-    """APL's strength at a stimulus: m times APL's evoked activity at m (window mean minus the blank's at the same m)
-    over paa's evoked activity at m = 1."""
-    raise NotImplementedError
+LADDER_SUB = 'B/ladder'
+E101_A3_ARCHIVE = ('data', 'model_outputs', 'E101_apl_vs_kc_claws', 'A3')
+WEAK_KC_PANEL = ('data', 'yang_weak_odor_kc', 'diag_mix')
+E49_FRACTIONS = ('results', 'E72_wiring_population', 'low_conc', 'data_fractions.csv')
+E98_A3_RATIOS = ('results', 'E98_apl_response_strength', 'a3_ratios.csv')
+KC_RESPONSE_Z = 1.0           # the KC data's criterion: trial mean above 1 z (E49's)
+FIRST_TRIALS = 3              # partner: the first three trials
+SOLVENT_ODOR = 'pfo @ 0'
+Y_READINGS = ('carrying', 'first_three_trials', 'solvent_subtracted', 'relative_to_panel', 'one_spike', 'settled')
+VIAL_SD_LOG2 = 0.461          # E103's vial SD (beside, waits on question 22)
+NORMAL_Z90 = 1.6449
 
 
-def interp_monotone(x: Sequence[float], y: Sequence[float], x0: float) -> float:
-    """y at x0 by linear interpolation between the ladder's points, the points first made monotone (isotonic) in x."""
-    raise NotImplementedError
+def flies_stim_label(odor: str) -> str:
+    """The KC data's and set W's label of a weak odor ('2h @ -7')."""
+    o, c = FLIES_WEAK[odor]
+    return f'{o} @ {c:g}'
 
 
-def d_star(d: Sequence[float], ratio: Sequence[float], target: float) -> float:
-    """The strength at which the family's response-rate ratio (APL off over on) equals `target` (interpolated)."""
-    raise NotImplementedError
+def model_label(odor: str, session: str) -> str:
+    """The B1 label of a weak odor's input under a session's estimate."""
+    E98 = _e98()
+    o, c = next(s for s in WEAK_STIMULI if s[0] == odor)
+    return E98.session_label(o, c, session, E98.DIAG)
 
 
-def flies_ratio_interval(n_boot: int = N_BOOT, seed: int = SEED) -> pd.DataFrame:
-    """The flies' APL-off / APL-on response-rate ratio per weak odor with its interval: bootstrap of the control flies,
-    each recording with APL output blocked left out in turn, the hull."""
-    raise NotImplementedError
+def saved_run(wiring: str) -> Dict[str, dict]:
+    """A wiring's saved B1 run (m = 1 'on', m = 0 'acute_off'): E98's for the real wiring, E101's archived A3 runs for
+    the other seven (as E98's `load_b1_all` reads them)."""
+    E98 = _e98()
+    roots = None if wiring == 'real' else [H.shared_dir().joinpath(*E101_A3_ARCHIVE)]
+    run = E98.load_b1_run(wiring, roots)
+    if run is None:
+        raise RuntimeError(f'{wiring}: no saved B1 run')
+    return run
+
+
+def compare_runs(o: dict, sv: dict, labs: Sequence[str]) -> dict:
+    """Spike counts and responses of a ladder run against a saved run on `labs`: the cells that differ."""
+    s_new, s_old = o['spike_counts'][labs].astype(float), sv['spike_counts'][labs].astype(float)
+    r_new, r_old = o['responses'][labs].astype(float), sv['responses'][labs].astype(float)
+    ok = bool(len(s_new) == len(s_old) and np.array_equal(np.asarray(s_new.index), np.asarray(s_old.index)))
+    return dict(index_equal=ok, counts_differ=int((s_new.to_numpy() != s_old.to_numpy()).sum()) if ok else -1,
+                responses_differ=int((r_new.to_numpy() != r_old.to_numpy()).sum()) if ok else -1,
+                apl_win_max_abs_diff=float((o['apl'].loc[labs, 'win'] - sv['apl'].loc[labs, 'win']).abs().max()))
+
+
+def run_ladder(wirings: Sequence[str] = ALL_WIRINGS, force: bool = False) -> pd.DataFrame:
+    """The ladder's runs (resumable): per wiring, m in M_LADDER at its fit (`ladder_params`) on the 11 stimuli, saved
+    under outputs/E104_kc_calyx_vs_apl/B/ladder/ (`save_run`) with a runs.csv row each (m, the absolute APL scales, the
+    fit's, every parameter, commits, host, threads). Each wiring other than the real one (checked in part 0) is first
+    run at m = 1 against its saved run (<wiring>_m1_identity.json); a difference stops the ladder."""
+    import gc
+    d = local_dir(LADDER_SUB)
+    commits = {k: v for k, v in H.code_commits().items() if not isinstance(v, (dict, list))}
+    if commits.get('queue_dirty') or commits.get('pyolfsysm_dirty'):
+        raise RuntimeError(f'part B runs from clean checkouts only: {commits}')
+    for w in wirings:
+        todo = [m for m in M_LADDER if force or not (d / f'{w}_m{m:g}_apl.csv').exists()]
+        ident_path = d / f'{w}_m1_identity.json'
+        need_ident = w != 'real' and not ident_path.exists()
+        if not todo and not need_ident:
+            continue
+        t0 = time.time()
+        er = ladder_run(w)
+        labs = list(er.labels)
+        if labs != b_stimuli():
+            raise RuntimeError(f"{w}: the run's stimuli are not the ladder's")
+        if need_ident:
+            o = run_ladder_point(er, 1.0)
+            ident = dict(wiring=w, **compare_runs(o, saved_run(w)['on'], labs), host=_host(),
+                         time=time.strftime('%Y-%m-%d %H:%M'))
+            ident['passed'] = bool(ident['counts_differ'] == 0 and ident['responses_differ'] == 0)
+            _write_json(ident_path, ident)
+            print(f"{time.strftime('%H:%M:%S')} {w} m=1 against its saved run: {ident['counts_differ']} counts differ",
+                  flush=True)
+            if not ident['passed']:
+                raise RuntimeError(f'{w}: the runner at m = 1 does not reproduce the saved run ({ident})')
+        for m in todo:
+            t1 = time.time()
+            o = run_ladder_point(er, m)
+            save_run(d, w, m, o)
+            p = o['params']
+            row = dict(wiring=w, m=m, wAPLKC_scale=float(p['wAPLKC_scale']), wAPLPN_scale=float(p['wAPLPN_scale']),
+                       fit_wAPLKC_scale=float(er.p['wAPLKC_scale']), fit_wAPLPN_scale=float(er.p['wAPLPN_scale']),
+                       params_json=json.dumps({k: (float(v) if isinstance(v, (int, float, np.floating)) else str(v))
+                                               for k, v in p.items()}, sort_keys=True),
+                       n_stimuli=len(labs), stimuli=';'.join(labs), max_spike_count=float(o['spike_counts'].to_numpy().max()),
+                       runtime_s=round(time.time() - t1, 1), host=_host(), time=time.strftime('%Y-%m-%d %H:%M'),
+                       threads=os.environ.get('OMP_NUM_THREADS'), thread_limit=os.environ.get('OMP_THREAD_LIMIT'),
+                       **commits)
+            pd.DataFrame([row]).to_csv(d / 'runs.csv', mode='a', header=not (d / 'runs.csv').exists(), index=False)
+            print(f"{time.strftime('%H:%M:%S')} {w} m={m:g}: {time.time() - t1:.0f} s", flush=True)
+            del o
+        del er
+        gc.collect()
+        print(f"{time.strftime('%H:%M:%S')} {w}: ladder done in {time.time() - t0:.0f} s", flush=True)
+    return pd.read_csv(d / 'runs.csv')
+
+
+def _run_rows(w: str, m: float, src: str, apl: pd.DataFrame, resp: pd.DataFrame, counts: pd.DataFrame,
+              labs: Sequence[str]) -> List[dict]:
+    rows = []
+    for s in labs:
+        c = counts[s].astype(float)
+        rows.append(dict(wiring=w, m=m, source=src, stimulus=s, win=float(apl.loc[s, 'win']), pre=float(apl.loc[s, 'pre']),
+                         pre_settled=float(apl.loc[s, 'pre_settled']) if 'pre_settled' in apl.columns else np.nan, rate=float(resp[s].astype(float).mean()),
+                         rate_1spike=float((c >= 1).mean()), max_spike_count=float(c.max())))
+    return rows
+
+
+def ladder_model_table(wirings: Sequence[str] = ALL_WIRINGS) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """The family's runs at every m: the ladder's (outputs/.../B/ladder/) and m = 1 / m = 0 from the saved runs
+    (`saved_run`); per wiring, m and stimulus APL's window, pre-odor and settled means, the KCs' response rate (two or
+    more spikes), the rate at one spike or more, and the largest spike count. And per wiring its panel ratio (the 16
+    panel odors' mean response rate, acute off over on, at the fit)."""
+    d = local_dir(LADDER_SUB)
+    labs = b_stimuli()
+    rows, panel = [], []
+    for w in wirings:
+        sv = saved_run(w)
+        for m, ct in ((1.0, 'on'), (0.0, 'acute_off')):
+            rows += _run_rows(w, m, f"saved:{sv[ct]['dir']}", sv[ct]['apl'], sv[ct]['responses'], sv[ct]['spike_counts'],
+                              labs)
+        p16 = list(H.APL16_ODORS)
+        on, off = (sv[ct]['responses'][p16].astype(float).to_numpy().mean() for ct in ('on', 'acute_off'))
+        on1, off1 = ((sv[ct]['spike_counts'][p16].astype(float) >= 1).to_numpy().mean() for ct in ('on', 'acute_off'))
+        panel.append(dict(wiring=w, panel_rate_on=on, panel_rate_off=off, panel_ratio=off / on,
+                          panel_rate_on_1spike=on1, panel_rate_off_1spike=off1, panel_ratio_1spike=off1 / on1))
+        for m in M_LADDER:
+            tag = f'{w}_m{m:g}'
+            if not (d / f'{tag}_apl.csv').exists():
+                raise RuntimeError(f'{tag}: the ladder run is missing (run part B)')
+            apl = pd.read_csv(d / f'{tag}_apl.csv', index_col=0)
+            rows += _run_rows(w, m, 'ladder', apl, pd.read_parquet(d / f'{tag}_responses.parquet'),
+                              pd.read_parquet(d / f'{tag}_spike_counts.parquet'), labs)
+    return pd.DataFrame(rows).sort_values(['wiring', 'stimulus', 'm'], kind='stable').reset_index(drop=True), \
+        pd.DataFrame(panel)
+
+
+def add_d(model: pd.DataFrame) -> pd.DataFrame:
+    """d(m) at every run: m times APL's evoked activity at m (window mean minus the blank's at the same m: 'd'; minus
+    the stimulus's settled pre-odor mean: 'd_settled'), over paa's at m = 1; and the response-rate ratios, APL off (m =
+    0) over APL on at m ('ratio', 'ratio_1spike')."""
+    E98 = _e98()
+    x = model.copy()
+    key = ['wiring', 'm']
+    blank = x.loc[x['stimulus'] == E98.BLANK_LABEL, key + ['win']].rename(columns={'win': 'blank_win'})
+    x = x.merge(blank, on=key, how='left', validate='many_to_one')
+    x['evoked'] = x['win'] - x['blank_win']
+    x['evoked_settled'] = x['win'] - x['pre_settled']
+    ref = x[(x['stimulus'] == REFERENCE) & (x['m'] == 1.0)].set_index('wiring')
+    x['d'] = x['m'] * x['evoked'] / x['wiring'].map(ref['evoked']).astype(float)
+    x['d_settled'] = x['m'] * x['evoked_settled'] / x['wiring'].map(ref['evoked_settled']).astype(float)
+    off = x[x['m'] == 0.0].set_index(['wiring', 'stimulus'])
+    idx = pd.MultiIndex.from_arrays([x['wiring'], x['stimulus']])
+    x['rate_off'] = off['rate'].reindex(idx).to_numpy(float)
+    x['rate_off_1spike'] = off['rate_1spike'].reindex(idx).to_numpy(float)
+    x['ratio'] = x['rate_off'] / x['rate']
+    x['ratio_1spike'] = x['rate_off_1spike'] / x['rate_1spike']
+    return x
+
+
+def isotonic(y: Sequence[float], increasing: bool = True) -> np.ndarray:
+    """Pool-adjacent-violators: the least-squares monotone (non-decreasing, or non-increasing) fit of `y` in order."""
+    v = np.asarray(y, dtype=float)
+    if not increasing:
+        return -isotonic(-v, True)
+    blocks = []                          # [sum, count]
+    for val in v:
+        blocks.append([val, 1])
+        while len(blocks) > 1 and blocks[-2][0] / blocks[-2][1] > blocks[-1][0] / blocks[-1][1]:
+            s, n = blocks.pop()
+            blocks[-1][0] += s
+            blocks[-1][1] += n
+    return np.concatenate([np.full(n, s / n) for s, n in blocks]) if blocks else v
+
+
+def interp_monotone(x: Sequence[float], y: Sequence[float], x0: float, increasing: bool = True) -> float:
+    """y at x0 by linear interpolation between the points sorted by x, y first made monotone (`isotonic`); NaN outside
+    the points' range."""
+    x, y = np.asarray(x, float), np.asarray(y, float)
+    ok = np.isfinite(x) & np.isfinite(y)
+    x, y = x[ok], y[ok]
+    if len(x) == 0 or not (x.min() <= x0 <= x.max()):
+        return np.nan
+    o = np.argsort(x, kind='stable')
+    return float(np.interp(x0, x[o], isotonic(y[o], increasing)))
+
+
+def _inverse(x: np.ndarray, f: np.ndarray, y: float, side: str) -> float:
+    """For f non-decreasing in x (sorted), the x at which the piecewise-linear f reaches y: the first ('left') or the last
+    ('right') such x; -inf below f's range, +inf above it."""
+    if y < f[0]:
+        return -np.inf
+    if y > f[-1]:
+        return np.inf
+    if side == 'left':
+        i = int(np.argmax(f >= y))
+        if i == 0 or f[i] == f[i - 1]:
+            return float(x[i])
+        return float(x[i - 1] + (y - f[i - 1]) * (x[i] - x[i - 1]) / (f[i] - f[i - 1]))
+    j = len(f) - 1 - int(np.argmax(f[::-1] <= y))
+    if j == len(f) - 1 or f[j + 1] == f[j]:
+        return float(x[j])
+    return float(x[j] + (y - f[j]) * (x[j + 1] - x[j]) / (f[j + 1] - f[j]))
+
+
+def d_star(d: Sequence[float], ratio: Sequence[float], target: float, lo: Optional[float] = None,
+           hi: Optional[float] = None) -> dict:
+    """The strength at which the family's response-rate ratio (APL off over on; made non-decreasing in d) equals
+    `target`, with its interval from [lo, hi] (the lower end the first d reaching lo, the upper the last d not above
+    hi); +inf where the ratio stays below the value over the ladder (d* beyond m = 2), 0 below the ratio at m = 0 (1)."""
+    x, y = np.asarray(d, float), np.asarray(ratio, float)
+    ok = np.isfinite(x) & np.isfinite(y)
+    x, y = x[ok], y[ok]
+    o = np.argsort(x, kind='stable')
+    x, f = x[o], isotonic(y[o], True)
+    if len(x) == 0:
+        return dict(d_star=np.nan, d_star_lo=np.nan, d_star_hi=np.nan, censored='')
+    pt = 0.5 * (_inverse(x, f, target, 'left') + _inverse(x, f, target, 'right'))
+    a = _inverse(x, f, target if lo is None else lo, 'left')
+    b = _inverse(x, f, target if hi is None else hi, 'right')
+    def clip(v):
+        return v if v == np.inf else max(v, 0.0)
+    cens = 'above the ladder' if np.isinf(b) and b > 0 else ''
+    return dict(d_star=clip(pt), d_star_lo=clip(a), d_star_hi=clip(b), censored=cens)
 
 
 def y_class(strength: Tuple[float, float], dstar: Tuple[float, float]) -> str:
-    """'too weak' if the strength's interval lies below d*'s, 'too strong' if above, otherwise 'inside'."""
-    raise NotImplementedError
+    """'too weak' if the strength's interval lies wholly below d*'s interval, 'too strong' if wholly above, else
+    'inside' (a point strength has lo == hi); 'no d*' when d* is not defined."""
+    s_lo, s_hi = strength
+    d_lo, d_hi = dstar
+    if np.isnan(d_lo) or np.isnan(d_hi):
+        return 'no d*'
+    if s_hi < d_lo:
+        return 'too weak'
+    if s_lo > d_hi:
+        return 'too strong'
+    return 'inside'
 
 
-def y_verdict(per_odor: Dict[str, str]) -> str:
-    """Y1 / Y2 over the three odors."""
-    raise NotImplementedError
+def y_over_wirings(classes: Sequence[str], min_wirings: int = X2_MIN_WIRINGS) -> str:
+    """A class under an estimate: the class at least `min_wirings` of the 8 wirings give, else 'not decided'."""
+    c = list(classes)
+    return next((k for k in Y_CLASSES if sum(x == k for x in c) >= min_wirings), 'not decided')
 
 
-def part_b(wirings: Sequence[str] = ALL_WIRINGS) -> dict:
-    """Part B: the ladder's runs (resumable) and the tables B1 to B3."""
-    raise NotImplementedError
+def y_over_estimates(per_estimate: Dict[str, str]) -> str:
+    """Over the estimates (E100's rule): inside if inside under any; too weak or too strong only if so under all."""
+    v = list(per_estimate.values())
+    if 'inside' in v:
+        return 'inside'
+    for k in ('too weak', 'too strong'):
+        if v and all(x == k for x in v):
+            return k
+    return 'not decided'
+
+
+def y_verdict(per_odor: Dict[str, str], min_odors: int = Y_MIN_ODORS) -> str:
+    """Y1 / Y2 over the three odors: 'too weak' if at least two are too weak and none too strong; 'too strong' the
+    reverse; 'inside' if at least two are inside; otherwise 'not decided'."""
+    v = list(per_odor.values())
+    n = {k: sum(x == k for x in v) for k in Y_CLASSES}
+    if n['too weak'] >= min_odors and n['too strong'] == 0:
+        return 'too weak'
+    if n['too strong'] >= min_odors and n['too weak'] == 0:
+        return 'too strong'
+    if n['inside'] >= min_odors:
+        return 'inside'
+    return 'not decided'
+
+
+def weak_kc_rates(first_n: Optional[int] = None, path: Optional[Path] = None) -> pd.DataFrame:
+    """The weak-odor KC recordings' (diag_mix) response rates per recording and odor (the three weak odors and the
+    solvent): the fraction of KCs whose trial mean (over all trials, or the first `first_n`) exceeds KC_RESPONSE_Z,
+    with the genotype group and the fly (date, fly number)."""
+    p = H.shared_dir().joinpath(*WEAK_KC_PANEL, 'diag_mix_long.csv') if path is None else Path(path)
+    want = [flies_stim_label(o) for o in FLIES_WEAK] + [SOLVENT_ODOR]
+    t = pd.read_csv(p, usecols=['date', 'fly_num', 'roi', 'odor', 'repeat', 'value', 'recording', 'genotype_group'])
+    t = t[t['odor'].isin(want)]
+    if first_n is not None:
+        t = t[t['repeat'] < first_n]
+    m = t.groupby(['recording', 'genotype_group', 'date', 'fly_num', 'odor', 'roi'], sort=False)['value'].mean()
+    r = (m > KC_RESPONSE_Z).groupby(level=['recording', 'genotype_group', 'date', 'fly_num', 'odor']).mean()
+    r = r.rename('rate').reset_index()
+    r['fly'] = r['date'].astype(str) + '_fly' + r['fly_num'].astype(str)
+    return r
+
+
+def flies_rate_ratio(rates: pd.DataFrame, odor_label: str, solvent: bool = False, n_boot: int = N_BOOT,
+                     seed: int = SEED) -> dict:
+    """The flies' response-rate ratio, APL output blocked (TNT) over control flies, at one odor (recording means, as
+    E49's), with its interval: `n_boot` bootstrap draws of the control flies (a drawn fly brings its recordings), each of
+    the blocked recordings left out in turn, the 90 % interval of each, their hull. `solvent`: each recording's solvent
+    rate subtracted first."""
+    x = rates[rates['odor'] == odor_label].set_index('recording')
+    if solvent:
+        s = rates[rates['odor'] == SOLVENT_ODOR].set_index('recording')['rate']
+        x = x.assign(rate=x['rate'] - s.reindex(x.index).to_numpy(float))
+    c = x[x['genotype_group'] == 'control']
+    b = x[x['genotype_group'] == 'apl_output_blocked']
+    ctrl, tnt = float(c['rate'].mean()), float(b['rate'].mean())
+    flies = sorted(c['fly'].unique())
+    by_fly = [c.loc[c['fly'] == f, 'rate'].to_numpy(float) for f in flies]
+    rng = np.random.default_rng(seed)
+    idx = rng.integers(0, len(flies), size=(n_boot, len(flies)))
+    sums = np.array([v.sum() for v in by_fly])
+    ns = np.array([len(v) for v in by_fly])
+    ctrl_b = sums[idx].sum(axis=1) / ns[idx].sum(axis=1)
+    ivs = []
+    for r in b.index:
+        loo = float(b.drop(index=r)['rate'].mean())
+        ivs.append(_ci(loo / ctrl_b))
+    lo, hi = min(a for a, _ in ivs), max(z for _, z in ivs)
+    return dict(odor=odor_label, ctrl=ctrl, tnt=tnt, ratio=tnt / ctrl, lo90=lo, hi90=hi, n_ctrl_recordings=int(len(c)),
+                n_ctrl_flies=len(flies), n_tnt_recordings=int(len(b)), n_tnt_flies=int(b['fly'].nunique()),
+                solvent_subtracted=solvent)
+
+
+def flies_apl_ratios() -> pd.DataFrame:
+    """The flies' APL at the weak odors over paa at 10^-3 (set W, E100's score_weak_table.csv: arithmetic means over 8
+    flies, 90 % intervals)."""
+    w = pd.read_csv(H.shared_dir().joinpath(*E100_B, 'score_weak_table.csv'))
+    rows = []
+    for o in FLIES_WEAK:
+        x = w[(w['set'] == 'W') & (w['stimulus'] == flies_stim_label(o))].iloc[0]
+        rows.append(dict(odor=o, stimulus=flies_stim_label(o), apl=float(x['flies_ratio']), apl_lo90=float(x['flies_lo90']),
+                         apl_hi90=float(x['flies_hi90']), n_flies=int(x['n_flies']), mean=x['flies_mean']))
+    return pd.DataFrame(rows)
+
+
+def widened(lo: float, mid: float, hi: float, sd_log2: float = VIAL_SD_LOG2) -> Tuple[float, float]:
+    """An interval widened by a vial SD on the log2 scale (each side's half-width combined in quadrature with
+    NORMAL_Z90 x sd_log2)."""
+    a, b = np.log2(mid) - np.log2(lo), np.log2(hi) - np.log2(mid)
+    w = NORMAL_Z90 * sd_log2
+    return float(2 ** (np.log2(mid) - np.hypot(a, w))), float(2 ** (np.log2(mid) + np.hypot(b, w)))
+
+
+def flies_targets() -> pd.DataFrame:
+    """The flies' KC response-rate ratios per weak odor under every Y reading that changes them (carrying, the first
+    three trials, the solvent subtracted, relative to the panel's PANEL_KC_RATIO), with the control flies' rate."""
+    rows = []
+    all_t, first = weak_kc_rates(), weak_kc_rates(FIRST_TRIALS)
+    for o in FLIES_WEAK:
+        lab = flies_stim_label(o)
+        for rd, rates, solv in (('carrying', all_t, False), ('first_three_trials', first, False),
+                                ('solvent_subtracted', all_t, True)):
+            rows.append(dict(odor=o, reading=rd, **flies_rate_ratio(rates, lab, solv)))
+        c = dict(rows[-3])
+        rows.append(dict(c, reading='relative_to_panel', ratio=c['ratio'] / PANEL_KC_RATIO,
+                         lo90=c['lo90'] / PANEL_KC_RATIO, hi90=c['hi90'] / PANEL_KC_RATIO))
+        for rd in ('one_spike', 'settled'):
+            rows.append(dict(c, reading=rd))
+    return pd.DataFrame(rows)
+
+
+def kc_identity(rates: pd.DataFrame) -> dict:
+    """The recomputed rates (all trials) against data/yang_weak_odor_kc's response_fraction_per_recording.csv
+    (frac_trialmean_gt1) and E49's recording means (data_fractions.csv)."""
+    ref = pd.read_csv(H.shared_dir().joinpath(*WEAK_KC_PANEL, 'computed', 'response_fraction_per_recording.csv'))
+    m = rates.merge(ref[['recording', 'odor', 'frac_trialmean_gt1']], on=['recording', 'odor'], how='left')
+    d1 = float((m['rate'] - m['frac_trialmean_gt1']).abs().max())
+    e49 = pd.read_csv(H.shared_dir().joinpath(*E49_FRACTIONS))
+    e49 = e49[e49['panel'] == 'diag_mix']
+    means = rates.groupby(['genotype_group', 'odor'])['rate'].mean()
+    d2 = max(abs(float(means.get((g, o), np.nan)) - float(f)) for g, o, f in zip(e49['group'], e49['odor'], e49['frac'])
+             if (g, o) in means.index)
+    return dict(passed=bool(d1 <= 1e-12 and d2 <= 1e-12), max_abs_diff_per_recording=d1, max_abs_diff_e49_means=d2,
+                n=int(len(m)))
+
+
+def reading_curve(x: pd.DataFrame, reading: str, panel: pd.DataFrame) -> pd.DataFrame:
+    """The model columns a Y reading uses: 'dd' (d, or d_settled), 'rr' (ratio, ratio_1spike, or ratio over the
+    wiring's panel ratio), 'rate_on' (2+ or 1+ spikes)."""
+    y = x.copy()
+    y['dd'] = y['d_settled'] if reading == 'settled' else y['d']
+    y['rr'] = y['ratio_1spike'] if reading == 'one_spike' else y['ratio']
+    y['rate_on'] = y['rate_1spike'] if reading == 'one_spike' else y['rate']
+    if reading == 'relative_to_panel':
+        y['rr'] = y['rr'] / y['wiring'].map(panel.set_index('wiring')['panel_ratio']).astype(float)
+    return y
+
+
+def y_tables(x: pd.DataFrame, panel: pd.DataFrame, targets: pd.DataFrame, apl: pd.DataFrame) -> Tuple[pd.DataFrame, dict]:
+    """B2 and the classes: per reading, odor, estimate and wiring d* with its interval, the flies' APL strength (Y1)
+    and the family's own d at m = 1 (Y2) and their classes; the verdicts over wirings, estimates and odors, and held."""
+    rows = []
+    for rd in Y_READINGS:
+        y = reading_curve(x, rd, panel)
+        for o in FLIES_WEAK:
+            t = targets[(targets['odor'] == o) & (targets['reading'] == rd)].iloc[0]
+            a = apl[apl['odor'] == o].iloc[0]
+            for s in X2_ESTIMATE_SESSIONS:
+                lab = model_label(o, s)
+                for w, g in y[y['stimulus'] == lab].groupby('wiring', sort=False):
+                    ds = d_star(g['dd'], g['rr'], t['ratio'], t['lo90'], t['hi90'])
+                    d1 = float(g.loc[g['m'] == 1.0, 'dd'].iloc[0])
+                    rows.append(dict(reading=rd, odor=o, estimate=s, stimulus=lab, wiring=w, flies_ratio=t['ratio'],
+                                     flies_lo90=t['lo90'], flies_hi90=t['hi90'], **ds, apl=a['apl'], apl_lo90=a['apl_lo90'],
+                                     apl_hi90=a['apl_hi90'], d_m1=d1,
+                                     family_ratio_m1=float(g.loc[g['m'] == 1.0, 'rr'].iloc[0]),
+                                     y1=y_class((a['apl_lo90'], a['apl_hi90']), (ds['d_star_lo'], ds['d_star_hi'])),
+                                     y2=y_class((d1, d1), (ds['d_star_lo'], ds['d_star_hi'])),
+                                     max_spike_count=float(g['max_spike_count'].max())))
+    t = pd.DataFrame(rows)
+    res = {}
+    for yk in ('y1', 'y2'):
+        by_reading = {}
+        for rd, g in t.groupby('reading', sort=False):
+            per_odor = {}
+            for o, go in g.groupby('odor', sort=False):
+                per_est = {s: y_over_wirings(ge[yk]) for s, ge in go.groupby('estimate', sort=False)}
+                per_odor[o] = dict(per_estimate=per_est, over_estimates=y_over_estimates(per_est))
+            by_reading[rd] = dict(per_odor=per_odor, verdict=y_verdict({o: v['over_estimates'] for o, v in per_odor.items()}))
+        res[yk] = dict(by_reading=by_reading, held=held_class({k: v['verdict'] for k, v in by_reading.items()}),
+                       carrying=by_reading['carrying']['verdict'])
+    return t, res
+
+
+def b1_table(x: pd.DataFrame, apl: pd.DataFrame, targets: pd.DataFrame) -> pd.DataFrame:
+    """B1 (described): per odor, estimate and wiring the family's response rate with APL on at the flies' APL ratio,
+    read linearly and through the indicator family (the ratio to the power 1/n, INDICATOR_NS), interpolated in d (made
+    non-increasing), against the control flies' rate."""
+    rows = []
+    for o in FLIES_WEAK:
+        a = float(apl.loc[apl['odor'] == o, 'apl'].iloc[0])
+        ctrl = float(targets[(targets['odor'] == o) & (targets['reading'] == 'carrying')]['ctrl'].iloc[0])
+        for s in X2_ESTIMATE_SESSIONS:
+            for w, g in x[x['stimulus'] == model_label(o, s)].groupby('wiring', sort=False):
+                for n in INDICATOR_NS:
+                    dd = a ** (1.0 / n)
+                    rows.append(dict(odor=o, estimate=s, wiring=w, n=n, d=dd,
+                                     rate_on=interp_monotone(g['d'], g['rate'], dd, increasing=False),
+                                     rate_on_m1=float(g.loc[g['m'] == 1.0, 'rate'].iloc[0]),
+                                     d_max=float(g['d'].max()), ctrl_flies=ctrl))
+    return pd.DataFrame(rows)
+
+
+def b3_table(yt: pd.DataFrame) -> pd.DataFrame:
+    """B3 (described): per odor, estimate and wiring the indicator exponent at which the flies' APL ratio meets d*
+    (n = ln ratio / ln d*), E98's V2 read with it (V2^(1/n)), and Y1 with the flies' APL interval widened by E103's
+    vial SD (beside; waits on question 22)."""
+    v2 = pd.read_csv(H.shared_dir().joinpath(*E98_A3_RATIOS), comment='#')
+    v2 = v2[(v2['ratio_id'] == 'V2') & (v2['reading'] == 'order_matched') & (v2['subset'] == 'all')].iloc[0]
+    t = yt[yt['reading'] == 'carrying'].copy()
+    with np.errstate(divide='ignore', invalid='ignore'):
+        t['n_star'] = np.log(t['apl']) / np.log(t['d_star'])
+        t['v2_read'] = float(v2['ratio']) ** (1.0 / t['n_star'])
+    t['v2'] = float(v2['ratio'])
+    wid = [widened(a, m, b) for a, m, b in zip(t['apl_lo90'], t['apl'], t['apl_hi90'])]
+    t['apl_lo90_widened'] = [a for a, _ in wid]
+    t['apl_hi90_widened'] = [b for _, b in wid]
+    t['y1_widened'] = [y_class((a, b), (lo, hi)) for a, b, lo, hi in
+                       zip(t['apl_lo90_widened'], t['apl_hi90_widened'], t['d_star_lo'], t['d_star_hi'])]
+    return t[['odor', 'estimate', 'wiring', 'apl', 'd_star', 'n_star', 'v2', 'v2_read', 'apl_lo90_widened',
+              'apl_hi90_widened', 'd_star_lo', 'd_star_hi', 'y1_widened']]
+
+
+def part_b(wirings: Sequence[str] = ALL_WIRINGS, runs: bool = True) -> dict:
+    """Part B: the ladder's runs (`run_ladder`, resumable; `runs` False: tables from the saved runs only), then
+    b_model.csv (every run's APL and response rates, d, the ratios), b_flies.csv (the flies' targets), b2_dstar.csv (d*
+    and the classes), b1_rates.csv, b3_exponents.csv and b_summary.json."""
+    if runs:
+        run_ladder(wirings)
+    out = out_dir()
+    model, panel = ladder_model_table(wirings)
+    x = add_d(model)
+    rates = weak_kc_rates()
+    kid = kc_identity(rates)
+    if not kid['passed']:
+        raise RuntimeError(f"the KC rates do not reproduce the saved fractions: {kid}")
+    targets = flies_targets()
+    apl = flies_apl_ratios()
+    yt, ys = y_tables(x, panel, targets, apl)
+    write_table(x, out / 'b_model.csv')
+    write_table(panel, out / 'b_panel.csv')
+    write_table(targets, out / 'b_flies.csv')
+    write_table(apl, out / 'b_flies_apl.csv')
+    write_table(yt, out / 'b2_dstar.csv')
+    write_table(b1_table(x, apl, targets), out / 'b1_rates.csv')
+    b3 = b3_table(yt)
+    write_table(b3, out / 'b3_exponents.csv')
+    ident = {w: _read_json(local_dir(LADDER_SUB) / f'{w}_m1_identity.json') for w in wirings if w != 'real'}
+    summ = dict(caveat=QUALITY_CAVEAT, unmeasured=UNMEASURED, kc_identity=kid, m1_identities=ident,
+                dstar_median=yt[yt['reading'] == 'carrying'].groupby('odor')[['d_star', 'd_star_lo', 'd_star_hi']]
+                .median().to_dict('index'),
+                y1=ys['y1'], y2=ys['y2'],
+                y1_widened=y_verdict({o: y_over_estimates({s: y_over_wirings(g2['y1_widened'])
+                                                           for s, g2 in g.groupby('estimate')})
+                                      for o, g in b3.groupby('odor')}),
+                max_spike_count=float(x['max_spike_count'].max()))
+    _write_json(out / 'b_summary.json', summ)
+    provenance('B', wirings=list(wirings), runs=runs, threads=os.environ.get('OMP_NUM_THREADS'))
+    return summ
 
 
 def part_c() -> dict:
-    """Part C: the verdict table."""
-    raise NotImplementedError
+    """Part C: the verdicts X1 (with G1 to G3), X2, X3, Y1 and Y2 in one table (c_verdicts.csv: per verdict and
+    reading, its class; the held class), and verdict.json."""
+    out = out_dir()
+    a = _read_json(out / 'a_summary.json')
+    b = _read_json(out / 'b_summary.json')
+    if a is None or b is None:
+        raise RuntimeError('part C needs parts A and B')
+    x1 = read_table(out / 'a2_x1.csv')
+    rows = []
+    for _, r in x1.iterrows():
+        for k in [f for f, _, _ in FALLS] + ['x1']:
+            rows.append(dict(verdict='X1' if k == 'x1' else f'X1: {k}', reading=r['reading'], cls=r[k]))
+    for k in ('x2', 'x3'):
+        for rd, v in a[k]['by_reading'].items():
+            rows.append(dict(verdict=k.upper(), reading=rd, cls=v))
+    for k in ('y1', 'y2'):
+        for rd, v in b[k]['by_reading'].items():
+            rows.append(dict(verdict=k.upper(), reading=rd, cls=v['verdict'],
+                             per_odor=';'.join(f"{o}: {p['over_estimates']}" for o, p in v['per_odor'].items())))
+    held = {'X1': a['x1']['x1'], **{f'X1: {f}': a['x1']['held_falls'][f] for f, _, _ in FALLS}, 'X2': a['x2']['x2'],
+            'X3': a['x3']['x3'], 'Y1': b['y1']['held'], 'Y2': b['y2']['held']}
+    for k, v in held.items():
+        rows.append(dict(verdict=k, reading='held', cls=v))
+    t = pd.DataFrame(rows)
+    write_table(t, out / 'c_verdicts.csv')
+    v = dict(caveat=QUALITY_CAVEAT, held=held, y1_widened_beside=b.get('y1_widened'),
+             lock_sha256=a.get('lock_sha256'), time=time.strftime('%Y-%m-%d %H:%M'), host=_host())
+    _write_json(out / 'verdict.json', v)
+    provenance('C')
+    return v
 
 
 def main() -> None:
@@ -1062,10 +1980,11 @@ def main() -> None:
     ap.add_argument('--write-lock', action='store_true',
                     help="part 0: write part A's lock once every identity passes (commit it before part A)")
     ap.add_argument('--wirings', default=','.join(ALL_WIRINGS), help='part B: comma-separated wirings')
+    ap.add_argument('--no-runs', action='store_true', help="part B: the tables from the saved runs only")
     ap.add_argument('--threads', type=int, default=None,
                     help='runs (part 0 with --runs, part B): OMP threads; OMP_NUM_THREADS and OMP_THREAD_LIMIT must match')
     a = ap.parse_args()
-    simulates = (a.part == '0' and a.runs) or a.part == 'B'
+    simulates = (a.part == '0' and a.runs) or (a.part == 'B' and not a.no_runs)
     if simulates:
         if a.threads is None:
             ap.error('runs need --threads')
@@ -1077,8 +1996,8 @@ def main() -> None:
     elif a.part == 'A':
         print(json.dumps(part_a(), indent=1, default=_json_default), flush=True)
     elif a.part == 'B':
-        print(json.dumps(part_b(tuple(x for x in a.wirings.split(',') if x)), indent=1, default=_json_default),
-              flush=True)
+        print(json.dumps(part_b(tuple(x for x in a.wirings.split(',') if x), runs=not a.no_runs), indent=1,
+                         default=_json_default), flush=True)
     else:
         print(json.dumps(part_c(), indent=1, default=_json_default), flush=True)
 
