@@ -36,6 +36,11 @@ Import: convert_markdown(md_text, figdir) -> html; lint(html) -> list of problem
 `convert_markdown(..., nested_items=True)` (not the command line; off by default, so other pages are
 unchanged) keeps a numbered list with indented sub-bullets or indented paragraphs under an item as one
 list, those blocks inside the item (the questions page, build_questions_page.py).
+`--experiment-pages DIR` (`convert_markdown(..., experiment_pages=experiment_pages(DIR))`; off by default)
+links the ID at the start of each item of an experiment key (a fold whose title starts with "Experiment
+key", items `E<n>: name (state)`) to that experiment's own page in DIR, the shared directory's reports/
+(`E<n>_<short>.html`, as a relative link, so it works from that folder and from the queue monitor's
+/report/); an experiment without a page keeps its ID as plain text. build_summary.py's pages pass it.
 """
 from __future__ import annotations
 
@@ -46,7 +51,7 @@ import re
 import sys
 import textwrap
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 CSS = """
   :root { --ink: #1f2328; --muted: #57606a; --line: #d8dee4; --bg: #ffffff; --soft: #f6f8fa; --accent: #2a78d6; }
@@ -254,8 +259,65 @@ def _indent(ln: str) -> int:
     return len(ln) - len(ln.lstrip())
 
 
+# an experiment's own page in the shared directory's reports/, as save_report_copy.py names it
+EXPERIMENT_PAGE_RE = re.compile(r'E(\d+)_[a-z0-9_]+\.html')
+_KEY_FOLD_RE = re.compile(r'<details class="fold"><summary>Experiment key.*?</summary>(.*?)</details>', re.S)
+
+
+def experiment_pages(folder: Path) -> Dict[int, str]:
+    """The experiments' own pages in `folder` (the shared directory's reports/).
+
+    Pages are the files named `E<n>_<short>.html` (lowercase short name; `E1_...` is never taken for
+    E10). An experiment with several such files takes the one whose name has a row in the folder's
+    README.md (`| E<n>_<short> | ...`, written by save_report_copy.py).
+
+    Returns:
+        {experiment number: file name}; experiments without a page are absent.
+
+    Raises:
+        ValueError: an experiment has several pages and not exactly one of them is in README.md.
+    """
+    found: Dict[int, List[str]] = {}
+    for p in sorted(Path(folder).iterdir()):
+        m = EXPERIMENT_PAGE_RE.fullmatch(p.name)
+        if m and p.is_file():
+            found.setdefault(int(m.group(1)), []).append(p.name)
+    readme = Path(folder) / 'README.md'
+    listed = set(re.findall(r'^\|\s*(E\d+_[a-z0-9_]+)\s*\|', readme.read_text(), flags=re.M)) if readme.is_file() else set()
+    pages = {}
+    for n, names in found.items():
+        if len(names) > 1:
+            names = [x for x in names if x[:-len('.html')] in listed]
+            if len(names) != 1:
+                raise ValueError(f'E{n} has several pages in {folder} ({", ".join(found[n])}) and '
+                    f'{"none" if not names else "more than one"} of them is listed in its README.md')
+        pages[n] = names[0]
+    return pages
+
+
+def link_experiment_id(item: str, pages: Dict[int, str]) -> str:
+    """A list item's HTML with the experiment ID it starts with (`E<n>` followed by ':' or ',', right after
+    an opening <b> or not) linked to that experiment's page, `pages[n]`, relative to the page's folder;
+    unchanged if it starts with no ID or the experiment has no page."""
+    m = re.match(r'(<b>)?E(\d+)(?=[:,])', item)
+    if not m or int(m.group(2)) not in pages:
+        return item
+    href = html_mod.escape(pages[int(m.group(2))], quote=True)
+    return f'{m.group(1) or ""}<a href="{href}">E{m.group(2)}</a>' + item[m.end():]
+
+
+def experiment_key_links(page: str) -> Tuple[List[int], List[int]]:
+    """The IDs of a page's experiment keys (items `E<n>: ...` of folds titled "Experiment key ..."):
+    (linked, not linked), in page order."""
+    linked, plain = [], []
+    for fold in _KEY_FOLD_RE.findall(page):
+        for m in re.finditer(r'<li>(?:<a href="[^"]*">)?E(\d+)(</a>)?:', fold):
+            (linked if m.group(2) else plain).append(int(m.group(1)))
+    return linked, plain
+
+
 def convert_body(md: str, figdir: Optional[Path] = None, *, byline: bool = True, defs: Optional[dict] = None,
-        nested_items: bool = False) -> str:
+        nested_items: bool = False, experiment_pages: Optional[Dict[int, str]] = None, _key: bool = False) -> str:
     """Converts markdown to the body HTML (no page wrapper).
 
     Args:
@@ -263,6 +325,9 @@ def convert_body(md: str, figdir: Optional[Path] = None, *, byline: bool = True,
             paragraphs after a blank line), are converted as blocks of their own inside that item's
             `<li>`, so a numbered list with sub-bullets stays one list. Off by default: the other pages
             keep their output (their indented lines after a numbered item end the list, as before).
+        experiment_pages: {experiment number: page file} (`experiment_pages()`): in folds titled
+            "Experiment key ...", the ID starting each bullet item links to its experiment's page.
+        _key: the markdown is an experiment key fold's content (set by the fold's conversion).
     """
     lines = md.split('\n')
     out: List[str] = []
@@ -372,7 +437,8 @@ def convert_body(md: str, figdir: Optional[Path] = None, *, byline: bool = True,
                 inner.append(lines[i]); i += 1
             i += 1   # the closing ???
             out.append(f'<details class="fold"><summary>{inline(title_txt)}</summary>'
-                + convert_body('\n'.join(inner), figdir, byline=False, defs=defs, nested_items=nested_items)
+                + convert_body('\n'.join(inner), figdir, byline=False, defs=defs, nested_items=nested_items,
+                    experiment_pages=experiment_pages, _key=title_txt.lower().startswith('experiment key'))
                 + '</details>')
             continue
         fm = _FIG_RE.match(s)
@@ -450,7 +516,9 @@ def convert_body(md: str, figdir: Optional[Path] = None, *, byline: bool = True,
                 while i < len(lines) and lines[i].strip() == '' and i + 1 < len(lines) \
                         and _BULLET_RE.match(lines[i + 1].strip()):
                     i += 1
-            out.append(_bullet_list(items, text_html))
+            render = (lambda t: link_experiment_id(text_html(t), experiment_pages)) if _key and experiment_pages \
+                else text_html
+            out.append(_bullet_list(items, render))
             continue
         para = [s]; i += 1
         while i < len(lines) and lines[i].strip() and not _is_block_start(lines[i].strip()):
@@ -464,8 +532,8 @@ def convert_body(md: str, figdir: Optional[Path] = None, *, byline: bool = True,
 
 
 def convert_markdown(md: str, figdir: Optional[Path] = None, title: Optional[str] = None, *,
-        nested_items: bool = False) -> str:
-    body = convert_body(md, figdir, nested_items=nested_items)
+        nested_items: bool = False, experiment_pages: Optional[Dict[int, str]] = None) -> str:
+    body = convert_body(md, figdir, nested_items=nested_items, experiment_pages=experiment_pages)
     if '@@TOC@@' in body:
         body = body.replace('@@TOC@@', build_toc(body.replace('@@TOC@@', '')))
     if title is None:
@@ -531,12 +599,20 @@ def main() -> None:
     ap.add_argument('out', type=Path)
     ap.add_argument('--figdir', type=Path, default=None, help='directory figure paths are relative to (default: the markdown file\'s)')
     ap.add_argument('--title', default=None)
+    ap.add_argument('--experiment-pages', type=Path, default=None, metavar='DIR',
+        help="link the IDs of the page's experiment keys to the experiments' pages in DIR (E<n>_<short>.html)")
     args = ap.parse_args()
-    page = convert_markdown(args.markdown.read_text(), args.figdir or args.markdown.parent, args.title)
+    pages = experiment_pages(args.experiment_pages) if args.experiment_pages else None
+    page = convert_markdown(args.markdown.read_text(), args.figdir or args.markdown.parent, args.title,
+        experiment_pages=pages)
     probs = lint(page)
     args.out.write_text(page)
     counts = {tag: len(re.findall(f'<{tag}[ >]', page)) for tag in ('h1', 'h2', 'h3', 'p', 'ol', 'ul', 'li', 'table', 'figure')}
     print(f'wrote {args.out} ({len(page) // 1024} KB); elements {counts}')
+    if pages is not None:
+        linked, plain = experiment_key_links(page)
+        print(f'experiment key: {len(linked)} IDs linked to their pages; no page for '
+            + (', '.join(f'E{n}' for n in plain) or 'none'))
     if probs:
         print('LINT PROBLEMS:'); print('\n'.join(' - ' + p for p in probs)); sys.exit(1)
     print('lint clean')

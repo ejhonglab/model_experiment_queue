@@ -83,6 +83,31 @@ def test_build(tmp_path, name):
 
 
 @pytest.mark.parametrize('name', NAMES)
+def test_experiment_key_links(tmp_path, name):
+    """The experiment key's IDs link to the experiments' pages saved in the shared directory's reports/ (relative
+    links); an experiment without a page keeps a plain ID, and without reports/ nothing is linked."""
+    key = '\n??? Experiment key: the ID of each experiment\n- E1: the baseline (completed)\n- E10: the joint fit (running)\n???\n'
+    shared = scratch_shared(tmp_path / 'first')
+    (shared / 'reports').mkdir()
+    (shared / 'reports' / 'E1_baseline.html').write_text('<body>E1</body>')
+    t = tmp_path / 'template.md'
+    t.write_text(TEMPLATE + key)
+    out_html = tmp_path / 'html' / 'index.html'
+    r = subprocess.run([sys.executable, str(REPO / 'reports' / f'build_{name}.py'), '--template', str(t), '--out-md',
+        str(tmp_path / 'md' / 'page.md'), '--out-html', str(out_html)],
+        env=dict(os.environ, KC_REMAPPING_SHARED=str(shared)), cwd=str(REPO), capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert 'experiment key: 1 IDs linked to their pages; no page for E10' in r.stdout
+    page = out_html.read_text()
+    assert '<li><a href="E1_baseline.html">E1</a>: the baseline (completed)</li>' in page
+    assert '<li>E10: the joint fit (running)</li>' in page
+    # no reports/ folder: the page is built, without links
+    r, shared, t, out_md, out_html = build(tmp_path / 'second', TEMPLATE + key, name)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert '<li>E1: the baseline (completed)</li>' in out_html.read_text()
+
+
+@pytest.mark.parametrize('name', NAMES)
 def test_unresolved_placeholder_fails(tmp_path, name):
     r, shared, t, out_md, out_html = build(tmp_path, TEMPLATE + '\nAnd {{data:no_such_target ~ .2f}}.\n', name)
     assert r.returncode != 0

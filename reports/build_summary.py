@@ -11,7 +11,8 @@
    that file), and the sidecar of every value's source next to it
    (summary_all_experiments.values.json);
 4. builds the page with source tooltips (md_to_artifact.py) at
-   outputs/_artifacts/summary/index.html.
+   outputs/_artifacts/summary/index.html, the IDs of its experiment key linked to the experiments' own
+   pages in the shared directory's reports/ (relative links: they work in the copy saved there).
 save_report_copy.py stays manual; the page is not published as an artifact (CLAUDE.md, "Report copies").
 Steps 2-4 are fill_and_build(), which the digest pages (build_since_priority_changes.py,
 build_since_yang_new_data.py) use for their own templates, through page_main().
@@ -73,7 +74,10 @@ def fill_and_build(template_path: Path, out_md: Path, out_html: Path, filled_nam
     out_html.parent.mkdir(parents=True, exist_ok=True)
     tipped_md = out_html.parent / filled_name
     tipped_md.write_text(tipped)
-    r = subprocess.run([sys.executable, str(H.HERE / 'reports' / 'md_to_artifact.py'), str(tipped_md), str(out_html), '--figdir', str(H.shared_dir())],
+    # the experiment key's IDs link to the experiments' own pages, saved next to this page's copy in reports/
+    pages_dir = H.shared_dir() / 'reports'
+    r = subprocess.run([sys.executable, str(H.HERE / 'reports' / 'md_to_artifact.py'), str(tipped_md), str(out_html), '--figdir', str(H.shared_dir())]
+        + (['--experiment-pages', str(pages_dir)] if pages_dir.is_dir() else []),
         capture_output=True, text=True)
     print('\n'.join(l for l in (r.stdout + r.stderr).split('\n') if l and 'Warning' not in l and 'warnings.warn' not in l)[-600:])
     print(f'{len(side)} values filled; {len(probs)} lint problems; markdown -> {out_md}; page -> {out_html}')

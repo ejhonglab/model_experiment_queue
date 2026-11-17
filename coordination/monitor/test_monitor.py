@@ -554,6 +554,53 @@ def test_reports_stay_in_their_folder(tmp_path):
     assert server.report_info(str(tmp_path)) == {}
 
 
+def test_experiment_pages(tmp_path):
+    """/report/E<n>_<short>.html serves an experiment's own page from reports/ (the target of the relative
+    links in the experiment keys and the experiment list) with the link script; nothing else in reports/
+    or outside it is served, and the page is not a Report view."""
+    make_shared(tmp_path, time.time())
+    reports = tmp_path / 'reports'
+    reports.mkdir()
+    (reports / 'E10_joint_fit.html').write_text('<!doctype html><html><body><h1>the joint fit</h1>'
+        '<a href="https://claude.ai/x">x</a></body></html>')
+    for name in ('E1_Upper.html', 'E1_a.md', 'notes.html', 'README.md', 'E10_joint_fit.html.bak'):
+        (reports / name).write_text('<body>not a page</body>')
+    (tmp_path / 'secret.html').write_text('<body>no</body>')
+    os.symlink('../secret.html', str(reports / 'E5_link.html'))
+    os.mkdir(str(reports / 'E6_dir.html'))
+    assert server.experiment_page_path(str(tmp_path), 'E10_joint_fit.html') == os.path.realpath(
+        str(reports / 'E10_joint_fit.html'))
+    for name in ('E1_Upper.html', 'E1_a.md', 'notes.html', 'README.md', 'E10_joint_fit.html.bak',
+            'E5_link.html', 'E6_dir.html', 'E7_missing.html', '../secret.html', 'E10_joint_fit',
+            'E_x.html', 'e10_joint_fit.html', 'E10_joint fit.html'):
+        assert server.experiment_page_path(str(tmp_path), name) is None, name
+    with serving(tmp_path) as base:
+        body = urllib.request.urlopen(base + '/report/E10_joint_fit.html').read().decode()
+        assert '<h1>the joint fit</h1>' in body and body.index(server.REPORT_LINK_SCRIPT) < body.index('</body>')
+        for name in ('E1_Upper.html', 'E1_a.md', 'notes.html', 'README.md', 'E10_joint_fit.html.bak',
+                'E5_link.html', 'E6_dir.html', 'E7_missing.html', '..%2Fsecret.html', '%2E%2E/secret.html',
+                'E10_joint_fit.html/..', 'reports/E10_joint_fit.html'):
+            with pytest.raises(urllib.error.HTTPError) as e:
+                urllib.request.urlopen(base + '/report/' + name)
+            assert e.value.code == 404, name
+        # an experiment page is not a Report view: no sub-tab, not listed
+        assert 'E10_joint_fit' not in urllib.request.urlopen(base + '/').read().decode()
+        assert json.loads(urllib.request.urlopen(base + '/api/reports').read()) == {}
+
+
+def test_report_link_script():
+    """The link script sends links to other sites to a new tab, and links to experiments' pages too when
+    the page is in the Report tab's frame; in-page anchors and other relative links are left alone."""
+    s = server.REPORT_LINK_SCRIPT
+    assert s.startswith('<script>') and s.endswith('</script>')
+    assert "f=window.top!==window.self" in s and "(f&&/^E\\d+_[a-z0-9_]+\\.html$/.test(h))" in s
+    js_re = re.compile(s.split('(f&&/', 1)[1].split('/.test(h)', 1)[0])
+    for href, ok in (('E10_joint_fit.html', True), ('E1_apl_knockout.html', True), ('#fn-x', False),
+            ('summary_all_experiments.html', False), ('E10_joint_fit.html#x', False), ('../E1_a.html', False)):
+        assert bool(js_re.fullmatch(href)) is ok, href
+        assert bool(server.EXPERIMENT_PAGE.fullmatch(href)) is ok, href
+
+
 QUESTIONS_NAME = 'questions_2026-11-15_1614.md'
 QUESTIONS_MD = """# Questions for Yang
 

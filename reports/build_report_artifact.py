@@ -15,9 +15,13 @@ in `{#id}` gets that id, e.g. `## Footnotes {#footnotes}`), and the escapes `\\~
 in md_to_artifact.py: a block opened by a line `%%% hover` and closed by `%%%`, each line
 `term: definition`, is removed from the text, and every whole-word occurrence of a term in
 paragraphs, list items and table cells (not headings) gets a dotted underline showing the
-definition on hover (md_to_artifact's `with_defs` and `span.def` style).
+definition on hover (md_to_artifact's `with_defs` and `span.def` style). In the "In silico
+experiments" section, the ID that starts each item (`**E<n>, title ...**`) links to that experiment's
+own page in the shared directory's reports/ (`E<n>_<short>.html`, md_to_artifact's
+`experiment_pages`), as a relative link that works in the copy saved there; an experiment without a
+page keeps its ID as plain text.
 
-Usage: ./venv/bin/python reports/build_report_artifact.py [--out PATH]
+Usage: ./venv/bin/python reports/build_report_artifact.py [--out PATH] [--experiment-pages DIR]
 """
 import argparse
 import datetime as dt
@@ -102,7 +106,14 @@ def hover_defs(md: str):
     return '\n'.join(kept), defs
 
 
-def convert(md: str) -> str:
+def convert(md: str, experiment_pages=None) -> str:
+    """The report page's HTML from its markdown.
+
+    Args:
+        md: the report markdown.
+        experiment_pages: {experiment number: page file} (md_to_artifact.experiment_pages): the ID
+            starting each numbered item of the "In silico experiments" section links to that page.
+    """
     md, defs = hover_defs(md)
 
     def text(s: str) -> str:
@@ -113,12 +124,15 @@ def convert(md: str) -> str:
     out, i = [], 0
     max_exp = 0
     after_note = False
+    in_experiments = False
     while i < len(lines):
         ln = lines[i]
         if ln.startswith('# '):
             out.append(heading('h1', ln[2:])); i += 1; continue
         if ln.startswith('## '):
-            out.append(heading('h2', ln[3:])); after_note = False; i += 1; continue
+            out.append(heading('h2', ln[3:])); after_note = False; i += 1
+            in_experiments = ln[3:].startswith('In silico experiments')
+            continue
         if ln.startswith('|'):
             rows = []
             while i < len(lines) and lines[i].startswith('|'):
@@ -143,7 +157,9 @@ def convert(md: str) -> str:
                     max_exp = max(max_exp, int(em.group(1)))
                 i += 1
             cls = ' class="added-list"' if after_note else ''
-            out.append(f'<ol start="{start}"{cls}>' + ''.join(f'<li>{text(x)}</li>' for x in items)
+            link = in_experiments and experiment_pages
+            out.append(f'<ol start="{start}"{cls}>' + ''.join(
+                f'<li>{M.link_experiment_id(text(x), experiment_pages) if link else text(x)}</li>' for x in items)
                 + '</ol>')
             after_note = False
             continue
@@ -182,13 +198,29 @@ def convert(md: str) -> str:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('--out', type=Path, default=DEFAULT_OUT)
+    ap.add_argument('--experiment-pages', type=Path, default=None, metavar='DIR',
+        help="the experiments' own pages (E<n>_<short>.html) the experiment list links to (default: the shared "
+        "directory's reports/, if found; without it the IDs stay plain text)")
     args = ap.parse_args()
-    page = convert(MD.read_text())
+    pages_dir = args.experiment_pages
+    if pages_dir is None:
+        # found as kcq.harness.shared_dir finds it, without importing the model's packages
+        from reports.build_questions_page import shared_dir
+        try:
+            pages_dir = shared_dir() / 'reports'
+        except FileNotFoundError:
+            print('shared directory not found: the experiment IDs are not linked')
+    pages = M.experiment_pages(pages_dir) if pages_dir is not None else None
+    page = convert(MD.read_text(), pages)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(page)
     n_items = [len(re.findall(r'<li>', ol)) for ol in re.findall(r'<ol[^>]*>.*?</ol>', page, flags=re.S)]
     print(f'wrote {args.out} ({len(page) / 1e3:.0f} kB); ordered lists: {n_items}; '
         f'sections: {re.findall(r"<h2[^>]*>(.*?)</h2>", page)}')
+    if pages is not None:
+        ids = [(int(n), bool(a)) for a, n in re.findall(r'<li>(?:<b>)?(<a href="[^"]*">)?E(\d+)(?:</a>)?,', page)]
+        print(f'experiment list: {sum(a for _, a in ids)} IDs linked to their pages; no page for '
+            + (', '.join(f'E{n}' for n, a in ids if not a) or 'none'))
 
 
 if __name__ == '__main__':

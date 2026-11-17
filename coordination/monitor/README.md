@@ -28,8 +28,12 @@ the bar at the top (the address remembers the view: `#summary`, `#experiments`,
   published, with its own contents list, full-screen figures and hover definitions; switching
   tabs keeps each view's place. The reports never reload by themselves: once a minute the page
   checks whether a newer copy has been saved and, if so, says so in the bar with a "reload" link.
-  Links to other sites (the artifacts) open in a new browser tab. "open alone" opens the current
-  view in a tab of its own.
+  Links to other sites (the artifacts) open in a new browser tab. The experiment IDs in the
+  experiment keys (Summary and the two digests) and in the experiment list (Experiments and
+  mechanisms) link to each experiment's own page, `reports/E<n>_<short>.html` in the shared
+  directory (served at `/report/E<n>_<short>.html`), which also opens in a new tab; IDs of
+  experiments without a page are plain text. "open alone" opens the current view in a tab of its
+  own (where the experiment links open in place).
 - **Monitor**, the dashboard below (also at `http://hal:17486/monitor`). It updates itself in place
   every 30 s, without reloading the page (no blink, and the scroll position and open "status
   file" boxes stay), and not while it is hidden (another tab shown, or the browser tab in the

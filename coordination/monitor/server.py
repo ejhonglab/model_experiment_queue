@@ -10,7 +10,8 @@ Reads the shared directory (Tom/claude_kc_remapping under /local/tensor or /mnt/
   model, the claude.ai account, the plan's 5-hour and weekly usage);
 - <host>_status.md, each host's self-reported status (its front matter, if any);
 - chat.md entry headers, experiment_priorities.md (experiment index, work claims);
-- reports/current-*.html (the Report tab), and questions_for_yang/questions_*.md (the titles of
+- reports/current-*.html (the Report tab) and the experiments' pages reports/E<n>_<short>.html,
+  and questions_for_yang/questions_*.md (the titles of
   the questions answered through the questions page's form).
 
 It writes in one place only (since 2026-11-15): `POST /api/answers`, the form of the Questions for
@@ -28,7 +29,9 @@ by themselves: a note offers a reload when a newer copy is saved) and Monitor (`
 dashboard; it updates itself in place, without a page reload, and not while it is hidden or anything
 is full screen; query parameters `days`, `tokens` and `group` choose what the usage plots show).
 Also `/report/<view>` (the report files: `summary`, `experiments`, `since-priority-changes`,
-`since-yang-new-data`, `questions-for-yang`), `/api/reports` (their file names and times),
+`since-yang-new-data`, `questions-for-yang`), `/report/E<n>_<short>.html` (an experiment's own page in
+reports/, which the experiment keys and the experiment list link to), `/api/reports` (the views' file
+names and times),
 `/api/state` (the dashboard's data as JSON) and `POST /api/answers` (above).
 Standard library only, so it runs under any system python3 >= 3.8.
 """
@@ -792,11 +795,18 @@ REPORTS = {
     # its page has a form whose answers POST /api/answers saves (ANSWERS_DIR, below)
     'questions-for-yang': ('Questions for Yang', 'current-questions-for-yang.html'),
 }
-# added to each report page served: links to other sites open in a new browser tab, not in the frame
+# an experiment's own page in <shared>/reports/ (save_report_copy.py's E<n>_<short>.html), served at
+# /report/<name>; the summary's and the digests' experiment keys and the report page's experiment list
+# link to them with relative links (reports/md_to_artifact.py, experiment_pages)
+EXPERIMENT_PAGE = re.compile(r'E\d+_[a-z0-9_]+\.html')
+# added to each report page served: links to other sites open in a new browser tab, not in the frame,
+# and so do the links to experiments' pages from a page shown in the Report tab's frame (the view
+# stays where it was; a page opened alone follows them in place)
 REPORT_LINK_SCRIPT = (
     "<script>document.addEventListener('DOMContentLoaded',function(){var a=document."
-    "querySelectorAll('a[href]');for(var i=0;i<a.length;i++){if(/^https?:/i.test(a[i]."
-    "getAttribute('href'))&&a[i].host!==location.host){a[i].target='_blank';a[i].rel='noopener'}}})"
+    "querySelectorAll('a[href]'),f=window.top!==window.self;for(var i=0;i<a.length;i++){var h=a[i]."
+    "getAttribute('href');if((/^https?:/i.test(h)&&a[i].host!==location.host)||(f&&"
+    "/^E\\d+_[a-z0-9_]+\\.html$/.test(h))){a[i].target='_blank';a[i].rel='noopener'}}})"
     "</script>")
 
 
@@ -825,9 +835,22 @@ def report_info(shared):
     return out
 
 
+def experiment_page_path(shared, name):
+    """The file of an experiment's own page, <shared>/reports/<name>, or None if `name` is not an
+    experiment page's name (EXPERIMENT_PAGE), the file is missing or a link leads out of reports/."""
+    if not EXPERIMENT_PAGE.fullmatch(name):
+        return None
+    base = os.path.realpath(os.path.join(shared, 'reports'))
+    path = os.path.realpath(os.path.join(base, name))
+    if os.path.dirname(path) != base or not os.path.isfile(path):
+        return None
+    return path
+
+
 def report_body(shared, view):
-    """The report page's bytes with REPORT_LINK_SCRIPT added before </body>, or None."""
-    path = report_path(shared, view)
+    """The bytes of a Report view's page, or of an experiment's own page (`view` its file name,
+    `experiment_page_path`), with REPORT_LINK_SCRIPT added before </body>; None if there is none."""
+    path = report_path(shared, view) or experiment_page_path(shared, view)
     if path is None:
         return None
     with open(path, 'rb') as f:
