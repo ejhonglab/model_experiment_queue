@@ -8,6 +8,38 @@ directory's notes/ and are linked from here.
 
 ## Open
 
+### The summary's text has five statements that are wrong or unsourced (found 2026-11-16 and 2026-11-17, viki, from Yang's questions on the summary)
+- **What.** In `reports/summary_template.md` (line numbers at 0c9d0d8):
+  1. Line 201: "the mean pair distance falls from 0.84 to 0.66, below the ORN input's own 0.71" sets a cosine distance
+     (KCs) beside a Pearson correlation distance (ORNs, across the 36 glomeruli). With one measure on both sides the KCs
+     with APL output blocked (TNT) stay further apart than the ORN input: cosine distance 0.66 against 0.35, Pearson
+     correlation distance 0.76 against 0.71.
+  2. Line 178 defines the excess shared responders as the measured distance minus the distance expected from the
+     response density alone, and then reads "negative means the two odors share fewer KCs". By that definition, and by
+     `excess_distance_recs` in experiments/E7_confound_controls.py ("excess < 0 means the odors are more similar than
+     density alone predicts"), negative means that they share more. Lines 571, 650, 656 and 672 read negative values as
+     "over-removed"; elsewhere the page reads the same sign as over-sharing.
+  3. Line 201's heading, "What blocking APL output does, mostly: a uniform sparsening", names what APL's output does:
+     with it blocked twice as many KCs respond.
+  4. Line 458 gives the model "443 hemibrain boutons" and "about 9,500 claws on 1,732 KCs, about 6 claws per KC", typed.
+     The saved runs have 389 boutons and 9,867 claws on 1,732 KCs, 5.7 per KC (results/E94_bouton_share/a1_path.csv,
+     row `real`; the wiring of E13's `bouton_base` has 389 columns; results/E29_oracle_substrate/glomerulus_substrate.csv
+     sums to the same, with 54 glomeruli, 36 of them with ORN input, and 111 PNs).
+  5. The table under "Breadth-weighted APL plus KC-KC inhibition: the block" gives the block of breadth-weighted APL at
+     exponent 3 as +0.015, typed. results/E12_breadth_apl/stats_variants.csv has +0.006 for `spikes_k3`
+     (`spike_counts_cosine__block_fruity_small_iso`) and +0.015 for `spikes_k4`.
+- **What it affects.** The summary page's text and its typed tables (the per-claw threshold's, the block's and the joint
+  fit's are typed, not placeholders); no model, fit or gate. Item 2 changes how four passages on the excess profile
+  read. The digest pages and the per-experiment notes were not checked.
+- **Done.** Yang's version of the page corrects items 1 to 3 in its own wording (reports/yang_summary/questions.md,
+  entries `orn-kc-level-comparison` and `blocking-apl-uniform-sparsening`; correlation_lines.jsonl for the definition)
+  and gives the saved counts in its scheme of the baseline model (reports/yang_model_scheme.py reads them from the
+  tables). The like-for-like values of item 1 were computed in Yang's session and are not registry entries: the KCs'
+  mean Pearson correlation distance is 0.86 in control flies and 0.76 with APL output blocked (TNT), and the ORN
+  input's mean cosine distance is 0.35. Posted in chat.md 2026-11-17.
+- **Remains.** A planner's rewording of the five places in the template; the typed tables turned into placeholders;
+  and, if the like-for-like values of item 1 are wanted on the page, their definitions in kcq/data_targets.py.
+
 ### The progress plot's ρ line ends on two points of kinds the plot is meant to leave out (found 2026-11-16, hal, the report pages' revision)
 - **What.** `reports/summary_progress_plot.py` leaves out oracle inputs and random, shuffled or re-drawn wirings by tag
   (`EXCLUDE_VARIANT`: `^input-searched_`, `^oracle_half`, `wiring-`, `^popfit_[PM]\d`, ...). From E83 on, variants carry
