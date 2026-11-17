@@ -2749,12 +2749,18 @@ def e_reference_runs(level) -> Tuple[Dict[str, Dict[str, tuple]], Dict[str, Tupl
 
 def _copy_reference(src: Tuple[Path, str], d: Path, name: str) -> None:
     """A reference's extended run copied into part E's folder under `name` (B1's files; the family table where there
-    is one), so that `step_readings` reads every point and reference from one folder."""
+    is one, its 'wiring' column renamed `name`), so that `step_readings` reads every point and reference from one
+    folder."""
     import shutil
     folder, prefix = src
     for f in Path(folder).glob(f'{prefix}_*'):
         rest = f.name[len(prefix):]
-        if rest.startswith(('_on_', '_acute_off_', '_family.csv', '_units.json')):
+        if rest == '_family.csv':
+            fam = pd.read_csv(f)
+            if 'wiring' in fam.columns:
+                fam['wiring'] = name
+            fam.to_csv(d / f'{name}{rest}', index=False)
+        elif rest.startswith(('_on_', '_acute_off_', '_units.json')):
             shutil.copy2(f, d / f'{name}{rest}')
 
 
@@ -2874,7 +2880,7 @@ def part_score_e(level, out: Optional[Path] = None) -> pd.DataFrame:
     parts = _effect_parts(pairs, tg, {k: s['undefined'] for k, s in silence.items()})
     rd = rd.merge(parts, on=['change', 'unit', 'readout'], how='left')
     rd.loc[rd['change'] == 'none', 'change'] = 'unchanged_none'
-    allruns = dict(runs, **{('unchanged_none', E_WIRING): refs['unchanged_none']})
+    allruns = {**runs, ('unchanged_none', E_WIRING): refs['unchanged_none']}
     zc = _zcell_readings(allruns, tg)
     if len(zc):
         rd = pd.concat([rd, zc[zc['unit'] == E_WIRING]], ignore_index=True)

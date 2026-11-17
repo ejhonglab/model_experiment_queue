@@ -835,10 +835,12 @@ def test_copy_reference(tmp_path):
     src, d = tmp_path / 'src', tmp_path / 'd'
     src.mkdir()
     d.mkdir()
-    for f in ('real_on_apl.csv', 'real_acute_off_spike_counts.parquet', 'real_family.csv', 'real_units.json',
+    for f in ('real_on_apl.csv', 'real_acute_off_spike_counts.parquet', 'real_units.json',
               'real_held_on_responses.parquet', 'real_point.json', 'real_runs.csv', 'realx_on_apl.csv'):
         (src / f).write_text(f)
+    pd.DataFrame(dict(wiring=['real', 'real'], x=[1, 2])).to_csv(src / 'real_family.csv', index=False)
     M._copy_reference((src, 'real'), d, 'refit_D')
+    assert list(pd.read_csv(d / 'refit_D_family.csv')['wiring']) == ['refit_D', 'refit_D']
     assert sorted(p.name for p in d.iterdir()) == ['refit_D_acute_off_spike_counts.parquet', 'refit_D_family.csv',
                                                     'refit_D_on_apl.csv', 'refit_D_units.json']
     assert (d / 'refit_D_on_apl.csv').read_text() == 'real_on_apl.csv'
