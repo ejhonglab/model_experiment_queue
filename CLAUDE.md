@@ -1189,6 +1189,7 @@ Canonical experiment names for summary reports:
 | E102 | the antennal lobe's normalization at the strength the flies' APL asks for |
 | E103 | the flies' APL across odors in the held-out vial series |
 | E104 | the flies' KCs beside their APL along concentration |
+| E105 | the KCs' response rates at the weak odors read like for like |
 
 ## Model-output archive (data/model_outputs/ in the shared directory)
 
