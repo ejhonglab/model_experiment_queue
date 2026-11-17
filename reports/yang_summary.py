@@ -920,18 +920,31 @@ class _Source:
             self.prefix, self.body = _parts(src, self.kind)
             self.indent = len(LIST.match(src).group(1)) if self.kind == 'list' else len(self.prefix)
 
-    def fits(self, ln: Line, first: bool) -> bool:
-        """Whether a template line may be a piece: of a paragraph, a paragraph or a "- " / "* " item at its
-        indentation; of a list item, the item itself (same marker) first, then items indented deeper."""
+    def fits(self, ln: Line, prev: Optional[Line]) -> bool:
+        """Whether a template line may be the piece after `prev` (None: the first piece).
+
+        Of a paragraph: a paragraph at its indentation, or a "- " / "* " item of a well-formed list, nested to any
+        depth: the first item after a paragraph piece (or first of all) at the paragraph's indentation, every other
+        item at most two spaces deeper than the item before it and not shallower than the paragraph. Of a list item:
+        the item itself (same marker) first, then "- " / "* " items indented deeper than it.
+        """
         if ln.kind not in ('para', 'list'):
             return False
         pre, _ = _parts(ln.text, ln.kind)
+        if ln.kind == 'list':
+            m = LIST.match(ln.text)
+            indent, bullet = len(m.group(1)), m.group(2) in ('- ', '* ')
         if self.kind == 'para':
-            return pre == self.prefix if ln.kind == 'para' else pre in (self.prefix + '- ', self.prefix + '* ')
-        if first:
+            if ln.kind == 'para':
+                return pre == self.prefix
+            if not bullet or not ln.text.startswith(self.prefix):
+                return False
+            if prev is None or prev.kind == 'para':
+                return indent == self.indent
+            return self.indent <= indent <= len(LIST.match(prev.text).group(1)) + 2
+        if prev is None:
             return ln.kind == 'list' and pre == self.prefix
-        m = LIST.match(ln.text)
-        return ln.kind == 'list' and len(m.group(1)) > self.indent and m.group(2) in ('- ', '* ')
+        return ln.kind == 'list' and indent > self.indent and bullet
 
 
 def _runs(lines: Sequence[Line], s: _Source) -> List[List[int]]:
@@ -940,7 +953,7 @@ def _runs(lines: Sequence[Line], s: _Source) -> List[List[int]]:
     target = _nb(s.body).strip()
     out = []
     for k, ln in enumerate(lines):
-        if not s.fits(ln, True) or not target.startswith(_nb(_parts(ln.text, ln.kind)[1]).strip() or '\0'):
+        if not s.fits(ln, None) or not target.startswith(_nb(_parts(ln.text, ln.kind)[1]).strip() or '\0'):
             continue
         run, pos = [], 0
         for i in range(k, len(lines)):
@@ -948,7 +961,7 @@ def _runs(lines: Sequence[Line], s: _Source) -> List[List[int]]:
             if ln2.kind == 'blank':
                 continue
             c = _nb(_parts(ln2.text, ln2.kind)[1]).strip()
-            if not s.fits(ln2, not run) or not c or not target.startswith(c, pos):
+            if not s.fits(ln2, lines[run[-1]] if run else None) or not c or not target.startswith(c, pos):
                 break
             run.append(i)
             pos += len(c)
@@ -1105,8 +1118,9 @@ def carry(paths: Paths = Paths(), *, dry_run: bool = False) -> dict:
     """Carries stale memory entries over a pure split of their source line.
 
     A pure split breaks a paragraph or a list item only between sentences and changes no word: a blank line between
-    two sentences, a run of sentences turned into a bullet list ("- " before each, at the paragraph's indentation), a
-    list item broken into sub-bullets ("- " items indented deeper than it), and, where a whole paragraph or a long
+    two sentences, a run of sentences turned into a bullet list ("- " before each; its items may nest, each at most two
+    spaces deeper than the one before, the list starting at the paragraph's indentation), a list item broken into
+    sub-bullets ("- " items indented deeper than it), and, where a whole paragraph or a long
     lead of a line was bold, its closing ** moved earlier, to the end of its first sentence (or another sentence of
     the span). For every memory entry whose `src` is no longer a line of the template, the runs of consecutive
     template lines (blank lines between them allowed) that are a pure split of it are found: their contents, list

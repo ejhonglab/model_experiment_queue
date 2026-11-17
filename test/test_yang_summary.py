@@ -805,3 +805,53 @@ def test_carry_warns_on_questions_across_a_split(tmp_path):
     warned = [w for w in r['warnings'] if 'question' in w]
     assert len(warned) == 2 and any('q-across' in w for w in warned) and any('q-yang' in w for w in warned)
     assert not any('q-within' in w for w in warned)
+
+
+NESTED_SRC = ('**The pattern can be read from the responses. An inhibition moves the pairs apart. Applied to the models, '
+    'it does no better. It reads spike counts. It recruits in its own way, far from the flies. The form is a target '
+    'close to the data.**')
+NESTED_OUT = ('**The pattern can be read from the responses. An inhibition decorrelates the pairs. Applied to the models, '
+    'it does no better. It reads spike counts. It recruits in its own way, weakly correlated with the flies. The form '
+    'is a target well correlated with the data.**')
+NESTED = """# Title
+
+## Data
+
+**The pattern can be read from the responses.**
+
+- An inhibition moves the pairs apart.
+- Applied to the models, it does no better.
+  - It reads spike counts.
+  - It recruits in its own way, far from the flies.
+- The form is a target close to the data.
+"""
+
+
+def test_carry_paragraph_into_nested_list(tmp_path):
+    # a wholly bold paragraph turned into a bold lead (its closing ** moved), a list and two sub-items under its
+    # second item, as the split pass did with a 631-word paragraph
+    p = paths(tmp_path, NESTED)
+    Y.write_memory(p.memory, {Y.sha(NESTED_SRC): dict(sha=Y.sha(NESTED_SRC), line=5, src=NESTED_SRC, out=NESTED_OUT,
+        keep=False, by='a converter', when='2026-11-16 15:34')}, Y.analyze(NESTED))
+    splits = Y.find_split(Y.analyze(NESTED), NESTED_SRC)[0]
+    assert len(splits) == 1 and len(splits[0].idx) == 6 and splits[0].moved[2] == 0
+    r = Y.carry(p)
+    assert r['failures'] == [] and len(r['carried']) == 1
+    got = {e['src']: e['out'] for e in new_entries(p).values()}
+    assert got == {'- An inhibition moves the pairs apart.': '- An inhibition decorrelates the pairs.',
+        '  - It recruits in its own way, far from the flies.': '  - It recruits in its own way, weakly correlated with the flies.',
+        '- The form is a target close to the data.': '- The form is a target well correlated with the data.'}
+    # the lead, the unchanged item and sub-item need no entry; the page shows Yang's text throughout
+    lines = Y.analyze(NESTED)
+    out, info = Y.yang_lines(lines, Y.load_memory(p.memory), Y.starred(lines))
+    assert out[4] == '**The pattern can be read from the responses.**' and info['unreviewed'] == []
+    assert ' '.join(Y._parts(t, Y.classify(t))[1] for t in out[4:] if t.strip()).replace('**', '') == NESTED_OUT.replace('**', '')
+    # nesting that is not well formed is not a pure split: an item more than two spaces deeper than the one before,
+    # a list that starts deeper than the paragraph, a sub-item under the paragraph itself
+    for bad in (NESTED.replace('  - It reads', '    - It reads'),
+            NESTED.replace('- An inhibition', '  - An inhibition'),
+            NESTED.replace('\n\n- An inhibition', '\n  - An inhibition')):
+        assert 'not a pure split' in Y.find_split(Y.analyze(bad), NESTED_SRC)[1], bad
+    # deeper levels are fine, one step at a time, and the list may come back up
+    deep = NESTED.replace('  - It recruits', '    - It recruits')
+    assert Y.find_split(Y.analyze(deep), NESTED_SRC)[0]
