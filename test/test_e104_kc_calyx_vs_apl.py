@@ -385,6 +385,7 @@ def test_flies_rate_ratio_made_up():
     r = M.flies_rate_ratio(rates, '2h @ -7', n_boot=2000)
     assert r['ratio'] == pytest.approx(0.17 / 0.06) and r['lo90'] < r['ratio'] < r['hi90']
     assert r['n_ctrl_flies'] == 3 and r['n_tnt_recordings'] == 3
+    assert r['stimulus'] == '2h @ -7' and 'odor' not in r            # flies_targets adds its own 'odor'
     s = M.flies_rate_ratio(rates, '2h @ -7', solvent=True, n_boot=2000)
     assert s['ratio'] == pytest.approx(0.16 / 0.05)
 

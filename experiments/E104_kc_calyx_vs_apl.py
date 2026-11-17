@@ -78,6 +78,22 @@ Readings of the entry (fixed in part 0, before any response of set K; each also 
   nearest E101 saved.
 - X2's model ratio set: per wiring, the three claw versions of E101's a3_family.csv through E98's indicator family (n 1
   to 2.5, both forms), "inside" if any lies in set K's interval (E98's `classify`).
+- X3's count is literal: at least 4 KC flies with a positive response at 10^-7. 2022-09-18 imaged paa and ms only down
+  to 10^-6, so for those two odors 4 flies have data, and leaving out any other fly (partner (6)) leaves 3: that
+  partner cannot give "holds".
+- A5's falls (described): each odor's lower concentrations of the SytGCaMP7f design over its highest, against set H
+  (E100's reading); E101's Q pairs set L's APL channel with its own KC channel at b = 0 and b_G.
+- Part B's flies: the KC rates are recomputed from the weak-odor recordings' trials (diag_mix_long.csv, trial mean above
+  1 z; `kc_identity` checks them against the saved fractions and E49's means); the ratio is the recording means' (as
+  E49's), its interval from bootstrap draws of the 12 control flies (a drawn fly brings its recordings) with each of the
+  three blocked recordings left out in turn, the hull. The flies' APL over paa at 10^-3 is E100's set W (its
+  score_weak_table.csv, arithmetic means over 8 flies). "Relative to the panel": the family's ratio over its own ratio
+  on the 16 panel odors at its fit (mean rates, acute off over on).
+- d*: the family's ratio (APL off over on) made non-decreasing in d (pool-adjacent-violators) and inverted linearly;
+  an interval end beyond the ladder's top (m = 2) is +inf (censored). Y1's strength is the flies' APL interval, Y2's the
+  family's own d at m = 1 under the same reading of d (the blank's level, or the settled level).
+- B3's widening by E103's vial SD (beside): each side of the flies' APL interval combined in quadrature with 1.645 x
+  0.461 on the log2 scale.
 
 Usage (from the repository root):
     ./venv/bin/python -u -m experiments.E104_kc_calyx_vs_apl --part 0
@@ -1757,7 +1773,7 @@ def flies_rate_ratio(rates: pd.DataFrame, odor_label: str, solvent: bool = False
         loo = float(b.drop(index=r)['rate'].mean())
         ivs.append(_ci(loo / ctrl_b))
     lo, hi = min(a for a, _ in ivs), max(z for _, z in ivs)
-    return dict(odor=odor_label, ctrl=ctrl, tnt=tnt, ratio=tnt / ctrl, lo90=lo, hi90=hi, n_ctrl_recordings=int(len(c)),
+    return dict(stimulus=odor_label, ctrl=ctrl, tnt=tnt, ratio=tnt / ctrl, lo90=lo, hi90=hi, n_ctrl_recordings=int(len(c)),
                 n_ctrl_flies=len(flies), n_tnt_recordings=int(len(b)), n_tnt_flies=int(b['fly'].nunique()),
                 solvent_subtracted=solvent)
 
@@ -1884,21 +1900,24 @@ def b1_table(x: pd.DataFrame, apl: pd.DataFrame, targets: pd.DataFrame) -> pd.Da
 
 def b3_table(yt: pd.DataFrame) -> pd.DataFrame:
     """B3 (described): per odor, estimate and wiring the indicator exponent at which the flies' APL ratio meets d*
-    (n = ln ratio / ln d*), E98's V2 read with it (V2^(1/n)), and Y1 with the flies' APL interval widened by E103's
-    vial SD (beside; waits on question 22)."""
+    (n = ln ratio / ln d*; none where d* is at or above 1, paa's own strength, which a ratio below 1 cannot reach), E98's
+    V2 read with it (V2^(1/n)), and Y1 with the flies' APL interval widened by E103's vial SD (beside; waits on
+    question 22)."""
     v2 = pd.read_csv(H.shared_dir().joinpath(*E98_A3_RATIOS), comment='#')
     v2 = v2[(v2['ratio_id'] == 'V2') & (v2['reading'] == 'order_matched') & (v2['subset'] == 'all')].iloc[0]
     t = yt[yt['reading'] == 'carrying'].copy()
+    ok = np.isfinite(t['d_star']) & (t['d_star'] > 0) & (t['d_star'] < 1)
     with np.errstate(divide='ignore', invalid='ignore'):
-        t['n_star'] = np.log(t['apl']) / np.log(t['d_star'])
+        t['n_star'] = np.where(ok, np.log(t['apl']) / np.log(t['d_star']), np.nan)
         t['v2_read'] = float(v2['ratio']) ** (1.0 / t['n_star'])
+    t['n_star_note'] = np.where(ok, '', 'no exponent: d* at or above paa\'s (1), which a ratio below 1 reaches with none')
     t['v2'] = float(v2['ratio'])
     wid = [widened(a, m, b) for a, m, b in zip(t['apl_lo90'], t['apl'], t['apl_hi90'])]
     t['apl_lo90_widened'] = [a for a, _ in wid]
     t['apl_hi90_widened'] = [b for _, b in wid]
     t['y1_widened'] = [y_class((a, b), (lo, hi)) for a, b, lo, hi in
                        zip(t['apl_lo90_widened'], t['apl_hi90_widened'], t['d_star_lo'], t['d_star_hi'])]
-    return t[['odor', 'estimate', 'wiring', 'apl', 'd_star', 'n_star', 'v2', 'v2_read', 'apl_lo90_widened',
+    return t[['odor', 'estimate', 'wiring', 'apl', 'd_star', 'n_star', 'n_star_note', 'v2', 'v2_read', 'apl_lo90_widened',
               'apl_hi90_widened', 'd_star_lo', 'd_star_hi', 'y1_widened']]
 
 
@@ -1940,6 +1959,38 @@ def part_b(wirings: Sequence[str] = ALL_WIRINGS, runs: bool = True) -> dict:
     return summ
 
 
+VARIANT_PARAM_COLS = ('fixed_thr', 'wAPLKC_scale', 'wKCAPL_scale', 'wAPLPN_scale', 'wPNAPL_scale', 'kc_kc_inh',
+                      'kc_kc_tau', 'pn_inhadd', 'pn_inhsc', 'k')
+
+
+def write_variants() -> pd.DataFrame:
+    """results/E104_kc_calyx_vs_apl/variants.csv, which the archive builds params.csv from: one row per saved ladder
+    run (tag = the files' variant, '<wiring>_m<m>'), with m, the absolute APL scales of the run and the fit's, every
+    scalar parameter of the run (base_params, JSON) and its columns of VARIANT_PARAM_COLS, the stimuli and the largest
+    spike count; m = 1 and m = 0 (acute off) are E98's and E101's saved runs, archived with those experiments."""
+    runs = pd.read_csv(local_dir(LADDER_SUB) / 'runs.csv')
+    runs = runs.drop_duplicates(['wiring', 'm'], keep='last')
+    rows = []
+    for r in runs.to_dict('records'):
+        p = json.loads(r['params_json'])
+        tag = f"{r['wiring']}_m{float(r['m']):g}"
+        row = dict(tag=tag, variant=tag, part='B', wiring=r['wiring'], m=float(r['m']),
+                   fit_wAPLKC_scale=r['fit_wAPLKC_scale'], fit_wAPLPN_scale=r['fit_wAPLPN_scale'],
+                   base_params=r['params_json'], stimuli=r['stimuli'], max_count_on=r['max_spike_count'],
+                   ref_experiment='E72_wiring_population (part B fits; E83 wiring labels)', host=r['host'],
+                   queue_commit=r.get('queue_commit'), pyolfsysm_commit=r.get('pyolfsysm_commit'))
+        for c in VARIANT_PARAM_COLS:
+            if c in p:
+                try:
+                    row[c] = float(p[c])
+                except (TypeError, ValueError):
+                    row[c] = p[c]
+        rows.append(row)
+    v = pd.DataFrame(rows)
+    v.to_csv(out_dir() / 'variants.csv', index=False)
+    return v
+
+
 def part_c() -> dict:
     """Part C: the verdicts X1 (with G1 to G3), X2, X3, Y1 and Y2 in one table (c_verdicts.csv: per verdict and
     reading, its class; the held class), and verdict.json."""
@@ -1975,7 +2026,7 @@ def part_c() -> dict:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
-    ap.add_argument('--part', required=True, choices=('0', 'A', 'B', 'C'))
+    ap.add_argument('--part', required=True, choices=('0', 'A', 'B', 'C', 'variants'))
     ap.add_argument('--runs', action='store_true', help="part 0: also the runner's identities on the real wiring")
     ap.add_argument('--write-lock', action='store_true',
                     help="part 0: write part A's lock once every identity passes (commit it before part A)")
@@ -1998,6 +2049,9 @@ def main() -> None:
     elif a.part == 'B':
         print(json.dumps(part_b(tuple(x for x in a.wirings.split(',') if x), runs=not a.no_runs), indent=1,
                          default=_json_default), flush=True)
+    elif a.part == 'variants':
+        v = write_variants()
+        print(f'variants.csv: {len(v)} rows', flush=True)
     else:
         print(json.dumps(part_c(), indent=1, default=_json_default), flush=True)
 
