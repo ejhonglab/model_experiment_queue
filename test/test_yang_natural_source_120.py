@@ -76,3 +76,56 @@ def test_bootstrap_draws_control_first():
     a = [X['A'][rng.integers(0, 3, 3)].mean() for _ in range(4)]
     b = [X['B'][rng.integers(0, 2, 2)].mean() for _ in range(4)]
     assert np.allclose(out['A'].m, a) and np.allclose(out['B'].m, b)
+
+
+def test_nan_handling_in_rho_and_resid():
+    assert Y.rho([1, 2, np.nan, 4, 5], [1, 2, 3, np.nan, 6]) == pytest.approx(1.0)
+    assert np.isnan(Y.rho([1, np.nan, np.nan], [1, 2, 3]))   # fewer than three entries left
+    rng = np.random.default_rng(6)
+    x = rng.uniform(0, 1, 30)
+    y = 0.2 + 0.6 * x + rng.normal(0, 0.05, 30)
+    y_nan = y.copy()
+    y_nan[[3, 7]] = np.nan
+    r = Y.resid(y_nan, x)
+    keep = ~np.isnan(y_nan)
+    assert np.isnan(r[[3, 7]]).all() and np.allclose(r[keep], Y.resid(y[keep], x[keep]))
+    assert abs(np.corrcoef(r[keep], x[keep])[0, 1]) < 1e-10
+
+
+def made_up_extract(odors, acid='InChI=ACID', seed=8):
+    """An extract like yang_vcf5q_apl16's: every ordered pair of the odors' InChIs and the acid, ten seeds and raw."""
+    rng = np.random.default_rng(seed)
+    chems = [f'InChI={o}' for o in odors] + [acid]
+    rows = []
+    for a, b in combinations(chems, 2):
+        vals = list(rng.uniform(0, 1, 11))
+        if 'f' in a and b == acid:
+            vals[10] = np.nan   # one raw distance missing
+        for x, y in ((a, b), (b, a)):
+            rows.append(dict(inchi_a=x, inchi_b=y, **dict(zip(Y.PAGE_SEEDS + ['vcf5q_dat'], vals))))
+    return pd.DataFrame(rows).set_index(['inchi_a', 'inchi_b'])
+
+
+def test_paa_substitution_changes_exactly_the_paa_pairs():
+    odors = ['a', 'b', 'paa', 'd', 'e', 'f']
+    pairs = list(combinations(odors, 2))
+    tab = made_up_extract(odors)
+    keys = {o: f'InChI={o}' for o in odors}
+    vec = Y.vcf_vectors(tab, keys, pairs, paa_acid='InChI=ACID')
+    assert list(vec) == list(Y.VCF_VECTORS)
+    is_paa = np.array(['paa' in p for p in pairs])
+    for v in ('d3mean', 'd3seed08', 'raw'):
+        a, b = vec[v], vec[v + '_paa_acid']
+        assert np.allclose(a[~is_paa], b[~is_paa], equal_nan=True)
+        assert (a[is_paa] != b[is_paa]).all() and is_paa.sum() == 5
+    seeds = np.column_stack([Y.lookup(tab[c], [(keys[x], keys[y]) for x, y in pairs]) for c in Y.PAGE_SEEDS])
+    assert np.allclose(vec['d3mean'], seeds.mean(1))
+    # only the pair of paa (as the acid) with f lacks a raw value; a statistic is taken over the pairs that have one
+    assert np.isnan(vec['raw']).sum() == 0 and np.isnan(vec['raw_paa_acid']).sum() == 1
+    rng = np.random.default_rng(9)
+    kc, orn = rng.uniform(0, 1, len(pairs)), rng.uniform(0, 1, len(pairs))
+    s = Y.make_vcf_stats(vec, orn)(kc)
+    m = ~np.isnan(vec['raw_paa_acid'])
+    assert s['res_raw_paa_acid_120'] == pytest.approx(Y.rho(Y.resid(kc[m], orn[m]), vec['raw_paa_acid'][m]))
+    assert s['kc_d3mean_120'] == pytest.approx(Y.rho(kc, vec['d3mean']))
+    assert np.allclose(Y.upper(Y.triangle_matrix(vec['d3mean'], len(odors))), vec['d3mean'])

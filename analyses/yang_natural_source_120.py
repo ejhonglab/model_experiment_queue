@@ -23,6 +23,16 @@ recordings and, for res_d4_120, kc_d4_120 and res_d3_66, a permutation test of t
 the 66 megamat pairs (D4 against the page's embedding and its raw distances, the page's ten seeds against each other)
 and D4 with the ORN distances.
 
+The page's own measure for all 16 odors (added 2026-11-16, when Yang pointed to her table of it for 425 chemicals):
+the extract <shared>/data/yang_vcf5q_apl16/ (README there) gives the ten seeds of the page's D = 3 embedding and the raw
+natural-source distances for every pair of the 16 odors, and for phenylacetic acid, which Yang's own matrices take for
+paa where the lab's odor table has phenylacetaldehyde. Six vectors over the 120 pairs: d3mean (the mean of the ten
+seeds, the page's vcf_hyp on the megamat pairs: checked), d3seed08 (seed 08 alone, Yang's matrix), raw (the page's
+vcf_raw: checked; missing for some pairs), each also with paa as phenylacetic acid (suffix _paa_acid). For each, ρ of
+the KC distances and of their residual around the ORN prediction with it (kc_<v>_120, res_<v>_120), over the pairs
+where it exists, with a 90 % interval from 1000 resamples of the recordings (seed 15) and, for d3mean, a permutation
+test of the 16 odors' labels (seed 17).
+
 The odors' InChIs are olfdb's (below); (-)-alpha-pinene is in Anoop's matrix without its stereo layers and is matched
 by its InChI cut before "/t" (recorded in provenance.json). Writes <shared>/results/yang_natural_source_120/:
 alignment.csv, pairs.csv, embeddings.csv and provenance.json.
@@ -64,8 +74,13 @@ ODOR_INCHI: Dict[str, str] = {
     'B-myr': 'InChI=1S/C10H16/c1-5-10(4)8-6-7-9(2)3/h5,7H,1,4,6,8H2,2-3H3',
 }
 STATS = ('kc_d4_120', 'res_d4_120', 'kc_d4_66', 'res_d4_66', 'kc_d3_66', 'res_d3_66', 'kc_orn_120')
+# the page's measure over the 120 pairs (the extract of Yang's table): name -> (embedding column value, paa)
+VCF_VECTORS = {'d3mean': ('page_d3_mean10', 'phenylacetaldehyde'), 'd3mean_paa_acid': ('page_d3_mean10', 'phenylacetic acid'),
+    'd3seed08': ('page_d3_seed08', 'phenylacetaldehyde'), 'd3seed08_paa_acid': ('page_d3_seed08', 'phenylacetic acid'),
+    'raw': ('page_raw', 'phenylacetaldehyde'), 'raw_paa_acid': ('page_raw', 'phenylacetic acid')}
+PAA_ACID = 'InChI=1S/C8H8O2/c9-8(10)6-7-4-2-1-3-5-7/h1-5H,6H2,(H,9,10)'   # phenylacetic acid
 GENOTYPES = ('TNT3c', 'TNT')   # control, APL output blocked (TNT)
-SEEDS = dict(bootstrap=5, permutations_16=7, permutations_12=8)
+SEEDS = dict(bootstrap=5, permutations_16=7, permutations_12=8, bootstrap_vcf120=15, permutations_vcf120=17)
 N_BOOT, N_PERM = 1000, 10000
 PAGE_SEEDS = [f'vcf5q_ND030_D03_seed{k:02d}' for k in range(1, 11)]   # the page's embedding is their mean
 
@@ -78,6 +93,57 @@ def embedding_path() -> Path:
 def tidy_path() -> Path:
     """The lab's megamat distances in other spaces (al_analysis, as apl_pair_analysis/apl_analysis.py reads it)."""
     return H.al_analysis_dir() / 'scripts' / 'corr_minus_orn_vs_vcf_repro' / 'data' / 'tidy_abbrev_dists.tsv'
+
+
+def extract_dir() -> Path:
+    """The extract of Yang's natural-source table for the 16 odors (README there)."""
+    return H.shared_dir() / 'data' / 'yang_vcf5q_apl16'
+
+
+def load_extract(path: Path) -> pd.DataFrame:
+    """The extract's table indexed by (inchi_a, inchi_b)."""
+    return pd.read_csv(path).set_index(['inchi_a', 'inchi_b'])
+
+
+def vcf_vectors(tab: pd.DataFrame, keys: Dict[str, str], pairs: Sequence[Tuple[str, str]],
+        paa_acid: str = PAA_ACID) -> Dict[str, np.ndarray]:
+    """The six natural-source vectors over `pairs` (VCF_VECTORS): the mean of the ten seeds, seed 08 and the raw
+    distances, with paa as `keys` give it and as phenylacetic acid.
+
+    Args:
+        tab: the extract (load_extract), a pair looked up in either orientation.
+        keys: odor -> its InChI in the table.
+    """
+    out = {}
+    for suffix, k in (('', keys), ('_paa_acid', {**keys, 'paa': paa_acid})):
+        kp = [(k[a], k[b]) for a, b in pairs]
+        seeds = np.column_stack([lookup(tab[c], kp) for c in PAGE_SEEDS])
+        out['d3mean' + suffix] = seeds.mean(1)
+        out['d3seed08' + suffix] = lookup(tab['vcf5q_ND030_D03_seed08'], kp)
+        out['raw' + suffix] = lookup(tab['vcf5q_dat'], kp)
+    return {v: out[v] for v in VCF_VECTORS}
+
+
+def make_vcf_stats(vectors: Dict[str, np.ndarray], orn: np.ndarray) -> Callable[[np.ndarray], Dict[str, float]]:
+    """kc_<v>_120 and res_<v>_120 of a vector of 120 KC distances for each natural-source vector v, over the pairs
+    where v exists (the ORN line of the residual fitted on those pairs)."""
+    masks = {v: ~np.isnan(x) for v, x in vectors.items()}
+
+    def stats(kc: np.ndarray) -> Dict[str, float]:
+        out = {}
+        for v, x in vectors.items():
+            m = masks[v]
+            out[f'kc_{v}_120'] = rho(kc[m], x[m])
+            out[f'res_{v}_120'] = rho(resid(kc[m], orn[m]), x[m])
+        return out
+    return stats
+
+
+def triangle_matrix(vec: np.ndarray, n: int) -> np.ndarray:
+    """The symmetric n x n matrix (zero diagonal) whose upper triangle, in combinations order, is `vec`."""
+    m = np.zeros((n, n))
+    m[np.triu_indices(n, 1)] = vec
+    return m + m.T
 
 
 def load_embedding(path: Path) -> pd.DataFrame:
@@ -132,15 +198,23 @@ def lookup(table, pairs: Sequence[Tuple[str, str]]) -> np.ndarray:
 
 
 def resid(y: np.ndarray, x: np.ndarray) -> np.ndarray:
-    """`y` minus its least-squares straight line on `x` (the residual around the linear ORN prediction)."""
-    b, a = np.polyfit(x, y, 1)
-    return y - (a + b * x)
+    """`y` minus its least-squares straight line on `x` (the residual around the linear ORN prediction), the line
+    fitted on the entries where neither is NaN (NaN elsewhere)."""
+    y, x = np.asarray(y, float), np.asarray(x, float)
+    m = ~(np.isnan(y) | np.isnan(x))
+    b, a = np.polyfit(x[m], y[m], 1)
+    out = y - (a + b * x)
+    out[~m] = np.nan
+    return out
 
 
 def rho(a: np.ndarray, b: np.ndarray) -> float:
-    """Spearman's ρ; NaN when either side is constant (a residual of zeros, say)."""
+    """Spearman's ρ over the entries where neither side is NaN; NaN when either side is constant there (a residual of
+    zeros, say) or fewer than three entries remain."""
     a, b = np.asarray(a, float), np.asarray(b, float)
-    if np.ptp(a) <= 1e-12 * max(1.0, np.abs(a).max()) or np.ptp(b) <= 1e-12 * max(1.0, np.abs(b).max()):
+    m = ~(np.isnan(a) | np.isnan(b))
+    a, b = a[m], b[m]
+    if len(a) < 3 or np.ptp(a) <= 1e-12 * max(1.0, np.abs(a).max()) or np.ptp(b) <= 1e-12 * max(1.0, np.abs(b).max()):
         return float('nan')
     return float(spearmanr(a, b)[0])
 
@@ -226,12 +300,26 @@ def main() -> None:
     orn66, hyp66, raw66 = lookup(ref['orn'], p66), lookup(ref['vcf_hyp'], p66), lookup(ref['vcf_raw'], p66)
     assert not np.isnan(orn66).any() and not np.isnan(hyp66).any()
     stats = make_stats(d4, orn, is66, orn66, hyp66)
+    # the page's measure for all 16 odors, from the extract of Yang's table
+    odors_x = pd.read_csv(extract_dir() / 'odors.csv').set_index('abbrev')
+    for o in odors:
+        assert odors_x.loc[o, 'inchi_lab_odor_table'] == ODOR_INCHI[o], f'{o}: the extract has another InChI'
+        assert odors_x.loc[o, 'inchi_in_table'] == 'InChI=' + keys[o][0], f'{o}: the extract keys it otherwise'
+    vec = vcf_vectors(load_extract(extract_dir() / 'vcf5q_apl16.csv'), odors_x['inchi_in_table'].to_dict(), pairs)
+    assert np.allclose(vec['d3mean'][is66], hyp66, atol=1e-9, rtol=0), "d3mean is not the page's vcf_hyp"
+    has66 = ~np.isnan(raw66)
+    assert np.allclose(vec['raw'][is66][has66], raw66[has66], atol=1e-9, rtol=0), "raw is not the page's vcf_raw"
+    assert not np.isnan(vec['d3mean']).any() and not np.isnan(vec['d3mean_paa_acid']).any()
+    vstats = make_vcf_stats(vec, orn)
     full = {g: stats(X[g].mean(0)) for g in GENOTYPES}
     reg = json.loads((H.shared_dir() / 'results' / 'data_targets' / 'data_targets.json').read_text())
     for g, name in (('TNT3c', 'ctrl_vcf'), ('TNT', 'tnt_vcf')):
         assert abs(full[g]['res_d3_66'] - reg[name]['value']) < 1e-6, f'res_d3_66 of {g} is not the registry\'s {name}'
     boot = bootstrap(X, stats)
     per_rec = {g: pd.DataFrame([stats(x) for x in X[g]]).mean() for g in GENOTYPES}
+    vfull = {g: vstats(X[g].mean(0)) for g in GENOTYPES}
+    vboot = bootstrap(X, vstats, seed=SEEDS['bootstrap_vcf120'])
+    vper_rec = {g: pd.DataFrame([vstats(x) for x in X[g]]).mean() for g in GENOTYPES}
     perms16 = permutations(16, N_PERM, SEEDS['permutations_16'])
     D12 = np.zeros((12, 12))
     D12[np.triu_indices(12, 1)] = hyp66   # the 66 megamat pairs are the combinations of H.MEGAMAT12 in order
@@ -253,20 +341,45 @@ def main() -> None:
                 on='residual' if s.startswith('res_') else 'kc', value=full[g][s],
                 lo=np.percentile(boot[g][s], 5), hi=np.percentile(boot[g][s], 95), per_recording_mean=per_rec[g][s],
                 perm_p=t[1] if t else None, null_sd=t[2] if t else None, null_q95=t[3] if t else None))
+    D3 = triangle_matrix(vec['d3mean'], 16)
+    perms_v = permutations(16, N_PERM, SEEDS['permutations_vcf120'])
+    for g in GENOTYPES:
+        kc = X[g].mean(0)
+        tests = {'kc_d3mean_120': perm_test(kc, D3, perms_v), 'res_d3mean_120': perm_test(resid(kc, orn), D3, perms_v)}
+        for v, (emb_name, paa) in VCF_VECTORS.items():
+            n = int((~np.isnan(vec[v])).sum())
+            for s in (f'kc_{v}_120', f'res_{v}_120'):
+                t = tests.get(s)
+                if t is not None:
+                    assert abs(t[0] - vfull[g][s]) < 1e-9
+                rows.append(dict(genotype=g, statistic=s, n_pairs=n, embedding=emb_name,
+                    on='residual' if s.startswith('res_') else 'kc', value=vfull[g][s],
+                    lo=np.percentile(vboot[g][s], 5), hi=np.percentile(vboot[g][s], 95),
+                    per_recording_mean=vper_rec[g][s], perm_p=t[1] if t else None, null_sd=t[2] if t else None,
+                    null_q95=t[3] if t else None, paa=paa))
     alignment = pd.DataFrame(rows)
+    alignment['paa'] = alignment['paa'].fillna('')
     kc_c, kc_t = X['TNT3c'].mean(0), X['TNT'].mean(0)
     pairs_tab = pd.DataFrame(dict(odor_a=[a for a, _ in pairs], odor_b=[b for _, b in pairs], megamat66=is66, d4=d4,
-        orn16=orn, kc_ctrl=kc_c, kc_tnt=kc_t, resid_ctrl=resid(kc_c, orn), resid_tnt=resid(kc_t, orn)))
+        orn16=orn, kc_ctrl=kc_c, kc_tnt=kc_t, resid_ctrl=resid(kc_c, orn), resid_tnt=resid(kc_t, orn), **vec))
     tidy = pd.read_csv(tidy_path(), sep='\t', index_col=[0, 1])
     has_raw = ~np.isnan(raw66)
     d466 = d4[is66]
+    is_paa = np.array(['paa' in p for p in pairs])
     embeddings = pd.DataFrame([dict(statistic=k, value=v) for k, v in dict(
         d4_vs_page_embedding_66=rho(d466, hyp66),
         d4_vs_page_raw_66=rho(d466[has_raw], raw66[has_raw]),
         page_embedding_vs_raw_66=rho(hyp66[has_raw], raw66[has_raw]),
         page_seed_to_seed_mean_66=seed_agreement(tidy, p66),
         orn_vs_d4_120=rho(orn, d4),
-        n_megamat_pairs_without_raw=int((~has_raw).sum())).items()])
+        n_megamat_pairs_without_raw=int((~has_raw).sum()),
+        d3mean_vs_d4_120=rho(vec['d3mean'], d4),
+        d3seed08_paa_acid_vs_d3mean_120=rho(vec['d3seed08_paa_acid'], vec['d3mean']),
+        raw_vs_d3mean_120=rho(vec['raw'], vec['d3mean']),
+        n_pairs_without_raw_120=int(np.isnan(vec['raw']).sum()),
+        n_pairs_without_raw_120_paa_acid=int(np.isnan(vec['raw_paa_acid']).sum()),
+        paa_acid_vs_aldehyde_d3mean_15=rho(vec['d3mean'][is_paa], vec['d3mean_paa_acid'][is_paa]),
+        paa_acid_vs_aldehyde_raw_15=rho(vec['raw'][is_paa], vec['raw_paa_acid'][is_paa])).items()])
     out = H.shared_dir() / 'results' / 'yang_natural_source_120'
     out.mkdir(parents=True, exist_ok=True)
     alignment.to_csv(out / 'alignment.csv', index=False)
@@ -275,13 +388,16 @@ def main() -> None:
     inputs = dict(hallem_d4_embedding=embedding_path(), page_reference_pairs=H.apl_pair_dir() / 'shared12_pairs.csv',
         page_embedding_seeds=tidy_path(), per_recording_rdms=H.yang_data_dir() / 'computed' / 'rdm_per_recording_long.csv',
         orn16=H.shared_dir() / 'data' / 'model_outputs' / 'inputs' / 'orn16_corrdist_olfdb_36glom_flymean.csv',
-        data_targets=H.shared_dir() / 'results' / 'data_targets' / 'data_targets.json')
+        data_targets=H.shared_dir() / 'results' / 'data_targets' / 'data_targets.json',
+        vcf5q_extract=extract_dir() / 'vcf5q_apl16.csv', vcf5q_extract_odors=extract_dir() / 'odors.csv',
+        vcf5q_extract_readme=extract_dir() / 'README.md')
     prov = dict(script='analyses/yang_natural_source_120.py', **H.code_commits(),
         inputs={k: dict(path=str(p), sha256=_sha256(p)) for k, p in inputs.items()},
         odor_inchi_source='olfdb odors table, field inchi (http://hal:8080/api/odors), read 2026-11-16',
         odor_keys={o: dict(inchi=ODOR_INCHI[o], embedding_key=k, match=m) for o, (k, m) in keys.items()},
         stereo_layers_dropped=[o for o, (_, m) in keys.items() if m != 'exact'],
         seeds=SEEDS, n_bootstrap=N_BOOT, n_permutations=N_PERM, page_embedding_seed_columns=PAGE_SEEDS,
+        paa_acid_inchi=PAA_ACID,
         generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),
         host=subprocess.run(['hostname'], capture_output=True, text=True).stdout.strip())
     (out / 'provenance.json').write_text(json.dumps(prov, indent=1, default=str) + '\n')
