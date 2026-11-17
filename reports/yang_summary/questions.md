@@ -55,19 +55,19 @@ So part of a KC's trial-to-trial variability is common to the odors of a repeat:
 
 ## orn-kc-level-comparison
 asked: 2026-11-16
-sentence: With APL output blocked (TNT), twice as many KCs respond to each odor (0.150 instead of 0.068 of the KCs, with the per-odor pattern conserved), and the mean pair correlation rises from 0.16 to 0.34, above the ORN input's own 0.29.
-sentence_main: Twice as many KCs respond to each odor (0.150 instead of 0.068 of the KCs, with the per-odor pattern conserved), and the mean pair distance falls from 0.84 to 0.66, below the ORN input's own 0.71.
+sentence: With APL output blocked (TNT), twice as many KCs respond to each odor (0.150 instead of 0.068 of the KCs, with the per-odor pattern conserved), and the mean pair correlation rises from 0.16 to 0.34.
+sentence_main: With APL output blocked (TNT), twice as many KCs respond to each odor (0.150 instead of 0.068 of the KCs, with the per-odor pattern conserved), and the mean pair distance falls from 0.84 to 0.66.
 question: I think this might not be a fair comparison: the ORNs use a dense code with about 50 units, whereas the KC space is sparse and high dimensional. Using cosine to measure the correlation of the ORN representations and comparing between the two spaces doesn't seem fair. Am I wrong?
 
-No, the comparison with the ORN input is not a fair one, and it does not hold once both sides are measured the same way. Two details differ from the question, and they make the point stronger. The ORN values on this page are Pearson correlations across the 36 glomeruli imaged in both ORN panels, not cosine similarities. The KC values are cosine similarities across all KCs of a recording. The clause therefore sets two different measures of two different codes side by side.
+No, the comparison with the ORN input is not a fair one, and it does not hold once both sides are measured the same way. Two details differ from the question, and they make the point stronger. The ORN values on this page are Pearson correlations across the 36 glomeruli imaged in both ORN panels, not cosine similarities. The KC values are cosine similarities across all KCs of a recording. The clause the question is about, "above the ORN input's own", therefore set two different measures of two different codes side by side; it has since been removed from the sentence, on the main page and here.
 
 | mean pair correlation (120 pairs) | ORNs | KCs, control flies | KCs, APL output blocked (TNT) |
 |---|---|---|---|
 | as on this page: Pearson for the ORNs, cosine similarity for the KCs | {{inv:data:orn_mean_dist ~ .2f}} | {{inv:data:ctrl_mean_dist ~ .2f}} | {{inv:data:tnt_mean_dist ~ .2f}} |
-| Pearson correlation for all three | {{inv:data:orn_mean_dist ~ .2f}} | {{lit:0.14 # one minus the mean over the 120 pairs of H.yang_mean_rdm('TNT3c', 'pearson') (0.858), computed 2026-11-16 in viki's session for Yang's question; not a registry entry}} | {{lit:0.24 # one minus the mean over the 120 pairs of H.yang_mean_rdm('TNT', 'pearson') (0.759), computed 2026-11-16 in viki's session for Yang's question; not a registry entry}} |
-| cosine similarity for all three | {{lit:0.65 # the mean over the 120 pairs of the cosine similarity between the two odors' fly-mean ORN vectors (36 glomeruli, the vectors of data_prep/orn16_distances_from_olfdb.py; mean cosine distance 0.351), computed 2026-11-16 in viki's session for Yang's question; not a registry entry}} | {{inv:data:ctrl_mean_dist ~ .2f}} | {{inv:data:tnt_mean_dist ~ .2f}} |
+| Pearson correlation for all three | {{inv:data:orn_mean_dist ~ .2f}} | {{inv:data:ctrl_mean_dist_pearson ~ .2f}} | {{inv:data:tnt_mean_dist_pearson ~ .2f}} |
+| cosine similarity for all three | {{inv:data:orn_mean_dist_cosine ~ .2f}} | {{inv:data:ctrl_mean_dist ~ .2f}} | {{inv:data:tnt_mean_dist ~ .2f}} |
 
-**With one measure on both sides, the KCs stay less correlated than the ORN input even with APL output blocked (TNT)**: 0.24 against 0.29 by Pearson, 0.34 against 0.65 by cosine. "Above the ORN input's own" is true only of the mixed pairing in the first row.
+**With one measure on both sides, the KCs stay less correlated than the ORN input even with APL output blocked (TNT)**: 0.24 against 0.29 by Pearson, 0.34 against 0.65 by cosine. "Above the ORN input's own", as the sentence ended when the question was asked, was true only of the mixed pairing in the first row.
 
 **Why the measure matters so much for the ORNs.** The ORN code is dense and positive: 96 % of the glomerulus responses are above zero. Every pair of odors then shares a common positive part, which the cosine counts as similarity and the Pearson correlation removes. The KC responses are sparse and z-scored, centred near zero, so the two measures nearly agree in control flies and differ more with APL output blocked (TNT), where twice as many KCs respond.
 
@@ -75,7 +75,7 @@ No, the comparison with the ORN input is not a fair one, and it does not hold on
 
 **What can be compared.** Control flies against APL output blocked (TNT): the same kind of cells and the same measure, and the mean pair correlation about doubles. And the order of the pairs, which no change of scale touches: ρ on odor-odor correlations with the ORNs is {{data:rho_ctrl_orn ~ .2f}} in control flies and {{data:rho_tnt_orn ~ .2f}} with APL output blocked (TNT). The page's statistics are of these two kinds.
 
-The Pearson values for the KCs and the cosine value for the ORNs are not on the main page; they were computed for this answer from the same recordings and the same ORN vectors.
+The Pearson values for the KCs and the cosine value for the ORNs are now on the main page too, as distances: the second row of its table gives the mean pair distance with one measure on both sides, and the paragraph after the sentence asked about says how to read it. On this page the same row and paragraph give them as correlations.
 
 ## isotonic-r2-at-ceiling
 asked: 2026-11-16
@@ -156,17 +156,17 @@ All nine block pairs sit below the monotone fit, but only three of them do so st
 
 ## blocking-apl-uniform-sparsening
 asked: 2026-11-16
-sentence: What APL output does, mostly: a uniform sparsening, which blocking it removes.
-sentence_main: What blocking APL output does, mostly: a uniform sparsening.
+sentence: What blocking APL output does, mostly: it undoes a uniform sparsening.
+sentence_main: What blocking APL output does, mostly: it undoes a uniform sparsening.
 question: (Of the main page's heading, "What blocking APL output does, mostly: a uniform sparsening.") This sounds opposite? The function of inhibition is to decorrelate odor pairs?
 
-On the main page this heading reads "What blocking APL output does, mostly: a uniform sparsening", which is worded the wrong way round, and the reading in the question is the right one. At Yang's request the heading is reworded in this version, and the sentence after it now says that it is about the flies with APL output blocked (TNT). Blocking APL output sparsens nothing: with APL output blocked (TNT) twice as many KCs respond to each odor ({{data:tnt_frac ~ .3f}} of the KCs against {{data:ctrl_frac ~ .3f}}) and the mean pair correlation rises from {{inv:data:ctrl_mean_dist ~ .2f}} to {{inv:data:tnt_mean_dist ~ .2f}}. What the heading names is what APL's output does in the intact fly, which is what blocking it takes away.
+When the question was asked this heading read "What blocking APL output does, mostly: a uniform sparsening", which was worded the wrong way round, and the reading in the question is the right one. It now reads "What blocking APL output does, mostly: it undoes a uniform sparsening", on the main page as here, and the sentence after it says that it is about the flies with APL output blocked (TNT). Blocking APL output sparsens nothing: with APL output blocked (TNT) twice as many KCs respond to each odor ({{data:tnt_frac ~ .3f}} of the KCs against {{data:ctrl_frac ~ .3f}}) and the mean pair correlation rises from {{inv:data:ctrl_mean_dist ~ .2f}} to {{inv:data:tnt_mean_dist ~ .2f}}. What the heading names is what APL's output does in the intact fly, which is what blocking it takes away.
 
 **In control flies APL sparsens and decorrelates.** Fewer KCs respond to each odor, and every one of the 120 pairs is less correlated than it is with APL output blocked (TNT): the per-pair APL effect runs from {{data:apl_effect_min ~ +.2f}} to {{data:apl_effect_max ~ +.2f}}, {{data:apl_effect_mean ~ +.2f}} on average. The two are not opposites. With fewer KCs responding, two odors share fewer KCs, so the sparsening is the way the inhibition decorrelates.
 
 **What "uniform" adds.** It does not say that every pair is decorrelated by the same amount. It says that one rule holds for all pairs: how much APL decorrelates a pair depends only on how correlated the pair is without APL, not on which two odors they are. That is what the monotone fit of the next sentence tests (isotonic R² {{data:iso_r2 ~ .2f}}).
 
-**What "mostly" leaves out.** The nine fruity × small-ester pairs, which APL decorrelates more than that rule gives: the block of the paragraph after next ([which pairs deviate from the fit, and how consistently](#yq-pairs-off-the-monotone-fit)).
+**What "mostly" leaves out.** The nine fruity × small-ester pairs, which APL decorrelates more than that rule gives: the block, in the paragraph that begins "The one pair-specific exception: the block" ([which pairs deviate from the fit, and how consistently](#yq-pairs-off-the-monotone-fit)).
 ## orn-rho-and-natural-source-alignment
 asked: 2026-11-16
 sentence: The code with APL output blocked (TNT) is more ORN-like than the control code (ρ on odor-odor correlations with the ORN input 0.73 instead of 0.65), yet it keeps structure the ORN input does not predict: its natural-source alignment is 0.36, which a linear model of the circuit does not reproduce.
@@ -324,8 +324,8 @@ The rows of the first table are from the breadth-weighted APL experiment (E12), 
 
 ## baseline-model-scheme
 asked: 2026-11-17
-sentence: The model (olfsysm) runs ORNs → projection neurons (with antennal-lobe inhibition) → PN boutons (443 hemibrain boutons) → KC claws (hemibrain claws, about 9,500 claws on 1,732 KCs, about 6 claws per KC) → KC somata, with one APL neuron inhibiting claws and boutons through connectome synapse counts as weights, and somatic thresholds tuned so that 5 % of KCs respond to an odor.
-sentence_main: The model (olfsysm) runs ORNs → projection neurons (with antennal-lobe inhibition) → PN boutons (443 hemibrain boutons) → KC claws (hemibrain claws, about 9,500 claws on 1,732 KCs, about 6 claws per KC) → KC somata, with one APL neuron inhibiting claws and boutons through connectome synapse counts as weights, and somatic thresholds tuned so that 5 % of KCs respond to an odor.
+sentence: The model (olfsysm) runs ORNs → projection neurons (with antennal-lobe inhibition) → PN boutons (389 hemibrain boutons) → KC claws (hemibrain claws, 9,867 claws on 1,732 KCs, 5.7 claws per KC on average) → KC somata, with one APL neuron inhibiting claws and boutons through connectome synapse counts as weights, and somatic thresholds tuned so that 5 % of KCs respond to an odor.
+sentence_main: The model (olfsysm) runs ORNs → projection neurons (with antennal-lobe inhibition) → PN boutons (389 hemibrain boutons) → KC claws (hemibrain claws, 9,867 claws on 1,732 KCs, 5.7 claws per KC on average) → KC somata, with one APL neuron inhibiting claws and boutons through connectome synapse counts as weights, and somatic thresholds tuned so that 5 % of KCs respond to an odor.
 question: Create a scheme showing the original version of the model, the connectivity, and the transformation at each step.
 
 The scheme is of the baseline model, the bouton model: the model that every later change on this page starts from. A click on the figure opens it full screen.
@@ -350,7 +350,7 @@ APL's four sets of weights are synapse counts of the hemibrain, each scaled to a
 
 **Where the scheme is more exact than the sentence it is attached to.**
 
-- **Boutons and claws.** The saved runs have {{E94/a1_path.csv:wiring=real:n_boutons ~ .0f}} boutons and {{E94/a1_path.csv:wiring=real:n_claws ~ ,.0f}} claws ({{E13/stats_variants.csv:bouton_base:mean_claws_per_kc ~ .1f}} per KC); the sentence says 443 boutons and about 9,500 claws.
+- **Boutons and claws.** The saved runs have {{E94/a1_path.csv:wiring=real:n_boutons ~ .0f}} boutons and {{E94/a1_path.csv:wiring=real:n_claws ~ ,.0f}} claws ({{E13/stats_variants.csv:bouton_base:mean_claws_per_kc ~ .1f}} per KC), and the sentence now gives these counts; when the question was asked it said 443 boutons and about 9,500 claws.
 - **Glomeruli without data.** {{lit:18 # the glomeruli without ORN input among those with claws in results/E29_oracle_substrate/glomerulus_substrate.csv, counted by reports/yang_model_scheme.py}} of the wiring's glomeruli have no measured ORN response: for every odor their ORNs stay at the spontaneous rate.
 - **The threshold.** It is not one number for all KCs: each KC's threshold is the tuned constant plus twice the KC's summed claw input before the odor.
 - **The spike count.** It is taken over the whole simulated window, from {{lit:0.5 s before the odor's onset to 0.25 s after its end # p.time.start = -0.5, p.time.end = 0.75 and p.time.stim.end = 0.5 in olfsysm/libolfsysm/src/olfsysm.cpp, read 2026-11-17; the KCs are simulated from p.time.start and their spikes are summed over that window}}, not over the odor alone.
