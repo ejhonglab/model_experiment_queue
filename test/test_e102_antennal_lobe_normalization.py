@@ -903,16 +903,65 @@ def test_variant_row():
 
 
 def test_variant_tags_name_the_archived_files():
-    """Each kind of variant's tag is, as whole '_'-separated parts, in the names the archive gives its files (olfdb
-    finds a model's files that way), and in no other step's."""
+    """Each kind of variant's tag is, by olfdb's rule (the longest name found in a file's name as whole '_'-separated
+    parts), the one its archived files are found under: the 16-odor runs under '<...>_held', the extended runs under
+    the bare name, and no other step's."""
     A = pytest.importorskip('archive_tools.archive_model_outputs')
 
     def parts_in(stem, name):
         i = stem.find(name)
-        return i >= 0 and (i == 0 or stem[i - 1] == '_') and (i + len(name) == len(stem) or stem[i + len(name)] == '_')
-    for rel, tag, other in (('B/inhadd1000/real_held_on_spike_counts.parquet', 'B_inhadd1000_real', 'B_inhadd100_real'),
-                            ('B/inhadd1000/real_on_spike_counts.parquet', 'B_inhadd1000_real', 'B_identity_real'),
-                            ('D/runs/B/inhadd1000/M1_on_spike_counts.parquet', 'D_inhadd1000_M1', 'B_inhadd1000_M1'),
-                            ('E/B/inhadd1000/refit_p_held_on_spike_counts.parquet', 'E_inhadd1000_refit_p', 'E_inhadd1000_refit_none')):
+        while i >= 0:
+            j = i + len(name)
+            if (i == 0 or stem[i - 1] == '_') and (j == len(stem) or stem[j] == '_'):
+                return True
+            i = stem.find(name, i + 1)
+        return False
+    tags = ['B_inhadd1000_real_held', 'B_inhadd1000_real', 'B_inhadd100_real_held', 'B_inhadd100_real', 'B_identity_real',
+            'D_inhadd1000_M1', 'B_inhadd1000_M1', 'E_inhadd1000_refit_p_held', 'E_inhadd1000_refit_p',
+            'E_inhadd1000_refit_none_held', 'H_inhadd1000_H1_real_held', 'H_inhadd1000_H2_real_held']
+    for rel, want in (('B/inhadd1000/real_held_on_spike_counts.parquet', 'B_inhadd1000_real_held'),
+                      ('B/inhadd1000/real_on_spike_counts.parquet', 'B_inhadd1000_real'),
+                      ('B/inhadd100/real_acute_off_spike_counts.parquet', 'B_inhadd100_real'),
+                      ('D/runs/B/inhadd1000/M1_on_spike_counts.parquet', 'D_inhadd1000_M1'),
+                      ('E/B/inhadd1000/refit_p_held_on_spike_counts.parquet', 'E_inhadd1000_refit_p_held'),
+                      ('E/B/inhadd1000/refit_p_on_spike_counts.parquet', 'E_inhadd1000_refit_p'),
+                      ('H/B/inhadd1000/H1_real_held_on_spike_counts.parquet', 'H_inhadd1000_H1_real_held')):
         stem = A.archive_rel(M.EXPERIMENT, Path(rel)).name[:-len('_spike_counts.parquet')]
-        assert parts_in(stem, tag) and not parts_in(stem, other)
+        hits = [t for t in tags if parts_in(stem, t)]
+        assert max(hits, key=len) == want, (rel, hits)
+
+
+# ---------------------------------------------------------------------------
+# part H's readings
+
+HALVES = ('halfA', 'halfB', 'halfC', 'halfD')
+
+
+def test_h1_class():
+    refit = dict(zip(HALVES, (0.0547, 0.0588, 0.0665, 0.0524)))
+    above = {h: v + 0.001 for h, v in refit.items()}
+    assert M.h1_class(0.0527, above, refit) == 'h' and M.h1_class(0.0520, refit, refit) == 'h'
+    assert M.h1_class(0.0540, above, refit) == 'r' and M.h1_class(0.0560, above, refit) == 'r'
+    assert M.h1_class(0.0560, dict(above, halfC=refit['halfC']), refit) == 'm'      # not above against every half
+    assert M.h1_class(0.0533, above, refit) == 'm'                                    # between the two thresholds
+    assert M.h1_class(0.05271, above, refit) == 'm'
+
+
+def test_h2_class():
+    unchanged = dict(zip(HALVES, (0.0569, 0.0552, 0.0636, 0.0529)))
+    below = {h: v - 0.001 for h, v in unchanged.items()}
+    assert M.h2_class(0.0480, below, unchanged) == 'response-rate effect'
+    assert M.h2_class(0.0470, dict(below, halfD=unchanged['halfD']), unchanged) == 'not told apart'
+    assert M.h2_class(0.0490, below, unchanged) == 'no response-rate effect'
+    assert M.h2_class(0.0510, unchanged, unchanged) == 'no response-rate effect'
+    assert M.h2_class(0.0485, below, unchanged) == 'not told apart'
+
+
+def test_h_prices():
+    p = M.h_prices(0.0500, 0.0514, 0.0545, 0.0478, 'r', 'response-rate effect')
+    assert p['as_fitted'] == pytest.approx(0.0014) and p['matched'] == pytest.approx(0.0045)
+    assert p['refit_minus_h2'] == pytest.approx(0.0036) and p['form'].startswith('two numbers')
+    assert M.h_prices(0.05, 0.0514, 0.052, 0.049, 'h', 'no response-rate effect')['form'].startswith('as fitted, said')
+    assert 'upper bound' in M.h_prices(0.05, 0.0514, 0.0545, 0.0495, 'r', 'no response-rate effect')['form']
+    q = M.h_prices(0.05, 0.0514, 0.0533, 0.0485, 'm', 'not told apart')
+    assert q['form'].startswith('a range') and q['range'] == pytest.approx([0.0029, 0.0033])

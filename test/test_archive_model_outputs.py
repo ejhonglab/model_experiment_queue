@@ -38,6 +38,8 @@ def test_excluded():
     ('B/identity/b1_stimuli.csv', 'B/identity/B_identity_b1_stimuli.csv'),
     ('D/runs/B/inhadd1000/real_on_apl.csv', 'D/runs/B/inhadd1000/D_inhadd1000_real_on_apl.csv'),
     ('E/B/inhadd1000/refit_F_acute_off_spike_counts.parquet', 'E/B/inhadd1000/E_inhadd1000_refit_F_acute_off_spike_counts.parquet'),
+    ('H/B/inhadd1000/H1_real_held_on_spike_counts.parquet', 'H/B/inhadd1000/H_inhadd1000_H1_real_held_on_spike_counts.parquet'),
+    ('H/identity_inhadd1000.json', None),
     ('rate0.068_aplboth_pnadd1000sc544.444_k2_cap3_on_spike_counts.parquet', None),
     ('logs/lane_a.log', None), ('D/init_inhadd1000.json', None), ('B/x.csv', None)])
 def test_archive_rel(rel, out):

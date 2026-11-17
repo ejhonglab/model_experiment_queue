@@ -84,7 +84,8 @@ HAND_BUILT = {
 # outputs/<name>/), the prefix put before the file's name in the archive, '{0}', '{1}', ... the folder's path parts,
 # so that each variant's name is unique (E102: B/<step>/<wiring>_held_on_... in every step's folder)
 FOLDER_PREFIXES = {
-    'E102_antennal_lobe_normalization': (('B/*', 'B_{1}_'), ('D/runs/B/*', 'D_{3}_'), ('E/B/*', 'E_{2}_')),
+    'E102_antennal_lobe_normalization': (('B/*', 'B_{1}_'), ('D/runs/B/*', 'D_{3}_'), ('E/B/*', 'E_{2}_'),
+                                         ('H/B/*', 'H_{2}_')),
 }
 # per experiment, the paths under outputs/<name>/ never copied (as --exclude, which adds to them): E102's start checks
 # (one evaluation of E10 each, in a scratch folder whose file names are the refits'), the refits' 16-odor copies under
