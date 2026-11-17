@@ -67,6 +67,7 @@ Parts (CLI `--part`):
   against the split rule itself, E103's `least_detectable`). Y1 (and Y2): the flies' ratio above which an odor is too
   weak (`y_thresholds`), and the new blocked recordings (the control flies as they are) or new flies of each genotype at
   which it would be (`y_counts`). d_x1_counts.csv, d_y_counts.csv, d_summary.json.
+- figures: E104_falls.png (`figure_falls`) and E104_ladder.png (`figure_ladder`), from the saved tables.
 
 Readings of the entry (fixed in part 0, before any response of set K; each also in p0_identity.json or the lock):
 - "45 hold a paa series, 46 pa and 37 ms" are the K6F recordings whose stimulus file presents the odor ('n_holding').
@@ -2300,6 +2301,158 @@ def part_d() -> dict:
     return summ
 
 
+# ---------------------------------------------------------------------------
+# figures (from the saved tables)
+
+FIG_COLORS = {'APL': '#2a78d6', 'KC': '#eb6834', 'APL 2021': '#7a7a75', 'kiwi-control': '#2a78d6',
+              'megamat': '#eb6834', 'validation2': '#1baf7a', 'flies APL': '#6250d6'}
+FALL_LABELS = {'G1': 'G1\npaa $10^{-5}$ / $10^{-4}$', 'G2': 'G2\npa $10^{-5}$ / $10^{-4}$',
+               'G3': 'G3\nms $10^{-4}$ / $10^{-3}$', 'paa_-4_over_-3': 'paa\n$10^{-4}$ / $10^{-3}$',
+               'pa_-6_over_-4': 'pa\n$10^{-6}$ / $10^{-4}$', 'ms_-4_over_-2': 'ms\n$10^{-4}$ / $10^{-2}$'}
+
+
+def _plain_axes(ax) -> None:
+    for s in ('top', 'right'):
+        ax.spines[s].set_visible(False)
+    ax.tick_params(colors='#333333', labelsize=8.5)
+
+
+def figure_falls(path: Optional[Path] = None) -> Path:
+    """E104_falls.png. Left: per fall (G1 to G3, then the three beside) the APL set (sets S and L) and the KCs' calyx
+    signal (set K, GCaMP6f), geometric means over flies with 90 % intervals (carrying reading), and E98's V2 of the 2021
+    APL recordings beside G1. Right: Q (APL's fall over the KCs') for G1 to G3, the carrying reading with its interval
+    and every partner reading as a dot, against the class cuts. From a2_falls.csv and E98's a3_ratios.csv."""
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    from matplotlib.ticker import NullLocator
+    out = out_dir()
+    path = out / 'E104_falls.png' if path is None else Path(path)
+    f = read_table(out / 'a2_falls.csv')
+    c = f[f['reading'] == 'carrying'].set_index('fall')
+    v2 = pd.read_csv(H.shared_dir().joinpath(*E98_A3_RATIOS), comment='#')
+    v2 = v2[(v2['ratio_id'] == 'V2') & (v2['reading'] == 'order_matched') & (v2['subset'] == 'all')].iloc[0]
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(11.0, 4.6), dpi=150, gridspec_kw=dict(width_ratios=[1.75, 1.0]))
+    falls = list(FALL_LABELS)
+    for i, fid in enumerate(falls):
+        r = c.loc[fid]
+        for side, dx, n in (('apl', -0.14, 'APL'), ('kc', 0.14, 'KC')):
+            a1.plot([i + dx] * 2, [r[f'{side}_lo90'], r[f'{side}_hi90']], color=FIG_COLORS[n], lw=2,
+                    solid_capstyle='round', zorder=2)
+            lab = None
+            if i == 0:
+                na = c.loc[falls, 'apl_n_flies'].astype(int)
+                lab = (f"APL, 2022 flies (sets S and L, {na.min()} to {na.max()} flies)" if n == 'APL' else
+                       f"KCs' calyx signal, set K ({int(r['kc_n_flies'])} flies)")
+            a1.plot([i + dx], [r[side]], 'o', ms=6.5, color=FIG_COLORS[n], mec='white', mew=1.2, zorder=3, label=lab)
+        if fid == 'G1':
+            a1.plot([i + 0.38] * 2, [v2['lo90'], v2['hi90']], color=FIG_COLORS['APL 2021'], lw=2, zorder=2)
+            a1.plot([i + 0.38], [v2['ratio']], 'D', ms=5.5, color=FIG_COLORS['APL 2021'], mec='white', mew=1.2,
+                    zorder=3, label=f"APL, the 2021 recordings ({int(v2['n_flies'])} flies)")
+    a1.axvline(2.5, color='#bbbbbb', lw=0.8, ls=':')
+    a1.text(2.6, 1.05, 'beside', fontsize=8, color='#555555', va='bottom')
+    a1.set_xticks(range(len(falls)))
+    a1.set_xticklabels([FALL_LABELS[x] for x in falls], fontsize=8)
+    a1.set_yscale('log')
+    ticks = (0.1, 0.2, 0.3, 0.5, 0.7, 1.0)
+    a1.set_yticks(ticks)
+    a1.set_yticklabels([f'{t:g}' for t in ticks])
+    a1.yaxis.set_minor_locator(NullLocator())
+    a1.set_ylim(0.13, 1.25)
+    a1.set_ylabel('fall: response at the lower over the higher\nconcentration (calyx peak dF/F), 90 % interval',
+                  fontsize=8.5)
+    a1.legend(loc='upper left', fontsize=7.5, frameon=False)
+    _plain_axes(a1)
+    a2.axhspan(Q_ONE_FUNCTION[0], Q_ONE_FUNCTION[1], color='#ececea', lw=0, zorder=0,
+               label=f'"one function" interval band ({Q_ONE_FUNCTION[0]:g} to {Q_ONE_FUNCTION[1]:g})')
+    for q, ls in ((Q_APL_STEEPER, '--'), (Q_KC_STEEPER, '--')):
+        a2.axhline(q, color='#777777', lw=0.9, ls=ls, zorder=1)
+    a2.text(3.3, Q_APL_STEEPER * 0.97, 'APL steeper below', fontsize=7.5, color='#555555', ha='right', va='top')
+    a2.text(3.3, Q_KC_STEEPER * 1.02, 'KCs steeper above', fontsize=7.5, color='#555555', ha='right', va='bottom')
+    rng = np.random.default_rng(0)
+    for i, fid in enumerate(('G1', 'G2', 'G3')):
+        g = f[(f['fall'] == fid) & ~f['reading'].str.contains('described')]
+        p = g[g['reading'] != 'carrying']
+        a2.plot(i + 0.12 + rng.uniform(-0.06, 0.06, len(p)), p['q'], 'o', ms=4, color='#9a9a95', mec='white', mew=0.6,
+                zorder=2, label='each partner reading' if i == 0 else None)
+        r = c.loc[fid]
+        a2.plot([i - 0.1] * 2, [r['q_lo90'], r['q_hi90']], color='#222222', lw=2, zorder=3)
+        a2.plot([i - 0.1], [r['q']], 'o', ms=6.5, color='#222222', mec='white', mew=1.2, zorder=4,
+                label='carrying reading, 90 % interval' if i == 0 else None)
+    a2.set_xticks(range(3))
+    a2.set_xticklabels(['G1\npaa', 'G2\npa', 'G3\nms'], fontsize=8)
+    a2.set_xlim(-0.5, 3.35)
+    a2.set_yscale('log')
+    ticks = (0.5, 0.67, 0.8, 1.0, 1.25, 1.5)
+    a2.set_yticks(ticks)
+    a2.set_yticklabels([f'{t:g}' for t in ticks])
+    a2.yaxis.set_minor_locator(NullLocator())
+    a2.set_ylim(0.42, 1.75)
+    a2.set_ylabel("Q: APL's fall over the KCs'", fontsize=8.5)
+    a2.legend(loc='upper left', fontsize=7.2, frameon=False)
+    _plain_axes(a2)
+    fig.tight_layout()
+    fig.savefig(path, facecolor='white')
+    plt.close(fig)
+    return path
+
+
+def figure_ladder(path: Optional[Path] = None) -> Path:
+    """E104_ladder.png: per weak odor the family's response-rate ratio (APL off over on, two or more spikes) against
+    APL's strength d along the ladder (eight wirings under each of the three estimates of the input, colored by the
+    estimate; the fit, m = 1, marked), the flies' KC ratio (APL output blocked (TNT) over control flies) with its 90 %
+    interval as a horizontal band, and the flies' APL over paa at 10^-3 (set W) with its 90 % interval as a vertical
+    band. d* is where a curve meets the horizontal band; Y1 compares it with the vertical band, Y2 with the marked fit.
+    From b_model.csv, b_flies.csv and b_flies_apl.csv."""
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    out = out_dir()
+    path = out / 'E104_ladder.png' if path is None else Path(path)
+    x = read_table(out / 'b_model.csv')
+    t = read_table(out / 'b_flies.csv')
+    t = t[t['reading'] == 'carrying'].set_index('odor')
+    apl = read_table(out / 'b_flies_apl.csv').set_index('odor')
+    odors = list(FLIES_WEAK)
+    fig, axes = plt.subplots(1, len(odors), figsize=(12.0, 4.3), dpi=150, sharey=True)
+    for ax, o in zip(axes, odors):
+        a = apl.loc[o]
+        ax.axvspan(a['apl_lo90'], a['apl_hi90'], color=FIG_COLORS['flies APL'], alpha=0.12, lw=0, zorder=0)
+        ax.axvline(a['apl'], color=FIG_COLORS['flies APL'], lw=1.2, zorder=1,
+                   label="the flies' APL over paa $10^{-3}$ (set W), 90 % interval" if o == odors[0] else None)
+        r = t.loc[o]
+        ax.axhspan(r['lo90'], r['hi90'], color='#d9d9d6', alpha=0.7, lw=0, zorder=0)
+        ax.axhline(r['ratio'], color='#333333', lw=1.2, zorder=1,
+                   label="KC data: APL output blocked (TNT) over control flies, 90 % interval"
+                   if o == odors[0] else None)
+        for s in X2_ESTIMATE_SESSIONS:
+            for w, g in x[x['stimulus'] == model_label(o, s)].groupby('wiring', sort=False):
+                g = g.sort_values('m')
+                ax.plot(g['d'], g['ratio'], '-', color=FIG_COLORS[s], lw=1.0, alpha=0.75, zorder=2,
+                        label=f"the family, {s}'s estimate of the input (8 wirings)"
+                        if (o == odors[0] and w == 'real') else None)
+                m1 = g[g['m'] == 1.0]
+                ax.plot(m1['d'], m1['ratio'], 'o', ms=4, color=FIG_COLORS[s], mec='white', mew=0.6, zorder=3)
+        _, cc = FLIES_WEAK[o]
+        ci = next(c2 for o2, c2 in WEAK_STIMULI if o2 == o)
+        inp = 'input exact' if ci == cc else f'input at $10^{{{int(ci)}}}$'
+        ax.set_title(f'{o} at $10^{{{int(cc)}}}$ ({inp})', fontsize=9.5)
+        ax.set_xlabel("APL's strength d (over paa's at the fit)", fontsize=8.5)
+        ax.set_xlim(0, None)
+        _plain_axes(ax)
+    axes[0].set_ylabel('response rate, APL off over APL on', fontsize=8.5)
+    axes[0].set_ylim(0.9, 7.5)
+    h, lab = axes[0].get_legend_handles_labels()
+    from matplotlib.lines import Line2D
+    h.append(Line2D([], [], ls='', marker='o', ms=4, color='#777777', mec='white', mew=0.6))
+    lab.append('the fit (m = 1), each wiring')
+    fig.legend(h, lab, loc='upper center', ncol=3, fontsize=7.5, frameon=False, bbox_to_anchor=(0.5, 1.02))
+    fig.tight_layout(rect=(0, 0, 1, 0.88))
+    fig.savefig(path, facecolor='white')
+    plt.close(fig)
+    return path
+
+
 VARIANT_PARAM_COLS = ('fixed_thr', 'wAPLKC_scale', 'wKCAPL_scale', 'wAPLPN_scale', 'wPNAPL_scale', 'kc_kc_inh',
                       'kc_kc_tau', 'pn_inhadd', 'pn_inhsc', 'k')
 
@@ -2367,7 +2520,7 @@ def part_c() -> dict:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
-    ap.add_argument('--part', required=True, choices=('0', 'A', 'B', 'C', 'D', 'variants'))
+    ap.add_argument('--part', required=True, choices=('0', 'A', 'B', 'C', 'D', 'variants', 'figures'))
     ap.add_argument('--runs', action='store_true', help="part 0: also the runner's identities on the real wiring")
     ap.add_argument('--write-lock', action='store_true',
                     help="part 0: write part A's lock once every identity passes (commit it before part A)")
@@ -2392,6 +2545,9 @@ def main() -> None:
                          default=_json_default), flush=True)
     elif a.part == 'D':
         print(json.dumps(part_d(), indent=1, default=_json_default), flush=True)
+    elif a.part == 'figures':
+        for f in (figure_falls, figure_ladder):
+            print(f(), flush=True)
     elif a.part == 'variants':
         v = write_variants()
         print(f'variants.csv: {len(v)} rows', flush=True)
