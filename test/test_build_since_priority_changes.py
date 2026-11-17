@@ -127,7 +127,9 @@ def test_default_paths(tmp_path):
     shared = scratch_shared(tmp_path)
     for name in NAMES:
         r = subprocess.run([sys.executable, str(REPO / 'reports' / f'build_{name}.py'), '--help'], cwd=str(REPO),
-            env=dict(os.environ, KC_REMAPPING_SHARED=str(shared)), capture_output=True, text=True)
+            # argparse wraps help at the terminal width and breaks long paths mid-word (a deep checkout or
+            # worktree path), so give it room
+            env=dict(os.environ, KC_REMAPPING_SHARED=str(shared), COLUMNS='10000'), capture_output=True, text=True)
         assert r.returncode == 0, r.stderr
         help_text = ' '.join(r.stdout.split())
         assert f'reports/{name}_template.md' in help_text and f'outputs/_artifacts/{name}/index.html' in help_text
