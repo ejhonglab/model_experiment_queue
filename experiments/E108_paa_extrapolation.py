@@ -716,6 +716,18 @@ def write_input(name: str) -> dict:
     return rec
 
 
+def input_record(name: str) -> dict:
+    """The record that part inputs wrote for an input (inputs/sha256.json), checked against the input built now (its
+    frame's sha256); part B reads it rather than writing again, so that two lanes never rewrite the same file."""
+    from experiments.E77_input_screen import frame_sha256
+    rec = _read_json(input_path(name).parent / 'sha256.json').get(name)
+    if rec is None:
+        raise RuntimeError(f'run --part inputs first (no record of input {name})')
+    if rec['frame_sha256'] != frame_sha256(input_of(name)):
+        raise RuntimeError(f'input {name} differs from the one part inputs wrote')
+    return rec
+
+
 def unit_check() -> pd.DataFrame:
     """The diagnostic odors (at the same concentration) that the ramp flies (dataset 21) and the validation2 file share:
     per odor, the slope through the origin of the file's values on the ramp flies' (both in the model's units), Pearson r
@@ -1013,7 +1025,7 @@ def part_b(lane: Optional[str] = None, max_points: Optional[int] = None) -> pd.D
             continue
         _still_clean(cc)
         orn = input_of(name)
-        rec = write_input(name)
+        rec = input_record(name)
         res = held(unit, orn, name)
         o = {'on': res['on'], 'off': res['off']}
         save_run(tag, o)
