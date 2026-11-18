@@ -1170,7 +1170,7 @@ COUNT_PROBES = ('n_distinct', 'n_inside', 'n_both_070_077', 'gain91_recordings_p
 
 
 def probes_table(T: Mapping[str, pd.DataFrame], arch: pd.DataFrame) -> pd.DataFrame:
-    """probes.csv: each planning probe beside the script's value (reading 'as the probe reads it'), and the other
+    """probes.csv: each planning probe beside the script's value (reading 'main reading'), and the other
     readings of `PROBE_ALTS` beside it; `agree` when they differ by at most 0.01 (counts: exactly; the archive's maxima:
     the script's is at most the probe's bound)."""
     got = probe_values(T, arch)
@@ -1184,7 +1184,7 @@ def probes_table(T: Mapping[str, pd.DataFrame], arch: pd.DataFrame) -> pd.DataFr
         return abs(s - p) <= 0.01 + 1e-9
 
     for k, (what, p) in PROBES.items():
-        for reading, key in [('as the probe reads it', k)] + PROBE_ALTS.get(k, []):
+        for reading, key in [('main reading', k)] + PROBE_ALTS.get(k, []):
             s = got[key]
             rows.append(dict(probe=k, what=what, reading=reading, probe_value=p, script_value=s, difference=s - p,
                              agree=bool(ok(k, s, p))))
