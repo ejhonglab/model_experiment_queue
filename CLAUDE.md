@@ -1194,6 +1194,7 @@ Canonical experiment names for summary reports:
 | E107 | the four validation2 odors in the panel their ORN input was recorded in |
 | E108 | paa's input at the flies' concentration |
 | E109 | the input of paa, B-myr and 2-but searched for ρ on odor-odor distances on held-out wirings and recordings |
+| E110 | KC-KC inhibition held at zero in the best family |
 
 ## Model-output archive (data/model_outputs/ in the shared directory)
 
