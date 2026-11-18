@@ -109,7 +109,8 @@ Readings chosen where the entry is open (fixed here before any run):
   paired change gives the count of wirings for "at least 3 of the 4".
 - A gain whose controls do not hold is "does not carry" (the controls hold is a condition of "carries below the gate"
   in the entry, and the classes "passes" and "a price" read the gain as the input's own).
-- The runs that must lie inside the bands are those of the six searched inputs at 0.6 on T (the gate's reading).
+- The runs that must lie inside the bands are those of the six searched inputs at 0.6 on T (the gate's reading: both
+  directions and the second split).
 - Under E108 "better" the class is carried against the family at the lab's input (I0) and given beside against the
   family at E108's input (E108's held runs of its carrying rule on T).
 - The control searches are read with the same gate (gate rows "ctl"), and their gains enter the candidate's controls.
@@ -276,11 +277,15 @@ def _flagged(x) -> bool:
 
 def commits_clean() -> dict:
     """`H.code_commits()` at the start of a simulation part, after importing every module the parts use (PRELOAD):
-    E108's `_commits_clean` (the other checkouts clean; this repository clean in every file this process loads)."""
+    E108's `_commits_clean` (the other checkouts clean; this repository clean in every file this process loads). Checked
+    and recorded once per process, so that a process that runs several searches records the commits of the code it
+    loaded, not a later HEAD."""
     from experiments import E108_paa_extrapolation as E108
-    for m in PRELOAD:
-        importlib.import_module(m)
-    return E108._commits_clean()
+    if 'commits' not in _CACHE:
+        for m in PRELOAD:
+            importlib.import_module(m)
+        _CACHE['commits'] = E108._commits_clean()
+    return dict(_CACHE['commits'])
 
 
 def _provenance_add(path: Path, part: str, tag: str, prov: dict) -> None:
@@ -1364,7 +1369,8 @@ def gate(rd: pd.DataFrame, runs: pd.DataFrame, ref: str = 'I0', main: Sequence[s
         out[f'worst_{key}'] = w
         if (sign > 0 and w > slack) or (sign < 0 and w < -slack):
             into[label] = w
-    nf = int(sum(d['n_flagged'] for d in dirs.values()))
+    # every run of the gate's inputs: both directions and the second split
+    nf = int(sum(d['n_flagged'] for d in dirs.values()) + (sv['n_flagged'] if sv else 0))
     out['n_flagged'] = nf
     if nf:
         fails['realism (runs outside the bands)'] = nf

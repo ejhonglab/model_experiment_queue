@@ -236,10 +236,14 @@ def test_gate_passes_and_price():
     rd, runs = _made_up(d)
     g = X.gate(rd, runs)
     assert g['cls'] == 'a price' and g['fails'] == {'pattern part (calibrated, unseen half)': pytest.approx(0.004)}
-    # a run outside the bands: a price
-    rd, runs = _made_up(_main(_all_rho('on', 0.02)), flagged=[('A1_s0.6', 'P3')])
-    g = X.gate(rd, runs)
-    assert g['cls'] == 'a price' and g['fails']['realism (runs outside the bands)'] == 1
+    # a run outside the bands (of a direction or of the second split): a price
+    for fl in ('A1_s0.6', 'D1_s0.6'):
+        rd, runs = _made_up(_main(_all_rho('on', 0.02)), flagged=[(fl, 'P3')])
+        g = X.gate(rd, runs)
+        assert g['cls'] == 'a price' and g['fails']['realism (runs outside the bands)'] == 1
+    # a control's run outside the bands does not count
+    rd, runs = _made_up(_main(_all_rho('on', 0.02)), flagged=[('A1_perm1', 'P3')])
+    assert X.gate(rd, runs)['cls'] == 'passes'
     # a pending item only: a price, and passes without the pending items
     d = _main(dict(_all_rho('on', 0.02), block=-0.02))
     rd, runs = _made_up(d)
