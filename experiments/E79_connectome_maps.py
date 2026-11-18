@@ -20,8 +20,12 @@ Inputs:
   calyces (the hemibrain's right, the male CNS's left and right) come from Pratyush's tables through
   `pratyush_calyces` (E97's counted claws, the boutons carrying them weighted by release sites, APL's synapses with
   both; no ROI rule), with `neighbour_axis_checks` for the axes and `official_roi_outline` beside; the section
-  "Pratyush's tables" below says what each table holds. The readers above them (load_calyces, axis_checks) are
-  unchanged and not called by that code.
+  "Pratyush's tables" below says what each table holds. Since 2026-11-17 (CLAUDE.md, "Connectome data") the readers of
+  the held tables (`_apl_table`, `axis_checks`, `load_calyces`) and `write_provenance`, which hashes them, are switched
+  off: they raise HeldTablesError naming the rule (HELD_RULE), and so does `main()` without `--calyces pratyush`. Part
+  D's entry point is `run_pratyush` (`--calyces pratyush`): the three calyces, the axis check, and analysis 4 on the
+  2021 maps through them, written to E100's results (PRAT_OUT, or --out), never to OUT, with
+  `write_provenance_prat` (Pratyush's tables, `prat_inputs`, with sha256).
 - The measured maps (data/yang_apl_calyx_maps/, apl_calyx_maps.py's ROI reader and stimulus maps: each stimulus's mean
   map minus the mean of all the recording's paraffin oil presentations).
 - The error common to all wirings (results/E72_wiring_population/common_error_pairs.csv, column `common`: per odor pair,
@@ -71,8 +75,8 @@ E79_connectome_* / E79_coloc_*, provenance_connectome.json, connectome_table.md)
    columns together, the same permutation for every calyx and setting), per setting and for the best setting. The entry's
    gate for outcome (a): 15 % or more removed on left-out odors beyond the null.
 
-Run from the repository root: `OMP_NUM_THREADS=6 OMP_THREAD_LIMIT=6 nice -n 10 ./venv/bin/python experiments/E79_connectome_maps.py
-[--analyses 4,6] [--n-perm 1000]`.
+Run from the repository root: `OMP_NUM_THREADS=1 OMP_THREAD_LIMIT=1 nice -n 10 ./venv/bin/python experiments/E79_connectome_maps.py
+--calyces pratyush [--out DIR] [--n-perm 1000]` (part D's reading on Pratyush's calyces; the other analyses refuse).
 """
 from __future__ import annotations
 
@@ -170,7 +174,9 @@ def _side_of(a: pd.DataFrame, dataset: str) -> pd.Series:
 
 def _apl_table(dataset: str, regions: Optional[Sequence[str]] = ('CA',)) -> pd.DataFrame:
     """The dataset's APL MB synapses with side, partner kind ('PN', 'KC', 'other'), partner id, region and the synapse's
-    position (midpoint of the pre and post sites) as R, D, A; synapses whose ROI side differs from the APL's dropped."""
+    position (midpoint of the pre and post sites) as R, D, A; synapses whose ROI side differs from the APL's dropped.
+    Switched off (HELD_RULE): raises HeldTablesError."""
+    _refuse_held('_apl_table')
     cols = ['direction', 'apl_side', 'partner_id', 'partner_class', 'roi_official', 'mb_region',
             'pre_x_nm', 'pre_y_nm', 'pre_z_nm', 'post_x_nm', 'post_y_nm', 'post_z_nm']
     a = pd.read_csv(YANG_APL / f'{dataset}_APL_MB_synapses.csv.gz', usecols=cols, dtype={'partner_id': str},
@@ -193,7 +199,9 @@ def _apl_table(dataset: str, regions: Optional[Sequence[str]] = ('CA',)) -> pd.D
 def axis_checks() -> pd.DataFrame:
     """Per mushroom body, the landmark checks of to_rda's axes, from each dataset's APL MB synapses: the lobes anterior of
     the calyx, the vertical lobe's tip (the 2 % of its synapses farthest from the peduncle's centroid) and the calyx
-    dorsal of the peduncle, the medial lobe's tip medial of the calyx, the right mushroom body at larger R."""
+    dorsal of the peduncle, the medial lobe's tip medial of the calyx, the right mushroom body at larger R. Switched off
+    (HELD_RULE): raises HeldTablesError; `neighbour_axis_checks` is the check on Pratyush's tables."""
+    _refuse_held('axis_checks')
     rows = []
     for ds in DATASETS:
         t = _apl_table(ds, regions=None)
@@ -268,7 +276,9 @@ def _prat_boutons() -> pd.DataFrame:
 
 def load_calyces() -> Dict[str, Dict[str, pd.DataFrame]]:
     """calyx name ('<dataset>_<side>', and 'model_hemibrain_R') -> {'boutons', 'claws', 'apl'}: tables with R, D, A (um)
-    and, for boutons and claws, the model's glomerulus name and a weight (n_tbars; the claw's PN synapses)."""
+    and, for boutons and claws, the model's glomerulus name and a weight (n_tbars; the claw's PN synapses). Switched off
+    (HELD_RULE): raises HeldTablesError; `pratyush_calyces` gives the three calyces of Pratyush's tables."""
+    _refuse_held('load_calyces')
     out: Dict[str, Dict[str, pd.DataFrame]] = {}
     for ds in DATASETS:
         apl = _apl_table(ds)
@@ -794,25 +804,119 @@ def _refuse_held(name: str) -> None:
                           'pratyush_calyces / run_pratyush (--calyces pratyush) instead.')
 
 
+# where part D's reading of analysis 4 on Pratyush's calyces goes by default (E100's results, never OUT)
+PRAT_OUT = SHARED / 'results' / 'E100_apl_weak_odors' / 'd_e79_analysis4'
+# said in every table written on Pratyush's calyces (E100's part D re-planned 2026-11-17, its Realism item)
+PRAT_CAVEATS = ("the male CNS is a male brain; its tables hold synapses at a postsynaptic confidence of 0.5 or more, "
+                "the hemibrain's from 0.28 (no threshold applied); claws: E97's counted claws (5 or more synapses from "
+                "one uniglomerular PN) with roi='none' in both brains, so the hemibrain's 9,870 are the model's wiring's "
+                "9,867 and 3 that the official ROI drops")
+
+
 def prat_inputs() -> Dict[str, Path]:
     """Every table part D reads from Pratyush's two folders: 'hemibrain/<key>' and 'malecns/<key>' for HEMIBRAIN_FILES /
-    MALECNS_FILES, and 'hemibrain/pn_kc', 'malecns/pn_kc' (E97's PN bouton -> KC claw tables)."""
-    raise NotImplementedError
+    MALECNS_FILES, and 'hemibrain/pn_kc', 'malecns/pn_kc' (E97's PN bouton -> KC claw tables). Raises HeldTablesError if
+    any path names held data (it cannot, by construction; checked)."""
+    E97 = _e97()
+    out: Dict[str, Path] = {}
+    for brain in PRAT_BRAINS:
+        for k, path in _prat_files(brain).items():
+            out[f'{brain}/{k}'] = Path(path)
+    out['hemibrain/pn_kc'] = Path(E97.hemibrain_dir()) / E97.HEMIBRAIN_PN_CLAW_FILE
+    out['malecns/pn_kc'] = (Path(E97.malecns_dir())
+                            / f'PNbouton-to-KCclaw_Connectivity_Male-CNS_{E97.MALECNS_STAMP}.parquet')
+    bad = [str(v) for v in out.values() if _held_path(v)]
+    if bad:
+        raise HeldTablesError(f'{bad}: {HELD_RULE}')
+    return out
 
 
-def write_provenance_prat(out: Path, extra: dict) -> Path:
-    """provenance_pratyush.json in `out`: script, commits (H.code_commits), the olfsysm build, the inputs
-    (`prat_inputs`, the 2021 maps, C2's spike counts and the PN rates) with sha256, settings, and `runs` (kept)."""
-    raise NotImplementedError
+def write_provenance_prat(out: Path, extra: dict, inputs: Optional[Sequence[Path]] = None) -> Path:
+    """provenance_pratyush.json in `out`: script, commits (H.code_commits: this repository, pyolfsysm, al_analysis,
+    hong2p, each with its dirty flag), the olfsysm build, Pratyush's tables (`prat_inputs`) and `inputs` (the 2021 maps,
+    C2's spike counts, the PN rates, ...) with sha256, settings and `runs` (earlier runs kept). Refuses an input path
+    naming held data."""
+    from kcq import harness as H
+    out = Path(out)
+    tables = {k: str(v) for k, v in prat_inputs().items()}
+    paths = [Path(v) for v in tables.values()] + [Path(x) for x in (inputs or [])]
+    bad = [str(x) for x in paths if _held_path(x)]
+    if bad:
+        raise HeldTablesError(f'{bad}: {HELD_RULE}')
+    try:
+        import olfsysm
+        build = olfsysm.build_info()
+    except Exception as ex:  # noqa: BLE001
+        build = repr(ex)
+    gen = time.strftime('%Y-%m-%d %H:%M:%S %z')
+    prov = dict(generated=gen, script=H.script_path(__file__), commits=dict(H.code_commits()), olfsysm_build=build,
+                connectome_rule=HELD_RULE, caveats=PRAT_CAVEATS, claw_rule=CALYX_ROI_RULE,
+                calyces=list(PRAT_CALYCES), c2=dict(experiment=C2[0], tag=C2[1]), tables=tables,
+                settings=dict(slab_thick_um=SLAB_THICK_UM, slab_step_um=SLAB_STEP_UM, slab_min_share=SLAB_MIN_SHARE,
+                              blurs_um=list(BLURS_UM), px_um=PX_UM, outline_blur_um=OUTLINE_BLUR_UM,
+                              outline_keep=OUTLINE_KEEP, grid_n=GRID_N, cell_inside=CELL_INSIDE,
+                              meas_blur_px=MEAS_BLUR_PX, match_min_fraction=MATCH_MIN_FRACTION,
+                              match_max_ratio=MATCH_MAX_RATIO, flips=list(FLIPS), seed=SEED),
+                inputs={str(x): _sha256(x) for x in paths if x.exists()},
+                missing=[str(x) for x in paths if not x.exists()], **extra)
+    path = out / 'provenance_pratyush.json'
+    runs = []
+    if path.exists():
+        try:
+            runs = json.loads(path.read_text()).get('runs', [])
+        except (ValueError, OSError):
+            pass
+    runs.append(dict(generated=gen, commits=prov['commits'], **extra))
+    prov['runs'] = runs
+    out.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(prov, indent=1, default=str) + '\n')
+    return path
 
 
-def run_pratyush(out: Path, n_perm: int = N_PERM, calyces: Optional[Dict[str, dict]] = None,
-                 rates: Optional[pd.DataFrame] = None, meas: Optional[Dict[str, dict]] = None) -> Dict[str, pd.DataFrame]:
+def _with_caveats(df: pd.DataFrame, caveats: str) -> pd.DataFrame:
+    return df.assign(claw_rule=f"roi='{CALYX_ROI_RULE}' in both brains", caveats=caveats)
+
+
+def run_pratyush(out: Path = PRAT_OUT, n_perm: int = N_PERM, calyces: Optional[Dict[str, dict]] = None,
+                 rates: Optional[pd.DataFrame] = None, meas: Optional[Dict[str, dict]] = None,
+                 caveats: str = PRAT_CAVEATS, rates_source: Optional[str] = None) -> Dict[str, pd.DataFrame]:
     """Part D's entry point in this module (`--calyces pratyush`): the three calyces (`pratyush_calyces`), the neighbour
-    axis check (strict), the calyx summary and the official-ROI outline beside, and analysis 4 (`run_maps`, E79's own
-    search) on the 12 recordings of 2021 through the three calyces, every table written to `out` (never to OUT, whose
-    analysis 4 is withheld)."""
-    raise NotImplementedError
+    axis check (strict: a failure raises AxisCheckError and nothing else runs), the calyx summary and the official-ROI
+    outline beside (deciding nothing), and analysis 4 (`run_maps`: E79's own search over every slab, blur and the four
+    flips, the bouton, claw, spike and anatomy alternatives, 1,000 label permutations) on the 12 recordings of 2021
+    through the three calyces, with `rates` (None: E79's cached C2 PN rates, `model_pn_rates`). Every table is written to
+    `out` (never to OUT, whose analysis 4 on the held tables is withheld) with the claw rule and `caveats` in columns,
+    and provenance_pratyush.json (`write_provenance_prat`)."""
+    out = Path(out)
+    if out.resolve() == Path(OUT).resolve():
+        raise ValueError(f'{out}: analysis 4 on the held tables is withheld in OUT; write part D elsewhere')
+    out.mkdir(parents=True, exist_ok=True)
+    t0 = time.time()
+    calyces = pratyush_calyces() if calyces is None else calyces
+    axes = neighbour_axis_checks(calyces, strict=True)
+    summ = pratyush_calyx_summary(calyces)
+    roi, _ = official_roi_outline(calyces)
+    if rates is None:
+        rates, rates_source = model_pn_rates(), rates_source or str(OUT / 'connectome_pn_rates.csv')
+    res = run_maps(n_perm, calyces, rates, meas=meas, out=out)
+    tables = dict(res, axes=axes, calyces=summ, official_roi=roi)
+    names = {'scores': 'connectome_map_scores.csv.gz', 'best': 'connectome_map_best.csv',
+             'pooled': 'connectome_map_pooled.csv', 'flips': 'connectome_map_flips.csv',
+             'flip_consensus': 'connectome_map_flip_consensus.csv', 'measured': 'connectome_measured.csv',
+             'axes': 'pratyush_axis_checks.csv', 'calyces': 'pratyush_calyces.csv',
+             'official_roi': 'pratyush_official_roi_outline.csv'}
+    for k, f in names.items():
+        _with_caveats(tables[k], caveats).to_csv(out / f, index=False)
+    recs = pd.read_csv(ACM.DATA / 'recordings.csv')
+    inputs = [C2_ON_COUNTS, ACM.DATA / 'recordings.csv', ACM.DATA / 'frames.csv']
+    inputs += [ACM.DATA / f for f in recs['file']] + [ACM.DATA / f for f in recs['roi']]
+    if rates_source:
+        inputs.append(Path(rates_source))
+    write_provenance_prat(out, dict(entry='run_pratyush', n_perm=int(n_perm), analyses=['4'], baseline='all_pfo',
+                                    rates_source=rates_source, seconds=round(time.time() - t0, 1)), inputs)
+    print(f'{time.strftime("%H:%M:%S")} run_pratyush: {len(calyces)} calyces, analysis 4 in {time.time() - t0:.0f} s '
+          f'-> {out}', flush=True)
+    return tables
 
 
 # ---------------------------------------------------------------------------
@@ -1088,14 +1192,17 @@ def predicted_comparisons(Wt: np.ndarray, perms: np.ndarray, G: np.ndarray, insi
 
 
 def run_maps(n_perm: int = N_PERM, calyces: Optional[Dict[str, dict]] = None, rates: Optional[pd.DataFrame] = None,
-             meas: Optional[Dict[str, dict]] = None, baseline: str = 'all_pfo') -> Dict[str, pd.DataFrame]:
+             meas: Optional[Dict[str, dict]] = None, baseline: str = 'all_pfo', out: Optional[Path] = None
+             ) -> Dict[str, pd.DataFrame]:
     """Analysis 4: writes connectome_map_scores.csv.gz (every calyx, alternative, blur, slab, flip, recording and
     comparison, with the null percentile), connectome_map_best.csv (per calyx, alternative, recording and comparison the
     best over slabs, blurs and flips, with the percentile against the permutations' maxima), connectome_map_flips.csv
     (per recording the best flip), connectome_map_pooled.csv (the mean over recordings of each recording's best score at
     one flip, against the same mean in each permutation), connectome_measured.csv (the chosen concentrations) and
-    figures; with another measured baseline than 'all_pfo' the file names end in _<baseline>."""
+    figures; with another measured baseline than 'all_pfo' the file names end in _<baseline>. `out`: the folder written
+    to (None: OUT, as before 2026-11-17; part D's reading on Pratyush's calyces writes elsewhere, `run_pratyush`)."""
     calyces = load_calyces() if calyces is None else calyces
+    out = OUT if out is None else Path(out)
     rates = model_pn_rates() if rates is None else rates
     meas = measured_maps(baseline) if meas is None else meas
     sfx = '' if baseline == 'all_pfo' else f'_{baseline}'
@@ -1205,14 +1312,14 @@ def run_maps(n_perm: int = N_PERM, calyces: Optional[Dict[str, dict]] = None, ra
                                   outside_1log=any(abs(c - INPUT_CONC[o]) > 1.0 for o, c in m['concs'][comp].items()),
                                   split_half_r=m['split_half_r'][comp])
                              for rec, m in meas.items() for comp in COMPARISONS])
-    OUT.mkdir(parents=True, exist_ok=True)
-    scores.to_csv(OUT / f'connectome_map_scores{sfx}.csv.gz', index=False)
-    best.to_csv(OUT / f'connectome_map_best{sfx}.csv', index=False)
-    pooled.to_csv(OUT / f'connectome_map_pooled{sfx}.csv', index=False)
-    flips.to_csv(OUT / f'connectome_map_flips{sfx}.csv', index=False)
-    consensus.to_csv(OUT / f'connectome_map_flip_consensus{sfx}.csv', index=False)
-    measured.to_csv(OUT / f'connectome_measured{sfx}.csv', index=False)
-    plot_maps(scores, pooled, keep_maps, meas, sfx)
+    out.mkdir(parents=True, exist_ok=True)
+    scores.to_csv(out / f'connectome_map_scores{sfx}.csv.gz', index=False)
+    best.to_csv(out / f'connectome_map_best{sfx}.csv', index=False)
+    pooled.to_csv(out / f'connectome_map_pooled{sfx}.csv', index=False)
+    flips.to_csv(out / f'connectome_map_flips{sfx}.csv', index=False)
+    consensus.to_csv(out / f'connectome_map_flip_consensus{sfx}.csv', index=False)
+    measured.to_csv(out / f'connectome_measured{sfx}.csv', index=False)
+    plot_maps(scores, pooled, keep_maps, meas, sfx, out=out)
     return dict(scores=scores, best=best, pooled=pooled, flips=flips, measured=measured, flip_consensus=consensus)
 
 
@@ -1326,10 +1433,13 @@ def profiles(calyces: Optional[Dict[str, dict]] = None, rates: Optional[pd.DataF
     return dict(profiles=prof, centroid_shift=shift, positions=pos)
 
 
-def plot_maps(scores: pd.DataFrame, pooled: pd.DataFrame, keep_maps: dict, meas: Dict[str, dict], sfx: str = '') -> None:
+def plot_maps(scores: pd.DataFrame, pooled: pd.DataFrame, keep_maps: dict, meas: Dict[str, dict], sfx: str = '',
+              out: Optional[Path] = None) -> None:
     """E79_connectome_scores.png: per calyx, the best r over flips and blurs against slab depth for pa minus ms and paa
     minus ms (bouton-driven), median over recordings with the range; E79_connectome_maps.png: the bouton-driven
-    predicted difference maps at each calyx's best slab (by the pooled score), beside the measured ones."""
+    predicted difference maps at each calyx's best slab (by the pooled score), beside the measured ones. Written to `out`
+    (None: OUT)."""
+    out = OUT if out is None else Path(out)
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
@@ -1357,7 +1467,7 @@ def plot_maps(scores: pd.DataFrame, pooled: pd.DataFrame, keep_maps: dict, meas:
             ax.tick_params(labelsize=6)
     fig.suptitle('Bouton-driven predicted difference maps against the 12 measured ones, by slab depth', fontsize=9)
     fig.tight_layout()
-    fig.savefig(OUT / f'E79_connectome_scores{sfx}.png', dpi=120)
+    fig.savefig(out / f'E79_connectome_scores{sfx}.png', dpi=120)
     plt.close(fig)
     # maps: per calyx the slab and blur with the best median r at the best pooled flip
     fig, axes = plt.subplots(2, len(cal) + 2, figsize=(1.9 * (len(cal) + 2), 4.2), squeeze=False)
@@ -1385,7 +1495,7 @@ def plot_maps(scores: pd.DataFrame, pooled: pd.DataFrame, keep_maps: dict, meas:
     fig.suptitle('Predicted (bouton-driven, 12 x 12 grid over the outline) and measured difference maps; red = more '
                  'response to the first odor', fontsize=8)
     fig.tight_layout()
-    fig.savefig(OUT / f'E79_connectome_maps{sfx}.png', dpi=130)
+    fig.savefig(out / f'E79_connectome_maps{sfx}.png', dpi=130)
     plt.close(fig)
 
 
@@ -1663,7 +1773,10 @@ def _git(repo: Path) -> dict:
 
 def write_provenance(extra: dict) -> None:
     """provenance_connectome.json: script, this repository's, al_analysis's and olfsysm's commits and dirty state, inputs
-    with sha256, and `runs`: every run's analyses, settings and commit (kept across runs that redo part of the analyses)."""
+    with sha256, and `runs`: every run's analyses, settings and commit (kept across runs that redo part of the analyses).
+    Switched off (HELD_RULE): its inputs are the held tables, which it would open to hash; raises HeldTablesError
+    (`write_provenance_prat` is part D's)."""
+    _refuse_held('write_provenance')
     from kcq import harness as H
     inputs = [YANG_APL / f'{ds}_{k}.csv.gz' for ds in DATASETS
               for k in ('PN_boutons_derived', 'KC_claws_derived', 'APL_MB_synapses')]
@@ -1867,12 +1980,21 @@ def write_table(tables: Dict[str, pd.DataFrame]) -> None:
 
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__.split('\n')[0])
+    p.add_argument('--calyces', choices=('pratyush',), default=None,
+                   help="'pratyush': part D's entry point (`run_pratyush`: the three calyces of Pratyush's tables, "
+                        "analysis 4 on the 2021 maps, written to --out); without it the script refuses, since its other "
+                        "analyses read the held tables (HELD_RULE)")
+    p.add_argument('--out', default=str(PRAT_OUT), help='--calyces pratyush: the output folder')
     p.add_argument('--analyses', default='4,6', help="comma-separated subset of 4, 6 and 'profiles' (part of 4); "
                    "'table' only rewrites connectome_table.md from the CSVs")
     p.add_argument('--n-perm', type=int, default=N_PERM)
     p.add_argument('--rebuild-pn-rates', action='store_true', help="recompute C2's PN rates (runs the PN stage)")
     p.add_argument('--baseline', default='all_pfo', help="the measured maps' baseline (see measured_maps)")
     args = p.parse_args()
+    if args.calyces == 'pratyush':
+        run_pratyush(Path(args.out), args.n_perm, rates=model_pn_rates(rebuild=True) if args.rebuild_pn_rates else None)
+        return
+    _refuse_held('main (analyses 4 and 6 on the held calyces; pass --calyces pratyush for part D)')
     which = set(args.analyses.split(','))
     OUT.mkdir(parents=True, exist_ok=True)
     if which == {'table'}:

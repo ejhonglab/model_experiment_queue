@@ -286,7 +286,7 @@ NEW_FUNCTIONS = ('_e97', '_prat_dirs', '_prat_files', '_held_path', '_read_prat'
                  '_release_sites', '_harmonize_apl', '_brain_tables', '_calyx_roi', '_assemble_calyces',
                  'pratyush_calyces', '_claws_in_roi', 'pratyush_calyx_summary', 'calyx_outlines',
                  '_neighbour_synapses', '_expect', '_neighbour_rows', 'neighbour_axis_checks', '_raise_if_failed',
-                 'official_roi_outline')
+                 'official_roi_outline', 'prat_inputs', 'write_provenance_prat', '_with_caveats', 'run_pratyush')
 
 
 def test_new_code_paths_name_no_held_data():
@@ -370,3 +370,43 @@ def test_real_three_calyces_smoke():
         assert len(p['claws']) > 5000 and len(p['boutons']) > 200 and len(p['apl']) > 10000, c
         assert (p['boutons']['n_tbars'] > 0).all() and p['boutons']['glomerulus'].notna().all()
     assert ax['calyx_passed'].all()
+
+
+# ---------------------------------------------------------------------------
+# the readers of the held tables are switched off (CLAUDE.md, "Connectome data (Tom, 2026-11-17)")
+
+def test_held_readers_refuse_naming_the_rule(monkeypatch, tmp_path):
+    """load_calyces, _apl_table, axis_checks and write_provenance raise HeldTablesError (a PermissionError) naming the
+    rule, before opening anything; main() refuses without --calyces pratyush; run_pratyush never writes to OUT."""
+    import builtins
+    opened = []
+    real_open = builtins.open
+
+    def spy(path, *a, **k):
+        opened.append(str(path))
+        return real_open(path, *a, **k)
+    monkeypatch.setattr(builtins, 'open', spy)
+    monkeypatch.setattr(pd, 'read_csv', lambda p, *a, **k: opened.append(str(p)) or pd.DataFrame())
+    for call in (lambda: E.load_calyces(), lambda: E._apl_table('hemibrain'), lambda: E.axis_checks(),
+                 lambda: E.write_provenance({})):
+        with pytest.raises(E.HeldTablesError, match='Connectome data'):
+            call()
+    assert not any('claude_apl_modeling' in p.lower() for p in opened), opened
+    assert issubclass(E.HeldTablesError, PermissionError)
+    monkeypatch.setattr('sys.argv', ['E79_connectome_maps.py', '--analyses', '4'])
+    with pytest.raises(E.HeldTablesError):
+        E.main()
+    with pytest.raises(ValueError, match='withheld'):
+        E.run_pratyush(E.OUT)
+
+
+def test_prat_inputs_are_the_allowed_tables():
+    try:
+        got = E.prat_inputs()
+    except Exception as ex:  # noqa: BLE001
+        pytest.skip(f"E97's folders not available: {ex!r}")
+    assert {k.split('/')[0] for k in got} == {'hemibrain', 'malecns'}
+    assert {k.split('/')[1] for k in got} == set(E.HEMIBRAIN_FILES) | {'pn_kc'}
+    for v in got.values():
+        assert not E._held_path(v)
+        assert str(v.parent).endswith(('from_pratyush/2025-12-05', 'data/Male-CNS_Tom')), v
