@@ -1896,6 +1896,106 @@ YQ_JS = """<script>
 })();
 </script>"""
 
+DEF_CSS = """
+  .def-tip { position: fixed; z-index: 950; display: none; max-width: min(420px, calc(100vw - 24px)); box-sizing: border-box; padding: 8px 12px; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22), 0 1px 4px rgba(0, 0, 0, 0.12); font-size: 0.86em; font-weight: 400; line-height: 1.45; white-space: normal; text-align: left; }
+  .def-tip.open { display: block; }
+  .def-term { display: block; font-weight: 600; margin-bottom: 2px; }
+  span.def.def-on { background: rgba(127, 127, 127, 0.16); border-radius: 2px; }
+"""
+
+# The definitions (span.def, the dotted terms; span.ydist, the "distances" pill): their text, in the title attribute,
+# shows in a small box under the term, instead of the browser's own tooltip, which appears late or not at all (never on
+# a touch screen). A mouse resting on a term shows it until the mouse leaves the term and the box; a click or a tap
+# keeps it until Esc, another click or a click elsewhere. A click on a term inside one of Yang's sentences shows the
+# definition and does not open her question; the rest of the sentence opens it. Terms inside her window work too (their
+# titles are read when first pointed at, so the answers' templates need nothing done to them).
+DEF_JS = """<script>
+(function () {
+  var SEL = 'span.def, span.ydist', tip = null, cur = null, pinned = false, timer = null;
+  function vw() { return document.documentElement.clientWidth || window.innerWidth; }
+  function vh() { return document.documentElement.clientHeight || window.innerHeight; }
+  function text(el) {
+    // the definition moves from title to data-def the first time the term is pointed at, so the browser's own
+    // tooltip does not show as well
+    var t = el.getAttribute('title');
+    if (t !== null) { el.setAttribute('data-def', t); el.removeAttribute('title'); el.setAttribute('aria-description', t); }
+    return el.getAttribute('data-def') || '';
+  }
+  function make() {
+    tip = document.createElement('div'); tip.className = 'def-tip'; tip.setAttribute('role', 'tooltip');
+    tip.addEventListener('pointerleave', function (e) { if (e.pointerType === 'mouse' && !pinned) later(hide); });
+    tip.addEventListener('pointerenter', function () { clearTimeout(timer); });
+    document.body.appendChild(tip);
+  }
+  function place() {
+    if (!cur) return;
+    var rects = cur.getClientRects(), r = rects.length ? rects[rects.length - 1] : cur.getBoundingClientRect();
+    var r0 = rects.length ? rects[0] : r;
+    if (r.bottom < 0 || r0.top > vh()) { hide(); return; }
+    var w = tip.offsetWidth, h = tip.offsetHeight, top = r.bottom + 6;
+    if (top + h > vh() - 8 && r0.top - 6 - h >= 8) top = r0.top - 6 - h;
+    tip.style.left = Math.max(12, Math.min(r.left, vw() - w - 12)) + 'px';
+    tip.style.top = Math.max(8, Math.min(top, vh() - h - 8)) + 'px';
+  }
+  function show(el, pin) {
+    var t = text(el);
+    if (!t) return;
+    if (!tip) make();
+    clearTimeout(timer);
+    if (cur && cur !== el) cur.classList.remove('def-on');
+    cur = el; pinned = !!pin; el.classList.add('def-on');
+    tip.innerHTML = '';
+    var term = document.createElement('span'); term.className = 'def-term'; term.textContent = el.textContent;
+    tip.appendChild(term); tip.appendChild(document.createTextNode(t));
+    tip.style.left = '0px'; tip.style.top = '0px'; tip.classList.add('open');
+    place();
+  }
+  function hide() {
+    clearTimeout(timer);
+    if (tip) tip.classList.remove('open');
+    if (cur) cur.classList.remove('def-on');
+    cur = null; pinned = false;
+  }
+  function later(f) { clearTimeout(timer); timer = setTimeout(f, 200); }
+  function term(t) { return t && t.closest ? t.closest(SEL) : null; }
+  document.addEventListener('pointerover', function (e) {
+    var el = term(e.target);
+    if (!el) return;
+    text(el);
+    if (e.pointerType !== 'mouse' || pinned) return;
+    clearTimeout(timer); timer = setTimeout(function () { show(el, false); }, 250);
+  });
+  document.addEventListener('pointerout', function (e) {
+    var el = term(e.target);
+    if (!el || e.pointerType !== 'mouse' || pinned) return;
+    if (e.relatedTarget && (el.contains(e.relatedTarget) || (tip && tip.contains(e.relatedTarget)))) return;
+    if (cur === el) later(hide); else clearTimeout(timer);
+  });
+  // capture phase: a click on a term shows its definition and goes no further (it neither opens nor closes Yang's
+  // window); a click elsewhere closes a kept definition and carries on as usual
+  document.addEventListener('click', function (e) {
+    var el = term(e.target);
+    if (el) {
+      if (el.closest('a[href]')) return;
+      var sel = window.getSelection && window.getSelection();
+      if (sel && !sel.isCollapsed && el.contains(sel.anchorNode)) return;
+      e.stopPropagation(); e.preventDefault();
+      if (cur === el && pinned) hide(); else show(el, true);
+      return;
+    }
+    if (tip && tip.contains(e.target)) { e.stopPropagation(); return; }
+    if (cur) hide();
+  }, true);
+  // registered before Yang's window's own Esc handler (this script comes first in the page), so that Esc closes the
+  // definition alone when one is shown
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && cur && tip.classList.contains('open')) { hide(); e.stopImmediatePropagation(); }
+  }, true);
+  window.addEventListener('scroll', function () { if (cur) place(); }, true);
+  window.addEventListener('resize', function () { if (cur) place(); });
+})();
+</script>"""
+
 _VOID = {'br', 'img', 'hr', 'input', 'meta', 'link', 'wbr', 'source', 'col', 'area', 'base', 'embed', 'track'}
 _TAG = re.compile(r'<(/?)([a-zA-Z][a-zA-Z0-9]*)\b[^>]*?(/?)>')
 _BLOCKS = ('p', 'li', 'td', 'th', 'figcaption', 'summary', 'h1', 'h2', 'h3')
@@ -1972,9 +2072,9 @@ def postprocess(page: str, groups: Sequence[Sequence[str]], answers: Dict[str, s
     tpl = ''.join(f'<template id="yqa-{i}">{h}</template>\n' for i, h in answers.items())
     k = page.rfind('</main>')
     page = page[:k] + tpl + page[k:]
-    page = page.replace('</style>', YQ_CSS + '</style>', 1)
+    page = page.replace('</style>', YQ_CSS + DEF_CSS + '</style>', 1)
     k = page.rfind('</body>')
-    page = page[:k] + YQ_JS + '\n' + page[k:]
+    page = page[:k] + DEF_JS + '\n' + YQ_JS + '\n' + page[k:]
     assert '⟪' not in page and '⟫' not in page, 'a page marker survived the conversion'
     return page, warnings
 

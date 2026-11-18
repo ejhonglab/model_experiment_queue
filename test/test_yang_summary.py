@@ -510,6 +510,9 @@ def test_postprocess(tmp_path):
     assert 'alt="a caption"' in out and '<figcaption>a <span class="yq" id="yq-f1"' in out
     assert out.count('<template id="yqa-') == 6 and out.index('<template id="yqa-h1">') < out.index('</main>')
     assert 'div.yq-pop' not in out and '.yq-pop {' in out and "Yang's question" in out
+    # the definitions' box: its CSS, and its script before the window's (so that its Esc handler runs first)
+    assert '.def-tip {' in out and out.count(Y.DEF_JS) == 1
+    assert out.index(Y.DEF_JS) < out.index(Y.YQ_JS) < out.rindex('</body>')
     assert M.lint(out) == []
     # a marked passage that crosses an element is widened to its block
     bad = '<html><head><style></style></head><body><main><p>Start ⟪yq:0⟫a <b>bold⟪/yq⟫ text</b> end.</p></main></body></html>'
