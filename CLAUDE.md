@@ -1195,6 +1195,7 @@ Canonical experiment names for summary reports:
 | E108 | paa's input at the flies' concentration |
 | E109 | the input of paa, B-myr and 2-but searched for ρ on odor-odor distances on held-out wirings and recordings |
 | E110 | KC-KC inhibition held at zero in the best family |
+| E111 | a residual APL output in the blocked flies in place of KC-KC inhibition |
 
 ## Model-output archive (data/model_outputs/ in the shared directory)
 

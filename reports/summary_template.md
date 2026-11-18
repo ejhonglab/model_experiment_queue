@@ -151,6 +151,7 @@ flies' chosen form: The inhibition that the recordings chose on halves of the fl
 - E108: paa's input at the flies' concentration (completed)
 - E109: the input of paa, B-myr and 2-but searched for ρ on odor-odor distances on held-out wirings and recordings (running)
 - E110: KC-KC inhibition held at zero in the best family (running)
+- E111: a residual APL output in the blocked flies in place of KC-KC inhibition (running)
 ???
 
 ## What the data show: the ORN→KC remapping in control flies, and what blocking APL output does to it
