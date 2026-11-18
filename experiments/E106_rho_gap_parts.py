@@ -141,8 +141,10 @@ PROBES = {
     'orn_91_off': ('the ORN input on the 91 pairs, against APL output blocked (TNT)', 0.86),
     'at_data_29_on': ("the family with the 29 pairs of paa and B-myr at the data's values, APL on", 0.83),
     'at_data_29_off': ("the family with the 29 pairs of paa and B-myr at the data's values, APL off", 0.89),
-    'gain91_halves_min': ('gain without paa and B-myr against a half of the recordings, smallest', 0.08),
-    'gain91_halves_max': ('gain without paa and B-myr against a half of the recordings, largest', 0.12),
+    'gain91_halves_min': ('gain without paa and B-myr against a half of the recordings, lower end (5th percentile over '
+                          'halves, the smaller condition)', 0.08),
+    'gain91_halves_max': ('gain without paa and B-myr against a half of the recordings, upper end (95th percentile, the '
+                          'larger condition)', 0.12),
     'gain91_recordings_positive': ('recordings (of 19) against which the gain without paa and B-myr is positive', 19),
     'hyb_flies_odor_on': ("the flies' odor part with the family's pair part, APL on", 0.74),
     'hyb_flies_odor_off': ("the flies' odor part with the family's pair part, APL off", 0.79),
@@ -160,18 +162,38 @@ PROBES = {
     'sd_wirings_off': ('SD over the eight wirings of ρ with APL off', 0.02),
     'boot_sd_on': ("SD of the family's ρ with APL on over resamples of the recordings", 0.02),
     'boot_sd_off': ("SD of the family's ρ with APL off over resamples of the recordings", 0.02),
-    'split_diff_on': ("mean absolute difference of the family's ρ with APL on between two halves of the recordings", 0.04),
-    'split_diff_off': ("mean absolute difference of the family's ρ with APL off between two halves of the recordings", 0.06),
+    'split_diff_min': ("difference of the family's ρ between two halves of the recordings, lower end (mean absolute "
+                       "difference, the smaller condition)", 0.04),
+    'split_diff_max': ("difference of the family's ρ between two halves of the recordings, upper end (mean absolute "
+                       "difference, the larger condition)", 0.06),
     'paired_sd_min': ('paired SD of a near-null change over the wirings, smallest (of both changes and conditions)', 0.004),
     'paired_sd_max': ('paired SD of a near-null change over the wirings, largest', 0.009),
     'e85_agreement_66_on': ("two populations of E85's model flies from disjoint ORN flies, 66 megamat pairs, APL on", 0.96),
     'e85_agreement_66_off': ("two populations of E85's model flies from disjoint ORN flies, 66 megamat pairs, APL off", 0.96),
-    'searched_on_min': ('change in ρ with APL on of the searched inputs on held-out wirings, smallest', -0.08),
-    'searched_on_max': ('change in ρ with APL on of the searched inputs on held-out wirings, largest', 0.00),
+    'searched_on_min': ('change in ρ with APL on of the searched inputs on held-out wirings (population of the four), '
+                        'smallest (size 0.6 and E86)', -0.08),
+    'searched_on_max': ('change in ρ with APL on of the searched inputs on held-out wirings (population of the four), '
+                        'largest (size 0.6 and E86)', 0.00),
     'noise_free_on': ('the family against the noise-free control flies', 0.67),
     'noise_free_off': ('the family against the noise-free APL output blocked (TNT)', 0.75),
 }
 
+# other readings of a probe, set beside it in probes.csv: key -> [(reading, value key in `probe_values`)]
+PROBE_ALTS = {
+    'max_off': [('inside the bands', 'max_off_inside')], 'max_on': [('inside the bands', 'max_on_inside')],
+    'at_data_29_on': [('quantile', 'at_data_29_on_quantile')], 'at_data_29_off': [('quantile', 'at_data_29_off_quantile')],
+    **{f'hyb_{w}_odor_{c}': [(r, f'hyb_{w}_odor_{c}_{r}') for r in ('matched', 'quantile', 'best')]
+       for w in ('flies', 'family') for c in CONDITIONS},
+    **{f'per_odor_worth_{c}': [(r, f'per_odor_worth_{c}_{r}') for r in ('matched', 'quantile', 'best', 'optimal')]
+       for c in CONDITIONS},
+    'gain91_halves_min': [('smallest of all halves', 'gain91_halves_min_abs')],
+    'gain91_halves_max': [('largest of all halves', 'gain91_halves_max_abs')],
+    'split_diff_min': [('root mean square', 'split_rms_min')], 'split_diff_max': [('root mean square', 'split_rms_max')],
+    'searched_on_min': [('all searched inputs, size 1 included', 'searched_on_min_all')],
+    'searched_on_max': [('all searched inputs, size 1 included', 'searched_on_max_all')],
+    'orn_66_on': [("the 66-pair reference table's ORN column (registry rho_ctrl_orn_66)", 'orn_66_on_ref66')],
+    'orn_66_off': [("the 66-pair reference table's ORN column (registry rho_tnt_orn_66)", 'orn_66_off_ref66')],
+}
 
 def out_dir() -> Path:
     d = H.results_dir(EXPERIMENT)
@@ -801,6 +823,41 @@ def robustness_table() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def realism_table(arch_full: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+    """The realism of the two families (for the write-up's Realism section): each member wiring's row of by_variant.csv
+    (response rates with APL on and off, their ratio, the response rate ρ, the odors-per-KC distances, the flag; the KC
+    data's side in baseline-noise units, as the bands read it) and the mean over the members; the mean pair distances of
+    the population (raw counts) beside the KC data's; the KC data's values and the bands."""
+    bv = pd.read_csv(AE.OUT / 'by_variant.csv', low_memory=False) if arch_full is None else arch_full
+    bv = bv.set_index(['folder', 'tag'])
+    cols = ['rate_on', 'rate_off', 'rate_rho_on', 'rate_rho_off', 'opk_on_tv', 'opk_off_tv']
+    rows = []
+    for name in ('family', 'ceiling'):
+        mem = family_members(name)
+        sub = []
+        for lab, f, t in mem:
+            r = bv.loc[(f, t)]
+            d = dict(family=name, reading=lab, folder=f, tag=t, **{c: float(r[c]) for c in cols},
+                     realism_flag=r['realism_flag'] if isinstance(r['realism_flag'], str) else '')
+            d['ratio'] = d['rate_off'] / d['rate_on']
+            sub.append(d)
+        rows += sub
+        m = {c: float(np.mean([x[c] for x in sub])) for c in cols + ['ratio']}
+        pop = _readings(name)[1]
+        rows.append(dict(family=name, reading='mean over the wirings', folder='', tag='', **m,
+                         realism_flag='; '.join(sorted({x['realism_flag'] for x in sub if x['realism_flag']})),
+                         mean_dist_on=float(pop['on'].mean()), mean_dist_off=float(pop['off'].mean())))
+    D = data_matrices()
+    rows.append(dict(family='KC data', reading='control flies / APL output blocked (TNT), baseline-noise units',
+                     rate_on=H.data_target('noise_ctrl_frac'), rate_off=H.data_target('noise_tnt_frac'),
+                     ratio=H.data_target('noise_rate_ratio_fraction'), opk_on_tv=AE.opk_band('on', 'noise'),
+                     opk_off_tv=AE.opk_band('off', 'noise'), mean_dist_on=float(D['on'].mean()), mean_dist_off=float(D['off'].mean()),
+                     realism_flag=f'bands: APL-on rate {AE.RATE_ON_BAND[0]}-{AE.RATE_ON_BAND[1]}, ratio {AE.RATE_RATIO_BAND[0]}-'
+                                  f'{AE.RATE_RATIO_BAND[1]}, response rate ρ with APL on at least {AE.RATE_RHO_MIN:.2f}, '
+                                  'odors per KC at most the opk_*_tv given'))
+    return pd.DataFrame(rows)
+
+
 def _split_means(rows: pd.DataFrame, rng: np.random.Generator) -> Tuple[pd.Series, pd.Series]:
     idx = rng.permutation(len(rows))
     return rows.iloc[idx[:len(rows) // 2]].mean(), rows.iloc[idx[len(rows) // 2:]].mean()
@@ -895,6 +952,11 @@ def family_resampling(pop: Mapping[str, pd.Series], seed: int = 0) -> Dict[str, 
     return dict(boot={k: np.asarray(v) for k, v in boot.items()}, split_diff={k: np.asarray(v) for k, v in diff.items()})
 
 
+@functools.lru_cache(maxsize=None)
+def _family_rs() -> Dict[str, Dict[str, np.ndarray]]:
+    return family_resampling(_readings('family')[1])
+
+
 def recording_loo(rows: pd.DataFrame, subset: str) -> np.ndarray:
     """Per recording: ρ of its pair distances with the mean of the other recordings of its genotype, over `subset`."""
     cols = subset_pairs(rows.columns, subset)
@@ -935,7 +997,7 @@ def _registry_values() -> Tuple[Tuple[str, float, str, Optional[Tuple[float, flo
             out.append((f'family_rho_{c}_sd_wirings_{SUBSET_SHORT[s]}', float(np.std(v, ddof=1)), f'SD (ddof 1) over the eight '
                         f"wirings of {fam} of each wiring's ρ on odor-odor distances, APL {c} against the {DATA_LABEL[c]}, "
                         f'{SUBSET_N[s]} pairs {_subset_words(s)} (E106)', None))
-    rs = family_resampling(pop)
+    rs = _family_rs()
     for c in CONDITIONS:
         for s in ('all120', 'megamat66', 'no_paa_bmyr91'):
             k, n = f'{c}_{s}', SUBSET_SHORT[s]
@@ -1030,11 +1092,10 @@ def _f(x, spec='.2f') -> str:
 
 
 def probe_values(T: Mapping[str, pd.DataFrame], arch: pd.DataFrame) -> Dict[str, float]:
-    """The script's value of each of `PROBES` from the tables."""
-    D = data_matrices()
-    summ = T['archive_summary']
-    s_all = summ[(summ.scope == 'all') & (summ.subset == 'all120')].iloc[0]
-    s_out = summ[(summ.scope == 'outside the bands') & (summ.subset == 'all120')].iloc[0]
+    """The script's value of each of `PROBES` (and of `PROBE_ALTS`' other readings) from the tables."""
+    summ = T['archive_summary'].set_index(['scope', 'subset'])
+    s_all, s_out = summ.loc[('all', 'all120')], summ.loc[('outside the bands', 'all120')]
+    s_in = summ.loc[('inside the bands', 'all120')]
     tr = T['tradeoff']
     tr_in = tr[(tr.scope == 'inside the bands') & (tr.subset == 'all120') & (tr.against == 'apl_effect_loss')].set_index('condition')
     cond = T['conditions']
@@ -1045,6 +1106,7 @@ def probe_values(T: Mapping[str, pd.DataFrame], arch: pd.DataFrame) -> Dict[str,
     sets = T['sets']
     st = sets[(sets.family == 'family') & (sets.odors == 'paa and B-myr')].set_index('condition')
     gain = T['gain91']
+    gh = gain[gain.kind == 'half'].groupby('condition')['gain']
     parts = T['parts']
     pp = parts[(parts.family == 'family') & (parts.reading == 'population')].set_index('condition')
     ys = T['yardsticks'].set_index('name')['value']
@@ -1053,10 +1115,15 @@ def probe_values(T: Mapping[str, pd.DataFrame], arch: pd.DataFrame) -> Dict[str,
     paired = [float(np.std(g[f'change_{c}'], ddof=1)) for _, g in nn120.groupby('change') for c in CONDITIONS]
     srch = T['searched_inputs']
     sp = srch[srch.wiring == 'population']
+    sp06 = sp[~sp.change.astype(str).str.endswith('_s1')]
     rob = T['robustness']
     rnf = rob[(rob.target == 'noise-free (E81)') & (rob.reading == 'family') & (rob.subset == 'all120')].iloc[0]
+    rs = _family_rs()
+    rms = {c: float(np.sqrt(np.mean(rs['split_diff'][f'{c}_all120'] ** 2))) for c in CONDITIONS}
+    mad = {c: float(np.mean(rs['split_diff'][f'{c}_all120'])) for c in CONDITIONS}
     v = dict(
         n_distinct=len(arch), max_on=s_all.max_on, max_off=s_all.max_off, n_both_070_077=s_all.n_both_070_077,
+        max_on_inside=s_in.max_on, max_off_inside=s_in.max_off,
         max_on_outside=s_out.max_on, max_off_outside=s_out.max_off, n_inside=int(arch.inside.sum()),
         corr_loss_on_inside=tr_in.loc['on', 'rank_corr'], corr_loss_off_inside=tr_in.loc['off', 'rank_corr'],
         family_on=cp.rho_on, family_off=cp.rho_off, cond_on_flies_off_family_effect=cp.on_from_flies_off_model_effect,
@@ -1069,40 +1136,58 @@ def probe_values(T: Mapping[str, pd.DataFrame], arch: pd.DataFrame) -> Dict[str,
         family_91_off=rh.loc[('orn_pearson', 'no_paa_bmyr91'), 'family_rho_off'],
         orn_91_on=rh.loc[('orn_pearson', 'no_paa_bmyr91'), 'rho_on'], orn_91_off=rh.loc[('orn_pearson', 'no_paa_bmyr91'), 'rho_off'],
         at_data_29_on=st.loc['on', 'at_data_raw'], at_data_29_off=st.loc['off', 'at_data_raw'],
-        gain91_halves_min=float(gain[gain.kind == 'half'].groupby(['condition'])['gain'].min().min()),
-        gain91_halves_max=float(gain[gain.kind == 'half'].groupby(['condition'])['gain'].max().max()),
+        at_data_29_on_quantile=st.loc['on', 'at_data_quantile'], at_data_29_off_quantile=st.loc['off', 'at_data_quantile'],
+        gain91_halves_min=float(gh.quantile(0.05).min()), gain91_halves_max=float(gh.quantile(0.95).max()),
+        gain91_halves_min_abs=float(gh.min().min()), gain91_halves_max_abs=float(gh.max().max()),
         gain91_recordings_positive=int((gain[gain.kind == 'recording']['gain'] > 0).sum()),
-        hyb_flies_odor_on=pp.loc['on', 'flies_odor_model_pair'], hyb_flies_odor_off=pp.loc['off', 'flies_odor_model_pair'],
-        hyb_family_odor_on=pp.loc['on', 'model_odor_flies_pair'], hyb_family_odor_off=pp.loc['off', 'model_odor_flies_pair'],
-        per_odor_worth_on=pp.loc['on', 'flies_odor_model_pair'] - pp.loc['on', 'model'],
-        per_odor_worth_off=pp.loc['off', 'flies_odor_model_pair'] - pp.loc['off', 'model'],
         family_66_on=rh.loc[('orn_pearson', 'megamat66'), 'family_rho_on'], family_66_off=rh.loc[('orn_pearson', 'megamat66'), 'family_rho_off'],
         orn_66_on=rh.loc[('orn_pearson', 'megamat66'), 'rho_on'], orn_66_off=rh.loc[('orn_pearson', 'megamat66'), 'rho_off'],
+        orn_66_on_ref66=H.data_target('rho_ctrl_orn_66'), orn_66_off_ref66=H.data_target('rho_tnt_orn_66'),
         remy_66_on=H.data_target('rho_ctrl_remy_soma'), remy_66_off=H.data_target('rho_tnt_remy_soma'),
         sd_wirings_on=ys['family_rho_on_sd_wirings_120'], sd_wirings_off=ys['family_rho_off_sd_wirings_120'],
         boot_sd_on=ys['family_rho_on_boot_sd_120'], boot_sd_off=ys['family_rho_off_boot_sd_120'],
-        split_diff_on=ys['family_rho_on_split_diff_120'], split_diff_off=ys['family_rho_off_split_diff_120'],
+        split_diff_min=min(mad.values()), split_diff_max=max(mad.values()),
+        split_rms_min=min(rms.values()), split_rms_max=max(rms.values()),
         paired_sd_min=min(paired), paired_sd_max=max(paired),
         e85_agreement_66_on=ys['e85_population_agreement_on_66'], e85_agreement_66_off=ys['e85_population_agreement_off_66'],
-        searched_on_min=float(sp['change_on_120'].min()), searched_on_max=float(sp['change_on_120'].max()),
+        searched_on_min=float(sp06['change_on_120'].min()), searched_on_max=float(sp06['change_on_120'].max()),
+        searched_on_min_all=float(sp['change_on_120'].min()), searched_on_max_all=float(sp['change_on_120'].max()),
         noise_free_on=rnf.rho_on, noise_free_off=rnf.rho_off)
+    for c in CONDITIONS:
+        v[f'hyb_flies_odor_{c}'] = pp.loc[c, 'flies_odor_model_pair']
+        v[f'hyb_family_odor_{c}'] = pp.loc[c, 'model_odor_flies_pair']
+        for r in ('matched', 'quantile', 'best'):
+            v[f'hyb_flies_odor_{c}_{r}'] = pp.loc[c, f'flies_odor_model_pair_{r}']
+            v[f'hyb_family_odor_{c}_{r}'] = pp.loc[c, f'model_odor_flies_pair_{r}']
+        v[f'per_odor_worth_{c}'] = pp.loc[c, 'flies_odor_model_pair'] - pp.loc[c, 'model']
+        for r in ('matched', 'quantile', 'best'):
+            v[f'per_odor_worth_{c}_{r}'] = pp.loc[c, f'flies_odor_model_pair_{r}'] - pp.loc[c, 'model']
+        v[f'per_odor_worth_{c}_optimal'] = pp.loc[c, 'model_pair_optimal_odor'] - pp.loc[c, 'model']
     return {k: float(x) for k, x in v.items()}
 
 
+COUNT_PROBES = ('n_distinct', 'n_inside', 'n_both_070_077', 'gain91_recordings_positive')
+
+
 def probes_table(T: Mapping[str, pd.DataFrame], arch: pd.DataFrame) -> pd.DataFrame:
-    """probes.csv: each planning probe beside the script's value; `agree` when they differ by at most 0.01 (counts:
-    exactly; the archive's maxima: the script's is at most the probe's bound)."""
+    """probes.csv: each planning probe beside the script's value (reading 'as the probe reads it'), and the other
+    readings of `PROBE_ALTS` beside it; `agree` when they differ by at most 0.01 (counts: exactly; the archive's maxima:
+    the script's is at most the probe's bound)."""
     got = probe_values(T, arch)
     rows = []
+
+    def ok(k, s, p):
+        if k in COUNT_PROBES:
+            return int(round(s)) == int(p)
+        if k in ('max_on', 'max_off'):
+            return s <= p + 0.005
+        return abs(s - p) <= 0.01 + 1e-9
+
     for k, (what, p) in PROBES.items():
-        s = got[k]
-        if k in ('n_distinct', 'n_inside', 'n_both_070_077', 'gain91_recordings_positive'):
-            ok = int(round(s)) == int(p)
-        elif k in ('max_on', 'max_off'):
-            ok = s <= p + 0.005
-        else:
-            ok = abs(s - p) <= 0.01 + 1e-9
-        rows.append(dict(probe=k, what=what, probe_value=p, script_value=s, difference=s - p, agree=bool(ok)))
+        for reading, key in [('as the probe reads it', k)] + PROBE_ALTS.get(k, []):
+            s = got[key]
+            rows.append(dict(probe=k, what=what, reading=reading, probe_value=p, script_value=s, difference=s - p,
+                             agree=bool(ok(k, s, p))))
     return pd.DataFrame(rows)
 
 
@@ -1124,11 +1209,68 @@ def comparison_table(T: Mapping[str, pd.DataFrame], probes: pd.DataFrame, out: P
         L.append(f"| ρ on odor-odor distances, {SUBSET_N[s]} pairs {_subset_words(s)} | {_f(cl['on'])} / {_f(cl['off'])} | "
                  f"{_f(r.rho_on)} / {_f(r.rho_off)} | {_f(r.family_rho_on)} / {_f(r.family_rho_off)} | "
                  f"{_f(r.ceiling_rho_on)} / {_f(r.ceiling_rho_off)} | {_f(r.family_gain_on, '+.2f')} / {_f(r.family_gain_off, '+.2f')} |")
-    L += ['', '## The planning probes against the script', '', '| probe | probe value | script | agree |', '|---|---:|---:|---|']
+    cond = T['conditions']
+    cp = cond[(cond.reading == 'population') & (cond.subset == 'all120')].set_index('family')
+    L += ['', '## The split between the conditions (population, 120 pairs)', '',
+          '| statistic | family | ceiling family |', '|---|---:|---:|']
+    for k, lab in (('rho_on', 'ρ on odor-odor distances, APL on'), ('rho_off', 'ρ on odor-odor distances, APL off'),
+                   ('on_from_flies_off_model_effect', "APL on from the flies' APL-off distances + the model's APL effect"),
+                   ('on_from_model_off_flies_effect', "APL on from the model's APL-off distances + the flies' APL effect"),
+                   ('off_from_flies_on_model_effect', "APL off from the flies' APL-on distances - the model's APL effect"),
+                   ('off_from_model_on_flies_effect', "APL off from the model's APL-on distances - the flies' APL effect"),
+                   ('resid_on_vs_off', "ρ between the two conditions' rank residuals")):
+        L.append(f"| {lab} | {_f(cp.loc['family', k])} | {_f(cp.loc['ceiling', k])} |")
+    pp = T['parts'][(T['parts'].reading == 'population') & (T['parts'].family == 'family')].set_index('condition')
+    L += ['', '## The odor part and the pair part (the family, population; APL on / APL off)', '',
+          '| reading | raw | matched | quantile | best scale |', '|---|---:|---:|---:|---:|']
+    for w, lab in (('flies_odor_model_pair', "the flies' odor part + the family's pair part"),
+                   ('model_odor_flies_pair', "the family's odor part + the flies' pair part")):
+        cells = [f"{_f(pp.loc['on', w + sfx])} / {_f(pp.loc['off', w + sfx])}" for sfx in ('', '_matched', '_quantile', '_best')]
+        L.append(f'| {lab} | ' + ' | '.join(cells) + ' |')
+    L.append(f"| the family's pair part + the Pearson-optimal odor part (in sample, 16 parameters) | "
+             f"{_f(pp.loc['on', 'model_pair_optimal_odor'])} / {_f(pp.loc['off', 'model_pair_optimal_odor'])} | | | |")
+    L.append(f"| the family | {_f(pp.loc['on', 'model'])} / {_f(pp.loc['off', 'model'])} | | | |")
+    st = T['sets'][T['sets'].family == 'family'].set_index(['odors', 'condition'])
+    L += ['', '## paa and B-myr (the family, population; APL on / APL off)', '',
+          '| reading | paa and B-myr (29 pairs) | the four validation2 odors (54 pairs) |', '|---|---:|---:|']
+    for k, lab in (('rho', 'the family, 120 pairs'), ('rho_without', 'the family without those pairs'),
+                   ('rho_without_orn', 'the ORN input without those pairs'), ('at_data_raw', "those pairs at the flies' values (raw)"),
+                   ('at_data_quantile', "those pairs at the flies' values (quantile)")):
+        L.append(f"| {lab} | {_f(st.loc[('paa and B-myr', 'on'), k])} / {_f(st.loc[('paa and B-myr', 'off'), k])} | "
+                 f"{_f(st.loc[('the four validation2 odors', 'on'), k])} / {_f(st.loc[('the four validation2 odors', 'off'), k])} |")
+    rob = T['robustness'][T['robustness'].subset == 'all120']
+    L += ['', '## Robustness (120 pairs; APL on / APL off)', '', '| target | family | ceiling family | ORN input |', '|---|---:|---:|---:|']
+    for tname, g in rob.groupby('target', sort=False):
+        g = g.set_index('reading')
+        L.append(f'| {tname} | ' + ' | '.join(f"{_f(g.loc[r, 'rho_on'])} / {_f(g.loc[r, 'rho_off'])}" for r in ('family', 'ceiling', 'ORN input')) + ' |')
+    sr = T['searched_inputs'][T['searched_inputs'].wiring == 'population']
+    L += ['', '## The searched inputs on the held-out wirings (population of P3, P4, M2, M3; change against the lab input)', '',
+          '| input | ρ, APL on / off | change, APL on / off | change on the 66 megamat pairs | pattern part (lab input) |',
+          '|---|---:|---:|---:|---:|']
+    for _, r in sr.iterrows():
+        L.append(f'| {r.input} | {_f(r.rho_on_120)} / {_f(r.rho_off_120)} | {_f(r.change_on_120, "+.3f")} / {_f(r.change_off_120, "+.3f")} | '
+                 f'{_f(r.change_on_66, "+.3f")} / {_f(r.change_off_66, "+.3f")} | {_f(r.pattern, ".3f")} ({_f(r.base_pattern, ".3f")}) |')
+    tr = T['tradeoff'][(T['tradeoff'].subset == 'all120')]
+    L += ['', '## The trade-off over the archive (rank correlation over distinct variants; APL on / APL off)', '',
+          '| against | inside the bands | all |', '|---|---:|---:|']
+    for k in TRADE_COLS:
+        g = tr[tr.against == k].set_index(['scope', 'condition'])['rank_corr']
+        L.append(f"| {k} | {_f(g[('inside the bands', 'on')])} / {_f(g[('inside the bands', 'off')])} | "
+                 f"{_f(g[('all', 'on')])} / {_f(g[('all', 'off')])} |")
+    re_ = T['realism']
+    L += ['', '## Realism of the two families (by_variant.csv; the KC data in baseline-noise units)', '',
+          '| reading | response rate, APL on / off | ratio | response rate ρ, APL on / off | odors per KC, APL on / off | '
+          'mean distance, APL on / off | flag |', '|---|---:|---:|---:|---:|---:|---|']
+    for _, r in re_.iterrows():
+        L.append(f'| {r.family}: {r.reading} | {_f(r.rate_on, ".3f")} / {_f(r.rate_off, ".3f")} | {_f(r.ratio)} | '
+                 f'{_f(r.get("rate_rho_on"))} / {_f(r.get("rate_rho_off"))} | {_f(r.opk_on_tv)} / {_f(r.opk_off_tv)} | '
+                 f'{_f(r.get("mean_dist_on"), ".3f")} / {_f(r.get("mean_dist_off"), ".3f")} | {r.realism_flag if isinstance(r.realism_flag, str) else ""} |')
+    L += ['', '## The planning probes against the script', '', '| probe | reading | probe value | script | agree |',
+          '|---|---|---:|---:|---|']
     for _, r in probes.iterrows():
-        spec = '.0f' if float(r.probe_value).is_integer() and abs(r.probe_value) > 1 else '.3f'
-        L.append(f'| {r.what} | {_f(r.probe_value, spec if spec == ".0f" else ".2f")} | {_f(r.script_value, spec)} | '
-                 f'{"yes" if r.agree else "no"} |')
+        cnt = r.probe in COUNT_PROBES
+        L.append(f'| {r.what} | {r.reading} | {_f(r.probe_value, ".0f" if cnt else ".3f")} | '
+                 f'{_f(r.script_value, ".0f" if cnt else ".3f")} | {"yes" if r.agree else "no"} |')
     (out / 'comparison_table.md').write_text('\n'.join(L) + '\n')
 
 
@@ -1154,6 +1296,7 @@ def main() -> None:
     T['near_null'] = near_null_changes()
     T['e85_agreement'] = e85_agreement()
     T['yardsticks'] = yardsticks_table()
+    T['realism'] = realism_table()
     probes = probes_table(T, arch)
     keep = [c for c in arch.columns if c in ('exp', 'folder', 'tag', 'n_copies', 'copies', 'inside', 'realism_flag', 'rate_on',
             'rate_off', 'rate_rho_on', 'opk_on_tv', 'opk_off_tv') or c in STAT_COLS or '__dist_rho_' in c
@@ -1164,7 +1307,7 @@ def main() -> None:
                  odors='residuals_odors.csv', sets='odors.csv', input_rhos='input.csv', input_follow='input_follow.csv',
                  input_parts='input_parts.csv', gain91='gain_without_paa_bmyr.csv', searched_inputs='searched_inputs.csv',
                  robustness='robustness.csv', near_null='near_null_changes.csv', e85_agreement='e85_agreement.csv',
-                 yardsticks='yardsticks.csv')
+                 yardsticks='yardsticks.csv', realism='realism.csv')
     for k, f in files.items():
         T[k].to_csv(out / f, index=False)
     probes.to_csv(out / 'probes.csv', index=False)

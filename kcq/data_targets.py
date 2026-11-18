@@ -12,7 +12,10 @@ vectors, averaged over recordings (the report's matrices); ORN distances are
 `noise_*` are the KC data's side of the realism bands (Tom, 2026-11-10 16:10): each KC's responses in units
 of its own baseline noise, a response above `noise_threshold` (`noise_unit_criterion`). Entries named `repeat_*` and
 `noise_free_*` (not band entries) are the flies' variability across the three repeats (E81_repeat_structure.py): the
-same-repeat gap, and distances and the APL effect from products of different repeats.
+same-repeat gap, and distances and the APL effect from products of different repeats. The entries of
+`experiments.E106_rho_gap_parts.registry_entries` (`<ctrl|tnt>_ceiling_<54|91>`, `_rec_rho_loo_<120|54|91>`, `family_rho_*`,
+`paired_rho_*`, `e85_population_agreement_*`) are the yardsticks for ρ on odor-odor distances, some of them read from saved
+model distances (the best family's spread over wirings and recordings, near-null changes, E85's model flies).
 Usage: ./venv/bin/python kcq/data_targets.py [--add-new]
 (--add-new: compute every entry but write only those not yet in the registry, keeping the existing entries as
 they are, and list any existing entry whose recomputed value or interval differs)
@@ -50,6 +53,15 @@ INPUTS = {
     # Yang's APL16 KC trial means and trials in baseline-noise units (yang_apl16_kc_noise_units.py, hal)
     'noise_trialmeans': H.shared_dir() / 'data' / 'yang_apl16_kc_noise_units' / 'trialmean_long.parquet',
     'noise_trials': H.shared_dir() / 'data' / 'yang_apl16_kc_noise_units' / 'per_trial_long.parquet',
+    # the saved model distances E106's yardsticks read (the best family on its eight wirings, E93's and E102's near-null
+    # changes on the same wirings, E85's model flies)
+    'e106_e67_pairs': H.shared_dir() / 'results' / 'E67_apl_effect_fits' / 'model_pair_distances_long.csv',
+    'e106_e72_pairs': H.shared_dir() / 'results' / 'E72_wiring_population' / 'model_pair_distances_long.csv',
+    'e106_e72_fits': H.shared_dir() / 'results' / 'E72_wiring_population' / 'fits.csv',
+    'e106_e93_pairs': H.shared_dir() / 'results' / 'E93_missing_glomeruli_input' / 'model_pair_distances_long.csv',
+    'e106_e102_pairs': H.shared_dir() / 'results' / 'E102_antennal_lobe_normalization' / 'model_pair_distances_long.csv',
+    'e106_e85_pairs': H.shared_dir() / 'results' / 'E85_orn_fly_population' / 'model_pair_distances_long.csv',
+    'e106_e85_runs': H.shared_dir() / 'results' / 'E85_orn_fly_population' / 'runs.csv',
 }
 
 
@@ -683,6 +695,13 @@ def build() -> dict:
     for name, value, definition, ci in e81_entries():
         add(name, value, definition, 'E81_repeat_structure.registry_entries (harness repeat statistics; 1000 resamples of '
             'recordings, seed 0)', ['kc_trials_ctrl', 'kc_trials_tnt', 'noise_trials'], ci=ci)
+    # the yardsticks for ρ on odor-odor distances (E106, the gap read by what could close it): the ceilings and one
+    # recording against the others on the 54 and 91 pairs, the best family's spread over wirings, over resamples and
+    # between halves of the recordings, the paired SD of near-null changes, and two populations of E85's model flies
+    from experiments.E106_rho_gap_parts import registry_entries as e106_entries, registry_inputs as e106_inputs
+    for name, value, definition, ci in e106_entries():
+        add(name, value, definition, 'E106_rho_gap_parts.registry_entries (resamples and splits of recordings seeded 0)',
+            e106_inputs(name), ci=ci)
     return reg
 
 
