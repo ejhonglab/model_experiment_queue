@@ -36,6 +36,11 @@ noise_<ctrl|tnt>_frac_<odor> entries); `realism_flag_zcrit` / `realism_zcrit` ke
 then (the KC data in Yang's whole-recording z, above 1 z: `opk_<on|off>_tv_zcrit`, and the response rate ρ
 of the experiment's own table, `spearman_rate_on_vs_data`), so that earlier write-ups can be checked.
 
+The last columns (since 2026-11-17, E106) are ρ on odor-odor distances, `spike_counts_cosine__dist_rho_<on|off>_<subset>`:
+the model's APL-on distances against the control flies' mean matrix and its APL-off distances against APL output blocked
+(TNT)'s, over the 120 pairs and the subsets of `PAIR_SUBSETS`; NaN for the variants of `HELD_VARIANTS`, whose wirings were
+built from connectome tables queue work does not use.
+
 build_summary.py runs it before the progress plot. Usage: ./venv/bin/python kcq/apl_effect.py
 [--no-figures] [--only-figures]
 """
@@ -80,6 +85,39 @@ RATE_RHO_MIN = 0.47 - 0.10
 OPK_BINS = ('0', '1', '2_3', '4_7', '8plus')
 TABLE_GLOBS = ('stats_variants.csv', 'fits.csv', 'stage2_fits.csv', 'wkckc_controls.csv', 'E*_summary.csv', 'comparison.csv')
 BUTTON = re.compile(r'!button\[([^\]]+)\]\(results/apl_effect/matrices/([^)\s]+)\.png\)')
+# ρ on odor-odor distances (the gap read by what could close it, E106): APL on against the control flies' mean matrix and
+# APL off against APL output blocked (TNT)'s, each over these subsets of the 120 pairs (columns
+# `spike_counts_cosine__dist_rho_<on|off>_<subset>`): the 66 pairs of the 12 megamat odors, the 54 with one of the four
+# validation2 odors (paa, -aPine, euc, B-myr; the three whose ORN input stands in at another concentration among them), the
+# 91 without paa and B-myr
+PAIR_SUBSETS = {
+    'all120': lambda a, b: True,
+    'megamat66': lambda a, b: a in H.MEGAMAT12 and b in H.MEGAMAT12,
+    'v2odors54': lambda a, b: a in H.VALIDATION2_4 or b in H.VALIDATION2_4,
+    'no_paa_bmyr91': lambda a, b: a not in ('paa', 'B-myr') and b not in ('paa', 'B-myr'),
+}
+# variants whose wirings were built from connectome tables that queue work does not use (CLAUDE.md, "Connectome data (Tom,
+# 2026-11-17)"): every E97 variant (claws moved to the proportions of Yang's own Claude's derived tables) and E4's two FAFB
+# wirings. They keep the columns they had; columns added since 2026-11-17 (the ρ's on odor-odor distances) are NaN for them
+HELD_VARIANTS = (('E97_glomerulus_claw_shares', re.compile(r'.*')), ('E4_substrate', re.compile(r'fafb')))
+
+
+def held(folder: str, tag: str) -> bool:
+    """True for a variant in `HELD_VARIANTS` (no new reading)."""
+    return any(folder == f and pat.match(str(tag)) for f, pat in HELD_VARIANTS)
+
+
+def dist_rho_columns(on: pd.Series, off: pd.Series, data_on: pd.Series, data_off: pd.Series) -> Dict[str, float]:
+    """`spike_counts_cosine__dist_rho_<on|off>_<subset>`: ρ on odor-odor distances of the model's APL-on distances against
+    `data_on` (the control flies) and of its APL-off distances against `data_off` (APL output blocked (TNT)), over each of
+    `PAIR_SUBSETS` (pairs either side lacks dropped)."""
+    out = {}
+    for cond, m, d in (('on', on, data_on), ('off', off, data_off)):
+        m = H.canonical_pairs(m)
+        for name, keep in PAIR_SUBSETS.items():
+            idx = [p for p in m.index if keep(*p)]
+            out[f'{V}__dist_rho_{cond}_{name}'] = H.spearman(m.loc[idx], d)
+    return out
 
 
 def _sha(p: Path) -> str:
@@ -259,7 +297,13 @@ def realism_flag(rate_on, rate_off, rate_rho, opk_on_tv=np.nan, opk_off_tv=np.na
     return '; '.join(why)
 
 
-def score_all(data: pd.Series) -> pd.DataFrame:
+def score_all(data: pd.Series, data_on: Optional[pd.Series] = None, data_off: Optional[pd.Series] = None) -> pd.DataFrame:
+    """One row per results folder x tag: the per-pair APL effect's statistics against `data`, the response rates, the
+    realism bands and, last, ρ on odor-odor distances against `data_on` / `data_off` (default the control flies' and APL
+    output blocked (TNT)'s mean matrices; `dist_rho_columns`, NaN for `HELD_VARIANTS`)."""
+    data_on = H.yang_mean_rdm('TNT3c') if data_on is None else data_on
+    data_off = H.yang_mean_rdm('TNT') if data_off is None else data_off
+    rho_cols = list(dist_rho_columns(data_on, data_off, data_on, data_off))
     rows = []
     for folder in sorted(RESULTS.glob('E*_*')):
         m = re.match(r'(E\d+)_', folder.name)
@@ -296,6 +340,8 @@ def score_all(data: pd.Series) -> pd.DataFrame:
             row['realism_zcrit'] = 'inside the bands' if not row['realism_flag_zcrit'] else 'outside: ' + row['realism_flag_zcrit']
             if missing:
                 row['realism_zcrit'] += ' (odors per KC not scored: no archived responses)'
+            # ρ on odor-odor distances by subset of pairs (E106), after every earlier column
+            row.update(dict.fromkeys(rho_cols, np.nan) if held(folder.name, tag) else dist_rho_columns(on, off, data_on, data_off))
             rows.append(row)
     return pd.DataFrame(rows)
 
@@ -428,7 +474,7 @@ def main() -> None:
     if args.only_figures:
         df = pd.read_csv(OUT / 'by_variant.csv')
     else:
-        df = score_all(data)
+        df = score_all(data, data_on, data_off)
         df.to_csv(OUT / 'by_variant.csv', index=False)
         best = best_by_experiment(df)
         best.to_csv(OUT / 'best_by_experiment.csv', index=False)
