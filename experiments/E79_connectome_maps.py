@@ -16,6 +16,12 @@ Inputs:
   not at the APL maps' (pa -6.8 to -4.4, paa -6.3 to -3.0, ms -7.7 to -2); pa's map concentrations are all more than one
   log10 unit from the input's, so every pa comparison is outside the 1-log rule.
 - C2's APL-on spike counts per KC (the model-output archive) for the spike-driven alternative.
+- E100's part D (re-planned 2026-11-17) reads none of Yang's own Claude's tables (held for queue work): its three
+  calyces (the hemibrain's right, the male CNS's left and right) come from Pratyush's tables through
+  `pratyush_calyces` (E97's counted claws, the boutons carrying them weighted by release sites, APL's synapses with
+  both; no ROI rule), with `neighbour_axis_checks` for the axes and `official_roi_outline` beside; the section
+  "Pratyush's tables" below says what each table holds. The readers above them (load_calyces, axis_checks) are
+  unchanged and not called by that code.
 - The measured maps (data/yang_apl_calyx_maps/, apl_calyx_maps.py's ROI reader and stimulus maps: each stimulus's mean
   map minus the mean of all the recording's paraffin oil presentations).
 - The error common to all wirings (results/E72_wiring_population/common_error_pairs.csv, column `common`: per odor pair,
@@ -74,10 +80,12 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import os
 import subprocess
 import time
+import warnings
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -293,16 +301,61 @@ def calyx_side(calyx: str) -> str:
 # folders are E97's hemibrain_dir() and malecns_dir(). Nothing here reads the tables of Yang's own Claude's project
 # (YANG_APL; held for queue work), FlyWire / FAFB or BANC, and nothing calls load_calyces, _apl_table, axis_checks or
 # _prat_boutons: every table is opened through `_read_prat`, which refuses any path outside those two folders.
+#
+# What the tables hold (read 2026-11-17). Positions are in 8 nm voxels in both brains (nm = 8 x voxel, then to_rda).
+# - PN bouton -> KC claw (the hemibrain's PNbouton-to-KCclaw of 2025-12-09-19-47-36, the loader's; the male CNS's of
+#   2026-10-25, both sides in one table): one row per synapse, with the PN's bouton (-1 unassigned: 5.8 % of the
+#   hemibrain's synapses, 0.2 % of the male CNS's) and the KC's corrected claw label (-1: in no cluster; the loader keeps
+#   it as a claw). Read through E97's pn_claw_synapses.
+# - PN_Synapse_Assignments (hemibrain 2025-12-05-13-39-22, male CNS 2026-10-25): each PN synapse near the calyx, type
+#   'pre' (a release site, one row each) or 'post', with its bouton (-1: none) and ROI. Its bouton labels are the
+#   PN -> KC tables' (every T-bar of those tables is found here with the same bouton, in both brains). The male CNS's
+#   PN_Boutons n_pre equals this count for 98.7 % of its boutons.
+# - APL <-> KC claw and APL <-> PN bouton, both directions (the hemibrain's of 2025-12-14-21-12-48 and
+#   2025-12-05-13-39-22, the loader's; the male CNS's four of 2026-10-25): one row per synapse with both sites, the claw
+#   label (NaN off the claws; the hemibrain's tables also hold the lobes' synapses, all NaN) or the bouton label, and
+#   the APL unit. The male CNS has one APL per side (APL_L, APL_R; the two ends' sides agree on every row), the
+#   hemibrain one (APL_R).
+# - KC_Synapse_Assignments (hemibrain 2025-12-09-19-47-36), PN_Synapse_Assignments and the APL's (hemibrain
+#   APL_Assignments_2025-12-05-13-39-22, the loader's; male CNS APL_Synapse_Assignments): each neuron's synapses near
+#   the calyx with an ROI label (CA, PED, SLP, PLP, SCL, ICL, ..., the side in parentheses; the male CNS's side column
+#   agrees with it on every labelled row). No lobe synapses in the male CNS's. The neighbours of the axis check.
+# - Sides: the male CNS's Left lies at larger x (R = -x); the hemibrain's tables are its right side only.
+# - Confidence: the male CNS's tables hold postsynaptic confidences of 0.5 and above (presynaptic 0.7 and above on the
+#   connectivity tables), the hemibrain's go down to 0.28. Nothing here thresholds them (E97's min_confidence applies to
+#   the claws only). The male CNS's region column (CA / ACA) is not used.
 
 PRAT_CALYCES: Tuple[str, ...] = ('hemibrain_R', 'malecns_L', 'malecns_R')
+PRAT_BRAINS: Tuple[str, ...] = ('hemibrain', 'malecns')
 # E97's mushroom-body names (`counted_claws`'s mb column) -> these calyces
 E97_MB_TO_CALYX = {'hemibrain': 'hemibrain_R', 'malecns_L': 'malecns_L', 'malecns_R': 'malecns_R'}
 # the calyx rule passed to E97's reader: none for all three (the re-plan: one rule, no ROI rule)
 CALYX_ROI_RULE = 'none'
+VOXEL_NM = 8.0
+HEMIBRAIN_FILES = {
+    'release': 'PN_Synapse_Assignments_Hemibrain_2025-12-05-13-39-22.parquet',
+    'apl_kc': 'APLunit-to-KCclaw_Connectivity_2025-12-14-21-12-48.parquet',
+    'kc_apl': 'KCclaw-to-APLunit_Connectivity_2025-12-14-21-12-48.parquet',
+    'apl_pn': 'APLunit-to-PNbouton_Connectivity_2025-12-05-13-39-22.parquet',
+    'pn_apl': 'PNbouton-to-APLunit_Connectivity_2025-12-05-13-39-22.parquet',
+    'kc_syn': 'KC_Synapse_Assignments_Hemibrain_2025-12-09-19-47-36.parquet',
+    'apl_syn': 'APL_Assignments_2025-12-05-13-39-22.parquet'}
+MALECNS_FILES = {  # {stamp}: E97.MALECNS_STAMP
+    'release': 'PN_Synapse_Assignments_Male-CNS_{stamp}.parquet',
+    'apl_kc': 'APLunit-to-KCclaw_Connectivity_Male-CNS_{stamp}.parquet',
+    'kc_apl': 'KCclaw-to-APLunit_Connectivity_Male-CNS_{stamp}.parquet',
+    'apl_pn': 'APLunit-to-PNbouton_Connectivity_Male-CNS_{stamp}.parquet',
+    'pn_apl': 'PNbouton-to-APLunit_Connectivity_Male-CNS_{stamp}.parquet',
+    'kc_syn': 'KC_Synapse_Assignments_Male-CNS_{stamp}.parquet',
+    'apl_syn': 'APL_Synapse_Assignments_Male-CNS_{stamp}.parquet'}
+# (table, partner kind, APL postsynaptic) of APL's synapses with claws and boutons
+APL_TABLES: Tuple[Tuple[str, str, bool], ...] = (('apl_kc', 'KC', False), ('kc_apl', 'KC', True),
+                                                 ('apl_pn', 'PN', False), ('pn_apl', 'PN', True))
 # the calyx's neighbours for the axis check: ROI name -> required signs of (lateral, dorsal, anterior) of the ROI's
 # synapses' centroid minus the calyx's (0: not checked); lateral is +R on the right side, -R on the left
 NEIGHBOURS: Dict[str, Tuple[int, int, int]] = {'PED': (0, -1, 1), 'SLP': (0, 1, 1), 'PLP': (1, -1, 0)}
 NEIGHBOUR_MIN_SYNAPSES = 20
+SLAB_MIN_SYNAPSES = 50                              # slab_column_grids' floor
 # path fragments the new readers must never open (the held and excluded connectome data)
 HELD_PATH_MARKERS: Tuple[str, ...] = ('claude_APL_modeling_YZ4TC', 'flywire', 'fafb', 'banc', '2024-09-13')
 
@@ -315,10 +368,205 @@ class AxisCheckError(RuntimeError):
         self.table = table
 
 
-def _read_prat(path: Path, columns: Optional[Sequence[str]] = None) -> pd.DataFrame:
-    """One of Pratyush's tables (parquet or csv), refusing any path outside E97's hemibrain_dir() and malecns_dir() or
-    naming held data."""
-    raise NotImplementedError
+def _e97():
+    from experiments import E97_glomerulus_claw_shares as E97
+    return E97
+
+
+def _prat_dirs() -> Dict[str, Path]:
+    E97 = _e97()
+    return {'hemibrain': Path(E97.hemibrain_dir()), 'malecns': Path(E97.malecns_dir())}
+
+
+def _prat_files(brain: str) -> Dict[str, Path]:
+    d = _prat_dirs()[brain]
+    if brain == 'hemibrain':
+        return {k: d / v for k, v in HEMIBRAIN_FILES.items()}
+    if brain == 'malecns':
+        return {k: d / v.format(stamp=_e97().MALECNS_STAMP) for k, v in MALECNS_FILES.items()}
+    raise ValueError(brain)
+
+
+def _held_path(path) -> bool:
+    s = str(path).lower()
+    return any(m.lower() in s for m in HELD_PATH_MARKERS)
+
+
+def _read_prat(path: Path, columns: Optional[Sequence[str]] = None,
+               roots: Optional[Sequence[Path]] = None) -> pd.DataFrame:
+    """One of Pratyush's tables (parquet or csv), refusing (PermissionError) any path outside `roots` (None: E97's
+    hemibrain_dir() and malecns_dir()) or naming held data (HELD_PATH_MARKERS)."""
+    p = os.path.normpath(os.path.abspath(str(path)))
+    roots = list(_prat_dirs().values()) if roots is None else list(roots)
+    inside = any(os.path.commonpath([p, os.path.normpath(os.path.abspath(str(r)))])
+                 == os.path.normpath(os.path.abspath(str(r))) for r in roots)
+    if _held_path(p) or not inside:
+        raise PermissionError(f"{path}: not one of Pratyush's hemibrain or male-CNS tables")
+    if p.endswith('.parquet'):
+        return pd.read_parquet(p, columns=None if columns is None else list(columns))
+    return pd.read_csv(p, usecols=None if columns is None else list(columns))
+
+
+def _to_rda_voxels(brain: str, x, y, z) -> np.ndarray:
+    return to_rda(brain, np.asarray(x, float) * VOXEL_NM, np.asarray(y, float) * VOXEL_NM,
+                  np.asarray(z, float) * VOXEL_NM)
+
+
+def _side_letter(s: pd.Series) -> pd.Series:
+    return s.astype(str).str.strip().str[0].str.upper()
+
+
+def _release_sites(t: pd.DataFrame) -> pd.DataFrame:
+    """A PN_Synapse_Assignments table's release sites with a bouton: pn_id, bouton, x, y, z (voxels)."""
+    t = t[(t['type'] == 'pre') & t['anatomical_bouton'].notna()]
+    t = t[t['anatomical_bouton'] >= 0]
+    return pd.DataFrame({'pn_id': t['neuron'].astype(np.int64).to_numpy(),
+                         'bouton': t['anatomical_bouton'].astype(np.int64).to_numpy(),
+                         'x': t['x'].to_numpy(float), 'y': t['y'].to_numpy(float), 'z': t['z'].to_numpy(float)})
+
+
+def _harmonize_apl(t: pd.DataFrame, brain: str, kind: str, apl_input: bool) -> pd.DataFrame:
+    """One of APL's connectivity tables in one form: apl_id, partner_id, kind, apl_input, claw_id (KC rows) or bouton
+    (PN rows; the other NaN), apl_unit, side (the partner's), roi_pre, roi_post, the two sites (voxels), confidences.
+    The hemibrain's tables name the element and unit columns bare, the male CNS's with _pre / _post."""
+    apl_end, partner_end = ('post', 'pre') if apl_input else ('pre', 'post')
+
+    def col(base: str, end: str) -> pd.Series:
+        for c in (f'{base}_{end}', base):
+            if c in t.columns:
+                return t[c]
+        raise KeyError(f'{base} not in {list(t.columns)}')
+    elem = col('anatomical_claw_corrected' if kind == 'KC' else 'anatomical_bouton', partner_end).astype(float)
+    n = len(t)
+    side = (pd.Series('R', index=t.index) if brain == 'hemibrain' else _side_letter(t[f'side_{partner_end}']))
+    out = pd.DataFrame({'apl_id': t[f'bodyId_{apl_end}'].astype(np.int64).to_numpy(),
+                        'partner_id': t[f'bodyId_{partner_end}'].astype(np.int64).to_numpy(),
+                        'kind': np.repeat(kind, n), 'apl_input': np.repeat(apl_input, n),
+                        'claw_id': elem.to_numpy() if kind == 'KC' else np.full(n, np.nan),
+                        'bouton': elem.to_numpy() if kind == 'PN' else np.full(n, np.nan),
+                        'apl_unit': col('anatomical_unit', apl_end).astype(float).to_numpy(),
+                        'side': side.to_numpy(), 'roi_pre': t['roi_pre'].to_numpy(object),
+                        'roi_post': t['roi_post'].to_numpy(object)})
+    for c in ('x_pre', 'y_pre', 'z_pre', 'x_post', 'y_post', 'z_post', 'confidence_pre', 'confidence_post'):
+        out[c] = t[c].to_numpy(float)
+    return out
+
+
+def _brain_tables(brain: str) -> Dict[str, pd.DataFrame]:
+    """{'pn_kc': E97's pn_claw_synapses(brain), 'release': `_release_sites`, 'apl': APL's synapses with claws and
+    boutons in `_harmonize_apl`'s form, all four tables}."""
+    f = _prat_files(brain)
+    apl = pd.concat([_harmonize_apl(_read_prat(f[k]), brain, kind, inp) for k, kind, inp in APL_TABLES],
+                    ignore_index=True)
+    release = _release_sites(_read_prat(f['release'], ['type', 'neuron', 'anatomical_bouton', 'x', 'y', 'z']))
+    return dict(pn_kc=_e97().pn_claw_synapses(brain), release=release, apl=apl)
+
+
+def _calyx_roi(side: str) -> str:
+    return f'CA({side})'
+
+
+def _assemble_calyces(claws: pd.DataFrame, tables: Mapping[str, Mapping[str, pd.DataFrame]]
+                      ) -> Dict[str, Dict[str, pd.DataFrame]]:
+    """`pratyush_calyces` on tables already read: `claws` in E97's counted_claws form, `tables[brain]` as
+    `_brain_tables` returns them (pn_kc in E97's pn_claw_synapses form: kc_id, pn_id, claw_id, bouton_id, roi_pre,
+    roi_post, side, x_post, y_post, z_post)."""
+    c = claws.copy()
+    c['calyx'] = c['mb'].map(E97_MB_TO_CALYX)
+    if c['calyx'].isna().any():
+        raise ValueError(f'unknown mushroom bodies: {sorted(set(c.loc[c.calyx.isna(), "mb"]))}')
+    c['kc_id'] = c['kc_id'].astype(np.int64)
+    c['pn_id'] = c['pn_id'].astype(np.int64)
+    c['claw_id'] = c['claw_id'].astype(np.int64)
+    if c.duplicated(['calyx', 'kc_id', 'claw_id']).any():
+        raise ValueError('a (KC, claw) is counted twice')
+    out: Dict[str, Dict[str, pd.DataFrame]] = {}
+    for calyx in PRAT_CALYCES:
+        brain, side = calyx.rsplit('_', 1)
+        cc = c[c['calyx'] == calyx].reset_index(drop=True)
+        if cc.empty or brain not in tables:
+            continue
+        tb = tables[brain]
+        key = ['kc_id', 'claw_id', 'pn_id']
+        s = tb['pn_kc']
+        s = s[s['claw_id'].notna()].copy()
+        s['kc_id'] = s['kc_id'].astype(np.int64)
+        s['pn_id'] = s['pn_id'].astype(np.int64)
+        s['claw_id'] = s['claw_id'].astype(np.int64)
+        s = s.merge(cc[key], on=key, how='inner')
+        roi = _calyx_roi(side)
+        s['in_roi'] = (s['roi_pre'] == roi) & (s['roi_post'] == roi)
+        g = s.groupby(key)
+        cc = cc.merge(g['in_roi'].agg(roi_share='mean', n_synapses_in_roi='sum').reset_index(), on=key, how='left')
+        if not {'x_post', 'y_post', 'z_post'} <= set(cc.columns):
+            cc = cc.merge(g[['x_post', 'y_post', 'z_post']].mean().reset_index(), on=key, how='left')
+        if 'n_synapses' not in cc.columns:
+            cc = cc.merge(g.size().rename('n_synapses').reset_index(), on=key, how='left')
+        # the claws' boutons: E97's bouton_ids when given, else every bouton of the claw's PN with a synapse on it
+        if 'bouton_ids' in cc.columns:
+            cb = cc[key + ['bouton_ids']].explode('bouton_ids').rename(columns={'bouton_ids': 'bouton'})
+            cb = cb.dropna(subset=['bouton'])
+        else:
+            cb = s.loc[s['bouton_id'] >= 0, key + ['bouton_id']].rename(columns={'bouton_id': 'bouton'})
+            cb = cb.drop_duplicates()
+        cb['bouton'] = cb['bouton'].astype(np.int64)
+        if 'main_bouton_id' not in cc.columns:
+            mb = (s[s['bouton_id'] >= 0].groupby(key + ['bouton_id']).size().rename('n').reset_index()
+                  .sort_values(key + ['n', 'bouton_id'], ascending=[True] * len(key) + [False, True])
+                  .drop_duplicates(key).rename(columns={'bouton_id': 'main_bouton_id'}))
+            cc = cc.merge(mb[key + ['main_bouton_id']], on=key, how='left')
+        P = _to_rda_voxels(brain, cc['x_post'], cc['y_post'], cc['z_post'])
+        claws_t = pd.DataFrame({'kc_id': cc['kc_id'].astype(str), 'claw_id': cc['claw_id'].to_numpy(),
+                                'pn_id': cc['pn_id'].astype(str), 'glomerulus': cc['glomerulus'].to_numpy(),
+                                'n_synapses': cc['n_synapses'].astype(int).to_numpy(),
+                                'n_PN_synapses': cc['n_synapses'].astype(int).to_numpy(),
+                                'main_bouton_id': cc['main_bouton_id'].to_numpy(),
+                                'roi_share': cc['roi_share'].to_numpy(float),
+                                'n_synapses_in_roi': cc['n_synapses_in_roi'].fillna(0).astype(int).to_numpy(),
+                                'R': P[:, 0], 'D': P[:, 1], 'A': P[:, 2]})
+        # the boutons that carry a counted claw, weighted by their release sites
+        gl = cc.drop_duplicates('pn_id').set_index('pn_id')['glomerulus']
+        if cc.groupby('pn_id')['glomerulus'].nunique().gt(1).any():
+            raise ValueError(f'{calyx}: a PN with claws of two glomeruli')
+        bt = cb.groupby(['pn_id', 'bouton']).size().rename('n_counted_claws').reset_index()
+        rel = tb['release'].groupby(['pn_id', 'bouton']).agg(n_tbars=('x', 'size'), x=('x', 'mean'), y=('y', 'mean'),
+                                                             z=('z', 'mean')).reset_index()
+        bt = bt.merge(rel, on=['pn_id', 'bouton'], how='left')
+        missing = bt['n_tbars'].isna()
+        if missing.any():
+            warnings.warn(f'{calyx}: {int(missing.sum())} of {len(bt)} boutons carrying a counted claw have no release '
+                          'site in PN_Synapse_Assignments; left out')
+            bt = bt[~missing]
+        P = _to_rda_voxels(brain, bt['x'], bt['y'], bt['z'])
+        boutons_t = pd.DataFrame({'bouton_id': bt['pn_id'].astype(str) + '_' + bt['bouton'].astype(str),
+                                  'pn_id': bt['pn_id'].astype(str), 'bouton': bt['bouton'].to_numpy(),
+                                  'glomerulus': bt['pn_id'].map(gl).to_numpy(),
+                                  'n_tbars': bt['n_tbars'].astype(int).to_numpy(),
+                                  'n_counted_claws': bt['n_counted_claws'].astype(int).to_numpy(),
+                                  'R': P[:, 0], 'D': P[:, 1], 'A': P[:, 2]})
+        # APL's synapses with those claws and those boutons
+        a = tb['apl']
+        kc = a[a['kind'] == 'KC'].dropna(subset=['claw_id'])
+        kc = kc.merge(pd.DataFrame({'partner_id': cc['kc_id'].to_numpy(), 'claw_id': cc['claw_id'].astype(float)}),
+                      on=['partner_id', 'claw_id'], how='inner')
+        pn = a[a['kind'] == 'PN'].dropna(subset=['bouton'])
+        pn = pn.merge(pd.DataFrame({'partner_id': bt['pn_id'].to_numpy(np.int64), 'bouton': bt['bouton'].astype(float)}),
+                      on=['partner_id', 'bouton'], how='inner')
+        aa = pd.concat([kc, pn], ignore_index=True)
+        P = _to_rda_voxels(brain, (aa['x_pre'] + aa['x_post']) / 2, (aa['y_pre'] + aa['y_post']) / 2,
+                           (aa['z_pre'] + aa['z_post']) / 2)
+        apl_t = pd.DataFrame({'side': side, 'kind': aa['kind'].to_numpy(), 'partner_id': aa['partner_id'].astype(str),
+                              'apl_input': aa['apl_input'].astype(bool).to_numpy(),
+                              'claw_id': pd.array(aa['claw_id'].to_numpy(), dtype='Int64'),
+                              'bouton': pd.array(aa['bouton'].to_numpy(), dtype='Int64'),
+                              'apl_id': aa['apl_id'].astype(str), 'apl_unit': aa['apl_unit'].to_numpy(),
+                              'in_roi': ((aa['roi_pre'] == roi) & (aa['roi_post'] == roi)).to_numpy(),
+                              'roi_pre': aa['roi_pre'].to_numpy(object), 'roi_post': aa['roi_post'].to_numpy(object),
+                              'confidence_pre': aa['confidence_pre'].to_numpy(),
+                              'confidence_post': aa['confidence_post'].to_numpy(),
+                              'R': P[:, 0], 'D': P[:, 1], 'A': P[:, 2]})
+        out[calyx] = dict(claws=claws_t, boutons=boutons_t, apl=apl_t)
+    return out
 
 
 def pratyush_calyces(claws: Optional[pd.DataFrame] = None, *, roi: str = CALYX_ROI_RULE, syn_min: int = 5,
@@ -327,59 +575,206 @@ def pratyush_calyces(claws: Optional[pd.DataFrame] = None, *, roi: str = CALYX_R
 
     Args:
         claws: the counted claws of both brains in the form of E97's `counted_claws` (needs mb, kc_id, claw_id, pn_id
-            and glomerulus; bouton_ids and x_post, y_post, z_post are used when present). None: E97's
-            `counted_claws('hemibrain', ...)` and `counted_claws('malecns', ...)` with `roi`, `syn_min` and
-            `min_confidence` (which apply to the claws only).
+            and glomerulus; bouton_ids, main_bouton_id, n_synapses and x_post, y_post, z_post are used when present,
+            else taken from E97's pn_claw_synapses). None: E97's `counted_claws('hemibrain', ...)` and
+            `counted_claws('malecns', ...)` with `roi` (default 'none' for both brains: the re-plan's no ROI rule),
+            `syn_min` and `min_confidence` (which apply to the claws only).
 
     Returns:
-        calyx -> {'claws', 'boutons', 'apl'}, in E79's (R, D, A) frame (um), in the columns E79's analyses read:
-        - claws: kc_id, claw_id, pn_id, glomerulus, n_synapses (= n_PN_synapses), main_bouton_id, roi_share (share of
-          the claw's PN synapses with both ends in the official calyx ROI of its side), R, D, A;
+        calyx -> {'claws', 'boutons', 'apl'}, in E79's (R, D, A) frame (um), in the columns E79's analyses read (ids as
+        strings, as load_calyces gives them):
+        - claws: kc_id, claw_id, pn_id, glomerulus, n_synapses (= n_PN_synapses), main_bouton_id, roi_share and
+          n_synapses_in_roi (the share and number of the claw's synapses from its PN, in E97's pn_claw_synapses, with
+          both ends in the official calyx ROI of its side), R, D, A (E97's mean KC-side site);
         - boutons: the boutons that carry at least one counted claw: bouton_id ('<pn>_<bouton>'), pn_id, bouton,
-          glomerulus, n_tbars (its number of release sites, the weight of E79's analysis 4), n_counted_claws, R, D, A
-          (the centroid of its release sites);
-        - apl: APL's synapses with those claws and those boutons, both directions: kind ('KC' / 'PN'), partner_id,
-          apl_input (True: APL postsynaptic), claw_id or bouton, apl_id, in_roi (both ends in the official calyx ROI),
-          confidence_pre, confidence_post, R, D, A (midpoint of the two sites). They draw each slab's outline and the
-          posterior edge by E79's rules (`calyx_outlines`)."""
-    raise NotImplementedError
+          glomerulus, n_tbars (its number of release sites in PN_Synapse_Assignments, the weight of E79's analysis
+          4), n_counted_claws, R, D, A (the centroid of its release sites);
+        - apl: APL's synapses with those claws and those boutons, both directions: side, kind ('KC' / 'PN'),
+          partner_id, apl_input (True: APL postsynaptic), claw_id or bouton (a claw labelled -1 is matched as the
+          loader matches it, by (KC, -1)), apl_id, apl_unit, in_roi (both ends in the official calyx ROI), roi_pre,
+          roi_post, confidence_pre, confidence_post, R, D, A (midpoint of the two sites). They draw each slab's
+          outline and the posterior edge by E79's rules (`calyx_outlines`; run_maps and profiles compute the same
+          from parts['apl'])."""
+    if claws is None:
+        E97 = _e97()
+        claws = pd.concat([E97.counted_claws(b, roi=roi, syn_min=syn_min, min_confidence=min_confidence)
+                           for b in PRAT_BRAINS], ignore_index=True)
+    brains = sorted({E97_MB_TO_CALYX[m].rsplit('_', 1)[0] for m in claws['mb'].unique() if m in E97_MB_TO_CALYX})
+    return _assemble_calyces(claws, {b: _brain_tables(b) for b in brains})
+
+
+def _claws_in_roi(claws: pd.DataFrame, syn_min: int) -> np.ndarray:
+    # a claw the official ROI keeps: syn_min or more of its synapses with both ends inside
+    return (claws['n_synapses_in_roi'] >= syn_min).to_numpy()
+
+
+def pratyush_calyx_summary(calyces: Dict[str, Dict[str, pd.DataFrame]], syn_min: int = 5) -> pd.DataFrame:
+    """Per calyx: counted claws, KCs, boutons carrying them and their release sites, APL's synapses by partner and
+    direction (and those on claws labelled -1), the shares inside the official ROI (share_claws_in_roi: the counted
+    claws that keep `syn_min` synapses with both ends in it), the posterior edge and the extent along A."""
+    rows = []
+    for calyx, p in calyces.items():
+        a, c, b = p['apl'], p['claws'], p['boutons']
+        row = dict(calyx=calyx, n_claws=len(c), n_kcs=c['kc_id'].nunique(), n_glomeruli=c['glomerulus'].nunique(),
+                   n_boutons=len(b), n_tbars=int(b['n_tbars'].sum()), n_pns=b['pn_id'].nunique(), n_apl=len(a))
+        for kind in ('KC', 'PN'):
+            k = kind.lower()
+            row[f'n_apl_to_{k}'] = int(((a['kind'] == kind) & ~a['apl_input']).sum())
+            row[f'n_{k}_to_apl'] = int(((a['kind'] == kind) & a['apl_input']).sum())
+        row['n_apl_on_claw_minus1'] = int((a['claw_id'] == -1).sum())
+        row['share_claws_in_roi'] = float(_claws_in_roi(c, syn_min).mean())
+        row['share_apl_in_roi'] = float(a['in_roi'].mean())
+        row['posterior_edge_A_um'] = float(np.quantile(a['A'], 0.005))
+        row['apl_A_extent_um'] = float(np.diff(np.quantile(a['A'], [0.005, 0.995]))[0])
+        rows.append(row)
+    return pd.DataFrame(rows)
 
 
 def calyx_outlines(apl: pd.DataFrame, frame: Optional[dict] = None) -> dict:
     """E79's outline and posterior edge from a calyx's APL synapses: {'frame': calyx_frame, 'posterior_edge_A': the
-    0.5th percentile of A, 'slab_centers': array, 'whole': the whole calyx's outline mask, 'slabs': {slab depth from the
-    posterior edge (um): outline mask}} (slabs with at least SLAB_MIN_SHARE of the synapses and 50 of them, as
-    run_maps uses). `frame` None: the synapses' own frame."""
-    raise NotImplementedError
+    0.5th percentile of A, 'slab_centers': array, 'whole': the whole calyx's outline mask (OUTLINE_KEEP of the
+    synapses), 'slabs': {slab depth from the posterior edge (um): outline mask}} (slabs with at least SLAB_MIN_SHARE of
+    the synapses and SLAB_MIN_SYNAPSES of them, as run_maps uses). `frame` None: the synapses' own frame."""
+    frame = calyx_frame(apl) if frame is None else frame
+    centers, a0 = slab_centers(apl)
+    slabs = {}
+    A = apl['A'].to_numpy()
+    for c in centers:
+        a = apl[(A >= c - SLAB_THICK_UM / 2) & (A < c + SLAB_THICK_UM / 2)]
+        if len(a) < max(SLAB_MIN_SHARE * len(apl), SLAB_MIN_SYNAPSES):
+            continue
+        slabs[float(c - a0)] = outline_mask(a['R'].to_numpy(), a['D'].to_numpy(), frame)
+    return dict(frame=frame, posterior_edge_A=a0, slab_centers=centers,
+                whole=outline_mask(apl['R'].to_numpy(), apl['D'].to_numpy(), frame), slabs=slabs)
+
+
+def _neighbour_synapses(brain: str) -> pd.DataFrame:
+    """The brain's KC, PN and APL synapses (the three assignment tables) in the neighbours' ROIs: roi, R, D, A."""
+    f = _prat_files(brain)
+    parts = []
+    for k in ('kc_syn', 'release', 'apl_syn'):
+        t = _read_prat(f[k], ['roi', 'x', 'y', 'z'])
+        t = t[t['roi'].astype(str).str.split('(').str[0].isin(list(NEIGHBOURS))]
+        P = _to_rda_voxels(brain, t['x'], t['y'], t['z'])
+        parts.append(pd.DataFrame({'roi': t['roi'].astype(str).to_numpy(), 'table': k, 'R': P[:, 0], 'D': P[:, 1],
+                                   'A': P[:, 2]}))
+    return pd.concat(parts, ignore_index=True)
+
+
+def _expect(signs: Tuple[int, int, int]) -> str:
+    words = (('medial', 'lateral'), ('ventral', 'dorsal'), ('posterior', 'anterior'))
+    return ' and '.join(w[s > 0] for s, w in zip(signs, words) if s != 0)
+
+
+def _neighbour_rows(calyces: Mapping[str, Mapping[str, pd.DataFrame]], synapses: Mapping[str, pd.DataFrame],
+                    min_synapses: int = NEIGHBOUR_MIN_SYNAPSES) -> pd.DataFrame:
+    """`neighbour_axis_checks` on tables already read (`synapses[brain]`: roi, R, D, A), without raising."""
+    rows = []
+    centre = {c: p['apl'][['R', 'D', 'A']].mean().to_numpy() for c, p in calyces.items()}
+    for calyx in calyces:
+        brain, side = calyx.rsplit('_', 1)
+        c = centre[calyx]
+        s = synapses[brain]
+        for nb, signs in NEIGHBOURS.items():
+            pts = s.loc[s['roi'] == f'{nb}({side})', ['R', 'D', 'A']].to_numpy()
+            row = dict(calyx=calyx, brain=brain, side=side, check=nb, n_synapses=len(pts), expect=_expect(signs))
+            if len(pts) < min_synapses:
+                row.update(status='fail', note=f'fewer than {min_synapses} synapses in {nb}({side})')
+            else:
+                d = pts.mean(axis=0) - c
+                lat = d[0] if side == 'R' else -d[0]
+                ok = all(sg * v > 0 for sg, v in zip(signs, (lat, d[1], d[2])) if sg != 0)
+                row.update(d_lateral_um=float(lat), d_dorsal_um=float(d[1]), d_anterior_um=float(d[2]),
+                           d_R_um=float(d[0]), status='pass' if ok else 'fail', note='')
+            rows.append(row)
+        other = f'{brain}_{"L" if side == "R" else "R"}'
+        row = dict(calyx=calyx, brain=brain, side=side, check='right mushroom body at larger R', n_synapses=np.nan,
+                   expect='right calyx R minus left calyx R > 0')
+        if other in centre:
+            dR = (centre[calyx][0] - centre[other][0]) * (1 if side == 'R' else -1)
+            row.update(d_R_um=float(dR), status='pass' if dR > 0 else 'fail', note='')
+        else:
+            row.update(status='n/a', note='one side only in this brain')
+        rows.append(row)
+    df = pd.DataFrame(rows)
+    df['calyx_passed'] = ~df.groupby('calyx')['status'].transform(lambda v: (v == 'fail').any())
+    cols = ['calyx', 'brain', 'side', 'check', 'n_synapses', 'd_lateral_um', 'd_dorsal_um', 'd_anterior_um', 'd_R_um',
+            'expect', 'status', 'note', 'calyx_passed']
+    return df.reindex(columns=cols)
 
 
 def neighbour_axis_checks(calyces: Optional[Dict[str, Dict[str, pd.DataFrame]]] = None, strict: bool = True,
                           min_synapses: int = NEIGHBOUR_MIN_SYNAPSES) -> pd.DataFrame:
-    """The axis check on Pratyush's tables alone: per calyx, the centroid of the PN, KC and APL synapses in each
-    neighbouring ROI (NEIGHBOURS: the peduncle anterior and ventral of the calyx, the superior lateral protocerebrum
-    dorsal and anterior, the posterior lateral protocerebrum ventral and lateral) minus the calyx's (the mean of its APL
-    synapses), and the right mushroom body at larger R than the left (the male CNS; not applicable to the hemibrain).
+    """The axis check on Pratyush's tables alone (they hold no lobe synapses in the male CNS, so the calyx's neighbours
+    take the lobes' place): per calyx, the centroid of the KC, PN and APL synapses in each neighbouring ROI of its side
+    (NEIGHBOURS: the peduncle anterior and ventral of the calyx, the superior lateral protocerebrum dorsal and anterior,
+    the posterior lateral protocerebrum ventral and lateral) minus the calyx's (the mean of its APL synapses), and the
+    right mushroom body at larger R than the left (the male CNS; 'n/a' in the hemibrain, whose tables have one side).
+    A neighbour with fewer than `min_synapses` synapses fails. Every axis's sign is checked in every calyx: D and A by
+    PED and SLP, R by PLP (lateral) and, in the male CNS, by the two sides.
 
     Returns:
         one row per calyx and check: calyx, brain, side, check, n_synapses, d_lateral_um, d_dorsal_um,
-        d_anterior_um, d_R_um, expect, status ('pass', 'fail' or 'n/a'), and calyx_passed (no check of that calyx
-        failed).
+        d_anterior_um, d_R_um, expect, status ('pass', 'fail' or 'n/a'), note, and calyx_passed (no check of that
+        calyx failed).
 
     Raises:
-        AxisCheckError (with the table) when `strict` and any check fails; a failed check stops part D."""
-    raise NotImplementedError
+        AxisCheckError (with the table) when `strict` and any check fails: a failed check stops part D. With
+        strict=False a failure is a warning."""
+    calyces = pratyush_calyces() if calyces is None else calyces
+    brains = sorted({c.rsplit('_', 1)[0] for c in calyces})
+    df = _neighbour_rows(calyces, {b: _neighbour_synapses(b) for b in brains}, min_synapses)
+    _raise_if_failed(df, strict)
+    return df
 
 
-def official_roi_outline(calyces: Optional[Dict[str, Dict[str, pd.DataFrame]]] = None
+def _raise_if_failed(df: pd.DataFrame, strict: bool) -> None:
+    bad = df[df['status'] == 'fail']
+    if bad.empty:
+        return
+    msg = (f'neighbour axis check FAILED for {", ".join(sorted(bad.calyx.unique()))} (part D stops):\n'
+           + bad.to_string(index=False))
+    if strict:
+        raise AxisCheckError(msg, df)
+    warnings.warn(msg)
+
+
+def official_roi_outline(calyces: Optional[Dict[str, Dict[str, pd.DataFrame]]] = None, syn_min: int = 5
                          ) -> Tuple[pd.DataFrame, Dict[str, dict]]:
     """Beside, deciding nothing: the outline and posterior edge from APL's calyx synapses inside the official calyx ROI
-    (in_roi) against those from all of them, in the same frame.
+    (in_roi) against those from all of them, in the same frame (E79's rules, `calyx_outlines`).
 
     Returns:
-        (one row per calyx: n_apl, share_apl_in_roi, share_claws_in_roi (roi_share above one half), posterior edges
-        (all, ROI) and their difference, mean A outside minus inside the ROI, the whole-calyx outlines' areas and
-        overlap (intersection over union); calyx -> `calyx_outlines` of the ROI's synapses)."""
-    raise NotImplementedError
+        (one row per calyx: n_apl, n_apl_in_roi, share_apl_in_roi, share_claws_in_roi (the counted claws that keep
+        `syn_min` synapses with both ends in the ROI, as the loader's ROI rule would count them),
+        posterior_edge_all_um and posterior_edge_roi_um (A) and roi_minus_all_edge_um (positive: the ROI's edge lies
+        anterior, the posterior part cut), apl_A_outside_minus_inside_um (mean A), claws_A_outside_minus_inside_um,
+        whole_area_all_um2, whole_area_roi_um2, whole_iou (intersection over union of the two whole-calyx outlines),
+        n_slabs_all, n_slabs_roi; calyx -> `calyx_outlines` of the ROI's synapses)."""
+    calyces = pratyush_calyces() if calyces is None else calyces
+    rows, outs = [], {}
+    for calyx, p in calyces.items():
+        a, c = p['apl'], p['claws']
+        inside = a['in_roi'].to_numpy(bool)
+        full = calyx_outlines(a)
+        roi = calyx_outlines(a[inside], frame=full['frame']) if inside.sum() >= SLAB_MIN_SYNAPSES else None
+        outs[calyx] = roi
+        cin = _claws_in_roi(c, syn_min)
+        row = dict(calyx=calyx, n_apl=len(a), n_apl_in_roi=int(inside.sum()), share_apl_in_roi=float(inside.mean()),
+                   share_claws_in_roi=float(cin.mean()), posterior_edge_all_um=full['posterior_edge_A'],
+                   posterior_edge_roi_um=roi['posterior_edge_A'] if roi else np.nan,
+                   apl_A_outside_minus_inside_um=(float(a.loc[~inside, 'A'].mean() - a.loc[inside, 'A'].mean())
+                                                  if (~inside).any() and inside.any() else np.nan),
+                   claws_A_outside_minus_inside_um=(float(c.loc[~cin, 'A'].mean() - c.loc[cin, 'A'].mean())
+                                                    if (~cin).any() and cin.any() else np.nan),
+                   whole_area_all_um2=float(full['whole'].sum() * PX_UM ** 2),
+                   whole_area_roi_um2=float(roi['whole'].sum() * PX_UM ** 2) if roi else np.nan,
+                   whole_iou=(float((full['whole'] & roi['whole']).sum() / (full['whole'] | roi['whole']).sum())
+                              if roi else np.nan),
+                   n_slabs_all=len(full['slabs']), n_slabs_roi=len(roi['slabs']) if roi else 0)
+        row['roi_minus_all_edge_um'] = row['posterior_edge_roi_um'] - row['posterior_edge_all_um']
+        rows.append(row)
+    return pd.DataFrame(rows), outs
 
 
 # ---------------------------------------------------------------------------
