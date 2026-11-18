@@ -90,3 +90,15 @@ def test_archive_experiment_with_folder_prefixes(tmp_path, monkeypatch):
     p = pd.read_csv(dst / 'params.csv')
     assert list(p['tag']) == ['B_identity_real', 'B_inhadd1000_real', 'D_inhadd1000_real', 'E_inhadd1000_refit_F']
     assert 'stray' not in p.columns and list(p['pn_inhadd']) == [31.4088, 1000.0, 1000.0, 1000.0]
+
+
+def test_withheld_folders_are_never_copied():
+    """A folder of withheld outputs (withheld_*, e.g. E97's of 2026-11-15) is skipped at any depth; a file whose own
+    name starts so is not a folder and is kept; E97's claims and caches are left out by default."""
+    A = pytest.importorskip('archive_tools.archive_model_outputs')
+    assert A.excluded('withheld_2026-11-15/runs/B2_mean_real_on_responses.parquet', ())
+    assert A.excluded('B/withheld_x/y.csv', ())
+    assert not A.excluded('withheld_note.txt', ())
+    ex = A.DEFAULT_EXCLUDE['E97_glomerulus_claw_shares']
+    assert A.excluded('claims/B2_mean2_real/owner', ex) and A.excluded('distances_cache.pkl', ex)
+    assert not A.excluded('runs_mcns/B2_mean2_real_on_responses.parquet', ex)

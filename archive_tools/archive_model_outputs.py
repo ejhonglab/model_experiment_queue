@@ -93,12 +93,19 @@ FOLDER_PREFIXES = {
 DEFAULT_EXCLUDE = {
     'E102_antennal_lobe_normalization': ('D/start_check', 'D/runs/B/*/*_held_*', 'E/B/*/unchanged_none_*',
                                          'E/B/*/refit_D_*', 'E/B/*/E95_f1_*'),
+    # E97: part B's per-point claims (lane bookkeeping) and the scoring caches
+    'E97_glomerulus_claw_shares': ('claims', 'distances_cache.pkl', 'coresponse_cache.pkl'),
 }
+# folders of outputs withheld from queue work (e.g. E97's withheld_2026-11-15/, built from connectome tables that queue
+# work does not use; CLAUDE.md, "Connectome data"): never copied, at any depth
+WITHHELD_PREFIX = 'withheld_'
 
 
 def excluded(rel: str, exclude) -> bool:
-    """Whether the path `rel` (relative to outputs/<name>/) is excluded: equal to or under one of `exclude`, or
-    matching one as a glob pattern."""
+    """Whether the path `rel` (relative to outputs/<name>/) is excluded: under a folder of withheld outputs
+    (WITHHELD_PREFIX), equal to or under one of `exclude`, or matching one as a glob pattern."""
+    if any(part.startswith(WITHHELD_PREFIX) for part in rel.split('/')[:-1]):
+        return True
     return any(rel == x or rel.startswith(x.rstrip('/') + '/') or fnmatch.fnmatchcase(rel, x) for x in exclude)
 
 
