@@ -1615,7 +1615,7 @@ def verdict() -> dict:
     out = dict(outcome=core['outcome'], carrying_class=core['carrying']['class'], held=core['held'],
                partners_differing=core['partners_differing'], level_check=lv,
                level_adjusted_distance=float(q['d_cos'] - lv['difference']),
-               carrying_set=sk, ceilings=ceil, core=core,
+               carrying_set=sk, ceilings=ceil, core=core, e106=e106_values(),
                rules=lock_definitions()['outcome_rules'], time=time.strftime('%Y-%m-%d %H:%M'), host=_host())
     _write_json(out_dir() / 'verdict.json', out)
     return out
@@ -1634,6 +1634,38 @@ def _r(tab: pd.DataFrame, **sel) -> float:
         m &= (tab[k].astype(str) == str(v)).to_numpy()
     x = tab[m]
     return float(x.rho.iloc[0]) if len(x) else np.nan
+
+
+E106_PROBES = ('family_on', 'family_off', 'family_91_on', 'family_91_off', 'orn_91_on', 'orn_91_off')
+E106_YARDSTICKS = ('family_rho_on_sd_wirings_120', 'family_rho_off_sd_wirings_120', 'family_rho_on_sd_wirings_66',
+                   'family_rho_on_sd_wirings_91', 'rho_ctrl_remy_soma', 'rho_tnt_remy_soma')
+
+
+def e106_values() -> Dict[str, dict]:
+    """E106's values that this experiment quotes in place of the planning probes (results/E106_rho_gap_parts/
+    probes.csv, main reading, and yardsticks.csv): {name: {'value', 'what', 'lo', 'hi'}}; empty if E106's results are
+    not there."""
+    d = H.shared_dir() / 'results' / 'E106_rho_gap_parts'
+    out: Dict[str, dict] = {}
+    if (d / 'probes.csv').exists():
+        pr = pd.read_csv(d / 'probes.csv')
+        pr = pr[pr.reading.astype(str) == 'main reading']
+        for name in E106_PROBES:
+            x = pr[pr.probe == name]
+            if len(x):
+                out[name] = dict(value=float(x.script_value.iloc[0]), what=str(x.what.iloc[0]), source='probes.csv')
+    if (d / 'yardsticks.csv').exists():
+        y = pd.read_csv(d / 'yardsticks.csv')
+        for name in E106_YARDSTICKS:
+            x = y[y.name == name]
+            if len(x):
+                out[name] = dict(value=float(x.value.iloc[0]), lo=float(x.lo.iloc[0]) if pd.notna(x.lo.iloc[0]) else None,
+                                 hi=float(x.hi.iloc[0]) if pd.notna(x.hi.iloc[0]) else None,
+                                 what=str(x.definition.iloc[0]), source='yardsticks.csv')
+    if out and (d / 'provenance.json').exists():
+        pv = json.loads((d / 'provenance.json').read_text())
+        out['_provenance'] = dict(queue_commit=pv.get('queue_commit'), queue_dirty=pv.get('queue_dirty'))
+    return out
 
 
 def comparison_table() -> str:
@@ -1696,6 +1728,14 @@ def comparison_table() -> str:
         f2 = _r(ct, panel='megamat', reader='family', reading='held', member='pop', remy='flymean_cos', set=which)
         L.append(f'| megamat level, the {which} pairs | {_f(o)} | {_f(f1)} | {_f(f2)} | {_f(ceil("megamat", "cosine", which))} |')
     y = _r(ct, panel='megamat', reader='yang_control', remy='flymean_cos', set='66')
+    e6 = e106_values()
+    if e6:
+        g = lambda k: _f(e6.get(k, {}).get('value'))
+        L += ['', "In Yang's panel (E106's values, results/E106_rho_gap_parts/): the family's two ρ's on odor-odor distances, "
+              f"APL on / off, {g('family_on')} / {g('family_off')} over the 120 pairs and {g('family_91_on')} / "
+              f"{g('family_91_off')} over the 91 without paa and B-myr (the ORN input alone {g('orn_91_on')} / "
+              f"{g('orn_91_off')} there); the SD over the eight wirings {g('family_rho_on_sd_wirings_120')} / "
+              f"{g('family_rho_off_sd_wirings_120')} (120 pairs).", '']
     L += ['', f"Yang's control flies against her megamat somata on the 66 pairs: ρ={_f(y)} on odor-odor distances "
           f"(cosine both; the registry's rho_ctrl_remy_soma, Remy's correlation distance, "
           f"{_f(H.data_target('rho_ctrl_remy_soma'))}).", '']
