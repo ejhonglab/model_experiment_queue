@@ -270,3 +270,22 @@ def test_commits_clean_allows_only_unloaded_dirty_files(monkeypatch):
     monkeypatch.setattr(X, '_queue_dirty_paths', lambda: [])
     with pytest.raises(RuntimeError):
         X._commits_clean()
+
+
+def test_recorded_input_diff(tmp_path):
+    """An input rebuilt on another host is compared with the recorded file: a last-bit difference is small, a changed
+    value large, and other glomeruli or odors are infinitely far."""
+    odors = ['pa @ -3', 'paa @ -3']
+    built = pd.DataFrame([[10.0, 1.0 / 3.0], [234.41349774532097, -5.5]], index=['D', 'DA2'], columns=odors)
+    lay = H.abbrev_columns(built)
+    lay.index.name = 'glomerulus'
+    p = tmp_path / 'X3.csv'
+    p.write_text(lay.to_csv())
+    assert X.recorded_input_diff(built, p) < 1e-12
+    nudged = built.copy()
+    nudged.iloc[1, 0] += 1e-13
+    assert X.recorded_input_diff(nudged, p) <= X.INPUT_ATOL
+    changed = built.copy()
+    changed.iloc[0, 1] += 0.01
+    assert X.recorded_input_diff(changed, p) > X.INPUT_ATOL
+    assert X.recorded_input_diff(built.iloc[::-1], p) == float('inf')

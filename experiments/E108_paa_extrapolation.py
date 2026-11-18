@@ -718,16 +718,44 @@ def write_input(name: str) -> dict:
     return rec
 
 
+INPUT_ATOL = 1e-9   # spike deltas up to ~250; a last-bit difference of the ramp fit is ~1e-13
+
+
+def recorded_input_diff(built: pd.DataFrame, saved_csv: Path) -> float:
+    """The largest absolute difference between an input built now (the lab input's layout) and the file part inputs
+    wrote for it (glomeruli x abbreviated odors); inf if their glomeruli or odors differ."""
+    saved = pd.read_csv(saved_csv, index_col=0)
+    lay = H.abbrev_columns(built)
+    if list(saved.index) != list(lay.index) or list(saved.columns) != list(lay.columns):
+        return float('inf')
+    a, b = lay.to_numpy(float), saved.to_numpy(float)
+    if not np.array_equal(np.isnan(a), np.isnan(b)):
+        return float('inf')
+    d = np.abs(a - b)
+    return float(np.nanmax(d)) if d.size else 0.0
+
+
 def input_record(name: str) -> dict:
     """The record that part inputs wrote for an input (inputs/sha256.json), checked against the input built now (its
-    frame's sha256); part B reads it rather than writing again, so that two lanes never rewrite the same file."""
+    frame's sha256); part B reads it rather than writing again, so that two lanes never rewrite the same file.
+
+    Another host can build a rule's input with last-bit differences (X3's fit on the ramps goes through linear algebra
+    whose rounding depends on the CPU and BLAS; on viki X3 differed from hal's record by 8.5e-14 at most, 2026-11-17).
+    Such an input is accepted when it equals the recorded file within `INPUT_ATOL`; the record returned then carries
+    this host's frame sha256, the recorded one (`recorded_frame_sha256`) and the largest difference
+    (`frame_max_abs_diff`), and part B writes them into the point's provenance."""
     from experiments.E77_input_screen import frame_sha256
     rec = _read_json(input_path(name).parent / 'sha256.json').get(name)
     if rec is None:
         raise RuntimeError(f'run --part inputs first (no record of input {name})')
-    if rec['frame_sha256'] != frame_sha256(input_of(name)):
-        raise RuntimeError(f'input {name} differs from the one part inputs wrote')
-    return rec
+    built = input_of(name)
+    sha = frame_sha256(built)
+    if rec['frame_sha256'] == sha:
+        return rec
+    diff = recorded_input_diff(built, H.shared_dir() / rec['file'])
+    if not diff <= INPUT_ATOL:
+        raise RuntimeError(f'input {name} differs from the one part inputs wrote (largest difference {diff:.3g})')
+    return dict(rec, frame_sha256=sha, recorded_frame_sha256=rec['frame_sha256'], frame_max_abs_diff=diff)
 
 
 def unit_check() -> pd.DataFrame:
@@ -1035,6 +1063,9 @@ def part_b(lane: Optional[str] = None, max_points: Optional[int] = None) -> pd.D
         E83._append_row(path, row)
         prov = _read_json(prov_path) or dict(part='B', lane=lane, script='experiments/E108_paa_extrapolation.py', points={})
         prov['points'][tag] = H.model_provenance(orn_deltas=orn)
+        if 'recorded_frame_sha256' in rec:   # built on this host within INPUT_ATOL of the recorded input
+            prov['points'][tag]['input_match'] = {k: rec[k] for k in
+                ('frame_sha256', 'recorded_frame_sha256', 'frame_max_abs_diff')}
         _write_json(prov_path, prov)
         print(f"E108 B {tag}: thr x{res['thr_factor']:.4f}, APL x{res['apl_factor']:.4f} ({res['n_on']}/{res['target_on']} on, "
               f"{res['n_off']}/{res['target_off']} off); paa {row['frac_paa_on']:.3f} / {row['frac_paa_off']:.3f}; "
