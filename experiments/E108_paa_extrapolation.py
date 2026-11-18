@@ -77,7 +77,7 @@ Parts (CLI `--part`):
   the block, the natural-source alignment on and off and the structure vs wild-type somata; the mean over the unit's
   runs of the response rates, response rate ρ on and off, and paa's and B-myr's response fractions; the runs outside
   the bands), runs.csv, gate.csv and gate.json (`gate`, per rule and control), classes.csv (`class_of`, with the column
-  "provisional, E106 pending"), bmyr.csv (step 4), comparison_table.md.
+  "provisional, E106 note pending"), bmyr.csv (step 4), comparison_table.md.
 - variants: variants.csv and model_pair_distances_long.csv for the model-output archive.
 
 The gate (the entry's, fixed before any run; `gate`; means over the eight wirings at fixed scales, each wiring paired
@@ -102,8 +102,10 @@ unless named):
 - Classes (`class_of`): 'better' (all hold), 'a price' (the gain holds and a constraint fails; each failure named with
   its size; a failure of the controls alone is named the same way), 'no gain'. The outcome letter (a) to (d) of the
   entry beside: (c) / (d) by whether W5 lowers either ρ by GAIN or more.
-- The class is written after E106's note (its yardsticks); until then classes.csv says "provisional, E106 pending".
-  No threshold here moves after a run is read.
+- The class is written after E106's note (its yardsticks); until then classes.csv says "provisional, E106 note pending"
+  and carries E106's yardsticks beside it (`e106_yardsticks`, results/E106_rho_gap_parts/yardsticks.csv: the SD over
+  the eight wirings, the resampling SD, the split-half difference and the paired SDs of near-null changes). No
+  threshold here moves after a run is read.
 
 Choices the entry left open (fixed here before any run, with the reason):
 - X3's form: ordinary least squares top = a + b mid + c low, pooled over the training odors' triples and glomeruli, no
@@ -191,7 +193,7 @@ RATE_RHO_SLACK = 0.05
 BLOCK_SLACK = 0.010
 STRUCTURE_SLACK = 0.05
 CONTROL_RATIO = 0.5
-E106_PENDING = 'provisional, E106 pending'
+E106_PENDING = 'provisional, E106 note pending'
 
 _CACHE: Dict[object, object] = {}
 
@@ -1072,10 +1074,24 @@ def effect_targets() -> Dict[str, pd.Series]:
     return _CACHE['effect_targets']
 
 
-def rho_pairs_with(model: pd.Series, data: pd.Series, pairs: Optional[Sequence[Tuple[str, str]]] = None) -> float:
-    """ρ on odor-odor distances of `model` against `data` over `pairs` (all both have when None; E106's `rho_pairs`)."""
-    from experiments import E106_rho_gap_parts as E106
-    return float(E106.rho_pairs(model, data, pairs=pairs))
+# E106's yardsticks beside the class (results/E106_rho_gap_parts/yardsticks.csv, by name; viki 2026-11-17 17:20)
+E106_YARDSTICKS = ('family_rho_on_sd_wirings_120', 'family_rho_off_sd_wirings_120', 'family_rho_on_boot_sd_120',
+                   'family_rho_off_boot_sd_120', 'family_rho_on_split_diff_120', 'family_rho_off_split_diff_120')
+E106_PAIRED_PREFIX = 'paired_rho_'                # the paired SDs of near-null changes ('paired_rho_<on|off>_sd_<change>')
+
+
+def e106_yardsticks() -> pd.DataFrame:
+    """E106's yardsticks that the class rests on (name, value, source, definition): the SD over the eight wirings, the
+    resampling SD and the split-half difference of the family's two ρ's, and the paired SDs of near-null changes; empty
+    when E106's table is not there."""
+    p = H.results_dir('E106_rho_gap_parts') / 'yardsticks.csv'
+    if not p.exists():
+        return pd.DataFrame(columns=['name', 'value', 'source', 'definition'])
+    y = pd.read_csv(p)
+    keep = y['name'].isin(E106_YARDSTICKS) | (y['name'].str.startswith(E106_PAIRED_PREFIX) & y['name'].str.contains('_sd_'))
+    out = y.loc[keep, ['name', 'value', 'definition']].copy()
+    out['source'] = 'results/E106_rho_gap_parts/yardsticks.csv'
+    return out
 
 
 def unit_scores(d: Dict[str, pd.Series]) -> dict:
@@ -1084,12 +1100,13 @@ def unit_scores(d: Dict[str, pd.Series]) -> dict:
     target the loss, the pattern part, its amplitude and shape parts, the spread ratio, ρ and Pearson r on the per-pair
     APL effect ('<target>_<stat>'); the mean APL effect and the mean distances; the block, the natural-source alignment
     on and off and the structure vs wild-type somata (on and off)."""
+    from experiments import E106_rho_gap_parts as E106
     on, off = E83._cs(d['on']), E83._cs(d['off'])
     row = dict(mean_on=float(on.mean()), mean_off=float(off.mean()))
     for t, dd in dist_targets().items():
         for c, m in (('on', on), ('off', off)):
-            row[f'rho_{c}_{t}'] = rho_pairs_with(m, dd[c])
-            row[f'rho15_{c}_{t}'] = rho_pairs_with(m, dd[c], PAA15)
+            row[f'rho_{c}_{t}'] = float(E106.rho_pairs(m, dd[c]))
+            row[f'rho15_{c}_{t}'] = float(E106.rho_pairs(m, dd[c], pairs=PAA15))
     me = E83._cs(H.apl_effect(on, off))
     row['mean_effect'] = float(me.mean())
     for t, de0 in effect_targets().items():
@@ -1357,13 +1374,17 @@ def gate_tables(rd: pd.DataFrame, runs: pd.DataFrame) -> Tuple[pd.DataFrame, dic
 
 def class_table(gt: pd.DataFrame) -> pd.DataFrame:
     """classes.csv: per rule (the family's eight), its class, the class without the pending items, the outcome and the
-    column "provisional, E106 pending" (the class is written after E106's note)."""
+    column "provisional, E106 note pending" (the class is written after E106's note)."""
     g = gt[(gt['population'] == 'all8') & gt['input'].isin(RULES)].copy()
     cols = [c for c in ('input', 'carrying', 'complete', 'gain', 'class', 'class_without_pending', 'outcome', 'fails',
                         'pending_fails') if c in g.columns]
     ct = g[cols].copy()
     ct[E106_PENDING] = True
+    y = e106_yardsticks()
+    for r in y.itertuples():
+        ct[f'yardstick_{r.name}'] = float(r.value)
     ct.to_csv(out_dir() / 'classes.csv', index=False)
+    y.to_csv(out_dir() / 'yardsticks_e106.csv', index=False)
     return ct
 
 
@@ -1448,6 +1469,10 @@ def comparison_table(rd: pd.DataFrame, gt: pd.DataFrame, verdict: dict) -> None:
                      f'{ok(r["apl_effect_ok"])} | {ok(r["realism_ok"])} | {ok(r["rates_ok"])} | {ok(r["pending_ok"])} | '
                      f'{ok(r.get("controls_ok"))} | {r.get("class", "")} | {r.get("outcome", "")} |')
         L += ['', f'Verdict ({E106_PENDING}): ' + json.dumps({k: v for k, v in verdict.items() if k not in ('fails', 'pending_fails')}), '']
+        y = e106_yardsticks()
+        if len(y):
+            L += ['E106\'s yardsticks beside the class (results/E106_rho_gap_parts/yardsticks.csv):', '',
+                  '| yardstick | value |', '|---|---|'] + [f'| {r.name} | {r.value:.4f} |' for r in y.itertuples()] + ['']
     (out_dir() / 'comparison_table.md').write_text('\n'.join(L) + '\n')
 
 
