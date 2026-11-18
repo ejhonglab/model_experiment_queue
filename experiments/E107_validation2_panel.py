@@ -234,9 +234,11 @@ def qc_identity(stims: pd.DataFrame, drops: pd.DataFrame) -> dict:
                 n_dropped=len(a))
 
 
-def pooled_name(name: str, conc: float, by_conc: bool = False) -> str:
-    """A stimulus's odor name in a matrix: the name, or for the pooled odors read by concentration '<name> @ <conc>'."""
-    return f'{name} @ {conc:g}' if by_conc and name in POOLED else name
+def pooled_name(name: str, conc: float, by_conc=False) -> str:
+    """A stimulus's odor name in a matrix: the name, or for the pooled odors read by concentration '<name> @ <conc>'
+    (`by_conc` True for all of POOLED, or the odors to read so)."""
+    split = set(POOLED) if by_conc is True else set(by_conc or ())
+    return f'{name} @ {conc:g}' if name in split and name in POOLED else name
 
 
 def fly_odors(stims: pd.DataFrame, names: Dict[str, dict], by_conc: bool = False) -> Dict[str, set]:
@@ -679,7 +681,7 @@ def _drops(qc: str) -> set:
 
 
 def _fly_rows(X: np.ndarray, flies: Sequence[str], stims: Sequence[str], names: Dict[str, dict], drops: set,
-              by_conc: bool = False, exclude: Sequence[str] = EXCLUDED_STIMULI) -> pd.DataFrame:
+              by_conc=False, exclude: Sequence[str] = EXCLUDED_STIMULI) -> pd.DataFrame:
     """Flies x pairs from per-fly stimulus x stimulus matrices X (flies x stims x stims): the excluded stimuli and the
     dropped (fly, stim) out, a stimulus a fly lacks (NaN diagonal) out, the odors named by the input's names (the
     pooled ones by concentration with `by_conc`); raises if a fly holds one odor at two concentrations."""
@@ -705,10 +707,10 @@ def _fly_rows(X: np.ndarray, flies: Sequence[str], stims: Sequence[str], names: 
     return out[[p for p in H.pair_list(odors) if p in out.columns]]
 
 
-def per_fly(measure: str = 'cosine', cells: str = CELLS, by_conc: bool = False, qc: str = 'lock') -> pd.DataFrame:
+def per_fly(measure: str = 'cosine', cells: str = CELLS, by_conc=False, qc: str = 'lock') -> pd.DataFrame:
     """Remy's per-fly validation2 matrices (xrds_stim_rdm_concat.nc, Fc_zscore, at `cells` and `measure`, with the
-    lock's drop list, `qc`) as flies x pairs (NaN where a fly lacks a pair); with `by_conc`, euc, -aPine and ger keep
-    their concentration in the odor name."""
+    lock's drop list, `qc`) as flies x pairs (NaN where a fly lacks a pair); with `by_conc` (True: euc, -aPine and ger;
+    or the odors to split), those odors keep their concentration in the odor name."""
     lock = require_lock()
     d = _open('validation2/kc_soma/xrds_stim_rdm_concat.nc')
     try:
@@ -1281,9 +1283,9 @@ def a_by_concentration() -> pd.DataFrame:
     conc = pd.DataFrame(lock['validation2']['concentrations'])
     inp = {m: input_pairs('validation2', m) for m in ('pearson', 'cosine')}
     for metric in ('cosine', 'correlation'):
-        bc = per_fly(metric, by_conc=True)
         pooled = remy_v2('table_cos' if metric == 'cosine' else 'table_corr')
         for odor in ('euc', '-aPine'):
+            bc = per_fly(metric, by_conc=(odor,))
             for c in sorted(POOLED[odor]) + [None]:
                 name = odor if c is None else f'{odor} @ {c:g}'
                 if c is None:
@@ -1295,9 +1297,8 @@ def a_by_concentration() -> pd.DataFrame:
                     n = sub.notna().sum()
                     s = sub.mean()[n >= MIN_FLIES]
                     n_flies = int(conc[(conc.odor == odor) & np.isclose(conc.conc, c)].n_in_rdm.sum())
-                    # back to the pooled name, so the pairs meet the input's
-                    s = pair_series({tuple(odor if x == name else (x.split(' @ ')[0] if ' @ ' in x else x) for x in p): v
-                                     for p, v in s.items()})
+                    # back to the pooled name, so the pairs meet the input's (only `odor` is split)
+                    s = pair_series({tuple(odor if x == name else x for x in p): v for p, v in s.items()})
                 mine = [p for p in s.index if odor in p]
                 d_paa = s.get(pkey(odor, 'paa'), np.nan) if odor != 'paa' else np.nan
                 d_bm = s.get(pkey(odor, 'B-myr'), np.nan)
