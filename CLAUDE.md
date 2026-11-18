@@ -1190,6 +1190,9 @@ Canonical experiment names for summary reports:
 | E103 | the flies' APL across odors in the held-out vial series |
 | E104 | the flies' KCs beside their APL along concentration |
 | E105 | the KCs' response rates at the weak odors read like for like |
+| E106 | the gap in ρ on odor-odor distances read by what could close it |
+| E107 | the four validation2 odors in the panel their ORN input was recorded in |
+| E108 | paa's input at the flies' concentration |
 
 ## Model-output archive (data/model_outputs/ in the shared directory)
 
