@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Tests for E97 (the glomeruli's shares of the claws in other connectomes; experiments/E97_glomerulus_claw_shares.py)
-on a made-up wiring and made-up tables: the builder's invariants of part 0 (each KC's claws and type, the per-type
-totals, the targets, every moved claw on a bouton of its new glomerulus, every other row unchanged); ratios of 1 move
-nothing; the seeds reproduce; the largest-remainder targets; the rule for small glomeruli; the mean proportions; the
-name mapping; the permutation keeps its strata and the small glomeruli; A1's and A3's rules; the variants and the plan's
-116 points."""
+on a made-up wiring and made-up tables in the form of Pratyush's two per-synapse tables (the hemibrain's and the male
+CNS's): the reader's identity with the loader's steps, the three calyx rules and the confidence reading; the names; the
+rule for small glomeruli with a label missing on one side; the two-brain mean; no held table named or opened; the
+builder's invariants of part 0 (each KC's claws and type, the per-type totals, the targets, every moved claw on a bouton
+of its new glomerulus, every other row unchanged); ratios of 1 move nothing; the seeds reproduce; the largest-remainder
+targets; the permutation keeps its strata and the small glomeruli; A1's and A3's rules; the variants and the plan's 84
+points; part C's verdict."""
 
 import os
 from typing import Dict, Tuple
@@ -123,38 +125,31 @@ def test_type_targets_largest_remainder():
 
 
 # ---------------------------------------------------------------------------
-# the derived tables' names, shares and ratios
+# shares and ratios
 
-def test_name_mapping():
-    assert G.glomerulus_name('VC3l_adPN', 'hemibrain') == 'VC3'
-    assert G.glomerulus_name('VC3m_lvPN', 'hemibrain') == 'VC3'
-    assert G.glomerulus_name('VC5_lvPN', 'hemibrain') == 'VC5'
-    assert G.glomerulus_name('VC3_adPN', 'flywire') == 'VC3'
-    assert G.glomerulus_name('VC5_lvPN', 'flywire') == 'VC3'
-    assert G.glomerulus_name('VM6_adPN', 'malecns') == 'VC5'
-    assert G.glomerulus_name('VM7d_adPN', 'banc') == 'VM7d'
-    for t in ('VP1d+VP4_l2PN1', 'VP3+_vPN', 'M_vPNml50', None, float('nan'), ''):
-        assert G.glomerulus_name(t, 'flywire') is None
+def test_kc_classes():
     assert G.kc_class('KCg-m') == 'g' and G.kc_class('KCab-c') == 'ab' and G.kc_class("KCa'b'-ap1") == "a'b'"
-    assert G.kc_class('KCapbp-m') == "a'b'" and G.kc_class('KC') == 'unknown' and G.kc_class("a'b'") == "a'b'"
+    assert G.kc_class('KCg') == 'g' and G.kc_class('KC') == 'unknown' and G.kc_class("a'b'") == "a'b'"
+    assert G.kc_class_of(None) is None and G.kc_class_of('KC part due to gap') is None
 
 
-def test_ratios_small_rule_and_mean_proportions():
-    gl = ['A', 'B', 'C', 'D']
-    counts = pd.DataFrame({'hemibrain': [100, 200, 20, 80], 'flywire_L': [200, 200, 200, 25],
-                           'flywire_R': [200, 200, 30, 100], 'malecns_L': [50, 200, 100, 100],
-                           'malecns_R': [50, 200, 100, 100]}, index=gl)
+def test_ratios_small_rule_and_the_two_brain_mean():
+    gl = ['A', 'B', 'C', 'D', 'E']
+    # E has no PN of its label on the right (missing there): it counts 0, so it is small there only
+    counts = pd.DataFrame({'hemibrain': [100, 200, 20, 80, 60], 'malecns_L': [200, 200, 200, 25, 50],
+                           'malecns_R': [50, 200, 100, 100, np.nan]}, index=gl)
     r, sm = G.ratios(counts, gl)
-    # C has 20 in the hemibrain: 1 everywhere; D has 25 in flywire_L: 1 there only
     assert (r.loc['C'] == 1).all() and sm.loc['C'].all()
-    assert r.loc['D', 'flywire_L'] == 1 and sm.loc['D', 'flywire_L'] and not sm.loc['D', 'flywire_R']
-    s = counts / counts.sum()
-    assert r.loc['A', 'flywire_R'] == pytest.approx(s.loc['A', 'flywire_R'] / s.loc['A', 'hemibrain'])
+    assert r.loc['D', 'malecns_L'] == 1 and sm.loc['D', 'malecns_L'] and not sm.loc['D', 'malecns_R']
+    assert r.loc['E', 'malecns_R'] == 1 and sm.loc['E', 'malecns_R'] and not sm.loc['E', 'malecns_L']
+    s = counts.fillna(0) / counts.fillna(0).sum()
+    assert r.loc['A', 'malecns_R'] == pytest.approx(s.loc['A', 'malecns_R'] / s.loc['A', 'hemibrain'])
     m = G.mean_proportions(r)
-    expect = 2 ** ((0 + np.log2(r.loc['A', ['flywire_L', 'flywire_R']]).mean()
-                    + np.log2(r.loc['A', ['malecns_L', 'malecns_R']]).mean()) / 3)
+    # the hemibrain's 1 and the male CNS's two sides averaged on log2 first: 2 ** (mean log2 / 2)
+    expect = 2 ** ((0 + np.log2(r.loc['A', ['malecns_L', 'malecns_R']]).mean()) / 2)
     assert m['A'] == pytest.approx(expect)
     assert m['C'] == 1.0
+    assert m['E'] == pytest.approx(2 ** (np.log2(r.loc['E', 'malecns_L']) / 4))
     sh = G.shares(pd.Series({'A': 1, 'B': 3, 'X': 10}), ['A', 'B'])
     assert sh.tolist() == [0.25, 0.75]
 
@@ -185,15 +180,18 @@ def test_permutation_keeps_its_strata_and_the_small_ones():
 def test_a1_rule():
     gl = [f'g{i}' for i in range(20)]
     model = pd.Series(np.linspace(50, 500, 20), index=gl)
-    ok = G.a1_rule(model, model * 1.05)
-    assert ok['sd'] == pytest.approx(0.0, abs=1e-12) and not ok['stops']
-    rng = np.random.default_rng(0)
-    off = model * 2 ** rng.normal(0, 0.4, 20)
-    bad = G.a1_rule(model, off)
-    assert bad['sd'] > G.A1_RULE_SD and bad['stops']
-    assert bad['n_glomeruli'] == int((model >= G.A1_RULE_MIN_CLAWS).sum())
-    gone = G.a1_rule(model, model.where(model.index != 'g19', 0))
-    assert gone['stops'] and gone['n_infinite'] == 1
+    counts = pd.DataFrame({'malecns_L': model * 1.02, 'malecns_R': model * 1.01})
+    pns = pd.DataFrame({'malecns_L': 2.0, 'malecns_R': 1.0}, index=gl)
+    ok = G.a1_rule(model, counts, pns)
+    assert not ok['stops'] and ok['mbs']['malecns_L']['ratio_to_model'] == pytest.approx(1.02)
+    assert ok['n_big'] == int((model >= G.A1_RULE_MIN_CLAWS).sum())
+    for k, f in (('malecns_L', 0.79), ('malecns_R', 1.26)):
+        bad = G.a1_rule(model, counts.assign(**{k: model * f}), pns)
+        assert bad['stops'] and not bad['mbs'][k]['inside_band']
+    gone = G.a1_rule(model, counts, pns.assign(malecns_R=pns.malecns_R.where(pns.index != 'g19', 0)))
+    assert gone['stops'] and gone['mbs']['malecns_R']['big_without_pn'] == ['g19']
+    # a small glomerulus without a PN does not stop it
+    assert not G.a1_rule(model, counts, pns.assign(malecns_R=pns.malecns_R.where(pns.index != 'g0', 0)))['stops']
 
 
 def test_a3_rule():
@@ -216,25 +214,37 @@ def test_counting_noise():
 
 def test_variants_and_the_plan():
     p = G.plan(G.ARMS, G.ALL_WIRINGS)
-    assert len(p) == 116
+    assert len(p) == 84
     sizes = {}
     for v, w in p:
         a = G.parse_variant(v)['arm']
         sizes[a] = sizes.get(a, 0) + 1
-    assert sizes == {'B1': 32, 'B2': 8, 'B3': 56, 'B4': 4, 'B5': 8, 'B6': 8}
+    assert sizes == {'B1': 16, 'B2': 8, 'B3': 40, 'B4': 4, 'B5': 8, 'B6': 8}
     assert len(G.plan(('C2',), G.ALL_WIRINGS)) == 4 and {w for _, w in G.plan(('C2',))} == set(G.T_WIRINGS)
-    assert len(G.plan(G.ARMS, G.S_WIRINGS)) == 4 * 1 + 4 * 4 + 4 * 7 + 4 + 8 + 4
-    assert G.parse_variant('B3_perm_malecns_L_s1') == dict(variant='B3_perm_malecns_L_s1', arm='B3',
-                                                           proportions='malecns_L', control='perm', seed=1, scale=1.0,
-                                                           draw=1, input='lab')
-    assert G.parse_variant('B4_mean_d2')['draw'] == 2 and G.parse_variant('C2_mean_d2')['draw'] == 2
-    assert G.parse_variant('B5_mean_x0.5')['scale'] == 0.5 and G.parse_variant('B3_invmean')['scale'] == -1.0
-    assert G.parse_variant('B6_mean_F')['input'] == 'F'
-    for bad in ('B1_banc_L', 'B2_x', 'B7_mean', 'B5_mean_x3'):
-        with pytest.raises((ValueError, AttributeError)):
+    assert len(G.plan(G.ARMS, G.S_WIRINGS)) == 4 * 1 + 4 * 2 + 4 * 5 + 4 + 8 + 4
+    assert G.parse_variant('B3_perm_mcnsL_s1') == dict(variant='B3_perm_mcnsL_s1', arm='B3', proportions='malecns_L',
+                                                       control='perm', seed=1, scale=1.0, draw=1, input='lab')
+    assert G.parse_variant('B1_mcnsR')['proportions'] == 'malecns_R'
+    assert G.parse_variant('B4_mean2_d2')['draw'] == 2 and G.parse_variant('C2_mean2_d2')['draw'] == 2
+    assert G.parse_variant('B5_mean2_x0.5')['scale'] == 0.5 and G.parse_variant('B3_invmean2')['scale'] == -1.0
+    assert G.parse_variant('B6_mean2_F')['input'] == 'F'
+    for bad in ('B1_malecns_L', 'B2_mean', 'B2_x', 'B7_mean2', 'B5_mean2_x3', 'B3_invmean'):
+        with pytest.raises((ValueError, AttributeError, KeyError)):
             G.parse_variant(bad)
-    assert p[0] == ('B2_mean', 'real')
-    assert G.draw_seed('B4_mean_d2', 'P3') == [G.DRAW_SEEDS[1], G.ALL_WIRINGS.index('P3')]
+    assert p[0] == ('B2_mean2', 'real')
+    assert G.draw_seed('B4_mean2_d2', 'P3') == [G.DRAW_SEEDS[1], G.ALL_WIRINGS.index('P3')]
+
+
+def test_no_new_tag_is_a_withheld_one():
+    """No point of the re-plan takes the name of one of the withheld points of 2026-11-15 (their arms on the eight
+    wirings, the five mushroom bodies of that design and its mean), and the run table is a new one."""
+    old_mbs = ['flywire_L', 'flywire_R', 'malecns_L', 'malecns_R']
+    old = (['B2_mean', 'B3_permmean_s1', 'B3_permmean_s2', 'B3_invmean', 'B4_mean_d2', 'B5_mean_x0.5', 'B5_mean_x2',
+            'B6_mean_F', 'C2_mean_d2'] + [f'B1_{m}' for m in old_mbs] + [f'B3_perm_{m}_s1' for m in old_mbs])
+    old_tags = {f'{v}_{w}' for v in old for w in G.ALL_WIRINGS}
+    new_tags = {G.run_tag(v, w) for v, w in G.plan(G.ARMS + ('C2',), G.ALL_WIRINGS)}
+    assert 'B2_mean_real' in old_tags and not (new_tags & old_tags)
+    assert G.RUNS_TABLE != 'runs_B.csv' and G.RUNS_SUB != 'runs'
 
 
 def test_variant_ratios_on_a_made_up_table():
@@ -245,16 +255,16 @@ def test_variant_ratios_on_a_made_up_table():
         rt[f'r_{m}'] = [1.1, 0.9, 1.2, 0.8, 1.0, 1.3]
         rt[f'fixed_{m}'] = [False] * 6
     rt = rt.set_index('glomerulus')
-    assert G.variant_ratios('B2_mean', rt).tolist() == rt.r_mean.tolist()
-    inv = G.variant_ratios('B3_invmean', rt)
+    assert G.variant_ratios('B2_mean2', rt).tolist() == rt.r_mean.tolist()
+    inv = G.variant_ratios('B3_invmean2', rt)
     assert np.allclose(inv * rt.r_mean, 1.0)
-    p = G.variant_ratios('B3_permmean_s1', rt)
+    p = G.variant_ratios('B3_permmean2_s1', rt)
     assert p['VA4'] == 1.0
     assert sorted(p[['DA1', 'DC1']]) == [0.7, 1.4] and sorted(p[['DL1', 'VM7d']]) == [0.9, 1.8]
-    assert np.allclose(G.variant_ratios('B5_mean_x2', rt), rt.r_mean ** 2)
-    assert G.variant_ratios('B1_flywire_R', rt).tolist() == rt['r_flywire_R'].tolist()
+    assert np.allclose(G.variant_ratios('B5_mean2_x2', rt), rt.r_mean ** 2)
+    assert G.variant_ratios('B1_mcnsR', rt).tolist() == rt['r_malecns_R'].tolist()
     W = made_up_wiring()
-    W1, mv, tg = G.move_claws(W, G.variant_ratios('B2_mean', rt).to_dict(), [1, 0])
+    W1, mv, tg = G.move_claws(W, G.variant_ratios('B2_mean2', rt).to_dict(), [1, 0])
     assert G.check_built(W, W1, mv, tg)['passes']
 
 
@@ -262,28 +272,28 @@ def test_variant_ratios_on_a_made_up_table():
 # part C's verdict on made-up rows
 
 def _rows(b2=0.0, b2_s=None, b2_t=None, perm=(0.0, 0.0), inv=0.0, r2=0.0, r2p=0.0, six=None, flagged=0, raw=0.0,
-          mean=0.178, mbs=(0.0, 0.0, 0.0, 0.0), b6=0.0):
+          mean=0.178, mbs=(0.0, 0.0), b6=0.0):
     """readings rows: each variant's pattern part as the reference's (0.0500 on S, 0.0486 on T, 0.0482 on the eight)
     minus the given gain."""
     ref = {'S': G.REF_S, 'T': G.REF_T, 'all8': G.REF_8}
-    gains = {G.REF: (0, 0, 0), 'B2_mean': (b2_s if b2_s is not None else b2, b2_t if b2_t is not None else b2, b2),
-             'B3_permmean_s1': (perm[0],) * 3, 'B3_permmean_s2': (perm[1],) * 3, 'B3_invmean': (inv,) * 3,
-             G.R2: (r2,) * 3, G.R2_PERM: (r2p,) * 3, f'B6_mean_{G.B6_INPUT}': (b2 + b6,) * 3}
+    gains = {G.REF: (0, 0, 0), 'B2_mean2': (b2_s if b2_s is not None else b2, b2_t if b2_t is not None else b2, b2),
+             'B3_permmean2_s1': (perm[0],) * 3, 'B3_permmean2_s2': (perm[1],) * 3, 'B3_invmean2': (inv,) * 3,
+             G.R2: (r2,) * 3, G.R2_PERM: (r2p,) * 3, f'B6_mean2_{G.B6_INPUT}': (b2 + b6,) * 3}
     for m, g in zip(G.OTHER_MBS, mbs):
-        gains[f'B1_{m}'] = (g,) * 3
+        gains[f'B1_{G.MB_SHORT[m]}'] = (g,) * 3
     rows = []
     for v, gs in gains.items():
         for unit, g in zip(('S', 'T', 'all8'), gs):
-            sx = (six if six is not None else g) if v == 'B2_mean' else g
+            sx = (six if six is not None else g) if v == 'B2_mean2' else g
             rows.append(dict(variant=v, unit=unit, readout='cal', z8_pattern=ref[unit] - g, z6_pattern=0.05 - sx,
-                             mean_effect=mean if v == 'B2_mean' else 0.177, n_flagged=flagged if v == 'B2_mean' else 0))
-            rows.append(dict(variant=v, unit=unit, readout='raw', z8_loss=0.073 + (raw if v == 'B2_mean' else 0.0),
+                             mean_effect=mean if v == 'B2_mean2' else 0.177, n_flagged=flagged if v == 'B2_mean2' else 0))
+            rows.append(dict(variant=v, unit=unit, readout='raw', z8_loss=0.073 + (raw if v == 'B2_mean2' else 0.0),
                              n_flagged=0))
     return pd.DataFrame(rows)
 
 
 def _boot(hi):
-    return pd.DataFrame([dict(variant='B2_mean', unit='all8', ref_variant=G.REF, diff_hi=hi)])
+    return pd.DataFrame([dict(variant='B2_mean2', unit='all8', ref_variant=G.REF, diff_hi=hi)])
 
 
 def test_verdicts(tmp_path, monkeypatch):
@@ -313,7 +323,7 @@ def test_verdicts(tmp_path, monkeypatch):
         v = G.verdict97(_rows(b2=0.004, perm=(0.0, 0.0), inv=0.0, r2=0.002, **kw), _boot(-0.001))
         assert not v['moves'], kw
     # (f) and (h)
-    v = G.verdict97(_rows(mbs=(0.004, -0.001, 0.0, 0.0), b6=0.002), _boot(0.0))
+    v = G.verdict97(_rows(mbs=(0.004, -0.001), b6=0.002), _boot(0.0))
     assert v['disagree'] and v['B6_differs']
     assert (tmp_path / 'verdict.json').exists()
 
@@ -345,7 +355,7 @@ def test_brain_decomposition_on_made_up_effects(monkeypatch, tmp_path):
     rng = np.random.default_rng(0)
     pairs = pd.MultiIndex.from_tuples([(f'a{i}', f'b{i}') for i in range(30)], names=['odor_a', 'odor_b'])
     tg = pd.Series(rng.normal(0.18, 0.05, 30), index=pairs)
-    vs = [G.REF] + [f'B1_{m}' for m in G.OTHER_MBS]
+    vs = [G.REF] + [f'B1_{G.MB_SHORT[m]}' for m in G.OTHER_MBS]
     eff = {(v, w): pd.Series(tg.to_numpy() + rng.normal(0, 0.03, 30), index=pairs) for v in vs for w in G.ALL_WIRINGS}
     runs = pd.DataFrame([dict(variant=v, wiring=w) for v, w in eff])
     monkeypatch.setattr(G, 'runs_table', lambda: runs)
@@ -439,7 +449,6 @@ def _keys(c: pd.DataFrame) -> set:
     return set(zip(c.kc_id.astype(int), c.claw_id.astype(int), c.glomerulus))
 
 
-@pytest.mark.xfail(raises=NotImplementedError, strict=True, reason='stub (interface first)')
 def test_reader_follows_the_loader_on_made_up_tables(made_up_tables):
     c = G.counted_claws('hemibrain')
     assert _keys(c) == made_up_tables['hemibrain']
@@ -461,19 +470,26 @@ def test_reader_follows_the_loader_on_made_up_tables(made_up_tables):
         G.counted_claws('hemibrain', roi='region')
 
 
-@pytest.mark.xfail(raises=NotImplementedError, strict=True, reason='stub (interface first)')
 def test_the_names():
     assert G.glomerulus_name('VC5_lvPN', 'malecns') == 'VC3' and G.glomerulus_name('VM6_adPN', 'malecns') == 'VC5'
     assert G.glomerulus_name('VC3_adPN', 'malecns') == 'VC3' and G.glomerulus_name('VC3l_adPN', 'hemibrain') == 'VC3'
-    assert G.glomerulus_name('VC5_lvPN', 'hemibrain') == 'VC5'
-    G.counted_claws('nobrain')
+    assert G.glomerulus_name('VC3m_lvPN', 'hemibrain') == 'VC3' and G.glomerulus_name('VC5_lvPN', 'hemibrain') == 'VC5'
+    for t in ('VP1d+VP4_l2PN1', 'VP3+_vPN', 'M_vPNml50', 'WEDPN12', None, float('nan'), ''):
+        assert G.glomerulus_name(t, 'malecns') is None
+    # one lookup on the type's own name: VM6 -> VC5 does not chain on to VC3
+    types = pd.Series(['VM6_adPN', 'VC5_lvPN', 'VC3_adPN', 'M_adPNm4', 'VP2+_adPN'])
+    got = G._glomeruli_of_types(types, 'malecns')
+    assert got[:3].tolist() == ['VC5', 'VC3', 'VC3'] and got[3:].isna().all()
+    with pytest.raises(ValueError):
+        G.counted_claws('nobrain')
+    with pytest.raises(RuntimeError):
+        G._glomeruli_of_types(pd.Series(['DA1_lPN_x']), 'hemibrain')
 
 
 HELD_WORDS = ('claude_APL_modeling_YZ4TC', 'Claude_APL_analysis', 'apl_synapses', 'flywire', 'fafb', 'banc',
               '2024-09-13', '_derived', 'withheld_')
 
 
-@pytest.mark.xfail(strict=True, reason='the readers of the held tables are removed in the next commit')
 def test_the_module_names_no_held_table():
     """The module (and so every code path of the experiment) names neither the folder of the tables that Yang's own
     Claude's project derived, nor FlyWire, FAFB or BANC, nor the withheld outputs (CLAUDE.md, "Connectome data")."""
@@ -481,3 +497,48 @@ def test_the_module_names_no_held_table():
     src = inspect.getsource(G).lower()
     found = [w for w in HELD_WORDS if w.lower() in src]
     assert not found, found
+
+
+def test_the_reader_opens_no_held_file(made_up_tables, monkeypatch):
+    """Every file the reader and part A's counting open is under the two allowed folders."""
+    opened = []
+    real_parquet, real_csv = pd.read_parquet, pd.read_csv
+
+    def rp(path, *a, **k):
+        opened.append(str(path))
+        return real_parquet(path, *a, **k)
+
+    def rc(path, *a, **k):
+        opened.append(str(path))
+        return real_csv(path, *a, **k)
+    monkeypatch.setattr(pd, 'read_parquet', rp)
+    monkeypatch.setattr(pd, 'read_csv', rc)
+    for brain in G.BRAINS2:
+        for roi in (None, 'official', 'none'):
+            G.counted_claws(brain, roi=roi)
+    G.mb_counts(5, True)
+    G.pn_labels()
+    root = str(made_up_tables['root'])
+    assert opened and all(p.startswith(root) for p in opened), opened
+    assert not any(w.lower() in p.lower() for p in opened for w in HELD_WORDS)
+
+
+def test_the_real_folders_are_the_allowed_ones():
+    assert str(G.malecns_dir()).endswith('data/Male-CNS_Tom')
+    assert str(G.hemibrain_dir()).endswith('from_pratyush/2025-12-05')
+
+
+def test_apl_effect_reads_no_withheld_point(tmp_path):
+    """kcq/apl_effect.py: E97's points of 2026-11-15 are held (no new reading) and a withheld_* folder of the archive is
+    never read; the re-plan's points are read."""
+    AE = pytest.importorskip('kcq.apl_effect')
+    assert AE.held(G.EXPERIMENT, 'B2_mean_real') and not AE.held(G.EXPERIMENT, 'B2_mean2_real')
+    for v, w in G.plan(G.ARMS + ('C2',), G.ALL_WIRINGS):
+        assert not AE.held(G.EXPERIMENT, G.run_tag(v, w))
+    d = tmp_path / 'E97_x'
+    (d / 'withheld_2026-11-15' / 'runs').mkdir(parents=True)
+    (d / 'runs_mcns').mkdir()
+    pd.DataFrame({'a': [1.0]}).to_parquet(d / 'withheld_2026-11-15' / 'runs' / 'B2_mean_real_on_responses.parquet')
+    pd.DataFrame({'a': [1.0]}).to_parquet(d / 'runs_mcns' / 'B2_mean2_real_on_responses.parquet')
+    idx = AE._archive_index(str(d))
+    assert set(idx) == {'B2_mean2_real_on_responses.parquet'}

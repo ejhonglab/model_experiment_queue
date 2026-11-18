@@ -39,7 +39,7 @@ of the experiment's own table, `spearman_rate_on_vs_data`), so that earlier writ
 The last columns (since 2026-11-17, E106) are ρ on odor-odor distances, `spike_counts_cosine__dist_rho_<on|off>_<subset>`:
 the model's APL-on distances against the control flies' mean matrix and its APL-off distances against APL output blocked
 (TNT)'s, over the 120 pairs and the subsets of `PAIR_SUBSETS`; NaN for the variants of `HELD_VARIANTS`, whose wirings were
-built from connectome tables queue work does not use.
+built from connectome tables queue work does not use. Folders of withheld outputs (withheld_*) are never read.
 
 build_summary.py runs it before the progress plot. Usage: ./venv/bin/python kcq/apl_effect.py
 [--no-figures] [--only-figures]
@@ -97,9 +97,15 @@ PAIR_SUBSETS = {
     'no_paa_bmyr91': lambda a, b: a not in ('paa', 'B-myr') and b not in ('paa', 'B-myr'),
 }
 # variants whose wirings were built from connectome tables that queue work does not use (CLAUDE.md, "Connectome data (Tom,
-# 2026-11-17)"): every E97 variant (claws moved to the proportions of Yang's own Claude's derived tables) and E4's two FAFB
-# wirings. They keep the columns they had; columns added since 2026-11-17 (the ρ's on odor-odor distances) are NaN for them
-HELD_VARIANTS = (('E97_glomerulus_claw_shares', re.compile(r'.*')), ('E4_substrate', re.compile(r'fafb')))
+# 2026-11-17)"): E97's points of 2026-11-15 (claws moved to the proportions of Yang's own Claude's derived tables; their
+# tables were moved to withheld_2026-11-15/ and are read by nothing, and the re-plan's points have other names: the male
+# CNS's sides mcnsL / mcnsR, the two brains' mean mean2) and E4's two FAFB wirings. They keep the columns they had; columns
+# added since 2026-11-17 (the ρ's on odor-odor distances) are NaN for them
+E97_WITHHELD = re.compile(r'^(B[1-6]|C2)_(flywire_[LR]|malecns_[LR]|banc_[LR]|mean|permmean_s\d+|invmean'
+                          r'|perm_(flywire|malecns|banc)_[LR]_s\d+|mean_d\d+|mean_x[0-9.]+|mean_F)_(real|P\d|M\d)$')
+HELD_VARIANTS = (('E97_glomerulus_claw_shares', E97_WITHHELD), ('E4_substrate', re.compile(r'fafb')))
+# folders below a results folder or the model-output archive that hold outputs withheld from queue work: never read
+WITHHELD_DIR = re.compile(r'^withheld_')
 
 
 def held(folder: str, tag: str) -> bool:
@@ -171,11 +177,14 @@ def rate_lookup(folder: Path) -> Dict[str, dict]:
 
 @functools.lru_cache(maxsize=None)
 def _archive_index(d: str) -> Dict[str, Tuple[Path, ...]]:
-    """{file name: paths} of every `*_responses.parquet` below the archive folder `d` (one walk per folder)."""
+    """{file name: paths} of every `*_responses.parquet` below the archive folder `d` (one walk per folder), leaving out
+    the folders of withheld outputs (`WITHHELD_DIR`)."""
     out: Dict[str, List[Path]] = {}
     root = Path(d)
     if root.is_dir():
         for p in sorted(root.rglob('*_responses.parquet')):
+            if any(WITHHELD_DIR.match(x) for x in p.relative_to(root).parts[:-1]):
+                continue
             out.setdefault(p.name, []).append(p)
     return {k: tuple(v) for k, v in out.items()}
 

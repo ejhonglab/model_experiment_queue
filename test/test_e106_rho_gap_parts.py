@@ -197,7 +197,11 @@ def test_dist_rho_columns_and_held():
     for cond, m, d in (('on', m_on, d_on), ('off', m_off, d_off)):
         for k in AE.PAIR_SUBSETS:
             assert c[f'{AE.V}__dist_rho_{cond}_{k}'] == pytest.approx(E.rho(m, d, k), abs=1e-12)
-    assert AE.held('E97_glomerulus_claw_shares', 'B2_mean_real') and AE.held('E97_glomerulus_claw_shares', 'anything')
+    assert AE.held('E97_glomerulus_claw_shares', 'B2_mean_real') and AE.held('E97_glomerulus_claw_shares', 'B1_flywire_L_P3')
+    assert AE.held('E97_glomerulus_claw_shares', 'B3_perm_malecns_R_s1_M2') and AE.held('E97_glomerulus_claw_shares', 'B5_mean_x0.5_P1')
+    # E97's re-plan of 2026-11-17 (the hemibrain and the male CNS): its points are read
+    for t in ('B2_mean2_real', 'B1_mcnsL_P1', 'B3_permmean2_s1_M3', 'B3_invmean2_P4', 'B5_mean2_x2_real', 'B6_mean2_F_M1'):
+        assert not AE.held('E97_glomerulus_claw_shares', t), t
     assert AE.held('E4_substrate', 'fafb-left-wd12_sp0.05') and not AE.held('E4_substrate', 'uniform_sp0.05_seed3')
     assert not AE.held('E72_wiring_population', 'popfit_real')
 

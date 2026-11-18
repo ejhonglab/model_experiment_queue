@@ -1,38 +1,52 @@
 #!/usr/bin/env python3
 """E97: the glomeruli's shares of the claws in other connectomes. Every wiring that the best family has been read on
-gives each glomerulus the hemibrain's number of claws; whether the proportions of FlyWire's and the male CNS's mushroom
-bodies, put onto the model's wirings by moving claws, move the per-pair APL effect; and whether the error common to all
-wirings is in part one fly's proportions.
+gives each glomerulus the hemibrain's number of claws; whether the proportions of the male CNS's two mushroom bodies, put
+onto the model's wirings by moving claws, move the per-pair APL effect; and whether the error common to all wirings is in
+part one fly's proportions.
 
 The entry is item E97 of experiment_priorities.md (proposed by hal 2026-11-15 11:38; planned by a Fable subagent,
-claude-fable-5-2, spawned from hal 2026-11-15 11:13). Built on E83 (the eight wirings at their own fits, the readings,
-the populations), E85 and E93 (the held reading: the somatic threshold and the tied APL scale bisected so that both
-response rates are the fit's), E89 (the targets, the co-response readings), E90 / E92 (the groups, the line, the six
-near pairs), E86 (part E's searched factors) and E10_joint_fit.py (`--wiring-file --wiring-tag`, part D).
+claude-fable-5-2, spawned from hal 2026-11-15 11:13; re-planned 2026-11-17 16:45 on the hemibrain and the male CNS, both
+as curated by Pratyush, by a Fable subagent, claude-fable-5-2, spawned from viki 2026-11-17 16:19). Built on E83 (the
+eight wirings at their own fits, the readings, the populations), E85 and E93 (the held reading: the somatic threshold and
+the tied APL scale bisected so that both response rates are the fit's), E89 (the targets, the co-response readings), E90 /
+E92 (the groups, the line, the six near pairs), E86 (part E's searched factors) and E10_joint_fit.py (`--wiring-file
+--wiring-tag`, part D).
+
+Connectome data (CLAUDE.md, "Connectome data", Tom 2026-11-17): only Pratyush's hemibrain (the tables the model's loader
+reads, olfsysm's pyolfsysm/data/from_pratyush/2025-12-05) and his male CNS (his pipeline's tables of 2026-10-25, the
+shared directory's data/Male-CNS_Tom/, read only). This module reads no other connectome table; the outputs of 2026-11-15,
+built from tables now held for queue work, were moved aside unread and none of their names is reused (test/
+test_e97_glomerulus_claw_shares.py checks that the module names neither).
 
 C2's family (the breadth-2 APL-effect fit of E67, 6.8 %, the 0.5 s pulse), each wiring at its own fit of E72's part B.
 S: real, P1, P2, M1. T: P3, P4, M2, M3. Halves A / B of the recordings E77's, C / D the second split's (E89's
 `targets89`). The input is the lab's except in B6 (E93's fuller input F).
 
 Definitions (the entry's, fixed before any run):
-- The derived tables (read only; Yang's own Claude's, single-linkage clusters of 2 um of each KC's PN synapses in the
-  calyx): `<dataset>_KC_claws_derived.csv.gz` with the official ROIs and, in with_outside_ROI_synapses/, with the
-  synapses outside the official ROIs added. A claw counts when it has SYN_MIN (5) or more PN synapses and its main PN's
-  type names one glomerulus (no '+', not M); glomerulus names are mapped to the model's (RENAMES: the loader merges the
-  hemibrain's VC3l and VC3m into VC3; FlyWire's VC3 and VC5 are those two, its VM6 the hemibrain's VC5). A KC's
-  mushroom body is the side of the APL it makes most of its synapses with (`kc_sides`).
+- A counted claw (`counted_claws`, public, shared with E100's part D): by the steps of the model's loader (the prat_claws
+  branch of pyolfsysm.mb_model.connectome_wPNKC) on Pratyush's per-synapse PN bouton -> KC claw table: the synapses that
+  one uniglomerular PN makes onto one of a KC's claws (his corrected claw labels), five or more of them (SYN_MIN); left
+  out, as the loader leaves them out: synapses without a bouton, PNs of more than one glomerulus, KCs outside the three
+  classes, claws that two PNs share. The hemibrain's calyx rule is the loader's (both ends in the official calyx ROI);
+  the male CNS has none (its official ROI leaves out part of the left calyx; fixed on counts before any run), with the
+  ROI rule and his calyx region beside in A1.
+- The names (BRAIN_RENAMES): the model has 54 glomeruli because the loader merges the hemibrain's VC3l and VC3m into
+  VC3; the male CNS's PN types carry newer names, and by the PNs' bundle and number in both tables its VC3 (adPN) and
+  VC5 (lvPN) are the hemibrain's VC3l and VC3m (the model's VC3), its VM6 (adPN) the hemibrain's VC5 (inferred in
+  planning, not confirmed; A1's a1_names.csv is the evidence).
+- The three mushroom bodies (MB3): the hemibrain's, which under this reading is the model's real wiring itself (part 0's
+  identity), and the male CNS's left and right (by the KC's side in his table).
 - A mushroom body's share for glomerulus g: its counted claws of g over its counted claws on the model's 54 glomeruli.
-  Its ratio r_g: that share over the derived hemibrain's share; r_g = 1 (and listed) for a glomerulus with fewer than
-  SMALL_CLAWS (30) counted claws in either.
-- The five mushroom bodies: the hemibrain's, FlyWire's two and the male CNS's two (BANC's two for the record only). The
-  mean proportions: the geometric mean of r_g over the three brains, the hemibrain's being 1 and the two sides of a brain
+  Its ratio r_g: that share over the model's real wiring's; r_g = 1 (and listed) for a glomerulus with fewer than
+  SMALL_CLAWS (30) counted claws in either (a glomerulus without a PN of its label on a side counts 0 there).
+- The mean proportions: the geometric mean of r_g over the two brains, the hemibrain being 1 and the male CNS's two sides
   averaged first (on log2).
 - A wiring at proportions r (`move_claws`): within each KC type, the target claw count of g is the wiring's own count
   times r_g, rescaled so that the type's total is unchanged (largest-remainder rounding). Glomeruli above target lose
   claws chosen at random; each lost claw goes to a glomerulus below target, onto one of its boutons drawn in proportion
   to the boutons' claw counts in that KC type. Every KC keeps its claws (rows), its type and its rows' index; the matrix
   keeps the base's index and columns, as `E10_joint_fit.py --wiring-file` requires. A moved claw keeps its own APL->KC
-  and KC->APL weights (indexed by claw) and takes the APL->bouton weight of its new bouton.
+  and KC->APL weights (indexed by claw) and its KC-KC weights, and takes the APL->bouton weight of its new bouton.
 - A held reading (`held97`): the built wiring's breadth recomputed (`E10_joint_fit.bouton_base(wiring_matrix=...)`,
   its APL-off breadth run cached under outputs/E97_glomerulus_claw_shares/breadth/), the wiring's own fit's parameters,
   the somatic threshold bisected to the fit's APL-off response count, then the tied APL scale to its APL-on count
@@ -40,6 +54,8 @@ Definitions (the entry's, fixed before any run):
 
 Parts (CLI `--part`):
 - 0, the identities, before any scored point (identity.json; parts B and D refuse to run until it passes):
+  - reader_hemibrain: `counted_claws` on the hemibrain's per-synapse table returns the model's real wiring's counted
+    claws, with 0 differences per glomerulus and KC class (and per claw);
   - unchanged_<wiring>: with every r_g = 1 the builder returns each of the eight wirings unchanged; each wiring's matrix
     and claw table are cached under outputs/.../W/ (part A reads the real wiring's);
   - held_real: the held reading of the real wiring through this experiment's path (`build97` with the unchanged
@@ -48,66 +64,64 @@ Parts (CLI `--part`):
     claw count and type the base's, the per-type totals unchanged, the glomerulus totals per type equal to the targets,
     every moved claw on a bouton of its new glomerulus and every other row unchanged (`check_built`; no simulation);
     each built matrix's sha256 is recorded, and part B refuses a matrix that differs.
-- A (no simulations; part 0's cache): A1 the counts (a1_counts.csv: per dataset, ROI version, mushroom body, threshold,
-  KC class and glomerulus the claws, the boutons and PNs that carry them; a1_model.csv the model's wiring;
-  a1_hemibrain_vs_model.csv and A1's rule; a1_roi.csv the two ROI versions per mushroom body; a1_flywire_pratyush.csv,
-  FlyWire's proportions a second way, from olfsysm's FlyWire PN->KC table; a1_sides.csv the KCs' sides); A2 the ratios
-  (ratios.csv: per glomerulus the counts, shares and ratios of the seven mushroom bodies, the mean proportions, B3's
-  strata; a2_spread.csv against the counting noise; a2_agreement.csv, two sides of a brain against two brains;
-  a2_departures.csv, where the hemibrain is furthest from the other brains); A3 the searched inputs against the mean
-  proportions (a3_searched.csv per glomerulus, a3_rule.csv); A4 the claw-weighted input distances by group
-  (a4_distances.csv); a_summary.json. Raises after writing them if A1's rule stops the experiment.
-- B (`--arm` B1..B6, default all; `--wirings`, default all8; resumable, runs_B.csv; runs under
-  outputs/E97_glomerulus_claw_shares/runs/ with the wiring matrix, the moved claws and the targets per type and
-  glomerulus): held readings, 116 points: B1 each of the four other mushroom bodies' proportions on the eight (32); B2
+- A (no simulations; part 0's cache): A1 the counts (a1_counts.csv: per reading, threshold (3, 5, 10), mushroom body,
+  KC class and glomerulus the counted claws, the boutons and PNs that carry them and their KCs; a1_model.csv the model's
+  wiring; a1_reader_vs_model.csv part 0's identity per glomerulus and class; a1_kcs.csv the KCs and claws per KC by
+  class; a1_roi.csv the male CNS under the official ROI rule and under his calyx region; a1_confidence.csv the hemibrain
+  with its synapses below a postsynaptic confidence of 0.5 left out; a1_names.csv per label the PNs' bundle and number in
+  both tables, the check of the name mapping; the beside readings decide nothing) and A1's rule (`a1_rule`); A2 the
+  ratios (ratios.csv: per glomerulus the counts, shares and ratios of the three mushroom bodies, the mean proportions,
+  B3's strata; a2_spread.csv against the counting noise; a2_agreement.csv, the male CNS's two sides against each other
+  and against the hemibrain; a2_departures.csv, the glomeruli where both sides depart from the hemibrain the same way);
+  A3 the searched inputs against the mean proportions (a3_searched.csv per glomerulus, a3_rule.csv); A4 the
+  claw-weighted input distances by group (a4_distances.csv); a_summary.json. Raises after writing them if A1's rule
+  stops the experiment.
+- B (`--arm` B1..B6, default all; `--wirings`, default all8; resumable, runs_B_mcns.csv; runs under
+  outputs/E97_glomerulus_claw_shares/runs_mcns/ with the wiring matrix, the moved claws and the targets per type and
+  glomerulus): held readings, 84 points: B1 each of the male CNS's two mushroom bodies' proportions on the eight (16); B2
   the mean proportions on the eight (8); B3 the controls on the eight (the mean proportions permuted within strata, two
-  seeds, 16; inverted, 8; each mushroom body's permuted, one seed, 32); B4 a second draw of the moved claws at the mean
-  proportions on S (4); B5 the mean proportions at half and twice their log ratios on S (8); B6 the mean proportions with
-  E93's fuller input on the eight (8).
+  seeds, 16; inverted, 8; each mushroom body's permuted, one seed, 16); B4 a second draw of the moved claws at the mean
+  proportions on S (4); B5 the mean proportions at half and twice their log ratios on S (8; twice is the male CNS's own
+  proportions, its two sides averaged); B6 the mean proportions with E93's fuller input on the eight (8).
 - score (`--no-co`, `--no-zcell`): the readings, part C's verdict and the tables.
 - C2: only on a verdict of "a part" or "moves", the second draw on T (4 points, with B4), then `score`.
 - D (`--pop S|T`, `--wirings` for a lane, `--dry-run`, `--force`): only on "a part" or "moves", C2's family fitted again
   at the mean proportions (E10_joint_fit.py with B2's matrix as --wiring-file).
 - Dscore, E (documented stubs), variants, table.
 
-Deviations from the entry, forced by the code or the data, or readings the entry leaves open:
-- Names: the model has 54 glomeruli because olfsysm's loader merges the hemibrain's VC3l and VC3m into VC3; the derived
-  tables are read the same way (the hemibrain's VC3l and VC3m, FlyWire's VC3 and VC5, are VC3; FlyWire's VM6 is the
-  model's VC5). The shares are over the claws on the model's 54 glomeruli (the planning probe's over all uniglomerular
-  labels; the builder's rescaling within each type makes the targets independent of that choice).
-- Sides: a KC's mushroom body is the majority side of the APL it makes synapses with; the 30 to 52 BANC KCs per side
-  without an APL synapse take the side of the largest gap in the KCs' mean claw x (both rules and the KC's own side
-  label agree on every KC that has all three; a1_sides.csv).
-- ROI versions: the rule "a mushroom body whose two ROI versions differ by more than that enters with the outside-ROI
-  version" is read per mushroom body, as the SD over the glomeruli with A1_RULE_MIN_CLAWS model claws of log2 of the
-  share with the outside synapses over the official one (a1_roi.csv); the male CNS's left side enters outside, its right
-  side official.
-- The mean proportions average a brain's two sides on log2 (a geometric mean, as the outer one). The small rule is
-  applied per mushroom body; the mean proportions are 1 by rule only where all four other bodies are small (DA3, DA4m,
-  VP4), and B3's permutations keep those (and, for one body's permutation, that body's small glomeruli) in place.
+Variant names are new (the male CNS's sides 'mcnsL' / 'mcnsR', the two brains' mean 'mean2'; e.g. B2_mean2_real), and so
+are the run table (runs_B_mcns.csv), the runs' folder (runs_mcns/) and part B's provenance (provenance_B_mcns.json).
+
+Departures from the entry, forced by the code or the data, or readings the entry leaves open:
+- The hemibrain's reference is the model's real wiring (the entry's definition); part 0's reader identity on the
+  hemibrain's table holds exactly, so the hemibrain's counts in part A are the reader's on that table (equal to the
+  wiring's at 5 synapses; at 3 and 10 the reader's).
+- Small glomeruli: the rule is applied per mushroom body; the mean proportions are 1 by rule only where both of the male
+  CNS's bodies are small, and B3's permutations keep those (and, for one body's permutation, that body's small
+  glomeruli) in place. A label missing on one side (VP2 on the right) counts 0 there and so is small there.
+- A1's rule "a glomerulus with 100 or more claws in the model has no PN of its label on a side" is read on the PNs that
+  carry a side's counted claws.
 - B3's strata: ORN input (the lab's 36) or not, then thirds of the real wiring's claw total within that class.
 - The moved claw's bouton is drawn in proportion to the boutons' claw counts within the claw's KC type in the base
-  wiring (all types where a glomerulus has none in that type, which does not happen at these targets).
-- A3: glomeruli whose mean-proportion ratio is 1 by rule are left out (none of the 36); for the nine glomeruli the
-  permutations are of the labels over the 36, read on the nine.
-- A4 is over the 66 megamat pairs (E93's `weighted_distances`; the groups are the megamat groups).
+  wiring (all types where a glomerulus has none in that type).
+- A3: glomeruli whose mean-proportion ratio is 1 by rule are left out; for the nine glomeruli the permutations are of the
+  labels over the 36, read on the nine. A4 is over the 66 megamat pairs (E93's `weighted_distances`).
 - Part C: "a part" requires the controls' conditions (both permuted seeds below half the gain, the inverted below
-  0.0015); the other conditions of "moves" are in verdict.json beside it. (f)'s "another raises it" is read as any
+  0.0015); the other conditions of "moves" are in verdict.json beside it. (f)'s "the other raises it" is read as the
   other body's pattern part above the reference's on the eight. R2 "not above the reference" is R2's pattern part at or
   below the eight wirings' as they are. The bootstrap resamples each genotype's recordings with replacement (BOOT_N).
-- The brain term: E72's and E85's 0.006 are SDs of a single run's pattern part (over wirings, over input flies), not
-  root mean square differences of the per-pair effect (between two of the eight wirings as they are that difference is
-  0.047 under the readout), so the entry's term (brain_term.csv) is given beside the same difference between the move's
-  two draws (B2 against B4 on S) and between the eight wirings, and brain_decomposition.csv gives the brain term in E85's
-  forms (the variance of the per-pair effect over the grid of wirings by bodies split into wiring, brain and interaction
-  terms; the SD over the five bodies of a single run's pattern part within a wiring).
+- The brain term (a male CNS side against the hemibrain on one wiring) and the side term (the male CNS's two sides) are
+  root mean square differences of the per-pair effect; E72's and E85's 0.006 are SDs of a single run's pattern part (over
+  wirings, over input flies), so brain_term.csv gives beside them the same difference between the move's two draws and
+  between the eight wirings, and brain_decomposition.csv the brain term in E85's forms.
 - The co-response readings (E89's) are of the reference, B2 and the first permuted and the inverted controls only.
 - Part D starts each fit from B2's held point (`--init-params`, as E93's part E): E10_joint_fit.py's exact start checks
   the wiring arguments of the base, which a moved wiring does not have.
 - The builder is in this module, not in pyolfsysm.wpnkc_shuffles (the entry makes that optional).
+- The withheld outputs' folder is named for the day they were made, as the entry names it (2026-11-15).
 
 Outputs: results/E97_glomerulus_claw_shares/ (shared); spike counts, responses, wiring matrices, moved-claw lists and
-targets under outputs/E97_glomerulus_claw_shares/ (runs/, W/, breadth/).
+targets under outputs/E97_glomerulus_claw_shares/ (runs_mcns/, W/, breadth/).
 
 Usage (from the repository root; 16-thread lanes; check `uptime` first; long runs with -u):
     OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ./venv/bin/python -u -m experiments.E97_glomerulus_claw_shares --part 0
@@ -137,36 +151,23 @@ EXPERIMENT = 'E97_glomerulus_claw_shares'
 S_WIRINGS, T_WIRINGS, ALL_WIRINGS = E83.S_WIRINGS, E83.T_WIRINGS, E83.ALL_WIRINGS
 
 # ---------------------------------------------------------------------------
-# the derived tables (read only)
+# the mushroom bodies and the counts
 
-DERIVED_DIR = Path('/local/tensor/Tom/claude_APL_modeling_YZ4TC/Claude_APL_analysis/apl_synapses')
-ROI_VERSIONS = {'official': DERIVED_DIR, 'outside': DERIVED_DIR / 'with_outside_ROI_synapses'}
-DATASETS = ('hemibrain', 'flywire', 'malecns', 'banc')
-# the model's names (olfsysm's loader merges the hemibrain's VC3l and VC3m into VC3, `glomerulus_renames`); FlyWire's
-# names (FlyWire, the male CNS, BANC) of the hemibrain's glomeruli as the derived tables' README and olfsysm's FlyWire
-# loader give them: VC3 = the hemibrain's VC3l, VC5 = its VC3m, VM6 = its VC5
-RENAMES = {'hemibrain': {'VC3l': 'VC3', 'VC3m': 'VC3'},
-           'flywire': {'VC5': 'VC3', 'VM6': 'VC5'}, 'malecns': {'VC5': 'VC3', 'VM6': 'VC5'},
-           'banc': {'VC5': 'VC3', 'VM6': 'VC5'}}
-# the mushroom bodies: the hemibrain's (right side only), and both sides of the other three
-MB_SIDES = {'hemibrain': ('R',), 'flywire': ('L', 'R'), 'malecns': ('L', 'R'), 'banc': ('L', 'R')}
-FIVE_MBS = ('hemibrain', 'flywire_L', 'flywire_R', 'malecns_L', 'malecns_R')
-OTHER_MBS = FIVE_MBS[1:]
-BANC_MBS = ('banc_L', 'banc_R')
-ALL_MBS = FIVE_MBS + BANC_MBS
-BRAINS = {'flywire': ('flywire_L', 'flywire_R'), 'malecns': ('malecns_L', 'malecns_R')}
+OTHER_MBS = ('malecns_L', 'malecns_R')              # the male CNS's two mushroom bodies (MB3 below has all three)
+BRAINS = {'malecns': OTHER_MBS}                     # the other brain's sides, averaged on log2 before the mean
+MB_SHORT = {'malecns_L': 'mcnsL', 'malecns_R': 'mcnsR'}   # in variant names (new names: no withheld point's name)
+MB_LONG = {v: k for k, v in MB_SHORT.items()}
 SYN_THRESHOLDS = (3, 5, 10)
 SYN_MIN = 5                                         # a counted claw has this many PN synapses or more
 SMALL_CLAWS = 30                                    # fewer counted claws in either mushroom body: r_g = 1
-KC_CLASSES = ('g', 'ab', "a'b'")                    # the model's KC types; derived types map by prefix (`kc_class`)
-FLYWIRE_PRATYUSH = 'from_pratyush/2024-09-13'       # olfsysm's FlyWire PN->KC table (A1's second way)
-PRATYUSH_MIN_WEIGHT = 4                             # the loader's threshold on a FlyWire PN->KC connection
+KC_CLASSES = ('g', 'ab', "a'b'")                    # the model's KC types (the loader's classes)
+CONFIDENCE_BESIDE = 0.5                             # A1 beside: the hemibrain at the male CNS's confidence floor
 
 # ---------------------------------------------------------------------------
 # part A's rules (fixed in the entry)
 
-A1_RULE_SD = 0.15                                   # SD of log2(derived hemibrain share / model share) at most this
-A1_RULE_MIN_CLAWS = 100                             # over the glomeruli with this many claws or more (the model's)
+A1_TOTAL_BAND = (0.8, 1.25)                         # a male CNS body's counted claws on the 54 over the model's 9,867
+A1_RULE_MIN_CLAWS = 100                             # a glomerulus with this many claws in the model needs a PN on a side
 A3_NULL = 10_000                                    # permutations of the glomerulus labels
 A3_QUANTILES = (0.05, 0.95)                         # "against" below the null's 5th percentile, "with" above its 95th
 A3_SEED = 0
@@ -251,13 +252,71 @@ def hemibrain_dir() -> Path:
     return Path(mb_model.prat_hemibrain_seg_dir)
 
 
+def _check_brain(brain: str) -> None:
+    if brain not in BRAINS2:
+        raise ValueError(f'brain {brain!r} not in {BRAINS2}')
+
+
 def pn_claw_synapses(brain: str) -> pd.DataFrame:
     """Pratyush's per-synapse PN bouton -> KC claw table of `brain` ('hemibrain' or 'malecns', both sides), one row per
     synapse, with the columns renamed to one form: kc_id, pn_id, pn_type (type_pre), kc_subtype (type_post), claw_id
-    (his corrected claw label, float with NaN as in the file), bouton_id (int, -1 unassigned), dist_to_root, roi_pre,
+    (his corrected claw label, float with NaN as in the file), bouton_id (-1 unassigned; NaN where the file has none,
+    as on a few of the hemibrain's synapses that the earlier steps of `counted_claws` remove), dist_to_root, roi_pre,
     roi_post, region_post (the male CNS's 'CA' / 'ACA'; None for the hemibrain), side ('L' / 'R': the KC's side, all
     'R' in the hemibrain), x_post, y_post, z_post (8 nm voxels), confidence_pre, confidence_post. Read only."""
-    raise NotImplementedError
+    _check_brain(brain)
+    key = ('pn_claw_synapses', brain)
+    if key in _CACHE:
+        return _CACHE[key]
+    if brain == 'hemibrain':
+        df = pd.read_parquet(hemibrain_dir() / HEMIBRAIN_PN_CLAW_FILE)
+        ren = {'anatomical_claw_corrected': 'claw_id', 'anatomical_bouton': 'bouton_id'}
+        df = df.rename(columns=ren)
+        df['region_post'] = None
+        df['side'] = 'R'
+    else:
+        df = pd.read_parquet(malecns_dir() / f'PNbouton-to-KCclaw_Connectivity_Male-CNS_{MALECNS_STAMP}.parquet')
+        ren = {'anatomical_claw_corrected_post': 'claw_id', 'anatomical_bouton_pre': 'bouton_id',
+               'dist_to_root_post': 'dist_to_root'}
+        df = df.rename(columns=ren)
+        df['side'] = df['side_post'].map({'Left': 'L', 'Right': 'R'})
+        if df['side'].isna().any():
+            raise RuntimeError(f"male CNS: side_post values {sorted(df.side_post.unique())} other than Left / Right")
+    df = df.rename(columns={'bodyId_pre': 'pn_id', 'bodyId_post': 'kc_id', 'type_pre': 'pn_type',
+                            'type_post': 'kc_subtype'})
+    cols = ['kc_id', 'pn_id', 'pn_type', 'kc_subtype', 'claw_id', 'bouton_id', 'dist_to_root', 'roi_pre', 'roi_post',
+            'region_post', 'side', 'x_post', 'y_post', 'z_post', 'confidence_pre', 'confidence_post']
+    df = df[cols].reset_index(drop=True)
+    _CACHE[key] = df
+    return df
+
+
+def kc_class_of(kc_subtype) -> Optional[str]:
+    """The loader's KC class of a KC type (`add_kc_type_col`: 'KC' and spaces stripped, the part before '-'): 'g',
+    'ab' or "a'b'"; None for anything else (no type, the male CNS's untyped 'KC', 'gap', 'incomplete', ...)."""
+    if kc_subtype is None or (isinstance(kc_subtype, float) and np.isnan(kc_subtype)):
+        return None
+    t = str(kc_subtype).strip('KC ').split('-')[0]
+    return t if t in KC_CLASSES else None
+
+
+def _glomeruli_of_types(types: pd.Series, brain: str) -> pd.Series:
+    """The model's glomerulus per PN type by the loader's rules (`add_glomerulus_col_from_hemibrain_type`), with
+    BRAIN_RENAMES applied before its filter on names (one lookup on the type's own name, so VM6 -> VC5 does not chain
+    on to VC3); None where the loader drops the type."""
+    from pyolfsysm.mb_model import task_gloms
+    out = {}
+    for t in pd.unique(types):
+        t = str(t)
+        if t in ('WEDPN12', 'WEDPN4') or '+' in t:
+            out[t] = None
+            continue
+        if t.count('_') != 1:
+            raise RuntimeError(f'{brain}: PN type {t!r} has {t.count("_")} underscores (the loader raises on these)')
+        g = t.split('_')[0]
+        g = BRAIN_RENAMES[brain].get(g, g)
+        out[t] = g if g in task_gloms else None
+    return types.astype(str).map(out)
 
 
 def counted_claws(brain: str, *, roi: Optional[str] = None, syn_min: int = 5, min_confidence: Optional[float] = None
@@ -283,13 +342,68 @@ def counted_claws(brain: str, *, roi: Optional[str] = None, syn_min: int = 5, mi
         n_synapses (int), bouton_ids (sorted tuple of int), n_boutons, main_bouton_id (the bouton with most of the claw's
         synapses, ties to the lowest id), x_post, y_post, z_post (mean of the KC-side synapse coordinates, 8 nm voxels).
         Sorted by mb, kc_id, claw_id."""
-    raise NotImplementedError
+    _check_brain(brain)
+    roi = DEFAULT_ROI[brain] if roi is None else roi
+    if roi not in ROI_RULES:
+        raise ValueError(f'roi {roi!r} not in {ROI_RULES}')
+    if roi == 'region' and brain != 'malecns':
+        raise ValueError("roi='region' is the male CNS's calyx region; the hemibrain's table has none")
+    key = ('counted_claws', brain, roi, int(syn_min), min_confidence)
+    if key in _CACHE:
+        return _CACHE[key].copy()
+    s = pn_claw_synapses(brain)
+    if roi == 'official':
+        ca = 'CA(' + s['side'] + ')'
+        s = s[(s.roi_pre == ca) & (s.roi_post == ca)]
+    elif roi == 'region':
+        s = s[s.region_post == 'CA']
+    if min_confidence is not None:
+        s = s[s.confidence_post >= float(min_confidence)]
+    s = s[s.claw_id.notna()]
+    s = s.assign(glomerulus=_glomeruli_of_types(s.pn_type, brain))
+    s = s[s.glomerulus.notna()]
+    s = s[np.isfinite(s.dist_to_root.to_numpy(dtype=float)) & s.kc_subtype.notna()]
+    if s.bouton_id.isna().any():
+        raise RuntimeError(f'{brain}: synapses without a bouton label after the earlier steps (the loader asserts none)')
+    s = s[s.bouton_id != -1].copy()
+    s['bouton_id'] = s['bouton_id'].astype(np.int64)
+    s['claw_id'] = s['claw_id'].astype(np.int64)
+    keys = ['kc_id', 'claw_id', 'pn_id']
+    for k in ('glomerulus', 'kc_subtype', 'side', 'pn_type'):
+        if (s.groupby(keys)[k].nunique() > 1).any():
+            raise RuntimeError(f'{brain}: more than one {k} within a (KC, claw, PN)')
+    g = s.groupby(keys, sort=True)
+    c = g.agg(n_synapses=('bouton_id', 'size'), glomerulus=('glomerulus', 'first'), kc_subtype=('kc_subtype', 'first'),
+              side=('side', 'first'), pn_type=('pn_type', 'first'), x_post=('x_post', 'mean'), y_post=('y_post', 'mean'),
+              z_post=('z_post', 'mean')).reset_index()
+    nb = s.groupby(keys + ['bouton_id']).size().rename('n').reset_index()
+    bt = nb.groupby(keys)['bouton_id'].apply(lambda x: tuple(sorted(int(v) for v in x))).rename('bouton_ids')
+    main = (nb.sort_values(keys + ['n', 'bouton_id'], ascending=[True] * len(keys) + [False, True])
+            .drop_duplicates(keys).set_index(keys)['bouton_id'].rename('main_bouton_id'))
+    c = c.join(bt, on=keys).join(main, on=keys)
+    c['n_boutons'] = c['bouton_ids'].map(len)
+    c = c[c.n_synapses >= int(syn_min)]
+    multi = c.groupby(['kc_id', 'claw_id'])['pn_id'].transform('size') > 1
+    c = c[~multi].copy()
+    c['kc_class'] = c['kc_subtype'].map(kc_class_of)
+    c = c[c.kc_class.notna()].copy()
+    c['brain'] = brain
+    c['mb'] = 'hemibrain' if brain == 'hemibrain' else 'malecns_' + c['side']
+    cols = ['brain', 'mb', 'side', 'kc_id', 'claw_id', 'pn_id', 'pn_type', 'glomerulus', 'kc_class', 'kc_subtype',
+            'n_synapses', 'bouton_ids', 'n_boutons', 'main_bouton_id', 'x_post', 'y_post', 'z_post']
+    c = c[cols].sort_values(['mb', 'kc_id', 'claw_id']).reset_index(drop=True)
+    c['n_synapses'] = c['n_synapses'].astype(np.int64)
+    c['main_bouton_id'] = c['main_bouton_id'].astype(np.int64)
+    _CACHE[key] = c
+    return c.copy()
 
 
 def claw_counts(claws: pd.DataFrame, by: Sequence[str] = ('mb', 'glomerulus')) -> pd.DataFrame:
     """Per group of `counted_claws`'s rows (`by`): n_claws, n_boutons (distinct main boutons, as (pn_id, bouton) pairs),
     n_pns and n_kcs; a flat frame with the `by` columns first."""
-    raise NotImplementedError
+    c = claws.assign(_bouton=list(zip(claws.pn_id, claws.main_bouton_id)))
+    return (c.groupby(list(by)).agg(n_claws=('claw_id', 'size'), n_boutons=('_bouton', 'nunique'),
+                                    n_pns=('pn_id', 'nunique'), n_kcs=('kc_id', 'nunique')).reset_index())
 
 
 def out_dir() -> Path:
@@ -337,154 +451,45 @@ def _sha(df: pd.DataFrame) -> str:
 
 
 # ---------------------------------------------------------------------------
-# the derived tables: claws, boutons, sides, names
+# names, counts, shares and ratios
 
-def glomerulus_name(pn_type, dataset: str) -> Optional[str]:
-    """The model's (hemibrain) name of a derived table's PN type (e.g. 'VC3_adPN' in FlyWire -> 'VC3'; 'VM6_adPN' in
-    FlyWire -> 'VC5'; 'VC3l_adPN' in the hemibrain -> 'VC3'), or None when the type names more than one glomerulus
-    ('+'), is multiglomerular (M) or untyped. Names that are not among the model's glomeruli are returned as they are
-    (and left out of the shares by the glomeruli they are read over)."""
+def glomerulus_name(pn_type, brain: str) -> Optional[str]:
+    """The model's (hemibrain) name of a PN type of `brain`'s table (e.g. 'VC5_lvPN' in the male CNS -> 'VC3';
+    'VM6_adPN' in the male CNS -> 'VC5'; 'VC3l_adPN' in the hemibrain -> 'VC3'), or None when the type names more than
+    one glomerulus ('+'), is multiglomerular (M), WEDPN12 / WEDPN4 or untyped. Names that are not among the model's
+    glomeruli are returned as they are (`counted_claws` keeps only the task glomeruli)."""
+    _check_brain(brain)
     if pn_type is None or (isinstance(pn_type, float) and np.isnan(pn_type)):
         return None
     t = str(pn_type).strip()
-    if not t or t.lower() == 'nan':
+    if not t or t.lower() == 'nan' or t in ('WEDPN12', 'WEDPN4'):
         return None
     g = t.split('_')[0]
     if not g or '+' in g or g == 'M':
         return None
-    return RENAMES.get(dataset, {}).get(g, g)
+    return BRAIN_RENAMES[brain].get(g, g)
 
 
 def kc_class(kc_type) -> str:
-    """A KC type's class: 'g' (KCg*, or the model's 'g'), 'ab' (KCab*), "a'b'" (KCa'b'*, KCapbp*), 'unknown' (KC
-    alone, untyped)."""
+    """A KC type's class: 'g', 'ab' or "a'b'" (the model's names, or the connectome's types by the loader's rule,
+    `kc_class_of`), else 'unknown'."""
     t = str(kc_type)
     if t in KC_CLASSES:
         return t
-    if t.startswith('KCg'):
-        return 'g'
-    if t.startswith("KCa'b'") or t.startswith('KCapbp'):
-        return "a'b'"
-    if t.startswith('KCab'):
-        return 'ab'
-    return 'unknown'
+    return kc_class_of(t) or 'unknown'
 
 
-def _side(x) -> Optional[str]:
-    s = str(x).strip().lower()
-    if s in ('l', 'left', 'apl_l'):
-        return 'L'
-    if s in ('r', 'right', 'apl_r'):
-        return 'R'
-    return None
-
-
-def _ids(s: pd.Series) -> pd.Series:
-    return pd.to_numeric(s, errors='coerce').astype('Int64')
-
-
-def _read_claws(dataset: str, roi: str) -> pd.DataFrame:
-    key = ('claws_raw', dataset, roi)
-    if key not in _CACHE:
-        df = pd.read_csv(ROI_VERSIONS[roi] / f'{dataset}_KC_claws_derived.csv.gz')
-        df['kc_id'] = _ids(df['kc_id'])
-        df['main_PN_id'] = _ids(df['main_PN_id'])
-        _CACHE[key] = df
-    return _CACHE[key]
-
-
-def kc_sides(dataset: str, roi: str = 'official') -> pd.DataFrame:
-    """Per KC of a dataset's claw table: 'side' ('L' / 'R'), the majority side of the APLs it makes synapses with
-    (`<dataset>_APL_MB_synapses.csv.gz` of the same ROI version), and beside it 'apl_side' (that majority, None without
-    an APL synapse or on a tie), 'own_side' (the KC's own side label, partner_side, majority), 'gap_side' (the side by the
-    largest gap of the KCs' mean claw x, labelled by its majority agreement with the APL sides), 'n_apl_syn'. A KC
-    without an APL side takes its gap side. The hemibrain's KCs are all 'R' (its one APL)."""
-    key = ('sides', dataset, roi)
-    if key in _CACHE:
-        return _CACHE[key]
-    claws = _read_claws(dataset, roi)
-    kx = claws.groupby('kc_id')['centroid_x_nm'].mean().sort_values()
-    out = pd.DataFrame(index=kx.index)
-    if dataset == 'hemibrain':
-        out['apl_side'] = 'R'
-        out['own_side'] = 'R'
-        out['gap_side'] = 'R'
-        out['n_apl_syn'] = np.nan
-        out['side'] = 'R'
-        _CACHE[key] = out
-        return out
-    cols = {'apl_side', 'apl_instance', 'partner_id', 'partner_side'}
-    syn = pd.read_csv(ROI_VERSIONS[roi] / f'{dataset}_APL_MB_synapses.csv.gz', usecols=lambda c: c in cols, dtype=str)
-    syn['partner_id'] = _ids(syn['partner_id'])
-    syn = syn[syn.partner_id.isin(kx.index)]
-    aside = syn['apl_side'].map(_side) if 'apl_side' in syn else pd.Series(None, index=syn.index, dtype=object)
-    if 'apl_instance' in syn:
-        aside = aside.where(aside.notna(), syn['apl_instance'].map(_side))
-    own = syn['partner_side'].map(_side) if 'partner_side' in syn else pd.Series(None, index=syn.index, dtype=object)
-    syn = syn.assign(a=aside, o=own)
-
-    def majority(col: str) -> pd.Series:
-        s = syn.dropna(subset=[col])
-        if not len(s):
-            return pd.Series(dtype=object)
-        c = s.groupby(['partner_id', col]).size().unstack(fill_value=0)
-        win = c.idxmax(axis=1)
-        if c.shape[1] > 1:
-            srt = np.sort(c.to_numpy(), axis=1)
-            win = win.where(srt[:, -1] > srt[:, -2])
-        return win
-    out['apl_side'] = majority('a').reindex(out.index)
-    out['own_side'] = majority('o').reindex(out.index)
-    out['n_apl_syn'] = syn.groupby('partner_id').size().reindex(out.index).fillna(0).astype(int)
-    x = kx.to_numpy()
-    i = int(np.argmax(np.diff(x)))
-    lo = pd.Series(np.arange(len(x)) <= i, index=kx.index)
-    agree_lo_L = float((out['apl_side'][lo] == 'L').mean() + (out['apl_side'][~lo] == 'R').mean())
-    agree_lo_R = float((out['apl_side'][lo] == 'R').mean() + (out['apl_side'][~lo] == 'L').mean())
-    lo_side, hi_side = ('L', 'R') if agree_lo_L >= agree_lo_R else ('R', 'L')
-    out['gap_side'] = np.where(lo, lo_side, hi_side)
-    out['side'] = out['apl_side'].where(out['apl_side'].notna(), out['gap_side'])
-    _CACHE[key] = out
-    return out
-
-
-def derived_claws(dataset: str, roi: str = 'official') -> pd.DataFrame:
-    """A dataset's derived claws with the columns kc_id, claw_id, kc_type, kc_class, n_PN_synapses, main_PN_id,
-    main_bouton_id, main_PN_type, glomerulus (the model's name, or None), side, mb ('hemibrain', or '<dataset>_<side>')."""
-    key = ('claws', dataset, roi)
-    if key not in _CACHE:
-        df = _read_claws(dataset, roi).copy()
-        df['glomerulus'] = [glomerulus_name(t, dataset) for t in df['main_PN_type']]
-        df['kc_class'] = [kc_class(t) for t in df['kc_type']]
-        sides = kc_sides(dataset, roi)['side']
-        df['side'] = df['kc_id'].map(sides)
-        df['mb'] = 'hemibrain' if dataset == 'hemibrain' else dataset + '_' + df['side'].astype(str)
-        _CACHE[key] = df
-    return _CACHE[key]
-
-
-def derived_boutons(dataset: str, roi: str = 'official') -> pd.DataFrame:
-    """A dataset's derived boutons with bouton_id, pn_id, n_tbars, glomerulus (the model's name, or None) and mb (that
-    of the KCs whose counted claws have the bouton's PN as their main PN, the majority; None for a PN without such a
-    claw)."""
-    b = pd.read_csv(ROI_VERSIONS[roi] / f'{dataset}_PN_boutons_derived.csv.gz')
-    b['pn_id'] = _ids(b['pn_id'])
-    b['glomerulus'] = [glomerulus_name(t, dataset) for t in b['pn_type']]
-    c = derived_claws(dataset, roi)
-    c = c[c.n_PN_synapses >= SYN_MIN].dropna(subset=['side'])
-    pn_mb = c.groupby(['main_PN_id', 'mb']).size().unstack(fill_value=0)
-    b['mb'] = b['pn_id'].map(pn_mb.idxmax(axis=1)) if len(pn_mb) else None
-    return b
-
-
-def mb_counts(claws: pd.DataFrame, syn_min: int = SYN_MIN, by_class: bool = False) -> pd.DataFrame:
-    """Per mushroom body (and KC class, with `by_class`) and glomerulus: the claws with `syn_min` or more PN synapses
-    whose main PN names one glomerulus ('n_claws'), the boutons and PNs that carry them as main bouton and PN
-    ('n_boutons', 'n_pns') and their KCs ('n_kcs')."""
-    c = claws[(claws['n_PN_synapses'] >= syn_min) & claws['glomerulus'].notna()]
-    keys = ['mb'] + (['kc_class'] if by_class else []) + ['glomerulus']
-    return (c.groupby(keys).agg(n_claws=('claw_id', 'size'), n_boutons=('main_bouton_id', 'nunique'),
-                                n_pns=('main_PN_id', 'nunique'), n_kcs=('kc_id', 'nunique')).reset_index())
+def mb_counts(syn_min: int = SYN_MIN, by_class: bool = False, roi: Optional[str] = None,
+              min_confidence: Optional[float] = None) -> pd.DataFrame:
+    """Per mushroom body of MB3 (and KC class, with `by_class`) and glomerulus: n_claws, n_boutons, n_pns, n_kcs of
+    `counted_claws` at `syn_min` (both brains; `roi` None the brains' own rules, else for the male CNS only, the
+    hemibrain keeping the loader's; `min_confidence` for both)."""
+    parts = []
+    for brain in BRAINS2:
+        r = None if (roi is None or brain == 'hemibrain') else roi
+        parts.append(counted_claws(brain, roi=r, syn_min=syn_min, min_confidence=min_confidence))
+    c = pd.concat(parts, ignore_index=True)
+    return claw_counts(c, ['mb'] + (['kc_class'] if by_class else []) + ['glomerulus'])
 
 
 def shares(counts: pd.Series, glomeruli: Sequence[str]) -> pd.Series:
@@ -495,8 +500,9 @@ def shares(counts: pd.Series, glomeruli: Sequence[str]) -> pd.Series:
 
 def ratios(counts: pd.DataFrame, glomeruli: Sequence[str], ref: str = 'hemibrain', small: int = SMALL_CLAWS
            ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """Each mushroom body's ratio r_g to `ref` (counts: glomeruli x mushroom bodies; shares over `glomeruli`), with
-    r_g = 1 where either has fewer than `small` counted claws. Returns (r, small), both glomeruli x mushroom bodies."""
+    """Each mushroom body's ratio r_g to `ref` (counts: glomeruli x mushroom bodies; shares over `glomeruli`, a
+    glomerulus missing from a body counting 0), with r_g = 1 where either has fewer than `small` counted claws. Returns
+    (r, small), both glomeruli x mushroom bodies."""
     C = counts.reindex(list(glomeruli)).fillna(0.0).astype(float)
     S = C / C.sum()
     with np.errstate(divide='ignore', invalid='ignore'):
@@ -508,26 +514,27 @@ def ratios(counts: pd.DataFrame, glomeruli: Sequence[str], ref: str = 'hemibrain
 
 
 def mean_proportions(r: pd.DataFrame, brains: Mapping[str, Sequence[str]] = BRAINS) -> pd.Series:
-    """The geometric mean of r_g over the three brains: the hemibrain's 1 and each other brain's sides averaged on log2
-    first."""
+    """The geometric mean of r_g over the brains: the hemibrain's 1 and each other brain's sides averaged on log2 first
+    (with the male CNS alone, 2 ** (mean of its two sides' log2 r_g / 2))."""
     logs = [pd.Series(0.0, index=r.index)]
     for _, mbs in brains.items():
         logs.append(np.log2(r[list(mbs)].astype(float)).mean(axis=1))
     return pd.Series(2.0 ** (sum(logs) / len(logs)), index=r.index, name='r_mean')
 
 
-def pratyush_flywire() -> pd.DataFrame:
-    """FlyWire's PN->KC connections from olfsysm's tables (pyolfsysm/data/from_pratyush/2024-09-13, both files), with the
-    loader's glomerulus names (from source_hemibrain_type: '+' and M dropped, VC3l and VC3m merged into VC3), the KC's side
-    (target_side) and KC class; connections of PRATYUSH_MIN_WEIGHT or more synapses (the loader's threshold)."""
-    import pyolfsysm
-    d = Path(pyolfsysm.__file__).resolve().parent / 'data' / FLYWIRE_PRATYUSH
-    df = pd.concat([pd.read_csv(d / f'FlyWire_PNKC_{s}.csv') for s in ('Left', 'Right')], ignore_index=True)
-    df['glomerulus'] = [glomerulus_name(t, 'hemibrain') for t in df['source_hemibrain_type']]
-    df['side'] = df['target_side'].map(_side)
-    df['mb'] = 'flywire_' + df['side'].astype(str)
-    df['kc_class'] = [kc_class(t) for t in df['target_hemibrain_type']]
-    return df[df['weight'] >= PRATYUSH_MIN_WEIGHT].copy()
+def pn_labels(roi: Optional[str] = None) -> pd.DataFrame:
+    """The check of the name mapping: per brain, mushroom body, the PN type's own label (the part before '_') and
+    bundle (after it), the model's name it maps to and the PNs (and their counted claws) of `counted_claws`."""
+    rows = []
+    for brain in BRAINS2:
+        c = counted_claws(brain, roi=None if brain == 'hemibrain' else roi)
+        lab = c.pn_type.str.split('_')
+        c = c.assign(label=lab.str[0], bundle=lab.str[1])
+        g = c.groupby(['mb', 'label', 'bundle', 'glomerulus']).agg(n_pns=('pn_id', 'nunique'),
+                                                                     n_claws=('claw_id', 'size')).reset_index()
+        g.insert(0, 'brain', brain)
+        rows.append(g)
+    return pd.concat(rows, ignore_index=True)
 
 
 # ---------------------------------------------------------------------------
@@ -743,21 +750,26 @@ def scaled_ratios(r: pd.Series, scale: float) -> pd.Series:
 # ---------------------------------------------------------------------------
 # the variants
 
+MEAN = 'mean2'                                      # the two brains' mean proportions, in variant names
+
+
 def arm_variants(arm: str) -> List[str]:
-    """The variants of an arm (B1..B6, C2), in run order."""
-    return {'B1': [f'B1_{m}' for m in OTHER_MBS],
-            'B2': ['B2_mean'],
-            'B3': [f'B3_permmean_s{s}' for s in PERM_SEEDS] + ['B3_invmean'] + [f'B3_perm_{m}_s{PERM_SEEDS[0]}' for m in OTHER_MBS],
-            'B4': [f'B4_mean_d{DRAW_SEEDS[1]}'],
-            'B5': [f'B5_mean_x{s:g}' for s in B5_SCALES],
-            'B6': [f'B6_mean_{B6_INPUT}'],
-            'C2': [f'C2_mean_d{DRAW_SEEDS[1]}']}[arm]
+    """The variants of an arm (B1..B6, C2), in run order. The names are new (the male CNS's sides 'mcnsL' / 'mcnsR',
+    the two brains' mean 'mean2'), so that no point takes the name of one of the withheld points of 2026-11-15."""
+    mbs = [MB_SHORT[m] for m in OTHER_MBS]
+    return {'B1': [f'B1_{m}' for m in mbs],
+            'B2': [f'B2_{MEAN}'],
+            'B3': [f'B3_perm{MEAN}_s{s}' for s in PERM_SEEDS] + [f'B3_inv{MEAN}'] + [f'B3_perm_{m}_s{PERM_SEEDS[0]}' for m in mbs],
+            'B4': [f'B4_{MEAN}_d{DRAW_SEEDS[1]}'],
+            'B5': [f'B5_{MEAN}_x{s:g}' for s in B5_SCALES],
+            'B6': [f'B6_{MEAN}_{B6_INPUT}'],
+            'C2': [f'C2_{MEAN}_d{DRAW_SEEDS[1]}']}[arm]
 
 
 def parse_variant(v: str) -> dict:
-    """A variant's fields: arm, proportions ('mean' or a mushroom body; 'hemibrain' for 'ref', the wirings as they are),
-    control ('perm', 'inv' or None), seed (the permutation's), scale (of the log ratios), draw (the moved claws' draw: 1,
-    or 2 for B4 / C2), input ('lab' or 'F')."""
+    """A variant's fields: arm, proportions ('mean' or a mushroom body of OTHER_MBS; 'hemibrain' for 'ref', the wirings
+    as they are), control ('perm', 'inv' or None), seed (the permutation's), scale (of the log ratios), draw (the moved
+    claws' draw: 1, or 2 for B4 / C2), input ('lab' or 'F')."""
     import re
     out = dict(variant=v, arm=None, proportions=None, control=None, seed=None, scale=1.0, draw=1, input='lab')
     if v == 'ref':
@@ -771,17 +783,17 @@ def parse_variant(v: str) -> dict:
     if v not in arm_variants(arm):
         raise ValueError(f'variant {v!r}: not one of arm {arm}\'s')
     if arm == 'B1':
-        out['proportions'] = rest
+        out['proportions'] = MB_LONG[rest]
     elif arm == 'B2':
         out['proportions'] = 'mean'
     elif arm == 'B3':
-        if rest == 'invmean':
+        if rest == f'inv{MEAN}':
             out.update(proportions='mean', control='inv', scale=-1.0)
-        elif rest.startswith('permmean_s'):
+        elif rest.startswith(f'perm{MEAN}_s'):
             out.update(proportions='mean', control='perm', seed=int(rest.split('_s')[1]))
         else:
             mb, s = re.match(r'^perm_(.+)_s(\d+)$', rest).groups()
-            out.update(proportions=mb, control='perm', seed=int(s))
+            out.update(proportions=MB_LONG[mb], control='perm', seed=int(s))
     elif arm in ('B4', 'C2'):
         out.update(proportions='mean', draw=int(rest.split('_d')[1]))
     elif arm == 'B5':
@@ -961,6 +973,26 @@ def built_records() -> dict:
     return _read_json(out_dir() / 'identity.json').get('built', {})
 
 
+def reader_identity() -> dict:
+    """Part 0's new identity: `counted_claws` on the hemibrain's per-synapse table against the model's real wiring
+    (part 0's cache of its claw table): the claws per glomerulus and KC class, and the (KC, claw) pairs with their
+    glomeruli, all with 0 differences."""
+    mc = model_claws('real')
+    mc = mc[mc.col >= 0]
+    h = counted_claws('hemibrain')
+    a = mc.groupby(['glomerulus', 'kc_class']).size()
+    b = h.groupby(['glomerulus', 'kc_class']).size()
+    d = b.sub(a, fill_value=0)
+    km = set(zip(mc[H.KC_ID_LEVEL].astype(np.int64), mc.claw_id.astype(np.int64), mc.glomerulus))
+    kr = set(zip(h.kc_id.astype(np.int64), h.claw_id.astype(np.int64), h.glomerulus))
+    return dict(n_claws_model=int(len(mc)), n_claws_reader=int(len(h)), n_kcs_model=int(mc[H.KC_ID_LEVEL].nunique()),
+                n_kcs_reader=int(h.kc_id.nunique()), n_glomeruli_model=int(mc.glomerulus.nunique()),
+                n_glomeruli_reader=int(h.glomerulus.nunique()), n_cells_differing=int((d != 0).sum()),
+                max_abs_difference=float(d.abs().max()) if len(d) else 0.0, claws_model_only=int(len(km - kr)),
+                claws_reader_only=int(len(kr - km)), file=str(hemibrain_dir() / HEMIBRAIN_PN_CLAW_FILE),
+                passes=bool((d == 0).all() and km == kr))
+
+
 def part_0(wirings: Sequence[str] = ALL_WIRINGS, held: bool = True) -> dict:
     """The identities (module docstring, part 0); identity.json (resumable per key); raises if one fails."""
     import gc
@@ -968,13 +1000,17 @@ def part_0(wirings: Sequence[str] = ALL_WIRINGS, held: bool = True) -> dict:
     res = _read_json(path)
     res['commits'] = _commits_clean()
     res['host'] = _host()
+    if not res.get('reader_hemibrain', {}).get('passes'):
+        res['reader_hemibrain'] = reader_identity()
+        print(f"E97 0 reader_hemibrain: {res['reader_hemibrain']}", flush=True)
+        _write_json(path, res)
     for w in wirings:
         key = f'unchanged_{w}'
         if res.get(key, {}).get('passes'):
             continue
         t0 = time.time()
         W = base_wiring(w)
-        W1, mv, tg = move_claws(W, {}, draw_seed('B2_mean', w))
+        W1, mv, tg = move_claws(W, {}, draw_seed(f'B2_{MEAN}', w))
         t = claw_table(W)
         chk = check_built(W, W1, mv, tg)
         res[key] = dict(passes=bool(W1.equals(W) and len(mv) == 0 and chk['passes']), n_rows=int(W.shape[0]),
@@ -1020,7 +1056,7 @@ def part_0(wirings: Sequence[str] = ALL_WIRINGS, held: bool = True) -> dict:
               flush=True)
     else:
         print('E97 0: no ratios.csv yet (run --part A, then --part 0 again for the built wirings)', flush=True)
-    keys = [f'unchanged_{w}' for w in ALL_WIRINGS] + ['held_real']
+    keys = ['reader_hemibrain'] + [f'unchanged_{w}' for w in ALL_WIRINGS] + ['held_real']
     failed = [k for k in keys if k in res and not res[k].get('passes')]
     failed += [f'built:{k}' for k, b in res.get('built', {}).items() if not b.get('passes')]
     n_plan = len(plan(ARMS + ('C2',), ALL_WIRINGS))
@@ -1047,21 +1083,26 @@ def model_glomeruli(claws: Optional[pd.DataFrame] = None) -> List[str]:
     return sorted(c.glomerulus.dropna().unique())
 
 
-def a1_rule(model_counts: pd.Series, derived_counts: pd.Series, min_claws: int = A1_RULE_MIN_CLAWS,
-            max_sd: float = A1_RULE_SD) -> dict:
-    """A1's rule: the SD over the glomeruli with `min_claws` or more claws in the model of log2(derived share / model
-    share), each share over all the model's glomeruli; 'stops' if above `max_sd` (or a glomerulus has none)."""
+def a1_rule(model_counts: pd.Series, counts: pd.DataFrame, n_pns: pd.DataFrame, band: Tuple[float, float] = A1_TOTAL_BAND,
+            min_claws: int = A1_RULE_MIN_CLAWS) -> dict:
+    """A1's rule (fixed in the entry): the experiment stops if a male CNS mushroom body's counted claws on the model's
+    glomeruli are below band[0] or above band[1] times the model's (`counts`: glomeruli x mushroom bodies, OTHER_MBS
+    among them), or if a glomerulus with `min_claws` or more claws in the model has no PN of its label on a side
+    (`n_pns`, the PNs that carry the side's counted claws; a glomerulus missing from it counts 0)."""
     gl = list(model_counts.index)
-    sm, sd_ = shares(model_counts, gl), shares(derived_counts, gl)
-    keep = model_counts.reindex(gl) >= min_claws
-    with np.errstate(divide='ignore'):
-        lr = np.log2(sd_[keep] / sm[keep])
-    finite = np.isfinite(lr)
-    sd = float(lr[finite].std(ddof=1)) if finite.sum() > 1 else np.nan
-    worst = lr[finite].abs().sort_values(ascending=False).head(5)
-    return dict(sd=sd, n_glomeruli=int(keep.sum()), n_infinite=int((~finite).sum()), max_sd=max_sd, min_claws=min_claws,
-                mean_log2=float(lr[finite].mean()), largest={g: float(lr[g]) for g in worst.index},
-                stops=bool(not np.isfinite(sd) or sd > max_sd or (~finite).any()))
+    tot = float(model_counts.sum())
+    big = [g for g in gl if model_counts[g] >= min_claws]
+    res = dict(model_claws=tot, band=list(band), min_claws=min_claws, n_big=len(big), mbs={})
+    stops = False
+    for mb in OTHER_MBS:
+        n = float(counts[mb].reindex(gl).fillna(0).sum()) if mb in counts else 0.0
+        no_pn = [g for g in big if not (n_pns[mb].reindex([g]).fillna(0).iloc[0] > 0 if mb in n_pns else False)]
+        inside = bool(band[0] <= n / tot <= band[1]) if tot > 0 else False
+        res['mbs'][mb] = dict(claws=n, ratio_to_model=n / tot if tot > 0 else np.nan, inside_band=inside,
+                              big_without_pn=no_pn)
+        stops = stops or not inside or bool(no_pn)
+    res['stops'] = bool(stops)
+    return res
 
 
 def a3_rule(agreement: float, null: np.ndarray, q: Tuple[float, float] = A3_QUANTILES) -> str:
@@ -1109,10 +1150,18 @@ def counting_noise_sd(n_a, n_b, n_draws: int = NOISE_DRAWS, seed: int = NOISE_SE
     return dict(analytic=analytic, simulated=float(np.mean(sds)), n_glomeruli=int(ok.sum()))
 
 
+def _counts_table(t: pd.DataFrame, gl: Sequence[str], col: str = 'n_claws') -> pd.DataFrame:
+    """glomeruli x mushroom bodies of `claw_counts` rows (0 where a body has none of a glomerulus)."""
+    return t.pivot(index='glomerulus', columns='mb', values=col).reindex(list(gl)).fillna(0.0)
+
+
 def a1_counts(out: Path) -> dict:
-    """A1 (module docstring): writes a1_counts.csv, a1_model.csv, a1_hemibrain_vs_model.csv, a1_roi.csv, a1_sides.csv,
-    a1_flywire_pratyush.csv; returns the rule, the ROI choice per mushroom body, the chosen counts (glomeruli x
-    mushroom bodies at SYN_MIN, each body in the version it enters with) and the model's counts."""
+    """A1 (module docstring): a1_model.csv (the model's real wiring), a1_counts.csv (per reading, threshold, mushroom
+    body, KC class and glomerulus the counted claws, the boutons and PNs that carry them and their KCs; reading 'main'
+    the brains' own rules, beside 'roi_official' / 'roi_region' for the male CNS and 'confidence_0.5' for the
+    hemibrain), a1_reader_vs_model.csv (part 0's identity per glomerulus and class), a1_kcs.csv (KCs and claws per KC by
+    class), a1_roi.csv, a1_confidence.csv and a1_names.csv (the check of the name mapping). Returns the rule, the counts
+    (glomeruli x MB3 at SYN_MIN) and the model's counts."""
     mc = model_claws('real')
     gl = model_glomeruli(mc)
     mcl = mc[mc.col >= 0]
@@ -1122,111 +1171,86 @@ def a1_counts(out: Path) -> dict:
         model[f'n_claws_{cls}'] = mcl[mcl.kc_class == cls].groupby('glomerulus').size().reindex(gl).fillna(0)
     model.index.name = 'glomerulus'
     model.reset_index().to_csv(out / 'a1_model.csv', index=False)
-    rows, side_rows = [], []
-    counts5: Dict[Tuple[str, str], pd.Series] = {}
-    for ds in DATASETS:
-        for roi in ROI_VERSIONS:
-            c = derived_claws(ds, roi)
-            sd = kc_sides(ds, roi)
-            for s in MB_SIDES[ds]:
-                k = sd[sd.side == s]
-                both = k.apl_side.notna() & k.own_side.notna()
-                side_rows.append(dict(dataset=ds, roi=roi, side=s, n_kcs=int(len(k)), by_apl=int(k.apl_side.notna().sum()),
-                                      agree_own=float((k.own_side == k.apl_side)[both].mean()) if both.any() else np.nan,
-                                      agree_gap=float((k.gap_side == k.apl_side)[k.apl_side.notna()].mean())
-                                      if k.apl_side.notna().any() else np.nan))
-            for thr in SYN_THRESHOLDS:
-                for by_class in (False, True):
-                    t = mb_counts(c, thr, by_class)
-                    if not by_class:
-                        t.insert(1, 'kc_class', 'all')
-                        if thr == SYN_MIN:
-                            for mb, g in t.groupby('mb'):
-                                counts5[(mb, roi)] = g.set_index('glomerulus')['n_claws']
-                    t.insert(0, 'threshold', thr)
-                    t.insert(0, 'roi', roi)
-                    t.insert(0, 'dataset', ds)
-                    rows.append(t)
-            # the boutons and PNs of the bouton table, by the side of their PN's counted claws
-            b = derived_boutons(ds, roi)
-            bt = b.dropna(subset=['glomerulus', 'mb']).groupby(['mb', 'glomerulus']).agg(
-                n_boutons=('bouton_id', 'size'), n_pns=('pn_id', 'nunique')).reset_index()
-            bt.insert(0, 'kc_class', 'bouton_table')
-            bt.insert(0, 'threshold', SYN_MIN)
-            bt.insert(0, 'roi', roi)
-            bt.insert(0, 'dataset', ds)
-            rows.append(bt)
+    rows = []
+
+    def add(t: pd.DataFrame, reading: str, thr: int, by_class: bool):
+        t = t.copy()
+        if not by_class:
+            t.insert(1, 'kc_class', 'all')
+        t.insert(0, 'threshold', thr)
+        t.insert(0, 'reading', reading)
+        rows.append(t)
+    for thr in SYN_THRESHOLDS:
+        for by_class in (False, True):
+            add(mb_counts(thr, by_class), 'main', thr, by_class)
+    for roi in ('official', 'region'):
+        t = mb_counts(SYN_MIN, False, roi=roi)
+        add(t[t.mb != 'hemibrain'], f'roi_{roi}', SYN_MIN, False)
+    t = claw_counts(counted_claws('hemibrain', min_confidence=CONFIDENCE_BESIDE))
+    add(t, f'confidence_{CONFIDENCE_BESIDE:g}', SYN_MIN, False)
     a1 = pd.concat(rows, ignore_index=True, sort=False)
     a1['in_model'] = a1.glomerulus.isin(gl)
     a1.to_csv(out / 'a1_counts.csv', index=False)
-    pd.DataFrame(side_rows).to_csv(out / 'a1_sides.csv', index=False)
-    # the derived hemibrain against the model's wiring
-    hv = pd.DataFrame(index=pd.Index(gl, name='glomerulus'))
-    hv['model_claws'] = model['n_claws']
-    hv['model_share'] = shares(model['n_claws'], gl)
-    rules = {}
-    for roi in ROI_VERSIONS:
-        for thr in SYN_THRESHOLDS:
-            t = a1[(a1.dataset == 'hemibrain') & (a1.roi == roi) & (a1.threshold == thr) & (a1.kc_class == 'all')]
-            n = t.set_index('glomerulus')['n_claws'].reindex(gl).fillna(0)
-            hv[f'derived_claws_{roi}_thr{thr}'] = n
-            hv[f'derived_share_{roi}_thr{thr}'] = shares(n, gl)
-            with np.errstate(divide='ignore'):
-                hv[f'log2_ratio_{roi}_thr{thr}'] = np.log2(hv[f'derived_share_{roi}_thr{thr}'] / hv['model_share'])
-            rules[f'{roi}_thr{thr}'] = a1_rule(model['n_claws'], n)
-    for cls in KC_CLASSES:
-        t = a1[(a1.dataset == 'hemibrain') & (a1.roi == 'official') & (a1.threshold == SYN_MIN) & (a1.kc_class == cls)]
-        hv[f'derived_claws_official_thr{SYN_MIN}_{cls}'] = t.set_index('glomerulus')['n_claws'].reindex(gl).fillna(0)
-        hv[f'model_claws_{cls}'] = model[f'n_claws_{cls}']
-    hv.reset_index().to_csv(out / 'a1_hemibrain_vs_model.csv', index=False)
-    # the two ROI versions per mushroom body: the version a body enters with
+    main = a1[(a1.reading == 'main') & (a1.threshold == SYN_MIN) & (a1.kc_class == 'all')]
+    chosen = _counts_table(main, gl)[list(MB3)]
+    n_pns = _counts_table(main, gl, 'n_pns')
+    # part 0's identity per glomerulus and class: the reader on the hemibrain's table against the model's wiring
+    hb = counted_claws('hemibrain')
+    rv = []
+    for cls in ('all',) + KC_CLASSES:
+        m = mcl if cls == 'all' else mcl[mcl.kc_class == cls]
+        h = hb if cls == 'all' else hb[hb.kc_class == cls]
+        a_, b_ = m.groupby('glomerulus').size().reindex(gl).fillna(0), h.groupby('glomerulus').size().reindex(gl).fillna(0)
+        rv.append(pd.DataFrame(dict(glomerulus=gl, kc_class=cls, model=a_.to_numpy(), reader=b_.to_numpy(),
+                                    difference=(b_ - a_).to_numpy())))
+    pd.concat(rv, ignore_index=True).to_csv(out / 'a1_reader_vs_model.csv', index=False)
+    # KCs and claws per KC by class
+    kr = []
+    for brain in BRAINS2:
+        c = counted_claws(brain)
+        for (mb, cls), g in pd.concat([c, c.assign(kc_class='all')]).groupby(['mb', 'kc_class']):
+            n = g.groupby('kc_id').size()
+            kr.append(dict(mb=mb, kc_class=cls, n_kcs=int(len(n)), n_claws=int(n.sum()), claws_per_kc_mean=float(n.mean()),
+                           claws_per_kc_median=float(n.median()), claws_per_kc_sd=float(n.std(ddof=1)),
+                           claws_per_kc_min=int(n.min()), claws_per_kc_max=int(n.max())))
+    pd.DataFrame(kr).to_csv(out / 'a1_kcs.csv', index=False)
+    # the male CNS under the official ROI rule and under his calyx region, beside (deciding nothing)
     keep = model['n_claws'] >= A1_RULE_MIN_CLAWS
-    roi_rows, choice = [], {}
-    for mb in ALL_MBS:
-        a, b = counts5.get((mb, 'official')), counts5.get((mb, 'outside'))
-        if a is None or b is None:
-            continue
-        sa, sb = shares(a, gl), shares(b, gl)
-        with np.errstate(divide='ignore', invalid='ignore'):
-            lr = np.log2(sb[keep] / sa[keep])
-        lr = lr[np.isfinite(lr)]
-        sd = float(lr.std(ddof=1))
-        choice[mb] = 'outside' if sd > A1_RULE_SD else 'official'
-        roi_rows.append(dict(mb=mb, n_official=float(a.reindex(gl).fillna(0).sum()),
-                             n_outside=float(b.reindex(gl).fillna(0).sum()), sd_log2_outside_over_official=sd,
-                             max_abs_log2=float(lr.abs().max()), glomerulus_max=str(lr.abs().idxmax()),
-                             enters_with=choice[mb]))
+    roi_rows = []
+    for mb in OTHER_MBS:
+        base = shares(chosen[mb], gl)
+        for roi in ('official', 'region'):
+            t = _counts_table(a1[(a1.reading == f'roi_{roi}') & (a1.kc_class == 'all')], gl)
+            n = t[mb] if mb in t else pd.Series(0.0, index=gl)
+            with np.errstate(divide='ignore', invalid='ignore'):
+                lr = np.log2(shares(n, gl)[keep] / base[keep])
+            fin = lr[np.isfinite(lr)]
+            kept = (n / chosen[mb].replace(0, np.nan))[keep]
+            roi_rows.append(dict(mb=mb, roi=roi, n_claws=float(n.sum()), n_claws_main=float(chosen[mb].sum()),
+                                 share_kept=float(n.sum() / chosen[mb].sum()), sd_log2_share_vs_main=float(fin.std(ddof=1)),
+                                 glomerulus_least_kept=str(kept.idxmin()), least_kept=float(kept.min()),
+                                 claws_least_kept=float(n[kept.idxmin()]), claws_main_least_kept=float(chosen.loc[kept.idxmin(), mb]),
+                                 n_glomeruli=int(keep.sum())))
     pd.DataFrame(roi_rows).to_csv(out / 'a1_roi.csv', index=False)
-    chosen = pd.DataFrame({mb: counts5[(mb, choice[mb])].reindex(gl).fillna(0) for mb in ALL_MBS if mb in choice})
-    chosen.index.name = 'glomerulus'
-    rule = dict(rules[f"{choice['hemibrain']}_thr{SYN_MIN}"], roi=choice['hemibrain'], threshold=SYN_MIN)
-    # FlyWire a second way (Pratyush's table)
-    pf = pratyush_flywire()
-    fr = []
-    for mb, g in pf.dropna(subset=['glomerulus', 'side']).groupby('mb'):
-        n_conn = g[g.weight >= SYN_MIN].groupby('glomerulus').size().reindex(gl).fillna(0)
-        n_syn = g.groupby('glomerulus')['weight'].sum().reindex(gl).fillna(0)
-        d = chosen[mb] if mb in chosen else pd.Series(0.0, index=gl)
-        fr.append(pd.DataFrame(dict(mb=mb, glomerulus=gl, pratyush_connections_ge5=n_conn.to_numpy(),
-                                    pratyush_synapses=n_syn.to_numpy(), derived_claws=d.reindex(gl).to_numpy())))
-    fr = pd.concat(fr, ignore_index=True)
-    summ = {}
-    hb = shares(chosen['hemibrain'], gl)
-    for mb, g in fr.groupby('mb'):
-        g = g.set_index('glomerulus')
-        sh_c, sh_s, sh_d = shares(g.pratyush_connections_ge5, gl), shares(g.pratyush_synapses, gl), shares(g.derived_claws, gl)
-        m = (g.derived_claws >= SMALL_CLAWS) & (g.pratyush_connections_ge5 >= SMALL_CLAWS) & (chosen['hemibrain'] >= SMALL_CLAWS)
-        lc, ld = np.log2(sh_c[m] / hb[m]), np.log2(sh_d[m] / hb[m])
-        summ[mb] = dict(n_glomeruli=int(m.sum()), r_log2_ratio_conn_vs_derived=float(np.corrcoef(lc, ld)[0, 1]),
-                        sd_log2_conn_over_derived=float(np.log2(sh_c[m] / sh_d[m]).std(ddof=1)),
-                        sd_log2_syn_over_derived=float(np.log2(sh_s[m] / sh_d[m]).std(ddof=1)),
-                        r_log2_share_conn_vs_derived=float(np.corrcoef(np.log2(sh_c[m]), np.log2(sh_d[m]))[0, 1]))
-        idx = fr.mb == mb
-        fr.loc[idx, 'share_conn'] = fr.loc[idx, 'glomerulus'].map(sh_c).to_numpy()
-        fr.loc[idx, 'share_synapses'] = fr.loc[idx, 'glomerulus'].map(sh_s).to_numpy()
-        fr.loc[idx, 'share_derived'] = fr.loc[idx, 'glomerulus'].map(sh_d).to_numpy()
-    fr.to_csv(out / 'a1_flywire_pratyush.csv', index=False)
-    return dict(rule=rule, rules=rules, roi_choice=choice, chosen=chosen, model=model, flywire_pratyush=summ)
+    # the hemibrain at the male CNS's confidence floor, beside
+    s = pn_claw_synapses('hemibrain')
+    ca = s[(s.roi_pre == 'CA(R)') & (s.roi_post == 'CA(R)')]
+    hc = _counts_table(a1[a1.reading == f'confidence_{CONFIDENCE_BESIDE:g}'], gl)['hemibrain']
+    with np.errstate(divide='ignore', invalid='ignore'):
+        lr = np.log2(shares(hc, gl)[keep] / shares(chosen['hemibrain'], gl)[keep])
+    pd.DataFrame([dict(min_confidence=CONFIDENCE_BESIDE, n_claws=float(hc.sum()), n_claws_main=float(chosen['hemibrain'].sum()),
+                       share_synapses_below=float((ca.confidence_post < CONFIDENCE_BESIDE).mean()),
+                       malecns_share_synapses_below=float((pn_claw_synapses('malecns').confidence_post < CONFIDENCE_BESIDE).mean()),
+                       sd_log2_share_vs_main=float(lr[np.isfinite(lr)].std(ddof=1)),
+                       max_abs_log2=float(lr[np.isfinite(lr)].abs().max()), glomerulus_max=str(lr[np.isfinite(lr)].abs().idxmax()),
+                       n_glomeruli=int(keep.sum()))]).to_csv(out / 'a1_confidence.csv', index=False)
+    # the check of the name mapping: per label, the PNs' bundle and number in both tables
+    names = pn_labels()
+    names['mapped'] = names.label != names.glomerulus
+    names['bears_on_mapping'] = names.label.isin(['VC3', 'VC3l', 'VC3m', 'VC5', 'VM6'])
+    names.to_csv(out / 'a1_names.csv', index=False)
+    rule = a1_rule(model['n_claws'], chosen, n_pns)
+    return dict(rule=rule, chosen=chosen, n_pns=n_pns, model=model, roi=roi_rows)
 
 
 def a2_ratios(out: Path, chosen: pd.DataFrame, model: pd.DataFrame) -> dict:
@@ -1247,13 +1271,13 @@ def a2_ratios(out: Path, chosen: pd.DataFrame, model: pd.DataFrame) -> dict:
         rt[f'small_{mb}'] = sm[mb]
         rt[f'fixed_{mb}'] = sm[mb]
     rt['r_mean'] = rm
-    # the mean proportions are 1 by the small rule only where every body of the three brains has r_g = 1
-    rt['fixed_mean'] = sm[[m for mbs in BRAINS.values() for m in mbs]].all(axis=1)
+    # the mean proportions are 1 by the small rule only where both of the male CNS's bodies have r_g = 1
+    rt['fixed_mean'] = sm[list(OTHER_MBS)].all(axis=1)
     rt['log2_r_mean'] = np.log2(rt['r_mean'])
     rt.reset_index().to_csv(out / 'ratios.csv', index=False)
     # spread against the counting noise
     sp = []
-    for mb in list(OTHER_MBS) + list(BANC_MBS) + ['mean']:
+    for mb in list(OTHER_MBS) + ['mean']:
         for subset, gs in (('all54', gl), ('input36', with_input)):
             col = 'r_mean' if mb == 'mean' else f'r_{mb}'
             small = rt['fixed_mean'] if mb == 'mean' else rt[f'small_{mb}']
@@ -1261,7 +1285,8 @@ def a2_ratios(out: Path, chosen: pd.DataFrame, model: pd.DataFrame) -> dict:
             lr = np.log2(rt.loc[g_ok, col].astype(float))
             row = dict(mb=mb, subset=subset, n_glomeruli=len(g_ok), n_small=len(gs) - len(g_ok),
                        sd_log2=float(lr.std(ddof=1)), q05=float(2 ** lr.quantile(0.05)), median=float(2 ** lr.median()),
-                       q95=float(2 ** lr.quantile(0.95)), min=float(2 ** lr.min()), max=float(2 ** lr.max()))
+                       q95=float(2 ** lr.quantile(0.95)), min=float(2 ** lr.min()), max=float(2 ** lr.max()),
+                       glomerulus_min=str(lr.idxmin()), glomerulus_max=str(lr.idxmax()))
             if mb != 'mean':
                 cn = counting_noise_sd(rt.loc[g_ok, f'n_{mb}'], rt.loc[g_ok, 'n_hemibrain'])
                 row.update(noise_sd_analytic=cn['analytic'], noise_sd_simulated=cn['simulated'],
@@ -1269,47 +1294,67 @@ def a2_ratios(out: Path, chosen: pd.DataFrame, model: pd.DataFrame) -> dict:
             sp.append(row)
     spread = pd.DataFrame(sp)
     spread.to_csv(out / 'a2_spread.csv', index=False)
-    # two sides of a brain against two brains
+    # the male CNS's two sides against each other and against the hemibrain
     ag = []
-    for a, b in combinations([m for m in ALL_MBS if m in chosen.columns], 2):
-        ok = (chosen[a] >= SMALL_CLAWS) & (chosen[b] >= SMALL_CLAWS)
-        la, lb = np.log2(shares(chosen[a], gl)[ok]), np.log2(shares(chosen[b], gl)[ok])
-        cn = counting_noise_sd(chosen.loc[ok, a], chosen.loc[ok, b])
-        ag.append(dict(mb_a=a, mb_b=b, kind='same brain' if a.split('_')[0] == b.split('_')[0] else 'two brains',
-                       banc=bool('banc' in a or 'banc' in b), n_glomeruli=int(ok.sum()),
-                       r_log2_share=float(np.corrcoef(la, lb)[0, 1]), sd_log2_ratio=float((la - lb).std(ddof=1)),
-                       noise_sd=cn['simulated']))
+    for a, b in combinations(list(MB3), 2):
+        for subset, base in (('all', pd.Series(True, index=gl)),
+                             (f'ge{A1_RULE_MIN_CLAWS}', rt['model_claws'] >= A1_RULE_MIN_CLAWS)):
+            ok = (chosen[a] >= SMALL_CLAWS) & (chosen[b] >= SMALL_CLAWS) & base
+            la, lb = np.log2(shares(chosen[a], gl)[ok]), np.log2(shares(chosen[b], gl)[ok])
+            cn = counting_noise_sd(chosen.loc[ok, a], chosen.loc[ok, b])
+            ag.append(dict(mb_a=a, mb_b=b, subset=subset, kind='two sides of one brain' if a.split('_')[0] == b.split('_')[0]
+                           else 'two brains', n_glomeruli=int(ok.sum()), r_log2_share=float(np.corrcoef(la, lb)[0, 1]),
+                           sd_log2_ratio=float((la - lb).std(ddof=1)), noise_sd=cn['simulated']))
     agree = pd.DataFrame(ag)
+    lrL, lrR = np.log2(rt['r_malecns_L'].astype(float)), np.log2(rt['r_malecns_R'].astype(float))
+    ok = ~(rt['small_malecns_L'] | rt['small_malecns_R'])
+    agree = pd.concat([agree, pd.DataFrame([dict(mb_a='malecns_L', mb_b='malecns_R', subset='all',
+                                                 kind='log2 ratios to the hemibrain', n_glomeruli=int(ok.sum()),
+                                                 r_log2_share=float(np.corrcoef(lrL[ok], lrR[ok])[0, 1]))])],
+                      ignore_index=True)
     agree.to_csv(out / 'a2_agreement.csv', index=False)
-    # where the hemibrain is furthest from the other brains
-    lr4 = np.log2(rt[[f'r_{m}' for m in OTHER_MBS]].astype(float))
+    # where the hemibrain is furthest from the male CNS, and where both sides depart from it the same way
+    lr2 = np.log2(rt[[f'r_{m}' for m in OTHER_MBS]].astype(float))
     dep = pd.DataFrame(index=rt.index)
     dep['has_input'] = rt['has_input']
     dep['model_claws'] = rt['model_claws']
     dep['n_hemibrain'] = rt['n_hemibrain']
-    dep['mean_log2_r4'] = lr4.mean(axis=1)
-    dep['sd_log2_r4'] = lr4.std(axis=1, ddof=1)
-    n4 = rt[[f'n_{m}' for m in OTHER_MBS]].clip(lower=1)
-    se = np.sqrt((1.0 / n4).mean(axis=1) / 4 + 1.0 / rt['n_hemibrain'].clip(lower=1)) / np.log(2)
+    for m in OTHER_MBS:
+        dep[f'r_{m}'] = rt[f'r_{m}']
+    dep['mean_log2_r2'] = lr2.mean(axis=1)
+    n2 = rt[[f'n_{m}' for m in OTHER_MBS]].clip(lower=1)
+    se = np.sqrt((1.0 / n2).mean(axis=1) / 2 + 1.0 / rt['n_hemibrain'].clip(lower=1)) / np.log(2)
     dep['counting_se'] = se
-    dep['z'] = dep['mean_log2_r4'] / se
+    dep['z'] = dep['mean_log2_r2'] / se
     dep['log2_r_mean'] = rt['log2_r_mean']
-    dep['all_four_same_sign'] = (np.sign(lr4).nunique(axis=1) == 1) & (lr4 != 0).all(axis=1)
-    sh5 = rt[[f'share_{m}' for m in FIVE_MBS]]
-    dep['hemibrain_rank_of_5'] = sh5.rank(axis=1, method='min')['share_hemibrain']
+    dep['both_same_sign'] = (np.sign(lr2).nunique(axis=1) == 1) & (lr2 != 0).all(axis=1)
+    sh3 = rt[[f'share_{m}' for m in MB3]]
+    dep['hemibrain_rank_of_3'] = sh3.rank(axis=1, method='min')['share_hemibrain']
     dep['small_any'] = rt[[f'small_{m}' for m in OTHER_MBS]].any(axis=1)
     dep = dep.sort_values('z', key=np.abs, ascending=False)
     dep.reset_index().to_csv(out / 'a2_departures.csv', index=False)
     lr_mean = np.log2(rt.loc[~rt.fixed_mean, 'r_mean'])
-    nb = agree[~agree.banc]
+    big = rt['model_claws'] >= A1_RULE_MIN_CLAWS
+    side_lr = np.log2(shares(chosen['malecns_L'], gl) / shares(chosen['malecns_R'], gl))[big & ok]
+    zero = {mb: float(1 - shares(chosen[mb], gl)[with_input].sum()) for mb in MB3}
+    two = agree[agree.kind == 'two brains']
+    one = agree[agree.kind == 'two sides of one brain']
     return dict(spread=spread, agreement=agree, departures=dep, ratios=rt,
                 summary=dict(n_glomeruli=len(gl), n_with_input=len(with_input), n_fixed_mean=int(rt.fixed_mean.sum()),
+                             small={mb: sorted(rt.index[rt[f'small_{mb}'].astype(bool)]) for mb in OTHER_MBS},
                              mean_sd_log2=float(lr_mean.std(ddof=1)),
                              mean_q05=float(2 ** lr_mean.quantile(0.05)), mean_q95=float(2 ** lr_mean.quantile(0.95)),
-                             within_brain_sd=float(nb[nb.kind == 'same brain'].sd_log2_ratio.mean()),
-                             between_brain_sd=float(nb[nb.kind == 'two brains'].sd_log2_ratio.mean()),
-                             within_brain_r=float(nb[nb.kind == 'same brain'].r_log2_share.mean()),
-                             between_brain_r=float(nb[nb.kind == 'two brains'].r_log2_share.mean())))
+                             mean_min=float(2 ** lr_mean.min()), mean_min_glomerulus=str(lr_mean.idxmin()),
+                             mean_max=float(2 ** lr_mean.max()), mean_max_glomerulus=str(lr_mean.idxmax()),
+                             side_sd_log2_ge100=float(side_lr.std(ddof=1)), side_n_ge100=int(len(side_lr)),
+                             sides_r_log2_ratio=float(np.corrcoef(lrL[ok], lrR[ok])[0, 1]),
+                             within_brain_sd=float(one[one.subset == 'all'].sd_log2_ratio.mean()),
+                             between_brain_sd=float(two[two.subset == 'all'].sd_log2_ratio.mean()),
+                             within_brain_r=float(one[one.subset == 'all'].r_log2_share.mean()),
+                             between_brain_r=float(two[two.subset == 'all'].r_log2_share.mean()),
+                             zero_input_share=zero,
+                             both_sides_same_way=sorted(dep.index[dep.both_same_sign & dep.has_input & ~dep.small_any
+                                                                  & (dep.z.abs() >= 2)])))
 
 
 def a3_searched(out: Path, rt: pd.DataFrame, n_null: int = A3_NULL, seed: int = A3_SEED) -> dict:
@@ -1365,7 +1410,7 @@ def a4_distances(out: Path, rt: pd.DataFrame) -> pd.DataFrame:
     orn = H.apl16_orn_deltas()
     base = rt['model_claws'].astype(float)
     weights = {'hemibrain': base}
-    for mb in list(OTHER_MBS) + list(BANC_MBS):
+    for mb in OTHER_MBS:
         weights[mb] = base * rt[f'r_{mb}']
     weights['mean'] = base * rt['r_mean']
     d0 = E93.weighted_distances(orn, weights['hemibrain'])
@@ -1394,43 +1439,42 @@ def part_a() -> dict:
     a4 = a4_distances(out, a2['ratios'])
     rt = a2['ratios']
     summ = dict(commits=dict(H.code_commits()), host=_host(), seconds=round(time.time() - t0, 1),
-                a1_rule=a1['rule'], a1_rules=a1['rules'], roi_choice=a1['roi_choice'],
-                flywire_pratyush=a1['flywire_pratyush'], a2=a2['summary'],
+                a1_rule=a1['rule'], a1_roi=a1['roi'], a2=a2['summary'],
                 a3={r.subset: dict(sign_agreement=r.sign_agreement, null_p05=r.null_p05, null_p95=r.null_p95, rho=r.rho,
                                    rule=r.rule, n=r.n_glomeruli) for r in a3['rule'].itertuples()},
                 a4={r.group: r.difference for r in a4[a4.proportions == 'mean'].itertuples()},
                 small_mean=sorted(rt.index[rt.fixed_mean.astype(bool)]),
                 stops=bool(a1['rule']['stops']))
     _write_json(out / 'a_summary.json', summ)
-    print(json.dumps({k: summ[k] for k in ('a1_rule', 'roi_choice', 'a2', 'a3', 'a4', 'stops')}, indent=1, default=float),
-          flush=True)
+    print(json.dumps({k: summ[k] for k in ('a1_rule', 'a2', 'a3', 'a4', 'stops')}, indent=1, default=float), flush=True)
     if summ['stops']:
-        raise RuntimeError(f"E97 part A: A1's rule stops the experiment (SD {a1['rule']['sd']:.3f} > {A1_RULE_SD}; "
-                           'outcome (i))')
+        raise RuntimeError(f"E97 part A: A1's rule stops the experiment ({a1['rule']}; outcome (i))")
     return summ
-
-
 
 
 # ---------------------------------------------------------------------------
 # part B: the held readings
+
+RUNS_TABLE = 'runs_B_mcns.csv'                      # part B's run table (new name: the re-plan's points only)
+RUNS_SUB = 'runs_mcns'                              # their runs, under outputs/ and the model-output archive
+
 
 def _done(path: Path) -> set:
     return set(pd.read_csv(path).tag) if path.exists() else set()
 
 
 def runs_b() -> pd.DataFrame:
-    p = out_dir() / 'runs_B.csv'
+    p = out_dir() / RUNS_TABLE
     return pd.read_csv(p) if p.exists() else pd.DataFrame(columns=['tag', 'variant', 'wiring'])
 
 
-def _run_dirs(sub: str = 'runs') -> List[Path]:
+def _run_dirs(sub: str = RUNS_SUB) -> List[Path]:
     arc = H.shared_dir() / 'data' / 'model_outputs' / EXPERIMENT
-    return [H.outputs_dir(EXPERIMENT) / sub, arc / sub, arc / 'from_viki' / sub, arc / 'from_hal' / sub]
+    return [H.outputs_dir(EXPERIMENT) / sub, arc / sub] + [arc / f'from_{h}' / sub for h in ('hal', 'viki', 'atlas')]
 
 
 def save_run(tag: str, o: Dict[str, tuple], W: pd.DataFrame, moved: pd.DataFrame, targets: pd.DataFrame,
-             sub: str = 'runs') -> Dict[str, str]:
+             sub: str = RUNS_SUB) -> Dict[str, str]:
     """A run's outputs (APL on and off: responses, spike counts), its wiring matrix, its moved claws and its targets per
     type and glomerulus, under outputs/E97_glomerulus_claw_shares/<sub>/. Returns the files' names."""
     d = local_dir(sub)
@@ -1443,7 +1487,7 @@ def save_run(tag: str, o: Dict[str, tuple], W: pd.DataFrame, moved: pd.DataFrame
     return dict(wiring_file=f'{tag}_wPNKC.parquet', moved_file=f'{tag}_moved.csv', targets_file=f'{tag}_targets.csv')
 
 
-def load_run(tag: str, sub: str = 'runs') -> Optional[Dict[str, tuple]]:
+def load_run(tag: str, sub: str = RUNS_SUB) -> Optional[Dict[str, tuple]]:
     """A saved run ({'on', 'off'}): this host's outputs, else the model-output archive (with viki's or hal's lane)."""
     for d in _run_dirs(sub):
         o = E83._load_pair(d, tag)
@@ -1452,7 +1496,7 @@ def load_run(tag: str, sub: str = 'runs') -> Optional[Dict[str, tuple]]:
     return None
 
 
-def wiring_file(tag: str, sub: str = 'runs') -> Optional[Path]:
+def wiring_file(tag: str, sub: str = RUNS_SUB) -> Optional[Path]:
     for d in _run_dirs(sub):
         p = d / f'{tag}_wPNKC.parquet'
         if p.exists():
@@ -1519,7 +1563,7 @@ def _append_locked(path: Path, row: dict) -> None:
 
 
 def _provenance_add(part: str, tag: str, prov: dict) -> None:
-    path = out_dir() / f'provenance_{part}.json'
+    path = out_dir() / f'provenance_{part}_mcns.json'
     with _Lock(path):
         d = _read_json(path) or dict(part=part, script='experiments/E97_glomerulus_claw_shares.py', points={})
         d.setdefault('points', {})[tag] = prov
@@ -1572,7 +1616,7 @@ def run_point(variant: str, wiring: str, rt: Optional[pd.DataFrame] = None, cc: 
     row.update({f'append_{k}': row[k] for k in cc if k in row})
     row.update(cc)
     row.update({f'process_{k}': v for k, v in cc.items()})
-    _append_locked(out_dir() / 'runs_B.csv', row)
+    _append_locked(out_dir() / RUNS_TABLE, row)
     _provenance_add('B', tag, dict(H.model_provenance(orn_deltas=H.apl16_orn_deltas() if orn is None else orn, _wPNKC=W1),
                                    wiring_sha256=sha, ratios_sha256=_sha(r.to_frame()), host=_host()))
     tgts = targets()
@@ -1591,7 +1635,7 @@ def part_b(arms: Sequence[str] = ARMS, wirings: Sequence[str] = ALL_WIRINGS, dry
            max_points: Optional[int] = None) -> pd.DataFrame:
     """Part B's points of `arms` on `wirings` (each arm on its own wirings, ARMS_ON; `plan`), resumable (runs_B.csv);
     needs part 0 to have passed (its built records). `max_points` stops after that many new points (the smoke test)."""
-    todo = [(v, w) for v, w in plan(arms, wirings) if run_tag(v, w) not in _done(out_dir() / 'runs_B.csv')]
+    todo = [(v, w) for v, w in plan(arms, wirings) if run_tag(v, w) not in _done(out_dir() / RUNS_TABLE)]
     print(f'E97 B: {len(todo)} points to run: ' + ', '.join(run_tag(v, w) for v, w in todo), flush=True)
     if dry_run:
         return runs_b()
@@ -1612,8 +1656,9 @@ def part_b(arms: Sequence[str] = ARMS, wirings: Sequence[str] = ALL_WIRINGS, dry
 READOUTS = ('cal', 'raw', 'zcell', 'zcell_lin')
 REF = 'ref'                                         # the wirings as they are (their saved fits)
 E93F = 'E93_F'                                      # E93's held points with the fuller input on the unmoved wirings
-R2 = 'R2_mbs40'                                     # the 40 model flies: the eight wirings by the five mushroom bodies
-R2_PERM = 'R2_perm40'                               # their permuted control: the eight as they are and B3's 32
+R2 = 'R2_mbs24'                                     # the 24 model flies: the eight wirings by the three mushroom bodies
+R2_PERM = 'R2_perm24'                               # their permuted control: the eight as they are and B3's 16
+MCNS16 = 'MCNS16'                                   # the male CNS's two bodies on the eight: 16 model flies of one brain
 D2 = 'draw2'                                        # the mean proportions with the second draw (B4 on S, C2 on T)
 UNITS = (('S', S_WIRINGS), ('T', T_WIRINGS), ('all8', ALL_WIRINGS))
 
@@ -1710,9 +1755,9 @@ def _flush_dist_cache() -> None:
 
 def populations(runs: pd.DataFrame) -> List[Tuple[str, str, List[Tuple[str, str]]]]:
     """[(variant, unit, [(variant, wiring), ...])] of every reading: each run alone; per variant S, T and the eight where
-    it has all their runs; R2's 40 model flies (the eight as they are and B1's four bodies) and their permuted control
-    (the eight as they are and B3's four permuted bodies) on the eight and on S and T (20 each); the second draw of the
-    mean proportions (B4 on S, C2 on T)."""
+    it has all their runs; R2's 24 model flies (the eight as they are and B1's two bodies) and their permuted control
+    (the eight as they are and B3's two permuted bodies) on the eight and on S and T (12 each); the male CNS's two bodies
+    together (MCNS16, 16 on the eight); the second draw of the mean proportions (B4 on S, C2 on T)."""
     have = set(zip(runs.variant, runs.wiring))
     out = []
     for v, g in runs.groupby('variant', sort=False):
@@ -1721,13 +1766,14 @@ def populations(runs: pd.DataFrame) -> List[Tuple[str, str, List[Tuple[str, str]
         for unit, ws in UNITS:
             if all((v, w) in have for w in ws):
                 out.append((v, unit, [(v, w) for w in ws]))
-    for name, vs in ((R2, [REF] + [f'B1_{m}' for m in OTHER_MBS]),
-                     (R2_PERM, [REF] + [f'B3_perm_{m}_s{PERM_SEEDS[0]}' for m in OTHER_MBS])):
+    for name, vs in ((R2, [REF] + [f'B1_{MB_SHORT[m]}' for m in OTHER_MBS]),
+                     (R2_PERM, [REF] + [f'B3_perm_{MB_SHORT[m]}_s{PERM_SEEDS[0]}' for m in OTHER_MBS]),
+                     (MCNS16, [f'B1_{MB_SHORT[m]}' for m in OTHER_MBS])):
         for unit, ws in UNITS:
             mem = [(v, w) for v in vs for w in ws]
             if all(m in have for m in mem):
                 out.append((name, unit, mem))
-    d2 = {w: (f'B4_mean_d{DRAW_SEEDS[1]}' if w in S_WIRINGS else f'C2_mean_d{DRAW_SEEDS[1]}') for w in ALL_WIRINGS}
+    d2 = {w: (f'B4_{MEAN}_d{DRAW_SEEDS[1]}' if w in S_WIRINGS else f'C2_{MEAN}_d{DRAW_SEEDS[1]}') for w in ALL_WIRINGS}
     for unit, ws in UNITS:
         mem = [(d2[w], w) for w in ws]
         if all(m in have for m in mem):
@@ -1847,22 +1893,23 @@ def readings(readouts: Sequence[str] = READOUTS) -> Tuple[pd.DataFrame, pd.DataF
         if v != REF and unit in ('S', 'T', 'all8'):
             add((v, unit, ro), (REF, unit, 'cal'))
     for unit in ('S', 'T', 'all8'):
-        add((f'B6_mean_{B6_INPUT}', unit, 'cal'), (E93F, unit, 'cal'))
-        add((f'B6_mean_{B6_INPUT}', unit, 'cal'), ('B2_mean', unit, 'cal'))
+        add((f'B6_{MEAN}_{B6_INPUT}', unit, 'cal'), (E93F, unit, 'cal'))
+        add((f'B6_{MEAN}_{B6_INPUT}', unit, 'cal'), (f'B2_{MEAN}', unit, 'cal'))
         add((R2_PERM, unit, 'cal'), (R2, unit, 'cal'))
-        add((D2, unit, 'cal'), ('B2_mean', unit, 'cal'))
-    add((f'B4_mean_d{DRAW_SEEDS[1]}', 'S', 'cal'), ('B2_mean', 'S', 'cal'))
+        add((D2, unit, 'cal'), (f'B2_{MEAN}', unit, 'cal'))
+    add((f'B4_{MEAN}_d{DRAW_SEEDS[1]}', 'S', 'cal'), (f'B2_{MEAN}', 'S', 'cal'))
     bt = pd.DataFrame(brows)
     bt.to_csv(out / 'boot.csv', index=False)
     return rd, pd.concat(prs, ignore_index=True) if prs else pd.DataFrame(), bt
 
 
 def brain_term(readout: str = 'cal') -> pd.DataFrame:
-    """brain_term.csv: on each wiring, the root mean square difference of the per-pair APL effect between two mushroom
-    bodies' proportions (the hemibrain's the wiring as it is; B1's four), raw and with both means removed; beside it the
-    same between the move's two draws at the mean proportions (B2 and B4 on S) and between the eight wirings as they are
-    (the draw term computed the same way); the summary rows 'brain_term', 'move_draw_term', 'wiring_draw_term' are the
-    root mean square over their pairs."""
+    """brain_term.csv: on each wiring, the root mean square difference of the per-pair APL effect between the
+    hemibrain's proportions (the wiring as it is) and a male CNS side's (B1; kind 'brain'), and between the male CNS's
+    two sides (kind 'side'), raw and with both means removed; beside them the same between the move's two draws at the
+    mean proportions (B2 and B4 on S, C2 on T) and between the eight wirings as they are (the draw term computed the same
+    way); the summary rows 'brain_term', 'side_term', 'move_draw_term', 'wiring_draw_term' are the root mean square over
+    their pairs."""
     runs = runs_table()
     have = set(zip(runs.variant, runs.wiring))
     rows = []
@@ -1871,30 +1918,32 @@ def brain_term(readout: str = 'cal') -> pd.DataFrame:
         ea, eb = _effect(_dist(*a, readout)), _effect(_dist(*b, readout))
         x = (ea - eb.reindex(ea.index)).to_numpy()
         return _rms(x), _rms(x - x.mean())
-    mbs = ['hemibrain'] + list(OTHER_MBS)
-    vof = {'hemibrain': REF, **{m: f'B1_{m}' for m in OTHER_MBS}}
+    vof = {'hemibrain': REF, **{m: f'B1_{MB_SHORT[m]}' for m in OTHER_MBS}}
     for w in ALL_WIRINGS:
-        for a, b in combinations(mbs, 2):
+        for a, b in combinations(list(MB3), 2):
             if (vof[a], w) in have and (vof[b], w) in have:
                 raw, cen = diff((vof[a], w), (vof[b], w))
-                rows.append(dict(kind='brain', wiring=w, a=a, b=b, rms=raw, rms_centered=cen))
-        d2 = f'B4_mean_d{DRAW_SEEDS[1]}' if w in S_WIRINGS else f'C2_mean_d{DRAW_SEEDS[1]}'
-        if ('B2_mean', w) in have and (d2, w) in have:
-            raw, cen = diff(('B2_mean', w), (d2, w))
-            rows.append(dict(kind='move_draw', wiring=w, a='B2_mean', b=d2, rms=raw, rms_centered=cen))
+                rows.append(dict(kind='brain' if a == 'hemibrain' else 'side', wiring=w, a=a, b=b, rms=raw,
+                                 rms_centered=cen))
+        d2 = f'B4_{MEAN}_d{DRAW_SEEDS[1]}' if w in S_WIRINGS else f'C2_{MEAN}_d{DRAW_SEEDS[1]}'
+        if (f'B2_{MEAN}', w) in have and (d2, w) in have:
+            raw, cen = diff((f'B2_{MEAN}', w), (d2, w))
+            rows.append(dict(kind='move_draw', wiring=w, a=f'B2_{MEAN}', b=d2, rms=raw, rms_centered=cen))
     for a, b in combinations(ALL_WIRINGS, 2):
         raw, cen = diff((REF, a), (REF, b))
         rows.append(dict(kind='wiring_draw', wiring=f'{a}-{b}', a=a, b=b, rms=raw, rms_centered=cen))
     df = pd.DataFrame(rows)
     _flush_dist_cache()
     summ = []
-    for k in ('brain', 'move_draw', 'wiring_draw'):
+    for k in ('brain', 'side', 'move_draw', 'wiring_draw'):
         g = df[df.kind == k]
         if len(g):
             summ.append(dict(kind=f'{k}_term', wiring='', a='', b='', rms=_rms(g.rms), rms_centered=_rms(g.rms_centered),
                              n=len(g)))
     df = pd.concat([df, pd.DataFrame(summ)], ignore_index=True)
     df['readout'] = readout
+    df['e72_draw_term'] = DRAW_TERM
+    df['e85_input_fly_term'] = INPUT_FLY_TERM
     df.to_csv(out_dir() / 'brain_term.csv', index=False)
     brain_decomposition(readout)
     return df
@@ -1902,15 +1951,15 @@ def brain_term(readout: str = 'cal') -> pd.DataFrame:
 
 def brain_decomposition(readout: str = 'cal') -> Optional[pd.DataFrame]:
     """brain_decomposition.csv, the brain term in the forms of E85's draw terms (draw_terms.csv there): over the grid of
-    the eight wirings by the five mushroom bodies (the hemibrain's the wiring as it is, B1's four), the variance of the
+    the eight wirings by the three mushroom bodies (the hemibrain's the wiring as it is, B1's two), the variance of the
     per-pair APL effect split into the wiring term, the brain term and their interaction (raw, and with each run's mean
-    removed: E85's 0.00064 wiring and input-fly terms under the readout); the SD over the five bodies of a single run's
+    removed: E85's 0.00064 wiring and input-fly terms under the readout); the SD over the three bodies of a single run's
     pattern part against all recordings within a wiring (beside E85's input-draw term 0.0053) and the SD over the eight
     wirings as they are (E85's wiring-draw term 0.0050, E72's 0.006); the mean of a body's single run minus its wiring as
     it is. None until B1 has run on all eight wirings."""
     runs = runs_table()
     have = set(zip(runs.variant, runs.wiring))
-    vs = [REF] + [f'B1_{m}' for m in OTHER_MBS]
+    vs = [REF] + [f'B1_{MB_SHORT[m]}' for m in OTHER_MBS]
     if not all((v, w) in have for v in vs for w in ALL_WIRINGS):
         return None
     tg = E83._cs(targets()['z8'])
@@ -1962,7 +2011,7 @@ def line_reading(pr: Optional[pd.DataFrame] = None) -> pd.DataFrame:
     return df
 
 
-CO_VARIANTS = (REF, 'B2_mean', f'B3_permmean_s{PERM_SEEDS[0]}', 'B3_invmean')
+CO_VARIANTS = (REF, f'B2_{MEAN}', f'B3_perm{MEAN}_s{PERM_SEEDS[0]}', f'B3_inv{MEAN}')
 CO_CANDIDATE = 'gm'
 
 
@@ -2067,7 +2116,7 @@ def _boot_hi(bt: pd.DataFrame, variant: str, unit: str, ref: str = REF) -> float
 
 
 def classify(gain8: float, gain_s: float, gain_t: float, controls_ok: bool, others_ok: bool, r2_gain: float,
-             perm40_gain: float) -> dict:
+             perm_r2_gain: float) -> dict:
     """Part C's categories from the gains (reference minus variant, on the pattern part; positive is lower): 'moves'
     (MOVE_8 or more on the eight, MOVE_ST on S and T, the controls and every other condition), 'a part' (PART_LO to
     MOVE_8 on the eight with the controls' conditions), 'worse' (WORSE or more higher), 'no move' (R1 and R2 within
@@ -2078,8 +2127,8 @@ def classify(gain8: float, gain_s: float, gain_t: float, controls_ok: bool, othe
         a_part=bool(PART_LO <= gain8 < MOVE_8 and controls_ok),
         worse=bool(gain8 <= -WORSE),
         no_move=bool(abs(gain8) < NO_MOVE and (not np.isfinite(r2_gain) or abs(r2_gain) < NO_MOVE)),
-        averaging=bool(np.isfinite(r2_gain) and r2_gain >= AVERAGING and np.isfinite(perm40_gain)
-                       and perm40_gain >= CONTROL_RATIO * r2_gain))
+        averaging=bool(np.isfinite(r2_gain) and r2_gain >= AVERAGING and np.isfinite(perm_r2_gain)
+                       and perm_r2_gain >= CONTROL_RATIO * r2_gain))
     names = {'moves': 'moves', 'a_part': 'a part', 'worse': 'worse', 'no_move': 'no move', 'averaging': 'averaging'}
     outcome = next((names[k] for k in ('moves', 'a_part', 'worse', 'no_move', 'averaging') if flags[k]),
                    "none of the entry's")
@@ -2088,15 +2137,15 @@ def classify(gain8: float, gain_s: float, gain_t: float, controls_ok: bool, othe
 
 def verdict97(rd: pd.DataFrame, bt: pd.DataFrame, runs: Optional[pd.DataFrame] = None) -> dict:
     """Part C's verdict, fixed in the entry, on the pattern part under the calibrated readout against all recordings
-    (R1: B2_mean on the eight, S and T; R2: the 40 model flies), with the controls (B3's permuted mean proportions on
+    (R1: B2_mean2 on the eight, S and T; R2: the 24 model flies), with the controls (B3's permuted mean proportions on
     both seeds, the inverted ones), the six typical recordings, the bands, the raw-count loss, the mean APL effect and
     the bootstrap interval; outcome (f) (one body lowers the eight by DISAGREE or more, another raises it), (h) (B6
     against B2 on the eight); and, where the second draw exists (B4 on S, C2 on T), the same reading on it ('a part' and
     'moves' must hold there). verdict.json."""
-    v = 'B2_mean'
+    v = f'B2_{MEAN}'
     g8, gs, gt = _gain(rd, v, 'all8'), _gain(rd, v, 'S'), _gain(rd, v, 'T')
-    perm = {s: _gain(rd, f'B3_permmean_s{s}', 'all8') for s in PERM_SEEDS}
-    inv = _gain(rd, 'B3_invmean', 'all8')
+    perm = {s: _gain(rd, f'B3_perm{MEAN}_s{s}', 'all8') for s in PERM_SEEDS}
+    inv = _gain(rd, f'B3_inv{MEAN}', 'all8')
     r2, r2p = _gain(rd, R2, 'all8'), _gain(rd, R2_PERM, 'all8')
     six = _gain(rd, v, 'all8', 'z6')
     n_flag = _val(rd, v, 'all8', 'n_flagged')
@@ -2127,18 +2176,20 @@ def verdict97(rd: pd.DataFrame, bt: pd.DataFrame, runs: Optional[pd.DataFrame] =
         res[f'R1_8_{k}'] = _val(rd, v, 'all8', f'z8_{k}')
         res[f'ref8_{k}'] = _val(rd, REF, 'all8', f'z8_{k}')
     # (f): the bodies alone on the eight
-    mbg = {m: _gain(rd, f'B1_{m}', 'all8') for m in OTHER_MBS}
+    mbg = {m: _gain(rd, f'B1_{MB_SHORT[m]}', 'all8') for m in OTHER_MBS}
     res['mb_gain'] = mbg
+    res['MCNS16'] = _val(rd, MCNS16, 'all8', 'z8_pattern')
+    res['MCNS16_gain'] = _gain(rd, MCNS16, 'all8')
     fin = [x for x in mbg.values() if np.isfinite(x)]
     res['disagree'] = bool(fin and max(fin) >= DISAGREE and min(fin) < 0)
     # (h): B6 against B2 on the eight
-    b6 = _val(rd, f'B6_mean_{B6_INPUT}', 'all8', 'z8_pattern')
+    b6 = _val(rd, f'B6_{MEAN}_{B6_INPUT}', 'all8', 'z8_pattern')
     res['B6_8'] = b6
     res['B6_minus_B2'] = b6 - res['R1_8'] if np.isfinite(b6) else np.nan
     res['B6_minus_E93F'] = b6 - _val(rd, E93F, 'all8', 'z8_pattern') if np.isfinite(b6) else np.nan
     res['B6_differs'] = bool(np.isfinite(res['B6_minus_B2']) and abs(res['B6_minus_B2']) >= B6_DIFF)
     # B5: graded with the size of the change
-    res['B5'] = {f'x{s:g}': _gain(rd, f'B5_mean_x{s:g}', 'S') for s in B5_SCALES}
+    res['B5'] = {f'x{s:g}': _gain(rd, f'B5_{MEAN}_x{s:g}', 'S') for s in B5_SCALES}
     res['B5']['x1'] = gs
     # the second draw
     if np.isfinite(_val(rd, D2, 'all8', 'z8_pattern')):
@@ -2182,7 +2233,7 @@ def score(coresponse: bool = True, zcell: bool = True, n_workers: int = 4) -> di
 
 
 def part_c2(dry_run: bool = False, force: bool = False) -> pd.DataFrame:
-    """The second draw on T (C2_mean_d2), only on a verdict of "a part" or "moves" (verdict.json), then `score` is run
+    """The second draw on T (C2_mean2_d2), only on a verdict of "a part" or "moves" (verdict.json), then `score` is run
     again."""
     v = _read_json(out_dir() / 'verdict.json')
     ok = v.get('outcome') in ('a part', 'moves')
@@ -2195,7 +2246,7 @@ def part_c2(dry_run: bool = False, force: bool = False) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 # part D: the family fitted again at the mean proportions (only on "a part" or "moves")
 
-D_VARIANT = 'B2_mean'
+D_VARIANT = f'B2_{MEAN}'
 
 
 def d_member(label: str) -> dict:
@@ -2205,7 +2256,7 @@ def d_member(label: str) -> dict:
 
 
 def d_wiring_tag(label: str) -> str:
-    return f'e97mean-{label}'
+    return f'e97mean2-{label}'
 
 
 def d_tag(label: str) -> str:
@@ -2215,12 +2266,12 @@ def d_tag(label: str) -> str:
 
 
 def d_init_params() -> Path:
-    """D/init_params_mean.json in this experiment's results: per wiring the absolute parameters of B2's held point (the
+    """D/init_params_mean2.json in this experiment's results: per wiring the absolute parameters of B2's held point (the
     wiring's own fit with the somatic threshold and the tied APL scale re-held at the mean proportions), the start of each
     refit (an exact start at the fit's own parameters is refused by E10_joint_fit.py on another wiring's base)."""
     rb = runs_b()
     d = {r.wiring: {k: float(x) for k, x in json.loads(r.params_on).items()} for r in rb[rb.variant == D_VARIANT].itertuples()}
-    path = out_dir() / 'D' / 'init_params_mean.json'
+    path = out_dir() / 'D' / f'init_params_{MEAN}.json'
     path.parent.mkdir(parents=True, exist_ok=True)
     _write_json(path, d)
     return path
@@ -2363,16 +2414,16 @@ def write_variants() -> pd.DataFrame:
         rows.append(dict(tag=r.tag, variant=r.tag, part=r.part, arm=r.arm, base='bouton', k=E83.BREADTH_K,
                          breadth_k=E83.BREADTH_K,
                          kind=(f"C2's family on {r.wiring} with the claws moved between glomeruli to the "
-                               f"{pv['proportions']} proportions{what}" + (f", log ratios x{pv['scale']:g}" if pv['scale'] not in (1.0, -1.0) else '')
+                               f"{'two brains (the hemibrain and the male CNS) mean' if pv['proportions'] == 'mean' else pv['proportions']} proportions{what}" + (f", log ratios x{pv['scale']:g}" if pv['scale'] not in (1.0, -1.0) else '')
                                + f" (draw {pv['draw']}); input {pv['input']}; breadth recomputed for the wiring; the somatic "
                                "threshold and the tied APL scale re-held at the fit's APL-off and APL-on counts"),
                          config=r.variant, wiring=r.wiring, ref_experiment=r.fit_folder, ref_fit=r.fit_tag,
-                         wiring_file=f'runs/{r.wiring_file}', wiring_sha256=r.wiring_sha256, n_moved=r.n_moved,
+                         wiring_file=f'{RUNS_SUB}/{r.wiring_file}', wiring_sha256=r.wiring_sha256, n_moved=r.n_moved,
                          moved_share=r.moved_share, fixed_thr=r.fixed_thr, wAPLKC_scale=r.wAPLKC_scale,
                          wKCAPL_scale=r.wKCAPL_scale, wAPLPN_scale=r.wAPLPN_scale, wPNAPL_scale=r.wPNAPL_scale,
                          wKCKC_scale=r.wKCKC_scale, kc_kc_inh=r.wKCKC_scale, thr_factor=r.thr_factor,
                          apl_factor=r.apl_factor, rate_on=r.rate_on, rate_off=r.rate_off, max_count_on=r.max_count_on,
-                         max_count_off=r.max_count_off, realism_flag=r.realism_flag, subdir='runs'))
+                         max_count_off=r.max_count_off, realism_flag=r.realism_flag, subdir=RUNS_SUB))
         o = load_run(r.tag)
         if o is None:
             continue
@@ -2399,10 +2450,14 @@ def _f(x, spec: str = '.4f') -> str:
 
 
 VARIANT_NAMES = {REF: 'the eight wirings as they are (the hemibrain\'s proportions)',
-                 'B2_mean': 'the mean proportions of the three brains', D2: 'the mean proportions, second draw',
-                 R2: 'the 40 model flies (eight wirings by five mushroom bodies)', R2_PERM: 'their permuted control',
-                 'B3_permmean_s1': 'the mean proportions permuted (seed 1)', 'B3_permmean_s2': 'the mean proportions permuted (seed 2)',
-                 'B3_invmean': 'the mean proportions inverted', f'B6_mean_{B6_INPUT}': "the mean proportions with E93's fuller input",
+                 f'B2_{MEAN}': 'the two brains\' mean proportions', D2: 'the mean proportions, second draw',
+                 R2: 'the 24 model flies (eight wirings by three mushroom bodies)', R2_PERM: 'their permuted control',
+                 MCNS16: 'the male CNS\'s two mushroom bodies on the eight (16)',
+                 'B1_mcnsL': 'the male CNS\'s left mushroom body', 'B1_mcnsR': 'the male CNS\'s right mushroom body',
+                 f'B3_perm{MEAN}_s1': 'the mean proportions permuted (seed 1)',
+                 f'B3_perm{MEAN}_s2': 'the mean proportions permuted (seed 2)',
+                 f'B3_inv{MEAN}': 'the mean proportions inverted',
+                 f'B6_{MEAN}_{B6_INPUT}': "the mean proportions with E93's fuller input",
                  E93F: "E93's fuller input on the wirings as they are"}
 
 
@@ -2412,22 +2467,23 @@ def comparison_table() -> str:
     APL effect, the mean APL effect, the raw-count loss, the response rates and the runs outside the bands) and the
     verdict."""
     out = out_dir()
-    lines = ['# E97: the glomeruli\'s shares of the claws in other connectomes', '',
-             'What stays the hemibrain\'s or the model\'s: only the glomeruli\'s claw totals per KC type are another '
-             'brain\'s; which KC samples which glomerulus, the KCs, their types and each KC\'s number of claws are the '
-             'model\'s wiring\'s; a moved claw keeps its own APL weights and takes the APL->bouton weight of its new bouton.', '']
+    lines = ['# E97: the glomeruli\'s shares of the claws in other connectomes (the hemibrain and the male CNS)', '',
+             'What stays the hemibrain\'s or the model\'s: only the glomeruli\'s claw totals per KC type are the male '
+             'CNS\'s; which KC samples which glomerulus, the KCs, their types and each KC\'s number of claws are the '
+             'model\'s wiring\'s; a moved claw keeps its own APL weights and its KC-KC weights, and takes the '
+             'APL->bouton weight of its new bouton. The male CNS is one male fly.', '']
     a = _read_json(out / 'a_summary.json')
     if a:
         r = a['a1_rule']
         lines += ['## Part A', '',
-                  f"A1's rule: SD of log2(derived hemibrain share / model share) over {r['n_glomeruli']} glomeruli with "
-                  f"{A1_RULE_MIN_CLAWS} or more claws = {_f(r['sd'], '.3f')} (stops above {A1_RULE_SD}): "
-                  f"{'stops' if r['stops'] else 'passes'}. ROI versions: " +
-                  ', '.join(f'{k} {v}' for k, v in a['roi_choice'].items()) + '.', '']
+                  "A1's rule (a male CNS body's counted claws on the model's glomeruli within "
+                  f"{r['band'][0]} to {r['band'][1]} times the model's {r['model_claws']:.0f}; every glomerulus with "
+                  f"{r['min_claws']} or more model claws has a PN on each side): {'stops' if r['stops'] else 'passes'} ("
+                  + ', '.join(f"{mb} {x['claws']:.0f} = {x['ratio_to_model']:.3f}" for mb, x in r['mbs'].items()) + ').', '']
         s = a['a2']
         lines += [f"A2: the mean proportions' ratios, SD of log2 {_f(s['mean_sd_log2'], '.3f')}, 5th to 95th percentile "
-                  f"{_f(s['mean_q05'], '.2f')} to {_f(s['mean_q95'], '.2f')}; two sides of a brain SD {_f(s['within_brain_sd'], '.3f')}, "
-                  f"two brains {_f(s['between_brain_sd'], '.3f')}.", '']
+                  f"{_f(s['mean_q05'], '.2f')} to {_f(s['mean_q95'], '.2f')}; the male CNS's two sides against each other "
+                  f"SD {_f(s['within_brain_sd'], '.3f')}, against the hemibrain {_f(s['between_brain_sd'], '.3f')}.", '']
         lines += ['| A3 subset | glomeruli | sign agreement | null 5th / 95th | ρ | rule |', '|---|---:|---:|---:|---:|---|']
         for k, x in a['a3'].items():
             lines.append(f"| {k} | {x['n']} | {_f(x['sign_agreement'], '.2f')} | {_f(x['null_p05'], '.2f')} / "

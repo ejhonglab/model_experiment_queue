@@ -41,8 +41,8 @@ explicit list of pairs or odors): `select_pairs`, `rho_pairs` (ρ on odor-odor d
 
 The holds (CLAUDE.md, "Connectome data (Tom, 2026-11-17)"): no table of Yang's own Claude's connectome project, no
 FlyWire / FAFB / BANC data and no raw-only recording is read. Archived variants whose wirings were built from such
-tables (`kcq.apl_effect.HELD_VARIANTS`: every E97 variant, and E4's two FAFB wirings) get no new reading and are left
-out of every table here.
+tables (`kcq.apl_effect.HELD_VARIANTS`: E97's points of 2026-11-15, and E4's two FAFB wirings) get no new reading and
+are left out of every table here.
 
 "At the data's values" puts a pair's model distance at the flies' distance ('raw') or at the model's own distance of the
 flies' percentile ('quantile': the flies' rank of the pair mapped onto the model's distribution); the hybrids of the odor
