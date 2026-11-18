@@ -259,7 +259,11 @@ def test_identity_real_wiring(tmp_path, monkeypatch):
 def test_commits_clean_allows_only_unloaded_dirty_files(monkeypatch):
     commits = dict(queue_commit='abc', queue_dirty=True, pyolfsysm_dirty=False, al_analysis_dirty=False, hong2p_dirty=False)
     monkeypatch.setattr(X.H, 'code_commits', lambda: dict(commits))
-    monkeypatch.setattr(X, '_queue_dirty_paths', lambda: ['experiments/E97_glomerulus_claw_shares.py'])
+    # the dirty file stands for one this process does not load, whatever other tests of the suite imported before
+    unloaded = 'experiments/E97_glomerulus_claw_shares.py'
+    loaded = X._loaded_queue_files
+    monkeypatch.setattr(X, '_loaded_queue_files', lambda: loaded() - {unloaded})
+    monkeypatch.setattr(X, '_queue_dirty_paths', lambda: [unloaded])
     cc = X._commits_clean()
     assert cc['queue_dirty_paths'] == 'experiments/E97_glomerulus_claw_shares.py'
     for bad in ('experiments/E108_paa_extrapolation.py', 'kcq/harness.py', 'experiments/E83_cross_wiring_fit.py'):
