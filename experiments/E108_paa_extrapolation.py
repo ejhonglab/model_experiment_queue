@@ -117,6 +117,11 @@ Choices the entry left open (fixed here before any run, with the reason):
 - The controls of the gate are X1's, as the entry defines them, whichever rule carries the verdict.
 - The ceiling family is read for every input and control; step 4 on the eight wirings of the family only.
 
+Provenance: the other checkouts must be clean; this repository must be clean except for files the process does not
+load (another session's work in progress in the same checkout; `_commits_clean`), which every row records as
+'queue_dirty_paths' beside `H.code_commits()`; every module is imported before the first point, and each point checks
+that no loaded file has changed since (`_still_clean`).
+
 Departures from the entry: none so far.
 
 The holds (CLAUDE.md, "Connectome data (Tom, 2026-11-17)"): no connectome table is read beyond the model's own
@@ -227,10 +232,69 @@ def _flagged(x) -> bool:
     return isinstance(x, str) and x.strip() not in ('', 'nan')
 
 
+PRELOAD = ('experiments.E10_joint_fit', 'experiments.E72_wiring_population', 'experiments.E77_input_screen',
+           'experiments.E77_input_side_common_error', 'experiments.E82_protocol_runs', 'experiments.E85_orn_fly_population',
+           'experiments.E89_apl_breadth_weighting', 'experiments.E106_rho_gap_parts', 'experiments.E67_apl_effect_fits',
+           'kcq.apl_effect', 'pyolfsysm.mb_model', 'pyolfsysm.tuning')
+
+
+def _queue_dirty_paths() -> List[str]:
+    """This repository's modified or untracked files (`git status --porcelain`, paths relative to its root)."""
+    import subprocess
+    out = subprocess.run(['git', '-C', str(H.HERE), 'status', '--porcelain'], capture_output=True, text=True, check=True).stdout
+    return [ln[3:].strip() for ln in out.splitlines() if ln.strip()]
+
+
+def _loaded_queue_files() -> set:
+    """The files of this repository that this process has loaded as modules."""
+    import sys
+    here = H.HERE.resolve()
+    out = set()
+    for m in list(sys.modules.values()):
+        f = getattr(m, '__file__', None)
+        if f:
+            p = Path(f).resolve()
+            if here in p.parents:
+                out.add(p.relative_to(here).as_posix())
+    return out
+
+
 def _commits_clean() -> dict:
-    """`H.code_commits()` at the start of a simulation part, which must be clean (E89's)."""
-    from experiments import E89_apl_breadth_weighting as E89
-    return E89._commits_clean()
+    """`H.code_commits()` at the start of a simulation part. The other checkouts must be clean; this repository must
+    be clean except for files that this process does not load (another session's work in progress in the same
+    checkout), which are recorded as 'queue_dirty_paths'. Every module the parts use is imported first (PRELOAD), so
+    nothing is loaded later from a working tree that may have changed."""
+    import importlib
+    for m in PRELOAD:
+        importlib.import_module(m)
+    cc = H.code_commits()
+    dirty = [k for k, v in cc.items() if k.endswith('_dirty') and v and k != 'queue_dirty']
+    if dirty:
+        raise RuntimeError(f'commit first: {dirty} (rows record the commits of the code that ran)')
+    paths = _queue_dirty_paths() if cc.get('queue_dirty') else []
+    loaded = _loaded_queue_files()
+    bad = [p for p in paths if p in loaded or p.startswith('kcq/') or p == 'pyproject.toml'
+           or (p.endswith('/') and p.startswith(('experiments/', 'kcq/')))]
+    if bad:
+        raise RuntimeError(f'commit first: {bad} (modified files of this repository that this process loads)')
+    cc['queue_dirty_paths'] = ' '.join(paths)
+    return cc
+
+
+def _still_clean(cc: dict) -> None:
+    """Before each point: no file this process has loaded has changed since the part began (RuntimeError)."""
+    loaded = _loaded_queue_files()
+    now = [p for p in _queue_dirty_paths() if p in loaded]
+    if now:
+        raise RuntimeError(f'loaded files modified during the run: {now}')
+    head = H.code_commits().get('queue_commit')
+    if head != cc.get('queue_commit'):
+        import subprocess
+        changed = subprocess.run(['git', '-C', str(H.HERE), 'diff', '--name-only', str(cc.get('queue_commit')), str(head)],
+                                 capture_output=True, text=True, check=True).stdout.split()
+        hit = [p for p in changed if p in loaded]
+        if hit:
+            raise RuntimeError(f'commits since the part began change loaded files: {hit}')
 
 
 # ---------------------------------------------------------------------------
@@ -947,6 +1011,7 @@ def part_b(lane: Optional[str] = None, max_points: Optional[int] = None) -> pd.D
         tag = run_tag(name, unit)
         if tag in set(runs_b()['tag']) or (max_points is not None and n >= max_points):
             continue
+        _still_clean(cc)
         orn = input_of(name)
         rec = write_input(name)
         res = held(unit, orn, name)
