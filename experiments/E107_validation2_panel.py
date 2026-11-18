@@ -550,6 +550,95 @@ def require_lock(check_git: bool = True, check_files: bool = True) -> dict:
     return lock
 
 
+# ---------------------------------------------------------------------------
+# the sets of 136 and 153 pairs (the lock's rule, after the lock)
+
+def column_groups(root: Optional[Path] = None) -> Dict[str, List[str]]:
+    """Remy's column_groups.yaml: {group: [columns]}."""
+    import yaml
+    root = remy_dir() if root is None else Path(root)
+    return yaml.safe_load((root / 'figure-05/resampled/column_groups.yaml').read_text())
+
+
+def complete_odors(table: pd.DataFrame, col: str, odors: Sequence[str]) -> List[str]:
+    """The largest set of `odors` all of whose pairs have a non-missing `col` in `table` (columns 'a', 'b', both orders
+    of a pair allowed), by the lock's rule: odors removed one at a time, the one with most missing pairs among those
+    kept first, ties by name."""
+    ok = {}
+    for a, b, v in zip(table['a'], table['b'], table[col]):
+        if a != b:
+            ok[frozenset((a, b))] = ok.get(frozenset((a, b)), False) or bool(pd.notna(v))
+    keep = sorted(set(odors))
+    while True:
+        miss = {o: sum(not ok.get(frozenset((o, x)), False) for x in keep if x != o) for o in keep}
+        worst = max(miss.values()) if miss else 0
+        if worst == 0:
+            return keep
+        keep.remove(sorted(o for o, n in miss.items() if n == worst)[0])
+
+
+def identify_sets(root: Optional[Path] = None, write: bool = True) -> dict:
+    """The lock's rule for the 136 and the 153 (`lock_definitions()['sets']['s136_s153']`): reads the mean table's odor
+    columns and its non-neural columns only (`usecols`; no kc-, orn- or model column parsed), per column the largest
+    complete set of odors (`complete_odors`), per group the intersection over its columns, and over all of them; a size
+    is identified when exactly one distinct set of that size arises. Writes SETS_PATH (`write`)."""
+    lock = require_lock()
+    root = remy_dir() if root is None else Path(root)
+    names = lock['odor_map']['validation2']
+    groups = column_groups(root)
+    header = pd.read_csv(root / MEAN_TABLE, sep='\t', nrows=0).columns.tolist()
+    odor_cols = header[:2]
+    cols = {g: [c for c in groups.get(g, []) if c in header] for g in NON_NEURAL_GROUPS}
+    use = odor_cols + sorted({c for cs in cols.values() for c in cs})
+    if any(c.startswith(('kc-', 'orn-')) or c in groups.get('model_cols', []) for c in use):
+        raise RuntimeError('a KC, ORN or model column among the columns to read')
+    t = pd.read_csv(root / MEAN_TABLE, sep='\t', usecols=use)
+    unknown = sorted((set(t[odor_cols[0]]) | set(t[odor_cols[1]])) - set(names))
+    if unknown:
+        raise RuntimeError(f'odor names not in the lock\'s map: {unknown}')
+    t['a'] = [names[x]['input'] for x in t[odor_cols[0]]]
+    t['b'] = [names[x]['input'] for x in t[odor_cols[1]]]
+    odors = lock['validation2']['odors']
+    per_col = {c: complete_odors(t, c, odors) for cs in cols.values() for c in cs}
+    cands = {}
+    for g, cs in cols.items():
+        if cs:
+            cands[g] = sorted(set.intersection(*[set(per_col[c]) for c in cs]))
+    cands['all'] = sorted(set.intersection(*[set(v) for v in per_col.values()]))
+    out = dict(rule=lock['definitions']['sets']['s136_s153'], odor_columns=odor_cols, columns=cols,
+               per_column={c: len(v) for c, v in per_col.items()}, candidates=cands, sets={},
+               outside_rule={c: H.odor_order(v) for c, v in per_col.items() if len(v) in (17, 18)},
+               lock_sha256=lock['sha256'],
+               mean_table_sha256=_sha256(root / MEAN_TABLE), time=time.strftime('%Y-%m-%d %H:%M'), host=_host())
+    for key, n in SET_SIZES.items():
+        if key == '231':
+            out['sets'][key] = dict(identified=True, odors=H.odor_order(odors), source='the lock (all 22 odors)')
+            continue
+        distinct = sorted({tuple(v) for v in cands.values() if len(v) == n})
+        if len(distinct) == 1:
+            src = [g for g, v in cands.items() if tuple(v) == distinct[0]]
+            out['sets'][key] = dict(identified=True, odors=H.odor_order(distinct[0]), source=src,
+                                    left_out=H.odor_order(sorted(set(odors) - set(distinct[0]))))
+        else:
+            out['sets'][key] = dict(identified=False, n_candidates=len(distinct),
+                                    candidates=[H.odor_order(d) for d in distinct])
+    if write:
+        _write_json(SETS_PATH, out)
+    return out
+
+
+def require_sets() -> dict:
+    """The committed sets file (SETS_PATH) after `require_lock`; raises PermissionError when it is missing, uncommitted
+    or written under another lock."""
+    lock = require_lock()
+    s = _read_json(SETS_PATH)
+    if s is None or s.get('lock_sha256') != lock['sha256']:
+        raise PermissionError(f'{SETS_PATH.name}: missing or written under another lock; run --part sets')
+    if not _committed(SETS_PATH):
+        raise PermissionError(f'{SETS_PATH.name} is not committed')
+    return s
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('--part', required=True, choices=('0', 'sets', 'data', 'A', 'B', 'C', 'variants'))
@@ -558,6 +647,12 @@ def main() -> None:
     if args.part == '0':
         lock = write_lock(force=args.force)
         print(f"-> {LOCK_PATH} (sha256 {lock['sha256'][:12]}); commit it before any other part", flush=True)
+        return
+    if args.part == 'sets':
+        s = identify_sets()
+        for k, v in s['sets'].items():
+            print(k, v, flush=True)
+        print(f'-> {SETS_PATH}; commit it before part A', flush=True)
         return
     raise NotImplementedError(args.part)
 
