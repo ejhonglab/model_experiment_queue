@@ -1,0 +1,4905 @@
+{
+ "experiment": "E107_validation2_panel",
+ "part": "0",
+ "definitions_sha256": "e82cf4123fc0d5545e32dac58e948643c8bd93c3abbe8ee0d03012690189403b",
+ "definitions": {
+  "experiment": "E107_validation2_panel",
+  "files": {
+   "manifests": [
+    "fly_counts_stim_rdm_concat.csv",
+    "stims_per_fly_long.csv",
+    "Odor-Panels.tex",
+    "validation2/kc_soma/stim_to_drop_by_qcthresh.csv",
+    "figure-05/resampled/column_groups.yaml"
+   ],
+   "distance_files": [
+    "validation2/kc_soma/xrda_stim_rdm_concat__rmap_nls_cluster__correlation__0.3.nc",
+    "validation2/kc_soma/xrds_stim_rdm_concat.nc",
+    "figure-05/resampled/tidy_abbrev_dists.tsv",
+    "megamat17/kc_soma/xrds_stim_rdm_concat_mm.nc"
+   ],
+   "not_read": [
+    "validation2/kc_soma/xrds_trial_rdm_concat.nc"
+   ],
+   "note": "Part 0 reads the manifests only. The distance files are hashed (bytes) and opened by no code before this lock is committed."
+  },
+  "stimuli": {
+   "excluded": [
+    "MethOH @ -2.0",
+    "pfo @ 0.0",
+    "geos @ -5.0"
+   ],
+   "excluded_why": "Remy's conventions (fly_counts_stim_rdm_concat.csv: 'ms grid excludes MethOH/pfo/geos@-5'; stims_per_fly_tables.tex: 'MethOH @ -2.0 is excluded throughout'): the solvent, methanol and geos at 10^-5 are not odors of the manuscript's matrix",
+   "pooled": {
+    "euc": [
+     -2.0,
+     -1.75
+    ],
+    "-aPine": [
+     -2.0,
+     -1.5
+    ],
+    "ger": [
+     -2.0,
+     -3.0
+    ]
+   },
+   "pooled_why": "her mean table pools each odor's two concentrations under one name (no fly received both)",
+   "names": "Remy's names mapped onto the ORN input's (olfdb's odors table, abbreviation or alias; `odor_map`): PAA -> paa, 1-prop -> 1-3ol, every other name unchanged; every table names odors by the input's names"
+  },
+  "measures": {
+   "verdict": "the cosine distance of the manuscript's cells: the mean table's column kc-cosine-rmap_nls_cluster (figure-05/resampled/tidy_abbrev_dists.tsv), the measure of the control flies' 0.93 and the family's 0.50",
+   "beside": "the correlation distance of the same cells (kc-correlation-rmap_nls_cluster)",
+   "band_rule": "close: 0.7 or less; apart: 0.85 or more; middle between. The band of the verdict is the cosine distance's when the correlation distance falls in the same band, else 'middle' (the outcome is then read on the pairs' order alone)",
+   "remy_matrix_for_rho": "her mean table's kc-cosine-rmap_nls_cluster (pooled concentrations, as the manuscript's); kc-correlation-rmap_nls_cluster beside (partner 'correlation'); the mean over flies of her per-fly matrices (pairs held by MIN_FLIES or more) beside (partner 'fly_mean')",
+   "per_fly": "xrds_stim_rdm_concat.nc (before her quality control) at cell_mask_coord rmap_nls_cluster, each metric, with the manuscript's drop list ({'cell_mask_coord': 'rmap_nls_cluster', 'metric': 'correlation', 'qc_thresh': 0.3}) applied to both metrics, so that both are read on the same flies and stimuli; checked against the manuscript's per-fly correlation file (xrda_stim_rdm_concat__rmap_nls_cluster__correlation__0.3.nc), which it must equal",
+   "orn_input": "the ORN input alone as the program reads the model's input: 1 - Pearson across the 36 glomeruli of the lab's input (`H.apl16_orn_deltas`' rows; validation2's DL4 and VM4 left out, as in the input), of validation2_orn_deltas() (22 odors) or megamat_orn_deltas() (17 odors); cosine beside (partner 'orn_cosine'); Remy's own ORN columns (orn-correlation-01234, orn-cosine-01234, her 5 manuscript flies) a cross-check beside, deciding nothing",
+   "model": "cosine distance on spike counts with APL on (raw counts, the program's primary model matrix); the family is the mean over its eight wirings of the pair distances (E72's population), each wiring given beside"
+  },
+  "sets": {
+   "known": {
+    "s231": "the 22 odors of the validation2 panel (her mean table, the manuscript grid)"
+   },
+   "s136_s153": "Remy's sets of 136 and 153 pairs (17 and 18 odors; figure-05 file names). The manifests do not name their odors. `identify_sets` identifies them after this lock is committed and before any KC or ORN distance is read, from her mean table's odor columns and its non-neural columns only (the column groups ['chem_cols', 'metacyc_cols', 'vcf_cols_remy', 'vcf_cols_anoop', 'vcf_cols_remy_hmds_329', 'vcf_cols_remy_hmds_452', 'lotus_cols'] of column_groups.yaml; no kc-, orn- or model column parsed): per column, the largest set of odors all of whose pairs are non-missing (odors removed one at a time, the one with most missing pairs first, ties by name); per group, the intersection over its columns; and the intersection over all of them. A set of n odors (17, 18) is identified when exactly one distinct n-odor set arises; otherwise it is 'not identified'",
+   "carrying": "\u03c1 over 'her pairs' is read on the 136 (identified), with the 153 and the 231 beside; if the 136 is not identified, on the 231, and the note says so",
+   "pb": "the pairs of paa and B-myr: the pairs of the carrying set involving paa or B-myr (if the carrying set lacks either odor, those of the 231)",
+   "four": "the pairs of the four odors: those of the set involving paa, B-myr, euc or -aPine; the 6 pairs among the four given as values",
+   "min_flies": 4,
+   "min_flies_why": "a pair enters a per-fly statistic (the mean over flies, the halves, the per-concentration readings) when MIN_FLIES or more flies' matrices hold it; 12 of the 231 pairs are held by 2 or 3 flies (the stimulus table, after her quality control)",
+   "by_concentration": "euc's and -aPine's pairs by concentration from the per-fly matrices, each concentration's flies (MIN_FLIES or more), and pooled as in her mean table beside; every table with them says that 7 of her 8 flies with euc and 4 of her 9 with -aPine had the odor at 10^-2, against an ORN input recorded at 10^-1.75 and 10^-1.5; the verdict does not rest on them. ger, pooled too (5 flies at 10^-3, 5 at 10^-2, the input at 10^-2), is read pooled only, and its tables say so"
+  },
+  "halves": {
+   "n_splits": 1000,
+   "seed": 0,
+   "min_per_half": 1,
+   "rule": "random halves of the flies (floor(n/2) and the rest); each split's two fly means read on the pairs both halves hold (MIN_PER_HALF or more flies each) of the set, the pairs held by MIN_FLIES or more flies in all; \u03c1 between the halves, its mean over splits; the Spearman-Brown value for all flies and its square root, the ceiling (as hong2p.stats.split_half_reliability)"
+  },
+  "megamat": {
+   "file": "megamat17/kc_soma/xrds_stim_rdm_concat_mm.nc (the manifest: 18 flies, the manuscript's)",
+   "reading": "the mean over her 18 flies of the per-fly matrices (pairs held by MIN_FLIES or more), at the metric (preference ['cosine', 'correlation']) and cell selection (preference ['rmap_nls_cluster', 'iscell_nls', 'iscell_good_xid0', 'none'], else the first the file lists) the file holds; no quality-control list for megamat in her folder, so none applied",
+   "level": "\u03c1 of a reader against her megamat somata over the 136 pairs of the 17 megamat odors (the megamat ORN input's panel); over the 66 pairs of the 12 odors of Yang's panel beside (partner 'megamat66')",
+   "like_for_like": "the validation2 \u03c1's that are compared with a megamat level use Remy's matrix in the metric the megamat level is read in"
+  },
+  "level_check": {
+   "rule": "her megamat somata against Yang's control flies (H.yang_mean_rdm('TNT3c', <metric>)), the same metric, on the 66 pairs of the 12 odors both have: the two means; flagged when they differ by more than 0.05",
+   "consequence": "when flagged, the note says so beside the verdict, and the class on the pairs' order alone (as for a distance in the middle band) is given beside; the outcome is then held only if both agree"
+  },
+  "family": {
+   "members": "C2 (E67's rate0.068_aplboth_k2_cap3) on the hemibrain wiring and E72 part B's seven re-drawn wirings (P1 to P4, M1 to M3), each at its own fit: E83's `saved_fit` (E72's `fitted_params`, the absolute fixed_thr, wAPLKC_scale, wKCAPL_scale, wAPLPN_scale, wPNAPL_scale and kc_kc_inh of E67's and E72's fits.csv)",
+   "runner": "E83's `build_simulator` (the runner of E93 and E98), breadth held at the lab input's (`wiring_parts(label)['breadth']`), so the APL->KC weights are the fit's (E98's choice); APL acutely off: the APL->KC and APL->bouton scales 0",
+   "identity": "each as-fitted run reproduces the saved fit's spike counts and responses on the odors its panel shares with the fit's panel (validation2: paa, -aPine, euc, B-myr; megamat: the 12) with 0 differences, APL on and off; a failure stops part B",
+   "fitted": "as fitted: the fit's parameters, nothing re-tuned (carries the verdict)",
+   "held": "re-held: E77's `hold_rates` on the panel (the somatic threshold bisected with APL off to the wiring's own APL-off fraction on its fit panel, target_off / size, then the tied APL scales to the control flies' response rate, the registry's ctrl_frac, 6.8 %, with APL on), the counts rounded on the panel's KCs x odors; partner 'held'",
+   "per_wiring": "each wiring's own class given beside (descriptive)"
+  },
+  "outcome_rules": {
+   "quantities": "d = the distance of paa from B-myr (verdict measure); pb(r) = \u03c1 of reader r against Remy's validation2 matrix over the pairs of paa and B-myr; all(r) = over the carrying set; mm(r) = r's megamat level; readers: the ORN input alone ('orn') and the family ('fam')",
+   "orders": "orn_orders: pb(orn) >= mm(orn) - ORDER_TOL; fam_orders_pb: pb(fam) >= mm(fam) - ORDER_TOL; fam_orders_all: all(fam) >= mm(fam) - ORDER_TOL",
+   "classes": "band close -> (a). Otherwise: fam_orders_pb and fam_orders_all -> (d); else orn_orders and not fam_orders_pb -> (b); else not orn_orders and not fam_orders_pb -> (c); else 'none' (the family orders the pairs of paa and B-myr but not the panel). In the middle band the class is read on the pairs' order alone (the same rules without the distance)",
+   "order_tol": 0.05,
+   "close": 0.7,
+   "apart": 0.85,
+   "held": "the class holds when the carrying reading and every partner ['held', 'other_set', 'megamat66', 'fly_mean', 'correlation', 'orn_cosine'] give it (and, if the level check is flagged, the class on order alone too); otherwise 'reading-dependent', naming the partners that differ. Partners: held (the re-held family); other_set (the 231 when the 136 carries, the 136 when the 231 carries and the 136 is identified); megamat66 (the megamat levels on the 66 pairs); fly_mean (Remy's mean over flies in place of her mean table, for d and the \u03c1's); correlation (Remy's correlation distance for the \u03c1's, the megamat level read likewise); orn_cosine (the ORN input as cosine distance)"
+  },
+  "realism": "the family's response rates with APL on and acutely off (two or more spikes), their ratio, the per-odor response fractions, the distribution of odors per KC (OPK_EDGES' classes over the panel's odors) and the largest spike counts, on each panel and reading, per wiring and for the population; no band applied; Remy's files hold distances only, so her response rates are not beside them"
+ },
+ "files": {
+  "manifests": [
+   {
+    "path": "fly_counts_stim_rdm_concat.csv",
+    "size": 2868,
+    "sha256": "70b097589e8b5e4a5303b654a37df42269cc3e3e5f61a0c6a6229ce1ca15291c"
+   },
+   {
+    "path": "stims_per_fly_long.csv",
+    "size": 146531,
+    "sha256": "e9ced78da18252595582903864e14e8348d8f662ccb7b4fb9c009295e97ba89e"
+   },
+   {
+    "path": "Odor-Panels.tex",
+    "size": 4308,
+    "sha256": "3e308d361372a7bdc9c7d98de2a55b55237f35abc91409e5105c90588a0a0333"
+   },
+   {
+    "path": "validation2/kc_soma/stim_to_drop_by_qcthresh.csv",
+    "size": 77762,
+    "sha256": "9bee57d2b4c14c6186d04a2048ce4aef760f824a31dc0bbd88d8b068f95fdbbf"
+   },
+   {
+    "path": "figure-05/resampled/column_groups.yaml",
+    "size": 2612,
+    "sha256": "656cbee724c3bb842d80245cd2e2ccc1e67694f541de7255a208774773914ea3"
+   }
+  ],
+  "distance_files": [
+   {
+    "path": "validation2/kc_soma/xrda_stim_rdm_concat__rmap_nls_cluster__correlation__0.3.nc",
+    "size": 119191,
+    "sha256": "65f07ccbc84eb17fcfc5ba05ecefff7f096fbdf636e047f080e20c76aa0f5f96"
+   },
+   {
+    "path": "validation2/kc_soma/xrds_stim_rdm_concat.nc",
+    "size": 4539645,
+    "sha256": "58a7c10360875e76845534e9eac0f1a83e5db9a095a1c67b96cd4c67ea29764e"
+   },
+   {
+    "path": "figure-05/resampled/tidy_abbrev_dists.tsv",
+    "size": 592521,
+    "sha256": "4589c8672261f7a28a94302e8a7dc25ae5a3304e815c9b495c53878e8887ddf4"
+   },
+   {
+    "path": "megamat17/kc_soma/xrds_stim_rdm_concat_mm.nc",
+    "size": 276542,
+    "sha256": "059e074193ccaa85b48e1aa99fff17feb402086f93a378693a126005fc852789"
+   }
+  ],
+  "root": "/mnt/tensor/Remy/MB ms FA2023/data_for_autocheck"
+ },
+ "odor_map": {
+  "validation2": {
+   "+pul": {
+    "input": "+pul",
+    "olfdb_id": 62,
+    "olfdb_abbrev": "+pul",
+    "olfdb_name": "(+)-pulegone",
+    "cid": 442495,
+    "cid_remy_table": 442495,
+    "cid_agrees": true
+   },
+   "-aPine": {
+    "input": "-aPine",
+    "olfdb_id": 3,
+    "olfdb_abbrev": "-aPine",
+    "olfdb_name": "(-)-alpha-pinene",
+    "cid": 440968,
+    "cid_remy_table": 6654,
+    "cid_agrees": false
+   },
+   "-bCar": {
+    "input": "-bCar",
+    "olfdb_id": 8,
+    "olfdb_abbrev": "-bCar",
+    "olfdb_name": "(-)-beta-caryophyllene",
+    "cid": 5281515,
+    "cid_remy_table": 5281515,
+    "cid_agrees": true
+   },
+   "1-prop": {
+    "input": "1-3ol",
+    "olfdb_id": 61,
+    "olfdb_abbrev": "1-prop",
+    "olfdb_name": "1-propanol",
+    "cid": 1031,
+    "cid_remy_table": 1031,
+    "cid_agrees": true
+   },
+   "1o3one": {
+    "input": "1o3one",
+    "olfdb_id": 53,
+    "olfdb_abbrev": "1o3one",
+    "olfdb_name": "1-octen-3-one",
+    "cid": 61346,
+    "cid_remy_table": 61346,
+    "cid_agrees": true
+   },
+   "1p3one": {
+    "input": "1p3one",
+    "olfdb_id": 57,
+    "olfdb_abbrev": "1p3one",
+    "olfdb_name": "1-penten-3-one",
+    "cid": 15394,
+    "cid_remy_table": 15394,
+    "cid_agrees": true
+   },
+   "2-mba": {
+    "input": "2-mba",
+    "olfdb_id": 46,
+    "olfdb_abbrev": "2-mba",
+    "olfdb_name": "2-methylbutyl acetate",
+    "cid": 12209,
+    "cid_remy_table": 12209,
+    "cid_agrees": true
+   },
+   "2-mib": {
+    "input": "2-mib",
+    "olfdb_id": 48,
+    "olfdb_abbrev": "2-mib",
+    "olfdb_name": "2-methylisoborneol",
+    "cid": 11062802,
+    "cid_remy_table": 11062802,
+    "cid_agrees": true
+   },
+   "B-myr": {
+    "input": "B-myr",
+    "olfdb_id": 9,
+    "olfdb_abbrev": "B-myr",
+    "olfdb_name": "beta-myrcene",
+    "cid": 31253,
+    "cid_remy_table": 31253,
+    "cid_agrees": true
+   },
+   "EtOct": {
+    "input": "EtOct",
+    "olfdb_id": 21,
+    "olfdb_abbrev": "EtOct",
+    "olfdb_name": "ethyl octanoate",
+    "cid": 7799,
+    "cid_remy_table": 7799,
+    "cid_agrees": true
+   },
+   "PAA": {
+    "input": "paa",
+    "olfdb_id": 60,
+    "olfdb_abbrev": "paa",
+    "olfdb_name": "phenylacetaldehyde",
+    "cid": 998,
+    "cid_remy_table": 998,
+    "cid_agrees": true
+   },
+   "PEA": {
+    "input": "PEA",
+    "olfdb_id": 59,
+    "olfdb_abbrev": "PEA",
+    "olfdb_name": "phenethylamine",
+    "cid": 1001,
+    "cid_remy_table": 1001,
+    "cid_agrees": true
+   },
+   "Z4-7al": {
+    "input": "Z4-7al",
+    "olfdb_id": 12,
+    "olfdb_abbrev": "Z4-7al",
+    "olfdb_name": "cis-4-heptenal",
+    "cid": 5362814,
+    "cid_remy_table": 5362814,
+    "cid_agrees": true
+   },
+   "bbenz": {
+    "input": "bbenz",
+    "olfdb_id": 7,
+    "olfdb_abbrev": "bbenz",
+    "olfdb_name": "benzyl benzoate",
+    "cid": 2345,
+    "cid_remy_table": 2345,
+    "cid_agrees": true
+   },
+   "euc": {
+    "input": "euc",
+    "olfdb_id": 23,
+    "olfdb_abbrev": "euc",
+    "olfdb_name": "eucalyptol",
+    "cid": 2758,
+    "cid_remy_table": 2758,
+    "cid_agrees": true
+   },
+   "geos": {
+    "input": "geos",
+    "olfdb_id": 27,
+    "olfdb_abbrev": "geos",
+    "olfdb_name": "geosmin",
+    "cid": 29746,
+    "cid_remy_table": 29746,
+    "cid_agrees": true
+   },
+   "ger": {
+    "input": "ger",
+    "olfdb_id": 28,
+    "olfdb_abbrev": "ger",
+    "olfdb_name": "geraniol",
+    "cid": 637566,
+    "cid_remy_table": 637566,
+    "cid_agrees": true
+   },
+   "guai": {
+    "input": "guai",
+    "olfdb_id": 30,
+    "olfdb_abbrev": "guai",
+    "olfdb_name": "guaiacol",
+    "cid": 460,
+    "cid_remy_table": 460,
+    "cid_agrees": true
+   },
+   "long": {
+    "input": "long",
+    "olfdb_id": 40,
+    "olfdb_abbrev": "long",
+    "olfdb_name": "longifolene",
+    "cid": 1796220,
+    "cid_remy_table": 1796220,
+    "cid_agrees": true
+   },
+   "mchav": {
+    "input": "mchav",
+    "olfdb_id": 43,
+    "olfdb_abbrev": "mchav",
+    "olfdb_name": "methyl chavicol",
+    "cid": 8815,
+    "cid_remy_table": 8815,
+    "cid_agrees": true
+   },
+   "menth": {
+    "input": "menth",
+    "olfdb_id": 41,
+    "olfdb_abbrev": "menth",
+    "olfdb_name": "menthone",
+    "cid": 6986,
+    "cid_remy_table": 26447,
+    "cid_agrees": false
+   },
+   "sab": {
+    "input": "sab",
+    "olfdb_id": 64,
+    "olfdb_abbrev": "sab",
+    "olfdb_name": "sabinene",
+    "cid": 18818,
+    "cid_remy_table": 18818,
+    "cid_agrees": true
+   }
+  },
+  "megamat17": {
+   "1-5ol": {
+    "input": "1-5ol",
+    "olfdb_id": 56,
+    "olfdb_abbrev": "1-5ol",
+    "olfdb_name": "1-pentanol",
+    "cid": 6276,
+    "cid_remy_table": 6276,
+    "cid_agrees": true
+   },
+   "1-6ol": {
+    "input": "1-6ol",
+    "olfdb_id": 34,
+    "olfdb_abbrev": "1-6ol",
+    "olfdb_name": "1-hexanol",
+    "cid": 8103,
+    "cid_remy_table": 8103,
+    "cid_agrees": true
+   },
+   "1-8ol": {
+    "input": "1-8ol",
+    "olfdb_id": 50,
+    "olfdb_abbrev": "1-8ol",
+    "olfdb_name": "1-octanol",
+    "cid": 957,
+    "cid_remy_table": 957,
+    "cid_agrees": true
+   },
+   "2-but": {
+    "input": "2-but",
+    "olfdb_id": 11,
+    "olfdb_abbrev": "2-but",
+    "olfdb_name": "2-butanone",
+    "cid": 6569,
+    "cid_remy_table": 6569,
+    "cid_agrees": true
+   },
+   "2h": {
+    "input": "2h",
+    "olfdb_id": 32,
+    "olfdb_abbrev": "2h",
+    "olfdb_name": "2-heptanone",
+    "cid": 8051,
+    "cid_remy_table": 8051,
+    "cid_agrees": true
+   },
+   "6al": {
+    "input": "6al",
+    "olfdb_id": 33,
+    "olfdb_abbrev": "6al",
+    "olfdb_name": "hexanal",
+    "cid": 6184,
+    "cid_remy_table": 6184,
+    "cid_agrees": true
+   },
+   "B-cit": {
+    "input": "B-cit",
+    "olfdb_id": 5,
+    "olfdb_abbrev": "B-cit",
+    "olfdb_name": "B-citronellol",
+    "cid": 101977,
+    "cid_remy_table": 31276,
+    "cid_agrees": false
+   },
+   "IaA": {
+    "input": "IaA",
+    "olfdb_id": 36,
+    "olfdb_abbrev": "IaA",
+    "olfdb_name": "isoamyl acetate",
+    "cid": 31276,
+    "cid_remy_table": 7762,
+    "cid_agrees": false
+   },
+   "Lin": {
+    "input": "Lin",
+    "olfdb_id": 39,
+    "olfdb_abbrev": "Lin",
+    "olfdb_name": "linalool",
+    "cid": 6549,
+    "cid_remy_table": 7749,
+    "cid_agrees": false
+   },
+   "aa": {
+    "input": "aa",
+    "olfdb_id": 1,
+    "olfdb_abbrev": "aa",
+    "olfdb_name": "acetic acid",
+    "cid": 176,
+    "cid_remy_table": 101977,
+    "cid_agrees": false
+   },
+   "benz": {
+    "input": "benz",
+    "olfdb_id": 6,
+    "olfdb_abbrev": "benz",
+    "olfdb_name": "benzaldehyde",
+    "cid": 240,
+    "cid_remy_table": 6549,
+    "cid_agrees": false
+   },
+   "eb": {
+    "input": "eb",
+    "olfdb_id": 19,
+    "olfdb_abbrev": "eb",
+    "olfdb_name": "ethyl butyrate",
+    "cid": 7762,
+    "cid_remy_table": 176,
+    "cid_agrees": false
+   },
+   "ep": {
+    "input": "ep",
+    "olfdb_id": 22,
+    "olfdb_abbrev": "ep",
+    "olfdb_name": "ethyl propionate",
+    "cid": 7749,
+    "cid_remy_table": 240,
+    "cid_agrees": false
+   },
+   "ms": {
+    "input": "ms",
+    "olfdb_id": 45,
+    "olfdb_abbrev": "ms",
+    "olfdb_name": "methyl salicylate",
+    "cid": 4133,
+    "cid_remy_table": 4133,
+    "cid_agrees": true
+   },
+   "pa": {
+    "input": "pa",
+    "olfdb_id": 58,
+    "olfdb_abbrev": "pa",
+    "olfdb_name": "pentyl acetate",
+    "cid": 12348,
+    "cid_remy_table": 12348,
+    "cid_agrees": true
+   },
+   "t2h": {
+    "input": "t2h",
+    "olfdb_id": 65,
+    "olfdb_abbrev": "t2h",
+    "olfdb_name": "trans-2-hexenal",
+    "cid": 5281168,
+    "cid_remy_table": 5281168,
+    "cid_agrees": true
+   },
+   "va": {
+    "input": "va",
+    "olfdb_id": 66,
+    "olfdb_abbrev": "va",
+    "olfdb_name": "valeric acid",
+    "cid": 7991,
+    "cid_remy_table": 7991,
+    "cid_agrees": true
+   }
+  }
+ },
+ "olfdb": {
+  "url": "http://hal:8080/api/odors",
+  "n_odors": 76
+ },
+ "validation2": {
+  "n_flies": 20,
+  "flies": [
+   "2023-10-16/2",
+   "2023-10-16/3",
+   "2023-10-17/1",
+   "2023-10-17/2",
+   "2023-10-19/1",
+   "2023-10-25/1",
+   "2023-10-25/2",
+   "2023-11-02/1",
+   "2023-11-02/2",
+   "2023-11-03/1",
+   "2023-11-03/3",
+   "2023-11-07/2",
+   "2023-11-21/1",
+   "2023-11-29/3",
+   "2023-11-29/4",
+   "2023-12-06/1",
+   "2023-12-06/2",
+   "2023-12-13/1",
+   "2023-12-19/1",
+   "2023-12-19/2"
+  ],
+  "odors": [
+   "paa",
+   "-aPine",
+   "euc",
+   "B-myr",
+   "+pul",
+   "-bCar",
+   "1-3ol",
+   "1o3one",
+   "1p3one",
+   "2-mba",
+   "2-mib",
+   "EtOct",
+   "PEA",
+   "Z4-7al",
+   "bbenz",
+   "geos",
+   "ger",
+   "guai",
+   "long",
+   "mchav",
+   "menth",
+   "sab"
+  ],
+  "sets": {
+   "231": [
+    "paa",
+    "-aPine",
+    "euc",
+    "B-myr",
+    "+pul",
+    "-bCar",
+    "1-3ol",
+    "1o3one",
+    "1p3one",
+    "2-mba",
+    "2-mib",
+    "EtOct",
+    "PEA",
+    "Z4-7al",
+    "bbenz",
+    "geos",
+    "ger",
+    "guai",
+    "long",
+    "mchav",
+    "menth",
+    "sab"
+   ]
+  },
+  "concentrations": [
+   {
+    "odor": "+pul",
+    "remy_name": "+pul",
+    "conc": -2.0,
+    "n_presented": 14,
+    "n_in_rdm": 12,
+    "n_qc_dropped": 2,
+    "input_conc": -2.0,
+    "within_one_log": true
+   },
+   {
+    "odor": "-aPine",
+    "remy_name": "-aPine",
+    "conc": -2.0,
+    "n_presented": 9,
+    "n_in_rdm": 4,
+    "n_qc_dropped": 5,
+    "input_conc": -1.5,
+    "within_one_log": true
+   },
+   {
+    "odor": "-aPine",
+    "remy_name": "-aPine",
+    "conc": -1.5,
+    "n_presented": 5,
+    "n_in_rdm": 5,
+    "n_qc_dropped": 0,
+    "input_conc": -1.5,
+    "within_one_log": true
+   },
+   {
+    "odor": "-bCar",
+    "remy_name": "-bCar",
+    "conc": -3.0,
+    "n_presented": 12,
+    "n_in_rdm": 12,
+    "n_qc_dropped": 0,
+    "input_conc": -3.0,
+    "within_one_log": true
+   },
+   {
+    "odor": "1-3ol",
+    "remy_name": "1-prop",
+    "conc": -3.0,
+    "n_presented": 14,
+    "n_in_rdm": 14,
+    "n_qc_dropped": 0,
+    "input_conc": -3.0,
+    "within_one_log": true
+   },
+   {
+    "odor": "1o3one",
+    "remy_name": "1o3one",
+    "conc": -4.0,
+    "n_presented": 14,
+    "n_in_rdm": 14,
+    "n_qc_dropped": 0,
+    "input_conc": -4.0,
+    "within_one_log": true
+   },
+   {
+    "odor": "1p3one",
+    "remy_name": "1p3one",
+    "conc": -5.0,
+    "n_presented": 12,
+    "n_in_rdm": 12,
+    "n_qc_dropped": 0,
+    "input_conc": -5.0,
+    "within_one_log": true
+   },
+   {
+    "odor": "2-mba",
+    "remy_name": "2-mba",
+    "conc": -3.0,
+    "n_presented": 14,
+    "n_in_rdm": 14,
+    "n_qc_dropped": 0,
+    "input_conc": -3.0,
+    "within_one_log": true
+   },
+   {
+    "odor": "2-mib",
+    "remy_name": "2-mib",
+    "conc": -4.0,
+    "n_presented": 14,
+    "n_in_rdm": 13,
+    "n_qc_dropped": 1,
+    "input_conc": -4.0,
+    "within_one_log": true
+   },
+   {
+    "odor": "B-myr",
+    "remy_name": "B-myr",
+    "conc": -2.0,
+    "n_presented": 20,
+    "n_in_rdm": 18,
+    "n_qc_dropped": 2,
+    "input_conc": -2.0,
+    "within_one_log": true
+   },
+   {
+    "odor": "EtOct",
+    "remy_name": "EtOct",
+    "conc": -2.0,
+    "n_presented": 14,
+    "n_in_rdm": 14,
+    "n_qc_dropped": 0,
+    "input_conc": -2.0,
+    "within_one_log": true
+   },
+   {
+    "odor": "PEA",
+    "remy_name": "PEA",
+    "conc": -4.0,
+    "n_presented": 20,
+    "n_in_rdm": 20,
+    "n_qc_dropped": 0,
+    "input_conc": -4.0,
+    "within_one_log": true
+   },
+   {
+    "odor": "Z4-7al",
+    "remy_name": "Z4-7al",
+    "conc": -4.0,
+    "n_presented": 14,
+    "n_in_rdm": 11,
+    "n_qc_dropped": 3,
+    "input_conc": -4.0,
+    "within_one_log": true
+   },
+   {
+    "odor": "bbenz",
+    "remy_name": "bbenz",
+    "conc": -2.0,
+    "n_presented": 12,
+    "n_in_rdm": 11,
+    "n_qc_dropped": 1,
+    "input_conc": -2.0,
+    "within_one_log": true
+   },
+   {
+    "odor": "euc",
+    "remy_name": "euc",
+    "conc": -2.0,
+    "n_presented": 9,
+    "n_in_rdm": 7,
+    "n_qc_dropped": 2,
+    "input_conc": -1.75,
+    "within_one_log": true
+   },
+   {
+    "odor": "euc",
+    "remy_name": "euc",
+    "conc": -1.75,
+    "n_presented": 5,
+    "n_in_rdm": 1,
+    "n_qc_dropped": 4,
+    "input_conc": -1.75,
+    "within_one_log": true
+   },
+   {
+    "odor": "geos",
+    "remy_name": "geos",
+    "conc": -4.0,
+    "n_presented": 7,
+    "n_in_rdm": 7,
+    "n_qc_dropped": 0,
+    "input_conc": -4.0,
+    "within_one_log": true
+   },
+   {
+    "odor": "ger",
+    "remy_name": "ger",
+    "conc": -3.0,
+    "n_presented": 7,
+    "n_in_rdm": 5,
+    "n_qc_dropped": 2,
+    "input_conc": -2.0,
+    "within_one_log": true
+   },
+   {
+    "odor": "ger",
+    "remy_name": "ger",
+    "conc": -2.0,
+    "n_presented": 5,
+    "n_in_rdm": 5,
+    "n_qc_dropped": 0,
+    "input_conc": -2.0,
+    "within_one_log": true
+   },
+   {
+    "odor": "guai",
+    "remy_name": "guai",
+    "conc": -3.0,
+    "n_presented": 20,
+    "n_in_rdm": 20,
+    "n_qc_dropped": 0,
+    "input_conc": -3.0,
+    "within_one_log": true
+   },
+   {
+    "odor": "long",
+    "remy_name": "long",
+    "conc": -2.0,
+    "n_presented": 12,
+    "n_in_rdm": 12,
+    "n_qc_dropped": 0,
+    "input_conc": -2.0,
+    "within_one_log": true
+   },
+   {
+    "odor": "mchav",
+    "remy_name": "mchav",
+    "conc": -3.0,
+    "n_presented": 12,
+    "n_in_rdm": 12,
+    "n_qc_dropped": 0,
+    "input_conc": -3.0,
+    "within_one_log": true
+   },
+   {
+    "odor": "menth",
+    "remy_name": "menth",
+    "conc": -3.0,
+    "n_presented": 14,
+    "n_in_rdm": 14,
+    "n_qc_dropped": 0,
+    "input_conc": -3.0,
+    "within_one_log": true
+   },
+   {
+    "odor": "paa",
+    "remy_name": "PAA",
+    "conc": -4.0,
+    "n_presented": 20,
+    "n_in_rdm": 20,
+    "n_qc_dropped": 0,
+    "input_conc": -4.0,
+    "within_one_log": true
+   },
+   {
+    "odor": "sab",
+    "remy_name": "sab",
+    "conc": -3.0,
+    "n_presented": 14,
+    "n_in_rdm": 14,
+    "n_qc_dropped": 0,
+    "input_conc": -3.0,
+    "within_one_log": true
+   }
+  ],
+  "flies_by_pair": [
+   {
+    "odor_a": "paa",
+    "odor_b": "-aPine",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 9,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "paa",
+    "odor_b": "-aPine",
+    "conc_a": "-4",
+    "conc_b": "-2",
+    "n_flies": 4,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2"
+   },
+   {
+    "odor_a": "paa",
+    "odor_b": "-aPine",
+    "conc_a": "-4",
+    "conc_b": "-1.5",
+    "n_flies": 5,
+    "flies": "2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "paa",
+    "odor_b": "euc",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 8,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-11-07/2;2023-11-21/1"
+   },
+   {
+    "odor_a": "paa",
+    "odor_b": "euc",
+    "conc_a": "-4",
+    "conc_b": "-2",
+    "n_flies": 7,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-11-07/2"
+   },
+   {
+    "odor_a": "paa",
+    "odor_b": "euc",
+    "conc_a": "-4",
+    "conc_b": "-1.75",
+    "n_flies": 1,
+    "flies": "2023-11-21/1"
+   },
+   {
+    "odor_a": "paa",
+    "odor_b": "B-myr",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 18,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-02/1;2023-11-02/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-29/3;2023-11-29/4;2023-12-06/1;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "paa",
+    "odor_b": "+pul",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "paa",
+    "odor_b": "-bCar",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-02/1;2023-11-02/2;2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "paa",
+    "odor_b": "1-3ol",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 14,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "paa",
+    "odor_b": "1o3one",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 14,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "paa",
+    "odor_b": "1p3one",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-02/1;2023-11-02/2;2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "paa",
+    "odor_b": "2-mba",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 14,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "paa",
+    "odor_b": "2-mib",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 13,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-29/3;2023-11-29/4;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "paa",
+    "odor_b": "EtOct",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 14,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "paa",
+    "odor_b": "PEA",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 20,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-02/1;2023-11-02/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "paa",
+    "odor_b": "Z4-7al",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 11,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "paa",
+    "odor_b": "bbenz",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 11,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-02/2;2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "paa",
+    "odor_b": "geos",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 7,
+    "flies": "2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "paa",
+    "odor_b": "ger",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 10,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "paa",
+    "odor_b": "ger",
+    "conc_a": "-4",
+    "conc_b": "-3",
+    "n_flies": 5,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2"
+   },
+   {
+    "odor_a": "paa",
+    "odor_b": "ger",
+    "conc_a": "-4",
+    "conc_b": "-2",
+    "n_flies": 5,
+    "flies": "2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "paa",
+    "odor_b": "guai",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 20,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-02/1;2023-11-02/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "paa",
+    "odor_b": "long",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-02/1;2023-11-02/2;2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "paa",
+    "odor_b": "mchav",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-02/1;2023-11-02/2;2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "paa",
+    "odor_b": "menth",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 14,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "paa",
+    "odor_b": "sab",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 14,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "euc",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 5,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-21/1"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "euc",
+    "conc_a": "-2",
+    "conc_b": "-2",
+    "n_flies": 4,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "euc",
+    "conc_a": "-1.5",
+    "conc_b": "-1.75",
+    "n_flies": 1,
+    "flies": "2023-11-21/1"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "B-myr",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 7,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-29/3;2023-11-29/4;2023-12-06/1"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "B-myr",
+    "conc_a": "-2",
+    "conc_b": "-2",
+    "n_flies": 4,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "B-myr",
+    "conc_a": "-1.5",
+    "conc_b": "-2",
+    "n_flies": 3,
+    "flies": "2023-11-29/3;2023-11-29/4;2023-12-06/1"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "+pul",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 9,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "+pul",
+    "conc_a": "-2",
+    "conc_b": "-2",
+    "n_flies": 4,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "+pul",
+    "conc_a": "-1.5",
+    "conc_b": "-2",
+    "n_flies": 5,
+    "flies": "2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "-bCar",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 4,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "-bCar",
+    "conc_a": "-2",
+    "conc_b": "-3",
+    "n_flies": 2,
+    "flies": "2023-10-17/1;2023-10-17/2"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "-bCar",
+    "conc_a": "-1.5",
+    "conc_b": "-3",
+    "n_flies": 2,
+    "flies": "2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "1-3ol",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 5,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-11-21/1;2023-11-29/3;2023-11-29/4"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "1-3ol",
+    "conc_a": "-2",
+    "conc_b": "-3",
+    "n_flies": 2,
+    "flies": "2023-10-16/2;2023-10-16/3"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "1-3ol",
+    "conc_a": "-1.5",
+    "conc_b": "-3",
+    "n_flies": 3,
+    "flies": "2023-11-21/1;2023-11-29/3;2023-11-29/4"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "1o3one",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 5,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-11-21/1;2023-11-29/3;2023-11-29/4"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "1o3one",
+    "conc_a": "-2",
+    "conc_b": "-4",
+    "n_flies": 2,
+    "flies": "2023-10-16/2;2023-10-16/3"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "1o3one",
+    "conc_a": "-1.5",
+    "conc_b": "-4",
+    "n_flies": 3,
+    "flies": "2023-11-21/1;2023-11-29/3;2023-11-29/4"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "1p3one",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 4,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "1p3one",
+    "conc_a": "-2",
+    "conc_b": "-5",
+    "n_flies": 2,
+    "flies": "2023-10-17/1;2023-10-17/2"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "1p3one",
+    "conc_a": "-1.5",
+    "conc_b": "-5",
+    "n_flies": 2,
+    "flies": "2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "2-mba",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 9,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "2-mba",
+    "conc_a": "-2",
+    "conc_b": "-3",
+    "n_flies": 4,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "2-mba",
+    "conc_a": "-1.5",
+    "conc_b": "-3",
+    "n_flies": 5,
+    "flies": "2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "2-mib",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 4,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-11-29/3;2023-11-29/4"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "2-mib",
+    "conc_a": "-2",
+    "conc_b": "-4",
+    "n_flies": 2,
+    "flies": "2023-10-16/2;2023-10-16/3"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "2-mib",
+    "conc_a": "-1.5",
+    "conc_b": "-4",
+    "n_flies": 2,
+    "flies": "2023-11-29/3;2023-11-29/4"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "EtOct",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 5,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-11-21/1;2023-11-29/3;2023-11-29/4"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "EtOct",
+    "conc_a": "-2",
+    "conc_b": "-2",
+    "n_flies": 2,
+    "flies": "2023-10-16/2;2023-10-16/3"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "EtOct",
+    "conc_a": "-1.5",
+    "conc_b": "-2",
+    "n_flies": 3,
+    "flies": "2023-11-21/1;2023-11-29/3;2023-11-29/4"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "PEA",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 9,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "PEA",
+    "conc_a": "-2",
+    "conc_b": "-4",
+    "n_flies": 4,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "PEA",
+    "conc_a": "-1.5",
+    "conc_b": "-4",
+    "n_flies": 5,
+    "flies": "2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "Z4-7al",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 5,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-11-21/1;2023-11-29/3;2023-11-29/4"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "Z4-7al",
+    "conc_a": "-2",
+    "conc_b": "-4",
+    "n_flies": 2,
+    "flies": "2023-10-16/2;2023-10-16/3"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "Z4-7al",
+    "conc_a": "-1.5",
+    "conc_b": "-4",
+    "n_flies": 3,
+    "flies": "2023-11-21/1;2023-11-29/3;2023-11-29/4"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "bbenz",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 4,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "bbenz",
+    "conc_a": "-2",
+    "conc_b": "-2",
+    "n_flies": 2,
+    "flies": "2023-10-17/1;2023-10-17/2"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "bbenz",
+    "conc_a": "-1.5",
+    "conc_b": "-2",
+    "n_flies": 2,
+    "flies": "2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "geos",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 3,
+    "flies": "2023-11-21/1;2023-11-29/3;2023-11-29/4"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "ger",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 4,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "ger",
+    "conc_a": "-2",
+    "conc_b": "-3",
+    "n_flies": 2,
+    "flies": "2023-10-17/1;2023-10-17/2"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "ger",
+    "conc_a": "-1.5",
+    "conc_b": "-2",
+    "n_flies": 2,
+    "flies": "2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "guai",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 9,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "guai",
+    "conc_a": "-2",
+    "conc_b": "-3",
+    "n_flies": 4,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "guai",
+    "conc_a": "-1.5",
+    "conc_b": "-3",
+    "n_flies": 5,
+    "flies": "2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "long",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 4,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "long",
+    "conc_a": "-2",
+    "conc_b": "-2",
+    "n_flies": 2,
+    "flies": "2023-10-17/1;2023-10-17/2"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "long",
+    "conc_a": "-1.5",
+    "conc_b": "-2",
+    "n_flies": 2,
+    "flies": "2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "mchav",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 4,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "mchav",
+    "conc_a": "-2",
+    "conc_b": "-3",
+    "n_flies": 2,
+    "flies": "2023-10-17/1;2023-10-17/2"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "mchav",
+    "conc_a": "-1.5",
+    "conc_b": "-3",
+    "n_flies": 2,
+    "flies": "2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "menth",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 9,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "menth",
+    "conc_a": "-2",
+    "conc_b": "-3",
+    "n_flies": 4,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "menth",
+    "conc_a": "-1.5",
+    "conc_b": "-3",
+    "n_flies": 5,
+    "flies": "2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "sab",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 9,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "sab",
+    "conc_a": "-2",
+    "conc_b": "-3",
+    "n_flies": 4,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2"
+   },
+   {
+    "odor_a": "-aPine",
+    "odor_b": "sab",
+    "conc_a": "-1.5",
+    "conc_b": "-3",
+    "n_flies": 5,
+    "flies": "2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "B-myr",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 7,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-11-07/2"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "+pul",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-07/2;2023-11-21/1"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "+pul",
+    "conc_a": "-2",
+    "conc_b": "-2",
+    "n_flies": 5,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-07/2"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "+pul",
+    "conc_a": "-1.75",
+    "conc_b": "-2",
+    "n_flies": 1,
+    "flies": "2023-11-21/1"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "-bCar",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 4,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "1-3ol",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 4,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-11-07/2;2023-11-21/1"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "1-3ol",
+    "conc_a": "-2",
+    "conc_b": "-3",
+    "n_flies": 3,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-11-07/2"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "1-3ol",
+    "conc_a": "-1.75",
+    "conc_b": "-3",
+    "n_flies": 1,
+    "flies": "2023-11-21/1"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "1o3one",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 4,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-11-07/2;2023-11-21/1"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "1o3one",
+    "conc_a": "-2",
+    "conc_b": "-4",
+    "n_flies": 3,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-11-07/2"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "1o3one",
+    "conc_a": "-1.75",
+    "conc_b": "-4",
+    "n_flies": 1,
+    "flies": "2023-11-21/1"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "1p3one",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 4,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "2-mba",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 8,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-11-07/2;2023-11-21/1"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "2-mba",
+    "conc_a": "-2",
+    "conc_b": "-3",
+    "n_flies": 7,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-11-07/2"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "2-mba",
+    "conc_a": "-1.75",
+    "conc_b": "-3",
+    "n_flies": 1,
+    "flies": "2023-11-21/1"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "2-mib",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 3,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-11-07/2"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "EtOct",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 4,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-11-07/2;2023-11-21/1"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "EtOct",
+    "conc_a": "-2",
+    "conc_b": "-2",
+    "n_flies": 3,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-11-07/2"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "EtOct",
+    "conc_a": "-1.75",
+    "conc_b": "-2",
+    "n_flies": 1,
+    "flies": "2023-11-21/1"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "PEA",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 8,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-11-07/2;2023-11-21/1"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "PEA",
+    "conc_a": "-2",
+    "conc_b": "-4",
+    "n_flies": 7,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-11-07/2"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "PEA",
+    "conc_a": "-1.75",
+    "conc_b": "-4",
+    "n_flies": 1,
+    "flies": "2023-11-21/1"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "Z4-7al",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 3,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-11-21/1"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "Z4-7al",
+    "conc_a": "-2",
+    "conc_b": "-4",
+    "n_flies": 2,
+    "flies": "2023-10-16/2;2023-10-16/3"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "Z4-7al",
+    "conc_a": "-1.75",
+    "conc_b": "-4",
+    "n_flies": 1,
+    "flies": "2023-11-21/1"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "bbenz",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 3,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-11-02/2"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "geos",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 2,
+    "flies": "2023-11-07/2;2023-11-21/1"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "geos",
+    "conc_a": "-2",
+    "conc_b": "-4",
+    "n_flies": 1,
+    "flies": "2023-11-07/2"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "geos",
+    "conc_a": "-1.75",
+    "conc_b": "-4",
+    "n_flies": 1,
+    "flies": "2023-11-21/1"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "ger",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 2,
+    "flies": "2023-10-17/1;2023-10-17/2"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "guai",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 8,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-11-07/2;2023-11-21/1"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "guai",
+    "conc_a": "-2",
+    "conc_b": "-3",
+    "n_flies": 7,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-11-07/2"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "guai",
+    "conc_a": "-1.75",
+    "conc_b": "-3",
+    "n_flies": 1,
+    "flies": "2023-11-21/1"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "long",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 4,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "mchav",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 4,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "menth",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 8,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-11-07/2;2023-11-21/1"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "menth",
+    "conc_a": "-2",
+    "conc_b": "-3",
+    "n_flies": 7,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-11-07/2"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "menth",
+    "conc_a": "-1.75",
+    "conc_b": "-3",
+    "n_flies": 1,
+    "flies": "2023-11-21/1"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "sab",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 8,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-11-07/2;2023-11-21/1"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "sab",
+    "conc_a": "-2",
+    "conc_b": "-3",
+    "n_flies": 7,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-11-07/2"
+   },
+   {
+    "odor_a": "euc",
+    "odor_b": "sab",
+    "conc_a": "-1.75",
+    "conc_b": "-3",
+    "n_flies": 1,
+    "flies": "2023-11-21/1"
+   },
+   {
+    "odor_a": "B-myr",
+    "odor_b": "+pul",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 10,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-29/3;2023-11-29/4;2023-12-06/1"
+   },
+   {
+    "odor_a": "B-myr",
+    "odor_b": "-bCar",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 11,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-02/1;2023-11-02/2;2023-12-06/1;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "B-myr",
+    "odor_b": "1-3ol",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 13,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-29/3;2023-11-29/4;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "B-myr",
+    "odor_b": "1o3one",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 13,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-29/3;2023-11-29/4;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "B-myr",
+    "odor_b": "1p3one",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 11,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-02/1;2023-11-02/2;2023-12-06/1;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "B-myr",
+    "odor_b": "2-mba",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-29/3;2023-11-29/4;2023-12-06/1"
+   },
+   {
+    "odor_a": "B-myr",
+    "odor_b": "2-mib",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 13,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-29/3;2023-11-29/4;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "B-myr",
+    "odor_b": "EtOct",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 13,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-29/3;2023-11-29/4;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "B-myr",
+    "odor_b": "PEA",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 18,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-02/1;2023-11-02/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-29/3;2023-11-29/4;2023-12-06/1;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "B-myr",
+    "odor_b": "Z4-7al",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 10,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-29/3;2023-11-29/4;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "B-myr",
+    "odor_b": "bbenz",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 10,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-02/2;2023-12-06/1;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "B-myr",
+    "odor_b": "geos",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-11-07/2;2023-11-29/3;2023-11-29/4;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "B-myr",
+    "odor_b": "ger",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 9,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-12-06/1;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "B-myr",
+    "odor_b": "ger",
+    "conc_a": "-2",
+    "conc_b": "-3",
+    "n_flies": 5,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2"
+   },
+   {
+    "odor_a": "B-myr",
+    "odor_b": "ger",
+    "conc_a": "-2",
+    "conc_b": "-2",
+    "n_flies": 4,
+    "flies": "2023-12-06/1;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "B-myr",
+    "odor_b": "guai",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 18,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-02/1;2023-11-02/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-29/3;2023-11-29/4;2023-12-06/1;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "B-myr",
+    "odor_b": "long",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 11,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-02/1;2023-11-02/2;2023-12-06/1;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "B-myr",
+    "odor_b": "mchav",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 11,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-02/1;2023-11-02/2;2023-12-06/1;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "B-myr",
+    "odor_b": "menth",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-29/3;2023-11-29/4;2023-12-06/1"
+   },
+   {
+    "odor_a": "B-myr",
+    "odor_b": "sab",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-29/3;2023-11-29/4;2023-12-06/1"
+   },
+   {
+    "odor_a": "+pul",
+    "odor_b": "-bCar",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 4,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "+pul",
+    "odor_b": "1-3ol",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 8,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4"
+   },
+   {
+    "odor_a": "+pul",
+    "odor_b": "1o3one",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 8,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4"
+   },
+   {
+    "odor_a": "+pul",
+    "odor_b": "1p3one",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 4,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "+pul",
+    "odor_b": "2-mba",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "+pul",
+    "odor_b": "2-mib",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 7,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-29/3;2023-11-29/4"
+   },
+   {
+    "odor_a": "+pul",
+    "odor_b": "EtOct",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 8,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4"
+   },
+   {
+    "odor_a": "+pul",
+    "odor_b": "PEA",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "+pul",
+    "odor_b": "Z4-7al",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 5,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-11-21/1;2023-11-29/3;2023-11-29/4"
+   },
+   {
+    "odor_a": "+pul",
+    "odor_b": "bbenz",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 4,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "+pul",
+    "odor_b": "geos",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 4,
+    "flies": "2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4"
+   },
+   {
+    "odor_a": "+pul",
+    "odor_b": "ger",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 4,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "+pul",
+    "odor_b": "ger",
+    "conc_a": "-2",
+    "conc_b": "-3",
+    "n_flies": 2,
+    "flies": "2023-10-17/1;2023-10-17/2"
+   },
+   {
+    "odor_a": "+pul",
+    "odor_b": "ger",
+    "conc_a": "-2",
+    "conc_b": "-2",
+    "n_flies": 2,
+    "flies": "2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "+pul",
+    "odor_b": "guai",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "+pul",
+    "odor_b": "long",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 4,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "+pul",
+    "odor_b": "mchav",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 4,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "+pul",
+    "odor_b": "menth",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "+pul",
+    "odor_b": "sab",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "-bCar",
+    "odor_b": "1-3ol",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "-bCar",
+    "odor_b": "1o3one",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "-bCar",
+    "odor_b": "1p3one",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-02/1;2023-11-02/2;2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "-bCar",
+    "odor_b": "2-mba",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "-bCar",
+    "odor_b": "2-mib",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "-bCar",
+    "odor_b": "EtOct",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "-bCar",
+    "odor_b": "PEA",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-02/1;2023-11-02/2;2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "-bCar",
+    "odor_b": "Z4-7al",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "-bCar",
+    "odor_b": "bbenz",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 11,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-02/2;2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "-bCar",
+    "odor_b": "geos",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 3,
+    "flies": "2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "-bCar",
+    "odor_b": "ger",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 10,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "-bCar",
+    "odor_b": "ger",
+    "conc_a": "-3",
+    "conc_b": "-3",
+    "n_flies": 5,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2"
+   },
+   {
+    "odor_a": "-bCar",
+    "odor_b": "ger",
+    "conc_a": "-3",
+    "conc_b": "-2",
+    "n_flies": 5,
+    "flies": "2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "-bCar",
+    "odor_b": "guai",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-02/1;2023-11-02/2;2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "-bCar",
+    "odor_b": "long",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-02/1;2023-11-02/2;2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "-bCar",
+    "odor_b": "mchav",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-02/1;2023-11-02/2;2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "-bCar",
+    "odor_b": "menth",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "-bCar",
+    "odor_b": "sab",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "1-3ol",
+    "odor_b": "1o3one",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 14,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "1-3ol",
+    "odor_b": "1p3one",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "1-3ol",
+    "odor_b": "2-mba",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 8,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4"
+   },
+   {
+    "odor_a": "1-3ol",
+    "odor_b": "2-mib",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 13,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-29/3;2023-11-29/4;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "1-3ol",
+    "odor_b": "EtOct",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 14,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "1-3ol",
+    "odor_b": "PEA",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 14,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "1-3ol",
+    "odor_b": "Z4-7al",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 11,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "1-3ol",
+    "odor_b": "bbenz",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "1-3ol",
+    "odor_b": "geos",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 7,
+    "flies": "2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "1-3ol",
+    "odor_b": "ger",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "1-3ol",
+    "odor_b": "ger",
+    "conc_a": "-3",
+    "conc_b": "-3",
+    "n_flies": 3,
+    "flies": "2023-10-19/1;2023-10-25/1;2023-10-25/2"
+   },
+   {
+    "odor_a": "1-3ol",
+    "odor_b": "ger",
+    "conc_a": "-3",
+    "conc_b": "-2",
+    "n_flies": 3,
+    "flies": "2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "1-3ol",
+    "odor_b": "guai",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 14,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "1-3ol",
+    "odor_b": "long",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "1-3ol",
+    "odor_b": "mchav",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "1-3ol",
+    "odor_b": "menth",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 8,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4"
+   },
+   {
+    "odor_a": "1-3ol",
+    "odor_b": "sab",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 8,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4"
+   },
+   {
+    "odor_a": "1o3one",
+    "odor_b": "1p3one",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "1o3one",
+    "odor_b": "2-mba",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 8,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4"
+   },
+   {
+    "odor_a": "1o3one",
+    "odor_b": "2-mib",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 13,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-29/3;2023-11-29/4;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "1o3one",
+    "odor_b": "EtOct",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 14,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "1o3one",
+    "odor_b": "PEA",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 14,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "1o3one",
+    "odor_b": "Z4-7al",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 11,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "1o3one",
+    "odor_b": "bbenz",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "1o3one",
+    "odor_b": "geos",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 7,
+    "flies": "2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "1o3one",
+    "odor_b": "ger",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "1o3one",
+    "odor_b": "ger",
+    "conc_a": "-4",
+    "conc_b": "-3",
+    "n_flies": 3,
+    "flies": "2023-10-19/1;2023-10-25/1;2023-10-25/2"
+   },
+   {
+    "odor_a": "1o3one",
+    "odor_b": "ger",
+    "conc_a": "-4",
+    "conc_b": "-2",
+    "n_flies": 3,
+    "flies": "2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "1o3one",
+    "odor_b": "guai",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 14,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "1o3one",
+    "odor_b": "long",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "1o3one",
+    "odor_b": "mchav",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "1o3one",
+    "odor_b": "menth",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 8,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4"
+   },
+   {
+    "odor_a": "1o3one",
+    "odor_b": "sab",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 8,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4"
+   },
+   {
+    "odor_a": "1p3one",
+    "odor_b": "2-mba",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "1p3one",
+    "odor_b": "2-mib",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "1p3one",
+    "odor_b": "EtOct",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "1p3one",
+    "odor_b": "PEA",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-02/1;2023-11-02/2;2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "1p3one",
+    "odor_b": "Z4-7al",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "1p3one",
+    "odor_b": "bbenz",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 11,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-02/2;2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "1p3one",
+    "odor_b": "geos",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 3,
+    "flies": "2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "1p3one",
+    "odor_b": "ger",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 10,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "1p3one",
+    "odor_b": "ger",
+    "conc_a": "-5",
+    "conc_b": "-3",
+    "n_flies": 5,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2"
+   },
+   {
+    "odor_a": "1p3one",
+    "odor_b": "ger",
+    "conc_a": "-5",
+    "conc_b": "-2",
+    "n_flies": 5,
+    "flies": "2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "1p3one",
+    "odor_b": "guai",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-02/1;2023-11-02/2;2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "1p3one",
+    "odor_b": "long",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-02/1;2023-11-02/2;2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "1p3one",
+    "odor_b": "mchav",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-02/1;2023-11-02/2;2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "1p3one",
+    "odor_b": "menth",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "1p3one",
+    "odor_b": "sab",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "2-mba",
+    "odor_b": "2-mib",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 7,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-29/3;2023-11-29/4"
+   },
+   {
+    "odor_a": "2-mba",
+    "odor_b": "EtOct",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 8,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4"
+   },
+   {
+    "odor_a": "2-mba",
+    "odor_b": "PEA",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 14,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "2-mba",
+    "odor_b": "Z4-7al",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 5,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-11-21/1;2023-11-29/3;2023-11-29/4"
+   },
+   {
+    "odor_a": "2-mba",
+    "odor_b": "bbenz",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 5,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-11-02/2;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "2-mba",
+    "odor_b": "geos",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 4,
+    "flies": "2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4"
+   },
+   {
+    "odor_a": "2-mba",
+    "odor_b": "ger",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 4,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "2-mba",
+    "odor_b": "ger",
+    "conc_a": "-3",
+    "conc_b": "-3",
+    "n_flies": 2,
+    "flies": "2023-10-17/1;2023-10-17/2"
+   },
+   {
+    "odor_a": "2-mba",
+    "odor_b": "ger",
+    "conc_a": "-3",
+    "conc_b": "-2",
+    "n_flies": 2,
+    "flies": "2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "2-mba",
+    "odor_b": "guai",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 14,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "2-mba",
+    "odor_b": "long",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "2-mba",
+    "odor_b": "mchav",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "2-mba",
+    "odor_b": "menth",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 14,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "2-mba",
+    "odor_b": "sab",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 14,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "2-mib",
+    "odor_b": "EtOct",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 13,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-29/3;2023-11-29/4;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "2-mib",
+    "odor_b": "PEA",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 13,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-29/3;2023-11-29/4;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "2-mib",
+    "odor_b": "Z4-7al",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 10,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-29/3;2023-11-29/4;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "2-mib",
+    "odor_b": "bbenz",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "2-mib",
+    "odor_b": "geos",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-11-07/2;2023-11-29/3;2023-11-29/4;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "2-mib",
+    "odor_b": "ger",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "2-mib",
+    "odor_b": "ger",
+    "conc_a": "-4",
+    "conc_b": "-3",
+    "n_flies": 3,
+    "flies": "2023-10-19/1;2023-10-25/1;2023-10-25/2"
+   },
+   {
+    "odor_a": "2-mib",
+    "odor_b": "ger",
+    "conc_a": "-4",
+    "conc_b": "-2",
+    "n_flies": 3,
+    "flies": "2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "2-mib",
+    "odor_b": "guai",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 13,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-29/3;2023-11-29/4;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "2-mib",
+    "odor_b": "long",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "2-mib",
+    "odor_b": "mchav",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "2-mib",
+    "odor_b": "menth",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 7,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-29/3;2023-11-29/4"
+   },
+   {
+    "odor_a": "2-mib",
+    "odor_b": "sab",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 7,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-29/3;2023-11-29/4"
+   },
+   {
+    "odor_a": "EtOct",
+    "odor_b": "PEA",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 14,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "EtOct",
+    "odor_b": "Z4-7al",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 11,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "EtOct",
+    "odor_b": "bbenz",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "EtOct",
+    "odor_b": "geos",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 7,
+    "flies": "2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "EtOct",
+    "odor_b": "ger",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "EtOct",
+    "odor_b": "ger",
+    "conc_a": "-2",
+    "conc_b": "-3",
+    "n_flies": 3,
+    "flies": "2023-10-19/1;2023-10-25/1;2023-10-25/2"
+   },
+   {
+    "odor_a": "EtOct",
+    "odor_b": "ger",
+    "conc_a": "-2",
+    "conc_b": "-2",
+    "n_flies": 3,
+    "flies": "2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "EtOct",
+    "odor_b": "guai",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 14,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "EtOct",
+    "odor_b": "long",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "EtOct",
+    "odor_b": "mchav",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "EtOct",
+    "odor_b": "menth",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 8,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4"
+   },
+   {
+    "odor_a": "EtOct",
+    "odor_b": "sab",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 8,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4"
+   },
+   {
+    "odor_a": "PEA",
+    "odor_b": "Z4-7al",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 11,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "PEA",
+    "odor_b": "bbenz",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 11,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-02/2;2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "PEA",
+    "odor_b": "geos",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 7,
+    "flies": "2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "PEA",
+    "odor_b": "ger",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 10,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "PEA",
+    "odor_b": "ger",
+    "conc_a": "-4",
+    "conc_b": "-3",
+    "n_flies": 5,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2"
+   },
+   {
+    "odor_a": "PEA",
+    "odor_b": "ger",
+    "conc_a": "-4",
+    "conc_b": "-2",
+    "n_flies": 5,
+    "flies": "2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "PEA",
+    "odor_b": "guai",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 20,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-02/1;2023-11-02/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "PEA",
+    "odor_b": "long",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-02/1;2023-11-02/2;2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "PEA",
+    "odor_b": "mchav",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-02/1;2023-11-02/2;2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "PEA",
+    "odor_b": "menth",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 14,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "PEA",
+    "odor_b": "sab",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 14,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "Z4-7al",
+    "odor_b": "bbenz",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "Z4-7al",
+    "odor_b": "geos",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "Z4-7al",
+    "odor_b": "ger",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "Z4-7al",
+    "odor_b": "ger",
+    "conc_a": "-4",
+    "conc_b": "-3",
+    "n_flies": 3,
+    "flies": "2023-10-19/1;2023-10-25/1;2023-10-25/2"
+   },
+   {
+    "odor_a": "Z4-7al",
+    "odor_b": "ger",
+    "conc_a": "-4",
+    "conc_b": "-2",
+    "n_flies": 3,
+    "flies": "2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "Z4-7al",
+    "odor_b": "guai",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 11,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "Z4-7al",
+    "odor_b": "long",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "Z4-7al",
+    "odor_b": "mchav",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "Z4-7al",
+    "odor_b": "menth",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 5,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-11-21/1;2023-11-29/3;2023-11-29/4"
+   },
+   {
+    "odor_a": "Z4-7al",
+    "odor_b": "sab",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 5,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-11-21/1;2023-11-29/3;2023-11-29/4"
+   },
+   {
+    "odor_a": "bbenz",
+    "odor_b": "geos",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 3,
+    "flies": "2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "bbenz",
+    "odor_b": "ger",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 10,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "bbenz",
+    "odor_b": "ger",
+    "conc_a": "-2",
+    "conc_b": "-3",
+    "n_flies": 5,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2"
+   },
+   {
+    "odor_a": "bbenz",
+    "odor_b": "ger",
+    "conc_a": "-2",
+    "conc_b": "-2",
+    "n_flies": 5,
+    "flies": "2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "bbenz",
+    "odor_b": "guai",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 11,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-02/2;2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "bbenz",
+    "odor_b": "long",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 11,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-02/2;2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "bbenz",
+    "odor_b": "mchav",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 11,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-02/2;2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "bbenz",
+    "odor_b": "menth",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 5,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-11-02/2;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "bbenz",
+    "odor_b": "sab",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 5,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-11-02/2;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "geos",
+    "odor_b": "ger",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 3,
+    "flies": "2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "geos",
+    "odor_b": "guai",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 7,
+    "flies": "2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "geos",
+    "odor_b": "long",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 3,
+    "flies": "2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "geos",
+    "odor_b": "mchav",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 3,
+    "flies": "2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "geos",
+    "odor_b": "menth",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 4,
+    "flies": "2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4"
+   },
+   {
+    "odor_a": "geos",
+    "odor_b": "sab",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 4,
+    "flies": "2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4"
+   },
+   {
+    "odor_a": "ger",
+    "odor_b": "guai",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 10,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "ger",
+    "odor_b": "guai",
+    "conc_a": "-3",
+    "conc_b": "-3",
+    "n_flies": 5,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2"
+   },
+   {
+    "odor_a": "ger",
+    "odor_b": "guai",
+    "conc_a": "-2",
+    "conc_b": "-3",
+    "n_flies": 5,
+    "flies": "2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "ger",
+    "odor_b": "long",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 10,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "ger",
+    "odor_b": "long",
+    "conc_a": "-3",
+    "conc_b": "-2",
+    "n_flies": 5,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2"
+   },
+   {
+    "odor_a": "ger",
+    "odor_b": "long",
+    "conc_a": "-2",
+    "conc_b": "-2",
+    "n_flies": 5,
+    "flies": "2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "ger",
+    "odor_b": "mchav",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 10,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "ger",
+    "odor_b": "mchav",
+    "conc_a": "-3",
+    "conc_b": "-3",
+    "n_flies": 5,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2"
+   },
+   {
+    "odor_a": "ger",
+    "odor_b": "mchav",
+    "conc_a": "-2",
+    "conc_b": "-3",
+    "n_flies": 5,
+    "flies": "2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "ger",
+    "odor_b": "menth",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 4,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "ger",
+    "odor_b": "menth",
+    "conc_a": "-3",
+    "conc_b": "-3",
+    "n_flies": 2,
+    "flies": "2023-10-17/1;2023-10-17/2"
+   },
+   {
+    "odor_a": "ger",
+    "odor_b": "menth",
+    "conc_a": "-2",
+    "conc_b": "-3",
+    "n_flies": 2,
+    "flies": "2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "ger",
+    "odor_b": "sab",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 4,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "ger",
+    "odor_b": "sab",
+    "conc_a": "-3",
+    "conc_b": "-3",
+    "n_flies": 2,
+    "flies": "2023-10-17/1;2023-10-17/2"
+   },
+   {
+    "odor_a": "ger",
+    "odor_b": "sab",
+    "conc_a": "-2",
+    "conc_b": "-3",
+    "n_flies": 2,
+    "flies": "2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "guai",
+    "odor_b": "long",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-02/1;2023-11-02/2;2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "guai",
+    "odor_b": "mchav",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-02/1;2023-11-02/2;2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "guai",
+    "odor_b": "menth",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 14,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "guai",
+    "odor_b": "sab",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 14,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "long",
+    "odor_b": "mchav",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-02/1;2023-11-02/2;2023-12-06/1;2023-12-06/2;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   },
+   {
+    "odor_a": "long",
+    "odor_b": "menth",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "long",
+    "odor_b": "sab",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "mchav",
+    "odor_b": "menth",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "mchav",
+    "odor_b": "sab",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 6,
+    "flies": "2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-12-06/1;2023-12-06/2"
+   },
+   {
+    "odor_a": "menth",
+    "odor_b": "sab",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 14,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-11-02/1;2023-11-02/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-21/1;2023-11-29/3;2023-11-29/4;2023-12-06/1;2023-12-06/2"
+   }
+  ],
+  "pairs_by_n_flies": {
+   "2": 2,
+   "3": 10,
+   "4": 27,
+   "5": 12,
+   "6": 46,
+   "7": 12,
+   "8": 18,
+   "9": 8,
+   "10": 12,
+   "11": 17,
+   "12": 27,
+   "13": 10,
+   "14": 24,
+   "18": 3,
+   "20": 3
+  },
+  "n_pairs_min_flies": 219,
+  "qc_identity": {
+   "table_only": [],
+   "list_only": [],
+   "equal": true,
+   "in_rdm_is_presented_not_dropped": true,
+   "n_dropped": 22
+  },
+  "verdict_pair_flies": [
+   {
+    "odor_a": "paa",
+    "odor_b": "B-myr",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 18,
+    "flies": "2023-10-16/2;2023-10-16/3;2023-10-17/1;2023-10-17/2;2023-10-19/1;2023-10-25/1;2023-10-25/2;2023-11-02/1;2023-11-02/2;2023-11-03/1;2023-11-03/3;2023-11-07/2;2023-11-29/3;2023-11-29/4;2023-12-06/1;2023-12-13/1;2023-12-19/1;2023-12-19/2"
+   }
+  ]
+ },
+ "megamat17": {
+  "n_flies": 18,
+  "flies": [
+   "2018-10-21/1",
+   "2019-03-06/3",
+   "2019-03-06/4",
+   "2019-03-07/2",
+   "2019-04-26/4",
+   "2019-05-09/4",
+   "2019-05-09/5",
+   "2019-05-23/2",
+   "2019-05-24/1",
+   "2019-05-24/3",
+   "2019-05-24/4",
+   "2019-07-19/2",
+   "2019-09-12/1",
+   "2019-09-12/2",
+   "2022-10-10/1",
+   "2022-10-10/2",
+   "2022-10-11/1",
+   "2022-11-10/1"
+  ],
+  "odors": [
+   "2h",
+   "IaA",
+   "pa",
+   "2-but",
+   "eb",
+   "ep",
+   "6al",
+   "t2h",
+   "1-8ol",
+   "1-5ol",
+   "1-6ol",
+   "ms",
+   "B-cit",
+   "Lin",
+   "aa",
+   "benz",
+   "va"
+  ],
+  "concentrations": [
+   {
+    "odor": "1-5ol",
+    "remy_name": "1-5ol",
+    "conc": -3.0,
+    "n_presented": 10,
+    "n_in_rdm": 10,
+    "n_qc_dropped": 0,
+    "input_conc": -3.0
+   },
+   {
+    "odor": "1-6ol",
+    "remy_name": "1-6ol",
+    "conc": -3.0,
+    "n_presented": 18,
+    "n_in_rdm": 18,
+    "n_qc_dropped": 0,
+    "input_conc": -3.0
+   },
+   {
+    "odor": "1-8ol",
+    "remy_name": "1-8ol",
+    "conc": -3.0,
+    "n_presented": 16,
+    "n_in_rdm": 16,
+    "n_qc_dropped": 0,
+    "input_conc": -3.0
+   },
+   {
+    "odor": "2-but",
+    "remy_name": "2-but",
+    "conc": -3.0,
+    "n_presented": 17,
+    "n_in_rdm": 17,
+    "n_qc_dropped": 0,
+    "input_conc": -3.0
+   },
+   {
+    "odor": "2h",
+    "remy_name": "2h",
+    "conc": -3.0,
+    "n_presented": 14,
+    "n_in_rdm": 14,
+    "n_qc_dropped": 0,
+    "input_conc": -3.0
+   },
+   {
+    "odor": "6al",
+    "remy_name": "6al",
+    "conc": -3.0,
+    "n_presented": 15,
+    "n_in_rdm": 15,
+    "n_qc_dropped": 0,
+    "input_conc": -3.0
+   },
+   {
+    "odor": "B-cit",
+    "remy_name": "B-cit",
+    "conc": -3.0,
+    "n_presented": 12,
+    "n_in_rdm": 12,
+    "n_qc_dropped": 0,
+    "input_conc": -3.0
+   },
+   {
+    "odor": "IaA",
+    "remy_name": "IaA",
+    "conc": -3.0,
+    "n_presented": 12,
+    "n_in_rdm": 12,
+    "n_qc_dropped": 0,
+    "input_conc": -3.0
+   },
+   {
+    "odor": "Lin",
+    "remy_name": "Lin",
+    "conc": -3.0,
+    "n_presented": 10,
+    "n_in_rdm": 10,
+    "n_qc_dropped": 0,
+    "input_conc": -3.0
+   },
+   {
+    "odor": "aa",
+    "remy_name": "aa",
+    "conc": -3.0,
+    "n_presented": 5,
+    "n_in_rdm": 5,
+    "n_qc_dropped": 0,
+    "input_conc": -3.0
+   },
+   {
+    "odor": "benz",
+    "remy_name": "benz",
+    "conc": -3.0,
+    "n_presented": 16,
+    "n_in_rdm": 16,
+    "n_qc_dropped": 0,
+    "input_conc": -3.0
+   },
+   {
+    "odor": "eb",
+    "remy_name": "eb",
+    "conc": -3.0,
+    "n_presented": 14,
+    "n_in_rdm": 14,
+    "n_qc_dropped": 0,
+    "input_conc": -3.0
+   },
+   {
+    "odor": "ep",
+    "remy_name": "ep",
+    "conc": -3.0,
+    "n_presented": 16,
+    "n_in_rdm": 16,
+    "n_qc_dropped": 0,
+    "input_conc": -3.0
+   },
+   {
+    "odor": "ms",
+    "remy_name": "ms",
+    "conc": -3.0,
+    "n_presented": 14,
+    "n_in_rdm": 14,
+    "n_qc_dropped": 0,
+    "input_conc": -3.0
+   },
+   {
+    "odor": "pa",
+    "remy_name": "pa",
+    "conc": -3.0,
+    "n_presented": 15,
+    "n_in_rdm": 15,
+    "n_qc_dropped": 0,
+    "input_conc": -3.0
+   },
+   {
+    "odor": "t2h",
+    "remy_name": "t2h",
+    "conc": -3.0,
+    "n_presented": 11,
+    "n_in_rdm": 11,
+    "n_qc_dropped": 0,
+    "input_conc": -3.0
+   },
+   {
+    "odor": "va",
+    "remy_name": "va",
+    "conc": -3.0,
+    "n_presented": 13,
+    "n_in_rdm": 13,
+    "n_qc_dropped": 0,
+    "input_conc": -3.0
+   }
+  ],
+  "flies_by_pair": [
+   {
+    "odor_a": "2h",
+    "odor_b": "IaA",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 11,
+    "flies": "2019-03-07/2;2019-05-09/4;2019-05-09/5;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "2h",
+    "odor_b": "pa",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 11,
+    "flies": "2018-10-21/1;2019-05-09/4;2019-05-09/5;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "2h",
+    "odor_b": "2-but",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 13,
+    "flies": "2018-10-21/1;2019-03-06/3;2019-03-07/2;2019-05-09/4;2019-05-09/5;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "2h",
+    "odor_b": "eb",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 11,
+    "flies": "2018-10-21/1;2019-03-07/2;2019-04-26/4;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "2h",
+    "odor_b": "ep",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 13,
+    "flies": "2018-10-21/1;2019-03-06/3;2019-04-26/4;2019-05-09/4;2019-05-09/5;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "2h",
+    "odor_b": "6al",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2018-10-21/1;2019-03-07/2;2019-05-09/4;2019-05-09/5;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "2h",
+    "odor_b": "t2h",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 11,
+    "flies": "2018-10-21/1;2019-05-09/4;2019-05-09/5;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "2h",
+    "odor_b": "1-8ol",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2018-10-21/1;2019-04-26/4;2019-05-09/4;2019-05-09/5;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "2h",
+    "odor_b": "1-5ol",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 9,
+    "flies": "2018-10-21/1;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "2h",
+    "odor_b": "1-6ol",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 14,
+    "flies": "2018-10-21/1;2019-03-06/3;2019-03-07/2;2019-04-26/4;2019-05-09/4;2019-05-09/5;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "2h",
+    "odor_b": "ms",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2018-10-21/1;2019-03-06/3;2019-03-07/2;2019-04-26/4;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "2h",
+    "odor_b": "B-cit",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 11,
+    "flies": "2018-10-21/1;2019-05-09/4;2019-05-09/5;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "2h",
+    "odor_b": "Lin",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 10,
+    "flies": "2018-10-21/1;2019-03-07/2;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "2h",
+    "odor_b": "aa",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 4,
+    "flies": "2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "2h",
+    "odor_b": "benz",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 13,
+    "flies": "2018-10-21/1;2019-03-07/2;2019-04-26/4;2019-05-09/4;2019-05-09/5;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "2h",
+    "odor_b": "va",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2018-10-21/1;2019-03-07/2;2019-05-09/4;2019-05-09/5;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "IaA",
+    "odor_b": "pa",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 11,
+    "flies": "2019-03-06/4;2019-05-09/4;2019-05-09/5;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "IaA",
+    "odor_b": "2-but",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2019-03-06/4;2019-03-07/2;2019-05-09/4;2019-05-09/5;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "IaA",
+    "odor_b": "eb",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 9,
+    "flies": "2019-03-07/2;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "IaA",
+    "odor_b": "ep",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 10,
+    "flies": "2019-05-09/4;2019-05-09/5;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "IaA",
+    "odor_b": "6al",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 11,
+    "flies": "2019-03-07/2;2019-05-09/4;2019-05-09/5;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "IaA",
+    "odor_b": "t2h",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 10,
+    "flies": "2019-05-09/4;2019-05-09/5;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "IaA",
+    "odor_b": "1-8ol",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 11,
+    "flies": "2019-03-06/4;2019-05-09/4;2019-05-09/5;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "IaA",
+    "odor_b": "1-5ol",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 9,
+    "flies": "2019-03-06/4;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "IaA",
+    "odor_b": "1-6ol",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2019-03-06/4;2019-03-07/2;2019-05-09/4;2019-05-09/5;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "IaA",
+    "odor_b": "ms",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 9,
+    "flies": "2019-03-07/2;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "IaA",
+    "odor_b": "B-cit",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 10,
+    "flies": "2019-05-09/4;2019-05-09/5;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "IaA",
+    "odor_b": "Lin",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 9,
+    "flies": "2019-03-07/2;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "IaA",
+    "odor_b": "aa",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 5,
+    "flies": "2019-03-06/4;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "IaA",
+    "odor_b": "benz",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 11,
+    "flies": "2019-03-07/2;2019-05-09/4;2019-05-09/5;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "IaA",
+    "odor_b": "va",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2019-03-06/4;2019-03-07/2;2019-05-09/4;2019-05-09/5;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "pa",
+    "odor_b": "2-but",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 15,
+    "flies": "2018-10-21/1;2019-03-06/4;2019-05-09/4;2019-05-09/5;2019-05-23/2;2019-05-24/1;2019-05-24/3;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "pa",
+    "odor_b": "eb",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2018-10-21/1;2019-05-23/2;2019-05-24/1;2019-05-24/3;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "pa",
+    "odor_b": "ep",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 14,
+    "flies": "2018-10-21/1;2019-05-09/4;2019-05-09/5;2019-05-23/2;2019-05-24/1;2019-05-24/3;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "pa",
+    "odor_b": "6al",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 14,
+    "flies": "2018-10-21/1;2019-05-09/4;2019-05-09/5;2019-05-23/2;2019-05-24/1;2019-05-24/3;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "pa",
+    "odor_b": "t2h",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 11,
+    "flies": "2018-10-21/1;2019-05-09/4;2019-05-09/5;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "pa",
+    "odor_b": "1-8ol",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 15,
+    "flies": "2018-10-21/1;2019-03-06/4;2019-05-09/4;2019-05-09/5;2019-05-23/2;2019-05-24/1;2019-05-24/3;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "pa",
+    "odor_b": "1-5ol",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 10,
+    "flies": "2018-10-21/1;2019-03-06/4;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "pa",
+    "odor_b": "1-6ol",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 15,
+    "flies": "2018-10-21/1;2019-03-06/4;2019-05-09/4;2019-05-09/5;2019-05-23/2;2019-05-24/1;2019-05-24/3;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "pa",
+    "odor_b": "ms",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 11,
+    "flies": "2018-10-21/1;2019-05-24/1;2019-05-24/3;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "pa",
+    "odor_b": "B-cit",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2018-10-21/1;2019-05-09/4;2019-05-09/5;2019-05-23/2;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "pa",
+    "odor_b": "Lin",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 9,
+    "flies": "2018-10-21/1;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "pa",
+    "odor_b": "aa",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 5,
+    "flies": "2019-03-06/4;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "pa",
+    "odor_b": "benz",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 14,
+    "flies": "2018-10-21/1;2019-05-09/4;2019-05-09/5;2019-05-23/2;2019-05-24/1;2019-05-24/3;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "pa",
+    "odor_b": "va",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2018-10-21/1;2019-03-06/4;2019-05-09/4;2019-05-09/5;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "2-but",
+    "odor_b": "eb",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 13,
+    "flies": "2018-10-21/1;2019-03-07/2;2019-05-23/2;2019-05-24/1;2019-05-24/3;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "2-but",
+    "odor_b": "ep",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 15,
+    "flies": "2018-10-21/1;2019-03-06/3;2019-05-09/4;2019-05-09/5;2019-05-23/2;2019-05-24/1;2019-05-24/3;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "2-but",
+    "odor_b": "6al",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 15,
+    "flies": "2018-10-21/1;2019-03-07/2;2019-05-09/4;2019-05-09/5;2019-05-23/2;2019-05-24/1;2019-05-24/3;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "2-but",
+    "odor_b": "t2h",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 11,
+    "flies": "2018-10-21/1;2019-05-09/4;2019-05-09/5;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "2-but",
+    "odor_b": "1-8ol",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 15,
+    "flies": "2018-10-21/1;2019-03-06/4;2019-05-09/4;2019-05-09/5;2019-05-23/2;2019-05-24/1;2019-05-24/3;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "2-but",
+    "odor_b": "1-5ol",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 10,
+    "flies": "2018-10-21/1;2019-03-06/4;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "2-but",
+    "odor_b": "1-6ol",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 17,
+    "flies": "2018-10-21/1;2019-03-06/3;2019-03-06/4;2019-03-07/2;2019-05-09/4;2019-05-09/5;2019-05-23/2;2019-05-24/1;2019-05-24/3;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "2-but",
+    "odor_b": "ms",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 13,
+    "flies": "2018-10-21/1;2019-03-06/3;2019-03-07/2;2019-05-24/1;2019-05-24/3;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "2-but",
+    "odor_b": "B-cit",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2018-10-21/1;2019-05-09/4;2019-05-09/5;2019-05-23/2;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "2-but",
+    "odor_b": "Lin",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 10,
+    "flies": "2018-10-21/1;2019-03-07/2;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "2-but",
+    "odor_b": "aa",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 5,
+    "flies": "2019-03-06/4;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "2-but",
+    "odor_b": "benz",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 15,
+    "flies": "2018-10-21/1;2019-03-07/2;2019-05-09/4;2019-05-09/5;2019-05-23/2;2019-05-24/1;2019-05-24/3;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "2-but",
+    "odor_b": "va",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 13,
+    "flies": "2018-10-21/1;2019-03-06/4;2019-03-07/2;2019-05-09/4;2019-05-09/5;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "eb",
+    "odor_b": "ep",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 13,
+    "flies": "2018-10-21/1;2019-04-26/4;2019-05-23/2;2019-05-24/1;2019-05-24/3;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "eb",
+    "odor_b": "6al",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 13,
+    "flies": "2018-10-21/1;2019-03-07/2;2019-05-23/2;2019-05-24/1;2019-05-24/3;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "eb",
+    "odor_b": "t2h",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 9,
+    "flies": "2018-10-21/1;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "eb",
+    "odor_b": "1-8ol",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 13,
+    "flies": "2018-10-21/1;2019-04-26/4;2019-05-23/2;2019-05-24/1;2019-05-24/3;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "eb",
+    "odor_b": "1-5ol",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 9,
+    "flies": "2018-10-21/1;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "eb",
+    "odor_b": "1-6ol",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 14,
+    "flies": "2018-10-21/1;2019-03-07/2;2019-04-26/4;2019-05-23/2;2019-05-24/1;2019-05-24/3;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "eb",
+    "odor_b": "ms",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 13,
+    "flies": "2018-10-21/1;2019-03-07/2;2019-04-26/4;2019-05-24/1;2019-05-24/3;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "eb",
+    "odor_b": "B-cit",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 10,
+    "flies": "2018-10-21/1;2019-05-23/2;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "eb",
+    "odor_b": "Lin",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 10,
+    "flies": "2018-10-21/1;2019-03-07/2;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "eb",
+    "odor_b": "aa",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 4,
+    "flies": "2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "eb",
+    "odor_b": "benz",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 14,
+    "flies": "2018-10-21/1;2019-03-07/2;2019-04-26/4;2019-05-23/2;2019-05-24/1;2019-05-24/3;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "eb",
+    "odor_b": "va",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 10,
+    "flies": "2018-10-21/1;2019-03-07/2;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "ep",
+    "odor_b": "6al",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 14,
+    "flies": "2018-10-21/1;2019-05-09/4;2019-05-09/5;2019-05-23/2;2019-05-24/1;2019-05-24/3;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "ep",
+    "odor_b": "t2h",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 11,
+    "flies": "2018-10-21/1;2019-05-09/4;2019-05-09/5;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "ep",
+    "odor_b": "1-8ol",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 15,
+    "flies": "2018-10-21/1;2019-04-26/4;2019-05-09/4;2019-05-09/5;2019-05-23/2;2019-05-24/1;2019-05-24/3;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "ep",
+    "odor_b": "1-5ol",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 9,
+    "flies": "2018-10-21/1;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "ep",
+    "odor_b": "1-6ol",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 16,
+    "flies": "2018-10-21/1;2019-03-06/3;2019-04-26/4;2019-05-09/4;2019-05-09/5;2019-05-23/2;2019-05-24/1;2019-05-24/3;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "ep",
+    "odor_b": "ms",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 13,
+    "flies": "2018-10-21/1;2019-03-06/3;2019-04-26/4;2019-05-24/1;2019-05-24/3;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "ep",
+    "odor_b": "B-cit",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2018-10-21/1;2019-05-09/4;2019-05-09/5;2019-05-23/2;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "ep",
+    "odor_b": "Lin",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 9,
+    "flies": "2018-10-21/1;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "ep",
+    "odor_b": "aa",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 4,
+    "flies": "2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "ep",
+    "odor_b": "benz",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 15,
+    "flies": "2018-10-21/1;2019-04-26/4;2019-05-09/4;2019-05-09/5;2019-05-23/2;2019-05-24/1;2019-05-24/3;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "ep",
+    "odor_b": "va",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 11,
+    "flies": "2018-10-21/1;2019-05-09/4;2019-05-09/5;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "6al",
+    "odor_b": "t2h",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 11,
+    "flies": "2018-10-21/1;2019-05-09/4;2019-05-09/5;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "6al",
+    "odor_b": "1-8ol",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 14,
+    "flies": "2018-10-21/1;2019-05-09/4;2019-05-09/5;2019-05-23/2;2019-05-24/1;2019-05-24/3;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "6al",
+    "odor_b": "1-5ol",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 9,
+    "flies": "2018-10-21/1;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "6al",
+    "odor_b": "1-6ol",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 15,
+    "flies": "2018-10-21/1;2019-03-07/2;2019-05-09/4;2019-05-09/5;2019-05-23/2;2019-05-24/1;2019-05-24/3;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "6al",
+    "odor_b": "ms",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2018-10-21/1;2019-03-07/2;2019-05-24/1;2019-05-24/3;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "6al",
+    "odor_b": "B-cit",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2018-10-21/1;2019-05-09/4;2019-05-09/5;2019-05-23/2;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "6al",
+    "odor_b": "Lin",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 10,
+    "flies": "2018-10-21/1;2019-03-07/2;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "6al",
+    "odor_b": "aa",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 4,
+    "flies": "2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "6al",
+    "odor_b": "benz",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 15,
+    "flies": "2018-10-21/1;2019-03-07/2;2019-05-09/4;2019-05-09/5;2019-05-23/2;2019-05-24/1;2019-05-24/3;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "6al",
+    "odor_b": "va",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2018-10-21/1;2019-03-07/2;2019-05-09/4;2019-05-09/5;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "t2h",
+    "odor_b": "1-8ol",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 11,
+    "flies": "2018-10-21/1;2019-05-09/4;2019-05-09/5;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "t2h",
+    "odor_b": "1-5ol",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 9,
+    "flies": "2018-10-21/1;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "t2h",
+    "odor_b": "1-6ol",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 11,
+    "flies": "2018-10-21/1;2019-05-09/4;2019-05-09/5;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "t2h",
+    "odor_b": "ms",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 9,
+    "flies": "2018-10-21/1;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "t2h",
+    "odor_b": "B-cit",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 11,
+    "flies": "2018-10-21/1;2019-05-09/4;2019-05-09/5;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "t2h",
+    "odor_b": "Lin",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 9,
+    "flies": "2018-10-21/1;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "t2h",
+    "odor_b": "aa",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 4,
+    "flies": "2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "t2h",
+    "odor_b": "benz",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 11,
+    "flies": "2018-10-21/1;2019-05-09/4;2019-05-09/5;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "t2h",
+    "odor_b": "va",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 11,
+    "flies": "2018-10-21/1;2019-05-09/4;2019-05-09/5;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "1-8ol",
+    "odor_b": "1-5ol",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 10,
+    "flies": "2018-10-21/1;2019-03-06/4;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "1-8ol",
+    "odor_b": "1-6ol",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 16,
+    "flies": "2018-10-21/1;2019-03-06/4;2019-04-26/4;2019-05-09/4;2019-05-09/5;2019-05-23/2;2019-05-24/1;2019-05-24/3;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "1-8ol",
+    "odor_b": "ms",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2018-10-21/1;2019-04-26/4;2019-05-24/1;2019-05-24/3;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "1-8ol",
+    "odor_b": "B-cit",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2018-10-21/1;2019-05-09/4;2019-05-09/5;2019-05-23/2;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "1-8ol",
+    "odor_b": "Lin",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 9,
+    "flies": "2018-10-21/1;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "1-8ol",
+    "odor_b": "aa",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 5,
+    "flies": "2019-03-06/4;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "1-8ol",
+    "odor_b": "benz",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 15,
+    "flies": "2018-10-21/1;2019-04-26/4;2019-05-09/4;2019-05-09/5;2019-05-23/2;2019-05-24/1;2019-05-24/3;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "1-8ol",
+    "odor_b": "va",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2018-10-21/1;2019-03-06/4;2019-05-09/4;2019-05-09/5;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "1-5ol",
+    "odor_b": "1-6ol",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 10,
+    "flies": "2018-10-21/1;2019-03-06/4;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "1-5ol",
+    "odor_b": "ms",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 9,
+    "flies": "2018-10-21/1;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "1-5ol",
+    "odor_b": "B-cit",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 9,
+    "flies": "2018-10-21/1;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "1-5ol",
+    "odor_b": "Lin",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 9,
+    "flies": "2018-10-21/1;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "1-5ol",
+    "odor_b": "aa",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 5,
+    "flies": "2019-03-06/4;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "1-5ol",
+    "odor_b": "benz",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 9,
+    "flies": "2018-10-21/1;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "1-5ol",
+    "odor_b": "va",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 10,
+    "flies": "2018-10-21/1;2019-03-06/4;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "1-6ol",
+    "odor_b": "ms",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 14,
+    "flies": "2018-10-21/1;2019-03-06/3;2019-03-07/2;2019-04-26/4;2019-05-24/1;2019-05-24/3;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "1-6ol",
+    "odor_b": "B-cit",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2018-10-21/1;2019-05-09/4;2019-05-09/5;2019-05-23/2;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "1-6ol",
+    "odor_b": "Lin",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 10,
+    "flies": "2018-10-21/1;2019-03-07/2;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "1-6ol",
+    "odor_b": "aa",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 5,
+    "flies": "2019-03-06/4;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "1-6ol",
+    "odor_b": "benz",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 16,
+    "flies": "2018-10-21/1;2019-03-07/2;2019-04-26/4;2019-05-09/4;2019-05-09/5;2019-05-23/2;2019-05-24/1;2019-05-24/3;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "1-6ol",
+    "odor_b": "va",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 13,
+    "flies": "2018-10-21/1;2019-03-06/4;2019-03-07/2;2019-05-09/4;2019-05-09/5;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "ms",
+    "odor_b": "B-cit",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 9,
+    "flies": "2018-10-21/1;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "ms",
+    "odor_b": "Lin",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 10,
+    "flies": "2018-10-21/1;2019-03-07/2;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "ms",
+    "odor_b": "aa",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 4,
+    "flies": "2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "ms",
+    "odor_b": "benz",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 13,
+    "flies": "2018-10-21/1;2019-03-07/2;2019-04-26/4;2019-05-24/1;2019-05-24/3;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "ms",
+    "odor_b": "va",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 10,
+    "flies": "2018-10-21/1;2019-03-07/2;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "B-cit",
+    "odor_b": "Lin",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 9,
+    "flies": "2018-10-21/1;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "B-cit",
+    "odor_b": "aa",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 4,
+    "flies": "2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "B-cit",
+    "odor_b": "benz",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2018-10-21/1;2019-05-09/4;2019-05-09/5;2019-05-23/2;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "B-cit",
+    "odor_b": "va",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 11,
+    "flies": "2018-10-21/1;2019-05-09/4;2019-05-09/5;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "Lin",
+    "odor_b": "aa",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 4,
+    "flies": "2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "Lin",
+    "odor_b": "benz",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 10,
+    "flies": "2018-10-21/1;2019-03-07/2;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "Lin",
+    "odor_b": "va",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 10,
+    "flies": "2018-10-21/1;2019-03-07/2;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "aa",
+    "odor_b": "benz",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 4,
+    "flies": "2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "aa",
+    "odor_b": "va",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 5,
+    "flies": "2019-03-06/4;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   },
+   {
+    "odor_a": "benz",
+    "odor_b": "va",
+    "conc_a": "all",
+    "conc_b": "all",
+    "n_flies": 12,
+    "flies": "2018-10-21/1;2019-03-07/2;2019-05-09/4;2019-05-09/5;2019-05-24/4;2019-07-19/2;2019-09-12/1;2019-09-12/2;2022-10-10/1;2022-10-10/2;2022-10-11/1;2022-11-10/1"
+   }
+  ],
+  "pairs_by_n_flies": {
+   "4": 9,
+   "5": 7,
+   "9": 21,
+   "10": 19,
+   "11": 21,
+   "12": 21,
+   "13": 13,
+   "14": 9,
+   "15": 12,
+   "16": 3,
+   "17": 1
+  },
+  "n_pairs_min_flies": 136,
+  "yang_shared": [
+   "2h",
+   "IaA",
+   "pa",
+   "2-but",
+   "eb",
+   "ep",
+   "6al",
+   "t2h",
+   "1-8ol",
+   "1-5ol",
+   "1-6ol",
+   "ms"
+  ]
+ },
+ "input_concentrations": {
+  "validation2": {
+   "+pul": -2.0,
+   "menth": -3.0,
+   "long": -2.0,
+   "sab": -3.0,
+   "-bCar": -3.0,
+   "-aPine": -1.5,
+   "euc": -1.75,
+   "2-mib": -4.0,
+   "geos": -4.0,
+   "guai": -3.0,
+   "mchav": -3.0,
+   "PEA": -4.0,
+   "paa": -4.0,
+   "bbenz": -2.0,
+   "B-myr": -2.0,
+   "ger": -2.0,
+   "1-3ol": -3.0,
+   "1p3one": -5.0,
+   "1o3one": -4.0,
+   "EtOct": -2.0,
+   "2-mba": -3.0,
+   "Z4-7al": -4.0
+  },
+  "megamat": {
+   "2h": -3.0,
+   "IaA": -3.0,
+   "pa": -3.0,
+   "2-but": -3.0,
+   "eb": -3.0,
+   "ep": -3.0,
+   "aa": -3.0,
+   "va": -3.0,
+   "B-cit": -3.0,
+   "Lin": -3.0,
+   "6al": -3.0,
+   "t2h": -3.0,
+   "1-8ol": -3.0,
+   "1-5ol": -3.0,
+   "1-6ol": -3.0,
+   "benz": -3.0,
+   "ms": -3.0
+  }
+ },
+ "host": "atlas",
+ "time": "2026-11-17 16:51",
+ "commits": {
+  "queue_commit": "368b0efae174bb0ce8e1c59733af295554da4d9a",
+  "queue_dirty": false,
+  "pyolfsysm_commit": "13bf1a8a2720992d4d6b5bbe8d011b857ed361e1",
+  "pyolfsysm_dirty": false,
+  "al_analysis_commit": "7b25156efd9e12b0fd9529ab6144228ebced2599",
+  "al_analysis_dirty": false,
+  "hong2p_commit": "ae2abda6bd6e9df4b6475a243c286dfeeb09ac70",
+  "hong2p_dirty": false
+ },
+ "note": "Written by part 0 from Remy's manifests, stimulus table, quality-control list and panel table alone, before any distance file was opened (the distance files' bytes are hashed only). The reading code refuses to run until this file is committed and unchanged (`require_lock`).",
+ "sha256": "e8e3d810d88127e1774ce08a0e3e2b3c8ab4ddc205bd2ca4e589e4674ebb765b"
+}
