@@ -7,6 +7,7 @@ name mapping; the permutation keeps its strata and the small glomeruli; A1's and
 116 points."""
 
 import os
+from typing import Dict, Tuple
 
 import numpy as np
 import pandas as pd
@@ -360,3 +361,123 @@ def test_brain_decomposition_on_made_up_effects(monkeypatch, tmp_path):
     assert (tmp_path / 'brain_decomposition.csv').exists()
     monkeypatch.setattr(G, 'runs_table', lambda: runs.iloc[1:])
     assert G.brain_decomposition() is None
+
+
+# ---------------------------------------------------------------------------
+# the re-plan of 2026-11-17: the reader of Pratyush's per-synapse tables (the hemibrain and the male CNS), on made-up
+# tables in the form of his two files
+
+def _syn(kc, claw, pn, ptype, ktype, n, *, bouton=0, roi='CA(R)', roi_pre=None, side='Right', region='CA', conf=0.9,
+         dist=1000.0, kinst=None):
+    return [dict(bodyId_pre=pn, bodyId_post=kc, roi_pre=roi if roi_pre is None else roi_pre, roi_post=roi,
+                 x_pre=100 + i, y_pre=200, z_pre=300, x_post=101 + i, y_post=201, z_post=301, confidence_pre=0.9,
+                 confidence_post=conf, instance_pre=f'{ptype}_R', type_pre=ptype,
+                 instance_post=kinst or f'{ktype}_R', type_post=ktype, claw=claw, dist=dist,
+                 bouton=bouton, side=side, region=region) for i in range(n)]
+
+
+def made_up_hemibrain() -> Tuple[pd.DataFrame, set]:
+    """A made-up hemibrain table (the loader's file's columns) and its counted claws under the loader's rule."""
+    r = []
+    r += _syn(1, 0, 10, 'DM1_lPN', 'KCg-m', 5)                                   # counted
+    r += _syn(1, 1, 11, 'VC3l_adPN', 'KCg-m', 3, bouton=0) + _syn(1, 1, 11, 'VC3l_adPN', 'KCg-m', 3, bouton=1)  # VC3
+    r += _syn(1, 2, 12, 'VC3m_lvPN', 'KCg-m', 4)                                 # below 5
+    r += _syn(2, -1, 10, 'DM1_lPN', 'KCab-s', 5)                                 # -1 is a claw
+    r += _syn(2, 0, 10, 'DM1_lPN', 'KCab-s', 5) + _syn(2, 0, 13, 'DA1_lPN', 'KCab-s', 6)   # two PNs: dropped
+    r += _syn(2, 1, 14, 'VP1d+VP4_l2PN1', 'KCab-s', 8)                            # '+': dropped
+    r += _syn(3, 0, 15, 'DL1_adPN', "KCa'b'-m", 4) + _syn(3, 0, 15, 'DL1_adPN', "KCa'b'-m", 1, roi_pre='SLP(R)')
+    r += _syn(3, 1, 15, 'DL1_adPN', "KCa'b'-m", 4) + _syn(3, 1, 15, 'DL1_adPN', "KCa'b'-m", 2, conf=0.3)
+    r += _syn(4, 0, 10, 'DM1_lPN', None, 6, kinst='KCy(half)')                    # no KC type: dropped
+    r += _syn(5, np.nan, 10, 'DM1_lPN', 'KCg-m', 6)                              # no claw label: dropped
+    r += _syn(5, 0, 16, 'M_adPNm4', 'KCg-m', 6)                                  # not a task glomerulus
+    r += _syn(5, 1, 10, 'DM1_lPN', 'KCg-m', 4) + _syn(5, 1, 10, 'DM1_lPN', 'KCg-m', 2, bouton=-1)
+    r += _syn(5, 2, 10, 'DM1_lPN', 'KCg-m', 4) + _syn(5, 2, 10, 'DM1_lPN', 'KCg-m', 1, dist=np.inf)
+    df = pd.DataFrame(r)
+    df = df.rename(columns=dict(claw='anatomical_claw_corrected', dist='dist_to_root', bouton='anatomical_bouton'))
+    df['anatomical_bouton'] = df['anatomical_bouton'].astype(float)
+    df = df.drop(columns=['side', 'region'])
+    return df, {(1, 0, 'DM1'), (1, 1, 'VC3'), (2, -1, 'DM1'), (3, 1, 'DL1')}
+
+
+def made_up_malecns() -> Tuple[pd.DataFrame, Dict[str, set]]:
+    """A made-up male-CNS table (his file's columns) and its counted claws under each calyx rule."""
+    r = []
+    r += _syn(101, 0, 20, 'VC5_lvPN', 'KCg-m', 5, roi='CA(L)', side='Left')                 # the model's VC3
+    r += _syn(101, 1, 21, 'VM6_adPN', 'KCg-m', 5, roi='CentralBrain-unspecified', side='Left')   # the model's VC5
+    r += _syn(102, 0, 22, 'VC3_adPN', 'KCab-c', 5)                                           # VC3 stays VC3
+    r += _syn(102, 1, 22, 'VC3_adPN', 'KCab-c', 5, region='ACA')
+    r += _syn(103, 0, 22, 'VC3_adPN', 'KC', 6)                                               # untyped KC: dropped
+    r += _syn(104, 0, 24, 'WEDPN12', "KCa'b'-ap1", 5, side='Left', roi='CA(L)')              # dropped
+    df = pd.DataFrame(r)
+    df = df.rename(columns=dict(claw='anatomical_claw_corrected_post', dist='dist_to_root_post',
+                                bouton='anatomical_bouton_pre', side='side_post', region='region_post'))
+    df['anatomical_claw_post'] = df['anatomical_claw_corrected_post']
+    df['anatomical_bouton_pre'] = df['anatomical_bouton_pre'].astype(np.int64)
+    want = {'none': {(101, 0, 'VC3'), (101, 1, 'VC5'), (102, 0, 'VC3'), (102, 1, 'VC3')},
+            'official': {(101, 0, 'VC3'), (102, 0, 'VC3'), (102, 1, 'VC3')},
+            'region': {(101, 0, 'VC3'), (101, 1, 'VC5'), (102, 0, 'VC3')}}
+    return df, want
+
+
+@pytest.fixture
+def made_up_tables(tmp_path, monkeypatch):
+    hb, mc = tmp_path / 'hemibrain', tmp_path / 'malecns'
+    hb.mkdir()
+    mc.mkdir()
+    h, hw = made_up_hemibrain()
+    m, mw = made_up_malecns()
+    h.to_parquet(hb / G.HEMIBRAIN_PN_CLAW_FILE)
+    m.to_parquet(mc / f'PNbouton-to-KCclaw_Connectivity_Male-CNS_{G.MALECNS_STAMP}.parquet')
+    monkeypatch.setattr(G, 'hemibrain_dir', lambda: hb)
+    monkeypatch.setattr(G, 'malecns_dir', lambda: mc)
+    G._CACHE.clear()
+    yield dict(hemibrain=hw, malecns=mw, root=tmp_path)
+    G._CACHE.clear()
+
+
+def _keys(c: pd.DataFrame) -> set:
+    return set(zip(c.kc_id.astype(int), c.claw_id.astype(int), c.glomerulus))
+
+
+@pytest.mark.xfail(raises=NotImplementedError, strict=True, reason='stub (interface first)')
+def test_reader_follows_the_loader_on_made_up_tables(made_up_tables):
+    c = G.counted_claws('hemibrain')
+    assert _keys(c) == made_up_tables['hemibrain']
+    assert set(c.mb) == {'hemibrain'} and set(c.side) == {'R'}
+    r = c.set_index(['kc_id', 'claw_id']).loc[(1, 1)]
+    assert r.n_synapses == 6 and r.n_boutons == 2 and r.bouton_ids == (0, 1) and r.main_bouton_id == 0
+    assert set(c.kc_class) == {'g', 'ab', "a'b'"}
+    # the ROI rule and the confidence reading beside
+    assert (3, 0, 'DL1') in _keys(G.counted_claws('hemibrain', roi='none'))
+    assert (3, 1, 'DL1') not in _keys(G.counted_claws('hemibrain', min_confidence=0.5))
+    for roi, want in made_up_tables['malecns'].items():
+        assert _keys(G.counted_claws('malecns', roi=roi)) == want, roi
+    m = G.counted_claws('malecns')
+    assert m.groupby('mb').size().to_dict() == {'malecns_L': 2, 'malecns_R': 2}
+    n = G.claw_counts(m)
+    assert n.set_index(['mb', 'glomerulus']).n_claws.to_dict() == {('malecns_L', 'VC3'): 1, ('malecns_L', 'VC5'): 1,
+                                                                    ('malecns_R', 'VC3'): 2}
+    with pytest.raises(ValueError):
+        G.counted_claws('hemibrain', roi='region')
+
+
+@pytest.mark.xfail(raises=NotImplementedError, strict=True, reason='stub (interface first)')
+def test_the_names():
+    assert G.glomerulus_name('VC5_lvPN', 'malecns') == 'VC3' and G.glomerulus_name('VM6_adPN', 'malecns') == 'VC5'
+    assert G.glomerulus_name('VC3_adPN', 'malecns') == 'VC3' and G.glomerulus_name('VC3l_adPN', 'hemibrain') == 'VC3'
+    assert G.glomerulus_name('VC5_lvPN', 'hemibrain') == 'VC5'
+    G.counted_claws('nobrain')
+
+
+HELD_WORDS = ('claude_APL_modeling_YZ4TC', 'Claude_APL_analysis', 'apl_synapses', 'flywire', 'fafb', 'banc',
+              '2024-09-13', '_derived', 'withheld_')
+
+
+@pytest.mark.xfail(strict=True, reason='the readers of the held tables are removed in the next commit')
+def test_the_module_names_no_held_table():
+    """The module (and so every code path of the experiment) names neither the folder of the tables that Yang's own
+    Claude's project derived, nor FlyWire, FAFB or BANC, nor the withheld outputs (CLAUDE.md, "Connectome data")."""
+    import inspect
+    src = inspect.getsource(G).lower()
+    found = [w for w in HELD_WORDS if w.lower() in src]
+    assert not found, found

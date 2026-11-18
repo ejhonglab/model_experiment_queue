@@ -223,6 +223,74 @@ D_RAW_REF = 0.073
 
 _CACHE: Dict[object, object] = {}
 
+# ---------------------------------------------------------------------------
+# Pratyush's per-synapse PN bouton -> KC claw tables (the re-plan of 2026-11-17; public, shared with E100's part D)
+
+BRAINS2 = ('hemibrain', 'malecns')
+MB3 = ('hemibrain', 'malecns_L', 'malecns_R')       # the three mushroom bodies
+MALECNS_STAMP = '2026-10-25-17-31-06'               # his male-CNS pipeline's run
+HEMIBRAIN_PN_CLAW_FILE = 'PNbouton-to-KCclaw_Connectivity_2025-12-09-19-47-36.parquet'   # the loader's
+# the model's names: olfsysm's loader merges the hemibrain's VC3l and VC3m into VC3; the male CNS's PN types carry newer
+# names, inferred from the PNs' bundle and number in both tables (the planner's notes of 2026-11-17, not confirmed):
+# its VC3 (adPN) and VC5 (lvPN) are the hemibrain's VC3l and VC3m, its VM6 (adPN) the hemibrain's VC5
+BRAIN_RENAMES = {'hemibrain': {'VC3l': 'VC3', 'VC3m': 'VC3'}, 'malecns': {'VC5': 'VC3', 'VM6': 'VC5'}}
+# the calyx rule per brain: the loader's (both ends in the official calyx ROI) for the hemibrain; none for the male CNS,
+# whose official ROI leaves out part of the left calyx (fixed in the entry before any run)
+ROI_RULES = ('official', 'none', 'region')
+DEFAULT_ROI = {'hemibrain': 'official', 'malecns': 'none'}
+
+
+def malecns_dir() -> Path:
+    """Pratyush's male-CNS tables (data/Male-CNS_Tom/ in the shared directory; read only)."""
+    return H.shared_dir() / 'data' / 'Male-CNS_Tom'
+
+
+def hemibrain_dir() -> Path:
+    """Pratyush's hemibrain tables that the model's loader reads (olfsysm's pyolfsysm/data/from_pratyush/2025-12-05)."""
+    from pyolfsysm import mb_model
+    return Path(mb_model.prat_hemibrain_seg_dir)
+
+
+def pn_claw_synapses(brain: str) -> pd.DataFrame:
+    """Pratyush's per-synapse PN bouton -> KC claw table of `brain` ('hemibrain' or 'malecns', both sides), one row per
+    synapse, with the columns renamed to one form: kc_id, pn_id, pn_type (type_pre), kc_subtype (type_post), claw_id
+    (his corrected claw label, float with NaN as in the file), bouton_id (int, -1 unassigned), dist_to_root, roi_pre,
+    roi_post, region_post (the male CNS's 'CA' / 'ACA'; None for the hemibrain), side ('L' / 'R': the KC's side, all
+    'R' in the hemibrain), x_post, y_post, z_post (8 nm voxels), confidence_pre, confidence_post. Read only."""
+    raise NotImplementedError
+
+
+def counted_claws(brain: str, *, roi: Optional[str] = None, syn_min: int = 5, min_confidence: Optional[float] = None
+                  ) -> pd.DataFrame:
+    """The counted claws of `brain` ('hemibrain' or 'malecns', both sides), by the steps of the model's loader (the
+    prat_claws branch of pyolfsysm.mb_model.connectome_wPNKC), from `pn_claw_synapses`:
+    1. the calyx rule `roi` (None: DEFAULT_ROI, the loader's 'official' for the hemibrain, 'none' for the male CNS):
+       'official' keeps synapses with both ends in the official calyx ROI of the KC's side (CA(R), CA(L)), 'region' those
+       whose KC end is in his calyx region (region_post 'CA', within 2 um of the ROI; male CNS only), 'none' all;
+    2. synapses with confidence_post below `min_confidence` left out (None: all in the table; the male CNS's table holds
+       0.5 and above, the hemibrain's from 0.28);
+    3. synapses without a claw label left out (-1 kept, as the loader keeps it);
+    4. the glomerulus from the PN type (the part before '_'; types with '+', WEDPN12 / WEDPN4 and names outside the
+       model's task glomeruli left out; BRAIN_RENAMES applied first);
+    5. synapses with a non-finite dist_to_root, without a KC type or without a bouton (-1) left out;
+    6. per (KC, claw, PN) the synapses summed over the claw's boutons; those with fewer than `syn_min` left out;
+    7. claws that two or more PNs keep after 6 left out (the loader's 'claws with multiple PNs');
+    8. KCs outside the three classes (g, ab, a'b'; e.g. the male CNS's untyped 'KC') left out.
+
+    Returns:
+        one row per counted claw, columns: brain, mb ('hemibrain', 'malecns_L', 'malecns_R'), side ('L' / 'R'), kc_id,
+        claw_id (int), pn_id, pn_type, glomerulus (the model's name), kc_class ('g', 'ab', "a'b'"), kc_subtype,
+        n_synapses (int), bouton_ids (sorted tuple of int), n_boutons, main_bouton_id (the bouton with most of the claw's
+        synapses, ties to the lowest id), x_post, y_post, z_post (mean of the KC-side synapse coordinates, 8 nm voxels).
+        Sorted by mb, kc_id, claw_id."""
+    raise NotImplementedError
+
+
+def claw_counts(claws: pd.DataFrame, by: Sequence[str] = ('mb', 'glomerulus')) -> pd.DataFrame:
+    """Per group of `counted_claws`'s rows (`by`): n_claws, n_boutons (distinct main boutons, as (pn_id, bouton) pairs),
+    n_pns and n_kcs; a flat frame with the `by` columns first."""
+    raise NotImplementedError
+
 
 def out_dir() -> Path:
     d = H.results_dir(EXPERIMENT)
