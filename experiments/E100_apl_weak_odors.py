@@ -2232,10 +2232,77 @@ def part_c(sets: Sequence[str] = E100_SETS) -> dict:
     return summ
 
 
-def part_d() -> dict:
-    """Part D (module docstring), from viki's copy, after Yang's answer (`measured_pair_grid`, `score_recording`,
-    `w3_verdict` per estimate, `w3_over_estimates`)."""
-    _waiting('D')
+# ---------------------------------------------------------------------------
+# part D re-planned 2026-11-17 (the block "(D, re-planned 2026-11-17 16:45)" of the entry): three calyces of Pratyush's
+# pipeline (the hemibrain's right, the male CNS's left and right), A4's two scorings and its rule, W3's calyx rule.
+# Interface first (stub): the bodies follow.
+
+PRAT_CALYCES = ('hemibrain_R', 'malecns_L', 'malecns_R')
+HEMIBRAIN_CALYX = 'hemibrain_R'
+MALECNS_CALYCES = ('malecns_L', 'malecns_R')
+SCORINGS = ('slabs', 'whole')            # A4's two scorings of E79's analysis 4 (the truth a slab in both)
+WITHHELD_DIR = 'withheld_2026-11-15'
+WITHHELD_FILES = ('a3_maps.csv', 'a3_agreement.csv', 'a3_anatomy.csv', 'a3_pred_grids.npz', 'a3_summary.json')
+WITHHELD_PREFIXES = ('a4_',)
+
+
+def brain_of(calyx: str) -> str:
+    """'hemibrain_R' -> 'hemibrain', 'malecns_L' -> 'malecns'."""
+    return calyx.rsplit('_', 1)[0]
+
+
+def ordered_calyx_pairs(calyces: Sequence[str] = PRAT_CALYCES) -> List[Tuple[str, str, str]]:
+    """(truth, scored, kind) for every ordered pair of different calyces: kind 'across brains' (the four ordered pairs
+    of the hemibrain's calyx with a male CNS side) or 'across sides' (the male CNS's two sides, one fly)."""
+    raise NotImplementedError
+
+
+def prat_calyces() -> Tuple[Dict[str, dict], Dict[str, pd.DataFrame]]:
+    """The three calyces from E79's `pratyush_calyces` (E97's counted claws, roi='none' in both brains) after E79's
+    neighbour axis check (strict: a failure raises E79's AxisCheckError and stops A3, A4 and D), with the tables
+    written beside: 'summary' (`pratyush_calyx_summary`), 'axes' (`neighbour_axis_checks`), 'official_roi'
+    (`official_roi_outline`, deciding nothing)."""
+    raise NotImplementedError
+
+
+def a4_rule(decisive: Dict[str, Dict[str, float]], min_pairs: int = W3_MIN_PAIRS,
+            power_min: float = A4_POWER_MIN) -> dict:
+    """The block's rule for which scoring W3 is read on: `decisive` maps scoring ('slabs', 'whole') to pair to the
+    decisive power (across the two brains, the 2021 maps' lower reliability, the lowest over session estimates). The
+    slabs if at least `min_pairs` pairs have power >= `power_min` there; otherwise the whole-calyx projection if at least
+    `min_pairs` pairs have it there; otherwise 'no pair'. Returns scoring (None for 'no pair'), kept pairs (those at or
+    above `power_min` under the chosen scoring), left_out, and the per-scoring counts."""
+    raise NotImplementedError
+
+
+def w3_pair_shares(exceed: pd.DataFrame) -> pd.Series:
+    """One pair's share of recordings exceeding the null's 95th percentile per calyx (`exceed`: rows of one pair, columns
+    calyx, recording, exceeds)."""
+    raise NotImplementedError
+
+
+def w3_pair_passes(shares: pd.Series, share: float) -> bool:
+    """W3's calyx rule (the re-plan): the prediction exceeds the null's 95th percentile in more than `share` of the
+    recordings in the hemibrain's calyx and in at least one of the male CNS's two."""
+    raise NotImplementedError
+
+
+def part_d(n_perm: int = N_PERM, state: Optional[dict] = None) -> dict:
+    """Part D (re-planned 2026-11-17), on the pairs and the scoring A4 keeps (a4_w3_pairs.json): E79's analysis 4 on set
+    W's recordings, each recording against each of the three calyces, the calyx mirrored into the recording's side,
+    under each session's estimate (`score_recording`); W3 per estimate (`w3_verdict`) and over estimates
+    (`w3_over_estimates`); beside, deciding nothing: set H's recordings holding both stimuli of a pair, set S's pa minus
+    ms at 10^-3, E79's two 2021 differences through the same three calyces (and E79's own analysis 4 on them,
+    `E79_connectome_maps.run_pratyush`). Writes d_scores.csv, d_pair_shares.csv, d_w3.json, d_summary.json and W3 into
+    verdict.json."""
+    raise NotImplementedError
+
+
+def move_withheld(out: Optional[Path] = None) -> List[str]:
+    """Moves (never deletes) the A3 and A4 outputs of 2026-11-15 that hold maps, agreements or powers (WITHHELD_FILES
+    and every a4_ file) to results/E100_apl_weak_odors/withheld_2026-11-15/; a3_pn_rates files, a3_inputs.csv and
+    a3_sessions.csv stay. Returns the names moved."""
+    raise NotImplementedError
 
 
 def part_e() -> dict:

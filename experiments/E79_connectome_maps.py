@@ -778,6 +778,44 @@ def official_roi_outline(calyces: Optional[Dict[str, Dict[str, pd.DataFrame]]] =
 
 
 # ---------------------------------------------------------------------------
+# part D's entry point and provenance on the allowed tables (E100's part D re-planned 2026-11-17); stub, bodies follow
+
+HELD_RULE = ("CLAUDE.md, 'Connectome data (Tom, 2026-11-17)': queue work uses only the hemibrain and the male CNS as "
+             "curated by Pratyush; the tables that Yang's own Claude's project derived (any connectome, any version) are "
+             "held until Tom lifts the hold himself, and FlyWire / FAFB and BANC are not used")
+
+
+class HeldTablesError(PermissionError):
+    """A reader of the held connectome tables was called (HELD_RULE)."""
+
+
+def _refuse_held(name: str) -> None:
+    raise HeldTablesError(f'{name}: switched off; it reads the held connectome tables ({HELD_RULE}). Use '
+                          'pratyush_calyces / run_pratyush (--calyces pratyush) instead.')
+
+
+def prat_inputs() -> Dict[str, Path]:
+    """Every table part D reads from Pratyush's two folders: 'hemibrain/<key>' and 'malecns/<key>' for HEMIBRAIN_FILES /
+    MALECNS_FILES, and 'hemibrain/pn_kc', 'malecns/pn_kc' (E97's PN bouton -> KC claw tables)."""
+    raise NotImplementedError
+
+
+def write_provenance_prat(out: Path, extra: dict) -> Path:
+    """provenance_pratyush.json in `out`: script, commits (H.code_commits), the olfsysm build, the inputs
+    (`prat_inputs`, the 2021 maps, C2's spike counts and the PN rates) with sha256, settings, and `runs` (kept)."""
+    raise NotImplementedError
+
+
+def run_pratyush(out: Path, n_perm: int = N_PERM, calyces: Optional[Dict[str, dict]] = None,
+                 rates: Optional[pd.DataFrame] = None, meas: Optional[Dict[str, dict]] = None) -> Dict[str, pd.DataFrame]:
+    """Part D's entry point in this module (`--calyces pratyush`): the three calyces (`pratyush_calyces`), the neighbour
+    axis check (strict), the calyx summary and the official-ROI outline beside, and analysis 4 (`run_maps`, E79's own
+    search) on the 12 recordings of 2021 through the three calyces, every table written to `out` (never to OUT, whose
+    analysis 4 is withheld)."""
+    raise NotImplementedError
+
+
+# ---------------------------------------------------------------------------
 # model inputs
 
 def model_pn_rates(rebuild: bool = False) -> pd.DataFrame:
