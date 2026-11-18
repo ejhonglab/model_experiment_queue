@@ -6,8 +6,10 @@ rule for small glomeruli with a label missing on one side; the two-brain mean; n
 builder's invariants of part 0 (each KC's claws and type, the per-type totals, the targets, every moved claw on a bouton
 of its new glomerulus, every other row unchanged); ratios of 1 move nothing; the seeds reproduce; the largest-remainder
 targets; the permutation keeps its strata and the small glomeruli; A1's and A3's rules; the variants and the plan's 84
-points; part C's verdict."""
+points; part C's verdict and its "at a price" label; part (R)'s classes, its second draw and its
+readings; B6's input check within a last-bit tolerance."""
 
+import json
 import os
 from typing import Dict, Tuple
 
@@ -326,6 +328,214 @@ def test_verdicts(tmp_path, monkeypatch):
     v = G.verdict97(_rows(mbs=(0.004, -0.001), b6=0.002), _boot(0.0))
     assert v['disagree'] and v['B6_differs']
     assert (tmp_path / 'verdict.json').exists()
+
+
+def test_part_c_at_a_price(tmp_path, monkeypatch):
+    """Part C's verdict stands; "at a price" when R1 lowers a ρ on odor-odor distances by more than 0.005 or response
+    rate ρ by more than 0.05 (added 2026-11-18 with part R), and with the pending columns applied."""
+    monkeypatch.setattr(G, 'out_dir', lambda: tmp_path)
+    rows = _rows(b2=0.004, perm=(0.001, 0.0005), inv=-0.001, r2=0.002, r2p=0.0005)
+    extra = {(G.REF, 'raw'): dict(rho_on_all=0.690, rho_off_all=0.756, run_rate_rho_on=0.47, run_rate_rho_off=0.40,
+                                  block=0.05, vcf_on=0.3, vcf_off=0.2, vcf_diff=0.1, struct_wt_on=0.4),
+             ('B2_mean2', 'raw'): dict(rho_on_all=0.680, rho_off_all=0.754, run_rate_rho_on=0.46, run_rate_rho_off=0.40,
+                                       block=0.05, vcf_on=0.3, vcf_off=0.2, vcf_diff=0.1, struct_wt_on=0.3)}
+
+    def with_extra(ex):
+        rd = rows.copy()
+        for (v, ro), cols in ex.items():
+            for c, x in cols.items():
+                rd.loc[(rd.variant == v) & (rd.unit == 'all8') & (rd.readout == ro), c] = x
+        return rd
+    v = G.verdict97(with_extra(extra), _boot(-0.001))
+    assert v['outcome'] == 'moves' and v['at_a_price'] and v['label'] == 'moves at a price'
+    assert list(v['price']) == ['ρ on odor-odor distances, APL on'] and v['price'][
+        'ρ on odor-odor distances, APL on'] == pytest.approx(-0.010)
+    assert v['price_pending'] == {'structure vs wild-type somata, APL on': pytest.approx(-0.1)}
+    ex2 = {k: dict(c) for k, c in extra.items()}
+    ex2[('B2_mean2', 'raw')].update(rho_on_all=0.686, struct_wt_on=0.4)
+    v = G.verdict97(with_extra(ex2), _boot(-0.001))
+    assert not v['at_a_price'] and v['label'] == 'moves' and v['label_with_pending'] == 'moves'
+    ex2[('B2_mean2', 'raw')].update(run_rate_rho_off=0.34)
+    v = G.verdict97(with_extra(ex2), _boot(-0.001))
+    assert v['at_a_price'] and list(v['price']) == ['response rate ρ, APL off']
+    # no price on a verdict that is not 'a part' or 'moves'
+    v = G.verdict97(_rows(b2=0.001, r2=-0.0005), _boot(0.001))
+    assert v['label'] == 'no move' and not v['at_a_price']
+
+
+# ---------------------------------------------------------------------------
+# part (R), the second verdict on ρ on odor-odor distances, on made-up rows
+
+RHO_BASE = {'on': 0.690, 'off': 0.756}
+
+
+def _rho_rows(on=0.0, off=0.0, per_w=None, halves=None, perm=((0.0, 0.0), (0.0, 0.0)), inv=(0.0, 0.0),
+              r2=(0.0, 0.0), r2p=(0.0, 0.0), pattern=0.0, half_pattern=None, raw=0.0, mean=0.0, flagged=0,
+              rate=(0.0, 0.0), block=0.0, vcf=(0.0, 0.0), struct=0.0, d2=None, drop=()):
+    """readings rows for part R: every reading of the reference at a base value, B2's (and the controls') the base plus
+    the given change; per_w {wiring: (on, off)} B2's change on each wiring (default the population's), halves (on,
+    off) on each of halves A to D (default the population's); d2 the second draw's changes (on, off), or None."""
+    ch = {'on': on, 'off': off}
+    hv = {'on': on, 'off': off} if halves is None else dict(zip(('on', 'off'), halves))
+    rows = []
+
+    def raw_row(v, unit, d_on, d_off, d_h=None, extra=None):
+        d_h = d_h or {'on': d_on, 'off': d_off}
+        r = dict(variant=v, unit=unit, readout='raw', n_flagged=0, z8_loss=0.073, run_rate_rho_on=0.47,
+                 run_rate_rho_off=0.40, block=0.05, vcf_on=0.30, vcf_off=0.20, vcf_diff=0.10, struct_wt_on=0.40)
+        for c, dc in (('on', d_on), ('off', d_off)):
+            r[f'rho_{c}_all'] = RHO_BASE[c] + dc
+            for h in G.HALVES:
+                r[f'rho_{c}_{h}'] = RHO_BASE[c] - 0.02 + d_h[c]
+        r.update(extra or {})
+        rows.append(r)
+
+    def cal_row(v, unit, extra=None):
+        r = dict(variant=v, unit=unit, readout='cal', z8_pattern=0.0482, mean_effect=0.177,
+                 **{f'half{h}_pattern': 0.055 for h in G.HALVES})
+        r.update(extra or {})
+        rows.append(r)
+    for w in G.ALL_WIRINGS:
+        raw_row(G.REF, w, 0.0, 0.0)
+        pw = (per_w or {}).get(w, (on, off))
+        raw_row('B2_mean2', w, *pw)
+    raw_row(G.REF, 'all8', 0.0, 0.0)
+    cal_row(G.REF, 'all8')
+    hp = pattern if half_pattern is None else half_pattern
+    raw_row('B2_mean2', 'all8', on, off, hv,
+            dict(n_flagged=flagged, z8_loss=0.073 + raw, run_rate_rho_on=0.47 + rate[0], run_rate_rho_off=0.40 + rate[1],
+                 block=0.05 + block, vcf_on=0.30 + vcf[0], vcf_off=0.20 + vcf[1], vcf_diff=0.10 + vcf[0] - vcf[1],
+                 struct_wt_on=0.40 + struct))
+    cal_row('B2_mean2', 'all8', dict(z8_pattern=0.0482 + pattern, mean_effect=0.177 + mean,
+                                     **{f'half{h}_pattern': 0.055 + hp for h in G.HALVES}))
+    for s, p in zip(G.PERM_SEEDS, perm):
+        raw_row(f'B3_permmean2_s{s}', 'all8', *p)
+    raw_row('B3_invmean2', 'all8', *inv)
+    raw_row(G.R2, 'all8', *r2)
+    raw_row(G.R2_PERM, 'all8', *r2p)
+    if d2 is not None:
+        for w in G.ALL_WIRINGS:
+            raw_row(f'B4_mean2_d2' if w in G.S_WIRINGS else 'C2_mean2_d2', w, *d2)
+        raw_row(G.D2, 'all8', *d2)
+        cal_row(G.D2, 'all8')
+    rd = pd.DataFrame(rows)
+    for v, u in drop:
+        rd = rd[~((rd.variant == v) & (rd.unit == u))]
+    return rd
+
+
+def test_rho_classes():
+    c = G.rho_class(_rho_rows(on=0.002, off=-0.001))
+    assert c['cls'] == 'no change' and c['no_change'] and not c['raises']
+    c = G.rho_class(_rho_rows(on=0.015, off=0.0))
+    assert c['cls'] == 'raises' and c['gains'] == {'on': True, 'off': False} and c['n_wirings_up_on'] == 8
+    # the other ρ lower by more than 0.005: no gain
+    c = G.rho_class(_rho_rows(on=0.015, off=-0.006))
+    assert not c['gains']['on'] and c['cls'] == 'below the gate'
+    # only 5 of the 8 wirings gain 0.010
+    pw = {w: ((0.015, 0.0) if i < 5 else (0.005, 0.0)) for i, w in enumerate(G.ALL_WIRINGS)}
+    c = G.rho_class(_rho_rows(on=0.015, per_w=pw))
+    assert c['n_wirings_up_on'] == 5 and c['cls'] == 'below the gate'
+    # one half below the gain
+    rd = _rho_rows(on=0.015)
+    rd.loc[(rd.variant == 'B2_mean2') & (rd.unit == 'all8'), 'rho_on_C'] -= 0.01
+    assert G.rho_class(rd)['cls'] == 'below the gate'
+    # the controls: a permuted seed gaining half as much, or the inverted gaining 0.005
+    assert G.rho_class(_rho_rows(on=0.015, perm=((0.008, 0.0), (0.0, 0.0))))['cls'] == 'below the gate'
+    assert G.rho_class(_rho_rows(on=0.015, perm=((0.007, 0.0), (0.0, 0.0))))['cls'] == 'raises'
+    assert G.rho_class(_rho_rows(on=0.015, inv=(0.0055, 0.0)))['cls'] == 'below the gate'
+    # R2 below the eight as they are by more than 0.005 on either ρ
+    assert G.rho_class(_rho_rows(on=0.015, r2=(0.0, -0.006)))['cls'] == 'below the gate'
+    # the not-worse margins: a price, each named
+    for kw, name in ((dict(pattern=0.0031), 'pattern part (all)'), (dict(half_pattern=0.0031), 'pattern part (A)'),
+                     (dict(raw=0.0051), 'raw-count loss'), (dict(mean=-0.011), 'mean APL effect'),
+                     (dict(flagged=1), 'realism (runs outside the bands)'), (dict(rate=(-0.051, 0.0)), 'response rate ρ, APL on')):
+        c = G.rho_class(_rho_rows(on=0.015, **kw))
+        assert c['cls'] == 'raises at a price' and name in c['fails'], kw
+    c = G.rho_class(_rho_rows(on=0.015, pattern=0.0029, raw=0.0049, mean=-0.009, rate=(-0.049, -0.049)))
+    assert c['cls'] == 'raises' and not c['fails']
+    # the pending columns enter no class, but give the class as it would read with them applied
+    for kw, name in ((dict(block=-0.011), 'the block'), (dict(vcf=(-0.051, 0.0)), 'natural-source alignment, APL on'),
+                     (dict(vcf=(0.0, 0.06)), 'natural-source alignment, APL on minus off'),
+                     (dict(struct=-0.051), 'structure vs wild-type somata, APL on')):
+        c = G.rho_class(_rho_rows(on=0.015, **kw))
+        assert c['cls'] == 'raises' and c['cls_with_pending'] == 'raises at a price' and name in c['pending_fails'], kw
+    # lowers, no change, averaging
+    c = G.rho_class(_rho_rows(off=-0.012))
+    assert c['cls'] == 'lowers' and c['lowers_off'] and not c['lowers_on']
+    c = G.rho_class(_rho_rows(on=0.003, r2=(0.012, 0.0), r2p=(0.007, 0.0)))
+    assert c['cls'] == 'averaging'
+    c = G.rho_class(_rho_rows(on=0.003, r2=(0.012, 0.0), r2p=(0.005, 0.0)))
+    assert c['cls'] == 'below the gate'
+    c = G.rho_class(_rho_rows(on=0.003, r2=(0.006, 0.0)))
+    assert c['cls'] == 'below the gate' and not c['no_change']
+
+
+def test_rho_verdict_second_draw_and_incomplete(tmp_path, monkeypatch):
+    monkeypatch.setattr(G, 'out_dir', lambda: tmp_path)
+    v = G.verdict_rho97(_rho_rows(on=0.015))
+    assert v['cls'] == 'raises' and v['final'] == 'pending: C2' and v['holds_on_draw2'] is None
+    v = G.verdict_rho97(_rho_rows(on=0.015, d2=(0.014, 0.0)))
+    assert v['holds_on_draw2'] and v['final'] == 'raises' and v['draw2']['n_wirings_up_on'] == 8
+    v = G.verdict_rho97(_rho_rows(on=0.015, d2=(0.004, 0.0)))
+    assert v['holds_on_draw2'] is False and v['final'] == 'raises on the first draw only'
+    v = G.verdict_rho97(_rho_rows(on=0.002))
+    assert v['final'] == 'no change' and v['draw2'] is None
+    v = G.verdict_rho97(_rho_rows(on=0.015, drop=[(G.R2, 'all8')]))
+    assert v['cls'] == 'incomplete' and 'R2' in v['missing']
+    v = G.verdict_rho97(_rho_rows(on=0.015, drop=[('B2_mean2', 'P3')]))
+    assert v['cls'] == 'incomplete' and 'B2_mean2 on P3' in v['missing']
+    assert (tmp_path / 'verdict_rho.json').exists()
+
+
+def test_rho_scores_on_made_up_distances(monkeypatch):
+    """`rho_scores` reads E106's ρ against E108's distance targets, over the 120 pairs and the subsets."""
+    E108 = pytest.importorskip('experiments.E108_paa_extrapolation')
+    odors = list(H.APL16_ODORS)
+    pairs = pd.MultiIndex.from_tuples([(a, b) for i, a in enumerate(odors) for b in odors[i + 1:]],
+                                      names=['odor_a', 'odor_b'])
+    rng = np.random.default_rng(1)
+    tg = {t: {c: pd.Series(rng.random(len(pairs)), index=pairs) for c in ('on', 'off')} for t in G.DIST_TARGETS}
+    monkeypatch.setattr(E108, 'dist_targets', lambda: tg)
+    d = {c: pd.Series(rng.random(len(pairs)), index=pairs) for c in ('on', 'off')}
+    r = G.rho_scores(d)
+    assert r['rho_on_all'] == pytest.approx(H.spearman(d['on'], tg['all']['on']))
+    assert r['rho_off_B'] == pytest.approx(H.spearman(d['off'], tg['B']['off']))
+    mm = [p for p in pairs if p[0] in H.MEGAMAT12 and p[1] in H.MEGAMAT12]
+    assert len(mm) == 66
+    assert r['rho_on_megamat66'] == pytest.approx(H.spearman(d['on'].loc[mm], tg['all']['on'].loc[mm]))
+    assert 'block' not in r
+
+
+def test_fuller_input_accepts_a_last_bit_difference(tmp_path, monkeypatch):
+    """B6's input check (2026-11-18): E93's fuller input rebuilt with a last-bit difference from its saved file is
+    accepted and says so; a real difference is refused."""
+    E93 = pytest.importorskip('experiments.E93_missing_glomeruli_input')
+    E108 = pytest.importorskip('experiments.E108_paa_extrapolation')
+    from experiments.E77_input_screen import frame_sha256
+    orn = pd.DataFrame(np.random.default_rng(0).random((4, 16)) * 200, index=['DA1', 'DC1', 'DL1', 'VM7d'],
+                       columns=list(H.APL16_ODORS))
+    res = tmp_path / 'results' / E93.EXPERIMENT / 'inputs'
+    res.mkdir(parents=True)
+    lay = H.abbrev_columns(orn)
+    lay.index.name = 'glomerulus'
+    lay.to_csv(res / 'F.csv')
+    (res / 'sha256.json').write_text(json.dumps({'F': dict(file=f'results/{E93.EXPERIMENT}/inputs/F.csv',
+                                                           frame_sha256=frame_sha256(orn))}))
+    monkeypatch.setattr(H, 'results_dir', lambda e: tmp_path / 'results' / e)
+    monkeypatch.setattr(H, 'shared_dir', lambda: tmp_path)
+    built = {'x': orn}
+    monkeypatch.setattr(E93, 'input_of', lambda name: built['x'].copy())
+    _, _, rec = G.fuller_input()
+    assert 'recorded_frame_sha256' not in rec
+    built['x'] = orn + 1e-12
+    _, _, rec = G.fuller_input()
+    assert rec['recorded_frame_sha256'] == frame_sha256(orn) and rec['frame_sha256'] == frame_sha256(built['x'])
+    assert 0 < rec['frame_max_abs_diff'] <= G.INPUT_ATOL
+    built['x'] = orn + 1e-6
+    with pytest.raises(RuntimeError, match='differs from its saved record'):
+        G.fuller_input()
+    assert E108.INPUT_ATOL == G.INPUT_ATOL
 
 
 def test_an_incomplete_part_b_gives_no_verdict(tmp_path, monkeypatch):

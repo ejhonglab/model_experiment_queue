@@ -83,8 +83,21 @@ Parts (CLI `--part`):
   seeds, 16; inverted, 8; each mushroom body's permuted, one seed, 16); B4 a second draw of the moved claws at the mean
   proportions on S (4); B5 the mean proportions at half and twice their log ratios on S (8; twice is the male CNS's own
   proportions, its two sides averaged); B6 the mean proportions with E93's fuller input on the eight (8).
-- score (`--no-co`, `--no-zcell`): the readings, part C's verdict and the tables.
-- C2: only on a verdict of "a part" or "moves", the second draw on T (4 points, with B4), then `score`.
+- score (`--no-co`, `--no-zcell`): the readings, part C's verdict (verdict.json, with its "at a price" label), part
+  (R)'s verdict (verdict_rho.json) and the tables.
+- C2: only on a verdict of "a part" or "moves", or a part (R) class of "raises" (with or without a price), the second
+  draw on T (4 points, with B4), then `score`.
+
+Part (R), the second verdict, on ρ on odor-odor distances (added to the entry 2026-11-18 14:22, planned by a Fable
+subagent, claude-fable-5-2, spawned from viki 2026-11-18 14:14; fixed before any point was scored; no run beyond part
+B's): `rho_scores` reads ρ with APL on against the control flies and with APL off against APL output blocked (TNT), on
+raw counts over the 120 pairs, against all recordings and each of halves A to D (E108's `dist_targets`, E106's
+`rho_pairs`), for every run and population; `rho_class` gives the class of R1 (B2 on the eight against the eight as they
+are) with E108's gate's thresholds (RHO_*), the not-worse margins (EQUAL_*, RATE_RHO_SLACK) and the pending columns
+(the block, the natural-source alignment, the structure against the wild-type somata; `pending_fails`), which enter no
+class but give each class as it would read with them applied; `verdict_rho97` adds the second draw and the readings
+beside. Part C's "at a price" (`c_price`): a verdict of "a part" or "moves" whose R1 lowers either ρ by more than
+RHO_OTHER or response rate ρ by more than RATE_RHO_SLACK is labelled so; the verdict stands.
 - D (`--pop S|T`, `--wirings` for a lane, `--dry-run`, `--force`): only on "a part" or "moves", C2's family fitted again
   at the mean proportions (E10_joint_fit.py with B2's matrix as --wiring-file).
 - Dscore, E (documented stubs), variants, table.
@@ -119,6 +132,17 @@ Departures from the entry, forced by the code or the data, or readings the entry
   the wiring arguments of the base, which a moved wiring does not have.
 - The builder is in this module, not in pyolfsysm.wpnkc_shuffles (the entry makes that optional).
 - The withheld outputs' folder is named for the day they were made, as the entry names it (2026-11-15).
+- B6: E93's fuller input built now is accepted within INPUT_ATOL (1e-9) of its saved file (`fuller_input`), as 60143d0
+  did for E108; the run's input_record and provenance carry both sha256s and the largest difference.
+- Part (R), readings the entry leaves open (fixed 2026-11-18 before any point was scored): "within 0.005" and "not lower
+  by more than" include the bound; the per-wiring changes pair each wiring's run with the same wiring as it is (for the
+  second draw, B4 on S and C2 on T); the controls' rule is read on each ρ that gains, against the gain on the eight
+  against all recordings; response rate ρ is `rate_rho_on` / `rate_rho_off` of the run rows (the rule of 2026-11-10),
+  the mean over the eight; the realism condition is that none of R1's eight runs is outside the bands; the pending
+  natural-source alignment is flagged on APL on, APL off and on minus off, and the structure against the wild-type
+  somata on APL on (the somata are wild-type flies with APL intact; APL off beside), each when lower by more than
+  STRUCTURE_SLACK; the classes are tried in the entry's order (raises, with or without a price; lowers; no change;
+  averaging), else "below the gate".
 
 Outputs: results/E97_glomerulus_claw_shares/ (shared); spike counts, responses, wiring matrices, moved-claw lists and
 targets under outputs/E97_glomerulus_claw_shares/ (runs_mcns/, W/, breadth/).
@@ -218,6 +242,27 @@ WORSE = 0.0015                                      # R1 this much higher: "wors
 AVERAGING = 0.0015                                  # R2 gains this and its permuted control at least half as much
 DISAGREE = 0.003                                    # (f): one mushroom body lowers the eight's pattern part this much
 B6_DIFF = 0.0015                                    # (h): B6 differs from B2 on the eight by this much
+
+# ---------------------------------------------------------------------------
+# part (R), the second verdict, on ρ on odor-odor distances (added to the entry 2026-11-18 14:22, fixed before any
+# point was scored; the thresholds are E108's gate's)
+
+RHO_GAIN = 0.010                                    # "raises" / "lowers": one ρ this much higher / lower
+RHO_WIRINGS = 6                                     # ... on at least this many of the eight wirings
+RHO_OTHER = 0.005                                   # the other ρ not lower by more than this (and part C's price)
+RHO_INVERTED = 0.005                                # the inverted proportions gain less than this
+RHO_R2_SLACK = 0.005                                # R2 not below the eight as they are by more than this on either ρ
+RHO_NO_CHANGE = 0.005                               # "no change": both ρ's of R1 and R2 within this
+EQUAL_PATTERN, EQUAL_RAW, EQUAL_MEAN = 0.003, 0.005, 0.01   # not worse elsewhere (E94's equal, E108's slacks)
+RATE_RHO_SLACK = 0.05                               # response rate ρ, APL on and off, mean over the eight
+BLOCK_SLACK, STRUCTURE_SLACK = 0.010, 0.05          # the pending columns (Tom's questions of 2026-11-17 14:44)
+HALVES = ('A', 'B', 'C', 'D')
+DIST_TARGETS = ('all',) + HALVES                    # E108's `dist_targets`: all recordings and the halves A to D
+HALF_EFFECT = {'all': 'z8', **{h: f'half{h}' for h in HALVES}}   # the same recordings' per-pair APL effect targets
+RHO_SUBSETS = {'megamat66': dict(odors=tuple(H.MEGAMAT12)), 'no_paa_bmyr91': dict(without=('paa', 'B-myr')),
+               'paa15': dict(pairs=tuple(('paa', o) for o in H.APL16_ODORS if o != 'paa'))}
+RUN_MEANS = ('rate_on', 'rate_off', 'rate_rho_on', 'rate_rho_off')   # per population, the mean over its runs
+PENDING_COLS = ('block', 'vcf_on', 'vcf_off', 'vcf_diff', 'struct_wt_on', 'struct_wt_off')
 
 # ---------------------------------------------------------------------------
 # part D (only on "a part" or "moves")
@@ -1518,15 +1563,29 @@ def wiring_file(tag: str, sub: str = RUNS_SUB) -> Optional[Path]:
     return None
 
 
+INPUT_ATOL = 1e-9   # E108's: spike deltas up to ~250; a last-bit difference of a rebuilt input is ~1e-14
+
+
 def fuller_input() -> Tuple[pd.DataFrame, str, dict]:
     """E93's fuller input F (`E93.input_of('F')`), its cache tag, and the record of E93's saved file (results/E93_.../
-    inputs/F.csv, its sha256), checked against the frame."""
+    inputs/F.csv, its sha256), checked against the frame.
+
+    The input built now may differ from the saved file in the last bits (on hal on 2026-11-18 by 1.4e-14 at most, which
+    stopped part B's two lanes at their first B6 point): it is accepted when it equals the saved file within
+    `INPUT_ATOL` (E108's `recorded_input_diff`, as 60143d0 did for E108), and the record returned then carries the
+    frame sha256 built now, the recorded one (`recorded_frame_sha256`) and the largest difference
+    (`frame_max_abs_diff`)."""
     from experiments import E93_missing_glomeruli_input as E93
     orn = E93.input_of(B6_INPUT)
     rec = _read_json(H.results_dir(E93.EXPERIMENT) / 'inputs' / 'sha256.json').get(B6_INPUT, {})
     sha = _sha(orn)
     if rec and rec.get('frame_sha256') != sha:
-        raise RuntimeError(f"E93's input {B6_INPUT} differs from its saved record ({rec.get('frame_sha256')} vs {sha})")
+        from experiments import E108_paa_extrapolation as E108
+        diff = E108.recorded_input_diff(orn, H.shared_dir() / rec['file'])
+        if not diff <= INPUT_ATOL:
+            raise RuntimeError(f"E93's input {B6_INPUT} differs from its saved record ({rec.get('frame_sha256')} vs {sha}; "
+                               f'largest difference {diff:.3g})')
+        rec = dict(rec, recorded_frame_sha256=rec['frame_sha256'], frame_max_abs_diff=diff)
     return orn, E83.input_tag_for(orn, f'E97_{B6_INPUT}'), dict(rec, frame_sha256=sha)
 
 
@@ -1631,8 +1690,11 @@ def run_point(variant: str, wiring: str, rt: Optional[pd.DataFrame] = None, cc: 
     row.update(cc)
     row.update({f'process_{k}': v for k, v in cc.items()})
     _append_locked(out_dir() / RUNS_TABLE, row)
-    _provenance_add('B', tag, dict(H.model_provenance(orn_deltas=H.apl16_orn_deltas() if orn is None else orn, _wPNKC=W1),
-                                   wiring_sha256=sha, ratios_sha256=_sha(r.to_frame()), host=_host()))
+    prov = dict(H.model_provenance(orn_deltas=H.apl16_orn_deltas() if orn is None else orn, _wPNKC=W1),
+                wiring_sha256=sha, ratios_sha256=_sha(r.to_frame()), host=_host())
+    if 'recorded_frame_sha256' in irec:   # built on this host within INPUT_ATOL of E93's saved input
+        prov['input_match'] = {k: irec[k] for k in ('frame_sha256', 'recorded_frame_sha256', 'frame_max_abs_diff')}
+    _provenance_add('B', tag, prov)
     tgts = targets()
     p0 = _rms(E83.pattern_error(E83.pair_distances(E83.saved_fit(wiring)['saved'], 'cal'), tgts['z8']).to_numpy())
     p1 = _rms(E83.pattern_error(E83.pair_distances(o, 'cal'), tgts['z8']).to_numpy())
@@ -1882,6 +1944,36 @@ def score_row(d: Dict[str, pd.Series]) -> dict:
     return row
 
 
+def rho_scores(d: Dict[str, pd.Series], pending: bool = False) -> dict:
+    """Part (R)'s readings of one unit's distances ({'on', 'off'}), as E106, E108 and E109 read them: ρ on odor-odor
+    distances with APL on against the control flies and with APL off against APL output blocked (TNT) over the 120
+    pairs, against all recordings and each of halves A to D ('rho_<on|off>_<all|A..D>', E108's `dist_targets`), and
+    against all recordings over RHO_SUBSETS ('rho_<on|off>_<subset>': the 66 megamat pairs, the 91 without paa and B-myr,
+    paa's 15). With `pending`, the columns that wait on Tom's answers of 2026-11-17 14:44 (E108's `unit_scores`): the
+    block, the natural-source alignment over the 66 megamat pairs with APL on, off and their difference ('vcf_diff', on
+    minus off), and the structure against Remy's wild-type somata with APL on and off."""
+    from experiments import E106_rho_gap_parts as E106
+    from experiments import E108_paa_extrapolation as E108
+    on, off = E83._cs(d['on']), E83._cs(d['off'])
+    dt = E108.dist_targets()
+    row = {}
+    for t in DIST_TARGETS:
+        for c, m in (('on', on), ('off', off)):
+            row[f'rho_{c}_{t}'] = float(E106.rho_pairs(m, dt[t][c]))
+    for s, kw in RHO_SUBSETS.items():
+        for c, m in (('on', on), ('off', off)):
+            row[f'rho_{c}_{s}'] = float(E106.rho_pairs(m, dt['all'][c], **kw))
+    if pending:
+        st, _ = H.compare_on_off(on, off)
+        row['block'] = float(st['block_fruity_small_iso'])
+        for c, m in (('on', on), ('off', off)):
+            r = H.compare_to_references(m)
+            row[f'vcf_{c}'] = float(r['spearman_resid_vs_vcf_hyp'])
+            row[f'struct_wt_{c}'] = float(r['spearman_resid_vs_remap_wt'])
+        row['vcf_diff'] = row['vcf_on'] - row['vcf_off']
+    return row
+
+
 def boot_targets(n: int = BOOT_N, seed: int = BOOT_SEED) -> Tuple[pd.MultiIndex, np.ndarray]:
     """The per-pair APL effect of `n` resamples of the recordings (each genotype's recordings with replacement; Yang's z,
     all recordings), pairs in E83's canonical order, checked against the main target at the full sample."""
@@ -1920,7 +2012,9 @@ def boot_patterns(me: pd.Series, pairs: pd.MultiIndex, B: np.ndarray) -> np.ndar
 
 def readings(readouts: Sequence[str] = READOUTS) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """readings.csv (per variant, unit and readout `score_row`, the runs outside the bands and at a bracket's bound, the
-    change against 'ref' on the same unit and readout as 'd_<column>'), pairs.csv (each population's per-pair distances
+    mean over the runs of their response rates and response rate ρ's ('run_<column>'), under 'raw' and 'cal' part (R)'s
+    `rho_scores` (with the pending columns on the populations' raw counts), the change against 'ref' on the same unit
+    and readout as 'd_<column>'), pairs.csv (each population's per-pair distances
     and effect under 'cal' and 'raw') and boot.csv (per population under the readout against all recordings: the
     difference of its pattern part from the reference's on the same unit, and a few other pairs, with the 90 % interval
     of a paired bootstrap over the recordings)."""
@@ -1929,12 +2023,17 @@ def readings(readouts: Sequence[str] = READOUTS) -> Tuple[pd.DataFrame, pd.DataF
     meta = {(r.variant, r.wiring): r for r in runs.itertuples()}
     rows, prs, eff = [], [], {}
     for v, unit, mem in populations(runs):
+        means = {f'run_{k}': float(np.mean([pd.to_numeric(getattr(meta[m], k, np.nan), errors='coerce') for m in mem]))
+                 for k in RUN_MEANS}
         for ro in readouts:
             ds = [_dist(mv, mw, ro) for mv, mw in mem]
             d = ds[0] if len(ds) == 1 else E83.population(ds)
-            rows.append(dict(variant=v, unit=unit, kind='wiring' if len(mem) == 1 else 'population', n_runs=len(mem),
-                             readout=ro, n_flagged=int(sum(meta[m].flagged for m in mem)),
-                             n_at_bound=int(sum(meta[m].at_bound for m in mem)), **score_row(d)))
+            row = dict(variant=v, unit=unit, kind='wiring' if len(mem) == 1 else 'population', n_runs=len(mem),
+                       readout=ro, n_flagged=int(sum(meta[m].flagged for m in mem)),
+                       n_at_bound=int(sum(meta[m].at_bound for m in mem)), **means, **score_row(d))
+            if ro in ('raw', 'cal'):
+                row.update(rho_scores(d, pending=ro == 'raw' and len(mem) > 1))
+            rows.append(row)
             if ro in ('cal', 'raw'):
                 me = _effect(d)
                 eff[(v, unit, ro)] = me
@@ -1947,7 +2046,7 @@ def readings(readouts: Sequence[str] = READOUTS) -> Tuple[pd.DataFrame, pd.DataF
     rd = pd.DataFrame(rows)
     base = rd[rd.variant == REF].set_index(['unit', 'readout'])
     cols = [c for c in rd.columns if c.endswith(('_loss', '_pattern', '_rho', '_amplitude', '_shape', '_sd_ratio', '_pearson'))
-            or c in ('mean_effect', 'mean_on', 'mean_off')]
+            or c in ('mean_effect', 'mean_on', 'mean_off') + PENDING_COLS or c.startswith(('rho_', 'run_'))]
     for c in cols:
         rd[f'd_{c}'] = [v - base[c].get((u, ro), np.nan) if (u, ro) in base.index else np.nan
                         for u, ro, v in zip(rd.unit, rd.readout, rd[c])]
@@ -2285,7 +2384,192 @@ def verdict97(rd: pd.DataFrame, bt: pd.DataFrame, runs: Optional[pd.DataFrame] =
     res['final'] = (res['outcome'] if not res['needs_draw2'] else
                     (res['outcome'] if res['holds_on_draw2'] else ('pending: C2' if res['holds_on_draw2'] is None
                                                                    else f"{res['outcome']} on the first draw only")))
+    # "at a price" (added 2026-11-18 with part R; the verdict itself stands): R1 on the eight against the eight as they
+    # are, either ρ on odor-odor distances lower by more than RHO_OTHER or response rate ρ lower by more than
+    # RATE_RHO_SLACK; and as it would read with the pending columns applied
+    for c in ('on', 'off'):
+        res[f'd_rho_{c}_all'] = _d(rd, v, 'all8', f'rho_{c}_all')
+        res[f'd_rate_rho_{c}'] = _d(rd, v, 'all8', f'run_rate_rho_{c}')
+    res['price'] = c_price(rd, v)
+    res['price_pending'] = pending_fails(rd, v)
+    priced = res['outcome'] in ('a part', 'moves')
+    res['at_a_price'] = bool(priced and res['price'])
+    res['at_a_price_with_pending'] = bool(priced and (res['price'] or res['price_pending']))
+    res['label'] = res['outcome'] + (' at a price' if res['at_a_price'] else '')
+    res['label_with_pending'] = res['outcome'] + (' at a price' if res['at_a_price_with_pending'] else '')
     _write_json(out_dir() / 'verdict.json', res)
+    return res
+
+
+def _d(rd: pd.DataFrame, variant: str, unit: str, col: str, readout: str = 'raw', ref: str = REF,
+       ref_unit: Optional[str] = None) -> float:
+    """A reading of `variant` on `unit` minus the reference's (`ref` on `ref_unit`, default the same unit)."""
+    return _val(rd, variant, unit, col, readout) - _val(rd, ref, unit if ref_unit is None else ref_unit, col, readout)
+
+
+def c_price(rd: pd.DataFrame, variant: str, unit: str = 'all8') -> dict:
+    """Part C's "at a price" (the entry's part C, added 2026-11-18): {measure: change} for either ρ on odor-odor
+    distances (raw counts, all recordings) lower by more than RHO_OTHER, and response rate ρ with APL on or off (the mean
+    over the runs) lower by more than RATE_RHO_SLACK, against the eight as they are."""
+    out = {}
+    for c in ('on', 'off'):
+        x = _d(rd, variant, unit, f'rho_{c}_all')
+        if x < -RHO_OTHER:
+            out[f'ρ on odor-odor distances, APL {c}'] = x
+        y = _d(rd, variant, unit, f'run_rate_rho_{c}')
+        if y < -RATE_RHO_SLACK:
+            out[f'response rate ρ, APL {c}'] = y
+    return out
+
+
+PENDING_NAMES = {'vcf_on': 'natural-source alignment, APL on', 'vcf_off': 'natural-source alignment, APL off',
+                 'vcf_diff': 'natural-source alignment, APL on minus off',
+                 'struct_wt_on': 'structure vs wild-type somata, APL on'}
+
+
+def pending_fails(rd: pd.DataFrame, variant: str, unit: str = 'all8') -> dict:
+    """The pending columns (Tom's questions of 2026-11-17 14:44; they enter no class, and each class is also given as
+    it would read with them applied): {measure: change} for the block lower by more than BLOCK_SLACK, and the
+    natural-source alignment (APL on, off, on minus off) or the structure against the wild-type somata (APL on) lower by
+    more than STRUCTURE_SLACK, on the population's raw counts against the eight as they are."""
+    out = {}
+    x = _d(rd, variant, unit, 'block')
+    if x < -BLOCK_SLACK:
+        out['the block'] = x
+    for col, name in PENDING_NAMES.items():
+        x = _d(rd, variant, unit, col)
+        if x < -STRUCTURE_SLACK:
+            out[name] = x
+    return out
+
+
+def _wiring_variants(variant: str) -> Dict[str, str]:
+    """The run behind each wiring of a population read in part R: the variant itself, or for the second draw (D2) B4
+    on S and C2 on T."""
+    if variant == D2:
+        return {w: (f'B4_{MEAN}_d{DRAW_SEEDS[1]}' if w in S_WIRINGS else f'C2_{MEAN}_d{DRAW_SEEDS[1]}') for w in ALL_WIRINGS}
+    return {w: variant for w in ALL_WIRINGS}
+
+
+def rho_class(rd: pd.DataFrame, variant: str = f'B2_{MEAN}') -> dict:
+    """Part (R)'s class for `variant` on the eight against the eight as they are (raw counts; the module docstring):
+    'raises', 'raises at a price', 'lowers', 'no change', 'averaging', 'below the gate' (the first that holds, in that
+    order), or 'incomplete'; with every change it rests on, the conditions, the failures of the not-worse margins
+    ('fails') and of the pending columns ('pending_fails'), and the class with the pending columns applied."""
+    v = variant
+    wv = _wiring_variants(v)
+    out = dict(variant=v, readout='raw', reference=REF)
+    need = {'R1 on the eight': (v, 'all8'), 'the reference': (REF, 'all8'), 'R2': (R2, 'all8'),
+            'R2 permuted': (R2_PERM, 'all8'), 'the inverted': (f'B3_inv{MEAN}', 'all8'),
+            **{f'the permuted (seed {s})': (f'B3_perm{MEAN}_s{s}', 'all8') for s in PERM_SEEDS},
+            **{f'{wv[w]} on {w}': (wv[w], w) for w in ALL_WIRINGS}}
+    missing = [k for k, (a, u) in need.items() if not np.isfinite(_val(rd, a, u, 'rho_on_all', 'raw'))]
+    if missing:
+        out.update(cls='incomplete', cls_with_pending='incomplete', missing=missing)
+        return out
+    other = {'on': 'off', 'off': 'on'}
+    up, down = {}, {}
+    for c in ('on', 'off'):
+        d_all = _d(rd, v, 'all8', f'rho_{c}_all')
+        per_w = {w: _val(rd, wv[w], w, f'rho_{c}_all', 'raw') - _val(rd, REF, w, f'rho_{c}_all', 'raw')
+                 for w in ALL_WIRINGS}
+        d_h = {h: _d(rd, v, 'all8', f'rho_{c}_{h}') for h in HALVES}
+        n_up = int(sum(x >= RHO_GAIN for x in per_w.values()))
+        n_down = int(sum(x <= -RHO_GAIN for x in per_w.values()))
+        up[c] = bool(d_all >= RHO_GAIN and n_up >= RHO_WIRINGS and all(x >= RHO_GAIN for x in d_h.values()))
+        down[c] = bool(d_all <= -RHO_GAIN and n_down >= RHO_WIRINGS and all(x <= -RHO_GAIN for x in d_h.values()))
+        out.update({f'd_rho_{c}_all': d_all, f'n_wirings_up_{c}': n_up, f'n_wirings_down_{c}': n_down,
+                    f'd_rho_{c}_wirings': per_w, **{f'd_rho_{c}_{h}': x for h, x in d_h.items()},
+                    f'd_rho_{c}_R2': _d(rd, R2, 'all8', f'rho_{c}_all'),
+                    f'd_rho_{c}_R2_perm': _d(rd, R2_PERM, 'all8', f'rho_{c}_all'),
+                    f'd_rho_{c}_perm': {s: _d(rd, f'B3_perm{MEAN}_s{s}', 'all8', f'rho_{c}_all') for s in PERM_SEEDS},
+                    f'd_rho_{c}_inv': _d(rd, f'B3_inv{MEAN}', 'all8', f'rho_{c}_all')})
+    gains = {c: bool(up[c] and out[f'd_rho_{other[c]}_all'] >= -RHO_OTHER) for c in ('on', 'off')}
+    ctl = {c: bool(all(out[f'd_rho_{c}_perm'][s] < CONTROL_RATIO * out[f'd_rho_{c}_all'] for s in PERM_SEEDS)
+                   and out[f'd_rho_{c}_inv'] < RHO_INVERTED) for c in ('on', 'off') if gains[c]}
+    r2_ok = bool(all(out[f'd_rho_{c}_R2'] >= -RHO_R2_SLACK for c in ('on', 'off')))
+    first4 = bool(any(gains.values()) and all(ctl.values()) and r2_ok)
+    # not worse elsewhere: the pattern part under the readout against all recordings and each half, the raw-count
+    # loss, the mean APL effect (readout), the bands, the response rate ρ's (the mean over the eight)
+    fails = {}
+    for t, et in HALF_EFFECT.items():
+        x = _d(rd, v, 'all8', f'{et}_pattern', 'cal')
+        out[f'd_pattern_{t}'] = x
+        if x > EQUAL_PATTERN:
+            fails[f'pattern part ({t})'] = x
+    out['d_raw_loss'] = _d(rd, v, 'all8', 'z8_loss', 'raw')
+    if out['d_raw_loss'] > EQUAL_RAW:
+        fails['raw-count loss'] = out['d_raw_loss']
+    out['d_mean_effect'] = _d(rd, v, 'all8', 'mean_effect', 'cal')
+    if out['d_mean_effect'] < -EQUAL_MEAN:
+        fails['mean APL effect'] = out['d_mean_effect']
+    out['n_flagged'] = _val(rd, v, 'all8', 'n_flagged', 'raw')
+    if out['n_flagged'] > 0:
+        fails['realism (runs outside the bands)'] = out['n_flagged']
+    for c in ('on', 'off'):
+        out[f'd_rate_rho_{c}'] = _d(rd, v, 'all8', f'run_rate_rho_{c}')
+        if out[f'd_rate_rho_{c}'] < -RATE_RHO_SLACK:
+            fails[f'response rate ρ, APL {c}'] = out[f'd_rate_rho_{c}']
+    pend = pending_fails(rd, v)
+    for col in PENDING_COLS:
+        out[f'd_{col}'] = _d(rd, v, 'all8', col)
+    no_change = bool(all(abs(out[f'd_rho_{c}_{k}']) <= RHO_NO_CHANGE for c in ('on', 'off') for k in ('all', 'R2')))
+    avg = {c: bool(out[f'd_rho_{c}_R2'] >= RHO_GAIN and out[f'd_rho_{c}_R2_perm'] >= CONTROL_RATIO * out[f'd_rho_{c}_R2'])
+           for c in ('on', 'off')}
+    out.update(gains=gains, controls=ctl, r2_ok=r2_ok, first_four=first4, fails=fails, pending_fails=pend,
+               raises=first4, lowers=bool(any(down.values())), lowers_on=down['on'], lowers_off=down['off'],
+               no_change=no_change, averaging=bool(any(avg.values())))
+    if first4:
+        cls = 'raises at a price' if fails else 'raises'
+        cls_p = 'raises at a price' if (fails or pend) else 'raises'
+    else:
+        cls = next((k for k, f in (('lowers', out['lowers']), ('no change', no_change), ('averaging', out['averaging']))
+                    if f), 'below the gate')
+        cls_p = cls
+    out.update(cls=cls, cls_with_pending=cls_p)
+    return out
+
+
+RAISES = ('raises', 'raises at a price')
+
+
+def verdict_rho97(rd: pd.DataFrame) -> dict:
+    """Part (R)'s verdict (verdict_rho.json): `rho_class` of the mean proportions (B2) on the eight; a "raises" (with or
+    without a price) has to hold on the second draw (B4 on S, C2 on T; 'pending: C2' until C2 has run); beside, deciding
+    nothing: each of the male CNS's mushroom bodies alone on the eight and the two as 16 model flies, B5's half and
+    double on S, B6 against E93's saved points and against B2, the two ρ's of B2 and the reference over the subsets
+    (the 66 megamat pairs, the 91 without paa and B-myr, paa's 15) and under the calibrated readout."""
+    v = f'B2_{MEAN}'
+    res = rho_class(rd, v)
+    res['outcome'] = res['cls']
+    if res['cls'] in RAISES:
+        d2 = rho_class(rd, D2)
+        res['draw2'] = d2
+        res['holds_on_draw2'] = None if d2['cls'] == 'incomplete' else bool(d2['cls'] in RAISES)
+    else:
+        res['draw2'], res['holds_on_draw2'] = None, None
+    res['final'] = (res['cls'] if res['cls'] not in RAISES else
+                    (res['cls'] if res['holds_on_draw2'] else ('pending: C2' if res['holds_on_draw2'] is None
+                                                               else f"{res['cls']} on the first draw only")))
+    beside = {}
+    for c in ('on', 'off'):
+        for name in [f'B1_{MB_SHORT[m]}' for m in OTHER_MBS] + [MCNS16]:
+            beside[f'{name}_d_rho_{c}'] = _d(rd, name, 'all8', f'rho_{c}_all')
+        for s in B5_SCALES:
+            beside[f'B5_x{s:g}_S_d_rho_{c}'] = _d(rd, f'B5_{MEAN}_x{s:g}', 'S', f'rho_{c}_all')
+        beside[f'B2_S_d_rho_{c}'] = _d(rd, v, 'S', f'rho_{c}_all')
+        b6 = f'B6_{MEAN}_{B6_INPUT}'
+        beside[f'B6_minus_E93F_rho_{c}'] = _d(rd, b6, 'all8', f'rho_{c}_all', ref=E93F)
+        beside[f'B6_minus_B2_rho_{c}'] = _d(rd, b6, 'all8', f'rho_{c}_all', ref=v)
+        for s in RHO_SUBSETS:
+            beside[f'ref_rho_{c}_{s}'] = _val(rd, REF, 'all8', f'rho_{c}_{s}', 'raw')
+            beside[f'B2_d_rho_{c}_{s}'] = _d(rd, v, 'all8', f'rho_{c}_{s}')
+        beside[f'ref_rho_{c}_all_cal'] = _val(rd, REF, 'all8', f'rho_{c}_all', 'cal')
+        beside[f'B2_d_rho_{c}_all_cal'] = _d(rd, v, 'all8', f'rho_{c}_all', 'cal')
+        beside[f'ref_rho_{c}_all'] = _val(rd, REF, 'all8', f'rho_{c}_all', 'raw')
+        beside[f'B2_rho_{c}_all'] = _val(rd, v, 'all8', f'rho_{c}_all', 'raw')
+    res['beside'] = beside
+    _write_json(out_dir() / 'verdict_rho.json', res)
     return res
 
 
@@ -2300,20 +2584,26 @@ def score(coresponse: bool = True, zcell: bool = True, n_workers: int = 4) -> di
     if coresponse:
         coresponse97(n_workers)
     v = verdict97(rd, bt)
-    print(json.dumps({k: v[k] for k in ('outcome', 'final', 'gain8', 'gainS', 'gainT', 'R1_8', 'ref8', 'R2', 'perm_gain',
-                                        'inv_gain', 'mb_gain', 'disagree', 'B6_minus_B2')}, indent=1, default=float),
-          flush=True)
+    print(json.dumps({k: v[k] for k in ('outcome', 'label', 'label_with_pending', 'final', 'gain8', 'gainS', 'gainT',
+                                        'R1_8', 'ref8', 'R2', 'perm_gain', 'inv_gain', 'mb_gain', 'disagree',
+                                        'B6_minus_B2', 'price', 'price_pending')}, indent=1, default=float), flush=True)
+    vr = verdict_rho97(rd)
+    print(json.dumps({k: vr.get(k) for k in ('cls', 'cls_with_pending', 'final', 'd_rho_on_all', 'd_rho_off_all',
+                                             'n_wirings_up_on', 'n_wirings_up_off', 'd_rho_on_R2', 'd_rho_off_R2',
+                                             'fails', 'pending_fails', 'missing')}, indent=1, default=float), flush=True)
+    provenance('score', outcome=v['outcome'], rho_class=vr['cls'])
     write_variants()
     comparison_table()
-    return v
+    return dict(v, rho=vr)
 
 
 def part_c2(dry_run: bool = False, force: bool = False) -> pd.DataFrame:
-    """The second draw on T (C2_mean2_d2), only on a verdict of "a part" or "moves" (verdict.json), then `score` is run
-    again."""
+    """The second draw on T (C2_mean2_d2), only on a verdict of "a part" or "moves" (verdict.json) or a part (R) class
+    of "raises" with or without a price (verdict_rho.json), then `score` is run again."""
     v = _read_json(out_dir() / 'verdict.json')
-    ok = v.get('outcome') in ('a part', 'moves')
-    print(f"E97 C2: verdict {v.get('outcome')!r}: {'run' if ok else 'not run'}", flush=True)
+    vr = _read_json(out_dir() / 'verdict_rho.json')
+    ok = v.get('outcome') in ('a part', 'moves') or vr.get('cls') in RAISES
+    print(f"E97 C2: verdict {v.get('outcome')!r}, part R {vr.get('cls')!r}: {'run' if ok else 'not run'}", flush=True)
     if not ok and not force:
         return runs_b()
     return part_b(('C2',), T_WIRINGS, dry_run=dry_run)
@@ -2584,6 +2874,49 @@ def comparison_table() -> str:
         lines += ['## Part C: the verdict', '', f"Outcome: {v['outcome']} (final: {v['final']}).", '',
                   f"R1 on the eight {_f(v['R1_8'])} against {_f(v['ref8'])}; on S {_f(v['R1_S'])} against {_f(v['refS'])}; "
                   f"on T {_f(v['R1_T'])} against {_f(v['refT'])}; R2 {_f(v['R2'])}.", '']
+        if 'label' in v:
+            pr = '; '.join(f'{k} {x:+.4f}' for k, x in v.get('price', {}).items()) or 'none'
+            pp = '; '.join(f'{k} {x:+.4f}' for k, x in v.get('price_pending', {}).items()) or 'none'
+            lines += [f"Label: {v['label']} (with the pending columns applied: {v['label_with_pending']}). Part R's "
+                      f"margins failed by R1 on the eight: {pr}; pending columns: {pp}.", '']
+    if rp.exists():
+        rd = pd.read_csv(rp)
+        if 'rho_on_all' in rd.columns:
+            r8 = rd[(rd.readout == 'raw') & (rd.unit == 'all8')]
+            lines += ['## Part R: ρ on odor-odor distances (raw counts, the eight wirings as one population)', '',
+                      '| variant | ρ, APL on | ρ, APL off | change, APL on | change, APL off | 66 megamat pairs, on / off | '
+                      '91 without paa and B-myr, on / off | paa\'s 15, on / off | response rate ρ, on / off | the block | '
+                      'natural-source alignment, on / off / on minus off | structure vs wild-type somata, APL on | '
+                      'runs outside the bands |',
+                      '|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|']
+            for r in r8.itertuples():
+                g = lambda c, s='.3f': _f(getattr(r, c, np.nan), s)
+                lines.append(f"| {VARIANT_NAMES.get(r.variant, r.variant)} | {g('rho_on_all')} | {g('rho_off_all')} | "
+                             f"{g('d_rho_on_all', '+.3f')} | {g('d_rho_off_all', '+.3f')} | "
+                             f"{g('rho_on_megamat66')} / {g('rho_off_megamat66')} | "
+                             f"{g('rho_on_no_paa_bmyr91')} / {g('rho_off_no_paa_bmyr91')} | "
+                             f"{g('rho_on_paa15')} / {g('rho_off_paa15')} | {g('run_rate_rho_on')} / {g('run_rate_rho_off')} | "
+                             f"{g('block')} | {g('vcf_on')} / {g('vcf_off')} / {g('vcf_diff', '+.3f')} | "
+                             f"{g('struct_wt_on')} | {int(r.n_flagged)} |")
+            lines += ['', 'KC data: the ceilings of ρ on odor-odor distances 0.98 (APL on, control flies) and 0.97 (APL '
+                      'off, APL output blocked (TNT)); the ORN input alone 0.65 / 0.73.', '']
+    vr = _read_json(out / 'verdict_rho.json')
+    if vr:
+        fl = '; '.join(f'{k} {x:+.4f}' for k, x in vr.get('fails', {}).items()) or 'none'
+        pf = '; '.join(f'{k} {x:+.4f}' for k, x in vr.get('pending_fails', {}).items()) or 'none'
+        lines += ['## Part R: the second verdict', '',
+                  f"Class: {vr['cls']} (with the pending columns applied: {vr['cls_with_pending']}; final: {vr['final']}).", '']
+        if vr['cls'] != 'incomplete':
+            lines += [f"R1 on the eight against the eight as they are: ρ with APL on {_f(vr['d_rho_on_all'], '+.4f')}, "
+                      f"with APL off {_f(vr['d_rho_off_all'], '+.4f')}; wirings up by {RHO_GAIN} or more: "
+                      f"{vr['n_wirings_up_on']} / {vr['n_wirings_up_off']} of 8, down: {vr['n_wirings_down_on']} / "
+                      f"{vr['n_wirings_down_off']}; halves A to D, APL on: "
+                      + ', '.join(_f(vr[f'd_rho_on_{h}'], '+.4f') for h in HALVES) + '; APL off: '
+                      + ', '.join(_f(vr[f'd_rho_off_{h}'], '+.4f') for h in HALVES)
+                      + f"; R2 {_f(vr['d_rho_on_R2'], '+.4f')} / {_f(vr['d_rho_off_R2'], '+.4f')}.", '',
+                      f'Not-worse margins failed: {fl}. Pending columns failed: {pf}.', '']
+        else:
+            lines += ['Missing: ' + ', '.join(vr.get('missing', [])) + '.', '']
     text = '\n'.join(lines) + '\n'
     (out / 'comparison_table.md').write_text(text)
     return text
