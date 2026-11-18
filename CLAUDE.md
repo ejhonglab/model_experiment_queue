@@ -1193,6 +1193,7 @@ Canonical experiment names for summary reports:
 | E106 | the gap in ρ on odor-odor distances read by what could close it |
 | E107 | the four validation2 odors in the panel their ORN input was recorded in |
 | E108 | paa's input at the flies' concentration |
+| E109 | the input of paa, B-myr and 2-but searched for ρ on odor-odor distances on held-out wirings and recordings |
 
 ## Model-output archive (data/model_outputs/ in the shared directory)
 
