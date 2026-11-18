@@ -1824,8 +1824,11 @@ def part_c() -> dict:
     comparison_table()
     figure()
     rb = runs_table()
-    provenance('C', model=H.model_provenance(orn_deltas=panel_input('validation2')), outcome=v['outcome'],
-               runs=rb.to_dict(orient='records'), input_sha256={p: _frame_sha(panel_input(p)) for p in PANELS})
+    provenance('C', model=H.model_provenance(orn_deltas=panel_input('validation2'), orn_deltas_megamat=panel_input('megamat')),
+               outcome=v['outcome'], runs=rb.to_dict(orient='records'),
+               input_sha256={p: _frame_sha(panel_input(p)) for p in PANELS},
+               part_files=sorted(x.name for x in out.glob('provenance_*.json')))
+    (out / 'provenance.json').write_text((out / 'provenance_C.json').read_text())
     return v
 
 
