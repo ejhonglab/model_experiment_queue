@@ -1152,10 +1152,10 @@ def rho(model: pd.Series, data: pd.Series, pairs: Optional[Sequence[Tuple[str, s
     """ρ on odor-odor distances of `model` against `data` over `pairs` (E106's `rho_pairs`), and the number of pairs
     both hold."""
     from experiments import E106_rho_gap_parts as E106
-    m = E106._canon(model)
+    m = pair_series(model.to_dict())
     idx = E106.select_pairs(m.index, pairs)
-    a, b = H.align_pairs(m.loc[idx], E106._canon(data))
-    return E106.rho_pairs(model, data, pairs=pairs), int(len(a))
+    n = len(E106.rank_residuals(m.loc[idx], data)) if len(idx) else 0
+    return E106.rho_pairs(model, data, pairs=pairs), int(n)
 
 
 _CACHE: Dict[object, object] = {}
