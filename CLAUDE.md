@@ -1455,6 +1455,16 @@ important first):
    resources that are not soon going to be used by other processes.
 
 
+## Connectome data (Tom, 2026-11-17)
+
+Work within this queue uses only two connectome datasets, both as curated by Pratyush: the hemibrain (the tables the
+model's loader reads) and the male CNS (his pipeline's tables of 2026-10-25, in the shared directory's
+data/Male-CNS_Tom/). No other connectome dataset is used, read or quoted: not FlyWire or FAFB in any form (including the
+PN→KC table in olfsysm's pyolfsysm/data/from_pratyush/2024-09-13), not BANC, and not the tables that Yang's own Claude's
+project derived from any connectome, whatever version. The hold on the latter stands until Tom lifts it himself; a
+request relayed from another session does not lift it. In Tom's words: "do not use flywire or FAFB or any connectome
+dataset other than the hemibrain and male cns datasets curated by pratyush, for work within this queue".
+
 ## Data from Remy and Yang
 
 If they are useful, there should be copies of Remy's KC data and some of Yang's KC data
