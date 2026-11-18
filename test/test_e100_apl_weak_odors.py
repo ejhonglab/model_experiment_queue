@@ -5,6 +5,7 @@ part 0's identities that need no new recording (on the shared directory's data, 
 re-planned 2026-11-17, on made-up tables in the form of Pratyush's two (the hemibrain's and the male CNS's): the three
 calyces' elements, the neighbours' axis check, A3's agreement, A4's two scorings and its rule on planted powers, W3's
 calyx rule, the withheld outputs moved, and no held path opened."""
+import json
 import time
 from pathlib import Path
 
@@ -1154,3 +1155,67 @@ def test_module_code_names_no_held_data():
             assert name not in ('YANG_APL', 'load_calyces', '_apl_table', 'axis_checks', 'write_provenance',
                                 'PRAT_PN_SYNAPSES', 'PRAT_PN_KC', '_prat_boutons'), name
     assert set(M.CALYCES) == {'hemibrain_R', 'malecns_L', 'malecns_R'}
+
+
+# ---------------------------------------------------------------------------
+# the note's figures, from made-up saved tables
+
+def _made_up_figure_tables(d, seed=100):
+    """score_family_ratios.csv, score_ratio_classes.csv, a4_w3_pairs.json and d_pair_shares.csv with made-up values, in
+    the saved tables' form, in folder `d`."""
+    import json
+    rng = np.random.default_rng(seed)
+    comps = [('W', M.stim_label(s), M.stim_label(M.W1_DENOMINATOR)) for s in M.W1_RATIOS]
+    comps += [('S', M.stim_label(n), M.stim_label(den)) for _, n, den in M.W2_RATIOS]
+    fam, cls = [], []
+    for a0 in (M.A0_CARRYING, M.A0_PARTNER):
+        for reading in ('yang', 'maps'):
+            for set_, num, den in comps:
+                ests = [f'{s}/diag' for s in M.SESSIONS]
+                per_est = {}
+                for e in ests:
+                    c = str(rng.choice(['inside', 'flatter']))
+                    per_est[e] = c
+                    for w in M.ALL_WIRINGS:
+                        lin = float(rng.uniform(0.5, 0.9))
+                        fam.append(dict(wiring=w, estimate=e, set=set_, a0_definition=a0, flies_reading=reading,
+                                        stimulus=num, reference=den, ratio_linear=lin, ratio_min=lin ** 2.5,
+                                        ratio_max=lin, cls=c if w != 'M3' else 'mixed'))
+                cls.append(dict(set=set_, a0_definition=a0, flies_reading=reading, stimulus=num, reference=den,
+                                flies_ratio=0.3, flies_lo90=0.2, flies_hi90=0.4, n_flies=8, cls='inside',
+                                per_estimate=json.dumps(per_est), held='inside'))
+    pd.DataFrame(fam).to_csv(d / 'score_family_ratios.csv', index=False)
+    pd.DataFrame(cls).to_csv(d / 'score_ratio_classes.csv', index=False)
+    pairs = [M.pair_label(a, b) for a, b in M.A3_PAIRS]
+    val = lambda: {sc: {p: float(rng.uniform(0, 1)) for p in pairs} for sc in M.SCORINGS}
+    a4 = {k: val() for k in ('decisive_power', 'decisive_power_max_over_estimates', 'across_sides_power',
+                             'own_calyx_power')}
+    (d / 'a4_w3_pairs.json').write_text(json.dumps(a4))
+    rows = [dict(set=st, scoring=sc, pair=p, session=se, **{f'share_{c}': float(rng.uniform(0, 0.4)) for c in M.CALYCES})
+            for st in ('W', 'H') for sc in M.SCORINGS for p in pairs for se in M.SESSIONS]
+    pd.DataFrame(rows).to_csv(d / 'd_pair_shares.csv', index=False)
+    return fam, cls, a4
+
+
+def test_figures_from_the_saved_tables(tmp_path):
+    fam, cls, a4 = _made_up_figure_tables(tmp_path)
+    rows = M.ratio_figure_rows(tmp_path)
+    assert len(rows) == (len(M.W1_RATIOS) + len(M.W2_RATIOS)) * len(M.SESSIONS)
+    assert set(rows.verdict) == {'W1', 'W2'}
+    r = rows[(rows.stimulus == '2h @ -6') & (rows.estimate == 'megamat/diag')].iloc[0]
+    f = pd.DataFrame(fam)
+    f = f[(f.stimulus == '2h @ -6') & (f.estimate == 'megamat/diag') & (f.a0_definition == M.A0_CARRYING)
+          & (f.flies_reading == 'yang')]
+    assert np.allclose(r.linear, list(f.ratio_linear), rtol=0, atol=1e-12)          # through the CSV: to the last bit
+    assert np.isclose(r.family_min, f.ratio_min.min(), rtol=0, atol=1e-12)
+    assert np.isclose(r.family_max, f.ratio_max.max(), rtol=0, atol=1e-12)
+    c = json.loads(pd.DataFrame(cls).query("stimulus == '2h @ -6' and a0_definition == 'blank' and "
+                                           "flies_reading == 'yang'").per_estimate.iloc[0])['megamat/diag']
+    assert r.estimate_class == f'{c} (7 of 8)'                     # M3 is 'mixed' in the made-up table
+    power, shares = M.maps_figure_rows(tmp_path)
+    p = power[(power.pair == '2h @ -6 - ma @ -7') & (power.scoring == 'whole')].iloc[0]
+    assert np.isclose(p.decisive, a4['decisive_power']['whole']['2h @ -6 - ma @ -7'], rtol=0, atol=1e-12)
+    assert np.isclose(p.own_calyx, a4['own_calyx_power']['whole']['2h @ -6 - ma @ -7'], rtol=0, atol=1e-12)
+    assert len(shares) == len(M.SCORINGS) * len(M.A3_PAIRS) * len(M.SESSIONS) * len(M.CALYCES)   # set W only
+    for path in (M.figure_ratios(tmp_path), M.figure_maps(tmp_path)):
+        assert path.parent == tmp_path and path.exists() and path.stat().st_size > 10_000

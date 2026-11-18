@@ -222,10 +222,12 @@ CLI (from the repository root):
     ./venv/bin/python -u -m experiments.E100_apl_weak_odors --part B
     ./venv/bin/python -u -m experiments.E100_apl_weak_odors --part C
     ./venv/bin/python -u -m experiments.E100_apl_weak_odors --part score  # after B (and C, for its descriptions)
+    ./venv/bin/python -u -m experiments.E100_apl_weak_odors --part figures  # the note's two figures, from the tables
     --dry-run lists what a part would read and write, and exits.
 
 Outputs: results/E100_apl_weak_odors/ in the shared directory (the tables above, identity.json, verdict.json,
-provenance_<part>.json); the PN-stage run of A3 under outputs/E100_apl_weak_odors/, archived to
+provenance_<part>.json; with `--part figures`, E100_apl_ratios.png and E100_maps_power.png drawn from the saved tables
+only); the PN-stage run of A3 under outputs/E100_apl_weak_odors/, archived to
 data/model_outputs/E100_apl_weak_odors/.
 """
 from __future__ import annotations
@@ -3086,7 +3088,230 @@ def score(a0s: Sequence[str] = A0_DEFINITIONS) -> dict:
     return {k: verdict[k] for k in ('W1', 'W1_by_a0', 'W1_classes', 'W2', 'W3', 'outcomes')}
 
 
-PARTS = ('0', 'A2', 'A3', 'A4', 'B', 'C', 'D', 'E', 'score')
+# ---------------------------------------------------------------------------
+# the figures (from the saved tables only: `--part figures`)
+
+FIG_RATIOS = 'E100_apl_ratios.png'
+FIG_MAPS = 'E100_maps_power.png'
+FIG_INK, FIG_MUTED, FIG_GRID, FIG_BAND = '#2b2b29', '#6b6a64', '#e4e3de', '#dcdbd5'
+# the reference palette's first three categorical slots, in fixed order (session estimates; calyces, with marker shapes)
+FIG_SESSION_COLORS = {'kiwi-control': '#2a78d6', 'megamat': '#eb6834', 'validation2': '#1baf7a'}
+FIG_CALYX_STYLE = {'hemibrain_R': ('#2a78d6', 'o', 'hemibrain, right calyx'),
+                   'malecns_L': ('#eb6834', 's', 'male CNS, left calyx'),
+                   'malecns_R': ('#1baf7a', 'D', 'male CNS, right calyx')}
+
+
+def _fig_stim(label: str) -> str:
+    """'2h @ -6' -> '2h 10^-6' in mathtext, for figure labels."""
+    odor, conc = parse_stim(label)
+    return f'{odor} $10^{{{conc:g}}}$'
+
+
+def _fig_style(ax) -> None:
+    for sp in ('top', 'right', 'left'):
+        ax.spines[sp].set_visible(False)
+    ax.spines['bottom'].set_color('#bdbcb5')
+    ax.tick_params(colors=FIG_MUTED, labelsize=8, length=0)
+    ax.tick_params(axis='y', labelcolor=FIG_INK)
+    ax.grid(axis='x', color=FIG_GRID, lw=0.8, zorder=0)
+    ax.set_axisbelow(True)
+
+
+def ratio_figure_rows(res: Optional[Path] = None, a0: str = A0_CARRYING, reading: str = 'yang') -> pd.DataFrame:
+    """The rows of FIG_RATIOS, from score_family_ratios.csv and score_ratio_classes.csv in `res` (default the results
+    folder), under the model's pre-odor level `a0` and the flies' reading `reading` (the carrying ones by default): per
+    comparison (W1's six ratios over paa at 10^-3 in set W; W2's two over pa at 10^-3 in set S) and per estimate of the
+    input that the comparison has, the flies' ratio, its 90 % interval and its number of flies, the eight wirings' linear
+    ratios (`linear`, a list), the lowest and highest ratio over the indicator family on any wiring (`family_min`,
+    `family_max`), the estimate's class with the number of wirings behind it (`estimate_class`, e.g. 'inside (8 of 8)'),
+    and the comparison's class over the estimates (`cls`) and held class (`held`)."""
+    res = out_dir() if res is None else Path(res)
+    fam = pd.read_csv(res / 'score_family_ratios.csv', low_memory=False)
+    cls = pd.read_csv(res / 'score_ratio_classes.csv', low_memory=False)
+    fam = fam[(fam.a0_definition == a0) & (fam.flies_reading == reading)]
+    cls = cls[(cls.a0_definition == a0) & (cls.flies_reading == reading)]
+    comps = [('W1', 'W', stim_label(s), stim_label(W1_DENOMINATOR)) for s in W1_RATIOS]
+    comps += [('W2', 'S', stim_label(n), stim_label(d)) for _, n, d in W2_RATIOS]
+    rows = []
+    for verdict, set_, num, den in comps:
+        c = cls[(cls.set == set_) & (cls.stimulus == num) & (cls.reference == den)]
+        if len(c) != 1:
+            raise ValueError(f'{len(c)} class rows for {num} over {den} in set {set_}')
+        c = c.iloc[0]
+        f = fam[(fam.set == set_) & (fam.stimulus == num) & (fam.reference == den)]
+        for est, ecls in json.loads(c.per_estimate).items():
+            g = f[f.estimate == est]
+            if g.empty:
+                raise ValueError(f'no family ratios for {num} over {den} under {est}')
+            counts = g.cls.value_counts()
+            if ecls in ('inside', 'flatter', 'steeper'):
+                label = f'{ecls} ({int(counts.get(ecls, 0))} of {len(g)})'
+            else:
+                label = f'{ecls} ({int(counts.iloc[0])} of {len(g)} {counts.index[0]})'
+            rows.append(dict(verdict=verdict, set=set_, stimulus=num, reference=den, estimate=est,
+                             session=est.split('/')[0], flies_ratio=float(c.flies_ratio),
+                             flies_lo90=float(c.flies_lo90), flies_hi90=float(c.flies_hi90), n_flies=int(c.n_flies),
+                             linear=[float(x) for x in g.ratio_linear], family_min=float(g.ratio_min.min()),
+                             family_max=float(g.ratio_max.max()), estimate_class=label, cls=str(c.cls),
+                             held=str(c.held)))
+    return pd.DataFrame(rows)
+
+
+def figure_ratios(res: Optional[Path] = None, path: Optional[Path] = None) -> Path:
+    """FIG_RATIOS: W1 and W2 under the carrying readings (the model at the blank's level, the flies by Yang's table).
+    Per comparison, the flies' ratio (black line) and 90 % interval over flies (gray band); per estimate of the input,
+    the eight wirings' linear ratios (dots) and the range over the indicator family on any wiring (line), with the
+    estimate's class at the right and the comparison's held class in its header. From the saved tables in `res`."""
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import Patch, Rectangle
+    res = out_dir() if res is None else Path(res)
+    rows = ratio_figure_rows(res)
+    path = res / FIG_RATIOS if path is None else Path(path)
+    n_groups = rows.groupby(['stimulus', 'reference'], sort=False).ngroups
+    height = 0.36 * len(rows) + 0.55 * n_groups + 1.6
+    fig, ax = plt.subplots(figsize=(9.4, height))
+    y, ticks, labels = 0.0, [], []
+    for (stim, ref), g in rows.groupby(['stimulus', 'reference'], sort=False):
+        r0 = g.iloc[0]
+        ys = [y - i for i in range(len(g))]
+        top, bot = ys[0] + 0.42, ys[-1] - 0.42
+        ax.add_patch(Rectangle((r0.flies_lo90, bot), r0.flies_hi90 - r0.flies_lo90, top - bot, color=FIG_BAND, lw=0,
+                               zorder=1))
+        ax.plot([r0.flies_ratio] * 2, [bot, top], color=FIG_INK, lw=1.8, zorder=2)
+        head = (f'{r0.verdict}, set {r0.set}: {_fig_stim(stim)} over {_fig_stim(ref)} ({r0.n_flies} flies)   '
+                + (f'held class: {r0.held}' if r0.verdict == 'W1' else
+                   f'described (fewer than {W2_MIN_FLIES} flies); class {r0.held}'))
+        ax.annotate(head, (0, top + 0.12), xycoords=('axes fraction', 'data'), fontsize=8.5, color=FIG_INK,
+                    va='bottom', ha='left', fontweight='bold')
+        for yy, (_, r) in zip(ys, g.iterrows()):
+            col = FIG_SESSION_COLORS.get(r.session, FIG_MUTED)
+            ax.plot([r.family_min, r.family_max], [yy, yy], color=col, lw=1.4, alpha=0.6, solid_capstyle='round',
+                    zorder=3)
+            ax.scatter(r.linear, [yy] * len(r.linear), s=22, color=col, edgecolor='white', linewidth=0.7, zorder=4)
+            ax.annotate(r.estimate_class, (1.0, yy), xycoords=('axes fraction', 'data'), xytext=(6, 0),
+                        textcoords='offset points', fontsize=7.5, color=FIG_INK, va='center')
+            ticks.append(yy)
+            labels.append(r.estimate)
+        y = ys[-1] - 1.55
+    ax.axvline(1.0, color=FIG_MUTED, lw=0.9, ls=(0, (3, 3)), zorder=1)
+    ax.set_yticks(ticks)
+    ax.set_yticklabels(labels, fontsize=7.5)
+    _fig_style(ax)
+    lo = min(-0.1, float(rows.flies_lo90.min()) - 0.05)
+    ax.set_xlim(lo, max(1.25, float(rows.family_max.max()) + 0.05))
+    ax.set_ylim(y + 1.0, 1.2)
+    ax.set_xlabel("ratio of APL's calyx response, the stimulus over the reference", fontsize=9, color=FIG_INK)
+    handles = [Line2D([], [], color=FIG_INK, lw=1.8, label="the flies' ratio"),
+               Patch(color=FIG_BAND, label='its 90 % interval over flies'),
+               Line2D([], [], color=FIG_MUTED, lw=1.4, alpha=0.6,
+                      label="the family's range over the indicator family (exponents 1 to 2.5)")]
+    handles += [Line2D([], [], marker='o', ls='', color=c, markeredgecolor='white',
+                       label=f"the family, linear, per wiring: {s}'s estimate") for s, c in FIG_SESSION_COLORS.items()]
+    fig.legend(handles=handles, loc='lower center', ncol=3, fontsize=7.5, frameon=False)
+    fig.suptitle("APL's response in the flies against the family's: the weak odors over paa $10^{-3}$ (W1) and "
+                 "across odors at $10^{-3}$ (W2)", fontsize=9.5, color=FIG_INK, x=0.02, ha='left')
+    fig.tight_layout(rect=(0, 0.75 / height, 0.86, 1 - 0.45 / height))
+    fig.savefig(path, dpi=170)
+    plt.close(fig)
+    return path
+
+
+def maps_figure_rows(res: Optional[Path] = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """The rows of FIG_MAPS from a4_w3_pairs.json and d_pair_shares.csv in `res` (default the results folder): (power,
+    shares). power: per pair of A3_PAIRS and scoring, the power across the two brains that decides (the lowest over the
+    estimates of the input, `decisive`) and the highest over them (`decisive_max`), across the male CNS's two sides
+    (`across_sides`) and against a calyx's own prediction (`own_calyx`). shares: set W's rows of part D, per pair,
+    scoring, estimate and calyx, the share of recordings whose score exceeds the null's 95th percentile."""
+    res = out_dir() if res is None else Path(res)
+    a4 = json.loads((res / 'a4_w3_pairs.json').read_text())
+    pairs = [pair_label(a, b) for a, b in A3_PAIRS]
+    power = pd.DataFrame([dict(pair=p, scoring=sc, decisive=float(a4['decisive_power'][sc][p]),
+                               decisive_max=float(a4['decisive_power_max_over_estimates'][sc][p]),
+                               across_sides=float(a4['across_sides_power'][sc][p]),
+                               own_calyx=float(a4['own_calyx_power'][sc][p]))
+                          for p in pairs for sc in SCORINGS])
+    d = pd.read_csv(res / 'd_pair_shares.csv', low_memory=False)
+    d = d[d.set == 'W']
+    shares = d.melt(id_vars=['pair', 'scoring', 'session'], value_vars=[f'share_{c}' for c in CALYCES],
+                    var_name='calyx', value_name='share')
+    shares['calyx'] = shares.calyx.str.replace('share_', '', regex=False)
+    return power, shares[['pair', 'scoring', 'session', 'calyx', 'share']].reset_index(drop=True)
+
+
+def figure_maps(res: Optional[Path] = None, path: Optional[Path] = None) -> Path:
+    """FIG_MAPS: left, A4's power to test each pair on another fly's single plane (across the two brains, the lowest over
+    the estimates of the input, with the line to the highest; across the male CNS's two sides; against the calyx's own
+    prediction), under the two scorings, with the 0.8 that a pair needs; right, part D on set W: the share of the 23
+    recordings above the null's 95th percentile in each calyx (one marker per estimate of the input), with W3's one
+    quarter and one half. From the saved tables in `res`."""
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
+    res = out_dir() if res is None else Path(res)
+    power, shares = maps_figure_rows(res)
+    path = res / FIG_MAPS if path is None else Path(path)
+    pairs = list(dict.fromkeys(power.pair))
+    sc_name = {'slabs': 'slabs within 6 µm', 'whole': 'whole calyx projected'}
+    pos, labels = {}, []
+    y = 0.0
+    for p in pairs:
+        for sc in SCORINGS:
+            pos[(p, sc)] = y
+            a, b = p.split(' - ')
+            labels.append(f'{_fig_stim(a)} − {_fig_stim(b)}, {sc_name[sc]}')
+            y -= 1.0
+        y -= 0.5
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(11.2, 5.4), sharey=True)
+    for _, r in power.iterrows():
+        yy = pos[(r.pair, r.scoring)]
+        a1.plot([r.decisive, r.decisive_max], [yy, yy], color=FIG_INK, lw=1.4, alpha=0.5, solid_capstyle='round',
+                zorder=2)
+        a1.scatter([r.decisive], [yy], s=40, color=FIG_INK, edgecolor='white', linewidth=1.0, zorder=4)
+        a1.scatter([r.across_sides], [yy], s=40, facecolor='white', edgecolor=FIG_INK, linewidth=1.2, zorder=3)
+        a1.scatter([r.own_calyx], [yy], s=40, marker='D', color=FIG_MUTED, edgecolor='white', linewidth=1.0, zorder=3)
+    a1.axvline(A4_POWER_MIN, color=FIG_MUTED, lw=1.0, ls=(0, (3, 3)), zorder=1)
+    a1.annotate(f'power needed ({A4_POWER_MIN:g})', (A4_POWER_MIN, 0.75), xytext=(-3, 0), textcoords='offset points',
+                fontsize=7.5, color=FIG_MUTED, ha='right', va='center')
+    a1.set_xlim(-0.03, 1.05)
+    a1.set_xlabel('power: share of simulated recordings above the null', fontsize=9, color=FIG_INK)
+    a1.set_title("A4: the power to test a pair on another fly's plane", fontsize=9.5, color=FIG_INK, loc='left')
+    off = {c: dy for c, dy in zip(CALYCES, (0.22, 0.0, -0.22))}
+    for _, r in shares.iterrows():
+        col, mk, _lab = FIG_CALYX_STYLE[r.calyx]
+        a2.scatter([r.share], [pos[(r.pair, r.scoring)] + off[r.calyx]], s=26, marker=mk, color=col,
+                   edgecolor='white', linewidth=0.7, zorder=3)
+    for v, lab in ((W3_FAIL_SHARE, 'one quarter'), (W3_PASS_SHARE, 'one half')):
+        a2.axvline(v, color=FIG_MUTED, lw=1.0, ls=(0, (3, 3)), zorder=1)
+        a2.annotate(lab, (v, 0.75), xytext=(3, 0), textcoords='offset points', fontsize=7.5, color=FIG_MUTED,
+                    va='center')
+    a2.set_xlim(-0.03, max(0.65, float(shares.share.max()) + 0.05))
+    a2.set_xlabel("part D, set W: share of recordings above the null's 95th percentile", fontsize=9, color=FIG_INK)
+    a2.set_title('Part D: the flies against the three calyces (described)', fontsize=9.5, color=FIG_INK, loc='left')
+    for ax in (a1, a2):
+        _fig_style(ax)
+    a1.set_yticks([pos[(p, sc)] for p in pairs for sc in SCORINGS])
+    a1.set_yticklabels(labels, fontsize=7.5)
+    a1.set_ylim(y + 0.9, 1.2)
+    handles = [Line2D([], [], marker='o', ls='', color=FIG_INK, markeredgecolor='white',
+                      label='across the two brains (decides; line: to the highest over the estimates)'),
+               Line2D([], [], marker='o', ls='', markerfacecolor='white', markeredgecolor=FIG_INK,
+                      label="across the male CNS's two sides"),
+               Line2D([], [], marker='D', ls='', color=FIG_MUTED, markeredgecolor='white',
+                      label="a calyx against its own prediction")]
+    handles += [Line2D([], [], marker=mk, ls='', color=col, markeredgecolor='white', label=lab)
+                for col, mk, lab in FIG_CALYX_STYLE.values()]
+    fig.legend(handles=handles, loc='lower center', ncol=3, fontsize=7.5, frameon=False)
+    fig.tight_layout(rect=(0, 0.1, 1, 1))
+    fig.savefig(path, dpi=170)
+    plt.close(fig)
+    return path
+
+
+PARTS = ('0', 'A2', 'A3', 'A4', 'B', 'C', 'D', 'E', 'score', 'figures')
 READS = {
     '0': "E79's connectome_pn_rates.csv and E79_maps_across_baselines.csv, data/yang_weak_odor_kc/"
          "orn_input_availability.csv, one 2021 recording of data/yang_apl_calyx_maps/, A3's a3_pn_rates.csv",
@@ -3102,6 +3327,8 @@ READS = {
     'C': "viki's copy (sets W, S, H): yaml, peak maps, outlines",
     'score': "part B's tables, E98's B1 on the eight wirings (E98's archive and E101's archived A3, through E98's "
              "load_b1_all), the lab's three ORN sessions, E72's low_conc/data_fractions.csv, part C's c_summary.json",
+    'figures': "the saved tables only: score_family_ratios.csv, score_ratio_classes.csv, a4_w3_pairs.json, "
+               "d_pair_shares.csv",
 }
 WRITES = {
     '0': 'identity.json', 'A2': 'a2_family.csv, a2_unmatched.csv',
@@ -3115,6 +3342,7 @@ WRITES = {
     'A4': 'a4_power_draws.csv.gz, a4_power.csv, a4_power_by_calyx.csv, a4_w3_pairs.json',
     'D': 'd_scores.csv, d_pair_shares.csv, d_inputs.csv, d_w3.json, d_summary.json, W3 in verdict.json, '
          'd_e79_analysis4/ (E79\'s analysis 4 on the 2021 maps through the three calyces)',
+    'figures': f'{FIG_RATIOS}, {FIG_MAPS}',
 }
 
 
@@ -3171,6 +3399,10 @@ def main() -> None:
     elif a.part == 'score':
         provenance('score', calyx_response=CALYX_RESPONSE, a0_definitions=list(A0_DEFINITIONS))
         print(json.dumps(score(), indent=1, default=float), flush=True)
+    elif a.part == 'figures':
+        provenance('figures', figures=[FIG_RATIOS, FIG_MAPS])
+        for p_ in (figure_ratios(), figure_maps()):
+            print(f'-> {p_}', flush=True)
     else:
         part_e()
 
