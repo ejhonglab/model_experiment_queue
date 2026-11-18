@@ -639,11 +639,424 @@ def require_sets() -> dict:
     return s
 
 
+# ---------------------------------------------------------------------------
+# reading Remy's matrices (only after the lock)
+
+def pkey(a: str, b: str) -> Tuple[str, str]:
+    """A pair's canonical orientation (`hong2p.rdm.pair_list` with the APL16 order first, then by name)."""
+    return tuple(H.odor_order([a, b]))
+
+
+def pair_series(values: Dict[Tuple[str, str], float], name: Optional[str] = None) -> pd.Series:
+    """A pair Series from {(a, b): value} (either orientation), keys canonical, in `H.pair_list` order of its odors
+    (pairs absent are left out, not NaN)."""
+    d = {pkey(a, b): float(v) for (a, b), v in values.items() if a != b}
+    odors = H.odor_order(sorted({o for p in d for o in p}))
+    keys = [p for p in H.pair_list(odors) if p in d]
+    return pd.Series([d[p] for p in keys], index=pd.MultiIndex.from_tuples(keys, names=['odor_a', 'odor_b']), name=name)
+
+
+def _open(rel: str):
+    import xarray as xr
+    require_lock()
+    return xr.open_dataset(remy_dir() / rel)
+
+
+def _drops(qc: str) -> set:
+    """The (fly, stim) dropped: qc 'lock' (the manuscript's list, QC_LIST), 'cosine' (her list for the cosine
+    metric, the same cells and threshold; beside only) or 'none'."""
+    if qc == 'none':
+        return set()
+    sel = {} if qc == 'lock' else dict(metric='cosine')
+    return set(map(tuple, qc_drops(**sel)[['fly', 'stim']].to_numpy()))
+
+
+def _fly_rows(X: np.ndarray, flies: Sequence[str], stims: Sequence[str], names: Dict[str, dict], drops: set,
+              by_conc: bool = False, exclude: Sequence[str] = EXCLUDED_STIMULI) -> pd.DataFrame:
+    """Flies x pairs from per-fly stimulus x stimulus matrices X (flies x stims x stims): the excluded stimuli and the
+    dropped (fly, stim) out, a stimulus a fly lacks (NaN diagonal) out, the odors named by the input's names (the
+    pooled ones by concentration with `by_conc`); raises if a fly holds one odor at two concentrations."""
+    rows = {}
+    for k, f in enumerate(flies):
+        keep = [i for i, s in enumerate(stims) if s not in exclude and (f, s) not in drops and not np.isnan(X[k, i, i])]
+        nm = {}
+        for i in keep:
+            n, c = split_stim(stims[i])
+            o = pooled_name(names[n]['input'], c, by_conc)
+            if o in nm.values():
+                raise RuntimeError(f'{f}: {o} twice')
+            nm[i] = o
+        vals = {}
+        for i, j in itertools.combinations(keep, 2):
+            v = X[k, i, j]
+            if not np.isnan(v):
+                vals[(nm[i], nm[j])] = v
+        rows[f] = pair_series(vals)
+    out = pd.DataFrame(rows).T
+    out.index.name = 'fly'
+    odors = H.odor_order(sorted({o for p in out.columns for o in p}))
+    return out[[p for p in H.pair_list(odors) if p in out.columns]]
+
+
+def per_fly(measure: str = 'cosine', cells: str = CELLS, by_conc: bool = False, qc: str = 'lock') -> pd.DataFrame:
+    """Remy's per-fly validation2 matrices (xrds_stim_rdm_concat.nc, Fc_zscore, at `cells` and `measure`, with the
+    lock's drop list, `qc`) as flies x pairs (NaN where a fly lacks a pair); with `by_conc`, euc, -aPine and ger keep
+    their concentration in the odor name."""
+    lock = require_lock()
+    d = _open('validation2/kc_soma/xrds_stim_rdm_concat.nc')
+    try:
+        r = [i for i, (c, m) in enumerate(zip(d.cell_mask_coord.values, d.metric.values))
+             if str(c) == cells and str(m) == measure]
+        if len(r) != 1:
+            raise RuntimeError(f'{cells} / {measure}: {len(r)} matrices')
+        X = np.asarray(d['Fc_zscore'].values[:, r[0]], dtype=float)
+        stims = [str(s) for s in d.stim_row.values]
+        if stims != [str(s) for s in d.stim_col.values]:
+            raise RuntimeError('rows and columns differ')
+        flies = [f'{a}/{int(b)}' for a, b in zip(d.date_imaged.values, d.fly_num.values)]
+    finally:
+        d.close()
+    return _fly_rows(X, flies, stims, lock['odor_map']['validation2'], _drops(qc), by_conc)
+
+
+def manuscript_per_fly() -> pd.DataFrame:
+    """The manuscript's per-fly correlation matrices (xrda_stim_rdm_concat__rmap_nls_cluster__correlation__0.3.nc) as
+    flies x pairs."""
+    lock = require_lock()
+    d = _open('validation2/kc_soma/xrda_stim_rdm_concat__rmap_nls_cluster__correlation__0.3.nc')
+    try:
+        X = np.asarray(d['Fc_zscore'].values, dtype=float)
+        stims = [str(s) for s in d.stim_row.values]
+        flies = [f'{a}/{int(b)}' for a, b in zip(d.date_imaged.values, d.fly_num.values)]
+    finally:
+        d.close()
+    return _fly_rows(X, flies, stims, lock['odor_map']['validation2'], set())
+
+
+def mean_table(col: str = f'kc-cosine-{CELLS}') -> pd.Series:
+    """One column of Remy's mean table (figure-05/resampled/tidy_abbrev_dists.tsv; every ordered pair, both orders
+    equal) as a canonical pair Series over the 22 odors (the input's names; concentrations pooled as in her table)."""
+    lock = require_lock()
+    names = lock['odor_map']['validation2']
+    t = pd.read_csv(remy_dir() / MEAN_TABLE, sep='\t', usecols=['Unnamed: 0', 'Unnamed: 1', col])
+    t = t[t['Unnamed: 0'] != t['Unnamed: 1']]
+    vals: Dict[Tuple[str, str], List[float]] = {}
+    for a, b, v in zip(t['Unnamed: 0'], t['Unnamed: 1'], t[col]):
+        vals.setdefault(pkey(names[a]['input'], names[b]['input']), []).append(float(v))
+    bad = [p for p, v in vals.items() if len(v) != 2 or not (np.isclose(v[0], v[1]) or np.isnan(v).all())]
+    if bad:
+        raise RuntimeError(f'{col}: pairs without two equal orders: {bad[:5]}')
+    s = pair_series({p: v[0] for p, v in vals.items()}, name=col)
+    return H.canonical_pairs(s.dropna()) if not s.isna().any() else s
+
+
+def fly_mean(rows: pd.DataFrame, min_flies: int = MIN_FLIES) -> pd.Series:
+    """The mean over flies (rows) of each pair held by at least `min_flies` flies."""
+    n = rows.notna().sum()
+    return rows.mean()[n >= min_flies]
+
+
+def split_half_ceiling(rows: pd.DataFrame, pairs: Optional[Sequence[Tuple[str, str]]] = None, n_splits: int = N_SPLITS,
+                       seed: int = SEED, min_per_half: int = MIN_PER_HALF, min_flies: int = MIN_FLIES,
+                       method: str = 'spearman') -> Dict[str, float]:
+    """The ceiling of ρ on odor-odor distances from random halves of the flies (rows): the pairs of `pairs` (all if
+    None) held by `min_flies` or more flies; each split's two halves' means read on the pairs both halves hold
+    (`min_per_half` or more flies each); the mean split-half correlation, its 5th and 95th percentiles, the mean number
+    of pairs, the Spearman-Brown value for all flies and its square root (the ceiling), as
+    `hong2p.stats.split_half_reliability`."""
+    from scipy import stats
+    cols = list(rows.columns if pairs is None else [p for p in rows.columns if p in set(map(tuple, pairs))])
+    R = rows[cols]
+    R = R.loc[:, R.notna().sum() >= min_flies]
+    X = R.to_numpy(dtype=float)
+    ok = ~np.isnan(X)
+    rng = np.random.default_rng(seed)
+    n = len(R)
+    corr = stats.spearmanr if method == 'spearman' else stats.pearsonr
+    vals, npairs = [], []
+    for _ in range(n_splits):
+        idx = rng.permutation(n)
+        h = [idx[:n // 2], idx[n // 2:]]
+        cnt = [ok[i].sum(axis=0) for i in h]
+        keep = (cnt[0] >= min_per_half) & (cnt[1] >= min_per_half)
+        if keep.sum() < 3:
+            vals.append(np.nan)
+            continue
+        with np.errstate(invalid='ignore'):
+            m = [np.nanmean(X[i][:, keep], axis=0) for i in h]
+        vals.append(float(corr(m[0], m[1])[0]))
+        npairs.append(int(keep.sum()))
+    vals = np.asarray(vals, dtype=float)
+    r = float(np.nanmean(vals))
+    full = 2 * r / (1 + r)
+    return dict(n_flies=int(n), n_pairs=int(R.shape[1]), mean_pairs_per_split=float(np.mean(npairs)) if npairs else np.nan,
+                split_half=r, split_half_lo=float(np.nanpercentile(vals, 5)), split_half_hi=float(np.nanpercentile(vals, 95)),
+                spearman_brown_full=float(full), ceiling=float(np.sqrt(full)) if full > 0 else np.nan)
+
+
+def megamat_somata(metric: str = 'cosine') -> Tuple[pd.DataFrame, dict]:
+    """Remy's megamat KC somata per fly (megamat17/kc_soma/xrds_stim_rdm_concat_mm.nc, Fc_zscore) as flies x pairs, at
+    `metric` if the file holds it (else the next of MEGAMAT_METRIC_PREFERENCE) and the first cell selection of
+    MEGAMAT_CELL_PREFERENCE it holds; and what was read."""
+    lock = require_lock()
+    d = _open('megamat17/kc_soma/xrds_stim_rdm_concat_mm.nc')
+    try:
+        pairs = [(str(c), str(m)) for c, m in zip(d.cell_mask_coord.values, d.metric.values)]
+        cells = next((c for c in MEGAMAT_CELL_PREFERENCE if any(p[0] == c for p in pairs)), pairs[0][0])
+        metrics = [metric] + [m for m in MEGAMAT_METRIC_PREFERENCE if m != metric]
+        met = next(m for m in metrics if (cells, m) in pairs)
+        r = pairs.index((cells, met))
+        X = np.asarray(d['Fc_zscore'].values[:, r], dtype=float)
+        stims = [str(s) for s in d.stim_row.values]
+        flies = [f'{a}/{int(b)}' for a, b in zip(d.date_imaged.values, d.fly_num.values)]
+        info = dict(file='megamat17/kc_soma/xrds_stim_rdm_concat_mm.nc', cells=cells, metric=met, asked=metric,
+                    held=pairs, n_flies=len(flies), panel_names=[str(x) for x in d.panel_name.values])
+    finally:
+        d.close()
+    return _fly_rows(X, flies, stims, lock['odor_map']['megamat17'], set(), exclude=()), info
+
+
+def remy_megamat(metric: str = 'cosine') -> Tuple[pd.Series, dict]:
+    """Her megamat somata's mean matrix (`fly_mean` of `megamat_somata`) and what was read."""
+    rows, info = megamat_somata(metric)
+    return fly_mean(rows), info
+
+
+def yang_control(metric: str = 'cosine') -> pd.Series:
+    """Yang's control flies' mean matrix (`H.yang_mean_rdm('TNT3c', ...)`, 'cosine' or 'correlation' -> 'pearson')."""
+    return H.yang_mean_rdm('TNT3c', 'cosine' if metric == 'cosine' else 'pearson')
+
+
+def level_check(metric: str = 'cosine') -> dict:
+    """Her megamat somata against Yang's control flies on the 66 pairs of the 12 odors both have, the same metric: the
+    two means, their difference (Remy minus Yang), flagged above LEVEL_TOL; ρ on odor-odor distances between them."""
+    rm, info = remy_megamat(metric)
+    y = yang_control(info['metric'])
+    keep = [p for p in rm.index if p[0] in H.MEGAMAT12 and p[1] in H.MEGAMAT12]
+    a, b = H.align_pairs(rm.loc[keep], H.canonical_pairs(y))
+    diff = float(a.mean() - b.mean())
+    return dict(metric=info['metric'], cells=info['cells'], n_pairs=int(len(a)), remy_mean=float(a.mean()),
+                yang_mean=float(b.mean()), difference=diff, flagged=bool(abs(diff) > LEVEL_TOL), tol=LEVEL_TOL,
+                rho=H.spearman(a, b))
+
+
+# ---------------------------------------------------------------------------
+# the ORN input
+
+def panel_input(panel: str) -> pd.DataFrame:
+    """The model's ORN input for `panel` ('validation2': `validation2_orn_deltas`, 22 odors; 'megamat':
+    `megamat_orn_deltas`, 17 odors) on the 36 glomeruli of the lab's input (`H.apl16_orn_deltas`, its row order), its
+    (panel, odor) columns as loaded. The columns the lab's input takes from it are identical to the lab's."""
+    from pyolfsysm.mb_model import megamat_orn_deltas, validation2_orn_deltas
+    if panel not in PANELS:
+        raise ValueError(f'{panel=}')
+    df = validation2_orn_deltas() if panel == 'validation2' else megamat_orn_deltas()
+    lab = H.apl16_orn_deltas()
+    out = df.loc[list(lab.index)]
+    if out.isna().any().any():
+        raise RuntimeError(f'{panel}: NaN in the input')
+    shared = [c for c in out.columns if c in lab.columns]
+    if not shared or not out[shared].equals(lab[shared]):
+        raise RuntimeError(f"{panel}: the columns shared with the lab's input differ from it")
+    return out
+
+
+def shared_odors(panel: str) -> List[str]:
+    """The odors of `panel`'s input that the fit's panel (APL16) has, as the lab's input has them."""
+    lab = H.apl16_orn_deltas()
+    return [H.odor_abbrev(c) for c in panel_input(panel).columns if c in lab.columns]
+
+
+def input_pairs(panel: str, measure: str = 'pearson') -> pd.Series:
+    """The ORN input alone as odor-odor distances: 1 - Pearson across the 36 glomeruli (the program's reading;
+    'cosine' beside), canonical pairs."""
+    return H.canonical_pairs(H.pair_distances(panel_input(panel), measure=measure))
+
+
+# ---------------------------------------------------------------------------
+# part B, the runs
+
+def _frame_sha(df: pd.DataFrame) -> str:
+    from experiments.E77_input_screen import frame_sha256
+    return frame_sha256(df)
+
+
+def _abbrev(o: Tuple[pd.DataFrame, pd.DataFrame]) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    return tuple(H.abbrev_columns(x) for x in o)
+
+
+def run_identity(label: str, o: Dict[str, tuple], panel: str) -> dict:
+    """The as-fitted run against the saved fit on the odors `panel` shares with the fit's panel: the number of spike
+    counts and responses that differ, APL on and off (0 expected)."""
+    from experiments import E83_cross_wiring_fit as E83
+    saved = E83.saved_fit(label)['saved']
+    odors = shared_odors(panel)
+    res = dict(wiring=label, panel=panel, odors=odors)
+    for c in ('on', 'off'):
+        rs, ss = _abbrev(saved[c])
+        r, s = o[c]
+        same_index = bool(s.index.equals(ss.index) and r.index.equals(rs.index))
+        res[c] = dict(index_equal=same_index,
+                      counts_differ=int((s[odors].to_numpy(dtype=float) != ss[odors].to_numpy(dtype=float)).sum()) if same_index else -1,
+                      responses_differ=int((r[odors].to_numpy(dtype=float) != rs[odors].to_numpy(dtype=float)).sum()) if same_index else -1)
+    res['reproduces'] = bool(all(res[c]['counts_differ'] == 0 and res[c]['responses_differ'] == 0 for c in ('on', 'off')))
+    return res
+
+
+def run_fitted(label: str, panel: str) -> Dict[str, object]:
+    """One wiring at its fit on `panel`'s input (E83's `build_simulator`, breadth held at the lab input's, so the
+    APL->KC weights are the fit's; nothing re-tuned), APL on and acutely off (the APL->KC and APL->bouton scales 0):
+    {'on', 'off': (responses, spike counts), 'params', 'params_off', 'n_sims'}."""
+    from experiments import E83_cross_wiring_fit as E83
+    P = E83.wiring_parts(label)
+    p = dict(P['p'])
+    p_off = dict(p, wAPLKC_scale=0.0, wAPLPN_scale=0.0)
+    sim, info = E83.build_simulator(label, orn=panel_input(panel), breadth=P['breadth'], params=p)
+    on, off = _abbrev(sim(p)), _abbrev(sim(p_off))
+    del sim, info
+    return dict(on=on, off=off, params=p, params_off=p_off, n_sims=3)
+
+
+def held_targets(label: str, panel: str) -> Tuple[int, int, float, float]:
+    """(target_off, target_on, fraction_off, fraction_on) for the re-held reading on `panel`: the wiring's own APL-off
+    fraction on its fit panel and the control flies' response rate (registry ctrl_frac), as counts on the panel's
+    KCs x odors (rounded)."""
+    from experiments import E83_cross_wiring_fit as E83
+    P = E83.saved_fit(label)
+    n_kc = P['saved']['on'][0].shape[0]
+    n = n_kc * panel_input(panel).shape[1]
+    f_off = P['target_off'] / P['size']
+    f_on = float(H.data_target('ctrl_frac'))
+    return int(round(f_off * n)), int(round(f_on * n)), float(f_off), f_on
+
+
+def run_held(label: str, panel: str) -> dict:
+    """One wiring on `panel`'s input with the response rates re-held (E77's `hold_rates`: the somatic threshold
+    bisected with APL off to the wiring's own APL-off fraction, then the tied APL scales to 6.8 % with APL on; breadth
+    held at the lab input's): hold_rates' dict, 'on' / 'off' with abbreviated columns."""
+    from experiments import E77_input_screen as S
+    from experiments import E83_cross_wiring_fit as E83
+    P = E83.wiring_parts(label)
+    t_off, t_on, _, _ = held_targets(label, panel)
+    orn = panel_input(panel)
+    res = S.hold_rates(lambda: E83.build_simulator(label, orn=orn, breadth=P['breadth'], params=dict(P['p'])),
+                       target_off=t_off, target_on=t_on, params=dict(P['p']), label=f'{label} {panel}')
+    res['on'], res['off'] = _abbrev(res['on']), _abbrev(res['off'])
+    return res
+
+
+def run_tag(panel: str, reading: str, wiring: str) -> str:
+    return f'{panel}_{reading}_{wiring}'
+
+
+def runs_dir() -> Path:
+    return local_dir('B')
+
+
+def save_run(tag: str, o: Dict[str, tuple]) -> None:
+    d = runs_dir()
+    for c, cc in (('on', 'on'), ('off', 'acute_off')):
+        o[c][0].to_parquet(d / f'{tag}_{cc}_responses.parquet')
+        o[c][1].to_parquet(d / f'{tag}_{cc}_spike_counts.parquet')
+
+
+def load_run(tag: str) -> Optional[Dict[str, tuple]]:
+    """A saved run ({'on', 'off'}: (responses, spike counts)) from the local outputs, else the model-output archive."""
+    for d in (runs_dir(), H.shared_dir() / 'data' / 'model_outputs' / EXPERIMENT / 'B'):
+        out = {}
+        for c, cc in (('on', 'on'), ('off', 'acute_off')):
+            ps = [d / f'{tag}_{cc}_{k}.parquet' for k in ('responses', 'spike_counts')]
+            if not all(p.exists() for p in ps):
+                break
+            out[c] = tuple(pd.read_parquet(p) for p in ps)
+        if len(out) == 2:
+            return out
+    return None
+
+
+def _append_csv(path: Path, row: dict) -> None:
+    df = pd.DataFrame([row])
+    df.to_csv(path, mode='a', header=not path.exists(), index=False)
+
+
+def runs_table() -> pd.DataFrame:
+    p = out_dir() / 'runs_B.csv'
+    return pd.read_csv(p) if p.exists() else pd.DataFrame()
+
+
+def _commits_clean() -> dict:
+    from experiments import E89_apl_breadth_weighting as E89
+    return E89._commits_clean()
+
+
+def part_b(panels: Sequence[str] = PANELS, wirings: Optional[Sequence[str]] = None,
+           readings: Sequence[str] = READINGS) -> None:
+    """Runs and saves every wiring, panel and reading not yet in runs_B.csv (as-fitted runs first, each checked by
+    `run_identity`, which must pass), with a runs_B.csv row (absolute parameters, the factors and targets, the response
+    counts and rates, the identity, the process's commits, host, threads, the input's sha256)."""
+    import gc
+    import os
+    from experiments import E83_cross_wiring_fit as E83
+    require_lock()
+    commits = _commits_clean()
+    wirings = tuple(wirings or E83.ALL_WIRINGS)
+    done = set(runs_table().get('tag', pd.Series(dtype=str)).astype(str))
+    ident_path = out_dir() / 'identity_B.json'
+    idents = _read_json(ident_path) or {}
+    for reading in readings:
+        for panel in panels:
+            orn = panel_input(panel)
+            for w in wirings:
+                tag = run_tag(panel, reading, w)
+                if tag in done and load_run(tag) is not None:
+                    continue
+                t0 = time.time()
+                if reading == 'fitted':
+                    res = run_fitted(w, panel)
+                    ident = run_identity(w, res, panel)
+                    idents[tag] = ident
+                    _write_json(ident_path, idents)
+                    if not ident['reproduces']:
+                        raise RuntimeError(f'{tag}: the as-fitted run does not reproduce the saved fit: {ident}')
+                    extra = dict(thr_factor=1.0, apl_factor=1.0, target_on=np.nan, target_off=np.nan, at_bound_thr=False,
+                                 at_bound_apl=False, identity_reproduces=True)
+                else:
+                    res = run_held(w, panel)
+                    extra = dict(thr_factor=res['thr_factor'], apl_factor=res['apl_factor'], target_on=res['target_on'],
+                                 target_off=res['target_off'], at_bound_thr=res['at_bound_thr'],
+                                 at_bound_apl=res['at_bound_apl'], identity_reproduces=np.nan)
+                save_run(tag, res)
+                P = E83.saved_fit(w)
+                n = res['on'][0].size
+                row = dict(tag=tag, panel=panel, reading=reading, wiring=w, fit_folder=P['folder'], fit_tag=P['tag'],
+                           n_kcs=int(res['on'][0].shape[0]), n_odors=int(res['on'][0].shape[1]),
+                           n_on=int((res['on'][0].to_numpy(dtype=float) > 0.5).sum()),
+                           n_off=int((res['off'][0].to_numpy(dtype=float) > 0.5).sum()),
+                           **{k: float(v) for k, v in res['params'].items()},
+                           **{f'off_{k}': float(v) for k, v in res['params_off'].items()},
+                           n_sims=int(res.get('n_sims', 0)), seconds=time.time() - t0, host=_host(),
+                           time=time.strftime('%Y-%m-%d %H:%M'), threads=os.environ.get('OMP_NUM_THREADS'),
+                           input_sha256=_frame_sha(orn), breadth='held at the lab input\'s (E83 wiring_parts)', **extra,
+                           **{k: v for k, v in commits.items() if not isinstance(v, (dict, list))})
+                row['rate_on'], row['rate_off'] = row['n_on'] / n, row['n_off'] / n
+                _append_csv(out_dir() / 'runs_B.csv', row)
+                print(f"{tag}: {row['seconds']:.0f} s, rate on {row['rate_on']:.4f}, off {row['rate_off']:.4f}", flush=True)
+                del res
+                gc.collect()
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('--part', required=True, choices=('0', 'sets', 'data', 'A', 'B', 'C', 'variants'))
     ap.add_argument('--force', action='store_true')
+    ap.add_argument('--panels', default=','.join(PANELS))
+    ap.add_argument('--readings', default=','.join(READINGS))
+    ap.add_argument('--wirings', default='', help='comma-separated wiring labels (default all eight)')
     args = ap.parse_args()
+    if args.part == 'B':
+        part_b(panels=[x for x in args.panels.split(',') if x], wirings=[x for x in args.wirings.split(',') if x] or None,
+               readings=[x for x in args.readings.split(',') if x])
+        return
     if args.part == '0':
         lock = write_lock(force=args.force)
         print(f"-> {LOCK_PATH} (sha256 {lock['sha256'][:12]}); commit it before any other part", flush=True)
