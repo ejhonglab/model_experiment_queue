@@ -265,3 +265,49 @@ def test_registry_inputs_are_registry_keys():
 
 def test_probe_alternates_name_known_probes():
     assert set(E.PROBE_ALTS) <= set(E.PROBES)
+
+
+def _made_up_results(d, seed=50):
+    """The tables the figures read, with made-up values, in folder `d`."""
+    rng = np.random.default_rng(seed)
+    u = lambda: float(rng.uniform(0.5, 0.95))
+    pd.DataFrame(dict(name=['ctrl_ceiling', 'tnt_ceiling'], value=[0.98, 0.97])).to_csv(d / 'yardsticks.csv', index=False)
+    cc = ['rho_on', 'rho_off', 'on_from_flies_off_model_effect', 'on_from_model_off_flies_effect',
+          'off_from_flies_on_model_effect', 'off_from_model_on_flies_effect', 'flies_on_vs_flies_off']
+    rows = [dict(family=f, reading=r, subset=s, **{c: u() for c in cc}) for f in ('family', 'ceiling')
+            for r in ('population', 'real', 'P1') for s in ('all120', 'megamat66')]
+    pd.DataFrame(rows).to_csv(d / 'conditions.csv', index=False)
+    pc = [f'{k}{r}' for k in ('flies_odor_model_pair', 'model_odor_flies_pair') for r in ('', '_matched', '_quantile', '_best')]
+    pc += ['model', 'model_pair_optimal_odor', 'model_odor_r2', 'data_odor_r2']
+    rows = [dict(family=f, reading=r, condition=c, **{k: u() for k in pc}) for f in ('family', 'ceiling')
+            for r in ('population', 'real', 'P1') for c in E.CONDITIONS]
+    pd.DataFrame(rows).to_csv(d / 'odor_pair_parts.csv', index=False)
+    rows = [dict(family=f, condition=c, odors=o, rho_without=u(), at_data_raw=u(), at_data_quantile=u())
+            for f in ('family', 'ceiling') for c in E.CONDITIONS for o in ('paa and B-myr', 'the four validation2 odors')]
+    pd.DataFrame(rows).to_csv(d / 'odors.csv', index=False)
+    rows = [dict(input=i, subset=s, rho_on=u(), rho_off=u()) for i in ('orn_pearson', 'input_cosine')
+            for s in ('all120', 'megamat66')]
+    pd.DataFrame(rows).to_csv(d / 'input.csv', index=False)
+    rows = [dict(input=i, condition=c, model_odor_r2=u()) for i in ('orn_pearson', 'input_cosine') for c in E.CONDITIONS]
+    pd.DataFrame(rows).to_csv(d / 'input_parts.csv', index=False)
+    rows = [dict(family=f, condition=c, odor=o, share_of_gap=float(rng.uniform(0, 0.3))) for f in ('family', 'ceiling')
+            for c in E.CONDITIONS for o in ODORS]
+    pd.DataFrame(rows).to_csv(d / 'residuals_odors.csv', index=False)
+
+
+def test_figures_from_the_saved_tables(tmp_path):
+    _made_up_results(tmp_path)
+    rows = E.gap_figure_rows(tmp_path)
+    cond = pd.read_csv(tmp_path / 'conditions.csv')
+    cp = cond[(cond.family == 'family') & (cond.reading == 'population') & (cond.subset == 'all120')].iloc[0]
+    fam = [r for r in rows if r['label'].startswith('the family (mean matrix')][0]
+    assert (fam['on'], fam['off']) == (cp.rho_on, cp.rho_off)
+    w = cond[(cond.family == 'family') & (cond.reading != 'population') & (cond.subset == 'all120')]
+    assert fam['on_range'] == (w.rho_on.min(), w.rho_on.max())
+    hyb = [r for r in rows if r['label'] == "the flies' odor part + the family's pair part"][0]
+    pp = pd.read_csv(tmp_path / 'odor_pair_parts.csv').query("family == 'family' and reading == 'population'").set_index('condition')
+    vals = [pp.loc['on', f'flies_odor_model_pair{r}'] for r in ('', '_matched', '_quantile', '_best')]
+    assert hyb['on'] == vals[0] and hyb['on_range'] == (min(vals), max(vals))
+    assert rows[0]['on'] == 0.98 and rows[0]['off'] == 0.97
+    for p in (E.figure_gap(tmp_path), E.figure_odor_parts(tmp_path)):
+        assert p.exists() and p.stat().st_size > 10_000

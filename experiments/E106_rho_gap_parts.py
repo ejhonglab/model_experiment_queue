@@ -49,8 +49,9 @@ flies' percentile ('quantile': the flies' rank of the pair mapped onto the model
 part and the pair part add the parts as they are ('raw') or with the donated part rescaled to the SD of the part it
 replaces ('matched').
 
-Outputs: <shared>/results/E106_rho_gap_parts/ (the CSVs above, comparison_table.md, provenance.json).
-Usage: ./venv/bin/python -u experiments/E106_rho_gap_parts.py
+Outputs: <shared>/results/E106_rho_gap_parts/ (the CSVs above, comparison_table.md, provenance.json; with `--figures`,
+E106_gap_readings.png and E106_odor_parts.png drawn from the saved tables).
+Usage: ./venv/bin/python -u experiments/E106_rho_gap_parts.py [--figures]
 """
 from __future__ import annotations
 
@@ -1274,12 +1275,209 @@ def comparison_table(T: Mapping[str, pd.DataFrame], probes: pd.DataFrame, out: P
     (out / 'comparison_table.md').write_text('\n'.join(L) + '\n')
 
 
+# ---------------------------------------------------------------------------
+# the figures (from the saved tables only: `--figures`)
+
+FIG_ON, FIG_OFF, FIG_INK, FIG_MUTED, FIG_GRID = '#2a78d6', '#eb6834', '#2b2b29', '#6b6a64', '#e4e3de'
+FIG_LABEL = {'on': 'APL on, against the control flies', 'off': 'APL off, against APL output blocked (TNT)'}
+
+
+def _read(res: Path, name: str) -> pd.DataFrame:
+    return pd.read_csv(Path(res) / name, low_memory=False)
+
+
+def gap_figure_rows(res: Path) -> List[dict]:
+    """The rows of E106_gap_readings.png from the saved tables in `res`: per row a group, a label and per condition the
+    main value ('on', 'off') and, where the tables give other readings, their range ('on_range', 'off_range'). All over
+    the 120 pairs but the row that says 91."""
+    ys = _read(res, 'yardsticks.csv').set_index('name')['value']
+    cond = _read(res, 'conditions.csv')
+    cond = cond[(cond.family == 'family') & (cond.subset == 'all120')]
+    cp = cond[cond.reading == 'population'].iloc[0]
+    wir = cond[cond.reading != 'population']
+    pp = _read(res, 'odor_pair_parts.csv')
+    pp = pp[(pp.family == 'family') & (pp.reading == 'population')].set_index('condition')
+    st = _read(res, 'odors.csv')
+    st = st[(st.family == 'family') & (st.odors == 'paa and B-myr')].set_index('condition')
+    inp = _read(res, 'input.csv')
+    inp = inp[inp.subset == 'all120'].set_index('input')
+
+    def readings(c, k):
+        return [float(pp.loc[c, f'{k}{r}']) for r in ('', '_matched', '_quantile', '_best')]
+
+    def row(group, label, on, off, on_range=None, off_range=None):
+        return dict(group=group, label=label, on=float(on), off=float(off), on_range=on_range, off_range=off_range)
+
+    rng = lambda v: (min(v), max(v))
+    rows = [
+        row('the KC data', 'measurement ceiling (split halves of the recordings)', ys['ctrl_ceiling'], ys['tnt_ceiling']),
+        row('the KC data', "the other genotype's matrix", cp.flies_on_vs_flies_off, cp.flies_on_vs_flies_off),
+        row("the family with the flies' values in one part",
+            "the flies' distances of the other condition,\nwith the family's APL effect",
+            cp.on_from_flies_off_model_effect, cp.off_from_flies_on_model_effect),
+        row("the family with the flies' values in one part", "the family's odor part + the flies' pair part",
+            pp.loc['on', 'model_odor_flies_pair'], pp.loc['off', 'model_odor_flies_pair'],
+            rng(readings('on', 'model_odor_flies_pair')), rng(readings('off', 'model_odor_flies_pair'))),
+        row("the family with the flies' values in one part", "the 29 pairs of paa and B-myr at the flies' values",
+            st.loc['on', 'at_data_raw'], st.loc['off', 'at_data_raw'],
+            rng([st.loc['on', 'at_data_raw'], st.loc['on', 'at_data_quantile']]),
+            rng([st.loc['off', 'at_data_raw'], st.loc['off', 'at_data_quantile']])),
+        row("the family with the flies' values in one part", 'the family without paa and B-myr (over the 91 pairs)',
+            st.loc['on', 'rho_without'], st.loc['off', 'rho_without']),
+        row("the family with the flies' values in one part",
+            "the family's pair part + the best value per odor\n(in sample, 16 parameters)",
+            pp.loc['on', 'model_pair_optimal_odor'], pp.loc['off', 'model_pair_optimal_odor']),
+        row("the family with the flies' values in one part", "the flies' odor part + the family's pair part",
+            pp.loc['on', 'flies_odor_model_pair'], pp.loc['off', 'flies_odor_model_pair'],
+            rng(readings('on', 'flies_odor_model_pair')), rng(readings('off', 'flies_odor_model_pair'))),
+        row("the family with the flies' values in one part",
+            "the family's distances of the other condition,\nwith the flies' APL effect",
+            cp.on_from_model_off_flies_effect, cp.off_from_model_on_flies_effect),
+        row('the family and its input', 'the family (mean matrix over its eight wirings)', cp.rho_on, cp.rho_off,
+            rng(list(wir.rho_on)), rng(list(wir.rho_off))),
+        row('the family and its input', "the model's own input, cosine distance", inp.loc['input_cosine', 'rho_on'],
+            inp.loc['input_cosine', 'rho_off']),
+        row('the family and its input', 'the ORN input, Pearson correlation distance', inp.loc['orn_pearson', 'rho_on'],
+            inp.loc['orn_pearson', 'rho_off']),
+    ]
+    return rows
+
+
+def _style(ax):
+    for sp in ('top', 'right', 'left'):
+        ax.spines[sp].set_visible(False)
+    ax.spines['bottom'].set_color('#bdbcb5')
+    ax.tick_params(colors=FIG_MUTED, labelsize=8, length=0)
+    ax.tick_params(axis='y', labelcolor=FIG_INK)
+    ax.grid(axis='x', color=FIG_GRID, lw=0.8, zorder=0)
+    ax.set_axisbelow(True)
+
+
+def figure_gap(res: Path, path: Optional[Path] = None) -> Path:
+    """E106_gap_readings.png: the family's two ρ's on odor-odor distances and what they would be with the flies' values in
+    one part of its matrices (the other condition's distances, the APL effect, the odor part, the pair part, the pairs of
+    paa and B-myr), beside the KC data's own yardsticks and the ORN input. Marker: the main reading; line: the range over
+    the other readings the tables give (matched, quantile, best scale; the eight wirings for the family). From the saved
+    tables in `res`."""
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
+    rows = gap_figure_rows(res)
+    path = Path(res) / 'E106_gap_readings.png' if path is None else Path(path)
+    fig, ax = plt.subplots(figsize=(9.2, 6.4))
+    y, ticks, labels, groups = 0.0, [], [], []
+    last = None
+    for r in rows:
+        if r['group'] != last:
+            if last is not None:
+                y -= 0.6
+            groups.append((y + 0.55, r['group']))
+            last = r['group']
+        for c, dy, col, mk in (('on', 0.14, FIG_ON, 'o'), ('off', -0.14, FIG_OFF, 's')):
+            if r[f'{c}_range'] is not None:
+                lo, hi = r[f'{c}_range']
+                ax.plot([lo, hi], [y + dy] * 2, color=col, lw=2, alpha=0.45, solid_capstyle='round', zorder=2)
+            ax.scatter([r[c]], [y + dy], s=46, marker=mk, color=col, edgecolor='white', linewidth=1.2, zorder=3)
+        ticks.append(y)
+        labels.append(r['label'])
+        y -= 1.0
+    ax.set_yticks(ticks)
+    ax.set_yticklabels(labels, fontsize=8.5, color=FIG_INK)
+    for yg, g in groups:
+        ax.annotate(g, (0, yg), xycoords=('axes fraction', 'data'), xytext=(-4, 0), textcoords='offset points',
+                    ha='right', va='center', fontsize=8.5, color=FIG_MUTED, style='italic')
+    _style(ax)
+    ax.set_xlim(0.55, 1.0)
+    ax.set_ylim(y + 0.4, 1.0)
+    ax.set_xlabel('ρ on odor-odor distances (120 pairs unless stated)', fontsize=9, color=FIG_INK)
+    handles = [Line2D([], [], marker='o', ls='', color=FIG_ON, label=FIG_LABEL['on']),
+               Line2D([], [], marker='s', ls='', color=FIG_OFF, label=FIG_LABEL['off']),
+               Line2D([], [], color=FIG_MUTED, lw=2, alpha=0.45, label='range over the other readings or the eight wirings')]
+    fig.legend(handles=handles, loc='upper left', bbox_to_anchor=(0.02, 0.955), ncol=3, fontsize=8, frameon=False)
+    fig.suptitle("Where the family's gap in ρ on odor-odor distances is: the family with the flies' values in one part "
+                 "of its matrices", fontsize=10, color=FIG_INK, x=0.02, ha='left')
+    fig.tight_layout(rect=(0, 0, 1, 0.92))
+    fig.savefig(path, dpi=170)
+    plt.close(fig)
+    return path
+
+
+def figure_odor_parts(res: Path, path: Optional[Path] = None) -> Path:
+    """E106_odor_parts.png: left, the share of each matrix's variance over the 120 pairs that its odor part carries (the
+    KC data, the family with the range over its eight wirings, the ORN input and the model's own input); right, each odor's
+    share of the family's gap in ρ on odor-odor distances (E61's shares; they add to 2 over the 16 odors, so 2/16 is an
+    even share), a lead only. From the saved tables in `res`."""
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
+    path = Path(res) / 'E106_odor_parts.png' if path is None else Path(path)
+    pp = _read(res, 'odor_pair_parts.csv')
+    pp = pp[pp.family == 'family']
+    pop = pp[pp.reading == 'population'].set_index('condition')
+    wir = pp[pp.reading != 'population']
+    ip = _read(res, 'input_parts.csv')
+    ip = ip[ip.condition == 'on'].set_index('input')
+    ro = _read(res, 'residuals_odors.csv')
+    ro = ro[ro.family == 'family'].pivot(index='odor', columns='condition', values='share_of_gap')
+    ro = ro.loc[ro.mean(axis=1).sort_values().index]
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(10.5, 4.8), gridspec_kw=dict(width_ratios=[1, 1.15]))
+    rows = [('KCs: control flies /\nAPL output blocked (TNT)', pop.loc['on', 'data_odor_r2'], pop.loc['off', 'data_odor_r2'], None),
+            ('the family: mean matrix\n(range: its eight wirings)', pop.loc['on', 'model_odor_r2'], pop.loc['off', 'model_odor_r2'],
+             {c: (wir[wir.condition == c].model_odor_r2.min(), wir[wir.condition == c].model_odor_r2.max()) for c in CONDITIONS})]
+    for i, (lab, von, voff, rg) in enumerate(rows):
+        y = -i
+        for c, v, dy, col, mk in (('on', von, 0.12, FIG_ON, 'o'), ('off', voff, -0.12, FIG_OFF, 's')):
+            if rg is not None:
+                a1.plot(rg[c], [y + dy] * 2, color=col, lw=2, alpha=0.45, solid_capstyle='round', zorder=2)
+            a1.scatter([v], [y + dy], s=46, marker=mk, color=col, edgecolor='white', linewidth=1.2, zorder=3)
+    inputs = [('the ORN input,\nPearson correlation distance', 'orn_pearson'), ("the model's own input,\ncosine distance", 'input_cosine')]
+    for j, (lab, k) in enumerate(inputs):
+        a1.scatter([ip.loc[k, 'model_odor_r2']], [-(len(rows) + j)], s=46, marker='D', color=FIG_MUTED, edgecolor='white',
+                   linewidth=1.2, zorder=3)
+    labs = [r[0] for r in rows] + [l for l, _ in inputs]
+    a1.set_yticks([-i for i in range(len(labs))])
+    a1.set_yticklabels(labs, fontsize=8, color=FIG_INK)
+    _style(a1)
+    a1.set_xlim(0, 0.6)
+    a1.set_ylim(-len(labs) + 0.4, 0.6)
+    a1.set_xlabel("share of the variance over the 120 pairs\ncarried by the odor part", fontsize=9, color=FIG_INK)
+    a1.set_title('How much of each matrix is a value per odor', fontsize=9.5, color=FIG_INK, loc='left')
+    for k, (c, dy, col, mk) in enumerate((('on', 0.15, FIG_ON, 'o'), ('off', -0.15, FIG_OFF, 's'))):
+        a2.scatter(ro[c], np.arange(len(ro)) + dy, s=36, marker=mk, color=col, edgecolor='white', linewidth=1.0, zorder=3)
+    a2.axvline(2 / 16, color=FIG_MUTED, lw=1, ls=(0, (3, 3)), zorder=1)
+    a2.annotate('even share (2/16)', (2 / 16, -0.45), xytext=(3, 0), textcoords='offset points', fontsize=7.5,
+                color=FIG_MUTED, va='center')
+    a2.set_yticks(np.arange(len(ro)))
+    a2.set_yticklabels(list(ro.index), fontsize=8, color=FIG_INK)
+    _style(a2)
+    a2.set_xlim(0, 0.36)
+    a2.set_ylim(-0.6, len(ro) - 0.1)
+    a2.set_xlabel("odor's share of the family's gap (1 − ρ on odor-odor distances)", fontsize=9, color=FIG_INK)
+    a2.set_title("Each odor's share of the family's gap (a lead)", fontsize=9.5, color=FIG_INK, loc='left')
+    handles = [Line2D([], [], marker='o', ls='', color=FIG_ON, label='APL on / control flies'),
+               Line2D([], [], marker='s', ls='', color=FIG_OFF, label='APL off / APL output blocked (TNT)'),
+               Line2D([], [], marker='D', ls='', color=FIG_MUTED, label='the input (one matrix for both)'),
+               Line2D([], [], color=FIG_MUTED, lw=2, alpha=0.45, label='range over the eight wirings')]
+    fig.legend(handles=handles, loc='lower center', ncol=4, fontsize=8, frameon=False)
+    fig.tight_layout(rect=(0, 0.06, 1, 1))
+    fig.savefig(path, dpi=170)
+    plt.close(fig)
+    return path
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('--out', type=Path, default=None)
+    ap.add_argument('--figures', action='store_true', help='only draw the figures from the saved tables in --out')
     args = ap.parse_args()
     out = args.out or out_dir()
     out.mkdir(parents=True, exist_ok=True)
+    if args.figures:
+        for p in (figure_gap(out), figure_odor_parts(out)):
+            print(f'-> {p}', flush=True)
+        return
     arch = archive()
     T: Dict[str, pd.DataFrame] = {}
     T['archive_summary'] = archive_summary(arch)
