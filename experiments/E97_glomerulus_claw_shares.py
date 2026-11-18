@@ -130,6 +130,11 @@ Usage (from the repository root; 16-thread lanes; check `uptime` first; long run
     OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ./venv/bin/python -u -m experiments.E97_glomerulus_claw_shares \\
         --part B --wirings S > <log> 2>&1
     ./venv/bin/python -u -m experiments.E97_glomerulus_claw_shares --part score
+Part B on several lanes (any host; the points are claimed in the shared results folder, B2 on the eight first):
+    OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ./venv/bin/python -u -m experiments.E97_glomerulus_claw_shares \\
+        --part B --order arm --claim >> <log> 2>&1
+A lane on another host copies its outputs/E97_glomerulus_claw_shares/runs_mcns/ to the archive's
+data/model_outputs/E97_glomerulus_claw_shares/from_<host>/runs_mcns/ before the scoring.
 """
 from __future__ import annotations
 
@@ -1651,13 +1656,21 @@ def _alive(pid: int) -> bool:
     return True
 
 
+def claims_dir() -> Path:
+    """Part B's claims: results/E97_glomerulus_claw_shares/claims/ in the shared directory (mkdir is atomic on NFS),
+    so that lanes on several hosts share the points; each claim is removed when its point is written or fails."""
+    d = out_dir() / 'claims'
+    d.mkdir(exist_ok=True)
+    return d
+
+
 def claim_point(tag: str) -> bool:
-    """Claim a point for this process (lanes on one host share part B's points): a directory
-    outputs/.../claims/<tag> made with mkdir, holding 'owner' (host and pid). A claim of this host whose process is gone
-    is taken over; a live one, or one being written, is not."""
+    """Claim a point for this process (lanes on any host share part B's points): a directory claims/<tag>
+    (`claims_dir`) made with mkdir, holding 'owner' (host and pid). A claim of this host whose process is gone is taken
+    over; a live one, one of another host (removed by hand if its lane died) or one being written is not."""
     import os
     import shutil
-    d = local_dir('claims') / tag
+    d = claims_dir() / tag
     try:
         d.mkdir()
     except FileExistsError:
@@ -1675,7 +1688,7 @@ def claim_point(tag: str) -> bool:
 
 def release_point(tag: str) -> None:
     import shutil
-    shutil.rmtree(local_dir('claims') / tag, ignore_errors=True)
+    shutil.rmtree(claims_dir() / tag, ignore_errors=True)
 
 
 def part_b(arms: Sequence[str] = ARMS, wirings: Sequence[str] = ALL_WIRINGS, dry_run: bool = False,
@@ -1683,7 +1696,8 @@ def part_b(arms: Sequence[str] = ARMS, wirings: Sequence[str] = ALL_WIRINGS, dry
     """Part B's points of `arms` on `wirings` (each arm on its own wirings, ARMS_ON; `plan` in `order`), resumable
     (runs_B_mcns.csv); needs part 0 to have passed (its built records). `max_points` stops after that many new points
     (the smoke test). With `claim`, each point is claimed first (`claim_point`) and the run table read again before it,
-    so that several lanes on this host share the points."""
+    so that several lanes share the points (on another host than hal, its runs are found for the scoring once copied to
+    the model-output archive's from_<host>/runs_mcns/)."""
     todo = [(v, w) for v, w in plan(arms, wirings, order) if run_tag(v, w) not in _done(out_dir() / RUNS_TABLE)]
     print(f'E97 B: {len(todo)} points to run: ' + ', '.join(run_tag(v, w) for v, w in todo), flush=True)
     if dry_run:

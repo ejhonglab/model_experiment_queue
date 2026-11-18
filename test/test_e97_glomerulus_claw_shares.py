@@ -550,11 +550,14 @@ def test_the_arm_order_and_the_claims(tmp_path, monkeypatch):
     assert pa[:8] == [('B2_mean2', w) for w in G.ALL_WIRINGS]
     with pytest.raises(ValueError):
         G.plan(order='odor')
-    monkeypatch.setattr(G, 'local_dir', lambda sub='': (tmp_path / sub) if (tmp_path / sub).mkdir(exist_ok=True) is None else None)
+    monkeypatch.setattr(G, 'out_dir', lambda: tmp_path)
     assert G.claim_point('B2_mean2_real') and not G.claim_point('B2_mean2_real')
-    # a claim of this host whose process is gone is taken over
+    # a claim of this host whose process is gone is taken over; another host's is not
     (tmp_path / 'claims' / 'B2_mean2_P1').mkdir()
     (tmp_path / 'claims' / 'B2_mean2_P1' / 'owner').write_text(f'{G._host()} 999999999')
     assert G.claim_point('B2_mean2_P1')
+    (tmp_path / 'claims' / 'B2_mean2_P2').mkdir()
+    (tmp_path / 'claims' / 'B2_mean2_P2' / 'owner').write_text('otherhost 999999999')
+    assert not G.claim_point('B2_mean2_P2')
     G.release_point('B2_mean2_real')
     assert G.claim_point('B2_mean2_real')
