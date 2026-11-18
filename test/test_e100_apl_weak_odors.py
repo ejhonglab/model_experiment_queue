@@ -1,7 +1,11 @@
 """Tests of E100's rules on made-up data (experiments/E100_apl_weak_odors.py): the solvent rules, the shuffled-block reader,
 W1's count rule and the rule over input estimates, W2's fly rule, W3's pass / fail and its power on planted maps, the
 concentration matching to one log unit (inclusive), the input estimates per session, the reader of E98's B1 runs, and
-part 0's identities that need no new recording (on the shared directory's data, skipped where it is absent)."""
+part 0's identities that need no new recording (on the shared directory's data, skipped where it is absent). Part D as
+re-planned 2026-11-17, on made-up tables in the form of Pratyush's two (the hemibrain's and the male CNS's): the three
+calyces' elements, the neighbours' axis check, A3's agreement, A4's two scorings and its rule on planted powers, W3's
+calyx rule, the withheld outputs moved, and no held path opened."""
+import time
 from pathlib import Path
 
 import numpy as np
@@ -185,31 +189,70 @@ def test_w2_four_flies():
 
 
 def _exceed(shares):
-    """pair -> per-calyx shares of 10 recordings exceeding."""
+    """pair -> shares of 10 recordings exceeding in the three calyces (hemibrain_R, malecns_L, malecns_R)."""
     rows = []
     for pair, per_calyx in shares.items():
-        for ci, sh in enumerate(per_calyx):
+        for c, sh in zip(M.CALYCES, per_calyx):
             k = int(round(sh * 10))
-            rows += [dict(pair=pair, calyx=f'c{ci}', recording=f'r{j}', exceeds=j < k) for j in range(10)]
+            rows += [dict(pair=pair, calyx=c, recording=f'r{j}', exceeds=j < k) for j in range(10)]
     return pd.DataFrame(rows)
 
 
+def test_w3_calyx_rule():
+    """The re-plan's rule: the hemibrain's calyx and at least one of the male CNS's two, each in more than the share."""
+    assert M.CALYCES == ('hemibrain_R', 'malecns_L', 'malecns_R') and M.HEMIBRAIN_CALYX == 'hemibrain_R'
+    sh = lambda hb, l, r: pd.Series({'hemibrain_R': hb, 'malecns_L': l, 'malecns_R': r})   # noqa: E731
+    assert M.w3_pair_passes(sh(0.6, 0.6, 0.0), 0.5) and M.w3_pair_passes(sh(0.6, 0.0, 0.6), 0.5)
+    assert not M.w3_pair_passes(sh(0.6, 0.5, 0.5), 0.5)          # exactly half is not more than half
+    assert not M.w3_pair_passes(sh(0.4, 0.9, 0.9), 0.5)          # the hemibrain's calyx is required
+    assert not M.w3_pair_passes(sh(0.9, 0.0, 0.0), 0.5)          # and one of the male CNS's
+    assert not M.w3_pair_passes(pd.Series({'malecns_L': 0.9}), 0.25)   # no hemibrain row: not passed
+    assert M.w3_pair_passes(sh(0.3, 0.0, 0.3), 0.25) and not M.w3_pair_passes(sh(0.3, 0.0, 0.3), 0.5)
+
+
 def test_w3_pass_fail_not_decided():
-    strong = [0.6] * 5 + [0.0] * 3                     # more than half in 5 of 8 calyces
-    weak = [0.6] * 4 + [0.0] * 4                       # only 4 calyces
-    quarter = [0.3] * 5 + [0.0] * 3                    # more than a quarter in 5, not more than half
-    none = [0.2] * 8
+    strong = [0.6, 0.6, 0.0]                           # more than half in the hemibrain and in the male CNS's left
+    hb_only = [0.9, 0.2, 0.2]                          # the male CNS below a quarter
+    quarter = [0.3, 0.0, 0.3]                          # more than a quarter, not more than half
+    none = [0.2, 0.2, 0.2]
     assert M.w3_verdict(_exceed(dict(a=strong, b=strong, c=strong)))['verdict'] == 'passes'
-    assert M.w3_verdict(_exceed(dict(a=strong, b=strong, c=weak)))['verdict'] == 'not decided'
-    assert M.w3_verdict(_exceed(dict(a=none, b=none, c=weak)))['verdict'] == 'fails'
+    assert M.w3_verdict(_exceed(dict(a=strong, b=strong, c=hb_only)))['verdict'] == 'not decided'
+    assert M.w3_verdict(_exceed(dict(a=none, b=none, c=hb_only)))['verdict'] == 'fails'
     assert M.w3_verdict(_exceed(dict(a=none, b=quarter, c=none)))['verdict'] == 'not decided'
-    # exactly half is not more than half
-    assert M.w3_pair_calyces(_exceed(dict(a=[0.5] * 8)), M.W3_PASS_SHARE) == 0
     # only the pairs A4 kept count
     v = M.w3_verdict(_exceed(dict(a=strong, b=strong, c=strong, d=none)), pairs=['a', 'b', 'd'])
     assert v['verdict'] == 'not decided' and v['n_pairs'] == 3 and v['n_pairs_pass'] == 2
+    assert v['pairs'][0]['share_hemibrain_R'] == pytest.approx(0.6)
     # A4 kept no pair: W3 neither passes nor fails
     assert M.w3_verdict(_exceed(dict(a=none)), pairs=[])['verdict'] == 'no pair'
+    # over the session estimates: only if under every one
+    assert M.w3_over_estimates({'a': 'passes', 'b': 'not decided'}) == 'not decided'
+
+
+def test_a4_rule_on_planted_powers():
+    five = [f'p{i}' for i in range(5)]
+    hi = {p: 0.9 for p in five}
+    # three pairs at power on the slabs: read on the slabs, those three kept
+    r = M.a4_rule({'slabs': dict(p0=0.9, p1=0.8, p2=0.85, p3=0.5, p4=0.1), 'whole': hi})
+    assert r['scoring'] == 'slabs' and r['kept'] == ['p0', 'p1', 'p2'] and r['left_out'] == ['p3', 'p4']
+    assert r['n_pairs_at_power'] == {'slabs': 3, 'whole': 5}
+    # two on the slabs: read on the whole-calyx projection, with its own pairs
+    r = M.a4_rule({'slabs': dict(p0=0.9, p1=0.9, p2=0.79, p3=0.0, p4=0.0),
+                   'whole': dict(p0=0.95, p1=0.5, p2=0.81, p3=0.99, p4=0.2)})
+    assert r['scoring'] == 'whole' and r['kept'] == ['p0', 'p2', 'p3'] and 'whole-calyx' in r['w3_reads']
+    # fewer than three in both: no pair (outcome (i))
+    r = M.a4_rule({'slabs': dict(p0=0.9, p1=0.9, p2=0.1), 'whole': dict(p0=0.99, p1=0.2, p2=np.nan)})
+    assert r['scoring'] is None and r['kept'] == [] and r['w3_reads'] == 'no pair'
+    assert M.a4_rule({})['scoring'] is None
+
+
+def test_ordered_calyx_pairs():
+    pairs = M.ordered_calyx_pairs()
+    across = [(t, c) for t, c, k in pairs if k == 'across brains']
+    sides = [(t, c) for t, c, k in pairs if k == 'across sides']
+    assert sorted(across) == [('hemibrain_R', 'malecns_L'), ('hemibrain_R', 'malecns_R'), ('malecns_L', 'hemibrain_R'),
+                              ('malecns_R', 'hemibrain_R')]
+    assert sorted(sides) == [('malecns_L', 'malecns_R'), ('malecns_R', 'malecns_L')]
 
 
 # ---------------------------------------------------------------------------
@@ -239,10 +282,10 @@ def test_pair_maps_true_labels():
 
 
 def _planted_state(n_glom=12, n_perm=99, seed=0, strength=1.0, shared_layout=True):
-    """Eight made-up calyces sharing one layout of glomerulus fields (each glomerulus a Gaussian blob at the same place,
-    with a little jitter per calyx; with `shared_layout` False each calyx has a layout of its own), one slab at 18 um and
-    two blurs; the pair's two stimuli drive glomerulus 0 and glomerulus 1 alone (times `strength`) over a flat
-    background."""
+    """The three made-up calyces sharing one layout of glomerulus fields (each glomerulus a Gaussian blob at the same
+    place, with a little jitter per calyx; with `shared_layout` False each calyx has a layout of its own), one slab at 18
+    um and the whole calyx (the same grids), two blurs; the pair's two stimuli drive glomerulus 0 and glomerulus 1 alone
+    (times `strength`) over a flat background."""
     rng = np.random.default_rng(seed)
     yy, xx = np.mgrid[:12, :12]
     centers = rng.uniform(1, 10, size=(n_glom, 2))
@@ -256,7 +299,8 @@ def _planted_state(n_glom=12, n_perm=99, seed=0, strength=1.0, shared_layout=Tru
         side = 'L' if c.endswith('_L') else 'R'
         if side == 'L':        # a left calyx is the mirror image (posterior view)
             G = G.reshape(n_glom, 12, 12)[:, :, ::-1].reshape(n_glom, 144)
-        slabs = {18.0: dict(G={2.0: G, 4.0: G}, inside=np.ones(144, bool), anat=None)}
+        sl = dict(G={2.0: G, 4.0: G, 8.0: G}, inside=np.ones(144, bool), anat=None)
+        slabs = {18.0: sl, -1.0: sl}
         grids[c] = dict(names=[f'g{i}' for i in range(n_glom)], perms=perms, slabs=slabs, side=side, seed=ci)
     w = np.full((n_glom, 2), 1.0)
     w[0, 0] += 20.0 * strength
@@ -267,7 +311,7 @@ def _planted_state(n_glom=12, n_perm=99, seed=0, strength=1.0, shared_layout=Tru
 
 def test_detect_planted_and_null():
     st = _planted_state()
-    g = st['grids']['flywire_R']
+    g = st['grids']['hemibrain_R']
     Wt = M._wt(st['rates'], g['names'], ['A [s]', 'B [s]'])
     P = M.pair_maps(Wt, g['perms'], g['slabs'][18.0]['G'][2.0], g['slabs'][18.0]['inside'])
     ins = np.ones(144, bool)
@@ -281,16 +325,24 @@ def test_detect_planted_and_null():
 def test_power_on_planted_maps(monkeypatch):
     monkeypatch.setattr(M, 'A4_PLANE_DEPTHS_UM', (18.0,))
     st = _planted_state(strength=1.0)
-    d = M.power('A - B', 's', st, reliabilities=[0.6], n_draws=3)
-    # 8 truths x 3 draws x 7 scored calyces, less the two hemibrain calyces scored against each other
-    assert len(d) == 3 * (8 * 7 - 2)
+    d = M.power('A - B', 's', st, reliabilities=[0.6], n_draws=3, self_truth=False)
+    # 3 truths x 3 draws x 2 scored calyces x 2 scorings; four ordered pairs across the brains, two across the sides
+    assert len(d) == 3 * 3 * 2 * 2
+    assert d.groupby('kind').size().to_dict() == {'across brains': 4 * 3 * 2, 'across sides': 2 * 3 * 2}
+    assert set(d['scoring']) == {'slabs', 'whole'}
+    # the truth is a slab in both scorings: the same simulated recording under each
+    tr = d.pivot_table(index=['truth_calyx', 'scored_calyx', 'draw'], columns='scoring', values='truth_depth_um')
+    assert (tr['slabs'] == tr['whole']).all() and (tr['slabs'] == 18.0).all()
     assert d['exceeds'].mean() > 0.9
+    # with the own-calyx control
+    d2 = M.power('A - B', 's', st, reliabilities=[0.6], n_draws=3)
+    assert (d2['kind'] == 'own calyx').sum() == 3 * 3 * 2 and d2.loc[d2.kind == 'own calyx', 'self_truth'].all()
     # each fly's map follows its own calyx's layout, unrelated to the scored calyces': the null, about 5 %
     own = _planted_state(strength=1.0, shared_layout=False)
-    d0 = M.power('A - B', 's', own, reliabilities=[0.6], n_draws=3)
+    d0 = M.power('A - B', 's', own, reliabilities=[0.6], n_draws=10, self_truth=False)
     assert d0['exceeds'].mean() < 0.2
     # a weaker reliability gives less power
-    d1 = M.power('A - B', 's', st, reliabilities=[0.05], n_draws=3)
+    d1 = M.power('A - B', 's', st, reliabilities=[0.05], n_draws=3, self_truth=False)
     assert d1['exceeds'].mean() < d['exceeds'].mean()
 
 
@@ -459,14 +511,24 @@ def test_measured_pair_grid_made_up():
 
 def test_score_recording_planted():
     st = _planted_state()
-    g = st['grids']['flywire_R']
+    g = st['grids']['hemibrain_R']
     Wt = M._wt(st['rates'], g['names'], ['A [s]', 'B [s]'])
     sl = g['slabs'][18.0]
     truth = M.pair_maps(Wt, g['perms'][:1], sl['G'][2.0], sl['inside'])[0]
     # a fly's right calyx, which Yang's files call "L" (the entry's orientation)
-    d = M.score_recording(dict(grid=truth, inside=sl['inside']), 'L', 18.0, 'A - B', 's', st)
-    assert len(d) == 8 and d.set_index('calyx').loc['flywire_R', 'exceeds']
-    assert d['exceeds'].mean() > 0.7                # the other calyces share the layout
+    for scoring in ('slabs', 'whole'):
+        d = M.score_recording(dict(grid=truth, inside=sl['inside']), 'L', 18.0, 'A - B', 's', st, scoring=scoring)
+        assert list(d['calyx']) == list(M.CALYCES) and d.set_index('calyx').loc['hemibrain_R', 'exceeds']
+        assert d['exceeds'].all() and (d['fly_side'] == 'R').all() and (d['scoring'] == scoring).all()
+    # a plane far from every slab: no slab within 6 um, nothing to score on the slabs, the whole calyx still scored
+    d = M.score_recording(dict(grid=truth, inside=sl['inside']), 'L', 40.0, 'A - B', 's', st, scoring='slabs')
+    assert (d['n_slabs'] == 0).all() and not d['exceeds'].any()
+    with pytest.raises(ValueError):
+        M.score_recording(dict(grid=truth, inside=sl['inside']), 'L', 18.0, 'A - B', 's', st, scoring='lobes')
+    # score_maps: several recordings, both scorings, the predictions computed once
+    rows = M.score_maps([dict(grid=truth, inside=sl['inside'], side='L', plane_um=18.0, recording=f'r{i}', set='W',
+                              fly='f') for i in range(3)], 'A - B', 's', ('A [s]', 'B [s]'), st)
+    assert len(rows) == 3 * 2 * 3 and rows['exceeds'].all() and set(rows['recording']) == {'r0', 'r1', 'r2'}
 
 
 def test_w3_over_estimates():
@@ -764,3 +826,331 @@ def test_recording_c_leave_one_out_share():
     # the strongest map makes most of the in-sample common map; scored against the others' common map its share falls
     assert s.loc['paa @ -3', 'r2_common_loo'] < s.loc['paa @ -3', 'r2_common']
     assert s['r2_common_loo'].between(0, 1).all() and s['r2_common_loo_corrected'].notna().all()
+
+
+# ---------------------------------------------------------------------------
+# part D re-planned 2026-11-17: made-up tables in the form of Pratyush's two (the hemibrain's, bare column names, one
+# side; the male CNS's, _pre / _post names, both sides), read through E97's reader and E79's three-calyx loader
+
+GLOMS8 = ('DM1', 'DL1', 'VA7m', 'D', 'DC2', 'DM2', 'VM5d', 'DM4')
+CENTRE_R = {'hemibrain_R': 100.0, 'malecns_L': -100.0, 'malecns_R': 100.0}
+N_KC = 60
+
+
+def _nat(brain, R, D, A):
+    """(R, D, A) um -> native 8 nm voxels (E79's to_rda inverted: hemibrain (-x, -z, +y), male CNS (-x, -y, -z))."""
+    R, D, A = (np.asarray(v, float) * 125.0 for v in (R, D, A))
+    return (-R, A, -D) if brain == 'hemibrain' else (-R, -D, -A)
+
+
+def _calyx_layout(seed=0):
+    """Each glomerulus's field (lateral offset, D, A) in um, shared by the three calyces (a left one mirrored)."""
+    rng = np.random.default_rng(seed)
+    return {g: (rng.uniform(-12, 12), rng.uniform(-12, 12), rng.uniform(6, 24)) for g in GLOMS8}
+
+
+def _made_up_calyx(brain, calyx, layout, rng, base_id, flip_dorsal=False):
+    """One calyx's rows of every table: 8 PNs (two boutons each, four release sites per bouton) and N_KC KCs with one
+    counted claw (6 synapses) each; KC 0 also has a 4-synapse claw (not counted) from an extra VM2 PN, whose bouton
+    carries no counted claw; APL synapses with the counted claws and boutons (both directions), with the uncounted claw,
+    off the claws (NaN) and with the VM2 bouton (none of these three kept); the neighbours' ROIs where they lie."""
+    side = calyx[-1]
+    lat = 1.0 if side == 'R' else -1.0
+    c0 = CENTRE_R[calyx]
+    roi = f'CA({side})'
+    sname = {'L': 'Left', 'R': 'Right'}[side]
+
+    def pos(g, bouton=0, jitter=0.0):
+        lo, d, a = layout[g] if g in layout else (0.0, 0.0, 15.0)
+        return (c0 + lat * lo + rng.normal(0, jitter), d + rng.normal(0, jitter), a + 4.0 * bouton + rng.normal(0, jitter))
+    pn_ids = {g: base_id + i for i, g in enumerate(GLOMS8 + ('VM2',))}
+    syn, rel, apl = [], [], []
+    for g, pid in pn_ids.items():
+        for b in ((0, 1) if g != 'VM2' else (0,)):
+            for _ in range(4 if g != 'VM2' else 3):
+                rel.append(dict(type='pre', neuron=pid, anatomical_bouton=b, roi=roi, xyz=pos(g, b, 0.5)))
+            rel.append(dict(type='post', neuron=pid, anatomical_bouton=b, roi=roi, xyz=pos(g, b, 0.5)))
+            for k in range(6 if g != 'VM2' else 2):
+                apl.append(dict(kind='PN', apl_input=k % 2 == 1, partner=pid, elem=float(b), xyz=pos(g, b, 1.0)))
+    for k in range(N_KC):
+        kc, g, b = base_id * 10 + k, GLOMS8[k % 8], (k // 8) % 2
+        for _ in range(6):
+            syn.append(dict(pn=pn_ids[g], kc=kc, ptype=f'{g}_adPN', claw=0.0, bouton=b, xyz=pos(g, b, 1.0)))
+        for j in range(9):
+            apl.append(dict(kind='KC', apl_input=j >= 6, partner=kc, elem=0.0, xyz=pos(g, b, 1.0)))
+        if k == 0:
+            for _ in range(4):
+                syn.append(dict(pn=pn_ids['VM2'], kc=kc, ptype='VM2_adPN', claw=1.0, bouton=0, xyz=pos('VM2', 0, 1.0)))
+            apl += [dict(kind='KC', apl_input=False, partner=kc, elem=1.0, xyz=pos('VM2', 0, 1.0))] * 2
+            apl += [dict(kind='KC', apl_input=False, partner=kc, elem=np.nan, xyz=pos(g, b, 1.0))] * 2
+    sd = -1.0 if flip_dorsal else 1.0
+    nb = []
+    for name, (dl, dd, da) in (('PED', (5, -20, 40)), ('SLP', (10, 20, 30)), ('PLP', (25, -20, 15))):
+        nb += [dict(roi=f'{name}({side})', xyz=(c0 + lat * dl, sd * dd, da))] * 30
+    return dict(syn=syn, rel=rel, apl=apl, nb=nb, side=side, sname=sname, roi=roi)
+
+
+def _write_brain(brain, calyces, root):
+    """The brain's tables in Pratyush's file forms, under root/<brain>/."""
+    from experiments import E79_connectome_maps as CM
+    from experiments import E97_glomerulus_claw_shares as E97
+    d = root / brain
+    d.mkdir(parents=True)
+    hb = brain == 'hemibrain'
+
+    def xyz(rows, pre_post=False):
+        x, y, z = _nat(brain, *zip(*[r['xyz'] for r in rows])) if rows else ([], [], [])
+        if not pre_post:
+            return dict(x=x, y=y, z=z)
+        return dict(x_pre=x, y_pre=y, z_pre=z, x_post=np.asarray(x) + 1, y_post=np.asarray(y) + 1,
+                    z_post=np.asarray(z) + 1)
+    syn = [dict(r, side=c['sname'], roi=c['roi']) for c in calyces for r in c['syn']]
+    t = pd.DataFrame(dict(bodyId_pre=[r['pn'] for r in syn], bodyId_post=[r['kc'] for r in syn],
+                          roi_pre=[r['roi'] for r in syn], roi_post=[r['roi'] for r in syn], **xyz(syn, True),
+                          confidence_pre=0.9, confidence_post=0.9, instance_pre=[r['ptype'] for r in syn],
+                          type_pre=[r['ptype'] for r in syn], instance_post='KCg-m_R', type_post='KCg-m'))
+    claw, bout = [r['claw'] for r in syn], [r['bouton'] for r in syn]
+    if hb:
+        t = t.assign(anatomical_claw_corrected=claw, dist_to_root=1000.0, anatomical_bouton=np.asarray(bout, float))
+        t.to_parquet(d / E97.HEMIBRAIN_PN_CLAW_FILE)
+        files = {k: d / v for k, v in CM.HEMIBRAIN_FILES.items()}
+    else:
+        t = t.assign(anatomical_claw_corrected_post=claw, anatomical_claw_post=claw, dist_to_root_post=1000.0,
+                     anatomical_bouton_pre=np.asarray(bout, np.int64), side_post=[r['side'] for r in syn],
+                     region_post='CA')
+        t.to_parquet(d / f'PNbouton-to-KCclaw_Connectivity_Male-CNS_{E97.MALECNS_STAMP}.parquet')
+        files = {k: d / v.format(stamp=E97.MALECNS_STAMP) for k, v in CM.MALECNS_FILES.items()}
+    rel = [r for c in calyces for r in c['rel']]
+    pd.DataFrame(dict(type=[r['type'] for r in rel], neuron=[r['neuron'] for r in rel],
+                      anatomical_bouton=[r['anatomical_bouton'] for r in rel], roi=[r['roi'] for r in rel],
+                      **xyz(rel))).to_parquet(files['release'])
+    for key, kind, apl_input in CM.APL_TABLES:
+        rows = [dict(r, side=c['sname'], roi=c['roi']) for c in calyces for r in c['apl']
+                if r['kind'] == kind and r['apl_input'] == apl_input]
+        apl_end, partner_end = ('post', 'pre') if apl_input else ('pre', 'post')
+        elem = 'anatomical_claw_corrected' if kind == 'KC' else 'anatomical_bouton'
+        t = pd.DataFrame({f'bodyId_{apl_end}': 77, f'bodyId_{partner_end}': [r['partner'] for r in rows],
+                          'roi_pre': [r['roi'] for r in rows], 'roi_post': [r['roi'] for r in rows],
+                          **xyz(rows, True), 'confidence_pre': 0.9, 'confidence_post': 0.9})
+        if hb:
+            t[elem], t['anatomical_unit'] = [r['elem'] for r in rows], 0.0
+        else:
+            t[f'{elem}_{partner_end}'], t[f'anatomical_unit_{apl_end}'] = [r['elem'] for r in rows], 0.0
+            t['side_pre'] = t['side_post'] = [r['side'] for r in rows]
+        t.to_parquet(files[key])
+    nb = [r for c in calyces for r in c['nb']]
+    pd.DataFrame(dict(roi=[r['roi'] for r in nb], **xyz(nb))).to_parquet(files['kc_syn'])
+    pd.DataFrame(dict(roi=pd.Series(dtype=str), x=pd.Series(dtype=float), y=pd.Series(dtype=float),
+                      z=pd.Series(dtype=float))).to_parquet(files['apl_syn'])
+    return d
+
+
+@pytest.fixture
+def prat_tables(tmp_path, monkeypatch):
+    """Made-up hemibrain and male CNS tables in Pratyush's forms; E97's folders pointed at them; out_dir a tmp folder."""
+    from experiments import E97_glomerulus_claw_shares as E97
+
+    def build(flip_dorsal=False):
+        root = tmp_path / ('broken' if flip_dorsal else 'tables')
+        rng = np.random.default_rng(1)
+        lay = _calyx_layout()
+        hb = _write_brain('hemibrain', [_made_up_calyx('hemibrain', 'hemibrain_R', lay, rng, 1000, flip_dorsal)], root)
+        mc = _write_brain('malecns', [_made_up_calyx('malecns', c, lay, rng, b, flip_dorsal)
+                                      for c, b in (('malecns_L', 2000), ('malecns_R', 3000))], root)
+        monkeypatch.setattr(E97, 'hemibrain_dir', lambda: hb)
+        monkeypatch.setattr(E97, 'malecns_dir', lambda: mc)
+        E97._CACHE.clear()
+        return root
+    out = tmp_path / 'out'
+    out.mkdir()
+    monkeypatch.setattr(M, 'out_dir', lambda: out)
+    yield dict(build=build, out=out, root=tmp_path)
+    E97._CACHE.clear()
+
+
+def test_three_calyces_elements_on_made_up_tables(prat_tables):
+    """The three calyces by the one rule: only the counted claws (the 4-synapse claw left out), only the boutons that carry
+    one (the VM2 bouton left out) weighted by their release sites, only APL's synapses with those claws and boutons; the
+    sides; the axis check passes and the tables are written with the claw rule and the caveats."""
+    prat_tables['build']()
+    cal, tabs = M.prat_calyces()
+    assert list(cal) == list(M.CALYCES)
+    for c, p in cal.items():
+        assert len(p['claws']) == N_KC and set(p['claws']['claw_id']) == {0}, c
+        assert len(p['boutons']) == 16 and (p['boutons']['n_tbars'] == 4).all(), c
+        assert set(p['boutons']['glomerulus']) == set(GLOMS8), c          # no VM2
+        assert len(p['apl']) == N_KC * 9 + 16 * 6, c
+        assert set(p['apl'].loc[p['apl']['kind'] == 'KC', 'claw_id'].astype(int)) == {0}
+        assert (p['apl']['side'] == c[-1]).all()
+        # the claws lie where they were put: R around the calyx's centre (posterior view, R = fly's right)
+        assert abs(p['claws']['R'].mean() - CENTRE_R[c]) < 15, c
+    s = tabs['summary'].set_index('calyx')
+    assert (s['n_claws'] == N_KC).all() and (s['n_boutons'] == 16).all()
+    assert tabs['axes']['calyx_passed'].all()
+    for f in M.CALYX_TABLE_FILES.values():
+        t = pd.read_csv(prat_tables['out'] / f)
+        assert t['claw_rule'].str.contains("roi='none'").all() and t['caveats'].str.contains('male brain').all()
+        assert t['caveats'].str.contains('no PID').all() and t['caveats'].str.contains('quality').all()
+        assert t['caveats'].str.contains('0.28').all()
+
+
+def test_axis_check_on_planted_neighbours_stops_part_d(prat_tables):
+    """With the neighbours' dorsal-ventral sign flipped, E79's check fails and prat_calyces (so A3, A4 and D) stops."""
+    from experiments import E79_connectome_maps as CM
+    prat_tables['build'](flip_dorsal=True)
+    with pytest.raises(CM.AxisCheckError) as ex:
+        M.prat_calyces()
+    t = ex.value.table
+    assert set(t.loc[t.status == 'fail', 'check']) == {'PED', 'SLP', 'PLP'}
+
+
+def _made_up_rates():
+    """A3's PN rates and inputs, made up: each A3 stimulus under each session drives one of GLOMS8."""
+    cols, rows = {}, []
+    stims = M.a3_stimuli()
+    for i, st in enumerate(stims):
+        for sess in M.SESSIONS:
+            lab = f'{st[0]} [{sess}/diag] @ {st[1]:g}'
+            v = pd.Series(1.0, index=list(GLOMS8) + ['VM2'])
+            v[GLOMS8[i % 8]] += 30.0
+            cols[lab] = v
+            rows.append(dict(stimulus=M.stim_label(st), session=sess, estimate=lab))
+    for o in ('pa', 'ms', 'paa'):
+        cols[o] = pd.Series(1.0, index=list(GLOMS8) + ['VM2'])
+    return pd.DataFrame(cols), pd.DataFrame(rows)
+
+
+HELD_MARKERS = ('claude_apl_modeling_yz4tc', 'claude_apl_analysis', 'apl_synapses', 'flywire', 'fafb', 'banc',
+                '2024-09-13', '_derived', 'withheld_')
+
+
+def test_a3_a4_on_made_up_tables_open_no_held_path(prat_tables, monkeypatch):
+    """A3 and A4 end to end on the made-up tables: every file read is under the made-up folders or the outputs, none
+    names held data; A3's agreement has its four ordered pairs across the brains and two across the sides; A4 gives
+    both scorings and its rule; every table carries the caveats."""
+    import builtins
+    from experiments import E79_connectome_maps as CM
+    root = prat_tables['build']()
+    rates, inputs = _made_up_rates()
+    monkeypatch.setattr(M, 'pn_rates_extended', lambda *a, **k: (rates, inputs))
+    fake = {f'r{i}': dict(split_half_r={'pa-ms': 0.69, 'paa-ms': 0.59}) for i in range(3)}
+    monkeypatch.setattr(CM, 'measured_maps', lambda *a, **k: fake)
+    opened = []
+    real = dict(open=builtins.open, rp=pd.read_parquet, rc=pd.read_csv)
+
+    def spy_open(path, *a, **k):
+        opened.append(str(path))
+        return real['open'](path, *a, **k)
+    monkeypatch.setattr(builtins, 'open', spy_open)
+    monkeypatch.setattr(pd, 'read_parquet', lambda p, *a, **k: opened.append(str(p)) or real['rp'](p, *a, **k))
+    monkeypatch.setattr(pd, 'read_csv', lambda p, *a, **k: opened.append(str(p)) or real['rc'](p, *a, **k))
+    state = M.load_a3_inputs(n_perm=19)
+    a3 = M.part_a3(19, state)
+    a4 = M.part_a4(state, n_draws=2)
+    files = [p for p in opened if not p.startswith(('/proc', '/sys', '/dev'))]
+    assert files and all(p.startswith(str(prat_tables['root'])) or p.startswith(str(root)) for p in files
+                         if not p.endswith('.py') and '/site-packages/' not in p and '/hong2p/' not in p), files
+    assert not any(m in p.lower() for p in opened for m in HELD_MARKERS), opened
+    agr = pd.read_csv(prat_tables['out'] / 'a3_agreement.csv')
+    one = agr[(agr['blur_um'] == 4.0) & (agr['session'] == M.SESSIONS[0]) & (agr['pair'] == a3['pairs'][0])]
+    assert one.groupby('group').size().to_dict() == {'across brains': 5, 'across sides': 3}   # pairs and their mean
+    assert agr['caveats'].str.contains('male brain').all()
+    assert set(a3['agreement']) == {'across brains', 'across sides'}
+    pw = pd.read_csv(prat_tables['out'] / 'a4_power.csv')
+    assert set(pw['scoring']) == {'slabs', 'whole'} and set(pw['kind']) == {'across brains', 'across sides', 'own calyx'}
+    assert a4['reliabilities'] == {'paa-ms': 0.59, 'pa-ms': 0.69} and a4['decisive_reliability'] == 0.59
+    assert set(a4['decisive_power']) == {'slabs', 'whole'} and a4['replan'] == M.REPLAN
+    assert a4['scoring'] in ('slabs', 'whole', None) and pw['caveats'].str.contains('no PID').all()
+
+
+def test_a3_agreement_planted():
+    st = _planted_state(n_perm=199)
+    agr = M.a3_agreement(st)
+    m = agr[(agr['truth'] == 'mean') & (agr['blur_um'] == 2.0)].set_index('group')
+    assert m.loc['across brains', 'r'] > 0.9 and m.loc['across brains', 'r'] > m.loc['across brains', 'null_p95']
+    assert m.loc['across brains', 'n_ordered_pairs'] == 4 and m.loc['across sides', 'n_ordered_pairs'] == 2
+    own = M.a3_agreement(_planted_state(n_perm=199, shared_layout=False))
+    o = own[(own['truth'] == 'mean') & (own['blur_um'] == 2.0)].set_index('group')
+    assert o.loc['across brains', 'r'] < m.loc['across brains', 'r']
+
+
+def test_measured_pair_grid_order_matched():
+    """Sets S and H: each presentation minus the all-solvent blocks' presentations at its position."""
+    blocks = [[('pfo', None)] * 3, [('pfo', None), ('pa', -3.0), ('ms', -3.0)], [('pfo', None), ('ms', -3.0), ('pa', -3.0)],
+              [('pfo', None)] * 3]
+    rows = []
+    for b, blk in enumerate(blocks):
+        for p_, (o, c) in enumerate(blk, start=1):
+            sv = o == 'pfo'
+            rows.append(dict(block=b, position=p_, odor=M.SOLVENT if sv else o, log10_conc=np.nan if sv else c,
+                             is_solvent=sv, stim=M.SOLVENT if sv else M.stim_label((o, c))))
+    fr = pd.DataFrame(rows)
+    yy, xx = np.mgrid[:48, :48]
+    mask = np.zeros((48, 48), bool)
+    mask[4:44, 4:44] = True
+    blob_a = np.exp(-((yy - 12) ** 2 + (xx - 12) ** 2) / 50.0)
+    blob_b = np.exp(-((yy - 36) ** 2 + (xx - 36) ** 2) / 50.0)
+    # each position has its own baseline map (0.1 x position, flat): order-matched removes it exactly
+    stack = np.stack([0.1 * r.position + np.zeros((48, 48)) + (0.0 if r.is_solvent else 0.3 + (blob_a if r.odor == 'pa' else blob_b))
+                      for r in fr.itertuples()])
+    g = M.measured_pair_grid(stack, fr, mask, 'pa @ -3', 'ms @ -3', solvent='order_matched')
+    assert g['mean_a'] == pytest.approx((0.3 + blob_a)[mask].mean())
+    assert g['mean_b'] == pytest.approx((0.3 + blob_b)[mask].mean())
+    G = g['grid'].reshape(12, 12)
+    assert G[2, 2] > 0 > G[9, 9]
+    # the carrying readings' names are accepted
+    assert M.measured_pair_grid(stack, fr, mask, 'pa @ -3', 'ms @ -3', solvent='minus_recording') is not None
+
+
+def test_matched_label_set_h():
+    fr = pd.DataFrame(dict(odor=['2h', '2h', 'ma', M.SOLVENT], log10_conc=[-6.194, -4.097, -7.248, np.nan],
+                           is_solvent=[False, False, False, True]))
+    fr['stim'] = [M.SOLVENT if s else M.stim_label((o, c)) for o, c, s in zip(fr.odor, fr.log10_conc, fr.is_solvent)]
+    assert M._matched_label(fr, ('2h', -6.0), exact=False) == '2h @ -6.194'
+    assert M._matched_label(fr, ('ma', -7.0), exact=False) == 'ma @ -7.248'
+    assert M._matched_label(fr, ('2h', -6.0), exact=True) is None
+    assert M._matched_label(fr, ('farn', -2.0), exact=False) is None
+
+
+def test_move_withheld(tmp_path):
+    """The 2026-11-15 outputs that hold maps, agreements or powers are moved, not deleted; the PN-stage files, a3_inputs
+    and a3_sessions stay (a3_sessions copied beside); a file written after the re-plan is not touched."""
+    import os
+    old = ['a3_maps.csv', 'a3_agreement.csv', 'a3_anatomy.csv', 'a3_pred_grids.npz', 'a3_summary.json', 'a4_power.csv',
+           'a4_power_draws.csv.gz', 'a4_w3_pairs.json']
+    stay = ['a3_pn_rates.csv', 'a3_pn_rates_total.csv', 'a3_pn_rates_legacy_time.csv', 'a3_inputs.csv',
+            'a3_sessions.csv', 'b_ratios.csv']
+    t_old = time.mktime(time.strptime('2026-11-15 14:16', '%Y-%m-%d %H:%M'))
+    for f in old + stay:
+        (tmp_path / f).write_text(f)
+        os.utime(tmp_path / f, (t_old, t_old))
+    (tmp_path / 'a4_new.csv').write_text('new')                   # now: after the re-plan
+    moved = M.move_withheld(tmp_path)
+    assert sorted(moved) == sorted(old)
+    w = tmp_path / M.WITHHELD_DIR
+    assert all((w / f).read_text() == f for f in old) and not any((tmp_path / f).exists() for f in old)
+    assert all((tmp_path / f).exists() for f in stay) and (w / 'a3_sessions.csv').exists()
+    assert (tmp_path / 'a4_new.csv').exists() and not (w / 'a4_new.csv').exists()
+    assert M.move_withheld(tmp_path) == []                         # a second call moves nothing
+
+
+def test_module_code_names_no_held_data():
+    """E100's code (docstrings and comments aside) names neither the held tables nor FlyWire, FAFB or BANC, nor E79's
+    readers of them, nor the withheld folder outside move_withheld; its calyces are the three of the re-plan."""
+    import ast
+    import inspect
+    tree = ast.parse(inspect.getsource(M))
+    docs = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.FunctionDef, ast.ClassDef)) and ast.get_docstring(node) is not None:
+            docs.add(id(node.body[0].value))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in docs:
+            low = node.value.lower()
+            assert not any(m in low for m in ('claude_apl_modeling', 'flywire_', 'banc_', '2024-09-13', 'fafb')), \
+                node.value
+        if isinstance(node, (ast.Name, ast.Attribute)):
+            name = node.id if isinstance(node, ast.Name) else node.attr
+            assert name not in ('YANG_APL', 'load_calyces', '_apl_table', 'axis_checks', 'write_provenance',
+                                'PRAT_PN_SYNAPSES', 'PRAT_PN_KC', '_prat_boutons'), name
+    assert set(M.CALYCES) == {'hemibrain_R', 'malecns_L', 'malecns_R'}

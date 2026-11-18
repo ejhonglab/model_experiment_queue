@@ -39,10 +39,13 @@ Definitions (the entry's, fixed before any reading; E98's hold where not changed
   are, otherwise not decided (`w1_verdict`). Ratios over farn at 10^-2 (exact input) are given beside and decide nothing.
 - W2 (set S), ms over pa and paa over pa, all at 10^-3: decided only with W2_MIN_FLIES (4) or more flies, otherwise
   described (`w2_verdict`).
-- W3 (the maps against the connectome), on the pairs A4 keeps (power at least A4_POWER_MIN, 0.8): a pair passes at a share
-  s if the prediction exceeds the label-permuted null's 95th percentile (W3_NULL_PCT) in more than s of the recordings in at
-  least W3_MIN_CALYCES (5) of the 8 calyces. W3 passes if at least W3_MIN_PAIRS (3) pairs pass at W3_PASS_SHARE (1/2); it
-  fails if no pair passes at W3_FAIL_SHARE (1/4); otherwise not decided (`w3_verdict`).
+- W3 (the maps against the connectome; the calyx rule of the block "(D, re-planned 2026-11-17 16:45)", which replaces
+  "at least 5 of the 8 calyces"), on the pairs and the scoring A4 keeps (`a4_rule`): a pair passes at a share s if the
+  prediction exceeds the label-permuted null's 95th percentile (W3_NULL_PCT) in more than s of the recordings in the
+  hemibrain's calyx and in at least one of the male CNS's two (`w3_pair_passes`). W3 passes if at least W3_MIN_PAIRS (3)
+  pairs pass at W3_PASS_SHARE (1/2); it fails if no pair passes at W3_FAIL_SHARE (1/4); otherwise not decided
+  (`w3_verdict`); 'no pair' when A4 keeps no scoring (outcome (i)). It passes or fails only if it does so under every
+  session's estimate (`w3_over_estimates`).
 
 Parts (CLI `--part`):
 - 0, the identities; a failure stops the experiment and is reported (identity.json). Those that need no new recording,
@@ -56,10 +59,13 @@ Parts (CLI `--part`):
   by viki's copy, read here); A2, the family at the stimuli of sets W, S and H that have ORN input, read from E98's B1
   (`read_e98_b1`): APL's window and pre-odor means, its evoked activity and the KCs' response rates with APL on and acutely
   off, on the eight wirings, under each session's estimate (a2_family.csv); A3, the connectome-predicted maps (E79's
-  bouton-driven prediction with C2's PN stage at the weak stimuli, eight calyces) for A3_PAIRS, with the anatomy-alone and
-  label-permuted controls (a3_pn_rates.csv, a3_inputs.csv, a3_maps.csv, a3_agreement.csv, a3_anatomy.csv); A4, the power
-  of W3 from the 2021 maps' reliability (a4_power.csv, a4_power_by_calyx.csv; a pair under A4_POWER_MIN leaves W3's list,
-  a4_w3_pairs.json).
+  bouton-driven prediction with C2's PN stage at the weak stimuli) for A3_PAIRS on the three calyces of the re-plan,
+  with the anatomy-alone control and the label-permuted null, and the agreement of the predicted difference maps across
+  the two brains (four ordered pairs of calyces) and across the male CNS's two sides, each against the null
+  (a3_calyces.csv, a3_axis_checks.csv, a3_official_roi_outline.csv, a3_maps.csv, a3_agreement.csv, a3_anatomy.csv,
+  a3_sessions.csv, a3_summary.json; the PN stage a3_pn_rates.csv and a3_inputs.csv kept from 2026-11-15); A4, the
+  power of W3 from the 2021 maps' reliability under two scorings and the rule for which W3 is read on (a4_power.csv,
+  a4_power_by_calyx.csv, a4_w3_pairs.json).
 - B (`part_b`; Yang released her processed recordings 2026-11-15 17:12): per recording and stimulus the calyx response
   (CALYX_RESPONSE: Yang's own roi_peak_dff; the calyx mean of her peak map inside the outline beside) raw, minus the
   recording's solvent, minus the block's solvent and, where the design has blocks of only solvent (sets S and H), E98's
@@ -74,9 +80,44 @@ Parts (CLI `--part`):
   whether the solvent's map is the common map (its r with the common map against the odors' maps'); the image-y
   centroid at matched magnitude (`centroid_offsets`); the common map's share at the weak stimuli against the panel's
   concentrations (`stimulus_class`), per fly with E79's bootstrap (c_*.csv, c_summary.json).
-- D (after Yang's answer): E79's analysis 4 on A3's pairs (A4's list), the orientation fixed as far as Yang has given it
-  (posterior view, dorsal up, "L" the fly's right; both medial edges until she answers: D_FLIPS), slabs within
-  D_SLAB_WITHIN_UM of the plane's nominal depth; set S's pa minus ms at 10^-3 beside.
+- D (re-planned 2026-11-17 16:45; `part_d`): E79's analysis 4 on set W's recordings, on the pairs and the scoring A4
+  keeps, each recording against each of the three calyces, the calyx mirrored into the recording's side, under each
+  session's estimate; the orientation fixed as far as Yang has given it (posterior view, dorsal up, "L" the fly's
+  right; both medial edges until she answers: D_FLIPS); beside, deciding nothing: set H's recordings with both stimuli
+  of a pair, set S's pa minus ms at 10^-3, E79's two 2021 differences through the same three calyces (and E79's own
+  analysis 4 on them, `E79_connectome_maps.run_pratyush`) (d_scores.csv, d_pair_shares.csv, d_inputs.csv, d_w3.json,
+  d_summary.json, d_e79_analysis4/; W3 into verdict.json).
+
+The maps against the connectome (A3, A4, D, W3) since the re-plan of 2026-11-17 16:45 (the entry's block "(D,
+re-planned)"; CLAUDE.md, "Connectome data"): three calyces of Pratyush's pipeline, the hemibrain's right (olfsysm's
+pyolfsysm/data/from_pratyush/2025-12-05, the tables the model's loader reads) and the male CNS's left and right
+(data/Male-CNS_Tom/, his tables of 2026-10-25), from E79's `pratyush_calyces` by one rule and with no ROI rule: the
+claws are E97's counted claws (5 or more synapses from one uniglomerular PN, roi='none' in both brains, which gives the
+hemibrain 3 claws more than the model's wiring, CLAW_RULE), the boutons those carrying a counted claw weighted by their
+release sites, APL's synapses those with these claws and boutons (both directions), which draw each slab's outline and
+the posterior edge; E79's neighbour axis check must pass (a failure stops A3, A4 and D). Nothing of Yang's own Claude's
+tables, FlyWire / FAFB or BANC is read (E79's readers of them refuse), and nothing of the A3 and A4 outputs of
+2026-11-15 (moved, not deleted, to withheld_2026-11-15/ by `move_withheld`; a3_pn_rates files, a3_inputs.csv and
+a3_sessions.csv stay, a copy of the old a3_sessions.csv kept there). Every table of A3, A4 and D says (columns claw_rule
+and caveats, `caveats_text`): the male CNS is a male brain; its tables hold synapses at a postsynaptic confidence of 0.5
+or more and the hemibrain's from 0.28; no PID was recorded in set W; Yang has not confirmed the quality of every set;
+and the claw rule.
+- A3 (`part_a3`): per calyx the bouton-driven predicted difference maps and their SD against the label-permuted null
+  (N_PERM permutations of the glomerulus labels of the rate vector per calyx), r with the anatomy-alone map (the
+  unweighted synapses between PNs and APL); the agreement of the whole-calyx difference maps between calyces
+  (`a3_agreement`) for each ordered pair (truth's true labels against the scored calyx's permutations), and the mean over
+  the four across the two brains and over the two across the male CNS's sides, each against the same mean in the
+  permutations.
+- A4 (`part_a4`): a simulated recording is a truth calyx's predicted map at a slab within D_SLAB_WITHIN_UM of a nominal
+  plane depth (A4_PLANE_DEPTHS_UM, set W's planes) at one of E79's blurs, with noise at the 2021 maps' reliability (the
+  median split-half r of pa minus ms and paa minus ms over the 12 recordings, `measured_reliability`; the lower end
+  decides), scored against another calyx's prediction under two scorings: 'slabs' (its slabs within D_SLAB_WITHIN_UM of
+  the nominal depth) and 'whole' (its whole calyx projected along the anterior-posterior axis); the truth is a slab in
+  both. The power that decides is across the two brains (the hemibrain scored with a male CNS side as the truth, and
+  each male CNS side scored with the hemibrain as the truth; pooled over the four ordered pairs and the draws, the
+  lowest over the session estimates); across the male CNS's sides, own calyx and half the response are beside. The
+  rule (`a4_rule`): W3 is read on the slabs if at least three pairs have power 0.8 or more there; if not, on the
+  whole-calyx projection if at least three pairs have it there; otherwise W3 reads 'no pair'.
 - E (only if Yang has set P processed or agrees to its processing): APL's calyx response to each of the 16 panel odors in
   one fly against the family's profile and E98's proportional alternatives. A lead, no verdict.
 - score (`score`): the verdict (W1, W2, W3; verdict.json), fixed above, from part B and B1's runs on the eight wirings
@@ -116,21 +157,47 @@ Deviations from the entry (each also in the note):
 - `match_b1` matched B1 labels by session alone until 2026-11-15 18:00, which gave kiwi-control's control panel and
   megamat's own panel the diagnostics' column (A2 had not run).
 - A2 runs nothing: it reads E98's B1 (the entry allows either; the task given to this script says so).
-- A4's "true wiring-based map" is another calyx's predicted map (the seven other calyces; the model's own hemibrain boutons
-  and hemibrain R are not truths for each other), at a slab within D_SLAB_WITHIN_UM of a nominal plane depth drawn from
-  A4_PLANE_DEPTHS_UM and at a blur drawn from E79's three, plus independent noise per grid cell at the reliability of the
-  2021 set's measured difference maps (the median split-half r of E79's pa minus ms and paa minus ms, read from
-  connectome_measured.csv: 0.59 to 0.69), the scored map being the mean of A4_N_PRESENTATIONS (2) presentations as in 2021.
-  Power is the share of simulated recordings, pooled over scored calyces, truths and draws, whose best score over slabs,
-  blurs and D_FLIPS exceeds the null's 95th percentile of the permutations' maxima over the same search; the lower end of
-  the reliability range decides (a4_power.csv gives both, and the share per scored calyx). Beside, as a sensitivity that
-  decides nothing: the reliability of a map with half the response at the same noise (`scaled_reliability`), since set
-  W's calyx responses are 0.13 to 0.64 of paa at 10^-3 (the planner's probes). Truth and prediction take the
-  same session's input estimate, and a pair's power is its lowest over the three sessions' estimates (the entry fixes no
-  rule over estimates for W3; part D will score each estimate apart, and W3 passes or fails only if it does so under
-  every estimate, otherwise it is not decided, as W1's outside classes).
-  As a control that decides nothing, each calyx is also scored against
-  its own prediction plus noise (`power_own_calyx`): the power if every fly's calyx were wired like the scored one.
+- A4's "true wiring-based map" is another calyx's predicted map, at a slab within D_SLAB_WITHIN_UM of a nominal plane
+  depth drawn from A4_PLANE_DEPTHS_UM and at a blur drawn from E79's three, plus independent noise per grid cell at the
+  reliability of the 2021 set's measured difference maps (the median split-half r of pa minus ms and paa minus ms: 0.59
+  to 0.69), the scored map being the mean of A4_N_PRESENTATIONS (2) presentations as in 2021. Power is the share of
+  simulated recordings whose best score over the scoring's slabs (or the whole calyx), blurs and D_FLIPS exceeds the
+  null's 95th percentile of the permutations' maxima over the same search; the lower end of the reliability range
+  decides. Beside, as a sensitivity that decides nothing: the reliability of a map with half the response at the same
+  noise (`scaled_reliability`), since set W's calyx responses are 0.13 to 0.64 of paa at 10^-3 (the planner's probes).
+  Truth and prediction take the same session's input estimate, and a pair's power is its lowest over the three
+  sessions' estimates; part D scores each estimate apart, and W3 passes or fails only if it does so under every
+  estimate. As a control that decides nothing, each calyx is also scored against its own prediction plus noise ('own
+  calyx'): the power if every fly's calyx were wired like the scored one.
+
+Readings of the re-plan of 2026-11-17 where the block leaves a choice (each also in the note):
+- A4_N_DRAWS is 100 noise draws per truth calyx and reliability (20 with the eight calyces), so that the decisive power
+  pools 400 simulated recordings per pair, estimate, reliability and scoring (the four ordered pairs across the brains);
+  the eight calyces' version pooled 1,120.
+- The decisive power pools the four ordered pairs across the brains and the draws, as the code pooled scored calyces
+  and truths; each ordered pair's share is in a4_power_by_calyx.csv, and W3's calyx rule on the simulated recordings
+  (each scored calyx's share with the truth in the other brain) is beside in a4_power.csv, deciding nothing.
+- The 2021 maps' reliability is read from the recordings (E79's `measured_maps`), not from E79's connectome_measured.csv,
+  which lies in E79's analysis-4 folder (withheld with the held tables); the numbers are the same.
+- A3's agreement across the brains is given for four ordered pairs: the r of two maps is symmetric, so the two orders of
+  a pair differ only in whose labels the null permutes (the scored calyx's, as part D permutes the calyx and not the
+  recording). It is read on the whole-calyx maps at E79's three blurs, as before.
+- Part D scores every set W recording on all five pairs under both scorings; the rows of A4's kept pairs under A4's
+  scoring decide W3 (`decides`), the others are described, and W3 on all five pairs under each scoring is beside in
+  d_w3.json, deciding nothing.
+- The measured maps are each set's carrying reading (CARRYING_READING): set W minus the recording's solvent, sets S and H
+  E98's order-matched baseline (`measured_pair_grid`). W3 counts recordings, as the block's words do, not flies.
+- Set H holds no pair's stimuli at their concentrations: a pair's stimulus is matched to set H's stimulus of the same
+  odor nearest in concentration within one log unit (`concentration_match`, Tom's rule), and the prediction is the
+  pair's (the same input by that rule, "the substituted inputs" of the verdict); only 2h - ma has both odors in set H.
+- Set S's pa minus ms and E79's 2021 differences are predicted with the panel's own input (A3's columns pa, ms, paa;
+  paa at 10^-4 for the flies' 10^-3), one estimate (PANEL_ESTIMATE), as E79 had it; the 2021 maps are E79's
+  `measured_maps` (matched concentrations, every paraffin oil presentation as the baseline) at the 2021 plane, 18 um.
+  E79's own analysis 4 on them (`run_pratyush`, its full search over every slab and the four flips) takes A3's PN rates
+  (pyolfsysm's current step times) in place of E79's cache (at most 0.021 Hz apart).
+- Yang's "L" is read as the fly's right for the 2021 recordings too; with both medial edges searched it changes no score.
+- The new A3 rewrites a3_sessions.csv, which the block says stays: a copy of the 2026-11-15 file is kept in
+  withheld_2026-11-15/ beside the moved ones.
 - A3 reads the PN stage with pyolfsysm's current step times (olfsysm 17cef71 on), as E90 does; E79's cached panel rates
   were read with the earlier ones, which put the 0-0.5 s window a fraction of a step later, so its evoked rates differ
   from A3's by up to 0.021 Hz (0.3 %); part 0 checks both readings.
@@ -139,16 +206,18 @@ Deviations from the entry (each also in the note):
   are kept as separate estimates. The PN stage runs on the 36 glomeruli of the panel's input, as everywhere; the weak
   odors' most-driven glomeruli (VM5d, DM4, VM2, DC3, VM5v, VM7d) are among them.
 - A3's "contrast against the label-permuted null": per calyx, pair and session estimate, the SD over grid cells of the
-  predicted difference map (each odor's map over its mean inside the outline, as E79) and the agreement between calyces of
-  the predicted difference maps (mean Pearson r over calyx pairs, the left calyces mirrored), each against the same in
-  N_PERM permutations of the glomerulus labels; the anatomy-alone control is the r of each odor's predicted map with the
-  unweighted PN-to-APL synapse map (which predicts no difference between odors).
+  predicted difference map (each odor's map over its mean inside the outline, as E79) against the same in N_PERM
+  permutations of the glomerulus labels; the agreement between calyces as above (`a3_agreement`); the anatomy-alone
+  control is the r of each odor's predicted map with the unweighted PN-to-APL synapse map (which predicts no difference
+  between odors).
 
 CLI (from the repository root):
     ./venv/bin/python -u -m experiments.E100_apl_weak_odors --part 0 --no-recordings
     OMP_NUM_THREADS=8 OMP_THREAD_LIMIT=8 PYTHONUNBUFFERED=1 nice -n 10 ./venv/bin/python -u \\
         -m experiments.E100_apl_weak_odors --part A3
     ./venv/bin/python -u -m experiments.E100_apl_weak_odors --part A4
+    OMP_NUM_THREADS=1 OMP_THREAD_LIMIT=1 PYTHONUNBUFFERED=1 nice -n 10 ./venv/bin/python -u \\
+        -m experiments.E100_apl_weak_odors --part A3A4D    # the re-plan: A3, A4 and part D on the three calyces
     ./venv/bin/python -u -m experiments.E100_apl_weak_odors --part A2     # E98's B1 (and E101's A3) on eight wirings
     ./venv/bin/python -u -m experiments.E100_apl_weak_odors --part B
     ./venv/bin/python -u -m experiments.E100_apl_weak_odors --part C
@@ -214,7 +283,8 @@ A3_PAIRS: Tuple[Tuple[Stim, Stim], ...] = ((('2h', -6.0), ('ma', -7.0)), (('2h',
                                            (('2-but', -6.0), ('ma', -7.0)))
 N_PERM = 1000                            # E79's label permutations
 A4_POWER_MIN = 0.8
-A4_N_DRAWS = 20                          # noise draws per (scored calyx, truth calyx, reliability)
+A4_N_DRAWS = 100                         # noise draws per truth calyx and reliability (20 with the eight calyces
+                                         # before 2026-11-17; three calyces since, the readings in the docstring)
 A4_N_PRESENTATIONS = 2                   # presentations averaged in a scored map (the 2021 set's)
 A4_PLANE_DEPTHS_UM = (12.0, 15.0, 18.0, 21.0, 24.0)    # set W's planes (the inventory)
 A4_RESPONSE_SCALE = 0.5                # A4's sensitivity (described, decides nothing): the reliability of a map whose
@@ -222,10 +292,30 @@ A4_RESPONSE_SCALE = 0.5                # A4's sensitivity (described, decides no
 W3_NULL_PCT = 95.0
 W3_PASS_SHARE = 0.5
 W3_FAIL_SHARE = 0.25
-W3_MIN_CALYCES = 5                       # of the 8
 W3_MIN_PAIRS = 3
 D_FLIPS = ('none', 'horizontal')         # posterior view, dorsal up; both medial edges until Yang answers
 D_SLAB_WITHIN_UM = 6.0
+
+# part D re-planned 2026-11-17 16:45 (the entry's block "(D, re-planned)"): three calyces of Pratyush's pipeline, by one
+# rule with no ROI rule (E79's `pratyush_calyces`); W3 needs the hemibrain's calyx and at least one of the male CNS's two
+REPLAN = '2026-11-17 16:45'
+PRAT_CALYCES = ('hemibrain_R', 'malecns_L', 'malecns_R')
+CALYCES = PRAT_CALYCES
+HEMIBRAIN_CALYX = 'hemibrain_R'
+MALECNS_CALYCES = ('malecns_L', 'malecns_R')
+SCORINGS = ('slabs', 'whole')            # A4's two scorings of E79's analysis 4 (the truth a slab in both)
+CLAW_RULE = ("roi='none' in both brains (E97's counted claws: 5 or more synapses from one uniglomerular PN; the "
+             "hemibrain's 9,870 claws differ from the model's wiring, 9,867 under the official ROI, by 3)")
+CALYX_TABLE_FILES = {'summary': 'a3_calyces.csv', 'axes': 'a3_axis_checks.csv',
+                     'official_roi': 'a3_official_roi_outline.csv'}
+WITHHELD_DIR = 'withheld_2026-11-15'
+WITHHELD_FILES = ('a3_maps.csv', 'a3_agreement.csv', 'a3_anatomy.csv', 'a3_pred_grids.npz', 'a3_summary.json')
+D_SET_S_PAIR: Tuple[Stim, Stim] = (('pa', -3.0), ('ms', -3.0))   # beside: set S's pa minus ms, both at 10^-3
+D_SET_S_PAIR_COLUMNS = ('pa', 'ms')      # the panel's own input (A3's rates columns), as E79 had it
+D_2021_DIFFS = ('pa-ms', 'paa-ms')       # beside: E79's own two differences in the 12 recordings of 2021
+D_2021_PLANE_UM = 18.0                   # the 2021 set's plane (data/yang_apl_calyx_maps/2021_APL_18um)
+PANEL_ESTIMATE = 'apl16'                 # the session label of the panel's own input (the beside items)
+D_E79_DIR = 'd_e79_analysis4'            # E79's analysis 4 on the 2021 maps through the three calyces (run_pratyush)
 
 # viki's copy (data/yang_apl_recordings/, README.md there): recordings.csv (one row per recording; set, stem, plane_depth_um,
 # pulse_s, nblock, nstim, peak_map_copied, shared_path, ...) and per recording `<stem>.yaml` (odor_pin, odor_stim_seq, nblock,
@@ -277,13 +367,28 @@ def _read_json(path: Path) -> Optional[dict]:
     return json.loads(path.read_text()) if path.exists() else None
 
 
-def provenance(part: str, **extra) -> None:
-    """provenance_<part>.json: the part's run record (commits, host, time, settings), earlier runs kept."""
+def provenance(part: str, inputs: Optional[Dict[str, Path]] = None, **extra) -> None:
+    """provenance_<part>.json: the part's run record (commits, host, time, settings, and `inputs` with their sha256),
+    earlier runs kept."""
     path = out_dir() / f'provenance_{part}.json'
     d = _read_json(path) or dict(part=part, script=H.script_path(__file__))
-    d.setdefault('runs', []).append(dict(commits=dict(H.code_commits()), host=_host(),
-                                         time=time.strftime('%Y-%m-%d %H:%M'), **extra))
+    run = dict(commits=dict(H.code_commits()), host=_host(), time=time.strftime('%Y-%m-%d %H:%M'), **extra)
+    if inputs:
+        run['inputs'] = {k: dict(path=str(v), sha256=_sha256(Path(v)) if Path(v).exists() else None)
+                         for k, v in inputs.items()}
+    d.setdefault('runs', []).append(run)
     _write_json(path, d)
+
+
+def connectome_inputs() -> Dict[str, Path]:
+    """The inputs of A3, A4 and D: Pratyush's tables (E79's `prat_inputs`; the hemibrain's of olfsysm's
+    pyolfsysm/data/from_pratyush/2025-12-05 and the male CNS's of data/Male-CNS_Tom/, nothing else), A3's cached PN stage
+    (a3_pn_rates.csv, a3_inputs.csv) and the 2021 maps' tables (data/yang_apl_calyx_maps/)."""
+    CM, DS = _e79()
+    out = {f'pratyush/{k}': v for k, v in CM.prat_inputs().items()}
+    out.update({'a3_pn_rates': out_dir() / 'a3_pn_rates.csv', 'a3_inputs': out_dir() / 'a3_inputs.csv',
+                'maps_2021/recordings': DS.ACM.DATA / 'recordings.csv', 'maps_2021/frames': DS.ACM.DATA / 'frames.csv'})
+    return out
 
 
 def _repoint(mod, names: Sequence[str], shared: Path) -> Optional[Path]:
@@ -313,15 +418,12 @@ def _ds():
 
 def _e79():
     """E79's two modules (E79_connectome_maps, E79_apl_calyx_constraints), with their shared-directory paths repointed to
-    `H.shared_dir()` on hosts where the tensor mount is not /mnt/tensor, the path they were written with (hal mounts it
-    at /local/tensor); Yang's Claude's connectome tables (Tom/claude_APL_modeling_YZ4TC, beside the shared directory)
-    repointed the same way, without looking at them (parts A3, A4 and D only; on hold since 2026-11-15 15:35)."""
+    `H.shared_dir()` on hosts where the tensor mount is not the one they were written with. Parts A3, A4 and D read
+    E79's three calyces of Pratyush's tables only (`pratyush_calyces`); E79's readers of the held tables refuse
+    (HeldTablesError, CLAUDE.md "Connectome data")."""
     from experiments import E79_connectome_maps as CM
     DS = _ds()
-    shared = H.shared_dir()
-    old = _repoint(CM, ('OUT', 'C2_ON_COUNTS', 'COMMON_ERROR', 'ORN_INPUT'), shared)
-    if old is not None:
-        CM.YANG_APL = shared.parent / Path(CM.YANG_APL).relative_to(old.parent)
+    _repoint(CM, ('OUT', 'C2_ON_COUNTS', 'COMMON_ERROR', 'ORN_INPUT', 'PRAT_OUT'), H.shared_dir())
     return CM, DS
 
 
@@ -847,26 +949,21 @@ def w2_verdict(comparison: str, n_flies: int, min_flies: int = W2_MIN_FLIES) -> 
     return comparison if int(n_flies) >= min_flies else 'described'
 
 
-def w3_pair_calyces(exceed: pd.DataFrame, share: float) -> int:
-    """The number of calyces in which the prediction exceeds the null's 95th percentile in more than `share` of the
-    recordings (`exceed`: one row per calyx and recording, column exceeds, bool)."""
-    sh = exceed.groupby('calyx')['exceeds'].mean()
-    return int((sh > share).sum())
-
-
 def w3_verdict(exceed: pd.DataFrame, pairs: Optional[Sequence[str]] = None) -> dict:
-    """W3 from one row per pair, calyx and recording (columns pair, calyx, recording, exceeds) on the pairs A4 kept
-    (`pairs`, default every pair in `exceed`): 'passes' if at least W3_MIN_PAIRS pairs pass at W3_PASS_SHARE in at least
-    W3_MIN_CALYCES calyces, 'fails' if no pair does at W3_FAIL_SHARE, else 'not decided' ('no pair' when A4 kept none);
-    with the per-pair counts."""
+    """W3 (the re-plan's calyx rule) from one row per pair, calyx and recording (columns pair, calyx, recording, exceeds)
+    on the pairs A4 kept (`pairs`, default every pair in `exceed`): a pair passes at a share s if the prediction exceeds
+    the null's 95th percentile in more than s of the recordings in the hemibrain's calyx and in at least one of the male
+    CNS's two (`w3_pair_passes`); 'passes' if at least W3_MIN_PAIRS pairs pass at W3_PASS_SHARE, 'fails' if no pair
+    passes at W3_FAIL_SHARE, else 'not decided' ('no pair' when A4 kept none); with the per-pair shares."""
     pairs = sorted(exceed['pair'].unique()) if pairs is None else list(pairs)
     rows = []
     for p in pairs:
-        e = exceed[exceed['pair'] == p]
-        rows.append(dict(pair=p, n_calyces_over_half=w3_pair_calyces(e, W3_PASS_SHARE),
-                         n_calyces_over_quarter=w3_pair_calyces(e, W3_FAIL_SHARE)))
-    n_pass = sum(r['n_calyces_over_half'] >= W3_MIN_CALYCES for r in rows)
-    n_quarter = sum(r['n_calyces_over_quarter'] >= W3_MIN_CALYCES for r in rows)
+        sh = w3_pair_shares(exceed[exceed['pair'] == p]) if len(exceed) else pd.Series(dtype=float)
+        rows.append(dict(pair=p, **{f'share_{c}': float(sh.get(c, np.nan)) for c in CALYCES},
+                         passes_half=w3_pair_passes(sh, W3_PASS_SHARE),
+                         passes_quarter=w3_pair_passes(sh, W3_FAIL_SHARE)))
+    n_pass = sum(r['passes_half'] for r in rows)
+    n_quarter = sum(r['passes_quarter'] for r in rows)
     if not pairs:
         verdict = 'no pair'           # A4 left every pair out: W3 can neither pass nor fail
     else:
@@ -1066,7 +1163,7 @@ def pn_rates_extended(stims: Optional[Sequence[Stim]] = None, rebuild: bool = Fa
     -0.5-0 s mean) on the extended input (`extended_input` of `stims`, default `a3_stimuli()`): glomerulus x column evoked
     rates (the 16 panel odors by abbreviation, the added columns by their estimate labels) and the added columns' table;
     cached in a3_pn_rates.csv (with a3_pn_rates_total.csv) and a3_inputs.csv in the results folder. The PN stage does not
-    depend on the wiring or on APL, so one run serves the eight calyces (C2's real-wiring fit, as E79)."""
+    depend on the wiring or on APL, so one run serves every calyx (C2's real-wiring fit, as E79)."""
     path, ipath = out_dir() / 'a3_pn_rates.csv', out_dir() / 'a3_inputs.csv'
     if path.exists() and ipath.exists() and not rebuild:
         return pd.read_csv(path, index_col=0), pd.read_csv(ipath)
@@ -1195,10 +1292,6 @@ def calyx_grids(calyx: str, parts: dict, rates: pd.DataFrame, n_perm: int = N_PE
     return dict(names=names, perms=perms, slabs=slabs, side=CM.calyx_side(calyx), seed=seed)
 
 
-CALYCES = ('flywire_L', 'flywire_R', 'malecns_L', 'malecns_R', 'banc_L', 'banc_R', 'hemibrain_R', 'model_hemibrain_R')
-DUPLICATE_CALYCES = frozenset({'hemibrain_R', 'model_hemibrain_R'})   # the same fly's calyx, two bouton segmentations
-
-
 def _wt(rates: pd.DataFrame, names: Sequence[str], cols: Sequence[str]) -> np.ndarray:
     return rates.reindex(list(names)).fillna(0.0)[list(cols)].to_numpy(dtype=float)
 
@@ -1208,31 +1301,83 @@ def _masked_r(x: np.ndarray, y: np.ndarray, inside: np.ndarray) -> float:
     return float(CM.masked_pearson(np.asarray(x, float)[None, :], np.asarray(y, float), inside)[0])
 
 
-def load_a3_inputs(n_perm: int = N_PERM) -> dict:
-    """The calyces (E79's `load_calyces`), the extended PN rates and A3's inputs table, and each calyx's grids."""
-    CM, _ = _e79()
+def load_a3_inputs(n_perm: int = N_PERM, calyces: Optional[Dict[str, dict]] = None, write: bool = True) -> dict:
+    """The three calyces (`prat_calyces`: E79's `pratyush_calyces` after its strict neighbour axis check; or `calyces`
+    as given), the extended PN rates and A3's inputs table (A3's cached PN stage, kept from 2026-11-15), and each
+    calyx's grids (`calyx_grids`)."""
     rates, inputs = pn_rates_extended()
-    calyces = CM.load_calyces()
+    tabs: Dict[str, pd.DataFrame] = {}
+    if calyces is None:
+        calyces, tabs = prat_calyces(write=write)
     missing = sorted(set(CALYCES) - set(calyces))
     if missing:
-        raise RuntimeError(f'calyces missing from E79: {missing}')
+        raise RuntimeError(f'calyces missing: {missing}')
     t0 = time.time()
     grids = {}
     for c in CALYCES:
         grids[c] = calyx_grids(c, calyces[c], rates, n_perm)
         print(f'{time.strftime("%H:%M:%S")} {c}: {len(grids[c]["names"])} glomeruli, {len(grids[c]["slabs"])} slabs '
               f'({time.time() - t0:.0f} s)', flush=True)
-    return dict(rates=rates, inputs=inputs, grids=grids, columns=_pair_columns(rates, inputs))
+    return dict(rates=rates, inputs=inputs, grids=grids, columns=_pair_columns(rates, inputs), calyces=calyces,
+                calyx_tables=tabs)
+
+
+def _rows_r(x: np.ndarray, Y: np.ndarray) -> np.ndarray:
+    """Pearson r of the vector `x` with each row of `Y`."""
+    x = x - x.mean()
+    Y = Y - Y.mean(axis=1, keepdims=True)
+    with np.errstate(invalid='ignore', divide='ignore'):
+        return (Y @ x) / np.sqrt((Y ** 2).sum(axis=1) * (x @ x))
+
+
+def a3_agreement(state: dict) -> pd.DataFrame:
+    """A3's agreement of the predicted difference maps between calyces (the re-plan): per pair, session estimate and
+    E79 blur, the whole-calyx difference maps (left calyces mirrored into the right's posterior view), and for each
+    ordered pair of calyces (`ordered_calyx_pairs`; truth, scored) the Pearson r of the truth's map (true labels) with
+    the scored calyx's map over the cells inside both outlines, against the scored calyx's N_PERM label permutations
+    (null_pct, null_p95, null_median); then per group ('across brains': the four ordered pairs of the hemibrain's calyx
+    with a male CNS side; 'across sides': the male CNS's two, one fly) the mean over its ordered pairs, against the same
+    mean in each permutation (rows with truth and scored 'mean')."""
+    CM, _ = _e79()
+    rates, grids = state['rates'], state['grids']
+    rows = []
+    for (pair, sess), cols in sorted(state['columns'].items()):
+        for blur in CM.BLURS_UM:
+            D = {}
+            for c in CALYCES:
+                g = grids[c]
+                sl = g['slabs'][CM.WHOLE_CALYX]
+                d = pair_maps(_wt(rates, g['names'], cols), g['perms'], sl['G'][blur], sl['inside'])
+                ins = sl['inside']
+                if g['side'] == 'L':
+                    d, ins = CM.flip_grid(d, 'horizontal'), CM.flip_grid(ins, 'horizontal')
+                D[c] = (d, ins)
+            per: Dict[str, List[np.ndarray]] = {}
+            for t, c, kind in ordered_calyx_pairs(CALYCES):
+                ins = D[t][1] & D[c][1]
+                r = _rows_r(D[t][0][0, ins], D[c][0][:, ins])
+                per.setdefault(kind, []).append(r)
+                rows.append(dict(pair=pair, session=sess, blur_um=blur, group=kind, truth=t, scored=c,
+                                 n_cells=int(ins.sum()), r=float(r[0]), null_pct=float((r[1:] < r[0]).mean() * 100),
+                                 null_p95=float(np.nanquantile(r[1:], 0.95)), null_median=float(np.nanmedian(r[1:]))))
+            for kind, rs in per.items():
+                m = np.nanmean(np.vstack(rs), axis=0)
+                rows.append(dict(pair=pair, session=sess, blur_um=blur, group=kind, truth='mean', scored='mean',
+                                 n_ordered_pairs=len(rs), r=float(m[0]), null_pct=float((m[1:] < m[0]).mean() * 100),
+                                 null_p95=float(np.nanquantile(m[1:], 0.95)), null_median=float(np.nanmedian(m[1:]))))
+    return pd.DataFrame(rows)
 
 
 def part_a3(n_perm: int = N_PERM, state: Optional[dict] = None) -> dict:
-    """A3 (module docstring): a3_maps.csv (per calyx, pair, session estimate, slab and blur: the SD of the predicted
-    difference map over the grid cells inside the outline and its percentile in the label-permuted null, and the r of
-    the difference map with the anatomy-alone map), a3_agreement.csv (per pair, estimate and blur, the mean r between the
-    seven dataset calyces' whole-calyx difference maps, opposite sides mirrored, against the same with each calyx's own
-    label permutation), a3_anatomy.csv (each stimulus's whole-calyx map against the anatomy-alone map), a3_sessions.csv
-    (the r between session estimates' whole-calyx difference maps), a3_pred_grids.npz (the predicted grids, true labels)
-    and a3_summary.json."""
+    """A3 on the three calyces (module docstring): a3_maps.csv (per calyx, pair, session estimate, slab and blur: the SD
+    of the predicted difference map over the grid cells inside the outline and its percentile in the label-permuted
+    null, and the r of the difference map with the anatomy-alone map), a3_agreement.csv (`a3_agreement`: per pair,
+    estimate and blur, the r between whole-calyx difference maps for each ordered pair of calyces, the truth's true
+    labels against the scored calyx's label permutations, and the mean over the four ordered pairs across the two brains
+    and over the two across the male CNS's sides, each against the same mean in the permutations), a3_anatomy.csv (each
+    stimulus's whole-calyx map against the anatomy-alone map), a3_sessions.csv (the r between session estimates'
+    whole-calyx difference maps), a3_pred_grids.npz (the predicted grids, true labels) and a3_summary.json; every
+    table with the claw rule and the caveats."""
     CM, _ = _e79()
     state = load_a3_inputs(n_perm) if state is None else state
     rates, grids, columns = state['rates'], state['grids'], state['columns']
@@ -1257,34 +1402,7 @@ def part_a3(n_perm: int = N_PERM, state: Optional[dict] = None) -> dict:
                         anat_rows.append(dict(calyx=c, estimate=est, blur_um=blur, r_with_anatomy=_masked_r(m, anat, ins)))
     maps = pd.DataFrame(rows)
     anat = pd.DataFrame(anat_rows)
-    # agreement between the seven dataset calyces' whole-calyx difference maps (right side as reference)
-    agr_rows = []
-    data_calyces = [c for c in CALYCES if not c.startswith('model_')]
-    for (pair, sess), cols in columns.items():
-        for blur in CM.BLURS_UM:
-            D = {}
-            for c in data_calyces:
-                g = grids[c]
-                sl = g['slabs'][CM.WHOLE_CALYX]
-                d = pair_maps(_wt(rates, g['names'], cols), g['perms'], sl['G'][blur], sl['inside'])
-                ins = sl['inside']
-                if g['side'] == 'L':
-                    d, ins = CM.flip_grid(d, 'horizontal'), CM.flip_grid(ins, 'horizontal')
-                D[c] = (d, ins)
-            rs = []
-            for i, a in enumerate(data_calyces):
-                for b in data_calyces[i + 1:]:
-                    ins = D[a][1] & D[b][1]
-                    X, Y = D[a][0][:, ins], D[b][0][:, ins]
-                    X = X - X.mean(axis=1, keepdims=True)
-                    Y = Y - Y.mean(axis=1, keepdims=True)
-                    with np.errstate(invalid='ignore', divide='ignore'):
-                        rs.append((X * Y).sum(axis=1) / np.sqrt((X ** 2).sum(axis=1) * (Y ** 2).sum(axis=1)))
-            m = np.nanmean(np.vstack(rs), axis=0)
-            agr_rows.append(dict(pair=pair, session=sess, blur_um=blur, n_calyx_pairs=len(rs), mean_r=float(m[0]),
-                                 null_pct=float((m[1:] < m[0]).mean() * 100), null_p95=float(np.quantile(m[1:], 0.95)),
-                                 null_median=float(np.median(m[1:]))))
-    agr = pd.DataFrame(agr_rows)
+    agr = a3_agreement(state)
     # session estimates against each other (whole calyx, blur 4 um)
     ses_rows = []
     for c in CALYCES:
@@ -1298,22 +1416,25 @@ def part_a3(n_perm: int = N_PERM, state: Optional[dict] = None) -> dict:
                     ses_rows.append(dict(calyx=c, pair=pl, session_a=s1, session_b=s2, r=_masked_r(x, y, ins)))
     ses = pd.DataFrame(ses_rows)
     out = out_dir()
-    maps.to_csv(out / 'a3_maps.csv', index=False)
-    anat.to_csv(out / 'a3_anatomy.csv', index=False)
-    agr.to_csv(out / 'a3_agreement.csv', index=False)
-    ses.to_csv(out / 'a3_sessions.csv', index=False)
+    with_caveats(maps).to_csv(out / 'a3_maps.csv', index=False)
+    with_caveats(anat).to_csv(out / 'a3_anatomy.csv', index=False)
+    with_caveats(agr).to_csv(out / 'a3_agreement.csv', index=False)
+    with_caveats(ses).to_csv(out / 'a3_sessions.csv', index=False)
     keys = sorted(keep)
     np.savez_compressed(out / 'a3_pred_grids.npz', grids=np.stack([keep[k][0] for k in keys]),
                         inside=np.stack([keep[k][1] for k in keys]),
                         keys=np.array(['|'.join(map(str, k)) for k in keys]))
     whole = maps[maps['slab_depth_um'] == CM.WHOLE_CALYX]
+    grp = agr[agr['truth'] == 'mean']
     summ = dict(
-        n_perm=int(n_perm), calyces=list(CALYCES), pairs=[pair_label(a, b) for a, b in A3_PAIRS],
-        sessions=list(SESSIONS),
+        replan=REPLAN, n_perm=int(n_perm), calyces=list(CALYCES), pairs=[pair_label(a, b) for a, b in A3_PAIRS],
+        sessions=list(SESSIONS), claw_rule=CLAW_RULE, caveats=caveats_text(),
         whole_calyx_sd_null_pct_median=whole.groupby(['pair', 'blur_um'])['null_pct_sd'].median().unstack().round(1)
         .to_dict(),
-        agreement=agr.groupby(['pair', 'blur_um'])[['mean_r', 'null_pct']].median().round(3).reset_index()
-        .to_dict('records'),
+        agreement={k: g.groupby(['pair', 'blur_um'])[['r', 'null_pct', 'null_p95']].median().round(3).reset_index()
+                   .to_dict('records') for k, g in grp.groupby('group')},
+        agreement_n_above_null_p95={k: f"{int((g['r'] > g['null_p95']).sum())} of {len(g)} (pair x estimate x blur)"
+                                    for k, g in grp.groupby('group')},
         session_r_median=ses.groupby('pair')['r'].median().round(3).to_dict() if len(ses) else {},
         seeds={c: grids[c]['seed'] for c in CALYCES})
     _write_json(out / 'a3_summary.json', summ)
@@ -1323,12 +1444,14 @@ def part_a3(n_perm: int = N_PERM, state: Optional[dict] = None) -> dict:
 # ---------------------------------------------------------------------------
 # A4: the power of W3
 
-def measured_reliability() -> Dict[str, float]:
-    """The 2021 set's measured difference-map reliability: the median over recordings of E79's split-half r of pa minus ms
-    and paa minus ms (connectome_measured.csv, E79's main measured baseline: every paraffin oil presentation)."""
+def measured_reliability(meas: Optional[Dict[str, dict]] = None) -> Dict[str, float]:
+    """The 2021 set's measured difference-map reliability: the median over the 12 recordings of the split-half r of pa
+    minus ms and paa minus ms on E79's grid (E79's `measured_maps`, its main baseline: every paraffin oil presentation;
+    `meas` its output, None to read it). Read from the recordings, not from E79's analysis-4 folder (withheld with the
+    held tables), whose connectome_measured.csv held the same numbers."""
     CM, _ = _e79()
-    m = pd.read_csv(CM.OUT / 'connectome_measured.csv')
-    return {c: float(m.loc[m['comparison'] == c, 'split_half_r'].median()) for c in ('paa-ms', 'pa-ms')}
+    meas = CM.measured_maps() if meas is None else meas
+    return {c: float(np.nanmedian([m['split_half_r'][c] for m in meas.values()])) for c in ('paa-ms', 'pa-ms')}
 
 
 def noise_sd(signal: np.ndarray, reliability: float, n_presentations: int = A4_N_PRESENTATIONS) -> float:
@@ -1372,30 +1495,33 @@ def _depth_slabs(slabs: dict, nominal: float, within: float = D_SLAB_WITHIN_UM) 
 
 
 def power(pair: str, session: str, state: dict, reliabilities: Sequence[float], n_draws: int = A4_N_DRAWS,
-          seed: int = SEED, self_truth: bool = False) -> pd.DataFrame:
-    """A4 for one pair under one session's input estimate: simulated recordings (a truth calyx's predicted map at a slab
-    within D_SLAB_WITHIN_UM of a nominal plane depth from A4_PLANE_DEPTHS_UM and a blur from E79's, plus noise at each
-    reliability, `noise_sd`) scored against every other calyx's prediction over its slabs within D_SLAB_WITHIN_UM of the
-    nominal depth, E79's blurs and D_FLIPS (`detect`, the scored calyx mirrored into the truth's side); one row per scored
-    calyx, truth calyx, reliability and draw. With `self_truth`, each calyx is also scored against its own truth (a
-    control, flagged `self_truth`: the power without any difference between flies' calyces)."""
+          seed: int = SEED, self_truth: bool = True, scorings: Sequence[str] = SCORINGS) -> pd.DataFrame:
+    """A4 for one pair under one session's input estimate (the re-plan): simulated recordings, each a truth calyx's
+    predicted map at a slab within D_SLAB_WITHIN_UM of a nominal plane depth drawn from A4_PLANE_DEPTHS_UM, at a blur drawn
+    from E79's, plus noise at each reliability (`noise_sd`), scored against every other calyx's prediction (mirrored
+    into the truth's side) under each scoring: 'slabs', the scored calyx's slabs within D_SLAB_WITHIN_UM of the nominal
+    depth; 'whole', its whole calyx projected along the anterior-posterior axis; E79's blurs and D_FLIPS in both
+    (`detect`). The same simulated recording is scored under both. One row per scoring, truth, scored calyx,
+    reliability and draw, with kind 'across brains', 'across sides' or (with `self_truth`, a control) 'own calyx'."""
     CM, _ = _e79()
     rates, grids = state['rates'], state['grids']
     cols = state['columns'][(pair, session)]
     rng = np.random.default_rng([seed, zlib.crc32(f'{pair}|{session}'.encode())])
-    # every calyx's predicted grids (all permutations) at the slabs any nominal depth can reach
+    # every calyx's predicted grids (all permutations) at the slabs any nominal depth can reach, and the whole calyx
     lo, hi = min(A4_PLANE_DEPTHS_UM) - D_SLAB_WITHIN_UM, max(A4_PLANE_DEPTHS_UM) + D_SLAB_WITHIN_UM
     P, INS = {}, {}
     for c, g in grids.items():
         Wt = _wt(rates, g['names'], cols)
         for d, sl in g['slabs'].items():
-            if d == CM.WHOLE_CALYX or not (lo - 1e-9 <= d <= hi + 1e-9):
+            if d != CM.WHOLE_CALYX and not (lo - 1e-9 <= d <= hi + 1e-9):
                 continue
             for blur, G in sl['G'].items():
                 P[(c, d, blur)] = pair_maps(Wt, g['perms'], G, sl['inside']).astype(np.float32)
                 INS[(c, d)] = sl['inside']
+    names = [c for c in CALYCES if c in grids]
+    combos = ordered_calyx_pairs(names) + ([(c, c, 'own calyx') for c in names] if self_truth else [])
     rows = []
-    for t in CALYCES:
+    for t in names:
         t_side = grids[t]['side']
         for rel in reliabilities:
             for k in range(n_draws):
@@ -1407,36 +1533,46 @@ def power(pair: str, session: str, state: dict, reliabilities: Sequence[float], 
                 b_t = float(rng.choice(sorted(grids[t]['slabs'][d_t]['G'])))
                 truth = P[(t, d_t, b_t)][0].astype(float)
                 ins_t = INS[(t, d_t)]
-                sig = truth[ins_t]
-                meas = truth + rng.normal(0.0, noise_sd(sig, rel), size=truth.shape)
-                for c in CALYCES:
-                    if (c == t and not self_truth) or {c, t} == DUPLICATE_CALYCES:
+                meas = truth + rng.normal(0.0, noise_sd(truth[ins_t], rel), size=truth.shape)
+                for tt, c, kind in combos:
+                    if tt != t:
                         continue
                     mirror = grids[c]['side'] != t_side
-                    pred, ins = {}, {}
-                    for d in _depth_slabs(grids[c]['slabs'], nominal):
-                        for blur in sorted(grids[c]['slabs'][d]['G']):
-                            pr = P[(c, d, blur)]
-                            pred[(d, blur)] = CM.flip_grid(pr, 'horizontal') if mirror else pr
-                            ins[(d, blur)] = CM.flip_grid(INS[(c, d)], 'horizontal') if mirror else INS[(c, d)]
-                    if not pred:
-                        continue
-                    best, p95, ex = detect(pred, ins, meas, ins_t)
-                    rows.append(dict(pair=pair, session=session, scored_calyx=c, truth_calyx=t, self_truth=c == t,
-                                     reliability=rel,
-                                     draw=k, nominal_depth_um=nominal, truth_depth_um=d_t, truth_blur_um=b_t,
-                                     best_r=best, null_p95=p95, exceeds=ex))
+                    for sc in scorings:
+                        if sc == 'slabs':
+                            depths = _depth_slabs(grids[c]['slabs'], nominal)
+                        else:
+                            depths = [CM.WHOLE_CALYX] if (c, CM.WHOLE_CALYX) in INS else []
+                        pred, ins = {}, {}
+                        for d in depths:
+                            for blur in sorted(grids[c]['slabs'][d]['G']):
+                                pr = P[(c, d, blur)]
+                                pred[(d, blur)] = CM.flip_grid(pr, 'horizontal') if mirror else pr
+                                ins[(d, blur)] = CM.flip_grid(INS[(c, d)], 'horizontal') if mirror else INS[(c, d)]
+                        if not pred:
+                            continue
+                        best, p95, ex = detect(pred, ins, meas, ins_t)
+                        rows.append(dict(pair=pair, session=session, scoring=sc, kind=kind, scored_calyx=c,
+                                         truth_calyx=t, self_truth=c == t, reliability=rel, draw=k,
+                                         nominal_depth_um=nominal, truth_depth_um=d_t, truth_blur_um=b_t, best_r=best,
+                                         null_p95=p95, exceeds=ex))
     return pd.DataFrame(rows)
 
 
 def part_a4(state: Optional[dict] = None, n_draws: int = A4_N_DRAWS) -> dict:
-    """A4 (module docstring): a4_power_draws.csv.gz (every simulated recording), a4_power.csv (per pair, session estimate
-    and reliability: the share of simulated recordings that exceed the null's 95th percentile, pooled over scored calyces,
-    truths and draws, and the number of scored calyces in which more than half / a quarter do, W3's counts),
-    a4_power_by_calyx.csv and a4_w3_pairs.json (the pairs kept: power at least A4_POWER_MIN at the lower reliability under
-    every session's estimate)."""
+    """A4 on the three calyces (the re-plan): a4_power_draws.csv.gz (every simulated recording, `power`), a4_power.csv
+    (per pair, session estimate, reliability, scoring and kind: the share of simulated recordings that exceed the null's
+    95th percentile, pooled over the ordered pairs of that kind and the draws; for W3's calyx rule beside, the share per
+    scored calyx with the truth in the other brain and whether the rule would pass at one half),
+    a4_power_by_calyx.csv (per truth and scored calyx) and a4_w3_pairs.json: the decisive power per scoring and pair
+    (across the two brains, at the 2021 maps' lower reliability, the lowest over session estimates), `a4_rule`'s scoring
+    and kept pairs, and beside them the power across the male CNS's sides, own calyx and at half the response."""
     state = load_a3_inputs() if state is None else state
-    rel = measured_reliability()
+    CM, _ = _e79()
+    meas = state.get('meas_2021')
+    if meas is None:
+        meas = state['meas_2021'] = CM.measured_maps()
+    rel = measured_reliability(meas)
     rels = sorted(rel.values())
     weak = scaled_reliability(rels[0], A4_RESPONSE_SCALE)
     t0 = time.time()
@@ -1444,45 +1580,52 @@ def part_a4(state: Optional[dict] = None, n_draws: int = A4_N_DRAWS) -> dict:
     for (pair, sess) in sorted(state['columns']):
         draws.append(power(pair, sess, state, rels + [weak], n_draws, self_truth=True))
         x = draws[-1]
-        print(f'{time.strftime("%H:%M:%S")} A4 {pair} [{sess}]: share exceeding '
-              f'{x[~x.self_truth].groupby("reliability")["exceeds"].mean().round(3).to_dict()}, own calyx as truth '
-              f'{x[x.self_truth].groupby("reliability")["exceeds"].mean().round(3).to_dict()} ({time.time() - t0:.0f} s)',
-              flush=True)
-    D_all = pd.concat(draws, ignore_index=True)
-    selfp = (D_all[D_all['self_truth']].groupby(['pair', 'session', 'reliability'])
-             .agg(power_own_calyx=('exceeds', 'mean')).reset_index())
-    D = D_all[~D_all['self_truth']]
-    by_cal = (D.groupby(['pair', 'session', 'reliability', 'scored_calyx'])
-              .agg(share=('exceeds', 'mean'), n=('exceeds', 'size'), median_best_r=('best_r', 'median'),
-                   median_null_p95=('null_p95', 'median')).reset_index())
-    pw = (D.groupby(['pair', 'session', 'reliability'])
-          .agg(power=('exceeds', 'mean'), n=('exceeds', 'size'), median_best_r=('best_r', 'median'),
-               median_null_p95=('null_p95', 'median')).reset_index())
-    cnt = by_cal.groupby(['pair', 'session', 'reliability'])['share']
-    pw = pw.merge(cnt.apply(lambda x: int((x > W3_PASS_SHARE).sum())).rename('n_calyces_over_half').reset_index())
-    pw = pw.merge(cnt.apply(lambda x: int((x > W3_FAIL_SHARE).sum())).rename('n_calyces_over_quarter').reset_index())
-    pw = pw.merge(selfp, how='left')
+        x0 = x[(x['kind'] == 'across brains') & (x['reliability'] == rels[0])]
+        print(f'{time.strftime("%H:%M:%S")} A4 {pair} [{sess}]: across brains at r {rels[0]:.3f} '
+              f'{x0.groupby("scoring")["exceeds"].mean().round(3).to_dict()} ({time.time() - t0:.0f} s)', flush=True)
+    D = pd.concat(draws, ignore_index=True)
+    key = ['pair', 'session', 'reliability', 'scoring', 'kind']
+    agg = dict(power=('exceeds', 'mean'), n=('exceeds', 'size'), median_best_r=('best_r', 'median'),
+               median_null_p95=('null_p95', 'median'))
+    pw = D.groupby(key).agg(**agg).reset_index()
+    by_cal = D.groupby(key + ['truth_calyx', 'scored_calyx']).agg(**agg).reset_index().rename(columns={'power': 'share'})
+    # W3's calyx rule on the simulated recordings (beside): per scored calyx, the share with the truth in the other brain
+    xb = D[D['kind'] == 'across brains'].groupby(['pair', 'session', 'reliability', 'scoring', 'scored_calyx'])['exceeds']
+    xb = xb.mean().unstack('scored_calyx')
+    sim = pd.DataFrame({f'sim_share_scored_{c}': xb[c] for c in CALYCES if c in xb.columns})
+    sim['sim_w3_rule_half'] = [w3_pair_passes(pd.Series(dict(zip(CALYCES, [r.get(f'sim_share_scored_{c}', np.nan)
+                                                                           for c in CALYCES]))), W3_PASS_SHARE)
+                               for r in sim.to_dict('records')]
+    pw = pw.merge(sim.reset_index(), on=['pair', 'session', 'reliability', 'scoring'], how='left')
     role = {rels[0]: 'decisive (2021, paa minus ms)', rels[1]: 'beside (2021, pa minus ms)',
             weak: f'sensitivity: response x {A4_RESPONSE_SCALE:g}'}
     for t_ in (by_cal, pw):
         t_.insert(3, 'role', t_['reliability'].map(role))
     out = out_dir()
-    D_all.to_csv(out / 'a4_power_draws.csv.gz', index=False)
-    by_cal.to_csv(out / 'a4_power_by_calyx.csv', index=False)
-    pw.to_csv(out / 'a4_power.csv', index=False)
-    low = pw[pw['reliability'] == rels[0]]
-    decisive = low.groupby('pair')['power'].min()
-    kept = [p for p in decisive.index if decisive[p] >= A4_POWER_MIN]
-    sens = pw[pw['reliability'] == weak].groupby('pair')['power'].min()
-    res = dict(reliabilities=rel, decisive_reliability=rels[0], sensitivity_reliability=weak,
-               sensitivity_power={p: round(float(v), 4) for p, v in sens.items()},
-               own_calyx_power={p: round(float(v), 4) for p, v in
-                                pw[pw['reliability'] == rels[0]].groupby('pair')['power_own_calyx'].min().items()},
-               n_draws=int(n_draws), n_presentations=A4_N_PRESENTATIONS,
-               plane_depths_um=list(A4_PLANE_DEPTHS_UM), slab_within_um=D_SLAB_WITHIN_UM, flips=list(D_FLIPS),
-               power_min=A4_POWER_MIN, decisive_power={p: round(float(v), 4) for p, v in decisive.items()},
-               kept=kept, left_out=[p for p in decisive.index if p not in kept],
-               w3_can_pass=len(kept) >= W3_MIN_PAIRS, seconds=round(time.time() - t0, 1))
+    with_caveats(D).to_csv(out / 'a4_power_draws.csv.gz', index=False)
+    with_caveats(by_cal).to_csv(out / 'a4_power_by_calyx.csv', index=False)
+    with_caveats(pw).to_csv(out / 'a4_power.csv', index=False)
+
+    def per_pair(kind, r, how='min'):
+        q = pw[(pw['kind'] == kind) & (pw['reliability'] == r)]
+        g = q.groupby(['scoring', 'pair'])['power']
+        g = g.min() if how == 'min' else g.max()
+        have = set(g.index.get_level_values(0))
+        return {sc: {p: round(float(v), 4) for p, v in g.loc[sc].items()} for sc in SCORINGS if sc in have}
+    decisive = per_pair('across brains', rels[0])
+    rule = a4_rule(decisive)
+    res = dict(replan=REPLAN, calyces=list(CALYCES), reliabilities=rel, decisive_reliability=rels[0],
+               sensitivity_reliability=weak, scorings=list(SCORINGS), decisive_power=decisive,
+               decisive_power_max_over_estimates=per_pair('across brains', rels[0], 'max'),
+               across_sides_power=per_pair('across sides', rels[0]), own_calyx_power=per_pair('own calyx', rels[0]),
+               sensitivity_power=per_pair('across brains', weak), beside_reliability_power=per_pair('across brains',
+                                                                                                    rels[1]),
+               scoring=rule['scoring'], kept=rule['kept'], left_out=rule['left_out'], w3_reads=rule['w3_reads'],
+               scoring_rule=rule, w3_can_pass=bool(rule['scoring'] is not None),
+               n_draws=int(n_draws), n_presentations=A4_N_PRESENTATIONS, plane_depths_um=list(A4_PLANE_DEPTHS_UM),
+               slab_within_um=D_SLAB_WITHIN_UM, flips=list(D_FLIPS), power_min=A4_POWER_MIN,
+               reliability_source="E79's measured_maps (all paraffin oil), median split-half r over the 12 recordings",
+               claw_rule=CLAW_RULE, caveats=caveats_text(), seconds=round(time.time() - t0, 1))
     _write_json(out / 'a4_w3_pairs.json', res)
     return res
 
@@ -1554,29 +1697,49 @@ def flies_ratios(per_stim: pd.DataFrame, numerators: Sequence[Stim], denominator
     return pd.DataFrame(rows)
 
 
+SOLVENT_BASELINES = {'recording': 'recording', 'minus_recording': 'recording', 'block': 'block',
+                     'minus_block': 'block', 'order_matched': 'order_matched'}
+
+
 def measured_pair_grid(stack: np.ndarray, frames: pd.DataFrame, mask: np.ndarray, a: str, b: str,
                        solvent: str = 'recording') -> Optional[dict]:
     """Part D's measured map of a pair (stimulus labels `a`, `b`) in one recording: each stimulus's mean peak map minus the
-    solvent's map (the mean of the recording's solvent presentations, or with `solvent` 'block' each presentation minus its
-    block's own), over its calyx mean, blurred E79's MEAS_BLUR_PX, on E79's 12 x 12 grid over the outline's bounding box,
-    a minus b (image axes as recorded); with the inside cells, the calyx means and the split-half r (the pair's map from
-    the even blocks against the odd blocks'). None when a stimulus is missing."""
+    solvent's map, over its calyx mean, blurred E79's MEAS_BLUR_PX, on E79's 12 x 12 grid over the outline's bounding
+    box, a minus b (image axes as recorded); with the inside cells, the calyx means and the split-half r (the pair's map
+    from the even blocks against the odd blocks'). The solvent's map (`solvent`, the set's carrying reading,
+    CARRYING_READING): 'recording' / 'minus_recording', the mean of the recording's solvent presentations (set W);
+    'block' / 'minus_block', each presentation's block's own (else the recording's); 'order_matched', the mean of the
+    all-solvent blocks' presentations at the presentation's position (sets S and H; a presentation without one is left
+    out, as `stimulus_maps_b`). None when a stimulus is missing."""
     from scipy.ndimage import gaussian_filter
     CM, _ = _e79()
+    how = SOLVENT_BASELINES[solvent]
     f = frames.reset_index(drop=True)
     if not ((f['stim'] == a).any() and (f['stim'] == b).any()):
         return None
-    sol = f[f['is_solvent']]
-    rec_sol = stack[sol.index].mean(axis=0)
+    sv = f['is_solvent'].astype(bool)
+    sol = f[sv]
+    rec_sol = stack[sol.index].mean(axis=0) if len(sol) else None
     blk_sol = {bk: stack[g.index].mean(axis=0) for bk, g in sol.groupby('block')}
+    pos_sol = {}
+    if how == 'order_matched':
+        all_sol = sv.groupby(f['block']).transform('all').astype(bool)
+        pos_sol = {ps: stack[g.index].mean(axis=0) for ps, g in f[sv & all_sol].groupby('position')}
     M_, inside = CM.cell_matrix(mask)
+
+    def base(bk, ps):
+        if how == 'recording':
+            return rec_sol
+        if how == 'block':
+            return blk_sol.get(bk, rec_sol)
+        return pos_sol.get(ps)
 
     def stim_map(lab, blocks=None):
         g = f[(f['stim'] == lab) & (True if blocks is None else f['block'].isin(blocks))]
-        if g.empty:
+        pos = g['position'] if 'position' in g else pd.Series(np.nan, index=g.index)
+        reps = [stack[i] - base(bk, ps) for i, bk, ps in zip(g.index, g['block'], pos) if base(bk, ps) is not None]
+        if not reps:
             return None, np.nan
-        reps = [stack[i] - (rec_sol if solvent == 'recording' else blk_sol.get(bk, rec_sol)) for i, bk in
-                zip(g.index, g['block'])]
         m = np.mean(reps, axis=0)
         return m, float(m[mask].mean())
 
@@ -1600,32 +1763,49 @@ def measured_pair_grid(stack: np.ndarray, frames: pd.DataFrame, mask: np.ndarray
     return dict(grid=ga - gb, inside=inside, mean_a=ma, mean_b=mb, split_half_r=sh)
 
 
-def score_recording(meas: dict, side: str, plane_um: float, pair: str, session: str, state: dict) -> pd.DataFrame:
-    """Part D for one recording and pair under one session's estimate: per calyx (E79's eight), the best r over its slabs
-    within D_SLAB_WITHIN_UM of the plane's nominal depth, E79's blurs and D_FLIPS, against the label-permuted null's 95th
-    percentile over the same search (`detect`); the calyx's prediction mirrored into the recording's hemisphere (Yang's
-    "L" read as the fly's right while YANG_L_IS_FLY_RIGHT). One row per calyx with W3's `exceeds`."""
+def score_recording(meas: dict, side: str, plane_um: float, pair: str, session: str, state: dict,
+                    scoring: str = 'slabs', cols: Optional[Sequence[str]] = None,
+                    cache: Optional[dict] = None) -> pd.DataFrame:
+    """Part D for one recording and pair under one session's estimate (`cols`: the pair's two rate columns, default
+    state['columns'][(pair, session)]): per calyx (CALYCES, the three of the re-plan), the best r over E79's blurs,
+    D_FLIPS and, by `scoring`, its slabs within D_SLAB_WITHIN_UM of the plane's nominal depth ('slabs') or its whole
+    calyx projected along the anterior-posterior axis ('whole'), against the label-permuted null's 95th percentile over
+    the same search (`detect`); the calyx's prediction mirrored into the recording's hemisphere (Yang's "L" read as the
+    fly's right while YANG_L_IS_FLY_RIGHT). `cache` keeps the calyx's predicted grids between recordings. One row per
+    calyx with W3's `exceeds`."""
     CM, _ = _e79()
     rates, grids = state['rates'], state['grids']
-    cols = state['columns'][(pair, session)]
+    cols = tuple(state['columns'][(pair, session)] if cols is None else cols)
     fly_side = side
     if YANG_L_IS_FLY_RIGHT:
         fly_side = {'L': 'R', 'R': 'L'}.get(side, side)
     rows = []
     for c in CALYCES:
+        if c not in grids:
+            continue
         g = grids[c]
-        Wt = _wt(rates, g['names'], cols)
         mirror = g['side'] != fly_side
+        if scoring == 'slabs':
+            depths = _depth_slabs(g['slabs'], float(plane_um))
+        elif scoring == 'whole':
+            depths = [CM.WHOLE_CALYX] if CM.WHOLE_CALYX in g['slabs'] else []
+        else:
+            raise ValueError(f'unknown scoring {scoring!r}; one of {SCORINGS}')
         pred, ins = {}, {}
-        for d in _depth_slabs(g['slabs'], float(plane_um)):
+        for d in depths:
             sl = g['slabs'][d]
             for blur, G in sl['G'].items():
-                pr = pair_maps(Wt, g['perms'], G, sl['inside'])
+                key = (c, cols, d, blur)
+                pr = None if cache is None else cache.get(key)
+                if pr is None:
+                    pr = pair_maps(_wt(rates, g['names'], cols), g['perms'], G, sl['inside'])
+                    if cache is not None:
+                        cache[key] = pr
                 pred[(d, blur)] = CM.flip_grid(pr, 'horizontal') if mirror else pr
                 ins[(d, blur)] = CM.flip_grid(sl['inside'], 'horizontal') if mirror else sl['inside']
         best, p95, ex = detect(pred, ins, meas['grid'], meas['inside']) if pred else (np.nan, np.nan, False)
-        rows.append(dict(calyx=c, pair=pair, session=session, n_slabs=len({k[0] for k in pred}), best_r=best,
-                         null_p95=p95, exceeds=ex))
+        rows.append(dict(calyx=c, pair=pair, session=session, scoring=scoring, fly_side=fly_side,
+                         n_slabs=len({k[0] for k in pred}), best_r=best, null_p95=p95, exceeds=ex))
     return pd.DataFrame(rows)
 
 
@@ -2234,17 +2414,7 @@ def part_c(sets: Sequence[str] = E100_SETS) -> dict:
 
 # ---------------------------------------------------------------------------
 # part D re-planned 2026-11-17 (the block "(D, re-planned 2026-11-17 16:45)" of the entry): three calyces of Pratyush's
-# pipeline (the hemibrain's right, the male CNS's left and right), A4's two scorings and its rule, W3's calyx rule.
-# Interface first (stub): the bodies follow.
-
-PRAT_CALYCES = ('hemibrain_R', 'malecns_L', 'malecns_R')
-HEMIBRAIN_CALYX = 'hemibrain_R'
-MALECNS_CALYCES = ('malecns_L', 'malecns_R')
-SCORINGS = ('slabs', 'whole')            # A4's two scorings of E79's analysis 4 (the truth a slab in both)
-WITHHELD_DIR = 'withheld_2026-11-15'
-WITHHELD_FILES = ('a3_maps.csv', 'a3_agreement.csv', 'a3_anatomy.csv', 'a3_pred_grids.npz', 'a3_summary.json')
-WITHHELD_PREFIXES = ('a4_',)
-
+# pipeline (the hemibrain's right, the male CNS's left and right), A4's two scorings and its rule, W3's calyx rule
 
 def brain_of(calyx: str) -> str:
     """'hemibrain_R' -> 'hemibrain', 'malecns_L' -> 'malecns'."""
@@ -2254,15 +2424,38 @@ def brain_of(calyx: str) -> str:
 def ordered_calyx_pairs(calyces: Sequence[str] = PRAT_CALYCES) -> List[Tuple[str, str, str]]:
     """(truth, scored, kind) for every ordered pair of different calyces: kind 'across brains' (the four ordered pairs
     of the hemibrain's calyx with a male CNS side) or 'across sides' (the male CNS's two sides, one fly)."""
-    raise NotImplementedError
+    return [(t, c, 'across brains' if brain_of(t) != brain_of(c) else 'across sides')
+            for t in calyces for c in calyces if c != t]
 
 
-def prat_calyces() -> Tuple[Dict[str, dict], Dict[str, pd.DataFrame]]:
+def caveats_text() -> str:
+    """What every table of A3, A4 and D says (the re-plan's Realism item): E79's PRAT_CAVEATS (the male CNS a male
+    brain, the two brains' confidence floors, the claw rule), set W's delivery and Yang's word on quality."""
+    CM, _ = _e79()
+    return f'{CM.PRAT_CAVEATS}; no PID was recorded in set W; Yang has not confirmed the quality of every set ({YANG_USE_NOTE})'
+
+
+def with_caveats(df: pd.DataFrame) -> pd.DataFrame:
+    """`df` with the columns claw_rule (CLAW_RULE) and caveats (`caveats_text`)."""
+    return df.assign(claw_rule=CLAW_RULE, caveats=caveats_text())
+
+
+def prat_calyces(write: bool = True) -> Tuple[Dict[str, dict], Dict[str, pd.DataFrame]]:
     """The three calyces from E79's `pratyush_calyces` (E97's counted claws, roi='none' in both brains) after E79's
     neighbour axis check (strict: a failure raises E79's AxisCheckError and stops A3, A4 and D), with the tables
-    written beside: 'summary' (`pratyush_calyx_summary`), 'axes' (`neighbour_axis_checks`), 'official_roi'
-    (`official_roi_outline`, deciding nothing)."""
-    raise NotImplementedError
+    'summary' (`pratyush_calyx_summary`), 'axes' (`neighbour_axis_checks`) and 'official_roi' (`official_roi_outline`,
+    deciding nothing), written (with `write`) to a3_calyces.csv, a3_axis_checks.csv and a3_official_roi_outline.csv."""
+    CM, _ = _e79()
+    cal = CM.pratyush_calyces()
+    missing = sorted(set(CALYCES) - set(cal))
+    if missing:
+        raise RuntimeError(f"calyces missing from Pratyush's tables: {missing}")
+    axes = CM.neighbour_axis_checks(cal, strict=True)
+    tabs = dict(summary=CM.pratyush_calyx_summary(cal), axes=axes, official_roi=CM.official_roi_outline(cal)[0])
+    if write:
+        for k, f in CALYX_TABLE_FILES.items():
+            with_caveats(tabs[k]).to_csv(out_dir() / f, index=False)
+    return cal, tabs
 
 
 def a4_rule(decisive: Dict[str, Dict[str, float]], min_pairs: int = W3_MIN_PAIRS,
@@ -2270,39 +2463,241 @@ def a4_rule(decisive: Dict[str, Dict[str, float]], min_pairs: int = W3_MIN_PAIRS
     """The block's rule for which scoring W3 is read on: `decisive` maps scoring ('slabs', 'whole') to pair to the
     decisive power (across the two brains, the 2021 maps' lower reliability, the lowest over session estimates). The
     slabs if at least `min_pairs` pairs have power >= `power_min` there; otherwise the whole-calyx projection if at least
-    `min_pairs` pairs have it there; otherwise 'no pair'. Returns scoring (None for 'no pair'), kept pairs (those at or
-    above `power_min` under the chosen scoring), left_out, and the per-scoring counts."""
-    raise NotImplementedError
+    `min_pairs` pairs have it there; otherwise 'no pair'. Returns scoring (None for 'no pair'), kept (the pairs at or
+    above `power_min` under the chosen scoring), left_out, the pairs at power per scoring and w3_reads."""
+    kept_by = {sc: sorted(p for p, v in decisive.get(sc, {}).items() if v is not None and np.isfinite(v)
+                          and v >= power_min) for sc in SCORINGS}
+    scoring = next((sc for sc in SCORINGS if len(kept_by[sc]) >= min_pairs), None)
+    kept = kept_by[scoring] if scoring is not None else []
+    pairs = sorted({p for sc in SCORINGS for p in decisive.get(sc, {})})
+    reads = ('no pair' if scoring is None else
+             'on the slabs within 6 um of the plane' if scoring == 'slabs' else 'on the whole-calyx projection')
+    return dict(scoring=scoring, kept=kept, left_out=[p for p in pairs if p not in kept],
+                n_pairs_at_power={sc: len(v) for sc, v in kept_by.items()}, kept_by_scoring=kept_by, w3_reads=reads,
+                min_pairs=int(min_pairs), power_min=float(power_min))
 
 
 def w3_pair_shares(exceed: pd.DataFrame) -> pd.Series:
     """One pair's share of recordings exceeding the null's 95th percentile per calyx (`exceed`: rows of one pair, columns
     calyx, recording, exceeds)."""
-    raise NotImplementedError
+    return exceed.groupby('calyx')['exceeds'].mean()
 
 
 def w3_pair_passes(shares: pd.Series, share: float) -> bool:
     """W3's calyx rule (the re-plan): the prediction exceeds the null's 95th percentile in more than `share` of the
     recordings in the hemibrain's calyx and in at least one of the male CNS's two."""
-    raise NotImplementedError
+    hb = shares.get(HEMIBRAIN_CALYX, np.nan)
+    return bool(hb > share and any(shares.get(c, np.nan) > share for c in MALECNS_CALYCES))
 
 
-def part_d(n_perm: int = N_PERM, state: Optional[dict] = None) -> dict:
+def score_maps(meas: Sequence[dict], pair: str, session: str, cols: Tuple[str, str], state: dict,
+               scorings: Sequence[str] = SCORINGS) -> pd.DataFrame:
+    """Part D's scoring of several measured maps against one pair's prediction under one estimate: each map (dicts with
+    grid, inside, side, plane_um and any other keys, copied into the rows) against each calyx, under each scoring
+    (`score_recording`), with the calyx's label-permuted predictions computed once (a cache over the maps)."""
+    cache: dict = {}
+    rows = []
+    for m in meas:
+        meta = {k: v for k, v in m.items() if k not in ('grid', 'inside')}
+        for sc in scorings:
+            d = score_recording(m, m['side'], m['plane_um'], pair, session, state, sc, cols=cols, cache=cache)
+            rows.append(d.assign(**meta))
+    return pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
+
+
+def _matched_label(frames: pd.DataFrame, s: Stim, exact: bool) -> Optional[str]:
+    """The recording's stimulus label for the pair's stimulus `s`: itself when presented; with `exact` False, the same
+    odor's concentration nearest to `s`'s within MATCH_LOG_UNITS (`concentration_match`; set H's stimuli)."""
+    f = frames[~frames['is_solvent'].astype(bool)]
+    if (f['stim'] == stim_label(s)).any():
+        return stim_label(s)
+    if exact:
+        return None
+    c = concentration_match(s[1], f.loc[f['odor'] == s[0], 'log10_conc'].astype(float).tolist())
+    return None if c is None else stim_label((s[0], float(c)))
+
+
+def _d_meas(rec: dict, a: str, b: str, baseline: str, **meta) -> Optional[dict]:
+    g = measured_pair_grid(rec['stack'], rec['frames'], rec['mask'], a, b, solvent=baseline)
+    if g is None:
+        return None
+    return dict(grid=g['grid'], inside=g['inside'], side=rec['side'], plane_um=float(rec['plane_um']), set=rec['set'],
+                recording=rec['stem'], fly=rec['fly'], stim_a=a, stim_b=b, baseline=baseline, mean_a=g['mean_a'],
+                mean_b=g['mean_b'], split_half_r=g['split_half_r'], **meta)
+
+
+def _a4_kept() -> dict:
+    """A4's rule (a4_w3_pairs.json) as written by this design's A4; refuses one from before the re-plan."""
+    a4 = _read_json(out_dir() / 'a4_w3_pairs.json')
+    if a4 is None or a4.get('replan') != REPLAN or list(a4.get('calyces', [])) != list(CALYCES):
+        raise RuntimeError("part D needs A4 run again on the three calyces (the re-plan of 2026-11-17): "
+                           "run --part A3A4 first")
+    return a4
+
+
+def part_d(n_perm: int = N_PERM, state: Optional[dict] = None, e79_reading: bool = True) -> dict:
     """Part D (re-planned 2026-11-17), on the pairs and the scoring A4 keeps (a4_w3_pairs.json): E79's analysis 4 on set
     W's recordings, each recording against each of the three calyces, the calyx mirrored into the recording's side,
-    under each session's estimate (`score_recording`); W3 per estimate (`w3_verdict`) and over estimates
-    (`w3_over_estimates`); beside, deciding nothing: set H's recordings holding both stimuli of a pair, set S's pa minus
-    ms at 10^-3, E79's two 2021 differences through the same three calyces (and E79's own analysis 4 on them,
-    `E79_connectome_maps.run_pratyush`). Writes d_scores.csv, d_pair_shares.csv, d_w3.json, d_summary.json and W3 into
-    verdict.json."""
-    raise NotImplementedError
+    under each session's estimate (`score_maps`); W3 per estimate (`w3_verdict`) and over estimates
+    (`w3_over_estimates`). Every recording is also scored under the other scoring and on every pair, rows marked
+    decides False (described). Beside, deciding nothing: set H's recordings holding both stimuli of a pair (set H's
+    stimuli matched within one log unit, the pair's input), set S's pa minus ms at 10^-3, E79's two 2021 differences
+    through the same three calyces (the panel's input, as E79), and with `e79_reading` E79's own analysis 4 on them
+    (`E79_connectome_maps.run_pratyush`, d_e79_analysis4/). Writes d_scores.csv, d_pair_shares.csv, d_inputs.csv,
+    d_w3.json, d_summary.json and W3 into verdict.json."""
+    CM, _ = _e79()
+    a4 = _a4_kept()
+    t0 = time.time()
+    state = load_a3_inputs(n_perm) if state is None else state
+    scoring, kept = a4['scoring'], list(a4['kept'])
+    recs = read_recordings(('W', 'H', 'S'))
+    recs = recs[recs['usable'] & ~recs['content'].astype(str).str.contains(LABEL_UNSURE, regex=False)]
+    meas: Dict[str, List[dict]] = {}          # pair label -> the measured maps scored against it
+    files = []
+    for _, row in recs.iterrows():
+        rec = read_recording(row, maps=True)
+        if row['set'] in ('W', 'H'):
+            for a, b in A3_PAIRS:
+                la = _matched_label(rec['frames'], a, exact=row['set'] == 'W')
+                lb = _matched_label(rec['frames'], b, exact=row['set'] == 'W')
+                if la is None or lb is None:
+                    continue
+                m = _d_meas(rec, la, lb, CARRYING_READING[row['set']])
+                if m is not None:
+                    meas.setdefault(pair_label(a, b), []).append(m)
+        else:
+            m = _d_meas(rec, stim_label(D_SET_S_PAIR[0]), stim_label(D_SET_S_PAIR[1]), CARRYING_READING['S'])
+            if m is not None:
+                meas.setdefault(pair_label(*D_SET_S_PAIR), []).append(m)
+        for k in ('yaml', 'peak_maps', 'roi'):
+            if rec['files'].get(k) is not None:
+                files.append(dict(recording=row['stem'], set=row['set'], kind=k, path=str(rec['files'][k]),
+                                  sha256=_sha256(rec['files'][k])))
+        print(f"{time.strftime('%H:%M:%S')} D {row['stem']} ({row['set']}) read ({time.time() - t0:.0f} s)", flush=True)
+    meas_2021 = state.get('meas_2021')
+    if meas_2021 is None:
+        meas_2021 = state['meas_2021'] = CM.measured_maps()
+    for rec, m in meas_2021.items():
+        for comp in D_2021_DIFFS:
+            a, b = comp.split('-')
+            meas.setdefault(f'{comp} (2021)', []).append(dict(
+                grid=m['grid'][comp], inside=m['inside'], side=m['side'], plane_um=D_2021_PLANE_UM, set='2021',
+                recording=rec, fly=rec.split('_')[0] + '_' + rec.split('_')[1][0], stim_a=f"{a} @ {m['concs'][comp][a]:g}",
+                stim_b=f"{b} @ {m['concs'][comp][b]:g}", baseline='all_pfo', mean_a=m['means'][comp][a],
+                mean_b=m['means'][comp][b], split_half_r=m['split_half_r'][comp]))
+    # the scoring: every pair under every session's estimate; the beside items under the panel's own input
+    parts = []
+    for (pl, sess), cols in sorted(state['columns'].items()):
+        if pl in meas:
+            parts.append(score_maps(meas[pl], pl, sess, cols, state))
+    for pl, cols in ((pair_label(*D_SET_S_PAIR), D_SET_S_PAIR_COLUMNS),
+                     *[(f'{c} (2021)', tuple(c.split('-'))) for c in D_2021_DIFFS]):
+        if pl in meas:
+            parts.append(score_maps(meas[pl], pl, PANEL_ESTIMATE, cols, state))
+        print(f"{time.strftime('%H:%M:%S')} D scored {pl} ({time.time() - t0:.0f} s)", flush=True)
+    scores = pd.concat(parts, ignore_index=True)
+    scores['brain'] = scores['calyx'].map(brain_of)
+    scores['decides'] = ((scores['set'] == 'W') & scores['pair'].isin(kept)
+                         & (scores['scoring'] == scoring)) if scoring is not None else False
+    scores['role'] = np.where(scores['decides'], 'decides (W3)',
+                              np.where(scores['set'] == 'W', 'described (another pair or scoring than A4 keeps)',
+                                       'beside, deciding nothing'))
+    # shares per set, scoring, pair, estimate and calyx, and W3's calyx rule on them
+    key = ['set', 'scoring', 'pair', 'session']
+    sh_rows = []
+    for k, g in scores.groupby(key):
+        s_ = w3_pair_shares(g)
+        sh_rows.append(dict(zip(key, k), n_recordings=int(g['recording'].nunique()), n_flies=int(g['fly'].nunique()),
+                            **{f'share_{c}': float(s_.get(c, np.nan)) for c in CALYCES},
+                            **{f'median_best_r_{c}': float(g.loc[g.calyx == c, 'best_r'].median()) for c in CALYCES},
+                            passes_half=w3_pair_passes(s_, W3_PASS_SHARE),
+                            passes_quarter=w3_pair_passes(s_, W3_FAIL_SHARE),
+                            decides=bool(g['decides'].all() and len(g))))
+    shares = pd.DataFrame(sh_rows)
+    # W3 under each session's estimate, then over the estimates
+    w = scores[scores['set'] == 'W']
+    sessions = sorted(set(w['session']))
+
+    def w3_on(sc, pairs):
+        per = {s_: w3_verdict(w[(w['scoring'] == sc) & (w['session'] == s_)], pairs=pairs) for s_ in sessions}
+        return dict(per_session=per, W3=w3_over_estimates({s_: v['verdict'] for s_, v in per.items()}))
+    if scoring is None:
+        dec = dict(per_session={}, W3='no pair')
+    else:
+        dec = w3_on(scoring, kept)
+    all_pairs = [pair_label(a, b) for a, b in A3_PAIRS]
+    described = {sc: w3_on(sc, all_pairs) for sc in SCORINGS}
+    outcome = {'passes': 'd', 'fails': 'e', 'no pair': 'i'}.get(dec['W3'])
+    res = dict(replan=REPLAN, calyces=list(CALYCES), scoring=scoring, kept=kept, a4_w3_reads=a4.get('w3_reads'),
+               W3=dec['W3'], per_session=dec['per_session'], outcome=outcome,
+               note_whole=('a verdict on the whole-calyx projection: a pass says that APL\'s map follows where a '
+                           'glomerulus\'s boutons lie in the posterior view, not at which depth') if scoring == 'whole'
+               else None,
+               described_all_pairs_both_scorings=described,
+               orientation=dict(L_is_fly_right=YANG_L_IS_FLY_RIGHT, flips=list(D_FLIPS),
+                                note='posterior view, dorsal up, "L" the fly\'s right; both medial edges searched '
+                                     '(the medial edge of an "L" file and the piezo zero are open with Yang)'),
+               slab_within_um=D_SLAB_WITHIN_UM, n_perm=int(n_perm), w3_rule=dict(
+                   pass_share=W3_PASS_SHARE, fail_share=W3_FAIL_SHARE, min_pairs=W3_MIN_PAIRS,
+                   calyces=f'{HEMIBRAIN_CALYX} and at least one of {list(MALECNS_CALYCES)}'),
+               n_recordings={k: int(v) for k, v in scores.groupby('set')['recording'].nunique().items()},
+               n_flies={k: int(v) for k, v in scores.groupby('set')['fly'].nunique().items()},
+               caveats=caveats_text(), claw_rule=CLAW_RULE, seconds=round(time.time() - t0, 1))
+    out = out_dir()
+    with_caveats(scores).to_csv(out / 'd_scores.csv', index=False)
+    with_caveats(shares).to_csv(out / 'd_pair_shares.csv', index=False)
+    pd.DataFrame(files).to_csv(out / 'd_inputs.csv', index=False)
+    _write_json(out / 'd_w3.json', res)
+    if e79_reading:
+        CM.run_pratyush(out / D_E79_DIR, n_perm, calyces=state['calyces'], rates=state['rates'], meas=meas_2021,
+                        caveats=caveats_text(), rates_source=str(out / 'a3_pn_rates.csv'))
+    summ = dict(res, pair_shares=shares[shares['set'] == 'W'].to_dict('records'),
+                beside=shares[shares['set'] != 'W'].to_dict('records'))
+    _write_json(out / 'd_summary.json', summ)
+    v = _read_json(out / 'verdict.json')
+    if v is not None:
+        v['W3'] = w3_summary(res)
+        v['outcomes'] = [o for o in v.get('outcomes', []) if o not in ('d', 'e', 'i')] + ([outcome] if outcome else [])
+        _write_json(out / 'verdict.json', v)
+    return {k: res[k] for k in ('W3', 'scoring', 'kept', 'outcome', 'per_session', 'n_recordings')}
+
+
+def _d_w3_current(out: Path) -> bool:
+    d = _read_json(out / 'd_w3.json')
+    return bool(d is not None and d.get('replan') == REPLAN and list(d.get('calyces', [])) == list(CALYCES))
+
+
+def w3_summary(d: dict) -> dict:
+    """W3 as verdict.json gives it, from part D's result (d_w3.json)."""
+    return dict(W3=d['W3'], scoring=d['scoring'], kept=d['kept'], outcome=d.get('outcome'),
+                per_session={s_: v['verdict'] for s_, v in d.get('per_session', {}).items()}, replan=d.get('replan'),
+                note_whole=d.get('note_whole'))
 
 
 def move_withheld(out: Optional[Path] = None) -> List[str]:
     """Moves (never deletes) the A3 and A4 outputs of 2026-11-15 that hold maps, agreements or powers (WITHHELD_FILES
-    and every a4_ file) to results/E100_apl_weak_odors/withheld_2026-11-15/; a3_pn_rates files, a3_inputs.csv and
-    a3_sessions.csv stay. Returns the names moved."""
-    raise NotImplementedError
+    and every a4_ file last written before the re-plan, REPLAN) to results/E100_apl_weak_odors/withheld_2026-11-15/;
+    a3_pn_rates files, a3_inputs.csv and a3_sessions.csv stay (a copy of the 2026-11-15 a3_sessions.csv is kept there
+    too, since the new A3 rewrites it). Nothing reads the folder. Returns the names moved."""
+    import shutil
+    out = out_dir() if out is None else Path(out)
+    cut = time.mktime(time.strptime(REPLAN, '%Y-%m-%d %H:%M'))
+    names = [f for f in WITHHELD_FILES if (out / f).is_file()]
+    names += sorted(p.name for p in out.glob('a4_*') if p.is_file())
+    names = [n for n in names if (out / n).stat().st_mtime < cut]
+    dest = out / WITHHELD_DIR
+    sess = out / 'a3_sessions.csv'
+    if names or (sess.is_file() and sess.stat().st_mtime < cut):
+        dest.mkdir(exist_ok=True)
+    for n in names:
+        if (dest / n).exists():
+            raise FileExistsError(f'{dest / n} exists; not overwritten')
+        shutil.move(str(out / n), str(dest / n))
+    if sess.is_file() and sess.stat().st_mtime < cut and not (dest / sess.name).exists():
+        shutil.copyfile(sess, dest / sess.name)
+    if names:
+        print(f"{time.strftime('%H:%M:%S')} withheld outputs moved to {dest}: {', '.join(names)}", flush=True)
+    return names
 
 
 def part_e() -> dict:
@@ -2658,7 +3053,8 @@ def score(a0s: Sequence[str] = A0_DEFINITIONS) -> dict:
         W1_over_farn2_described={stim_label(s): c_(A0_CARRYING, 'W', 'yang', s, W1_BESIDE_DENOMINATOR)
                                  for s in W1_RATIOS if s != W1_BESIDE_DENOMINATOR},
         a0_identity_passes=bool(ident['passes'].all()),
-        W2=w2, W3='waits: part D is on hold with the connectome tables (rule of 2026-11-15 15:35)',
+        W2=w2, W3=(w3_summary(_read_json(out / 'd_w3.json')) if _d_w3_current(out) else
+                   'waits: part D (re-planned 2026-11-17 on the hemibrain and the male CNS) has not run'),
         set_w_solvent=dict(yang_median=float(rw['solvent'].median()), yang_min=float(rw['solvent'].min()),
                            yang_max=float(rw['solvent'].max()), n_large=int(rw['large_solvent'].sum()),
                            n_recordings=int(len(rw))),
@@ -2683,6 +3079,8 @@ def score(a0s: Sequence[str] = A0_DEFINITIONS) -> dict:
                 g_[set_] = d['solvent']
         verdict['f_common_share_weak_vs_panel'] = f_
         verdict['g_solvent_vs_common'] = g_
+    if isinstance(verdict['W3'], dict) and verdict['W3'].get('outcome'):
+        oc.append(verdict['W3']['outcome'])
     verdict['outcomes'] = oc
     _write_json(out / 'verdict.json', verdict)
     return {k: verdict[k] for k in ('W1', 'W1_by_a0', 'W1_classes', 'W2', 'W3', 'outcomes')}
@@ -2693,9 +3091,12 @@ READS = {
     '0': "E79's connectome_pn_rates.csv and E79_maps_across_baselines.csv, data/yang_weak_odor_kc/"
          "orn_input_availability.csv, one 2021 recording of data/yang_apl_calyx_maps/, A3's a3_pn_rates.csv",
     'A2': "E98's B1 runs (outputs/E98_apl_response_strength/B/ or its archive), the lab's three ORN sessions",
-    'A3': "C2's simulator (E77's build_c2_simulator) on the extended input, E79's calyces (Yang's Claude's connectome "
-          "tables in Tom/claude_APL_modeling_YZ4TC and Pratyush's boutons)",
-    'A4': "A3's inputs (rebuilt in the process), E79's connectome_measured.csv",
+    'A3': "A3's cached PN stage (a3_pn_rates.csv, a3_inputs.csv; C2's simulator only with --rebuild-pn), the three "
+          "calyces of Pratyush's tables (E79's pratyush_calyces: the hemibrain's of olfsysm's from_pratyush/2025-12-05, "
+          "the male CNS's of data/Male-CNS_Tom/; nothing else)",
+    'A4': "A3's inputs (rebuilt in the process), E79's measured_maps of the 12 recordings of 2021 (their reliability)",
+    'D': "A3's inputs, a4_w3_pairs.json (this design's), viki's copy (sets W, H, S: yaml, peak maps, outlines), the 12 "
+         "recordings of 2021 (E79's measured_maps)",
     'B': "viki's copy of Yang's processed recordings (data/yang_apl_recordings/; sets W, S, H; raw-only rows refused): "
          "yaml, peak maps, outlines, Yang's roi_peak_dff tables, Experiment.xml; E79's E79_maps_across_baselines.csv",
     'C': "viki's copy (sets W, S, H): yaml, peak maps, outlines",
@@ -2708,23 +3109,27 @@ WRITES = {
          'identity.json (readings_2021)',
     'C': 'c_shared.csv, c_stimuli.csv, c_solvent.csv, c_centroid.csv, c_summary.json',
     'score': 'score_family_ratios.csv, score_ratio_classes.csv, score_weak_table.csv, verdict.json',
-    'A3': 'a3_pn_rates.csv, a3_pn_rates_total.csv, a3_inputs.csv, a3_maps.csv, a3_agreement.csv, a3_anatomy.csv, '
-          'a3_sessions.csv, a3_pred_grids.npz, a3_summary.json; outputs/E100_apl_weak_odors/A3/orn_extended.csv',
+    'A3': 'a3_calyces.csv, a3_axis_checks.csv, a3_official_roi_outline.csv, a3_maps.csv, a3_agreement.csv, '
+          'a3_anatomy.csv, a3_sessions.csv, a3_pred_grids.npz, a3_summary.json (the withheld outputs of 2026-11-15 moved '
+          'to withheld_2026-11-15/ first)',
     'A4': 'a4_power_draws.csv.gz, a4_power.csv, a4_power_by_calyx.csv, a4_w3_pairs.json',
+    'D': 'd_scores.csv, d_pair_shares.csv, d_inputs.csv, d_w3.json, d_summary.json, W3 in verdict.json, '
+         'd_e79_analysis4/ (E79\'s analysis 4 on the 2021 maps through the three calyces)',
 }
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
-    ap.add_argument('--part', required=True, choices=PARTS + ('A3A4',),
-                    help="A3A4 runs A3 and then A4 in one process (the calyces' grids built once)")
+    ap.add_argument('--part', required=True, choices=PARTS + ('A3A4', 'A3A4D', 'withheld'),
+                    help="A3A4 runs A3 and then A4 in one process (the calyces' grids built once), A3A4D then part D; "
+                         "'withheld' only moves the withheld outputs of 2026-11-15")
     ap.add_argument('--no-recordings', action='store_true', help="part 0: the identities that need no new recording")
     ap.add_argument('--n-perm', type=int, default=N_PERM, help='A3 / A4: label permutations')
     ap.add_argument('--n-draws', type=int, default=A4_N_DRAWS, help='A4: noise draws per scored and truth calyx')
     ap.add_argument('--rebuild-pn', action='store_true', help='A3: rerun the PN stage even if a3_pn_rates.csv exists')
     ap.add_argument('--dry-run', action='store_true', help='say what the part reads and writes, and exit')
     a = ap.parse_args()
-    parts = ('A3', 'A4') if a.part == 'A3A4' else (a.part,)
+    parts = {'A3A4': ('A3', 'A4'), 'A3A4D': ('A3', 'A4', 'D')}.get(a.part, (a.part,))
     if a.dry_run:
         for p_ in parts:
             print(f'part {p_}: reads {READS.get(p_, "viki copy of Yang recordings (after Yang answers)")}; writes '
@@ -2736,16 +3141,27 @@ def main() -> None:
     elif a.part == 'A2':
         provenance('A2')
         print(json.dumps(part_a2(), indent=1, default=float), flush=True)
-    elif a.part in ('A3', 'A4', 'A3A4'):
+    elif a.part in ('A3', 'A4', 'A3A4', 'A3A4D'):
+        move_withheld()
         if a.rebuild_pn:
             pn_rates_extended(rebuild=True)
         state = load_a3_inputs(a.n_perm)
         if 'A3' in parts:
-            provenance('A3', n_perm=a.n_perm)
+            provenance('A3', inputs=connectome_inputs(), n_perm=a.n_perm, replan=REPLAN, calyces=list(CALYCES))
             print(json.dumps(part_a3(a.n_perm, state), indent=1, default=float), flush=True)
         if 'A4' in parts:
-            provenance('A4', n_perm=a.n_perm, n_draws=a.n_draws)
+            provenance('A4', inputs=connectome_inputs(), n_perm=a.n_perm, n_draws=a.n_draws, replan=REPLAN,
+                       calyces=list(CALYCES))
             print(json.dumps(part_a4(state, a.n_draws), indent=1, default=float), flush=True)
+        if 'D' in parts:
+            provenance('D', inputs=connectome_inputs(), n_perm=a.n_perm, replan=REPLAN, calyces=list(CALYCES))
+            print(json.dumps(part_d(a.n_perm, state), indent=1, default=float), flush=True)
+    elif a.part == 'D':
+        state = load_a3_inputs(a.n_perm)
+        provenance('D', inputs=connectome_inputs(), n_perm=a.n_perm, replan=REPLAN, calyces=list(CALYCES))
+        print(json.dumps(part_d(a.n_perm, state), indent=1, default=float), flush=True)
+    elif a.part == 'withheld':
+        print(json.dumps(move_withheld()), flush=True)
     elif a.part == 'B':
         provenance('B', calyx_response=CALYX_RESPONSE, carrying_reading=CARRYING_READING, n_boot=N_BOOT)
         print(json.dumps(part_b(), indent=1, default=float), flush=True)
@@ -2756,7 +3172,7 @@ def main() -> None:
         provenance('score', calyx_response=CALYX_RESPONSE, a0_definitions=list(A0_DEFINITIONS))
         print(json.dumps(score(), indent=1, default=float), flush=True)
     else:
-        {'D': part_d, 'E': part_e}[a.part]()
+        part_e()
 
 
 if __name__ == '__main__':
