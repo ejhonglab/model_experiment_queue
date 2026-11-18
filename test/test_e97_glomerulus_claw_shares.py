@@ -542,3 +542,19 @@ def test_apl_effect_reads_no_withheld_point(tmp_path):
     pd.DataFrame({'a': [1.0]}).to_parquet(d / 'runs_mcns' / 'B2_mean2_real_on_responses.parquet')
     idx = AE._archive_index(str(d))
     assert set(idx) == {'B2_mean2_real_on_responses.parquet'}
+
+
+def test_the_arm_order_and_the_claims(tmp_path, monkeypatch):
+    pa = G.plan(G.ARMS, G.ALL_WIRINGS, order='arm')
+    assert sorted(pa) == sorted(G.plan(G.ARMS, G.ALL_WIRINGS)) and len(pa) == 84
+    assert pa[:8] == [('B2_mean2', w) for w in G.ALL_WIRINGS]
+    with pytest.raises(ValueError):
+        G.plan(order='odor')
+    monkeypatch.setattr(G, 'local_dir', lambda sub='': (tmp_path / sub) if (tmp_path / sub).mkdir(exist_ok=True) is None else None)
+    assert G.claim_point('B2_mean2_real') and not G.claim_point('B2_mean2_real')
+    # a claim of this host whose process is gone is taken over
+    (tmp_path / 'claims' / 'B2_mean2_P1').mkdir()
+    (tmp_path / 'claims' / 'B2_mean2_P1' / 'owner').write_text(f'{G._host()} 999999999')
+    assert G.claim_point('B2_mean2_P1')
+    G.release_point('B2_mean2_real')
+    assert G.claim_point('B2_mean2_real')

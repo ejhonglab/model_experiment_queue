@@ -807,15 +807,24 @@ def run_tag(variant: str, wiring: str) -> str:
     return f'{variant}_{wiring}'
 
 
-def plan(arms: Sequence[str] = ARMS, wirings: Sequence[str] = ALL_WIRINGS) -> List[Tuple[str, str]]:
-    """[(variant, wiring)] of `arms` on `wirings` (each arm on its own wirings, ARMS_ON), wiring by wiring in
-    ALL_WIRINGS order, each wiring's arms in ARM_ORDER (C2 last)."""
+def plan(arms: Sequence[str] = ARMS, wirings: Sequence[str] = ALL_WIRINGS, order: str = 'wiring'
+         ) -> List[Tuple[str, str]]:
+    """[(variant, wiring)] of `arms` on `wirings` (each arm on its own wirings, ARMS_ON): `order` 'wiring', wiring by
+    wiring in ALL_WIRINGS order, each wiring's arms in ARM_ORDER (C2 last); 'arm', arm by arm in ARM_ORDER, each arm's
+    variants on the wirings in ALL_WIRINGS order (B2 on the eight first)."""
     out = []
-    order = [a for a in ARM_ORDER if a in arms] + [a for a in arms if a not in ARM_ORDER]
+    arms_o = [a for a in ARM_ORDER if a in arms] + [a for a in arms if a not in ARM_ORDER]
+    if order == 'arm':
+        for a in arms_o:
+            for v in arm_variants(a):
+                out += [(v, w) for w in ALL_WIRINGS if w in wirings and w in ARMS_ON[a]]
+        return out
+    if order != 'wiring':
+        raise ValueError(f"order {order!r} is 'wiring' or 'arm'")
     for w in ALL_WIRINGS:
         if w not in wirings:
             continue
-        for a in order:
+        for a in arms_o:
             if w in ARMS_ON[a]:
                 out += [(v, w) for v in arm_variants(a)]
     return out
@@ -1631,11 +1640,51 @@ def run_point(variant: str, wiring: str, rt: Optional[pd.DataFrame] = None, cc: 
     return row
 
 
+def _alive(pid: int) -> bool:
+    import os
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def claim_point(tag: str) -> bool:
+    """Claim a point for this process (lanes on one host share part B's points): a directory
+    outputs/.../claims/<tag> made with mkdir, holding 'owner' (host and pid). A claim of this host whose process is gone
+    is taken over; a live one, or one being written, is not."""
+    import os
+    import shutil
+    d = local_dir('claims') / tag
+    try:
+        d.mkdir()
+    except FileExistsError:
+        try:
+            host, pid = (d / 'owner').read_text().split()
+        except (OSError, ValueError):
+            return False
+        if host == _host() and not _alive(int(pid)):
+            shutil.rmtree(d, ignore_errors=True)
+            return claim_point(tag)
+        return False
+    (d / 'owner').write_text(f'{_host()} {os.getpid()}')
+    return True
+
+
+def release_point(tag: str) -> None:
+    import shutil
+    shutil.rmtree(local_dir('claims') / tag, ignore_errors=True)
+
+
 def part_b(arms: Sequence[str] = ARMS, wirings: Sequence[str] = ALL_WIRINGS, dry_run: bool = False,
-           max_points: Optional[int] = None) -> pd.DataFrame:
-    """Part B's points of `arms` on `wirings` (each arm on its own wirings, ARMS_ON; `plan`), resumable (runs_B.csv);
-    needs part 0 to have passed (its built records). `max_points` stops after that many new points (the smoke test)."""
-    todo = [(v, w) for v, w in plan(arms, wirings) if run_tag(v, w) not in _done(out_dir() / RUNS_TABLE)]
+           max_points: Optional[int] = None, order: str = 'wiring', claim: bool = False) -> pd.DataFrame:
+    """Part B's points of `arms` on `wirings` (each arm on its own wirings, ARMS_ON; `plan` in `order`), resumable
+    (runs_B_mcns.csv); needs part 0 to have passed (its built records). `max_points` stops after that many new points
+    (the smoke test). With `claim`, each point is claimed first (`claim_point`) and the run table read again before it,
+    so that several lanes on this host share the points."""
+    todo = [(v, w) for v, w in plan(arms, wirings, order) if run_tag(v, w) not in _done(out_dir() / RUNS_TABLE)]
     print(f'E97 B: {len(todo)} points to run: ' + ', '.join(run_tag(v, w) for v, w in todo), flush=True)
     if dry_run:
         return runs_b()
@@ -1643,10 +1692,23 @@ def part_b(arms: Sequence[str] = ARMS, wirings: Sequence[str] = ALL_WIRINGS, dry
         raise RuntimeError('run --part 0 (after --part A) first: the identities must hold before any scored point')
     cc = _commits_clean()
     rt, built = ratios_table(), built_records()
-    for i, (v, w) in enumerate(todo):
-        if max_points is not None and i >= max_points:
+    n = 0
+    for v, w in todo:
+        if max_points is not None and n >= max_points:
             break
-        run_point(v, w, rt, cc, built, part='B' if not v.startswith('C2') else 'C2')
+        tag = run_tag(v, w)
+        if claim:
+            if tag in _done(out_dir() / RUNS_TABLE) or not claim_point(tag):
+                continue
+            if tag in _done(out_dir() / RUNS_TABLE):
+                release_point(tag)
+                continue
+        try:
+            run_point(v, w, rt, cc, built, part='B' if not v.startswith('C2') else 'C2')
+        finally:
+            if claim:
+                release_point(tag)
+        n += 1
     return runs_b()
 
 
@@ -2531,6 +2593,8 @@ def main() -> None:
     ap.add_argument('--wirings', default='all8', help="S, T, all8 or a comma-separated list of wiring labels")
     ap.add_argument('--pop', default='S', choices=['S', 'T'], help="part D's population")
     ap.add_argument('--max-points', type=int, default=None, help='part B: stop after this many new points')
+    ap.add_argument('--order', default='wiring', choices=['wiring', 'arm'], help="part B's order of the points")
+    ap.add_argument('--claim', action='store_true', help='part B: claim each point (lanes on one host share them)')
     ap.add_argument('--dry-run', action='store_true', help='print the plan (and the commands) without running')
     ap.add_argument('--force', action='store_true', help='part C2 / D without their condition')
     ap.add_argument('--no-held', action='store_true', help='part 0 without the held reading of the real wiring')
@@ -2549,7 +2613,7 @@ def main() -> None:
     elif a.part == 'B':
         if not a.dry_run:
             provenance('B', arms=list(arms), wirings=list(ws), max_points=a.max_points)
-        part_b(arms, ws, dry_run=a.dry_run, max_points=a.max_points)
+        part_b(arms, ws, dry_run=a.dry_run, max_points=a.max_points, order=a.order, claim=a.claim)
     elif a.part == 'score':
         score(coresponse=not a.no_co, zcell=not a.no_zcell, n_workers=a.workers)
     elif a.part == 'C2':
