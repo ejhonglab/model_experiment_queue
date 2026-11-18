@@ -550,7 +550,10 @@ def require_lock(check_git: bool = True, check_files: bool = True) -> dict:
     if check_git and not _committed(LOCK_PATH):
         raise PermissionError(f'{LOCK_PATH.name} is not committed (or has uncommitted changes)')
     if check_files:
-        root = Path(lock['files']['root'])
+        # Remy's folder as this host mounts tensor (`remy_dir`), not the lock's recorded root, which is the
+        # mount path of the host that wrote the lock (atlas: /mnt/tensor; hal and viki: /local/tensor); the
+        # paths below it and their sha256 are what is checked
+        root = remy_dir()
         for kind in ('manifests', 'distance_files'):
             for f in lock['files'][kind]:
                 if _sha256(root / f['path']) != f['sha256']:
