@@ -248,3 +248,16 @@ def test_archive_dedupes_and_drops_held():
     assert list(a.n_copies) == [2, 2, 1]
     assert a.copies.iloc[0] == 'E1_x:a ; E1_x:d'
     assert list(a.inside) == [True, False, True]
+
+
+def test_registry_inputs_are_registry_keys():
+    from kcq import data_targets as DT
+    for keys in E.REGISTRY_INPUTS.values():
+        assert set(keys) <= set(DT.INPUTS)
+    for name in ('ctrl_ceiling_54', 'tnt_rec_rho_loo_91', 'family_rho_on_sd_wirings_120', 'family_rho_off_boot_sd_66',
+                 'paired_rho_off_sd_e93_fuller_input', 'e85_population_agreement_on_66'):
+        assert E.registry_inputs(name)
+
+
+def test_probe_alternates_name_known_probes():
+    assert set(E.PROBE_ALTS) <= set(E.PROBES)
