@@ -535,13 +535,17 @@ def part_b(out: Path, half: str, gens: int = P_GENS, pop: int = P_POP, resume: b
 # ---------------------------------------------------------------------------
 # arm I (part C): each odor's input
 
-def _input_worker(conn, label: str) -> None:
+def _input_worker(conn, label: str, orn: Optional[pd.DataFrame] = None) -> None:
     """An InputPool worker: one wiring's pieces (`wiring_parts`), then for each (odor, factors) received the
-    candidates simulated as pseudo-odors (E64's `candidate_orn` on the lab's input) on a simulator built for them at the
-    wiring's fit, the lab input's breadth held, APL on and APL off; until None."""
+    candidates simulated as pseudo-odors (E64's `candidate_orn` on the lab's input, or on `orn` when given: E109's start
+    from another input, the lab input's layout) on a simulator built for them at the wiring's fit, the lab input's
+    breadth held, APL on and APL off; until None."""
     try:
         from experiments.E64_input_oracle import candidate_orn
         parts = X.wiring_parts(label)
+        base = parts['orn'] if orn is None else orn
+        if not (base.index.equals(parts['orn'].index) and base.columns.equals(parts['orn'].columns)):
+            raise ValueError(f"{label}: the base input's glomeruli or odors are not the lab input's")
         p = dict(parts['p'])
         conn.send(('ready', dict(label=label, n_kc=int(parts['saved']['on'][1].shape[0]),
                                  odors=[str(c) for c in parts['saved']['on'][1].columns])))
@@ -554,7 +558,7 @@ def _input_worker(conn, label: str) -> None:
             break
         try:
             odor, factors = msg
-            cand = candidate_orn(parts['orn'], odor, np.asarray(factors, dtype=float))
+            cand = candidate_orn(base, odor, np.asarray(factors, dtype=float))
             sim, _ = X.build_simulator(label, orn=cand, breadth=parts['breadth'])
             r_on, s_on = sim(dict(p))
             r_off, s_off = sim(dict(p, wAPLKC_scale=0.0, wAPLPN_scale=0.0))
@@ -570,9 +574,11 @@ def _input_worker(conn, label: str) -> None:
 class InputPool:
     """One worker process per wiring (spawned, `threads` OpenMP threads each), each simulating a generation's candidates
     for one odor on its wiring (`_input_worker`); `run(odor, factors)` returns {wiring: (responses on, counts on,
-    responses off, counts off)} as arrays (KCs x candidates)."""
+    responses off, counts off)} as arrays (KCs x candidates). The factors multiply the lab's input, or `orn` (the lab
+    input's layout) when given."""
 
-    def __init__(self, wirings: Sequence[str] = S_WIRINGS, threads: int = I_WORKERS_THREADS):
+    def __init__(self, wirings: Sequence[str] = S_WIRINGS, threads: int = I_WORKERS_THREADS,
+                 orn: Optional[pd.DataFrame] = None):
         import multiprocessing
         ctx = multiprocessing.get_context('spawn')
         keep = {k: os.environ.get(k) for k in ('OMP_NUM_THREADS', 'OMP_THREAD_LIMIT')}
@@ -582,7 +588,7 @@ class InputPool:
         try:
             for w in self.wirings:
                 a, b = ctx.Pipe()
-                p = ctx.Process(target=_input_worker, args=(b, w), daemon=True)
+                p = ctx.Process(target=_input_worker, args=(b, w) if orn is None else (b, w, orn), daemon=True)
                 p.start()
                 self.procs[w], self.conns[w] = p, a
         finally:
