@@ -286,6 +286,103 @@ def calyx_side(calyx: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Pratyush's tables: the three calyces of E100's part D (re-planned 2026-11-17)
+#
+# The hemibrain's right calyx and the male CNS's left and right, all from Pratyush's pipeline, by one rule and with no
+# ROI rule. The claws are E97's counted claws (`E97_glomerulus_claw_shares.counted_claws`, with its name mapping); the
+# folders are E97's hemibrain_dir() and malecns_dir(). Nothing here reads the tables of Yang's own Claude's project
+# (YANG_APL; held for queue work), FlyWire / FAFB or BANC, and nothing calls load_calyces, _apl_table, axis_checks or
+# _prat_boutons: every table is opened through `_read_prat`, which refuses any path outside those two folders.
+
+PRAT_CALYCES: Tuple[str, ...] = ('hemibrain_R', 'malecns_L', 'malecns_R')
+# E97's mushroom-body names (`counted_claws`'s mb column) -> these calyces
+E97_MB_TO_CALYX = {'hemibrain': 'hemibrain_R', 'malecns_L': 'malecns_L', 'malecns_R': 'malecns_R'}
+# the calyx rule passed to E97's reader: none for all three (the re-plan: one rule, no ROI rule)
+CALYX_ROI_RULE = 'none'
+# the calyx's neighbours for the axis check: ROI name -> required signs of (lateral, dorsal, anterior) of the ROI's
+# synapses' centroid minus the calyx's (0: not checked); lateral is +R on the right side, -R on the left
+NEIGHBOURS: Dict[str, Tuple[int, int, int]] = {'PED': (0, -1, 1), 'SLP': (0, 1, 1), 'PLP': (1, -1, 0)}
+NEIGHBOUR_MIN_SYNAPSES = 20
+# path fragments the new readers must never open (the held and excluded connectome data)
+HELD_PATH_MARKERS: Tuple[str, ...] = ('claude_APL_modeling_YZ4TC', 'flywire', 'fafb', 'banc', '2024-09-13')
+
+
+class AxisCheckError(RuntimeError):
+    """A failed neighbour axis check (`neighbour_axis_checks`); `table` holds the checks."""
+
+    def __init__(self, message: str, table: pd.DataFrame):
+        super().__init__(message)
+        self.table = table
+
+
+def _read_prat(path: Path, columns: Optional[Sequence[str]] = None) -> pd.DataFrame:
+    """One of Pratyush's tables (parquet or csv), refusing any path outside E97's hemibrain_dir() and malecns_dir() or
+    naming held data."""
+    raise NotImplementedError
+
+
+def pratyush_calyces(claws: Optional[pd.DataFrame] = None, *, roi: str = CALYX_ROI_RULE, syn_min: int = 5,
+                     min_confidence: Optional[float] = None) -> Dict[str, Dict[str, pd.DataFrame]]:
+    """The three calyces (PRAT_CALYCES) from Pratyush's tables, by one rule and with no ROI rule.
+
+    Args:
+        claws: the counted claws of both brains in the form of E97's `counted_claws` (needs mb, kc_id, claw_id, pn_id
+            and glomerulus; bouton_ids and x_post, y_post, z_post are used when present). None: E97's
+            `counted_claws('hemibrain', ...)` and `counted_claws('malecns', ...)` with `roi`, `syn_min` and
+            `min_confidence` (which apply to the claws only).
+
+    Returns:
+        calyx -> {'claws', 'boutons', 'apl'}, in E79's (R, D, A) frame (um), in the columns E79's analyses read:
+        - claws: kc_id, claw_id, pn_id, glomerulus, n_synapses (= n_PN_synapses), main_bouton_id, roi_share (share of
+          the claw's PN synapses with both ends in the official calyx ROI of its side), R, D, A;
+        - boutons: the boutons that carry at least one counted claw: bouton_id ('<pn>_<bouton>'), pn_id, bouton,
+          glomerulus, n_tbars (its number of release sites, the weight of E79's analysis 4), n_counted_claws, R, D, A
+          (the centroid of its release sites);
+        - apl: APL's synapses with those claws and those boutons, both directions: kind ('KC' / 'PN'), partner_id,
+          apl_input (True: APL postsynaptic), claw_id or bouton, apl_id, in_roi (both ends in the official calyx ROI),
+          confidence_pre, confidence_post, R, D, A (midpoint of the two sites). They draw each slab's outline and the
+          posterior edge by E79's rules (`calyx_outlines`)."""
+    raise NotImplementedError
+
+
+def calyx_outlines(apl: pd.DataFrame, frame: Optional[dict] = None) -> dict:
+    """E79's outline and posterior edge from a calyx's APL synapses: {'frame': calyx_frame, 'posterior_edge_A': the
+    0.5th percentile of A, 'slab_centers': array, 'whole': the whole calyx's outline mask, 'slabs': {slab depth from the
+    posterior edge (um): outline mask}} (slabs with at least SLAB_MIN_SHARE of the synapses and 50 of them, as
+    run_maps uses). `frame` None: the synapses' own frame."""
+    raise NotImplementedError
+
+
+def neighbour_axis_checks(calyces: Optional[Dict[str, Dict[str, pd.DataFrame]]] = None, strict: bool = True,
+                          min_synapses: int = NEIGHBOUR_MIN_SYNAPSES) -> pd.DataFrame:
+    """The axis check on Pratyush's tables alone: per calyx, the centroid of the PN, KC and APL synapses in each
+    neighbouring ROI (NEIGHBOURS: the peduncle anterior and ventral of the calyx, the superior lateral protocerebrum
+    dorsal and anterior, the posterior lateral protocerebrum ventral and lateral) minus the calyx's (the mean of its APL
+    synapses), and the right mushroom body at larger R than the left (the male CNS; not applicable to the hemibrain).
+
+    Returns:
+        one row per calyx and check: calyx, brain, side, check, n_synapses, d_lateral_um, d_dorsal_um,
+        d_anterior_um, d_R_um, expect, status ('pass', 'fail' or 'n/a'), and calyx_passed (no check of that calyx
+        failed).
+
+    Raises:
+        AxisCheckError (with the table) when `strict` and any check fails; a failed check stops part D."""
+    raise NotImplementedError
+
+
+def official_roi_outline(calyces: Optional[Dict[str, Dict[str, pd.DataFrame]]] = None
+                         ) -> Tuple[pd.DataFrame, Dict[str, dict]]:
+    """Beside, deciding nothing: the outline and posterior edge from APL's calyx synapses inside the official calyx ROI
+    (in_roi) against those from all of them, in the same frame.
+
+    Returns:
+        (one row per calyx: n_apl, share_apl_in_roi, share_claws_in_roi (roi_share above one half), posterior edges
+        (all, ROI) and their difference, mean A outside minus inside the ROI, the whole-calyx outlines' areas and
+        overlap (intersection over union); calyx -> `calyx_outlines` of the ROI's synapses)."""
+    raise NotImplementedError
+
+
+# ---------------------------------------------------------------------------
 # model inputs
 
 def model_pn_rates(rebuild: bool = False) -> pd.DataFrame:
