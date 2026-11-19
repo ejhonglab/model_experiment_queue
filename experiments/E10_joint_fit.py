@@ -200,6 +200,21 @@ passed: the fits as before); recorded in fits.csv (apl_inh_divisive) and the pro
 given; tag part div_ after pool<S>_ (before k<k>); refused with --claw-inh-pool (olfsysm refuses the two together) and
 --block-proxy (its replays were validated for the subtractive form only); allowed with --claw-thr (olfsysm divides
 before the per-claw transfer).
+A residual APL output in the blocked flies (E111): `--apl-residual F` gives the blocked condition ('off': the acute_off
+run, every APL-off statistic of the loss and of fits.csv) a fraction F of APL's output: its APL->KC and APL->bouton scales
+are F times the evaluation's APL-on scales, in place of 0 (the inputs to APL, KC->APL and bouton->APL, the threshold and
+the KC-KC scale as APL on; `apl_residual_params`). Fixed (0 to 1; F = 0 is the blocked condition without the option, F = 1
+the APL-on condition), or with `--fit-apl-residual` fitted from F within `--apl-residual-bounds LO HI` (default 0 0.5) as an
+extra parameter of optimize_mb_model_params (linear in its bounds). The blocked condition is then a condition hook named
+'off', run after the APL-on condition at every evaluation, since the static overrides cannot follow the fitted scales
+(`fit_one`, `with_apl_residual`). The breadth run (`bouton_base`'s APL-off run of the base) and its pre-passes (E71, E78)
+do not take the option: APL's output stays a true 0 there, so the breadth weights are those of the fits without it.
+Off by default (the fits, their history and fits.csv columns as before); recorded in fits.csv (apl_residual: the fixed or
+fitted F; apl_residual_fitted, apl_residual_init, apl_residual_lo / _hi, off_wAPLKC_scale / off_wAPLPN_scale: the blocked
+condition's absolute scales), the history (an apl_residual column, constant when fixed) and the provenance (apl_residual)
+only when given; tag part aplres<F>_ (fixed) or aplresfit<F>_ (fitted from F; b<LO>-<HI> before the underscore with other
+bounds) after the KC-KC prefix; refused with --jitter-k, --block-proxy, --kc-thr-input-exp, --count-kernel and
+--save-spike-times.
 """
 from __future__ import annotations
 
@@ -349,7 +364,62 @@ def pn_norm_tag(pn: Optional[dict]) -> str:
     return f"pnadd{_tag_number(pn['pn_inhadd'])}sc{_tag_number(pn['pn_inhsc'])}_"
 
 
-APLKC_FLAT_KINDS = ('uniform', 'connectome', 'offclaw', 'offclaw_ped', 'allsyn', 'allsyn_even', 'allsyn_even_calyx')
+# (E111) the residual APL output of the blocked condition: the extra parameter's name (history, fits.csv) and the default
+# bounds of a fitted fraction
+APL_RESIDUAL_KEY = 'apl_residual'
+APL_RESIDUAL_BOUNDS = (0.0, 0.5)
+
+
+def apl_residual_spec(f: Optional[float], fitted: bool = False, bounds: Optional[Tuple[float, float]] = None
+    ) -> Optional[dict]:
+    """(E111) --apl-residual's settings, checked: None when `f` is None (the option off: the blocked condition has its
+    APL->KC and APL->bouton scales at 0, the fits as before), else {'value' (f; the start when fitted), 'fitted', 'bounds'
+    ((lo, hi) of a fitted f; None when fixed)}. A fixed f is in [0, 1] (1: the blocked condition is the APL-on one); a
+    fitted f starts inside its bounds, which are in [0, 1] (default APL_RESIDUAL_BOUNDS).
+
+    Raises:
+        ValueError: a value out of range, or `fitted` / `bounds` without `f`, or `bounds` without `fitted`.
+    """
+    if f is None:
+        if fitted or bounds is not None:
+            raise ValueError('--fit-apl-residual / --apl-residual-bounds need --apl-residual (the start)')
+        return None
+    v = float(f)
+    if not (np.isfinite(v) and 0.0 <= v <= 1.0):
+        raise ValueError(f'--apl-residual must be in [0, 1] (got {f})')
+    if not fitted:
+        if bounds is not None:
+            raise ValueError('--apl-residual-bounds needs --fit-apl-residual')
+        return dict(value=v, fitted=False, bounds=None)
+    lo, hi = (float(x) for x in (APL_RESIDUAL_BOUNDS if bounds is None else bounds))
+    if not (np.isfinite(lo) and np.isfinite(hi) and 0.0 <= lo < hi <= 1.0):
+        raise ValueError(f'--apl-residual-bounds must satisfy 0 <= lo < hi <= 1 (got {bounds})')
+    if not lo <= v <= hi:
+        raise ValueError(f'--apl-residual {v} (the start of a fitted residue) not within its bounds {(lo, hi)}')
+    return dict(value=v, fitted=True, bounds=(lo, hi))
+
+
+def apl_residual_tag(spec: Optional[dict]) -> str:
+    """(E111) The tag part of --apl-residual: aplres<f>_ for a fixed residue, aplresfit<f0>_ for a fitted one started at f0
+    (with b<lo>-<hi> before the underscore when its bounds are not APL_RESIDUAL_BOUNDS); '' when off."""
+    if spec is None:
+        return ''
+    if not spec['fitted']:
+        return f"aplres{_tag_number(spec['value'])}_"
+    b = '' if tuple(spec['bounds']) == APL_RESIDUAL_BOUNDS else f"b{_tag_number(spec['bounds'][0])}-{_tag_number(spec['bounds'][1])}"
+    return f"aplresfit{_tag_number(spec['value'])}{b}_"
+
+
+def apl_residual_params(params: Dict[str, float], f: float) -> Dict[str, float]:
+    """(E111) The blocked condition's parameters with a residual APL output f: `params` (the APL-on ones) with the
+    APL->KC and APL->bouton scales (APL's output) multiplied by f; the inputs to APL (KC->APL, bouton->APL), the
+    threshold and the KC-KC scale unchanged. At f = 0 the two scales are 0.0, the values of the blocked condition's
+    static override without the option; at f = 1 the parameters are `params`."""
+    return dict(params, wAPLKC_scale=float(f) * float(params['wAPLKC_scale']),
+        wAPLPN_scale=float(f) * float(params['wAPLPN_scale']))
+
+
+APLKC_FLAT_KINDS =('uniform', 'connectome', 'offclaw', 'offclaw_ped', 'allsyn', 'allsyn_even', 'allsyn_even_calyx')
 # (E96) the components built from the counts of APL's synapses per KC (`aplkc_flat_counts`); (E99) 'allsyn_even' (T1)
 # each KC's count of all of APL's synapses (on its kept claws, on no claw in the calyx, in the peduncle) and
 # 'allsyn_even_calyx' (T2) the same without the peduncle's, spread evenly over its claws
@@ -1647,7 +1717,7 @@ def fit_one(k: float, orn, initial, wnorm, breadth, loss_fn, *, kckc0: float, ma
     kc_thr_factor_fixed: Optional[np.ndarray] = None, claw_transfer: Optional[dict] = None,
     protocol: Optional[dict] = None, spike_times: bool = False, claw_inh_pool: Optional[float] = None,
     apl_divisive: bool = False, aplpn_hold: Optional[float] = None, aplkc_flat: Optional[dict] = None,
-    pn: Optional[dict] = None):
+    pn: Optional[dict] = None, apl_residual: Optional[dict] = None):
     """One joint fit; `kc_thr_factors` (K x KCs, `jitter_factors`) adds the K jittered runs of
     each condition (`jitter_conditions`) to every evaluation; `init_exact_expect` (not None)
     starts exactly at the `init_from` fit's parameters (`init_from_fit` with exact=True);
@@ -1674,7 +1744,16 @@ def fit_one(k: float, orn, initial, wnorm, breadth, loss_fn, *, kckc0: float, ma
     only); `aplkc_flat` (E95: `aplkc_flat_spec`) adds the size d of an unweighted component of the APL->KC weights as a
     fitted parameter ('aplkc_flat', bounded, `aplkc_flat_param`; not passed when None); `pn` (E102: `pn_norm_kws`, the PN
     normalization's pn_inhadd and pn_inhsc) is a fixed model kwarg of every simulation of the fit, APL on and off (not
-    passed when None or empty; `breadth` should then be `bouton_base`'s with the same `pn`)."""
+    passed when None or empty; `breadth` should then be `bouton_base`'s with the same `pn`); `apl_residual` (E111:
+    `apl_residual_spec`, not None) gives the blocked condition a residual APL output f: its APL->KC and APL->bouton
+    scales are f times the APL-on ones of the evaluation (`apl_residual_params`), simulated by a condition hook named
+    'off' (optimize_mb_model_params' static overrides cannot follow the fitted scales; the hook runs after the 'on'
+    condition, as the static 'off' condition does), with f fixed or fitted within its bounds as an extra parameter
+    ('apl_residual', linear in its bounds, the optimizer's rule for a lower bound of 0); the result then has
+    condition_outputs['off'] (the hook's best outputs), condition_params['off'], 'apl_residual' (f, the blocked
+    condition's absolute scales) and, for a fixed f, a constant 'apl_residual' column in its history. Not with the
+    jittered runs, the block proxy, the input-scaled threshold or spike times (refused). None (default): the call is
+    the one without the option."""
     from pyolfsysm.mb_model import optimize_mb_model_params
     wAPLKC = breadth_weights(wnorm['wAPLKC'], breadth, k)
     r19 = None if (claw_thr is None or apl_drive != 'claws') else e19_row(claw_thr, k, kckc0)
@@ -1763,6 +1842,34 @@ def fit_one(k: float, orn, initial, wnorm, breadth, loss_fn, *, kckc0: float, ma
     # (only with a glomerulus gain, so the default path is unchanged)
     wiring_kws = {} if wPNKC_override is None else {'_wPNKC': wPNKC_override}
     overrides = {'on': {}, 'off': {'wAPLKC_scale': 0.0, 'wAPLPN_scale': 0.0}}
+    # (E111; only when given, so the default path is unchanged) the blocked condition with a residual APL output: a
+    # hook named 'off' in place of the static 'off' condition, f in a cell the extra parameter's setter updates
+    residual_hooks, residual_extra, residual_cell = {}, {}, {}
+    if apl_residual is not None:
+        if kc_thr_factors is not None and len(kc_thr_factors) > 0:
+            raise NotImplementedError('--apl-residual with --jitter-k (the jittered conditions are static overrides)')
+        if block_proxy is not None:
+            raise NotImplementedError('--apl-residual with --block-proxy (the proxy replays the static APL-off condition)')
+        if kc_thr_factor_fixed is not None:
+            raise NotImplementedError('--apl-residual with --kc-thr-input-exp')
+        if spike_times:
+            raise NotImplementedError('--apl-residual with spike times (--count-kernel / --save-spike-times)')
+        if set(apl_residual) != {'value', 'fitted', 'bounds'}:
+            raise ValueError(f'apl_residual must be apl_residual_spec\'s dict, not {apl_residual}')
+        overrides = {'on': {}}
+        residual_cell['f'] = float(apl_residual['value'])
+
+        def residual_off(simulate, params):
+            return simulate(apl_residual_params(params, residual_cell['f']))
+        residual_hooks = {'off': residual_off}
+        if apl_residual['fitted']:
+            def set_residual(simulate, value):
+                residual_cell['f'] = float(value)
+            residual_extra = {APL_RESIDUAL_KEY: dict(initial=float(apl_residual['value']),
+                bounds=tuple(float(x) for x in apl_residual['bounds']), set=set_residual)}
+        print(f"blocked condition with a residual APL output: APL->KC and APL->bouton at f x the APL-on scales, f "
+            + (f"fitted in {tuple(apl_residual['bounds'])} from {apl_residual['value']:g}" if apl_residual['fitted']
+               else f"{apl_residual['value']:g}"), flush=True)
     jit_kws = {}
     if kc_thr_factors is not None and len(kc_thr_factors) > 0:
         jit = jitter_conditions(len(kc_thr_factors))
@@ -1830,6 +1937,12 @@ def fit_one(k: float, orn, initial, wnorm, breadth, loss_fn, *, kckc0: float, ma
             block_proxy['relax'], {'on': overrides['on'], 'off': overrides['off']})
         hook_kws = dict(condition_hooks={'proxy': hook})
         ctx = E43.captured_olfsysm_vars(store)
+    if residual_hooks:
+        # (E111; the proxy and spike times are refused above)
+        hook_kws['condition_hooks'] = dict(residual_hooks)
+    if residual_extra:
+        # (E111) beside any --aplkc-flat size, after it
+        flat_kws = dict(extra_params=dict(flat_kws.get('extra_params', {}), **residual_extra))
     with ctx:
         res = optimize_mb_model_params(orn, loss_fn=loss_fn,
             condition_param_overrides=overrides, **jit_kws, **hook_kws,
@@ -1840,7 +1953,29 @@ def fit_one(k: float, orn, initial, wnorm, breadth, loss_fn, *, kckc0: float, ma
             _wAPLPN=wnorm['wAPLPN'], _wPNAPL=wnorm['wPNAPL'], kc_kc_inh=kckc0, kc_kc_tau=TAU, **kc_spiking,
             **protocol, **pool_kws, **div_kws, **flat_kws, **pn
         )
+    if apl_residual is not None:
+        res = with_apl_residual(res, apl_residual, set(flat_kws.get('extra_params', {})))
     return res, init, bounds
+
+
+def with_apl_residual(res: dict, spec: dict, extra_names: set) -> dict:
+    """(E111) `fit_one`'s result of a fit with a residual APL output, completed as without it: condition_outputs['off']
+    (the hook's best outputs), condition_params['off'] (`apl_residual_params` of the best model parameters at the best
+    f), 'apl_residual' (value: f, fitted, initial, bounds, the blocked condition's absolute APL->KC and APL->bouton
+    scales) and, for a fixed f, the constant column 'apl_residual' in the history (a fitted f has its own, the extra
+    parameter's). `extra_names`: the extra parameters of the fit (not model parameters)."""
+    p = res['params']
+    f = float(p[APL_RESIDUAL_KEY]) if spec['fitted'] else float(spec['value'])
+    model_p = {k: v for k, v in p.items() if k not in extra_names}
+    off_p = apl_residual_params(model_p, f)
+    res['condition_outputs']['off'] = tuple(res['hook_outputs']['off'][:2])
+    res.setdefault('condition_params', {})['off'] = off_p
+    res['apl_residual'] = dict(value=f, fitted=bool(spec['fitted']), initial=float(spec['value']),
+        bounds=(None if spec['bounds'] is None else [float(x) for x in spec['bounds']]),
+        off_wAPLKC_scale=float(off_p['wAPLKC_scale']), off_wAPLPN_scale=float(off_p['wAPLPN_scale']))
+    if not spec['fitted']:
+        res['history'][APL_RESIDUAL_KEY] = f
+    return res
 
 
 def make_figure(res_dir: Path, data: dict) -> None:
@@ -2112,6 +2247,15 @@ def main() -> None:
     ap.add_argument('--pn-inhsc', type=float, default=None, metavar='S',
         help="(E102) fit_mb_model's pn_inhsc, with --pn-inhadd (olfsysm's default 368.6631; E77_input_screen.inhsc_for "
             'raises it with pn_inhadd)')
+    ap.add_argument('--apl-residual', type=float, default=None, metavar='F',
+        help='(E111) the blocked condition keeps a fraction F of APL\'s output: its APL->KC and APL->bouton scales are F x '
+            'the APL-on ones (the inputs to APL unchanged), in place of 0; fixed (0 to 1), or with --fit-apl-residual the '
+            'start of a fitted F; the breadth runs keep APL\'s output at 0; off by default; tag part aplres<F>_ / '
+            'aplresfit<F>_')
+    ap.add_argument('--fit-apl-residual', action='store_true',
+        help='(E111) fit the residue F (--apl-residual, the start) beside the other parameters, within --apl-residual-bounds')
+    ap.add_argument('--apl-residual-bounds', type=float, nargs=2, default=None, metavar=('LO', 'HI'),
+        help=f'(E111) the bounds of a fitted residue (default {APL_RESIDUAL_BOUNDS[0]:g} {APL_RESIDUAL_BOUNDS[1]:g})')
     ap.add_argument('--smoke', action='store_true', help='time a few evaluations and exit')
     ap.add_argument('--figure-only', action='store_true', help='only redraw the figures from saved results')
     args = ap.parse_args()
@@ -2383,6 +2527,18 @@ def main() -> None:
             ap.error(str(e))
         if args.block_proxy > 0:
             ap.error('--aplkc-flat with --block-proxy is not supported')
+    # (E111) the blocked condition's residual APL output, fixed or fitted (the breadth runs below keep APL's output at 0)
+    try:
+        residual = apl_residual_spec(args.apl_residual, args.fit_apl_residual,
+            None if args.apl_residual_bounds is None else tuple(args.apl_residual_bounds))
+    except ValueError as e:
+        ap.error(str(e))
+    if residual is not None:
+        for flag, bad in (('--jitter-k', jit_k > 0), ('--block-proxy', args.block_proxy > 0),
+                          ('--kc-thr-input-exp', args.kc_thr_input_exp is not None),
+                          ('--count-kernel / --save-spike-times', save_spike_times)):
+            if bad:
+                ap.error(f'--apl-residual with {flag} is not supported')
     initial, wnorm, wPNKC, breadth = bouton_base(orn, out_dir, args.claw_thr, gain=gain,
         gain_gloms=args.gain_glomeruli, wiring=args.wiring, wiring_seed=args.wiring_seed,
         apl_drive=args.apl_drive, base_params=args.base_params, info=base_info, input_tag=input_tag,
@@ -2426,7 +2582,7 @@ def main() -> None:
             + ('opk' if args.apl_opk_term else '') + (('cls' + ('' if class_form == 'sq' else class_form)) if args.apl_class_term else '')
             + ('dnu' if args.apl_data_units == 'noise' else '') + '_')
     prefix = zcell_tag + band_tag + {'spikes': 'spk_', 'spikes_only': 'spko_'}.get(args.apl_drive, '') + ('' if args.claw_thr is None else f'thr{args.claw_thr:g}{claw_transfer_tag(claw_transfer)}_') + wiring_tag + (
-        '' if gain is None else f'gain{gain:g}_') + rate_tag + block_tag + loss_tag + kckc_tag + kc_tag + thrin_tag + (
+        '' if gain is None else f'gain{gain:g}_') + rate_tag + block_tag + loss_tag + kckc_tag + apl_residual_tag(residual) + kc_tag + thrin_tag + (
         claw_inh_pool_tag(args.claw_inh_pool)) + apl_divisive_tag(args.apl_divisive) + aplpn_hold_tag(args.aplpn_hold) + (
         aplkc_flat_tag(flat_spec)) + pn_norm_tag(pn) + proxy_tag + jit_tag
     jit_factors, jit_meta = None, {}
@@ -2477,7 +2633,8 @@ def main() -> None:
             **({} if not args.apl_divisive else dict(apl_divisive=True)),
             **({} if args.aplpn_hold is None else dict(aplpn_hold=args.aplpn_hold)),
             **({} if flat_spec is None else dict(aplkc_flat=flat_spec)),
-            **({} if not pn else dict(pn=pn))
+            **({} if not pn else dict(pn=pn)),
+            **({} if residual is None else dict(apl_residual=residual))
         )
         hist = res['history']
         hist.to_csv(res_dir / f'history_{tag}.csv')
@@ -2563,6 +2720,14 @@ def main() -> None:
                 aplkc_flat_size=float(res['extra_params']['aplkc_flat']))),
             # (E102: the PN normalization's pn_inhadd and pn_inhsc, absolute; absent when not given)
             **pn,
+            # (E111: the blocked condition's residual APL output, the fitted or fixed f, its start and bounds, and the
+            # blocked condition's absolute APL->KC and APL->bouton scales; absent when not given)
+            **({} if residual is None else dict(apl_residual=res['apl_residual']['value'],
+                apl_residual_fitted=res['apl_residual']['fitted'], apl_residual_init=res['apl_residual']['initial'],
+                apl_residual_lo=(None if residual['bounds'] is None else residual['bounds'][0]),
+                apl_residual_hi=(None if residual['bounds'] is None else residual['bounds'][1]),
+                off_wAPLKC_scale=res['apl_residual']['off_wAPLKC_scale'],
+                off_wAPLPN_scale=res['apl_residual']['off_wAPLPN_scale'])),
             # (E73 part C: the per-KC session z-score reading's settings; absent when not used)
             **(dict(rate_criterion=args.rate_criterion, zcell_q=loss_fn.zcell['q'], zcell_map=loss_fn.zcell['amp'],
                 zcell_calibrate=loss_fn.zcell['calibrate'], zcell_drift=loss_fn.zcell['drift'])
@@ -2693,6 +2858,12 @@ def main() -> None:
                 'apl_inh_divisive: each claw\'s PN drive x becomes x / (1 + max(i, 0)), i its APL inhibition (olfsysm '
                 'mp.kc.apl_inh_divisive), in place of x - i; with APL off x / (1 + 0) = x, so the breadth run (APL off) is the '
                 'base\'s'))) if args.apl_divisive else {}),
+            **(dict(apl_residual=dict(res['apl_residual'], note=('E111: the blocked condition (APL off, the saved acute_off '
+                'run and every APL-off statistic) keeps a fraction f of APL\'s output: its APL->KC and APL->bouton scales '
+                'are f times the evaluation\'s APL-on scales (KC->APL, bouton->APL, the threshold and KC-KC as APL on), '
+                'simulated by a condition hook after the APL-on condition (E10_joint_fit.apl_residual_params); f fixed, '
+                'or fitted within its bounds as an extra parameter (linear in the bounds); the breadth run and its '
+                'pre-passes keep APL\'s output at 0'))) if residual is not None else {}),
             loss_weights=loss_weights(args.loss),
             block_target=loss_fn.block_target, block_target_spec=args.block_target,
             block_scale=BLOCK_SCALE, rate_target=loss_fn.rate_target, rate_target_spec=args.rate_target,
