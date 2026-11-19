@@ -1,8 +1,8 @@
 """The queue's generally useful functions that moved to hong2p and pyolfsysm (2026-11-12) give the queue the same
 outputs as before the move: every case of frozen_step3/cases.py, run through the queue's names (kcq.harness and the
 experiments' re-exports, with the queue's defaults), against the outputs frozen from the code before the move
-(frozen_step3/make_frozen.py). Exact unless the library versions differ from the frozen files' (they do not in the
-queue's venv)."""
+(frozen_step3/make_frozen.py). To the last bits (rtol 1e-12) with the library versions of the frozen files (the queue's
+venv has them), looser with others (frozen_outputs.check)."""
 from pathlib import Path
 
 import pytest
@@ -33,6 +33,6 @@ def test_frozen_case(group, case):
 
 
 def test_versions_match():
-    """The queue's venv is the environment the files were frozen in, so every comparison above is exact."""
+    """The queue's venv has the library versions the files were frozen with, so every comparison above is to the last bits."""
     for g in GROUPS:
         assert F.same_versions(_frozen(g)[0]), (g, _frozen(g)[0]['version'], F.versions())
