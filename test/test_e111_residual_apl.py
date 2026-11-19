@@ -390,3 +390,15 @@ def test_same_outputs_and_row_check():
     assert rc['exact'] and rc['fit_exact'] and rc['n_columns'] == 3 and rc['n_fit_columns'] == 2
     rc = E.row_check(dict(row, rate_off=0.16), ref)
     assert not rc['exact'] and rc['fit_exact'] and list(rc['differs']) == ['rate_off']
+
+
+def test_explain_row_differences():
+    differs = {'spike_counts_cosine__spearman_orn_on': [0.9010139593027292, 0.895214945482325],
+               'apl_factor_vs_e3': [0.9456755979503502, 0.9456755979503504], 'rate_off': [0.15, 0.16]}
+    rec = {'spike_counts_cosine__spearman_orn_on': 0.9010139593027293, 'rate_off': 0.155}
+    w = E.explain_row_differences(differs, rec, 1.0000000000000002)
+    assert set(w['explained']) == {'spike_counts_cosine__spearman_orn_on', 'apl_factor_vs_e3'}
+    assert w['unexplained'] == ['rate_off'] and not w['all_explained']
+    assert E.explain_row_differences({}, {}, 1.0)['all_explained']
+    # a larger difference in apl_factor_vs_e3 is not the last bit
+    assert E.explain_row_differences({'apl_factor_vs_e3': [0.95, 0.94]}, {}, 1.01)['unexplained'] == ['apl_factor_vs_e3']

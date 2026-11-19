@@ -27,7 +27,9 @@ is still making; `--part commands` prints every command):
   its fits.csv row and its saved runs are written) from C2's exact start on the hemibrain wiring (`--init-from-exact`,
   KC-KC free as in the family): f0_real (`--apl-residual 0`): its first history row equals C2's history at its best
   evaluation on every column they share (E110's `exact_check`), its fits.csv row equals C2's (every `fit_<term>` and
-  `loss` exactly; every other shared column but the run's own metadata, META_SKIP, compared and listed), and its saved
+  `loss` exactly; every other shared column but the run's own metadata, META_SKIP, compared and listed, each difference
+  checked against today's recomputation from C2's own saved runs, `recompute_row_columns`, since C2's row was written
+  with the ORN pairs as they were before 2026-11-13; `explain_row_differences`), and its saved
   APL-on and blocked responses and spike counts equal C2's saved ones exactly; f1_real (`--apl-residual 1`): its saved
   blocked run equals its saved APL-on run exactly, and that equals C2's. check.json; `--checks` runs a subset (f0_real
   first; f1_real may follow later). The fits and simulations below need f0_real passed and no check failed.
@@ -444,6 +446,51 @@ def row_check(row: Mapping, ref: Mapping) -> dict:
                 fit_exact=bool(fit_cols and not any(c in diff for c in fit_cols)))
 
 
+ROW_RECOMPUTED = ('on_spearman_dev', 'on_dev_sd_model', 'off_spearman_dev', 'off_dev_sd_model', 'spearman_orn_on',
+                  'spearman_orn_off', 'gap_closed')
+
+
+def recompute_row_columns(saved: Dict[str, tuple]) -> Dict[str, float]:
+    """The fits.csv columns of E4's `score` that read the ORN pairs (ROW_RECOMPUTED, for each of its three model RDMs),
+    recomputed with today's code and inputs from a fit's saved runs, as E10_joint_fit.py's main builds them (the KC data
+    matrices, `H.orn16_consensus_pairs`, `H.consensus_orn_drive`)."""
+    orn_pairs, drive = H.orn16_consensus_pairs(), H.consensus_orn_drive()
+    data = {'raw': {g: H.yang_mean_rdm(g, 'cosine') for g in ('TNT3c', 'TNT')},
+            'binarized': {g: H.yang_mean_rdm(g, 'cosine', binarize=1.0) for g in ('TNT3c', 'TNT')},
+            'pearson': {g: H.yang_mean_rdm(g, 'pearson') for g in ('TNT3c', 'TNT')}}
+    on, off = H.model_rdms(*saved['on']), H.model_rdms(*saved['off'])
+    out = {}
+    for variant in ('spike_counts_cosine', 'responses_cosine', 'spike_counts_pearson'):
+        tgt = data['binarized' if variant == 'responses_cosine' else ('pearson' if variant.endswith('pearson') else 'raw')]
+        for cond, rd, geno in (('on', on, 'TNT3c'), ('off', off, 'TNT')):
+            m = H.compare_model_to_data(rd[variant], tgt[geno], orn=orn_pairs)
+            for k in ('spearman_dev', 'dev_sd_model'):
+                out[f'{variant}__{cond}_{k}'] = float(m[k])
+        st, _ = H.compare_on_off(on[variant], off[variant], orn=orn_pairs, drive=drive)
+        for k in ('spearman_orn_on', 'spearman_orn_off', 'gap_closed'):
+            out[f'{variant}__{k}'] = float(st[k])
+    return out
+
+
+def explain_row_differences(differs: Mapping[str, Sequence], recomputed: Mapping[str, float], base_ratio: float
+                            ) -> dict:
+    """Which of part 0's differing fits.csv columns (`differs`: column -> [check row, C2's row]) the inputs explain: a
+    column of `recomputed` (`recompute_row_columns` of C2's saved runs) whose today's value equals the check row's (to
+    1e-12 relative, a CSV round trip), and apl_factor_vs_e3 when it differs by less than 1e-14 relative (the last bit of
+    the base's APL->KC scale as read today, `base_ratio` the check row's base over C2's). Returns {'explained': {column:
+    why}, 'unexplained': [...], 'all_explained'}."""
+    expl, unexpl = {}, []
+    for c, (mine, ref) in differs.items():
+        if c in recomputed and np.isclose(float(recomputed[c]), float(mine), rtol=1e-12, atol=1e-15):
+            expl[c] = (f"today's value from C2's own saved runs ({float(recomputed[c])!r}) is the check row's; C2's row "
+                       f"({float(ref)!r}) was written with the ORN pairs before their 2026-11-13 redefinition")
+        elif c == 'apl_factor_vs_e3' and abs(float(mine) / float(ref) - 1.0) < 1e-14:
+            expl[c] = f"the last bit of the base's APL->KC scale as read today (ratio {base_ratio!r})"
+        else:
+            unexpl.append(c)
+    return dict(explained=expl, unexplained=unexpl, all_explained=not unexpl)
+
+
 def evaluate_check(name: str, tag: str) -> dict:
     """Part 0's reading of one check run (the module docstring); 'passes'."""
     res = {}
@@ -466,6 +513,11 @@ def evaluate_check(name: str, tag: str) -> dict:
         res['history_vs_c2_best'] = dict(reference=f'{folder}:{ftag} (history row {int(best["eval"])}, the best)', **ex)
         row = pd.read_csv(fit_results_dir(name, check=True) / 'fits.csv').set_index('tag').loc[tag]
         res['row_vs_c2_row'] = row_check(row, ref_row)
+        if res['row_vs_c2_row']['differs']:
+            ratio = (float(row['wAPLKC_scale']) / float(row['apl_factor_vs_e3'])) / (
+                float(ref_row['wAPLKC_scale']) / float(ref_row['apl_factor_vs_e3']))
+            res['row_vs_c2_row']['why'] = explain_row_differences(res['row_vs_c2_row']['differs'],
+                                                                  recompute_row_columns(F['saved']), ratio)
         res['off_vs_c2_off'] = same_outputs(o, F['saved'], 'off', 'off')
         res['passes'] = bool(ex['exact'] and res['row_vs_c2_row']['fit_exact'] and res['on_vs_c2_on']['exact']
                              and res['off_vs_c2_off']['exact'])
