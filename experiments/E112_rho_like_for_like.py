@@ -68,7 +68,9 @@ Readings chosen where the entry is open (fixed here before any reading was score
   given beside.
 - Part B's E109 inputs: the two control searches (ctlA, ctlB) and the first draw of each half's search (A1, B1), at 0.6
   of their size, as their held readings (runs_R.csv's absolute parameters); each model's noise calibrated by the
-  pipeline as E72's part E calibrated its four.
+  pipeline as E72's part E calibrated its four (E43's defaults otherwise, as part E: below-levels tuned, pseudo-recordings
+  only at the two matched levels). E43 draws each model's noise by its position in the run, so on a wiring the inputs'
+  draws are not the fit's (the changes under R4 are not paired draw for draw, as R3's are).
 
 - The outcome letter: (a) / (b) when the reading moves ρ and E109's gain holds / shrinks under R3 (R4 of E109's inputs
   is part B's, given beside); (c) when no reading moves ρ and no reading's wirings split in sign; (d) when no reading
@@ -1221,7 +1223,7 @@ def part_b_commands() -> List[str]:
         specs = [f"--model-from E72_wiring_population:{E83.saved_fit(w)['tag']}"]
         specs += [f'--model-from {EXPERIMENT}:{part_b_tag(f"{n}_s{E109_SIZE:g}", w)}' for n in E109_INPUTS_B]
         cmds.append('OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ./venv/bin/python -u experiments/E43_model_trial_noise.py '
-                    f'--part B --tune-trials 3 --seed 43 --n-recordings 10 --n-trials 3 --levels match_on match_off --below '
+                    f'--part B --tune-trials 3 --seed 43 --n-recordings 10 --n-trials 3 --levels match_on match_off '
                     f'{" ".join(specs)} --experiment {EXPERIMENT} '
                     f'--results-dir {H.results_dir(EXPERIMENT)}/partB_{w} --outputs-dir {H.outputs_dir(EXPERIMENT)}/partB_{w}')
     return cmds
