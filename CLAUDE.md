@@ -104,9 +104,10 @@ for this work:
 
 ## Code changes
 
-Only Opus >=5.5 at xhigh or max writes or edits code and scripts: the session itself when it is
-that model and effort, otherwise an Opus subagent it spawns for the change (see "Permissions by
-model and effort" below; Fable never writes code); others only run scripts already committed.
+Only Opus >=5.5 at medium effort or higher (medium by default; Tom, 2026-11-18) writes or edits code
+and scripts: the session itself when it is that model and effort, otherwise an Opus subagent it
+spawns for the change (see "Permissions by model and effort" below; Fable never writes code); others
+only run scripts already committed.
 
 When implementing experiments, modify olfsysm (the model: its C++, or pyolfsysm) or the library code
 in hong2p (or al_analysis, for the AL analysis), and then make scripts in this repository as needed. The al_analysis, olfsysm and hong2p
@@ -135,8 +136,8 @@ pytest coordination/monitor` for the monitor) for changes here, and olfsysm's te
 
 If multiple experiments would benefit from an overlapping set of changes to any library
 code, start with some of those code changes, regardless of which experiments you are
-running first. You may spawn up to 3 code subagents (Opus >=5.5 at xhigh: the Agent tool's
-`model: "opus"`, `effort: "xhigh"`, type general-purpose, never a fork of a Fable session) to work on
+running first. You may spawn up to 3 code subagents (Opus >=5.5 at medium: the Agent tool's
+`model: "opus"`, `effort: "medium"`, type general-purpose, never a fork of a Fable session) to work on
 code changes necessary for any future experiments (prioritize code changes for
 experiments with higher priority), so they can work in parallel with ongoing experiments
 (which may take a non-negligible amount of simulation time). Commit and push as code
@@ -188,10 +189,10 @@ Queue sessions do not run on Fable ("Permissions by model and effort" below), so
 cap touches only the planning subagents: when a Fable subagent cannot be spawned, or reports a
 model that is not Fable, the host records it in its status file (`blocked_on: Fable cap` when
 planning is what it waits for) and in chat.md, and the planning work waits for a host whose Fable
-is available or goes to Tom; code and coordination work go on, on Opus >=5.5 at xhigh, as before.
-A session that is itself on Fable (started before 2026-11-09, or by mistake) asks its user to
-switch it to Opus >=5.5 at xhigh (/model, /effort) at the first opportunity and takes no new
-work until switched. Code subagents are always Opus >=5.5 at xhigh.
+is available or goes to Tom; code and coordination work go on, on Opus >=5.5 at medium or higher, as
+before. A session that is itself on Fable (started before 2026-11-09, or by mistake) asks its user to
+switch it to Opus >=5.5 at medium (/model, /effort) at the first opportunity and takes no new
+work until switched. Code subagents are always Opus >=5.5, at medium effort by default.
 
 ## System resources
 
@@ -334,8 +335,8 @@ sessions on Tom's hosts do. Once per machine:
 3. Queue sessions start in this repository (`cd ~/src/kc_queue/model_experiment_queue && claude`),
    since Claude Code reads `.claude/settings.json` (the session-title,
    queue-monitor and queue-tree hooks) only from the folder a session starts in; accept its
-   workspace-trust prompt. Start them on Opus >=5.5 at xhigh (or a smaller model for a run-only
-   host), not on Fable; the first session on a machine also runs the Fable-consent step
+   workspace-trust prompt. Start them on Opus >=5.5 at medium effort (or a smaller model for a
+   run-only host), not on Fable; the first session on a machine also runs the Fable-consent step
    ("Fable consent" under "Permissions by model and effort") and tells the owner where its
    account's consent record comes from, or asks.
 
@@ -513,7 +514,16 @@ to Tom with offers or choices about queued work ("E9 or the coverage check?"): w
 is determined by the list and these rules, and the interface turns such closing lines into
 suggestions he does not need to see. Raise only decisions that are genuinely his.
 
-### Permissions by model and effort (revised 2026-11-09 at Tom's request)
+### Permissions by model and effort (revised 2026-11-09 at Tom's request; effort relaxed 2026-11-18)
+
+Effort (Tom, 2026-11-18): planning (Fable) and code (Opus) need medium effort or higher, no longer
+xhigh, and by default all work runs at medium, each kind on its own model: Fable for planning and the
+summary write-ups, Opus for writing code. Planning and code subagents are spawned with `effort:
+"medium"`, and queue sessions run at medium (their users set it with `/effort`), so that the
+accounts' usage caps, Yang's (viki's) above all, stretch further. A queue worker may itself be an
+interactive Opus session at medium effort: it then writes code and write-ups itself, as any session
+on Opus >=5.5 at medium or higher does, and spawns a code subagent only for work in parallel. A higher effort is a choice for a
+task that needs it, not the default. Records of earlier work at xhigh stand as written.
 
 Work is assigned to models by kind of work, not by the model the session happens to run on. The
 session's model and effort are in its system prompt (Fable IDs start with `claude-fable-`, Opus
@@ -527,9 +537,9 @@ account's, so a record of the ID matters.
 
 | kind of work | who does it |
 |---|---|
-| planning: proposing experiments (a proposal's text), planning and prioritizing them (rewriting the text that describes an experiment, ordering the priority list, moving proposals into it, including under the idle-host rule, placing a completed experiment in the Completed list), and the summary write-ups (new or rewritten text of the all-experiments summary, `reports/summary_template.md`, and of the final report) | a Fable subagent (Fable 5.2 where the account serves it, otherwise the Fable it serves; effort xhigh) spawned by the host's session for that one task, on an account whose holder has consented ("Fable consent" below) and whose Fable usage cap is not hit; the subagent returns text, the session applies it |
-| code: creating or editing any script or code (this repository, al_analysis, hong2p, olfsysm, the monitor and hooks), code fixes down to one line, committing and pushing them; writing up a completed experiment (its note and page, "Completing an experiment" below, apart from its place in the Completed list and its summary passage) | Opus >=5.5 at xhigh or max, and only that: the session itself when it is that model and effort, otherwise an Opus subagent (`model: "opus"`, `effort: "xhigh"`) it spawns for the change, which checks its own ID and stops if below 5.5. Fable never writes code or scripts, not even when the session is Fable |
-| coordination and compute: claims (Status lines, index rows, Work-claims rows), the status file, chat posts, the heartbeat, pulling and reinstalling, running committed scripts, copying and archiving outputs, building and publishing pages from markdown that exists, and applying to the shared files the text a Fable subagent returned (under the lock, with the provenance line below) | the session itself, on any model that is not Fable: Opus >=5.5 at xhigh (which also covers the code work) or a smaller model or lower effort (run-only, as before). Queue sessions therefore run on Opus >=5.5 at xhigh, or smaller for run-only hosts, never on Fable |
+| planning: proposing experiments (a proposal's text), planning and prioritizing them (rewriting the text that describes an experiment, ordering the priority list, moving proposals into it, including under the idle-host rule, placing a completed experiment in the Completed list), and the summary write-ups (new or rewritten text of the all-experiments summary, `reports/summary_template.md`, and of the final report) | a Fable subagent (Fable 5.2 where the account serves it, otherwise the Fable it serves; effort medium by default, never below medium) spawned by the host's session for that one task, on an account whose holder has consented ("Fable consent" below) and whose Fable usage cap is not hit; the subagent returns text, the session applies it |
+| code: creating or editing any script or code (this repository, al_analysis, hong2p, olfsysm, the monitor and hooks), code fixes down to one line, committing and pushing them; writing up a completed experiment (its note and page, "Completing an experiment" below, apart from its place in the Completed list and its summary passage) | Opus >=5.5 at medium effort or higher (medium by default), and only that: the session itself when it is that model and effort, otherwise an Opus subagent (`model: "opus"`, `effort: "medium"`) it spawns for the change, which checks its own ID and stops if below 5.5. Fable never writes code or scripts, not even when the session is Fable |
+| coordination and compute: claims (Status lines, index rows, Work-claims rows), the status file, chat posts, the heartbeat, pulling and reinstalling, running committed scripts, copying and archiving outputs, building and publishing pages from markdown that exists, and applying to the shared files the text a Fable subagent returned (under the lock, with the provenance line below) | the session itself, on any model that is not Fable: Opus >=5.5 at medium or higher (which also covers the code work) or a smaller model or lower effort (run-only, as before). Queue sessions therefore run on Opus >=5.5 at medium, or smaller for run-only hosts, never on Fable |
 
 Fable's text is applied as returned: the session that spawned the subagent writes it into
 proposed_experiments.md, experiment_priorities.md, the report markdown or the template with
@@ -556,7 +566,7 @@ exists); and keep claims, Status lines, the status file and chat. They do not cr
 scripts or code, not even a one-line fix, and do not write up results. When a run finishes or
 fails, the session writes in the experiment's Status what ran, where the outputs are and what
 remains ("outputs copied, needs write-up", or "crashed: <error>, needs a code fix"), and posts in
-chat.md "For an Opus host: ..."; a session on Opus >=5.5 at xhigh claims the write-up or the fix
+chat.md "For an Opus host: ..."; a session on Opus >=5.5 at medium or higher claims the write-up or the fix
 and finishes the experiment. A run-only session with nothing runnable says in chat.md that it is
 idle and sets `state: idle` in its status file.
 
@@ -579,9 +589,9 @@ Claims, probes noted in a Status, the status file and chat posts need no Fable.
 
 Joining the queue. When a session first joins the queue (before its first claim or its first
 chat_watch.sh), it tells its user in its reply, in a few lines: its model and effort (and, if it
-is on Fable, that it should be switched to Opus >=5.5 at xhigh and takes no new work until it
-is); what that lets it do (Opus >=5.5 at xhigh: code, write-ups and coordination; smaller or
-lower: running committed scripts and coordination); the Fable-consent status of its account and
+is on Fable, that it should be switched to Opus >=5.5 at medium and takes no new work until it
+is); what that lets it do (Opus >=5.5 at medium or higher: code, write-ups and coordination; smaller
+or lower: running committed scripts and coordination); the Fable-consent status of its account and
 where it comes from ("Fable consent" below); and the three kinds of work in one short line each,
 with no paths or file-level detail. It tells the user again if any of this changes mid-session.
 
@@ -769,7 +779,7 @@ depth (e.g. 4), and start with the Tom, Remy, Yang, Remy_Yang, MB_Model, MB_team
 
 ## Completing an experiment
 
-Completing an experiment is write-up work for Opus >=5.5 at xhigh or max (the session, or a code
+Completing an experiment is write-up work for Opus >=5.5 at medium effort or higher (the session, or a code
 subagent; "Permissions by model and effort" above); a run-only session copies the outputs and
 hands over as that section says. Its place in the Completed list (step 2) and its passage in
 the summary (step 4) are planning work: a Fable subagent gives them when the account has Fable,

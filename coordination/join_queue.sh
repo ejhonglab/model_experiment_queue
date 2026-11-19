@@ -686,7 +686,7 @@ enables the hooks in its .claude/settings.json):
     cd $q && claude
 and ask it to work the experiment queue. Queue sessions here work only in $src: its checkouts and
 model_experiment_queue/venv. The hooks tell each session so, and refuse edits elsewhere in ~/src.
-Use Opus 5.5 or newer at xhigh effort (never Fable) for code and write-ups; other models and lower
-efforts only run scripts that are already written (CLAUDE.md here, "Permissions by model and
+Use Opus 5.5 or newer at medium effort or higher (never Fable) for code and write-ups; other models
+and lower efforts only run scripts that are already written (CLAUDE.md here, "Permissions by model and
 effort").
 EOF
