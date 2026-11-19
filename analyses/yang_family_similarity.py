@@ -49,13 +49,10 @@ def square(s: pd.Series, order: List[str]) -> np.ndarray:
     return sq
 
 
-def group_bounds(order: List[str]) -> List[float]:
-    """Positions between two odors of different chemical groups (`H.ODOR_GROUPS`)."""
-    g = [H.ODOR_GROUPS.get(o, o) for o in order]
-    return [i - 0.5 for i in range(1, len(order)) if g[i] != g[i - 1]]
-
-
-def draw(t: pd.DataFrame, out: Path) -> None:
+def draw(t: pd.DataFrame, out: Path, name: str = 'best family',
+         about: str = 'the best family (breadth-2 APL-effect fit, mean over its 8 wirings, raw spike counts)') -> None:
+    """The 2 x 3 heatmaps: the model `name` (row 1) and the KC data (row 2), APL on / APL off / the change; `about`
+    describes the model in the figure's title."""
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
@@ -67,15 +64,14 @@ def draw(t: pd.DataFrame, out: Path) -> None:
     lim = float(np.ceil(t[['model_change', 'flies_change']].abs().to_numpy().max() * 20) / 20)
     rho = lambda a, b: spearmanr(t[a], t[b]).statistic
     titles = {
-        'model_on': f'best family, APL on\nρ {rho("model_on", "flies_on"):.2f} with the control flies',
-        'model_off': f'best family, APL off (acute)\nρ {rho("model_off", "flies_off"):.2f} with APL output blocked (TNT)',
-        'model_change': f'best family: APL off minus APL on\nmean {t.model_change.mean():+.3f}, '
+        'model_on': f'{name}, APL on\nρ {rho("model_on", "flies_on"):.2f} with the control flies',
+        'model_off': f'{name}, APL off (acute)\nρ {rho("model_off", "flies_off"):.2f} with APL output blocked (TNT)',
+        'model_change': f'{name}: APL off minus APL on\nmean {t.model_change.mean():+.3f}, '
                         f'ρ {rho("model_change", "flies_change"):.2f} with the flies\' change',
         'flies_on': 'KCs, control flies (APL on)',
         'flies_off': 'KCs, APL output blocked (TNT) (APL off)',
         'flies_change': f'KCs: APL off minus APL on\nmean {t.flies_change.mean():+.3f}',
     }
-    bounds = group_bounds(order)
     fig, axes = plt.subplots(2, 3, figsize=(16.5, 10.6), gridspec_kw=dict(hspace=0.36, wspace=0.34))
     for i, who in enumerate(('model', 'flies')):
         for j, part in enumerate(('on', 'off', 'change')):
@@ -87,9 +83,6 @@ def draw(t: pd.DataFrame, out: Path) -> None:
             else:
                 im = ax.imshow(mat, cmap=seq, vmin=0.0, vmax=1.0)
                 label = 'cosine similarity'
-            for b in bounds:
-                ax.axhline(b, color='white', lw=1.2)
-                ax.axvline(b, color='white', lw=1.2)
             ax.set_xticks(range(len(order)))
             ax.set_xticklabels(order, rotation=90, fontsize=8)
             ax.set_yticks(range(len(order)))
@@ -102,31 +95,48 @@ def draw(t: pd.DataFrame, out: Path) -> None:
             cb.set_label(label, fontsize=8)
             cb.ax.tick_params(labelsize=7)
             cb.outline.set_visible(False)
-    fig.suptitle('Odor-odor cosine similarity: the best family (breadth-2 APL-effect fit, mean over its 8 wirings, raw '
-                 'spike counts) and the KC data\nρ: Spearman correlation over the 120 pairs; odors in chemical groups '
-                 '(white lines); grey diagonal', fontsize=11)
+    fig.suptitle(f'Odor-odor cosine similarity: {about} and the KC data\n'
+                 'ρ: Spearman correlation over the 120 pairs; grey diagonal', fontsize=11)
     out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out, dpi=110, bbox_inches='tight')
     plt.close(fig)
 
 
 def main() -> None:
+    import argparse
+    ap = argparse.ArgumentParser(description='The best family\'s (default) or a saved variant\'s heatmaps beside the flies\'.')
+    ap.add_argument('--variant', help='a saved variant instead of the family: <results folder>:<tag>, e.g. '
+                                      'E12_breadth_apl:spikes_k3 (its model_pair_distances_long.csv, APL on and acute off)')
+    ap.add_argument('--name', default=None, help='the model\'s name in the panel titles')
+    ap.add_argument('--about', default=None, help='the model\'s description in the figure title')
+    a = ap.parse_args()
     t0 = time.time()
     out = H.shared_dir() / 'results' / NAME
-    members = E106.family_members('family')
-    model = E106.population(members)
+    if a.variant:
+        folder, tag = a.variant.split(':', 1)
+        members = [('real', folder, tag)]
+        model = E106.load_pairs(folder, tag)
+        stem = f'{folder}__{tag}'
+        name, about = a.name or tag, a.about or f'{folder}:{tag} (raw spike counts)'
+    else:
+        members = E106.family_members('family')
+        model = E106.population(members)
+        stem = ''
+        name = a.name or 'best family'
+        about = a.about or 'the best family (breadth-2 APL-effect fit, mean over its 8 wirings, raw spike counts)'
     data = E106.data_matrices()
     t = pairs_table(model, data)
     if len(t) != 120:
         raise RuntimeError(f'{len(t)} pairs with all six values, not 120')
     out.mkdir(parents=True, exist_ok=True)
-    t.rename_axis(['odor_a', 'odor_b']).to_csv(out / 'pairs.csv')
-    draw(t, out / 'similarity.png')
+    sfx = f'_{stem}' if stem else ''
+    t.rename_axis(['odor_a', 'odor_b']).to_csv(out / f'pairs{sfx}.csv')
+    draw(t, out / f'similarity{sfx}.png', name=name, about=about)
     prov = H.model_provenance()
     prov.update(script=H.script_path(__file__), generated=time.strftime('%Y-%m-%d %H:%M:%S %Z'), seconds=time.time() - t0,
                 family=[dict(wiring=w, folder=f, tag=g) for w, f, g in members],
                 data='E106.data_matrices (kcq.harness.yang_recording_rdms, cosine; TNT3c for APL on, TNT for APL off)')
-    (out / 'provenance.json').write_text(json.dumps(prov, indent=1, default=str) + '\n')
+    (out / f'provenance{sfx}.json').write_text(json.dumps(prov, indent=1, default=str) + '\n')
     rho = lambda a, b: spearmanr(t[a], t[b]).statistic
     print(f'{len(members)} wirings; ρ on {rho("model_on", "flies_on"):.3f}, off {rho("model_off", "flies_off"):.3f}, '
           f'change {rho("model_change", "flies_change"):.3f} (Pearson {t.model_change.corr(t.flies_change):.3f}); '
