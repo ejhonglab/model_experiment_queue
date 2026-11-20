@@ -404,7 +404,15 @@ def model_rois(stage: str, wiring: str, cond: str, reading: str, share: float, p
     POOL_SEED + the wiring's index; noise seed NOISE_SEED + the wiring's index (the same for both conditions)."""
     wi = WIRINGS.index(wiring)
     mu = model_units(stage, wiring, float(share))
-    V = E90._drop_silent(pool_units(mu[cond], pool, POOL_SEED + wi, mu['groups']))
+    return rois_of_units(mu[cond], mu['groups'], stage, reading, pool, wi, reliability)
+
+
+def rois_of_units(U: pd.DataFrame, groups: Optional[np.ndarray], stage: str, reading: str, pool: str, wi: int,
+                  reliability: Optional[pd.Series] = None) -> np.ndarray:
+    """`model_rois` on given units x ODORS values U (and their glomeruli `groups`, for 'g<n>' pooling): pooled with seed
+    POOL_SEED + wi, silent ROIs dropped, read in `reading` (noise seed NOISE_SEED + wi); trials x ROIs x ODORS. E120
+    reads other runs' stages with it."""
+    V = E90._drop_silent(pool_units(U, pool, POOL_SEED + wi, groups))
     if reading == 'rate':
         return V[list(ODORS)].to_numpy(dtype=float)[None]
     Z = E90.session_z(V)

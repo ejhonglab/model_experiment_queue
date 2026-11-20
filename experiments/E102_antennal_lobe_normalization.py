@@ -106,7 +106,8 @@ Parts (CLI `--part`):
   b_e98_wirings.csv, b_e100.csv, b_e101.csv, b_e101_summary.csv: E98's, E100's and E101's comparisons per step;
   b_low_conc.csv; b_pn.csv; each with 'silent_odors_16odor'), b_steps.csv (one row per step) and part C's levels
   (levels.json).
-- D (the refits; `--level`, `--wirings`, default S): per wiring, one after another (`part_d`, `run_refit`; resumable),
+- D (the refits; `--level`, `--wirings`, default S; `--e120-level`: at E120's level, `refit_due`): per wiring, one after
+  another (`part_d`, `run_refit`; resumable),
   E10_joint_fit.py with C2's options (REFIT_ARGS, REFIT_MAXFEV evaluations, `--tag _cap3`) and the level's PN kwargs
   (its `--pn-inhadd` / `--pn-inhsc`, which also recompute the breadth behind the APL->KC weights with them on the
   wiring's own wiring), from the wiring's part-B point at the level (`--init-params` on D/init_<step>.json,
@@ -2200,9 +2201,33 @@ def refit_extended(level, wiring: str, commits: Optional[Mapping] = None) -> dic
     return rec
 
 
-def refit_due(level, wirings: Sequence[str]) -> Tuple[bool, str]:
+def e120_level_path() -> Path:
+    """E120's level for its part B (the bouton stage held to the recorded boutons; experiments/E120_bouton_stage_measured.py
+    writes it from its part A2)."""
+    return H.results_dir('E120_bouton_stage_measured') / 'level.json'
+
+
+def e120_allows(level, wirings: Sequence[str]) -> Tuple[bool, str]:
+    """Whether E120's level.json names `level` for its part B (part_b_runs true), for S's wirings only."""
+    lv = _read_json(e120_level_path())
+    if not lv:
+        return False, f'no E120 level ({e120_level_path()})'
+    if not lv.get('part_b_runs'):
+        return False, "E120's part B does not run"
+    if float(lv['level']) != float(level):
+        return False, f"E120's level is {float(lv['level']):g}, not {float(level):g}"
+    t = [w for w in wirings if w not in S_WIRINGS]
+    if t:
+        return False, f"E120's part B refits S's wirings only, not {t}"
+    return True, "E120's level (its part B)"
+
+
+def refit_due(level, wirings: Sequence[str], e120: bool = False) -> Tuple[bool, str]:
     """Whether the entry allows these refits: S's always (at a refit level of part C, `levels.json`); T's only if S's
-    refitted population at the level is an equal or better (d_class_<step>.json, `part_score_refits`)."""
+    refitted population at the level is an equal or better (d_class_<step>.json, `part_score_refits`). With `e120`, at
+    E120's level instead (`e120_allows`: S's wirings, the level its level.json names), which part C need not name."""
+    if e120:
+        return e120_allows(level, wirings)
     lv = _read_json(out_dir() / 'levels.json') or {}
     if float(level) not in [float(x) for x in lv.get('refit_levels', [])]:
         return False, f"{step_tag(level)} is not a refit level of part C ({lv.get('refit_levels')})"
@@ -2244,10 +2269,11 @@ def run_refit(level, wiring: str, root: Optional[Path] = None, force: bool = Fal
     return refit_extended(level, wiring, commits)
 
 
-def part_d(level, wirings: Sequence[str], root: Optional[Path] = None, force: bool = False, check_only: bool = False) -> None:
+def part_d(level, wirings: Sequence[str], root: Optional[Path] = None, force: bool = False, check_only: bool = False,
+           e120: bool = False) -> None:
     """Part D's refits at `level` on `wirings` (a lane), one after another (`run_refit`), if the entry allows them
-    (`refit_due`); with `check_only` only their start checks."""
-    ok, why = refit_due(level, wirings)
+    (`refit_due`; with `e120` at E120's level); with `check_only` only their start checks."""
+    ok, why = refit_due(level, wirings, e120=e120)
     print(f'E102 D {step_tag(level)} {",".join(wirings)}: {"allowed" if ok else "not allowed"} ({why})', flush=True)
     if not ok:
         raise SystemExit(f'part D at {step_tag(level)} on {list(wirings)} is not due: {why}')
@@ -3392,6 +3418,8 @@ def main() -> None:
     ap.add_argument('--level', type=float, default=None, help="part D: the level (pn_inhadd) of the refits")
     ap.add_argument('--dry-run', action='store_true', help="part D: print the refits' E10 commands only")
     ap.add_argument('--check-only', action='store_true', help="part D: run the refits' start checks only")
+    ap.add_argument('--e120-level', action='store_true',
+                    help="part D: refit at E120's level (its level.json; S's wirings), which part C need not name")
     ap.add_argument('--score-refits', action='store_true', help='part D: score the refits at --level (no simulation)')
     ap.add_argument('--points', default='all', help="part E: a lane of E_LANES ('a', 'b'), 'all' or a comma-separated list")
     ap.add_argument('--score-e', action='store_true', help="part E: score the beside-points at --level (no simulation)")
@@ -3420,7 +3448,7 @@ def main() -> None:
         elif a.score_refits:
             print(json.dumps(part_score_refits(a.level, Path(a.out) if a.out else None), indent=1, default=str))
         else:
-            part_d(a.level, wirings, root, force=a.force, check_only=a.check_only)
+            part_d(a.level, wirings, root, force=a.force, check_only=a.check_only, e120=a.e120_level)
     elif a.part == 'variants':
         v = write_variants()
         print(f"variants.csv: {len(v)} rows ({', '.join(f'{k} {n}' for k, n in v['part'].value_counts().items())})")
