@@ -156,8 +156,9 @@ flies' chosen form: The inhibition that the recordings chose on halves of the fl
 - E113: the searched input of paa, B-myr and 2-but inside the ORN flies' spread, reduced and fitted again (not started)
 - E114: a compressive map from the ORN recordings to the input rates (not started)
 - E115: the megamat gap against two sets of flies and the yardstick of the price in response rate ρ (completed)
-- E116: the input of paa and B-myr searched against a second set of flies and taken from Hallem's receptor data (not started)
+- E116: the input of paa and B-myr searched against a second set of flies and taken from Hallem's receptor data (running)
 - E117: the megamat odors' input searched for ρ on odor-odor distances (not started)
+- E118: the KC types in the best family and in the recordings (not started)
 ???
 
 ## What the data show: the ORN→KC remapping in control flies, and what blocking APL output does to it
@@ -1377,7 +1378,7 @@ The best family with paa's input changed and nothing fitted again: ρ on odor-od
 
 **It can, and one constraint fails by a hair.** On the held-out wirings and against the unseen recordings both ρ's on odor-odor distances rise, in every search and on every wiring, and the controls gain less than half as much. The APL-effect loss does not move. The response rate ρ with APL on falls just beyond its margin in one of three readings.
 
-**By the outcomes fixed beforehand, that is a gain at a price.** The same cost is paid by the control search and by the permuted and the inverted factors, and it is absent when the wirings' response fractions are pooled. Its spread has since been measured, and the fall is inside what control changes of the input cost ([the next subsection](#two-yardsticks)). Whether it counts as a failed constraint stays an open decision. No searched input is put forward for the model.
+**By the outcomes fixed beforehand, that is a gain at a price.** The same cost is paid by the control search and by the permuted and the inverted factors, and it is absent when the wirings' response fractions are pooled. Its spread has since been measured, and the fall is inside what control changes of the input cost ([the next subsection](#two-yardsticks)). The fall has since been judged not to be a real cost; the class fixed beforehand stays as written. No searched input is put forward for the model, and searches of many free input factors are not taken further.
 
 **The search.** Four of the family's eight wirings ([the APL-effect fit on re-drawn wirings](#wiring-population)) were searched at once, each at its own fit. The objective was the sum of the two ρ's on odor-odor distances of their mean matrices, against one half of the recordings of each genotype. A candidate was penalized when an odor's response fractions left a set range or the pattern part of [the APL-effect loss](#apl-effect) rose beyond a small margin.
 
@@ -1451,7 +1452,8 @@ The same four held-out wirings against all recordings, as levels. Two values joi
 **What this leaves.**
 
 - **The input's side is open for the order of the pairs.** A bounded change of three odors' input raises both ρ's on odor-odor distances where it was not searched, which no earlier searched input did, and it leaves the main target where it was.
-- **Whether the price is one is an open decision, now with its numbers.** Over {{E115/b_yardstick.csv:controls=all;condition=on:n_controls ~ .0f}} control changes of the input the same statistic changes by {{data:rate_rho_on_control_change_mean ~ +.3f}} on average, and the searched input's two directions are at the {{lit:33rd # results/E115_two_yardsticks/verdict.json, price.directions.A.percentile}} and the {{lit:23rd # the same file, price.directions.B.percentile}} percentile of the controls of comparable size ([the next subsection](#two-yardsticks)). If the missed margin is read as no failure, the next step is the family fitted again with a searched input, then the family with the firing ceiling and the trial noise.
+- **The price is not counted as a real cost.** Over {{E115/b_yardstick.csv:controls=all;condition=on:n_controls ~ .0f}} control changes of the input the same statistic changes by {{data:rate_rho_on_control_change_mean ~ +.3f}} on average, and the searched input's two directions are at the {{lit:33rd # results/E115_two_yardsticks/verdict.json, price.directions.A.percentile}} and the {{lit:23rd # the same file, price.directions.B.percentile}} percentile of the controls of comparable size ([the next subsection](#two-yardsticks)). The class fixed beforehand, a gain at a price, stays as written.
+- **The search is not taken further as a direction.** An input with a free factor for every glomerulus and odor has too many free parameters to become the model's. The experiments already planned on it run as planned, the family fitted again with a searched input among them. New experiments go to changes with few parameters, or grounded in anatomy or physiology, unless those results prove clearly promising.
 - **No searched input is put forward for the model.** The lab's recordings stay the input of the three odors.
 - **A measurement would test the lead:** paa and B-myr recorded in the same ORN flies as megamat odors, at the flies' concentrations, with DM1, DL5, VM7d and DP1m as the glomeruli to look at (with the open measurement question at the end of the page).
 - **The concentration is not the likely reason for the collapse.** paa's input moved to the flies' concentration did not give this gain ([the subsection before this one](#paa-concentration)), and wild-type flies separate the two odors at the concentration of the ORN input.
@@ -1530,9 +1532,9 @@ The change of the response rate ρ from the family at the lab's input, on the fo
 
 **What this leaves.**
 
-- **The room on the megamat pairs is small.** The family is one to three hundredths below what one set of flies reaches against the other, not the distance to the agreement between halves of one set. The megamat odors' input searched for ρ on odor-odor distances therefore counts only the pairs on which both sets stand against the family.
+- **The room on the megamat pairs is small.** The family is one to three hundredths below what one set of flies reaches against the other, not the distance to the agreement between halves of one set. A search of the megamat odors' input was planned on the few pairs on which both sets stand against the family; it has been set aside with the other searches of many input factors.
 - **The megamat pairs do not tell the model from its input.** A change that is to count there has to move the pairs on which both sets of flies leave the ORN input, and the two sets' agreement is the level to reach.
-- **The price has its numbers.** Any change of the input at fixed scales costs about as much response rate ρ as the searched input did. Whether its class is read as a pass stays an open decision. The family fitted again with a searched input is a step of a pending experiment, the searched input of paa, B-myr and 2-but inside the ORN flies' spread, reduced and fitted again.
+- **The price has its numbers, and it is not counted as a real cost.** Any change of the input at fixed scales costs about as much response rate ρ as the searched input did. The searched input's class stays as written, and no searched input is put forward for the model. The family fitted again with a searched input is a step of a pending experiment, the searched input of paa, B-myr and 2-but inside the ORN flies' spread, reduced and fitted again.
 - **Later tests on the response rate ρ quote the controls' spread beside their margin.** A fall of five hundredths on four wirings is what about three in ten changes with no claim behind them give.
 - **The pairs of eb and of 2h are a description.** On them the recordings of this page stand apart from both Remy's flies and the family, and no model is changed for them.
 
