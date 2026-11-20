@@ -8,6 +8,17 @@ directory's notes/ and are linked from here.
 
 ## Open
 
+### E112's realism table labels the flies' 1 z values as baseline-noise units (found 2026-11-20 13:39, viki's write-up subagent for E112)
+- **What.** results/E112_rho_like_for_like/realism.csv has a "flies" row labelled "baseline-noise units, 1.97 SD".
+  Its values are the 1 z ones, from the registry's ctrl_frac, tnt_frac and rate_ratio_fraction: 0.068 / 0.150, ratio
+  2.20. The baseline-noise values are 0.068 / 0.156, ratio 2.28 (noise_ctrl_frac, noise_tnt_frac,
+  noise_rate_ratio_fraction).
+- **What it affects.** That one row of the table only. The model rows, the bands that experiments/E112_rho_like_for_like.py
+  applies and E112's verdict are not affected. E112_rho_like_for_like.md quotes the baseline-noise values.
+- **What has been done.** The note uses the correct values.
+- **What remains.** Relabel the row or take it from the noise_* entries in E112's script (a code fix; hal's script, so hal
+  or an Opus subagent), then rebuild realism.csv from the saved runs.
+
 ### The progress plot's ρ line ends on two points of kinds the plot is meant to leave out (found 2026-11-16, hal, the report pages' revision)
 - **What.** `reports/summary_progress_plot.py` leaves out oracle inputs and random, shuffled or re-drawn wirings by tag
   (`EXCLUDE_VARIANT`: `^input-searched_`, `^oracle_half`, `wiring-`, `^popfit_[PM]\d`, ...). From E83 on, variants carry
