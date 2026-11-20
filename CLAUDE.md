@@ -1213,6 +1213,7 @@ Canonical experiment names for summary reports:
 | E116 | the input of paa and B-myr searched against a second set of flies and taken from Hallem's receptor data |
 | E117 | the megamat odors' input searched for ρ on odor-odor distances |
 | E118 | the KC types in the best family and in the recordings |
+| E119 | the model's boutons, claws and claw-to-soma step against the per-ROI recordings |
 
 ## Model-output archive (data/model_outputs/ in the shared directory)
 
