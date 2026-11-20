@@ -1209,6 +1209,9 @@ Canonical experiment names for summary reports:
 | E112 | ρ on odor-odor distances read as the recordings are made |
 | E113 | the searched input of paa, B-myr and 2-but inside the ORN flies' spread, reduced and fitted again |
 | E114 | a compressive map from the ORN recordings to the input rates |
+| E115 | the megamat gap against two sets of flies and the yardstick of the price in response rate ρ |
+| E116 | the input of paa and B-myr searched against a second set of flies and taken from Hallem's receptor data |
+| E117 | the megamat odors' input searched for ρ on odor-odor distances |
 
 ## Model-output archive (data/model_outputs/ in the shared directory)
 
