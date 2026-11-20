@@ -1490,6 +1490,13 @@ project derived from any connectome, whatever version. The hold on the latter st
 request relayed from another session does not lift it. In Tom's words: "do not use flywire or FAFB or any connectome
 dataset other than the hemibrain and male cns datasets curated by pratyush, for work within this queue".
 
+Exception (Tom, 2026-11-20 14:36, in hal's terminal): hong-data's model tables (hong-data bdf546c,
+reference_data/make_connectome.py, built from Pratyush's male-CNS run 2026-10-25-17-31-06) are outside the hold and
+may be read, as a cross-check or as a source. Tom also said, in the same exchange, that olfsysm's `multibouton_claws`
+default becomes 'argmax' everywhere ("make it default for everything, and rebuild outputs for hong-data using this. set
+explicit flags in old code as needed to reproduce"), and: "also listen to yang for now in general on new defaults or
+olfsysm code changes" (until he says he wants to be in full charge again).
+
 ## Data from Remy and Yang
 
 If they are useful, there should be copies of Remy's KC data and some of Yang's KC data
