@@ -148,14 +148,15 @@ systemd-run --user or nohup, with -u):
     OMP_NUM_THREADS=8 OMP_THREAD_LIMIT=8 nice -n 10 ./venv/bin/python -u experiments/E113_input_within_spread.py --part remy
     ./venv/bin/python -u experiments/E113_input_within_spread.py --part score
     ./venv/bin/python -u experiments/E113_input_within_spread.py --part variants
-    ./venv/bin/python archive_tools/archive_model_outputs.py E113_input_within_spread --exclude 'input-E113_*'
-    ./venv/bin/python archive_tools/migrate_model_output_params.py E113_input_within_spread
+    ./venv/bin/python archive_tools/archive_model_outputs.py E113_input_within_spread --exclude 'input-E113_*,wiring-*'
+    ./venv/bin/python archive_tools/migrate_model_output_params.py E113_input_within_spread --apply
   Only when score's refit.json names an input (a pass):
     ./venv/bin/python -u experiments/E113_input_within_spread.py --part refit --dry-run
     OMP_NUM_THREADS=8 OMP_THREAD_LIMIT=8 nice -n 10 ./venv/bin/python -u experiments/E113_input_within_spread.py --part refit [--wirings P3 P4]
     ./venv/bin/python -u experiments/E113_input_within_spread.py --part score
     ./venv/bin/python -u experiments/E113_input_within_spread.py --part variants
-  then archive and migrate again. ('input-E113_*' are the breadth caches of E85's `build`, which any host recomputes.)
+  then archive and migrate again. ('input-E113_*' and 'wiring-*' at the top of outputs/E113_input_within_spread/ are
+  the breadth caches of E85's `build` (the lab wiring's and the re-draws'), which any host recomputes.)
 """
 from __future__ import annotations
 
