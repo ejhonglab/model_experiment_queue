@@ -52,6 +52,46 @@ def test_split_flies_raises_when_impossible():
         X.split_flies(flies, held, seed=0, pairs=[('a', 'b')], tries=50)
 
 
+def _alpha_pairs(odors):
+    """Pair Series keyed in alphabetical orientation (as E83's `_cs` keys them), values the pair's position."""
+    import itertools
+    keys = [tuple(sorted(p)) for p in itertools.combinations(odors, 2)]
+    return pd.Series(np.arange(len(keys), dtype=float), index=pd.MultiIndex.from_tuples(keys))
+
+
+def test_class_residuals_takes_pairs_in_any_orientation():
+    odors = list(H.MEGAMAT12)
+    rng = np.random.default_rng(0)
+    m = _alpha_pairs(odors)
+    m[:] = rng.random(len(m))
+    d = m.copy()
+    d[:] = rng.random(len(d))
+    # the classes' pairs in APL16 order (E115's a_classes.csv), the model's and data's keys alphabetical
+    canon = [k for k in H.canonical_pairs(m).index]
+    assert any(k not in set(m.index) for k in canon)      # the orientations really differ (the crash's cause)
+    classes = ['x' if i % 3 == 0 else 'neither' for i in range(len(canon))]
+    rr, cls = X.class_residuals(m, d, canon, classes)
+    assert len(rr) == 66 and set(rr.index) == set(canon)
+    assert np.isclose(rr['contribution'].sum(), 1 - H.spearman(H.canonical_pairs(m), H.canonical_pairs(d)))
+    assert [cls[k] for k in canon] == classes
+    # the same with the pairs given reversed
+    rr2, cls2 = X.class_residuals(m, d, [(b, a) for a, b in canon], classes)
+    assert rr2.equals(rr) and cls2 == cls
+
+
+def test_class_residuals_raises_on_missing_pairs():
+    odors = list(H.MEGAMAT12)
+    m = _alpha_pairs(odors)
+    d = m.copy()
+    canon = list(H.canonical_pairs(m).index)
+    with pytest.raises(KeyError):
+        X.class_residuals(m.drop(m.index[0]), d, canon, ['neither'] * len(canon))
+    d2 = d.copy()
+    d2.iloc[3] = np.nan
+    with pytest.raises(KeyError):
+        X.class_residuals(m, d2, canon, ['neither'] * len(canon))
+
+
 def test_score_of_subtracts_the_rate_penalty():
     base = {'w1': (0.10, 0.20), 'w2': (0.05, 0.10)}
     s = X.score_of(0.7, base, base)

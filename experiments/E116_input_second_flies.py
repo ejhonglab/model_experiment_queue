@@ -1201,6 +1201,26 @@ def e112_ended() -> Tuple[bool, str]:
     return False, 'not found'
 
 
+def class_residuals(model: pd.Series, data: pd.Series, pairs: Sequence[Tuple[str, str]],
+                    classes: Sequence[str]) -> Tuple[pd.DataFrame, Dict[Tuple[str, str], str]]:
+    """E106's `rank_residuals` of `model` against `data` over `pairs` (either orientation), with both Series and the
+    pairs taken in canonical orientation (`kcq.harness.canonical_pairs`, APL16 odor order), and the pairs' classes
+    keyed the same way. Raises if a pair is missing from either Series (or NaN there), rather than dropping it."""
+    from experiments import E106_rho_gap_parts as E106
+    m, dd = E106._canon(model), E106._canon(data)
+    idx = E106.select_pairs(m.index, pairs)
+    keys = list(idx)
+    if len(keys) != len(set(pairs)) or len(set(keys)) != len(keys):
+        raise KeyError(f'{len(set(pairs))} pairs asked for, {len(keys)} found in the model\'s pair index')
+    rr = E106.rank_residuals(m.loc[idx], dd)
+    if len(rr) != len(keys):
+        lost = sorted(set(keys) - set(rr.index))
+        raise KeyError(f'pairs missing or NaN in the model or the data: {lost}')
+    c = E106._canon(pd.Series(list(classes), index=pd.MultiIndex.from_tuples(list(pairs)), dtype=object))
+    cls = dict(zip(c.index, c.to_numpy()))
+    return rr, cls
+
+
 def e115_class_table(runs: pd.DataFrame) -> pd.DataFrame:
     """Step 11, beside: the 66 megamat pairs by E115's classes (results/E115_two_yardsticks/a_classes.csv, her cosine
     reading where it has one): per change (the family and the four searches at 0.6, T's population, raw counts) and
@@ -1222,11 +1242,8 @@ def e115_class_table(runs: pd.DataFrame) -> pd.DataFrame:
         d = E83.population([E83.pair_distances(run_outputs(ch, w), 'raw') for w in T_WIRINGS])
         for c in ('on', 'off'):
             pairs = [tuple(x) for x in cl[cl['condition'] == c][['odor_a', 'odor_b']].to_numpy()]
-            m = E83._cs(d[c])
-            idx = E106.select_pairs(m.index, pairs)
-            rr = E106.rank_residuals(m.loc[idx], dt[c])
-            cls = {tuple(sorted(k)): v for k, v in zip(pairs, cl[cl['condition'] == c]['cls'])}
-            rr['cls'] = [cls.get(tuple(sorted(k)), 'neither') for k in rr.index]
+            rr, cls = class_residuals(d[c], dt[c], pairs, cl[cl['condition'] == c]['cls'])
+            rr['cls'] = [cls.get(k, 'neither') for k in rr.index]
             for k, g in rr.groupby('cls'):
                 rows.append(dict(change=ch, condition=c, cls=k, n_pairs=len(g), contribution=float(g['contribution'].sum()),
                                  remy_metric=metric))
