@@ -102,3 +102,29 @@ def test_withheld_folders_are_never_copied():
     ex = A.DEFAULT_EXCLUDE['E97_glomerulus_claw_shares']
     assert A.excluded('claims/B2_mean2_real/owner', ex) and A.excluded('distances_cache.pkl', ex)
     assert not A.excluded('runs_mcns/B2_mean2_real_on_responses.parquet', ex)
+
+
+def test_params_keep_input_change_columns(tmp_path, monkeypatch):
+    """E116's variants.csv names each variant's input by change, search, size and panel (which search's factors, at
+    what fraction of their log size, on which odor panel); params.csv keeps those columns, not only the fit's."""
+    name = 'E116_input_second_flies'
+    here, shared = tmp_path / 'repo', tmp_path / 'shared'
+    src, res = here / 'outputs' / name, shared / 'results' / name
+    arch = shared / 'data' / 'model_outputs'
+    monkeypatch.setattr(H, 'HERE', here)
+    monkeypatch.setattr(H, 'shared_dir', lambda: shared)
+    monkeypatch.setattr(H, 'results_dir', lambda e: shared / 'results' / e)
+    monkeypatch.setattr(A, 'ARCHIVE', arch)
+    s = pd.DataFrame(np.ones((3, 2)), columns=['a', 'b'])
+    for f in ('R/Ra_s0.6_P3_on', 'V/Ra_s1_P3_v2_on'):
+        p = src / f'{f}_spike_counts.parquet'
+        p.parent.mkdir(parents=True, exist_ok=True)
+        s.to_parquet(p)
+    res.mkdir(parents=True)
+    pd.DataFrame(dict(tag=['Ra_s0.6_P3', 'Ra_s1_P3_v2'], change=['Ra_s0.6', 'Ra_s1'], search=['Ra', 'Ra'], size=[0.6, 1.0],
+                      panel=['APL16', 'validation2'], fixed_thr=[1.0, 2.0], kind_text='x')).to_csv(res / 'variants.csv', index=False)
+    A.archive_experiment(name, 'host')
+    p = pd.read_csv(arch / name / 'params.csv')
+    assert list(p['change']) == ['Ra_s0.6', 'Ra_s1'] and list(p['search']) == ['Ra', 'Ra']
+    assert list(p['size']) == [0.6, 1.0] and list(p['panel']) == ['APL16', 'validation2']
+    assert 'kind_text' not in p.columns
