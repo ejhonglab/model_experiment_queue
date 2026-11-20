@@ -15,7 +15,10 @@ of its own baseline noise, a response above `noise_threshold` (`noise_unit_crite
 same-repeat gap, and distances and the APL effect from products of different repeats. The entries of
 `experiments.E106_rho_gap_parts.registry_entries` (`<ctrl|tnt>_ceiling_<54|91>`, `_rec_rho_loo_<120|54|91>`, `family_rho_*`,
 `paired_rho_*`, `e85_population_agreement_*`) are the yardsticks for ρ on odor-odor distances, some of them read from saved
-model distances (the best family's spread over wirings and recordings, near-null changes, E85's model flies).
+model distances (the best family's spread over wirings and recordings, near-null changes, E85's model flies). The entries of
+`experiments.E115_two_yardsticks.registry_entries` (`family_rho_<on|off>_two_sets_66`, `family_resid_corr_remy_<on|off>_66`,
+`rate_rho_<on|off>_control_change_mean`, `_control_change_sd`, `_control_paired_sd`) are the megamat pairs against two sets of
+flies and the spread of response rate ρ under control input changes.
 Usage: ./venv/bin/python kcq/data_targets.py [--add-new]
 (--add-new: compute every entry but write only those not yet in the registry, keeping the existing entries as
 they are, and list any existing entry whose recomputed value or interval differs)
@@ -62,6 +65,8 @@ INPUTS = {
     'e106_e102_pairs': H.shared_dir() / 'results' / 'E102_antennal_lobe_normalization' / 'model_pair_distances_long.csv',
     'e106_e85_pairs': H.shared_dir() / 'results' / 'E85_orn_fly_population' / 'model_pair_distances_long.csv',
     'e106_e85_runs': H.shared_dir() / 'results' / 'E85_orn_fly_population' / 'runs.csv',
+    # E115's two yardsticks (the megamat gap against two sets of flies, the price in response rate ρ), as its run wrote them
+    'e115_registry': H.shared_dir() / 'results' / 'E115_two_yardsticks' / 'registry.csv',
 }
 
 
@@ -702,6 +707,13 @@ def build() -> dict:
     for name, value, definition, ci in e106_entries():
         add(name, value, definition, 'E106_rho_gap_parts.registry_entries (resamples and splits of recordings seeded 0)',
             e106_inputs(name), ci=ci)
+    # the two yardsticks of E115: the best family's megamat pairs against two sets of flies (Yang's and Remy's wild-type
+    # somata: ρ against their mean rank, the residual correlation) and the spread of response rate ρ under control input
+    # changes at fixed scales (read from the run's registry.csv, written by experiments/E115_two_yardsticks.py)
+    from experiments.E115_two_yardsticks import registry_entries as e115_entries
+    for name, value, definition, ci in e115_entries():
+        add(name, value, definition, 'E115_two_yardsticks.registry_entries (results/E115_two_yardsticks/registry.csv; '
+            '1000 joint resamples seeded 0)', ['e115_registry'], ci=ci)
     return reg
 
 
