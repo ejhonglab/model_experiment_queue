@@ -49,7 +49,9 @@ as in the default fit (`--aplpn-fixed` fixes the bouton->APL scale at F x the ba
 (after the --apl-divisive prefix).
 KC-KC held (the KC-KC-held fits proposed from E51): `--kckc-fixed S` holds the KC-KC scale (kc_kc_inh) at S and fits the other three
 parameters; with --init-from the start is the seed's parameters with its KC-KC replaced by S; tag
-prefix kckc<S>_ (after the block prefix). --loss rho (E63) puts rho<W>_ (W the matrix terms' weight) after the block
+prefix kckc<S>_ (after the block prefix). `--kckc-matrix PARQUET --kckc-matrix-tag TAG` (E122) replaces the hemibrain
+KC-KC matrix with a saved one (fit_mb_model's `_wKCKC`, times the KC-KC scale); tag prefix kcm-<TAG>_ (after kckc<S>_);
+recorded in fits.csv (kckc_matrix, kckc_matrix_tag, kckc_matrix_sha256) and the provenance. --loss rho (E63) puts rho<W>_ (W the matrix terms' weight) after the block
 prefix.
 The block term on the proxy (E60): `--block-proxy PASSES` computes the block term on the batched
 network-aware proxy's block through the noise (noise_proxy.py: at every evaluation two extra simulations
@@ -1717,8 +1719,10 @@ def fit_one(k: float, orn, initial, wnorm, breadth, loss_fn, *, kckc0: float, ma
     kc_thr_factor_fixed: Optional[np.ndarray] = None, claw_transfer: Optional[dict] = None,
     protocol: Optional[dict] = None, spike_times: bool = False, claw_inh_pool: Optional[float] = None,
     apl_divisive: bool = False, aplpn_hold: Optional[float] = None, aplkc_flat: Optional[dict] = None,
-    pn: Optional[dict] = None, apl_residual: Optional[dict] = None):
-    """One joint fit; `kc_thr_factors` (K x KCs, `jitter_factors`) adds the K jittered runs of
+    pn: Optional[dict] = None, apl_residual: Optional[dict] = None,
+    kckc_matrix: Optional[pd.DataFrame] = None):
+    """One joint fit; `kckc_matrix` (E122: KC x KC, post x pre, KC body IDs) replaces the hemibrain KC-KC matrix
+    (fit_mb_model's `_wKCKC`, used as given and multiplied by the KC-KC scale); `kc_thr_factors` (K x KCs, `jitter_factors`) adds the K jittered runs of
     each condition (`jitter_conditions`) to every evaluation; `init_exact_expect` (not None)
     starts exactly at the `init_from` fit's parameters (`init_from_fit` with exact=True);
     `kckc_fixed` holds the KC-KC scale there and fits the other three parameters; `block_proxy`
@@ -1841,6 +1845,9 @@ def fit_one(k: float, orn, initial, wnorm, breadth, loss_fn, *, kckc0: float, ma
         opt_kws = dict(popsize=6, seed=0, polish=False, init='sobol')
     # (only with a glomerulus gain, so the default path is unchanged)
     wiring_kws = {} if wPNKC_override is None else {'_wPNKC': wPNKC_override}
+    if kckc_matrix is not None:
+        # (E122; only when given, so the default path is unchanged)
+        wiring_kws['_wKCKC'] = kckc_matrix
     overrides = {'on': {}, 'off': {'wAPLKC_scale': 0.0, 'wAPLPN_scale': 0.0}}
     # (E111; only when given, so the default path is unchanged) the blocked condition with a residual APL output: a
     # hook named 'off' in place of the static 'off' condition, f in a cell the extra parameter's setter updates
@@ -2042,6 +2049,11 @@ def main() -> None:
         help='hold the KC-KC scale (kc_kc_inh) at S and fit the other three parameters (the KC-KC-held fits); with --init-from '
         "the start is the seed fit's parameters with its KC-KC scale replaced by S (so an exact start's first "
         'evaluation differs from the row); tag prefix kckc<S>_ (after the block prefix)')
+    ap.add_argument('--kckc-matrix', default=None, metavar='PARQUET',
+        help='(E122) replace the hemibrain KC-KC matrix with this saved KC x KC matrix (post x pre; index KC body IDs, '
+        'columns the same IDs as strings), used as given and multiplied by the KC-KC scale; needs --kckc-matrix-tag; tag '
+        'prefix kcm-<TAG>_ (after the kckc<S>_ prefix)')
+    ap.add_argument('--kckc-matrix-tag', default=None, metavar='TAG', help='name of the --kckc-matrix matrix (for the tag)')
     ap.add_argument('--block-proxy', type=int, default=0, metavar='PASSES',
         help="compute the loss's block term on the batched network-aware proxy's block through the noise (noise_proxy."
         'make_block_proxy_hook: PASSES replay passes of every KC at the trial-noise pipeline\'s jittered thresholds, '
@@ -2462,6 +2474,13 @@ def main() -> None:
     if args.wiring_file is not None and args.wiring_tag is None:
         ap.error('--wiring-file needs --wiring-tag')
     wiring_matrix = pd.read_parquet(args.wiring_file) if args.wiring_file else None
+    if (args.kckc_matrix is None) != (args.kckc_matrix_tag is None):
+        ap.error('--kckc-matrix and --kckc-matrix-tag go together')
+    kckc_matrix, kckc_matrix_sha = None, None
+    if args.kckc_matrix is not None:
+        kckc_matrix = pd.read_parquet(args.kckc_matrix)
+        kckc_matrix.columns = pd.Index([int(c) for c in kckc_matrix.columns], name=kckc_matrix.columns.name)
+        kckc_matrix_sha = hashlib.sha256(np.ascontiguousarray(kckc_matrix.to_numpy(dtype=float), dtype='<f8').tobytes()).hexdigest()
     if args.kc_thr_input_exp is not None and args.block_proxy > 0:
         ap.error('--kc-thr-input-exp with --block-proxy is not supported')
     # (E78) the per-claw knee's sub-threshold gain / softplus width, fixed
@@ -2563,7 +2582,8 @@ def main() -> None:
         gain_gloms = list(args.gain_glomeruli) if args.gain_glomeruli else list(ORACLE)
     print(f'bouton base ready ({time.time() - t0:.0f}s; claw_thr {args.claw_thr}; gain {gain}; '
         f'wiring {args.wiring}); tuned params {initial}', flush=True)
-    kckc_tag = '' if args.kckc_fixed is None else f'kckc{args.kckc_fixed:g}_'
+    kckc_tag = ('' if args.kckc_fixed is None else f'kckc{args.kckc_fixed:g}_') + (
+        '' if args.kckc_matrix_tag is None else f'kcm-{args.kckc_matrix_tag}_')
     from pyolfsysm.mb_model import kc_spiking_param_dict
     try:
         kc_spiking = kc_spiking_param_dict(kc_refractory_period=args.kc_refractory_period, kc_adapt_inc=args.kc_adapt_inc,
@@ -2625,6 +2645,7 @@ def main() -> None:
             init_thr=args.init_thr, aplpn_max=args.aplpn_max, aplpn_fixed=args.aplpn_fixed,
             aplkc_min=args.aplkc_min, apl_drive=args.apl_drive, init_params=args.init_params,
             kc_thr_factors=jit_factors, init_exact_expect=exact_expect, kckc_fixed=args.kckc_fixed,
+            **({} if kckc_matrix is None else dict(kckc_matrix=kckc_matrix)),
             block_proxy=proxy, kc_spiking=kc_spiking, kc_thr_factor_fixed=thr_in_factor,
             **({} if not claw_transfer else dict(claw_transfer=claw_transfer)),
             **({} if not protocol else dict(protocol=protocol)),
@@ -2677,6 +2698,9 @@ def main() -> None:
             apl_drive=args.apl_drive, base_params=args.base_params, init_params=args.init_params,
             aplpn_max=args.aplpn_max, aplpn_fixed=args.aplpn_fixed, aplkc_min=args.aplkc_min,
             kckc_fixed=args.kckc_fixed,
+            # (E122: the KC-KC matrix in place of the hemibrain one; empty when not set)
+            **({} if args.kckc_matrix is None else dict(kckc_matrix=args.kckc_matrix, kckc_matrix_tag=args.kckc_matrix_tag,
+                kckc_matrix_sha256=kckc_matrix_sha)),
             # (E69: the fixed KC refractory period / adaptation; empty when not set)
             kc_refractory_period=args.kc_refractory_period, kc_adapt_inc=args.kc_adapt_inc,
             kc_adapt_tau=(args.kc_adapt_tau if args.kc_adapt_inc is not None else None),
@@ -2816,6 +2840,9 @@ def main() -> None:
                 'evenly over its claws), aplkc_flat fitted '
                 'within bounds as a fifth parameter (optimize_mb_model_params extra_params)')))),
             kckc_fixed=args.kckc_fixed, base_params=initial, loss_variant=args.loss, kc_spiking=kc_spiking,
+            **({} if kckc_matrix is None else dict(kckc_matrix=dict(path=args.kckc_matrix, tag=args.kckc_matrix_tag,
+                sha256=kckc_matrix_sha, note='E122: fit_mb_model _wKCKC in place of the hemibrain KC-KC matrix, times the '
+                'KC-KC scale'))),
             **(dict(kc_thr_input=dict(exponent=args.kc_thr_input_exp, prepass=prepass_info,
                 factor_sha256=hashlib.sha256(np.ascontiguousarray(thr_in_factor, dtype='<f8').tobytes()).hexdigest(),
                 note=('E71: every simulation (APL on, APL off and any jittered run, whose jitter multiplies it) has each KC\'s '
