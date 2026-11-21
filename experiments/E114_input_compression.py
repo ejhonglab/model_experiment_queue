@@ -101,7 +101,9 @@ Choices the entry left open (fixed here before any run, with the reason):
 - Part C's exponent ("the largest gated gain"): among pow0.6 to pow0.9, those whose class is "better"; of them the one
   with the largest population change against all recordings on a ρ that gains; on a tie the exponent nearer 1. None
   "better": 0.75, as the entry says ("if none passes"), whose held points are run first (part Cstart) as the refit's
-  start and enter no class. The saturating form is not refitted (the entry refits "the exponent").
+  start and enter no choice; they are gated like part A's inputs once run (`gate_tables`), for outcome (b)'s "at fixed
+  scales" (added 2026-11-20 after the chain: with the fallback 0.75 not among part A's exponents, (b) had no
+  fixed-scale gate to read and the letter fell to '-'). The saturating form is not refitted (the entry refits "the exponent").
 - The refit's start: each wiring's held point of the chosen exponent (the fit's own parameters with the somatic
   threshold and the tied APL scale re-held for the new input; E110 part B's precedent), one start, 150 evaluations
   (E72's), KC-KC free. The bounds are E10's (relative to E3's base parameters, which do not depend on the input).
@@ -997,6 +999,10 @@ def gate_tables(rd: pd.DataFrame, runs: pd.DataFrame) -> Tuple[pd.DataFrame, Dic
     if _have(runs, REFIT):
         gates[REFIT] = gate(rd, runs, REFIT)
     cs = _read_json(out_dir() / 'choice.json')
+    # the chosen exponent's held points (part Cstart) when it is not one of part A's: outcome (b)'s fixed-scale reading
+    chosen = pow_name(float(cs['exponent'])) if cs.get('exponent') else None
+    if chosen and chosen not in gates and _have(runs, chosen):
+        gates[chosen] = gate(rd, runs, chosen)
     if all(gates[n].get('complete') for n in A_INPUTS + B_INPUTS):
         new = choose_c(gates)
         if cs.get('exponent') and float(cs['exponent']) != float(new['exponent']):

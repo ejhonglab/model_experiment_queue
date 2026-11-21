@@ -186,6 +186,12 @@ def test_outcomes():
     # (b) a price on the pattern part at fixed scales and after the refit
     gates, rd = _gates(dict(a, **{'pow0.8': dict(d_on=0.012, pattern=0.004)}, refit=dict(d_on=0.012, pattern=0.004)))
     assert X.outcome_of(gates, rd, {'exponent': 0.8})['letter'] == 'b'
+    # (b) with the fallback 0.75, read on its held points (part Cstart), while pow0.7 has a gain at fixed scales
+    gates, rd = _gates(dict(a, **{'pow0.7': dict(d_off=0.012, pattern=0.004), 'pow0.75': dict(d_off=0.012, pattern=0.004)},
+                            refit=dict(d_off=0.012, pattern=0.004)))
+    assert X.outcome_of(gates, rd, {'exponent': 0.75})['letter'] == 'b'
+    del gates['pow0.75']                                             # without its gate the letter cannot be (b)
+    assert X.outcome_of(gates, rd, {'exponent': 0.75})['letter'] == '-'
     # (c) a gain on the hemibrain wiring only
     w = [0.02] + [0.0] * 7
     gates, rd = _gates(dict(a, **{'pow0.8': dict(wirings_on=w)}))
