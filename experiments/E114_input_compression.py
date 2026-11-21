@@ -1318,11 +1318,13 @@ def write_variants() -> pd.DataFrame:
     rows, parts = [], []
     for _, r in runs[runs['input'] != 'I0'].iterrows():
         o = run_outputs(r['input'], r['unit'])
-        tag = r['tag']
+        # a refit's tag is its fit's own stem, the name of its archived spike counts and responses (E110's layout), so
+        # kcq/apl_effect.py finds its responses for the bands; `variant` keeps C_<wiring>
+        tag = r['fit_tag'] if r['input'] == REFIT else r['tag']
         kind = (f"C2's family's {r['unit']} " + ('fitted again (E10_joint_fit.py, E72\'s part-B command) on ' if r['input'] == REFIT
                 else 'fit, the somatic threshold and the tied APL scale re-held, on ') +
                 f"the ORN input {r['input'] if r['input'] != REFIT else chosen_name()} (results/{EXPERIMENT}/inputs/)")
-        rows.append(dict(tag=tag, variant=tag, part=r['part'], arm=r['input'], base='bouton', k=2.0, breadth_k=2.0, kind=kind,
+        rows.append(dict(tag=tag, variant=r['tag'], part=r['part'], arm=r['input'], base='bouton', k=2.0, breadth_k=2.0, kind=kind,
                          config=r['input'], wiring=r['unit'], ref_experiment=r.get('fit_folder'), ref_fit=r.get('fit_tag'),
                          **{k: r.get(k) for k in E83.PARAM_KEYS}, kc_kc_inh=r.get('wKCKC_scale'),
                          thr_factor=r.get('thr_factor'), apl_factor=r.get('apl_factor'), rate_on=r['rate_on'],
