@@ -331,6 +331,8 @@ def part_check() -> dict:
     res = E122._read_json(path)
     if res.get('passes'):
         return res
+    if res:
+        E122._write_json(out_dir() / f"check_failed_{res.get('checked', '').replace(' ', '_').replace(':', '')}.json", res)
     r1 = pd.read_csv(H.shared_dir() / 'results' / E122.EXPERIMENT / 'runs_1.csv')
     ra = pd.concat([pd.read_csv(p) for p in sorted((H.shared_dir() / 'results' / 'E110_no_kckc').glob('runs_A_*.csv'))],
                    ignore_index=True)
@@ -365,7 +367,8 @@ def part_check() -> dict:
     rec = r1[r1['tag'] == 'S1_SH_real'].iloc[0]
     diff = {c: int((hr[c][1].to_numpy(dtype=float) != saved[c][1].to_numpy(dtype=float)).sum()) for c in ('on', 'off')}
     fac = dict(thr=(hr['thr_factor'], float(rec.thr_factor)), apl=(hr['apl_factor'], float(rec.apl_factor)))
-    exact = all(v == 0 for v in diff.values()) and all(a == b for a, b in fac.values())
+    # the factors as E122's runs_1.csv reads them back (CSV keeps 16 significant digits: equal to 1e-12, relative)
+    exact = all(v == 0 for v in diff.values()) and all(abs(a - b) <= 1e-12 * abs(b) for a, b in fac.values())
     res = dict(checked=_now(), host=_host(), matrices=mats, references=refs,
                apl_borne_off=dict(differing_counts=diff, factors=fac, exact=exact, seconds=time.time() - t0,
                                   what="SH0 on 'real' at the family fit with off_extra None, against E122's S1_SH_real"),
