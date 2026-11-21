@@ -164,6 +164,7 @@ flies' chosen form: The inhibition that the recordings chose on halves of the fl
 - E121: the rise of the input by odor and by glomerulus (running)
 - E122: one feedback neuron that survives the block in place of KC-KC inhibition (completed)
 - E123: the form of the inhibition among KCs: draws of the shuffle, random sparse matrices and the inhibition as a part of APL (completed)
+- E124: the inhibition among KCs as a part of APL, fitted with a KC-KC scale for each condition (running)
 ???
 
 ## What the data show: the ORN→KC remapping in control flies, and what blocking APL output does to it
