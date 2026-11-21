@@ -68,7 +68,7 @@ Parts (CLI `--part`):
   population and on 3 of 4 wirings against all recordings and each half, the mean APL effect under the readout not
   lower by 0.01 and the raw-count loss not higher by 0.005 (population), every T run in the bands; "neither" otherwise.
 - variants: variants.csv and model_pair_distances_long.csv for the model-output archive.
-- chain: check, 1, score1, 2 and T for the passing arms (gated), score, variants, in one process (the detached launch).
+- chain: 0, check, 1, score1, 2 and T for the passing arms (gated), score, variants, in one process (the detached launch).
 
 Choices fixed before any run: the matched total (the sum of the matrix, not each KC's row sum: U, TY and G give KCs the
 same input whatever their hemibrain amount, which is what separates them from SH); the read on T by carried parameters
@@ -485,18 +485,19 @@ def part_check(smoke: bool = True) -> dict:
         cc = fit_clean()
         rec = launch(fit_command(spec, smoke=True), H.results_dir(f'{FIT_PREFIX}/{spec.name}'),
                      local_dir('logs') / f'{spec.name}.log', cc, spec.name)
-        row = fit_row(spec.name, fit_tag(spec))
-        h = None
-        hp = H.results_dir(f'{FIT_PREFIX}/{spec.name}')
-        hs = sorted(hp.glob('history_*.csv'))
-        if hs:
-            h = pd.read_csv(hs[-1])
-        res['smoke'] = dict(returncode=rec['returncode'], seconds=rec['seconds'], row=row is not None,
-                            sha_in_row=(None if row is None else row.get('kckc_matrix_sha256')), matrix_sha256=sha,
+        # (a --smoke run of E10_joint_fit.py writes its history only, no fits.csv row)
+        hp = H.results_dir(f'{FIT_PREFIX}/{spec.name}') / f'history_{fit_tag(spec)}.csv'
+        h = pd.read_csv(hp) if hp.exists() else None
+        fam_loss = float(pd.read_csv(H.results_dir(E83.members()['real'][0]) / 'fits.csv').set_index('tag').loc[
+            E83.members()['real'][1], 'loss'])
+        first = None if h is None or not len(h) else float(h['loss'].iloc[0])
+        res['smoke'] = dict(returncode=rec['returncode'], seconds=rec['seconds'], history=str(hp.name),
+                            history_exists=h is not None, n_evals=None if h is None else int(len(h)),
+                            first_loss=first, family_fit_loss=fam_loss, matrix_sha256=sha,
                             kckc_values=(None if h is None or 'wKCKC_scale' not in h else
                                          sorted({float(x) for x in h['wKCKC_scale']})[:5]),
-                            passes=bool(rec['returncode'] == 0 and row is not None
-                                        and str(row.get('kckc_matrix_sha256')) == sha))
+                            passes=bool(rec['returncode'] == 0 and h is not None and len(h) >= 2
+                                        and first is not None and first != fam_loss))
         _write_json(out / 'check.json', res)
         print(f"E122 check (ii): {res['smoke']}", flush=True)
         if not res['smoke']['passes']:
@@ -940,7 +941,8 @@ def write_variants() -> pd.DataFrame:
 
 
 def chain() -> None:
-    """check, step 1, score1, the gated refits with their T reads, score, variants."""
+    """step 0 (again, at the chain's commit), check, step 1, score1, the gated refits with their T reads, score, variants."""
+    part_0()
     part_check()
     part_1()
     g = score1()
