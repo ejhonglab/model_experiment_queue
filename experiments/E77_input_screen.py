@@ -290,7 +290,7 @@ def build_c2_simulator(extra_kws: Optional[dict] = None, *, orn: Optional[pd.Dat
 def hold_rates(build: Callable[[], Union[Callable, Tuple[Callable, dict]]], *, target_off: Optional[int] = None,
                target_on: Optional[int] = None, params: Optional[Dict[str, float]] = None, breadth_from: str = 'base',
                label: str = '', thr_bracket: Tuple[float, float] = THR_BRACKET,
-               apl_bracket: Tuple[float, float] = APL_BRACKET) -> dict:
+               apl_bracket: Tuple[float, float] = APL_BRACKET, off_extra: Optional[Dict[str, float]] = None) -> dict:
     """The fixed-scale runner with both response rates held, on the simulator `build()` returns (e.g.
     `lambda: build_c2_simulator(dict(claw_thr=100.0))`; a bare simulate function or build_c2_simulator's
     (simulate, info) pair). First the somatic threshold (fixed_thr) is bisected with APL off (APL->KC and APL->bouton
@@ -310,6 +310,9 @@ def hold_rates(build: Callable[[], Union[Callable, Tuple[Callable, dict]]], *, t
             return build_c2_simulator's pair).
         label: printed with each bisection step.
         thr_bracket, apl_bracket: the factors' brackets.
+        off_extra: further parameters of the APL-off condition only, over APL->KC and APL->bouton 0 (e.g.
+            dict(wKCKC_scale=0.0): KC-KC inhibition that follows APL's block, E123); None (default) leaves the
+            APL-off condition as before.
 
     Returns:
         dict with 'params' (absolute, APL on), 'params_off' (the APL-off run's), 'thr_factor', 'apl_factor', 'n_on',
@@ -343,7 +346,7 @@ def hold_rates(build: Callable[[], Union[Callable, Tuple[Callable, dict]]], *, t
             held['breadth'] = breadth
 
     res = tuning.hold_rates(sim, p, target_off=target_off, target_on=target_on, size=P['size'],
-        off_params=dict(wAPLKC_scale=0.0, wAPLPN_scale=0.0), tied_on=TIED_ON, thr_bracket=thr_bracket,
+        off_params=dict(wAPLKC_scale=0.0, wAPLPN_scale=0.0, **(off_extra or {})), tied_on=TIED_ON, thr_bracket=thr_bracket,
         thr_step=THR_STEP, apl_bracket=apl_bracket, apl_step=APL_STEP, label=label, after_off=after_off,
         max_iters=E69.BISECT_ITERS)
     breadth = held.get('breadth')
