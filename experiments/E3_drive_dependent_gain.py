@@ -53,7 +53,10 @@ BASES = {
     'hemibrain-wd20': dict(pn2kc_connections='hemibrain', weight_divisor=20,
         _drop_glom_with_plus=False),
 }
-BOUTON = dict(CLAWS, prat_boutons=True, pn_claw_to_apl=True)
+# multibouton_claws='first': each claw on its PN's lowest-ID bouton, the loader's default
+# until 2026-11-20 (now 'argmax'), with which the bouton base and every model built on it
+# were run; pinned so they reproduce (it is left out of model IDs)
+BOUTON = dict(CLAWS, prat_boutons=True, pn_claw_to_apl=True, multibouton_claws='first')
 DEFAULT_INHADD = [PN_INHADD_DEFAULT, 100.0, 314.0, 1000.0, 3141.0, 10000.0]
 PN_APL_MULTIPLIERS = [0.0, 0.5, 1.0, 2.0, 4.0]
 
