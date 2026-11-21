@@ -217,6 +217,14 @@ condition's absolute scales), the history (an apl_residual column, constant when
 only when given; tag part aplres<F>_ (fixed) or aplresfit<F>_ (fitted from F; b<LO>-<HI> before the underscore with other
 bounds) after the KC-KC prefix; refused with --jitter-k, --block-proxy, --kc-thr-input-exp, --count-kernel and
 --save-spike-times.
+A KC-KC scale of the blocked condition (E124): `--off-kckc-scale S` gives the blocked condition ('off': the acute_off run,
+every APL-off statistic of the loss and of fits.csv) the KC-KC scale S (absolute, fixed) in place of the evaluation's
+APL-on one, through the static override of the 'off' condition (beside APL->KC and APL->bouton 0; `off_kckc_overrides`):
+the inhibition among KCs that follows APL's block (S = 0: none with APL off), while the APL-on KC-KC scale is fitted (or
+held by --kckc-fixed) as without it. The breadth run (`bouton_base`'s APL-off run of the base) does not take the option,
+so the breadth weights are those of the fits without it. Off by default (the call, the fits and fits.csv as before);
+recorded in fits.csv (off_kckc_scale) and the provenance (off_kckc_scale) only when given; tag part kckcoff<S>_ after
+kcm-<TAG>_ (before any aplres_); refused with --apl-residual and --block-proxy.
 """
 from __future__ import annotations
 
@@ -419,6 +427,24 @@ def apl_residual_params(params: Dict[str, float], f: float) -> Dict[str, float]:
     static override without the option; at f = 1 the parameters are `params`."""
     return dict(params, wAPLKC_scale=float(f) * float(params['wAPLKC_scale']),
         wAPLPN_scale=float(f) * float(params['wAPLPN_scale']))
+
+
+def off_kckc_overrides(overrides: Dict[str, Dict[str, float]], s: Optional[float]) -> Dict[str, Dict[str, float]]:
+    """(E124) The conditions' static overrides with the blocked condition's KC-KC scale S: `overrides` unchanged (the same
+    object) when `s` is None; else a copy whose 'off' entry also sets wKCKC_scale to float(s) (finite, not negative)."""
+    if s is None:
+        return overrides
+    v = float(s)
+    if not (np.isfinite(v) and v >= 0.0):
+        raise ValueError(f'--off-kckc-scale must be finite and not negative (got {s})')
+    out = {c: dict(o) for c, o in overrides.items()}
+    out['off']['wKCKC_scale'] = v
+    return out
+
+
+def off_kckc_tag(s: Optional[float]) -> str:
+    """(E124) The tag part of --off-kckc-scale: kckcoff<S>_; '' when off."""
+    return '' if s is None else f'kckcoff{_tag_number(float(s))}_'
 
 
 APLKC_FLAT_KINDS =('uniform', 'connectome', 'offclaw', 'offclaw_ped', 'allsyn', 'allsyn_even', 'allsyn_even_calyx')
@@ -1720,7 +1746,7 @@ def fit_one(k: float, orn, initial, wnorm, breadth, loss_fn, *, kckc0: float, ma
     protocol: Optional[dict] = None, spike_times: bool = False, claw_inh_pool: Optional[float] = None,
     apl_divisive: bool = False, aplpn_hold: Optional[float] = None, aplkc_flat: Optional[dict] = None,
     pn: Optional[dict] = None, apl_residual: Optional[dict] = None,
-    kckc_matrix: Optional[pd.DataFrame] = None):
+    kckc_matrix: Optional[pd.DataFrame] = None, off_kckc: Optional[float] = None):
     """One joint fit; `kckc_matrix` (E122: KC x KC, post x pre, KC body IDs) replaces the hemibrain KC-KC matrix
     (fit_mb_model's `_wKCKC`, used as given and multiplied by the KC-KC scale); `kc_thr_factors` (K x KCs, `jitter_factors`) adds the K jittered runs of
     each condition (`jitter_conditions`) to every evaluation; `init_exact_expect` (not None)
@@ -1757,7 +1783,9 @@ def fit_one(k: float, orn, initial, wnorm, breadth, loss_fn, *, kckc0: float, ma
     condition_outputs['off'] (the hook's best outputs), condition_params['off'], 'apl_residual' (f, the blocked
     condition's absolute scales) and, for a fixed f, a constant 'apl_residual' column in its history. Not with the
     jittered runs, the block proxy, the input-scaled threshold or spike times (refused). None (default): the call is
-    the one without the option."""
+    the one without the option. `off_kckc` (E124: S, absolute) gives the blocked condition's static override the KC-KC
+    scale S (`off_kckc_overrides`; any jittered APL-off runs share the override), the APL-on KC-KC scale as without it;
+    not with `apl_residual` or `block_proxy` (refused); None (default): the call is the one without it."""
     from pyolfsysm.mb_model import optimize_mb_model_params
     wAPLKC = breadth_weights(wnorm['wAPLKC'], breadth, k)
     r19 = None if (claw_thr is None or apl_drive != 'claws') else e19_row(claw_thr, k, kckc0)
@@ -1849,6 +1877,14 @@ def fit_one(k: float, orn, initial, wnorm, breadth, loss_fn, *, kckc0: float, ma
         # (E122; only when given, so the default path is unchanged)
         wiring_kws['_wKCKC'] = kckc_matrix
     overrides = {'on': {}, 'off': {'wAPLKC_scale': 0.0, 'wAPLPN_scale': 0.0}}
+    if off_kckc is not None:
+        # (E124; only when given, so the default path is unchanged)
+        if apl_residual is not None:
+            raise NotImplementedError('--off-kckc-scale with --apl-residual (the residue replaces the static off condition)')
+        if block_proxy is not None:
+            raise NotImplementedError('--off-kckc-scale with --block-proxy (the proxy was validated without it)')
+        overrides = off_kckc_overrides(overrides, off_kckc)
+        print(f"blocked condition's KC-KC scale held at {float(off_kckc):g} (APL-on KC-KC as without the option)", flush=True)
     # (E111; only when given, so the default path is unchanged) the blocked condition with a residual APL output: a
     # hook named 'off' in place of the static 'off' condition, f in a cell the extra parameter's setter updates
     residual_hooks, residual_extra, residual_cell = {}, {}, {}
@@ -2268,6 +2304,10 @@ def main() -> None:
         help='(E111) fit the residue F (--apl-residual, the start) beside the other parameters, within --apl-residual-bounds')
     ap.add_argument('--apl-residual-bounds', type=float, nargs=2, default=None, metavar=('LO', 'HI'),
         help=f'(E111) the bounds of a fitted residue (default {APL_RESIDUAL_BOUNDS[0]:g} {APL_RESIDUAL_BOUNDS[1]:g})')
+    ap.add_argument('--off-kckc-scale', type=float, default=None, metavar='S',
+        help="(E124) the blocked condition's KC-KC scale, absolute and fixed (0: no inhibition among KCs with APL off), in "
+            'place of the APL-on one, which is fitted (or held by --kckc-fixed) as without it; the breadth runs unchanged; '
+            'off by default; tag part kckcoff<S>_; not with --apl-residual or --block-proxy')
     ap.add_argument('--smoke', action='store_true', help='time a few evaluations and exit')
     ap.add_argument('--figure-only', action='store_true', help='only redraw the figures from saved results')
     args = ap.parse_args()
@@ -2558,6 +2598,14 @@ def main() -> None:
                           ('--count-kernel / --save-spike-times', save_spike_times)):
             if bad:
                 ap.error(f'--apl-residual with {flag} is not supported')
+    # (E124) the blocked condition's KC-KC scale
+    if args.off_kckc_scale is not None:
+        if residual is not None:
+            ap.error('--off-kckc-scale with --apl-residual is not supported')
+        if args.block_proxy > 0:
+            ap.error('--off-kckc-scale with --block-proxy is not supported')
+        if not (np.isfinite(args.off_kckc_scale) and args.off_kckc_scale >= 0):
+            ap.error('--off-kckc-scale must be finite and not negative')
     initial, wnorm, wPNKC, breadth = bouton_base(orn, out_dir, args.claw_thr, gain=gain,
         gain_gloms=args.gain_glomeruli, wiring=args.wiring, wiring_seed=args.wiring_seed,
         apl_drive=args.apl_drive, base_params=args.base_params, info=base_info, input_tag=input_tag,
@@ -2602,7 +2650,7 @@ def main() -> None:
             + ('opk' if args.apl_opk_term else '') + (('cls' + ('' if class_form == 'sq' else class_form)) if args.apl_class_term else '')
             + ('dnu' if args.apl_data_units == 'noise' else '') + '_')
     prefix = zcell_tag + band_tag + {'spikes': 'spk_', 'spikes_only': 'spko_'}.get(args.apl_drive, '') + ('' if args.claw_thr is None else f'thr{args.claw_thr:g}{claw_transfer_tag(claw_transfer)}_') + wiring_tag + (
-        '' if gain is None else f'gain{gain:g}_') + rate_tag + block_tag + loss_tag + kckc_tag + apl_residual_tag(residual) + kc_tag + thrin_tag + (
+        '' if gain is None else f'gain{gain:g}_') + rate_tag + block_tag + loss_tag + kckc_tag + off_kckc_tag(args.off_kckc_scale) + apl_residual_tag(residual) + kc_tag + thrin_tag + (
         claw_inh_pool_tag(args.claw_inh_pool)) + apl_divisive_tag(args.apl_divisive) + aplpn_hold_tag(args.aplpn_hold) + (
         aplkc_flat_tag(flat_spec)) + pn_norm_tag(pn) + proxy_tag + jit_tag
     jit_factors, jit_meta = None, {}
@@ -2655,7 +2703,8 @@ def main() -> None:
             **({} if args.aplpn_hold is None else dict(aplpn_hold=args.aplpn_hold)),
             **({} if flat_spec is None else dict(aplkc_flat=flat_spec)),
             **({} if not pn else dict(pn=pn)),
-            **({} if residual is None else dict(apl_residual=residual))
+            **({} if residual is None else dict(apl_residual=residual)),
+            **({} if args.off_kckc_scale is None else dict(off_kckc=args.off_kckc_scale))
         )
         hist = res['history']
         hist.to_csv(res_dir / f'history_{tag}.csv')
@@ -2752,6 +2801,8 @@ def main() -> None:
                 apl_residual_hi=(None if residual['bounds'] is None else residual['bounds'][1]),
                 off_wAPLKC_scale=res['apl_residual']['off_wAPLKC_scale'],
                 off_wAPLPN_scale=res['apl_residual']['off_wAPLPN_scale'])),
+            # (E124: the blocked condition's KC-KC scale, absolute; absent when not given)
+            **({} if args.off_kckc_scale is None else dict(off_kckc_scale=float(args.off_kckc_scale))),
             # (E73 part C: the per-KC session z-score reading's settings; absent when not used)
             **(dict(rate_criterion=args.rate_criterion, zcell_q=loss_fn.zcell['q'], zcell_map=loss_fn.zcell['amp'],
                 zcell_calibrate=loss_fn.zcell['calibrate'], zcell_drift=loss_fn.zcell['drift'])
@@ -2840,6 +2891,9 @@ def main() -> None:
                 'evenly over its claws), aplkc_flat fitted '
                 'within bounds as a fifth parameter (optimize_mb_model_params extra_params)')))),
             kckc_fixed=args.kckc_fixed, base_params=initial, loss_variant=args.loss, kc_spiking=kc_spiking,
+            **({} if args.off_kckc_scale is None else dict(off_kckc_scale=dict(value=float(args.off_kckc_scale),
+                note="E124: the blocked condition's KC-KC scale (static override of 'off'), the APL-on one fitted as "
+                'without it; the breadth run unchanged'))),
             **({} if kckc_matrix is None else dict(kckc_matrix=dict(path=args.kckc_matrix, tag=args.kckc_matrix_tag,
                 sha256=kckc_matrix_sha, note='E122: fit_mb_model _wKCKC in place of the hemibrain KC-KC matrix, times the '
                 'KC-KC scale'))),
