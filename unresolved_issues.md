@@ -261,6 +261,17 @@ directory's notes/ and are linked from here.
 
 ## Resolved
 
+### E114's scorer gave "none of the entry's outcomes" where outcome (b) holds, and left its refits' realism unscored (found 2026-11-20 16:00, viki's write-up subagent for E114; resolved 2026-11-20)
+- **What.** (1) Outcome (b) needs the chosen exponent's own class at fixed scales. With no part-A exponent "better", the
+  chosen exponent was the fallback 0.75, whose held points (part Cstart) were never gated, so `outcome_of` found no
+  fixed-scale class and returned '-'. (2) `write_variants` tagged the eight refits C_<wiring>, a name their archived
+  responses do not carry, so kcq/apl_effect.py left their odors per KC, response rate ρ and response rates unscored.
+- **Affects.** E114's outcome.json, gate.csv and comparison_table.md (letter '-' instead of (b)); the refits' rows of
+  results/apl_effect/by_variant.csv. No class, choice or number changed.
+- **Done.** eb8b45d gates the chosen exponent's held points when it is not one of part A's (with a test); 80f3b3c tags
+  each refit by its fit's stem. Score, variants, the archive and the APL-effect table re-run: outcome (b), pow0.75
+  "a price", all 80 runs inside the bands.
+
 ### The summary's text had five statements that were wrong or unsourced (found 2026-11-16 and 2026-11-17, viki, from Yang's questions on the summary; resolved 2026-11-17 14:47)
 - **What.** In `reports/summary_template.md` (line numbers at 0c9d0d8):
   1. Line 201: "the mean pair distance falls from 0.84 to 0.66, below the ORN input's own 0.71" sets a cosine distance
