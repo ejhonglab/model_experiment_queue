@@ -261,6 +261,19 @@ directory's notes/ and are linked from here.
 
 ## Resolved
 
+### E120's archive params.csv listed part A's readings as variants and not the four saved refits; its outcome.json had no letter and no part B (found 2026-11-20 20:40, viki's write-up subagent for E120; resolved 2026-11-20)
+- **What.** (1) archive_model_outputs.py builds params.csv from every `*_summary.csv` in results/: for E120 those are
+  part A's readings of other experiments' archives (a1_, a3_summary.csv) and of part B's runs. The migrate kept 117 a3
+  rows (they carry a variant name) as variants and set 252 a1 rows aside as unidentified, and the four refits saved
+  under B/inhadd10000/ (real, P1, P2, M1) had no row. (2) `write_table` wrote outcome.json at part A and `--part Bread`
+  never updated it, so it had no outcome letter and no part B.
+- **Affects.** data/model_outputs/E120_bouton_stage_measured/params.csv (what Tom's viewer imports) and
+  results/E120_bouton_stage_measured/outcome.json and comparison_table.md. No statistic changed.
+- **Done.** 6533574: E120 writes variants.csv (the four refits, absolute parameters, the PN normalization,
+  multibouton_claws, response rates), the archive builds E120's params.csv from it only (PARAMS_TABLES), and
+  `--part table` writes the letter (d) and part B's reading; with tests. params.csv rebuilt (4 rows, 0 set aside); the old
+  unidentified rows and migration log moved to the archive's params_backup/.
+
 ### E114's scorer gave "none of the entry's outcomes" where outcome (b) holds, and left its refits' realism unscored (found 2026-11-20 16:00, viki's write-up subagent for E114; resolved 2026-11-20)
 - **What.** (1) Outcome (b) needs the chosen exponent's own class at fixed scales. With no part-A exponent "better", the
   chosen exponent was the fallback 0.75, whose held points (part Cstart) were never gated, so `outcome_of` found no
