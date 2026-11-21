@@ -115,3 +115,46 @@ def test_e102_part_d_takes_e120_level(tmp_path, monkeypatch):
     (tmp_path / 'levels.json').write_text(json.dumps(dict(refit_levels=[1000.0])))
     assert E102.refit_due(1000.0, ['real'])[0]
     assert not E102.refit_due(10000.0, ['real'])[0]
+
+
+def test_outcome_letter():
+    assert E.outcome_letter(True, dict(found_inside=True, level=100.0)) == 'a'
+    assert E.outcome_letter(False, dict(found_inside=True, level=1000.0)) == 'b'
+    assert E.outcome_letter(False, dict(found_inside=True, level=314.0)) == 'b'
+    assert E.outcome_letter(False, dict(found_inside=True, level=3141.0)) == 'c'
+    assert E.outcome_letter(False, dict(found_inside=False, level=10000.0)) == 'd'
+
+
+def test_write_variants_and_part_b_reading(tmp_path, monkeypatch):
+    """variants.csv from the stage records (absolute parameters, the refit's tag, response rates from the saved
+    responses) and part B's reading from b_stage_summary and E102's class."""
+    shared = tmp_path / 'shared'
+    res = shared / 'results' / E.EXPERIMENT
+    res.mkdir(parents=True)
+    monkeypatch.setattr(E, 'out_dir', lambda: res)
+    monkeypatch.setattr(E.H, 'shared_dir', lambda: shared)
+    monkeypatch.setattr(E.H, 'outputs_dir', lambda e: tmp_path / 'outputs' / e)
+    d = shared / 'data' / 'model_outputs' / E.EXPERIMENT / 'B' / 'inhadd10000'
+    d.mkdir(parents=True)
+    (d / 'real_stage.json').write_text(json.dumps(dict(
+        wiring='real', level=10000.0, tag='rate0.068_x', params=dict(fixed_thr=132.4, wAPLKC_scale=0.15),
+        pn_kws=dict(pn_inhadd=10000.0, pn_inhsc=2177.8), exact=True)))
+    pd.DataFrame([[1.0, 0.0], [0.0, 0.0]]).to_parquet(d / 'real_on_responses.parquet')
+    pd.DataFrame([[1.0, 1.0], [0.0, 0.0]]).to_parquet(d / 'real_acute_off_responses.parquet')
+    v = E.write_variants(10000.0, ('real', 'P1'))
+    assert list(v.tag) == ['real'] and v.fixed_thr.iloc[0] == 132.4 and v.pn_inhsc.iloc[0] == 2177.8
+    assert v.rate_on.iloc[0] == 0.25 and v.rate_acute_off.iloc[0] == 0.5 and v.ref_fit.iloc[0] == 'rate0.068_x'
+    assert (res / 'variants.csv').exists()
+    assert E.part_b_reading(10000.0) is None
+    c = E.VERDICT_CRITERION
+    pd.DataFrame(dict(model=['refit inhadd10000', 'default'], stage='bouton', cond='on', reading='rate', criterion=c,
+                      n_wirings=4, totals_cv=[0.2, 0.1], totals_cv_in=[0, 0])).to_csv(
+        res / 'b_stage_summary_inhadd10000.csv', index=False)
+    e102 = shared / 'results' / 'E102_antennal_lobe_normalization'
+    e102.mkdir(parents=True)
+    (e102 / 'd_class_inhadd10000.json').write_text(json.dumps(dict(S=dict(
+        **{'class': 'price'}, pattern=0.058, pattern_unchanged=0.050, d_pattern=dict(z8=0.008), d_raw_loss=-0.02,
+        n_flagged=0))))
+    pb = E.part_b_reading(10000.0)
+    assert pb['totals_cv_on_refit'] == 0.2 and pb['totals_cv_on_default'] == 0.1 and pb['n_wirings'] == 4
+    assert pb['refit_class'] == 'price' and pb['pattern_refit'] == 0.058

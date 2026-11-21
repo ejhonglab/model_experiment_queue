@@ -82,6 +82,13 @@ HAND_BUILT = {
     'E49_low_conc_kc': 'params.csv written by hand: E49 has none of the tables params.csv is built from (2026-11-09)',
 }
 
+# experiments whose params.csv is built from these tables only (names in results/<name>/ or outputs/<name>/): their other
+# summary tables are readings, not model variants (E120: part A's a1_ / a2_ / a3_summary.csv read other experiments'
+# archives, b_stage_summary_*.csv reads part B's runs; variants.csv has one row per saved stage run)
+PARAMS_TABLES = {
+    'E120_bouton_stage_measured': ('variants.csv',),
+}
+
 # experiments whose step folders repeat their files' names: per folder pattern (fnmatch on the file's folder under
 # outputs/<name>/), the prefix put before the file's name in the archive, '{0}', '{1}', ... the folder's path parts,
 # so that each variant's name is unique (E102: B/<step>/<wiring>_held_on_... in every step's folder)
@@ -192,6 +199,9 @@ def archive_experiment(name: str, host: str, params_only: bool = False, force_ha
     # experiments write E<n>_summary.csv, window_stats.csv, fits.csv, ...)
     tables = []
     for d in ([res] if res else []) + [src]:
+        if name in PARAMS_TABLES:
+            tables.extend(d / t for t in PARAMS_TABLES[name])
+            continue
         for sname in STATS_NAMES:
             tables.append(d / sname)
         for pat in ('*_summary.csv', 'stats*.csv', 'window_stats.csv', 'fits.csv', 'variants.csv'):

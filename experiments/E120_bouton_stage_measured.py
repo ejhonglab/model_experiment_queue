@@ -52,8 +52,10 @@ Definitions (fixed before reading):
   claws.
 
 Outputs: <shared>/results/E120_bouton_stage_measured/ (a1_*.csv, a2_*.csv, a3_*.csv, a4_*.csv, a5_bound.csv,
-level.json, outcome.json, comparison_table.md, provenance_<part>.json); part B's stage runs under
-outputs/E120_bouton_stage_measured/B/<step>/.
+level.json, outcome.json, comparison_table.md, provenance_<part>.json; after part B, b_stage_*_<step>.csv and
+variants.csv, the four refits' parameters, the one table the archive's params.csv is built from); part B's stage runs
+under outputs/E120_bouton_stage_measured/B/<step>/. outcome.json's `letter` is the entry's outcome (a) to (d); (e), the
+dose, is `dose`; `part_b` holds E102's class of the refit at the level and the bouton totals' CV, once part B is read.
 
 Usage (from the repository root; part A is light, no simulations):
     OMP_NUM_THREADS=2 OMP_THREAD_LIMIT=2 nice -n 10 ./venv/bin/python -u experiments/E120_bouton_stage_measured.py --part A
@@ -720,7 +722,83 @@ def part_bread(level: float, wirings: Sequence[str] = S_WIRINGS) -> pd.DataFrame
     summ = summarize(rows, ('model', 'stage', 'cond', 'reading', 'criterion'), CLAW_STATS)
     summ.to_csv(out_dir() / f'b_stage_summary_{e102_step_tag(level)}.csv', index=False)
     provenance('Bread', level=level, wirings=list(wirings))
+    write_variants(level, wirings)
     return summ
+
+
+# part B ran at olfsysm bde95cb, whose default was multibouton_claws='first'; since the queue's 7af5a27 E3's BOUTON (and
+# so E83's simulator for these refits) pins 'first', so a rerun from current code builds the same model
+RUN_MULTIBOUTON = 'first'
+
+
+def stage_record(level: float, wiring: str) -> Optional[dict]:
+    """`refit_stage_run`'s record (<wiring>_stage.json) from the local outputs or the archive."""
+    tag = e102_step_tag(level)
+    for d in (H.outputs_dir(EXPERIMENT) / 'B' / tag, archive(EXPERIMENT) / 'B' / tag):
+        if (d / f'{wiring}_stage.json').exists():
+            return dict(_read_json(d / f'{wiring}_stage.json'), _dir=str(d))
+    return None
+
+
+def write_variants(level: float, wirings: Sequence[str] = S_WIRINGS) -> Optional[pd.DataFrame]:
+    """variants.csv: one row per part-B stage run (tag = its file names' stem under B/<step>/, the wiring), with E102's
+    refit parameters as absolute values, the PN normalization, the refit's E102 tag and the overall response rates with
+    APL on and acutely off (from the saved responses). The archive's params.csv is built from this table only
+    (archive_model_outputs.PARAMS_TABLES); the readings of part A are not model variants."""
+    rows = []
+    for w in wirings:
+        rec = stage_record(level, w)
+        if rec is None:
+            continue
+        d = Path(rec['_dir'])
+        r = dict(tag=w, variant=w, part='B', wiring=w, folder=f"B/{e102_step_tag(level)}", **rec.get('pn_kws', {}),
+                 **rec['params'], multibouton_claws=RUN_MULTIBOUTON, target_rate=0.068,
+                 ref_experiment='E102_antennal_lobe_normalization', ref_fit=rec['tag'], exact=rec.get('exact'))
+        for c, ct in (('on', 'on'), ('acute_off', 'acute_off')):
+            f = d / f'{w}_{ct}_responses.parquet'
+            r[f'rate_{c}'] = float(pd.read_parquet(f).to_numpy(dtype=float).mean()) if f.exists() else np.nan
+        rows.append(r)
+    if not rows:
+        return None
+    df = pd.DataFrame(rows)
+    df.to_csv(out_dir() / 'variants.csv', index=False)
+    return df
+
+
+def outcome_letter(a1_outcome_a: bool, level: Mapping) -> str:
+    """The entry's outcome among (a) to (d): (a) an indicator member passes A1; (b) a step up to 1000 reaches the flies'
+    totals; (c) a step above 1000 does; (d) none does. (e), the dose, is read separately (`dose_outcome`)."""
+    if a1_outcome_a:
+        return 'a'
+    if level.get('found_inside'):
+        return 'b' if float(level['level']) <= E102_DONE_LEVEL else 'c'
+    return 'd'
+
+
+def part_b_reading(level: float) -> Optional[dict]:
+    """Part B's reading for outcome.json: E102's class of the refit at `level` (d_class_<step>.json) and the bouton
+    totals' CV (rate reading, verdict criterion) of the default and the refit with APL on, with the number of wirings
+    inside the flies' range. None before part B is read."""
+    tag = e102_step_tag(level)
+    bs = out_dir() / f'b_stage_summary_{tag}.csv'
+    cls_path = H.shared_dir() / 'results' / 'E102_antennal_lobe_normalization' / f'd_class_{tag}.json'
+    if not bs.exists():
+        return None
+    b = pd.read_csv(bs)
+    b = b[(b.stage == 'bouton') & (b.cond == 'on') & (b.reading == 'rate') & (b.criterion == VERDICT_CRITERION)]
+    out = dict(step=tag)
+    for m, k in ((f'refit {tag}', 'refit'), ('default', 'default')):
+        r = b[b.model == m]
+        if len(r):
+            out[f'totals_cv_on_{k}'] = float(r.totals_cv.iloc[0])
+            out[f'totals_cv_on_{k}_in'] = int(r.totals_cv_in.iloc[0])
+            out['n_wirings'] = int(r.n_wirings.iloc[0])
+    cls = _read_json(cls_path)
+    if cls is not None:
+        S = cls.get('S', {})
+        out.update(refit_class=S.get('class'), pattern_unchanged=S.get('pattern_unchanged'), pattern_refit=S.get('pattern'),
+                   d_pattern=S.get('d_pattern'), d_raw_loss=S.get('d_raw_loss'), n_flagged=S.get('n_flagged'))
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -854,6 +932,27 @@ def write_table() -> dict:
     L += ['## Part B', '', f"Runs: {'yes' if out['part_b_runs'] else 'no'} ({out['part_b_reason']}).", '']
     if out['part_b_runs']:
         L += ['```'] + out['part_b_commands'] + ['```', '']
+    pb = part_b_reading(lv['level']) if out['part_b_runs'] else None
+    out['part_b'] = pb
+    if pb is not None:
+        tag = pb['step']
+        bs = pd.read_csv(od / f'b_stage_summary_{tag}.csv')
+        bs = bs[(bs.criterion == VERDICT_CRITERION)]
+        L += [f"E119's statistics on the refits at {tag} ({pb.get('n_wirings', '-')} searched wirings) and on the default "
+              "fits of the same wirings; threshold matched on APL on.", '']
+        hdr = ['model', 'stage', 'APL', 'reading'] + [STAT_NAMES[s] for s in STATS]
+        rws = []
+        for stage in ('bouton', 'claw'):
+            rws.append(['flies', stage, 'on', '-'] + [_range(stage, s) for s in STATS])
+            for _, r in bs[bs.stage == stage].iterrows():
+                rws.append([r.model, stage, r.cond, r.reading] + [f"{_f(r[s])} [{int(r[f'{s}_in'])}]" for s in STATS])
+        L += _md(hdr, rws) + ['']
+        if pb.get('refit_class') is not None:
+            L += [f"E102's class of the refit at {tag} (pattern part under the calibrated readout, the four searched "
+                  f"wirings): {pb['refit_class']} ({_f(pb['pattern_unchanged'], '.4f')} unchanged, "
+                  f"{_f(pb['pattern_refit'], '.4f')} refitted; {pb.get('n_flagged')} flagged).", '']
+    out['letter'] = outcome_letter(out['a1_outcome_a'], lv)
+    L += [f"Outcome: ({out['letter']}); the dose, (e): {out['dose']}.", '']
     (od / 'comparison_table.md').write_text('\n'.join(L) + '\n')
     _write_json(od / 'outcome.json', dict(**out, time=time.strftime('%Y-%m-%d %H:%M'), commits=H.code_commits()))
     return out

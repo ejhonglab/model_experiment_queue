@@ -128,3 +128,28 @@ def test_params_keep_input_change_columns(tmp_path, monkeypatch):
     assert list(p['change']) == ['Ra_s0.6', 'Ra_s1'] and list(p['search']) == ['Ra', 'Ra']
     assert list(p['size']) == [0.6, 1.0] and list(p['panel']) == ['APL16', 'validation2']
     assert 'kind_text' not in p.columns
+
+
+def test_params_tables_override(tmp_path, monkeypatch):
+    """E120's params.csv is built from variants.csv only: its a1_ / a3_ / b_stage_summary tables are readings of other
+    runs (rows with a form or a reading's variant but no saved model), which the migrate would otherwise keep or set
+    aside as unidentified."""
+    name = 'E120_bouton_stage_measured'
+    here, shared = tmp_path / 'repo', tmp_path / 'shared'
+    src, res = here / 'outputs' / name, shared / 'results' / name
+    arch = shared / 'data' / 'model_outputs'
+    monkeypatch.setattr(H, 'HERE', here)
+    monkeypatch.setattr(H, 'shared_dir', lambda: shared)
+    monkeypatch.setattr(H, 'results_dir', lambda e: shared / 'results' / e)
+    monkeypatch.setattr(A, 'ARCHIVE', arch)
+    p = src / 'B' / 'inhadd10000' / 'real_on_spike_counts.parquet'
+    p.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(np.ones((3, 2)), columns=['a', 'b']).to_parquet(p)
+    res.mkdir(parents=True)
+    pd.DataFrame(dict(form=['baseline', 'evoked'], n=[1.0, 2.0])).to_csv(res / 'a1_summary.csv', index=False)
+    pd.DataFrame(dict(variant=['ref', 'B_sub_k2_d2'], form=['sub', 'sub'])).to_csv(res / 'a3_summary.csv', index=False)
+    pd.DataFrame(dict(tag=['real'], wiring=['real'], pn_inhadd=[1e4], fixed_thr=[132.4])).to_csv(res / 'variants.csv', index=False)
+    A.archive_experiment(name, 'host')
+    q = pd.read_csv(arch / name / 'params.csv')
+    assert list(q['tag']) == ['real'] and list(q['source_table']) == ['variants.csv']
+    assert list(q['pn_inhadd']) == [1e4] and 'form' not in q.columns
