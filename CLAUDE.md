@@ -1218,6 +1218,7 @@ Canonical experiment names for summary reports:
 | E121 | the rise of the input by odor and by glomerulus |
 | E122 | one feedback neuron that survives the block in place of KC-KC inhibition |
 | E123 | the form of the inhibition among KCs: draws of the shuffle, random sparse matrices and the inhibition as a part of APL |
+| E124 | the inhibition among KCs as a part of APL, fitted with a KC-KC scale for each condition |
 
 ## Model-output archive (data/model_outputs/ in the shared directory)
 
