@@ -1215,6 +1215,8 @@ Canonical experiment names for summary reports:
 | E118 | the KC types in the best family and in the recordings |
 | E119 | the model's boutons, claws and claw-to-soma step against the per-ROI recordings |
 | E120 | the bouton stage held to the recorded boutons |
+| E121 | the rise of the input by odor and by glomerulus |
+| E122 | one feedback neuron that survives the block in place of KC-KC inhibition |
 
 ## Model-output archive (data/model_outputs/ in the shared directory)
 
