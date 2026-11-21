@@ -52,3 +52,13 @@ def test_groups_and_wirings():
     assert E.odor_group('ms') == 'ester' and E.odor_group('6al') == 'alcohol' and E.odor_group('paa') == 'other'
     assert E.odor_name('2h @ -3') == '2h'
     assert set(E.WIRINGS) == set(E.S_SET) | set(E.T_SET) and len(E.WIRINGS) == 8
+
+
+def test_apl_level_at():
+    t = np.round(np.arange(-0.01, 0.6, 0.001), 6)
+    tr = np.interp(t, [-0.01, 0, 0.1, 0.4, 0.5, 0.6], [1, 1, 3.0, 2.0, 2.0, 1])
+    apl = pd.DataFrame([tr], index=['eb'], columns=t)
+    comp = pd.DataFrame({'odor_name': ['eb', 'eb'], 't_complete': [0.05, 0.1]})
+    c = E.apl_level_at(comp, apl)
+    assert c['apl_frac_peak'].tolist() == pytest.approx([0.5, 1.0])
+    assert c['apl_frac_late'].tolist() == pytest.approx([1.0, 2.0])

@@ -16,7 +16,11 @@ Per responding KC and odor (2 or more spikes) the time of its second spike, the 
 of that odor and wiring (APL on's trace in both conditions: APL off is the reference, read against the same clock).
 
 The gate (E121's entry): fewer than 20 % of APL-on responses complete before APL's 90 % point: no race, and the
-experiment closes without code.
+experiment closes without code.  The family's APL trace overshoots (it peaks 50 to 100 ms after onset and sags to a lower
+sustained level by the pulse's end), so "its plateau" has two readings, and the gate is read on both: when they
+disagree the verdict is "split" (race None in step0_gate.json) and goes to the planner. Beside them, a reading that
+needs no plateau: APL's level at each response's completion as a fraction of its peak and of its sustained level
+(`apl_level_at`).
 
 Groups (E77_input_screen's): ester group 2h, IaA, pa, eb, ep, ms; alcohol group 1-8ol, 1-5ol, 1-6ol, 6al; the rest
 (2-but, t2h, paa, -aPine, euc, B-myr) "other". Breadth: the number of the 16 odors the KC responds to in that
@@ -174,8 +178,35 @@ def shares(marked: pd.DataFrame) -> pd.DataFrame:
             rows.append(dict(by=by, level=str(level), n_responses=n, n_before=int(g['before'].sum()),
                              share=(float(g['before'].mean()) if n else float('nan')),
                              median_t_complete=float(g['t_complete'].median()) if n else float('nan'),
-                             median_t_apl90=float(g['t_apl90'].median()) if n else float('nan')))
+                             median_t_apl90=float(g['t_apl90'].median()) if n else float('nan'),
+                             **{f'median_{k}': (float(g[k].median()) if (n and k in g) else float('nan'))
+                                for k in ('apl_frac_peak', 'apl_frac_late')}))
     return pd.DataFrame(rows)
+
+
+def apl_level_at(completion: pd.DataFrame, apl: pd.DataFrame) -> pd.DataFrame:
+    """Adds APL's level at each response's completion: 'apl_frac_peak' (APL's trace above its onset value at
+    `t_complete`, as a fraction of its maximum over the pulse) and 'apl_frac_late' (the same, as a fraction of its
+    mean over the last LATE_WINDOW s of the pulse); a reading of the race that needs no choice of plateau.
+
+    Args:
+        completion: `completion_table`'s rows (one wiring and condition).
+        apl: odors x time steps, the APL trace of the same wiring (APL on), columns the times from onset.
+    """
+    t = apl.columns.to_numpy(dtype=float)
+    pre, during = t <= 0, (t > 0) & (t <= STIM_END)
+    late = during & (t > STIM_END - LATE_WINDOW)
+    c = completion.copy()
+    fp = np.full(len(c), np.nan)
+    fl = np.full(len(c), np.nan)
+    for odor, idx in c.groupby('odor_name').indices.items():
+        tr = apl.loc[odor].to_numpy(dtype=float)
+        base = tr[pre][-1]
+        lvl = np.interp(c['t_complete'].to_numpy()[idx], t, tr) - base
+        fp[idx] = lvl / (tr[during].max() - base)
+        fl[idx] = lvl / (tr[late].mean() - base)
+    c['apl_frac_peak'], c['apl_frac_late'] = fp, fl
+    return c
 
 
 def run_wiring(label: str, archive: Path, out: Path) -> Dict[str, object]:
@@ -278,7 +309,7 @@ def step0(out_dir: Optional[Path] = None, res_dir: Optional[Path] = None,
             ap.columns = [f'{x:.4f}' for x in ap.columns]
             ap.to_parquet(out_dir / f'{lab}_{c}_apl_trace.parquet')
             hashes[f'{lab}_{c}_spike_times'] = _sha(o[f'spikes_{c}'])
-            comp = completion_table(o[f'spikes_{c}'], o['odors'], o['n_kcs'])
+            comp = apl_level_at(completion_table(o[f'spikes_{c}'], o['odors'], o['n_kcs']), o['apl_on'])
             for pl in PLATEAUS:
                 # (APL on's clock in both conditions: APL off is read against the rise of the intact APL)
                 m = mark_before(comp, rise, pl)
@@ -311,17 +342,34 @@ def step0(out_dir: Optional[Path] = None, res_dir: Optional[Path] = None,
     per_w = {lab: get(lab, 'on', 'late', 'overall', 'all') for lab in labels}
     pooled = get('pooled', 'on', 'late', 'overall', 'all')
     pooled_max = get('pooled', 'on', 'max', 'overall', 'all')
-    race = pooled >= GATE_SHARE
+    race_late, race_max = pooled >= GATE_SHARE, pooled_max >= GATE_SHARE
+    race = race_late if race_late == race_max else None
+    on_l = M[(M.condition == 'on') & (M.plateau == 'late')]
     rl = rise_all[rise_all.plateau == 'late']
     gate = dict(
         experiment=EXPERIMENT, step='step0',
         rule=(f'fewer than {GATE_SHARE:.0%} of APL-on responses complete (second spike) before APL reaches '
               f'{RISE_FRACTION:.0%} of its plateau: no race, the experiment closes without code'),
         verdict=('race: step 0 passes (the share is at or above the gate); steps 1-3 wait on the olfsysm option'
-                 if race else 'no race: the experiment closes without code'),
-        race=bool(race),
+                 if race else 'no race: the experiment closes without code' if race is not None else
+                 ("split: the two readings of APL's plateau disagree (APL's trace overshoots, peaking early in the "
+                  "pulse and sagging to a lower sustained level); "
+                  f"by the sustained level {'race' if race_late else 'no race'}, by the peak "
+                  f"{'race' if race_max else 'no race'}: for the planner")),
+        race=race, race_plateau_late=bool(race_late), race_plateau_max=bool(race_max),
+        apl_frac_peak_at_completion_on=dict(median=float(on_l['apl_frac_peak'].median()),
+            q25=float(on_l['apl_frac_peak'].quantile(0.25)), q75=float(on_l['apl_frac_peak'].quantile(0.75))),
+        apl_frac_late_at_completion_on=dict(median=float(on_l['apl_frac_late'].median()),
+            q25=float(on_l['apl_frac_late'].quantile(0.25)), q75=float(on_l['apl_frac_late'].quantile(0.75))),
+        apl_peak_over_late=float(np.median(
+            rise_all[rise_all.plateau == 'max'].set_index(['wiring', 'odor_name'])['amplitude'] /
+            rise_all[rise_all.plateau == 'late'].set_index(['wiring', 'odor_name'])['amplitude'])),
+        apl_t90_peak_s=dict(median=float(rise_all[rise_all.plateau == 'max']['t90'].median()),
+            min=float(rise_all[rise_all.plateau == 'max']['t90'].min()),
+            max=float(rise_all[rise_all.plateau == 'max']['t90'].max())),
+        share_on_by_group_plateau_max={g: get('pooled', 'on', 'max', 'group', g) for g in ('ester', 'alcohol', 'other')},
         share_on_pooled=pooled, share_on_pooled_plateau_max=pooled_max,
-        verdict_same_with_plateau_max=bool((pooled_max >= GATE_SHARE) == race),
+
         share_on_per_wiring=per_w,
         share_on_range_over_wirings=[min(per_w.values()), max(per_w.values())],
         share_on_by_group={g: get('pooled', 'on', 'late', 'group', g) for g in ('ester', 'alcohol', 'other')},
@@ -360,7 +408,9 @@ def main() -> None:
     ap.add_argument('--wirings', nargs='+', choices=list(WIRINGS), default=None)
     args = ap.parse_args()
     gate = step0(wirings=args.wirings)
-    print(json.dumps({k: gate[k] for k in ('verdict', 'share_on_pooled', 'share_on_range_over_wirings',
+    print(json.dumps({k: gate[k] for k in ('verdict', 'share_on_pooled', 'share_on_pooled_plateau_max',
+                                            'apl_frac_peak_at_completion_on', 'apl_peak_over_late',
+                                            'share_on_range_over_wirings',
                                             'share_on_by_group', 'share_on_by_breadth', 'share_off_pooled',
                                             'apl_t90_s')}, indent=1))
 
