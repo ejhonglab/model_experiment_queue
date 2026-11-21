@@ -133,6 +133,8 @@ Provenance: the other checkouts must be clean; this repository clean in every fi
 
 Outputs: <shared>/results/E114_input_compression/; spike counts and responses under outputs/E114_input_compression/
 (A, B, Cs, D, beside, fits/), then data/model_outputs/E114_input_compression/.
+Part stages (added after the chain, for E120's part A4): beside's bouton stage again with its bouton windows saved
+(outputs/E114_input_compression/stages/), checked against bouton_stage.csv (stage_check.csv).
 
 Usage (from the repository root; one 16-thread lane on viki, under systemd-run --user; outputs/E114_input_compression/
 chain.sh runs the parts in order):
@@ -1170,9 +1172,12 @@ def pn_stage_row(name: str, orn: pd.DataFrame) -> dict:
     return dict(input=name, **E90.pn_statistics(st['win'], st['pre']))
 
 
-def bouton_stage_rows(name: str, orn: pd.DataFrame, params: Mapping[str, float]) -> List[dict]:
+def bouton_stage_rows(name: str, orn: pd.DataFrame, params: Mapping[str, float], save_dir: Optional[Path] = None
+                      ) -> List[dict]:
     """The bouton stage on the real wiring, APL on, at `params` (the module docstring): group means of 1 - Pearson across
-    the boutons of the shared glomeruli, 'rate' and 'session_z', beside the flies'."""
+    the boutons of the shared glomeruli, 'rate' and 'session_z', beside the flies'. `save_dir`: also save the stage's
+    bouton windows as `<name>_on_bouton_win.parquet` and `<name>_on_bouton_pre.parquet` there (E90's `read_stages`
+    frames; E120's part A4 reads them)."""
     from experiments import E85_orn_fly_population as E85
     from experiments import E90_model_stages as E90
     sim, info = E85.build('real', orn, cache_tag(orn, name), cache_dir=local_dir())
@@ -1183,6 +1188,9 @@ def bouton_stage_rows(name: str, orn: pd.DataFrame, params: Mapping[str, float])
     r, s = sim(dict(params))
     W = E83.wiring_parts('real')['W']
     st = E90.read_stages(mp, rv, W, order, [H.odor_abbrev(c) for c in r.columns], E90.MODEL_WINDOW)
+    if save_dir is not None:
+        for k in ('bouton_win', 'bouton_pre'):
+            st[k].to_parquet(Path(save_dir) / f'{name}_on_{k}.parquet')
     del sim, info
     gc.collect()
     U = E90.stage_units(st, 'bouton')
@@ -1215,6 +1223,32 @@ def part_beside() -> dict:
             print(f'E114 beside boutons {name}', flush=True)
     _write_json(out_dir() / 'provenance_beside.json', dict(part='beside', script=SCRIPT, **H.code_commits()))
     return dict(pn=str(pp), bouton=str(bp))
+
+
+def part_stages() -> pd.DataFrame:
+    """Part stages (added 2026-11-20 for E120's part A4, after the chain): beside's bouton stage run again for every
+    input with its bouton windows saved under outputs/E114_input_compression/stages/ (resumable per input), and its rows
+    checked against bouton_stage.csv (stage_check.csv: the largest absolute difference per input)."""
+    runs = runs_table()
+    d = local_dir('stages')
+    bp = out_dir() / 'bouton_stage.csv'
+    ref = pd.read_csv(bp) if bp.exists() else pd.DataFrame(columns=['input', 'reading', 'group', 'model'])
+    rows = []
+    for name, orn, p in stage_inputs(runs):
+        if (d / f'{name}_on_bouton_win.parquet').exists() and (d / f'{name}_on_bouton_pre.parquet').exists():
+            continue
+        new = pd.DataFrame(bouton_stage_rows(name, orn, p, save_dir=d))
+        old = ref[ref['input'] == name]
+        m = new.merge(old, on=['input', 'reading', 'group'], suffixes=('', '_saved'))
+        diff = float((m['model'] - m['model_saved']).abs().max()) if len(m) else np.nan
+        rows.append(dict(input=name, n_rows=len(new), n_matched=len(m), max_abs_diff=diff))
+        print(f'E114 stages {name}: max |difference| from bouton_stage.csv {diff:.3g}', flush=True)
+    sc = out_dir() / 'stage_check.csv'
+    out = pd.concat([pd.read_csv(sc), pd.DataFrame(rows)], ignore_index=True) if sc.exists() and rows else pd.DataFrame(rows)
+    if len(out):
+        out.drop_duplicates('input', keep='last').to_csv(sc, index=False)
+    _write_json(out_dir() / 'provenance_stages.json', dict(part='stages', script=SCRIPT, saved=str(d), **H.code_commits()))
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -1343,7 +1377,7 @@ def write_variants() -> pd.DataFrame:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('--part', required=True, choices=('inputs', '0', '0c', 'A', 'B', 'score', 'Cstart', 'C', 'D', 'beside',
-                                                      'variants'))
+                                                      'variants', 'stages'))
     ap.add_argument('--wirings', nargs='+', default=None, choices=ALL_WIRINGS)
     ap.add_argument('--max-points', type=int, default=None)
     ap.add_argument('--force', action='store_true', help='part D: run without a pass after the refit')
@@ -1371,6 +1405,8 @@ def main() -> None:
         part_beside()
     elif a.part == 'variants':
         write_variants()
+    elif a.part == 'stages':
+        part_stages()
 
 
 if __name__ == '__main__':
