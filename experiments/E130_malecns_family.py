@@ -612,7 +612,8 @@ def build_simulator(c: str, params: Mapping[str, float]) -> Tuple:
                                            _wKCAPL=wnorm['wKCAPL'], _wAPLPN=wnorm['wAPLPN'], _wPNAPL=wnorm['wPNAPL'],
                                            kc_kc_inh=p['wKCKC_scale'], kc_kc_tau=J.TAU)
     return sim, dict(params=p, kws=_scalar_kws(dict(kws, kc_kc_inh=p['wKCKC_scale'], kc_kc_tau=J.TAU)),
-                     connectome=c, multibouton_claws=kws['multibouton_claws'])
+                     connectome=c, multibouton_claws=kws['multibouton_claws'], breadth=P['breadth'], wAPLKC=wAPLKC,
+                     W=P['W'], orn=P['orn'])
 
 
 def transfer_params(base: Mapping[str, float], kckc: bool, c2: Optional[Mapping[str, float]] = None,
@@ -947,8 +948,6 @@ def prerequisite(spec: FitSpec) -> Optional[str]:
         return f'no base for {spec.connectome} in bases.json (atlas: --part check)'
     if spec.start == 'held' and f'S1_{spec.target}' not in _read_json(starts_path()):
         return f'no step-1 held point S1_{spec.target} in starts.json (atlas: --part 1)'
-    if spec.connectome in MALE and spec.connectome not in _read_json(out_dir() / 'matrices.json'):
-        return f'no matrix record for {spec.connectome} in matrices.json'
     return None
 
 
