@@ -172,3 +172,16 @@ def test_substitute_and_compare_rows():
     assert c['max_abs_diff'] == 0.0 and c['n_rows'] == 2
     off = same.assign(rho_on_all=same['rho_on_all'] + 0.01)
     assert E.compare_rows(saved, off, ex, 'raw')['max_abs_diff'] == pytest.approx(0.01)
+
+
+def test_registry_entries_paired_sd(tmp_path, monkeypatch):
+    ws = ('real', 'P1', 'P2', 'M1', 'P3', 'P4', 'M2', 'M3')
+    base = {u: (0.66, 0.74) for u in ws + ('all8',)}
+    rt = rho_rows(base, {u: (0.66 + 0.01 * i, 0.74) for i, u in enumerate(ws + ('all8',))})
+    parts = [rt] + [rt[rt['reading'] == 'R3'].assign(reading=r) for r in ('R1', 'R2', 'R4', 'R4z')]
+    pd.concat(parts).to_csv(tmp_path / 'rhos.csv', index=False)
+    monkeypatch.setattr(H, 'results_dir', lambda ex: tmp_path)
+    ent = {n: v for n, v, *_ in E.registry_entries()}
+    assert set(ent) == {f'paired_rho_{c}_sd_e112_{r}' for c in ('on', 'off') for r in ('r1', 'r2', 'r3', 'r4', 'r4z')}
+    want = np.std([0.01 * i for i in range(8)], ddof=1)
+    assert np.isclose(ent['paired_rho_on_sd_e112_r3'], want) and ent['paired_rho_off_sd_e112_r4z'] == 0

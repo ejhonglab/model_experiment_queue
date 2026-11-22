@@ -95,6 +95,7 @@ Usage (from the repository root):
     ./venv/bin/python -u experiments/E112_rho_like_for_like.py --part B-prepare
     (E43's part B per held-out wiring: the commands B-prepare prints)
     OMP_NUM_THREADS=1 OMP_THREAD_LIMIT=1 nice -n 10 ./venv/bin/python -u experiments/E112_rho_like_for_like.py --part B-score --jobs 16
+    ./venv/bin/python -u experiments/E112_rho_like_for_like.py --part realism   # realism.csv alone, from the saved runs
 """
 from __future__ import annotations
 
@@ -652,8 +653,8 @@ def realism_table(jobs: int = 1) -> pd.DataFrame:
         rows.append(dict(wiring=w, reading='above 1 z (R2, R3)', **{k: v for k, v in cs.items() if np.isscalar(v)},
                          **{f'cal_{k}': v for k, v in cal.items()}))
     dt = H.data_target
-    rows.append(dict(wiring='flies', reading='KC data (baseline-noise units, 1.97 SD)', rate_on=dt('ctrl_frac'),
-                     rate_off=dt('tnt_frac'), ratio=dt('tnt_frac') / dt('ctrl_frac')))
+    rows.append(dict(wiring='flies', reading='KC data (baseline-noise units, 1.97 SD)', rate_on=dt('noise_ctrl_frac'),
+                     rate_off=dt('noise_tnt_frac'), ratio=dt('noise_rate_ratio_fraction')))
     return pd.DataFrame(rows)
 
 
@@ -1094,6 +1095,29 @@ def verdicts(rt: pd.DataFrame, holds: Optional[dict] = None) -> dict:
     return out
 
 
+REGISTRY_READINGS = ('R1', 'R2', 'R3', 'R4', 'R4z')
+READING_NAMES = {'R1': 'the calibrated readout', 'R2': 'the per-KC session z-score',
+                 'R3': 'the per-KC session z-score through pseudo-recordings', 'R4': 'the trial noise on raw counts',
+                 'R4z': 'the per-KC session z-score of the jittered trials'}
+
+
+def registry_entries() -> List[Tuple[str, float, str, Optional[Sequence[float]]]]:
+    """The paired SD per reading for kcq/data_targets.py (outcome (d)), from results/E112_rho_like_for_like/rhos.csv:
+    [(name, value, definition, None)], `paired_rho_<on|off>_sd_e112_<r1|r2|r3|r4|r4z>` (`moves_verdict`'s
+    `paired_sd_<c>` over the eight wirings, each wiring's change from R0)."""
+    rt = pd.read_csv(H.results_dir(EXPERIMENT) / 'rhos.csv')
+    out = []
+    for r in REGISTRY_READINGS:
+        v = moves_verdict(rt, r)
+        for c in CONDITIONS:
+            out.append((f'paired_rho_{c}_sd_e112_{r.lower()}', float(v[f'paired_sd_{c}']),
+                        f'paired SD of a reading: SD (ddof 1) over the {v["n_wirings"]} wirings of the best family of the '
+                        f'change in ρ on odor-odor distances (120 pairs, APL {c} against '
+                        f'{"the control flies" if c == "on" else "APL output blocked (TNT)"}) from raw counts (R0) to '
+                        f'{READING_NAMES[r]} ({r}), each wiring against itself (E112)', None))
+    return out
+
+
 def part_a(jobs: int = 1, gates: bool = True) -> dict:
     """Part A (no simulations): the family's readings and tables, the gates re-read, the identities, the verdicts."""
     warnings.simplefilter('ignore', RuntimeWarning)
@@ -1288,13 +1312,16 @@ def part_b_score(jobs: int = 1) -> dict:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
-    ap.add_argument('--part', choices=('A', 'B-prepare', 'B-check', 'B-score'), required=True)
+    ap.add_argument('--part', choices=('A', 'B-prepare', 'B-check', 'B-score', 'realism'), required=True,
+                    help='realism: rebuild realism.csv alone from the saved runs (no simulation)')
     ap.add_argument('--tags', nargs='*', default=None, help='B-check: the fits.csv tags to build (default all)')
     ap.add_argument('--jobs', type=int, default=1, help='processes for the per-run readings (one OpenMP thread each)')
     ap.add_argument('--no-gates', action='store_true', help='part A without the gates re-read (a quick look)')
     a = ap.parse_args()
     if a.part == 'A':
         part_a(a.jobs, gates=not a.no_gates)
+    elif a.part == 'realism':
+        realism_table().to_csv(out_dir() / 'realism.csv', index=False)
     elif a.part == 'B-prepare':
         part_b_prepare()
     elif a.part == 'B-check':

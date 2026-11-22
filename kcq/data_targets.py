@@ -18,7 +18,9 @@ same-repeat gap, and distances and the APL effect from products of different rep
 model distances (the best family's spread over wirings and recordings, near-null changes, E85's model flies). The entries of
 `experiments.E115_two_yardsticks.registry_entries` (`family_rho_<on|off>_two_sets_66`, `family_resid_corr_remy_<on|off>_66`,
 `rate_rho_<on|off>_control_change_mean`, `_control_change_sd`, `_control_paired_sd`) are the megamat pairs against two sets of
-flies and the spread of response rate ρ under control input changes.
+flies and the spread of response rate ρ under control input changes. The entries of
+`experiments.E112_rho_like_for_like.registry_entries` (`paired_rho_<on|off>_sd_e112_<r1|r2|r3|r4|r4z>`) are the paired SD
+over the best family's eight wirings of the change in ρ on odor-odor distances from raw counts to each of E112's readings.
 Usage: ./venv/bin/python kcq/data_targets.py [--add-new]
 (--add-new: compute every entry but write only those not yet in the registry, keeping the existing entries as
 they are, and list any existing entry whose recomputed value or interval differs)
@@ -67,6 +69,8 @@ INPUTS = {
     'e106_e85_runs': H.shared_dir() / 'results' / 'E85_orn_fly_population' / 'runs.csv',
     # E115's two yardsticks (the megamat gap against two sets of flies, the price in response rate ρ), as its run wrote them
     'e115_registry': H.shared_dir() / 'results' / 'E115_two_yardsticks' / 'registry.csv',
+    # E112's two ρ's per wiring under each reading (the paired SD per reading), as its run wrote them
+    'e112_rhos': H.shared_dir() / 'results' / 'E112_rho_like_for_like' / 'rhos.csv',
 }
 
 
@@ -714,6 +718,13 @@ def build() -> dict:
     for name, value, definition, ci in e115_entries():
         add(name, value, definition, 'E115_two_yardsticks.registry_entries (results/E115_two_yardsticks/registry.csv; '
             '1000 joint resamples seeded 0)', ['e115_registry'], ci=ci)
+    # E112's paired SD per reading (outcome (d)): the SD over the best family's eight wirings of each wiring's change in
+    # the two ρ's from raw counts to each reading (read from the run's rhos.csv, written by
+    # experiments/E112_rho_like_for_like.py)
+    from experiments.E112_rho_like_for_like import registry_entries as e112_entries
+    for name, value, definition, ci in e112_entries():
+        add(name, value, definition, 'E112_rho_like_for_like.registry_entries (results/E112_rho_like_for_like/rhos.csv; '
+            'moves_verdict)', ['e112_rhos'], ci=ci)
     return reg
 
 
