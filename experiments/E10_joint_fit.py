@@ -225,6 +225,16 @@ held by --kckc-fixed) as without it. The breadth run (`bouton_base`'s APL-off ru
 so the breadth weights are those of the fits without it. Off by default (the call, the fits and fits.csv as before);
 recorded in fits.csv (off_kckc_scale) and the provenance (off_kckc_scale) only when given; tag part kckcoff<S>_ after
 kcm-<TAG>_ (before any aplres_); refused with --apl-residual and --block-proxy.
+The base's connectome (E130): `--connectome` chooses the wiring of the base and of every simulation of the fit:
+'hemibrain-first' (the default, the family's: the hemibrain with each claw on its PN's lowest-ID bouton, E3's BOUTON pin),
+'hemibrain-argmax' (each claw on the bouton with most of its synapses, olfsysm's default since 60cddc3), 'malecns-left' or
+'malecns-right' (a calyx of the male CNS, olfsysm's pn2kc_connections of 60cddc3, main bouton only; needs --kckc-matrix,
+olfsysm having KC->KC synapses for the hemibrain only). Any other than the default has its own base: --base-params if
+given, else E3's tuning (fit_mb_model at 5 % with APL on, E3's kwargs on that connectome; `connectome_base`, cached in the
+experiment's outputs folder), so --init-from applies a fit's factors to that base; its breadth run is cached with a
+cx-<connectome>_ prefix. Not with --claw-thr or spike-driven APL (hemibrain bases). The default is the fit as before (no
+kwarg passed); otherwise recorded in fits.csv (connectome, multibouton_claws) and the provenance (always: connectome,
+multibouton_claws, base); tag part cx-<connectome>_ before the wiring part.
 """
 from __future__ import annotations
 
@@ -454,22 +464,48 @@ CONNECTOMES = ('hemibrain-first', 'hemibrain-argmax', 'malecns-left', 'malecns-r
 DEFAULT_CONNECTOME = 'hemibrain-first'
 
 
+def _check_connectome(connectome: str) -> None:
+    if connectome not in CONNECTOMES:
+        raise ValueError(f'{connectome=} not in {CONNECTOMES}')
+
+
 def connectome_kws(connectome: str = DEFAULT_CONNECTOME) -> dict:
     """(E130) The fit_mb_model kwargs that select `connectome` (one of CONNECTOMES) over E3's BOUTON: {} for the
     default; multibouton_claws 'argmax' for 'hemibrain-argmax'; pn2kc_connections and multibouton_claws 'argmax' for
     the male CNS's calyces."""
-    raise NotImplementedError('E130 stub')
+    _check_connectome(connectome)
+    if connectome == DEFAULT_CONNECTOME:
+        return {}
+    if connectome == 'hemibrain-argmax':
+        return dict(multibouton_claws='argmax')
+    return dict(pn2kc_connections=connectome, multibouton_claws='argmax')
 
 
 def connectome_tag(connectome: str = DEFAULT_CONNECTOME) -> str:
     """(E130) The tag part of --connectome: cx-<connectome>_; '' for the default."""
-    raise NotImplementedError('E130 stub')
+    _check_connectome(connectome)
+    return '' if connectome == DEFAULT_CONNECTOME else f'cx-{connectome}_'
 
 
 def connectome_base(orn: pd.DataFrame, connectome: str, out_dir: Path) -> Dict[str, float]:
     """(E130) The bouton base's tuned parameters on `connectome`: E3's procedure (fit_mb_model tuned to 5 % with APL
     on, E3's BOUTON kwargs with `connectome_kws`), cached as JSON in `out_dir`; E3's saved parameters for the default."""
-    raise NotImplementedError('E130 stub')
+    from pyolfsysm.mb_model import fit_mb_model
+    _check_connectome(connectome)
+    if connectome == DEFAULT_CONNECTOME:
+        return e3_bouton_params()
+    path = Path(out_dir) / f'{connectome_tag(connectome)}base_params.json'
+    if path.exists():
+        return {k: float(v) for k, v in json.loads(path.read_text())['params'].items()}
+    t0 = time.time()
+    r_on, _, _, params = fit_mb_model(orn, target_sparsity=0.05, **base_kws(None, connectome=connectome))
+    p = {k: float(np.mean(params[k])) for k in PARAM_KEYS}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(dict(connectome=connectome, params=p, rate_on=rate(r_on), target_sparsity=0.05,
+        model_kws={k: v for k, v in base_kws(None, connectome=connectome).items()}, seconds=time.time() - t0,
+        note="E3's bouton base tuning (fit_mb_model target_sparsity 0.05 with APL on) on this connectome"), indent=1) + '\n')
+    print(f'{connectome} base tuned ({time.time() - t0:.0f}s): {p}; APL-on rate {rate(r_on):.4f}', flush=True)
+    return p
 
 
 APLKC_FLAT_KINDS =('uniform', 'connectome', 'offclaw', 'offclaw_ped', 'allsyn', 'allsyn_even', 'allsyn_even_calyx')
@@ -695,14 +731,16 @@ def kernel_counts(spike_times: pd.DataFrame, like: pd.DataFrame, kernel: Tuple[f
     return H.kernel_weighted_counts(spike_times, like.index, like.columns, float(kernel[0]), float(kernel[1]))
 
 
-def base_kws(claw_thr, apl_drive: str = 'claws', transfer: Optional[dict] = None) -> dict:
+def base_kws(claw_thr, apl_drive: str = 'claws', transfer: Optional[dict] = None,
+    connectome: str = DEFAULT_CONNECTOME) -> dict:
     """The bouton base's fit_mb_model kwargs; `apl_drive='spikes'` drives APL by the KCs'
     spikes (plus the bouton rates) instead of the summed claw input (pn_claw_to_apl=False;
     E35 / E36). 'spikes_only' (E37) has the same kwargs: the bouton->APL input is removed by
     its scale (wPNAPL_scale = 0), which is a parameter, not a kwarg. `transfer`
     (`claw_transfer_kws`; E78) adds the per-claw knee's sub-threshold gain / softplus width,
-    which need `claw_thr`."""
-    kws = dict(BOUTON, make_plots=False, silent=True)
+    which need `claw_thr`. `connectome` (E130, CONNECTOMES) adds `connectome_kws` (none for
+    the default)."""
+    kws = dict(BOUTON, make_plots=False, silent=True, **connectome_kws(connectome))
     if claw_thr is not None:
         kws['claw_thr'] = float(claw_thr)
     if apl_drive in ('spikes', 'spikes_only'):
@@ -960,7 +998,7 @@ def bouton_base(orn: pd.DataFrame, out_dir: Path, claw_thr=None, gain: Optional[
     base_params: Optional[str] = None, info: Optional[dict] = None, input_tag: Optional[str] = None,
     wiring_matrix: Optional[pd.DataFrame] = None, wiring_tag: Optional[str] = None,
     kc_thr_input_exp: Optional[float] = None, claw_transfer: Optional[dict] = None,
-    timing: Optional[dict] = None, pn: Optional[dict] = None):
+    timing: Optional[dict] = None, pn: Optional[dict] = None, connectome: str = DEFAULT_CONNECTOME):
     """The bouton base at its tuned parameters (E3's; with `claw_thr`, E16's as recorded in
     E19's thr<T>_k0_kckc0 row): normalized APL weights, wPNKC, and the per-KC APL-off
     breadth (total spike count; hal's saved run if copied to the shared directory, else
@@ -1016,10 +1054,26 @@ def bouton_base(orn: pd.DataFrame, out_dir: Path, claw_thr=None, gain: Optional[
     that antennal lobe, as E77_input_screen.handle_breadth computes it for E102's re-held points (cached with a
     `pn_norm_tag` prefix; hal's saved runs are at olfsysm's normalization, so they do not apply). The base's own run
     (the normalized APL weights, which come from the connectome) and the returned parameters and wiring are the base's
-    (the PN kwargs are model kwargs of the fit too)."""
+    (the PN kwargs are model kwargs of the fit too).
+
+    With `connectome` (E130; one of CONNECTOMES other than the default 'hemibrain-first') the base is built on that
+    wiring (`connectome_kws`: the hemibrain with each claw on its main bouton, or a calyx of the male CNS), at its own
+    tuned parameters (`base_params` if given, else `connectome_base`, E3's tuning on that connectome, cached in
+    `out_dir`), and its APL-off breadth run is cached with a cx-<connectome>_ prefix (hal's saved runs are the default
+    connectome's, so they do not apply). Not with `claw_thr` or APL driven by spikes (their bases are the hemibrain's)."""
     from pyolfsysm.mb_model import fit_mb_model
+    _check_connectome(connectome)
+    if connectome != DEFAULT_CONNECTOME and (claw_thr is not None or apl_drive != 'claws'):
+        raise NotImplementedError(f'connectome {connectome!r} with claw_thr / apl_drive {apl_drive!r} (their bases are '
+            "the hemibrain's)")
     hal_out = H.shared_dir() / 'data' / 'hal_outputs'
-    if claw_thr is None:
+    if connectome != DEFAULT_CONNECTOME:
+        initial = read_params(base_params) if base_params is not None else connectome_base(orn, connectome, out_dir)
+        hal_path = out_dir / 'no_such_file'
+        off_path = out_dir / f'{connectome_tag(connectome)}base_acute_off_spike_counts.parquet'
+        base_params = None
+        print(f'connectome {connectome}: base parameters {initial}', flush=True)
+    elif claw_thr is None:
         initial = e3_bouton_params()
         # hal's E3 APL-off run (the breadth E12 / E8 used)
         hal_path = hal_out / 'E3_drive_dependent_gain' / 'bouton_pnapl_x1_acute_off_spike_counts.parquet'
@@ -1049,7 +1103,7 @@ def bouton_base(orn: pd.DataFrame, out_dir: Path, claw_thr=None, gain: Optional[
         print(f'spike-driven APL; base parameters from {base_params}: {initial}', flush=True)
     elif base_params is not None:
         initial = read_params(base_params)
-    kws = base_kws(claw_thr, apl_drive)
+    kws = base_kws(claw_thr, apl_drive, connectome=connectome)
     _, _, wPNKC, pd0 = fit_mb_model(orn, fixed_thr=initial['fixed_thr'],
         wAPLKC=initial['wAPLKC_scale'], wKCAPL=initial['wKCAPL_scale'],
         wAPLPN=initial['wAPLPN_scale'], wPNAPL=initial['wPNAPL_scale'], **kws
@@ -1771,7 +1825,8 @@ def fit_one(k: float, orn, initial, wnorm, breadth, loss_fn, *, kckc0: float, ma
     protocol: Optional[dict] = None, spike_times: bool = False, claw_inh_pool: Optional[float] = None,
     apl_divisive: bool = False, aplpn_hold: Optional[float] = None, aplkc_flat: Optional[dict] = None,
     pn: Optional[dict] = None, apl_residual: Optional[dict] = None,
-    kckc_matrix: Optional[pd.DataFrame] = None, off_kckc: Optional[float] = None):
+    kckc_matrix: Optional[pd.DataFrame] = None, off_kckc: Optional[float] = None,
+    connectome: str = DEFAULT_CONNECTOME):
     """One joint fit; `kckc_matrix` (E122: KC x KC, post x pre, KC body IDs) replaces the hemibrain KC-KC matrix
     (fit_mb_model's `_wKCKC`, used as given and multiplied by the KC-KC scale); `kc_thr_factors` (K x KCs, `jitter_factors`) adds the K jittered runs of
     each condition (`jitter_conditions`) to every evaluation; `init_exact_expect` (not None)
@@ -1810,7 +1865,8 @@ def fit_one(k: float, orn, initial, wnorm, breadth, loss_fn, *, kckc0: float, ma
     jittered runs, the block proxy, the input-scaled threshold or spike times (refused). None (default): the call is
     the one without the option. `off_kckc` (E124: S, absolute) gives the blocked condition's static override the KC-KC
     scale S (`off_kckc_overrides`; any jittered APL-off runs share the override), the APL-on KC-KC scale as without it;
-    not with `apl_residual` or `block_proxy` (refused); None (default): the call is the one without it."""
+    not with `apl_residual` or `block_proxy` (refused); None (default): the call is the one without it. `connectome` (E130,
+    CONNECTOMES) is the wiring of every simulation (`base_kws`); the default is the call without it."""
     from pyolfsysm.mb_model import optimize_mb_model_params
     wAPLKC = breadth_weights(wnorm['wAPLKC'], breadth, k)
     r19 = None if (claw_thr is None or apl_drive != 'claws') else e19_row(claw_thr, k, kckc0)
@@ -2017,7 +2073,7 @@ def fit_one(k: float, orn, initial, wnorm, breadth, loss_fn, *, kckc0: float, ma
             params_to_optimize=params,
             initial_params=init, bounds=bounds, tie_apl_weights=tie, method=method,
             maxfev=maxfev, optimizer_kws=opt_kws, verify=False, verbose=verbose,
-            **base_kws(claw_thr, apl_drive, claw_transfer), **wiring_kws, _wAPLKC=wAPLKC, _wKCAPL=wnorm['wKCAPL'],
+            **base_kws(claw_thr, apl_drive, claw_transfer, connectome), **wiring_kws, _wAPLKC=wAPLKC, _wKCAPL=wnorm['wKCAPL'],
             _wAPLPN=wnorm['wAPLPN'], _wPNAPL=wnorm['wPNAPL'], kc_kc_inh=kckc0, kc_kc_tau=TAU, **kc_spiking,
             **protocol, **pool_kws, **div_kws, **flat_kws, **pn
         )
@@ -2340,7 +2396,12 @@ def main() -> None:
     ap.add_argument('--figure-only', action='store_true', help='only redraw the figures from saved results')
     args = ap.parse_args()
     if args.connectome != DEFAULT_CONNECTOME:
-        ap.error('--connectome other than the default: not implemented yet (E130 stub)')
+        # (E130) the bases of a per-claw threshold and of spike-driven APL are the hemibrain's; olfsysm has KC->KC synapse
+        # counts for the hemibrain only
+        if args.claw_thr is not None or args.apl_drive != 'claws':
+            ap.error('--connectome other than the default with --claw-thr or --apl-drive spikes / spikes_only is not supported')
+        if args.connectome.startswith('malecns') and args.kckc_matrix is None:
+            ap.error(f'--connectome {args.connectome} needs --kckc-matrix (olfsysm has KC->KC synapses for the hemibrain only)')
 
     res_dir = H.results_dir(args.experiment)
     out_dir = H.outputs_dir(args.experiment)
@@ -2643,7 +2704,8 @@ def main() -> None:
         **({} if args.kc_thr_input_exp is None else dict(kc_thr_input_exp=args.kc_thr_input_exp)),
         **({} if not claw_transfer else dict(claw_transfer=claw_transfer)),
         **({} if not timing_kws(protocol) else dict(timing=timing_kws(protocol))),
-        **({} if not pn else dict(pn=pn))
+        **({} if not pn else dict(pn=pn)),
+        **({} if args.connectome == DEFAULT_CONNECTOME else dict(connectome=args.connectome))
     )
     # (E71) the fixed input-scaled threshold factor, in the model's KC order (that of the breadth run), and
     # the pre-pass's record (kept out of base_info, which describes a spike-only base when it is not empty)
@@ -2651,7 +2713,7 @@ def main() -> None:
     # (E78) the claw transfer's pre-pass record, likewise
     transfer_info = base_info.pop('claw_transfer_prepass', None)
     thr_in_factor = None if args.kc_thr_input_exp is None else kc_input_thr_factor(wPNKC, breadth.index, args.kc_thr_input_exp)
-    wiring_tag = ('' if args.wiring is None else f'wiring-{args.wiring}-seed{args.wiring_seed}_') + (
+    wiring_tag = connectome_tag(args.connectome) + ('' if args.wiring is None else f'wiring-{args.wiring}-seed{args.wiring_seed}_') + (
         '' if args.wiring_file is None else f'wiring-{args.wiring_tag}_') + (
         '' if input_tag is None else f'input-{input_tag}_')
     gain_gloms = None
@@ -2714,7 +2776,7 @@ def main() -> None:
                 wiring_seed=(args.wiring_seed if args.wiring else None), orn_input=args.orn_input,
                 apl_drive=args.apl_drive, base_params=args.base_params,
                 **({} if not claw_transfer else dict(claw_thr_subgain=args.claw_thr_subgain, claw_thr_width=args.claw_thr_width)),
-                **pn)
+                **pn, **({} if args.connectome == DEFAULT_CONNECTOME else dict(connectome=args.connectome)))
         res, init, bounds = fit_one(k, orn, initial, wnorm, breadth, loss_fn, kckc0=args.kckc0,
             maxfev=5 if args.smoke else args.maxfev, method=args.method,
             thr0_factor=args.thr0_factor, claw_thr=args.claw_thr, init_from=args.init_from,
@@ -2734,7 +2796,8 @@ def main() -> None:
             **({} if flat_spec is None else dict(aplkc_flat=flat_spec)),
             **({} if not pn else dict(pn=pn)),
             **({} if residual is None else dict(apl_residual=residual)),
-            **({} if args.off_kckc_scale is None else dict(off_kckc=args.off_kckc_scale))
+            **({} if args.off_kckc_scale is None else dict(off_kckc=args.off_kckc_scale)),
+            **({} if args.connectome == DEFAULT_CONNECTOME else dict(connectome=args.connectome))
         )
         hist = res['history']
         hist.to_csv(res_dir / f'history_{tag}.csv')
@@ -2833,6 +2896,9 @@ def main() -> None:
                 off_wAPLPN_scale=res['apl_residual']['off_wAPLPN_scale'])),
             # (E124: the blocked condition's KC-KC scale, absolute; absent when not given)
             **({} if args.off_kckc_scale is None else dict(off_kckc_scale=float(args.off_kckc_scale))),
+            # (E130: the base's connectome and its claws' boutons; absent for the default)
+            **({} if args.connectome == DEFAULT_CONNECTOME else dict(connectome=args.connectome,
+                multibouton_claws=base_kws(None, connectome=args.connectome)['multibouton_claws'])),
             # (E73 part C: the per-KC session z-score reading's settings; absent when not used)
             **(dict(rate_criterion=args.rate_criterion, zcell_q=loss_fn.zcell['q'], zcell_map=loss_fn.zcell['amp'],
                 zcell_calibrate=loss_fn.zcell['calibrate'], zcell_drift=loss_fn.zcell['drift'])
@@ -2905,7 +2971,9 @@ def main() -> None:
             script='experiments/E10_joint_fit.py', host=subprocess.run(['hostname'], capture_output=True,
                 text=True).stdout.strip(),
             **start_prov,
-            base=dict(base_kws(args.claw_thr, args.apl_drive, claw_transfer), **pn), apl_drive=args.apl_drive,
+            base=dict(base_kws(args.claw_thr, args.apl_drive, claw_transfer, args.connectome), **pn), apl_drive=args.apl_drive,
+            # (E130) the connectome option, and the claws' boutons it implies (also in base)
+            connectome=args.connectome, multibouton_claws=base_kws(None, connectome=args.connectome)['multibouton_claws'],
             init_params=args.init_params, claw_thr=args.claw_thr, gain=gain, gain_glomeruli=gain_gloms,
             wiring=args.wiring, wiring_seed=(args.wiring_seed if args.wiring else None), orn_input=args.orn_input,
             wiring_file=args.wiring_file, wiring_tag=args.wiring_tag,
