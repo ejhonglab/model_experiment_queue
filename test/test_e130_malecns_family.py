@@ -387,3 +387,15 @@ def test_comparison_table_on_made_up_readings():
     assert lines[0] == '| statistic | family:real | fit:malecns-left |'
     assert '| pattern part, readout | 0.0560 | 0.0530 |' in lines
     assert all(len(line.split('|')) == 5 for line in lines)
+
+
+def test_calyx_ok_and_e10_default_explained():
+    rec = dict(identity=dict(exact=True), e10_default=dict(passes=True),
+               readme_counts={c: dict(same=True) for c in E.MALE}, **{'smoke_hemibrain-argmax': dict(passes=True),
+                                                                      'smoke_malecns-left': dict(passes=False)})
+    assert E.calyx_ok(rec) == {'hemibrain-argmax': True, 'malecns-left': False, 'malecns-right': False}
+    rec['smoke_malecns-left'] = dict(passes=True)
+    assert all(E.calyx_ok(rec).values())
+    rec['identity'] = dict(exact=False)
+    assert not any(E.calyx_ok(rec).values())
+    assert E.e10_default_explained(dict(exact=True))['passes']
