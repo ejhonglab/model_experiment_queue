@@ -8,17 +8,6 @@ directory's notes/ and are linked from here.
 
 ## Open
 
-### E112's realism table labels the flies' 1 z values as baseline-noise units (found 2026-11-20 13:39, viki's write-up subagent for E112)
-- **What.** results/E112_rho_like_for_like/realism.csv has a "flies" row labelled "baseline-noise units, 1.97 SD".
-  Its values are the 1 z ones, from the registry's ctrl_frac, tnt_frac and rate_ratio_fraction: 0.068 / 0.150, ratio
-  2.20. The baseline-noise values are 0.068 / 0.156, ratio 2.28 (noise_ctrl_frac, noise_tnt_frac,
-  noise_rate_ratio_fraction).
-- **What it affects.** That one row of the table only. The model rows, the bands that experiments/E112_rho_like_for_like.py
-  applies and E112's verdict are not affected. E112_rho_like_for_like.md quotes the baseline-noise values.
-- **What has been done.** The note uses the correct values.
-- **What remains.** Relabel the row or take it from the noise_* entries in E112's script (a code fix; hal's script, so hal
-  or an Opus subagent), then rebuild realism.csv from the saved runs.
-
 ### The progress plot's ρ line ends on two points of kinds the plot is meant to leave out (found 2026-11-16, hal, the report pages' revision)
 - **What.** `reports/summary_progress_plot.py` leaves out oracle inputs and random, shuffled or re-drawn wirings by tag
   (`EXCLUDE_VARIANT`: `^input-searched_`, `^oracle_half`, `wiring-`, `^popfit_[PM]\d`, ...). From E83 on, variants carry
@@ -260,6 +249,16 @@ directory's notes/ and are linked from here.
   These two tables and the structure targets' are still typed.
 
 ## Resolved
+
+### E112's realism table labels the flies' 1 z values as baseline-noise units (found 2026-11-20 13:39, viki's write-up subagent for E112; resolved 2026-11-22)
+- **What.** results/E112_rho_like_for_like/realism.csv has a "flies" row labelled "baseline-noise units, 1.97 SD".
+  Its values were the 1 z ones, from the registry's ctrl_frac, tnt_frac and rate_ratio_fraction: 0.068 / 0.150, ratio
+  2.20. The baseline-noise values are 0.068 / 0.156, ratio 2.28 (noise_ctrl_frac, noise_tnt_frac,
+  noise_rate_ratio_fraction).
+- **What it affects.** That one row of the table only. The model rows, the bands that experiments/E112_rho_like_for_like.py
+  applies and E112's verdict are not affected. E112_rho_like_for_like.md quotes the baseline-noise values.
+- **Done.** c8f342a takes the row from the noise_* entries (and adds `--part realism`); realism.csv rebuilt from the
+  saved runs on 2026-11-22 (atlas): the flies row now 0.068 / 0.156, ratio 2.28, and every model row identical to before.
 
 ### E120's archive params.csv listed part A's readings as variants and not the four saved refits; its outcome.json had no letter and no part B (found 2026-11-20 20:40, viki's write-up subagent for E120; resolved 2026-11-20)
 - **What.** (1) archive_model_outputs.py builds params.csv from every `*_summary.csv` in results/: for E120 those are
