@@ -96,6 +96,28 @@ def test_block_table_and_predictors():
     assert np.isclose(sc['r2'], 1.0)
 
 
+def test_matrix_stats_and_arm_stats():
+    ref, types = _toy()
+    st = X.arm_stats(ref, types).set_index('arm')
+    assert list(st.index) == ['HB'] + list(X.ARMS)
+    assert np.allclose(st['total_weight'], ref.sum())
+    rs = ref.sum(axis=1)
+    hb = st.loc['HB']
+    assert np.isclose(hb['row_sum_cv'], rs.std() / rs.mean()) and np.isclose(hb['row_sum_r_hemibrain'], 1.0)
+    assert hb['nonzero'] == (ref > 0).sum() and hb['kcs_without_input'] == (rs == 0).sum()
+    # the shuffle keeps the entries' values (so their count and the modal share), not the row sums
+    assert st.loc['SH', 'nonzero'] == hb['nonzero']
+    assert np.isclose(st.loc['SH', 'modal_value_share'], hb['modal_value_share'])
+    # one uniform neuron: every row sum the same (r undefined), every pair reciprocal
+    assert np.isclose(st.loc['U', 'row_sum_cv'], 0.0) and np.isnan(st.loc['U', 'row_sum_r_hemibrain'])
+    assert np.isclose(st.loc['U', 'reciprocal_share'], 1.0) and np.isclose(st.loc['U', 'modal_value_share'], 1.0)
+    # reciprocal pairs: a matrix with one pair i<->j and one one-way entry
+    M = np.zeros((4, 4))
+    M[0, 1] = M[1, 0] = M[2, 3] = 1.0
+    s = X.matrix_stats(M, ref[:4, :4] + 1.0)
+    assert np.isclose(s['reciprocal_share'], 2 / 3) and s['kcs_without_input'] == 1 and np.isclose(s['inputs_per_kc'], 0.75)
+
+
 def test_prediction_scores_perfect_and_scaled():
     rng = np.random.default_rng(1)
     a = rng.random((20, 5))

@@ -36,7 +36,11 @@ Parts (CLI `--part`):
   input over the run) is predicted by pooled activity: the arms' matrices applied to the same counts ('U', 'TY', 'G',
   'GAB'), the block-mean matrix ('blocks', SH's expectation) and each KC's own per-pre-type amounts times each type's
   mean count ('own_amounts'). Per wiring and condition: R² (1 - SSE / SST, no free scale), Pearson r over KC x odor,
-  and the mean over odors of Pearson r across KCs. step0_blocks.csv, step0_prediction.csv, step0.json.
+  and the mean over odors of Pearson r across KCs; (iii) the matrices themselves (`arm_stats`; added 2026-11-22 and
+  run alone as `--part 0arms`): for the hemibrain matrix and each arm, entries above zero, the CV of the KCs' row
+  sums, Pearson r of the row sums with the hemibrain's, the share of reciprocal pairs, the share of nonzero entries
+  at their most common value, and the sha256 checked against step 1's runs. step0_blocks.csv, step0_prediction.csv,
+  step0.json, step0_arms.csv, step0_arms.json.
 - check: (i) the hemibrain matrix passed explicitly as `_wKCKC` at the fit's parameters reproduces the hemibrain fit's
   saved APL-on and APL-off spike counts exactly; (ii) a 5-evaluation smoke fit of E10_joint_fit.py with `--kckc-matrix`
   (arm U, hemibrain wiring). check.json.
@@ -321,6 +325,56 @@ def prediction_scores(actual: np.ndarray, pred: np.ndarray) -> dict:
     return dict(r2=r2, pearson_r=r, mean_r_within_odor=float(np.mean(per)) if per else np.nan, n_odors_within=len(per))
 
 
+def matrix_stats(M: np.ndarray, ref: np.ndarray) -> dict:
+    """One KC x KC matrix (post x pre) against the hemibrain's `ref`: its total weight, entries above zero (and per KC),
+    KCs without input, the coefficient of variation of the KCs' received totals (row sums), Pearson r of its row sums
+    with `ref`'s (NaN when either is constant), the share of its nonzero off-diagonal entries whose transpose is also
+    nonzero (reciprocal pairs), and the share of its nonzero entries at their most common value."""
+    rs, rs_ref = M.sum(axis=1), ref.sum(axis=1)
+    nz = M > 0
+    off = nz.copy()
+    np.fill_diagonal(off, False)
+    vals = M[nz]
+    _, counts = np.unique(vals, return_counts=True)
+    r = float(np.corrcoef(rs, rs_ref)[0, 1]) if np.ptp(rs) > 1e-12 * abs(rs).max() and rs_ref.std() > 0 else np.nan
+    return dict(total_weight=float(M.sum()), nonzero=int(nz.sum()), inputs_per_kc=float(nz.sum() / len(rs)),
+                kcs_without_input=int((rs == 0).sum()), row_sum_cv=float(rs.std() / rs.mean()), row_sum_r_hemibrain=r,
+                reciprocal_share=float((off & off.T).sum() / off.sum()) if off.any() else np.nan,
+                modal_value_share=float(counts.max() / len(vals)) if len(vals) else np.nan)
+
+
+def arm_stats(ref: np.ndarray, types: np.ndarray, seed: int = SH_SEED) -> pd.DataFrame:
+    """`matrix_stats` of the hemibrain matrix ('HB') and of every arm's matrix, one row per matrix."""
+    return pd.DataFrame([dict(arm=a, **matrix_stats(arm_array(a, ref, types, seed), ref)) for a in ('HB',) + ARMS])
+
+
+def part_0_arms() -> pd.DataFrame:
+    """Step 0's table of the matrices themselves (added 2026-11-22, no simulation): `arm_stats` with each matrix's
+    sha256 (as `write_matrix` computes it), checked against the matrix_sha256 that step 1's runs recorded where
+    runs_1.csv exists. step0_arms.csv, step0_arms.json."""
+    from experiments.E77_input_screen import frame_sha256
+    out = out_dir()
+    idx = model_kc_index()
+    types = kc_types_of(idx)
+    ref_df = hemibrain_kckc(idx.get_level_values(H.KC_ID_LEVEL))
+    ref = ref_df.to_numpy(dtype=float)
+    st = arm_stats(ref, types)
+    st['matrix_sha256'] = [frame_sha256(arm_matrix(a, ref_df, types)) for a in st['arm']]
+    runs = _rows(out / 'runs_1.csv')
+    used = (runs.dropna(subset=['matrix_sha256']).groupby('arm')['matrix_sha256'].agg(lambda s: sorted(set(s)))
+            if {'arm', 'matrix_sha256'} <= set(runs.columns) else pd.Series(dtype=object))
+    st['sha256_as_run'] = [(used[a] == [s]) if a in used.index else np.nan
+                           for a, s in zip(st['arm'], st['matrix_sha256'])]
+    st.to_csv(out / 'step0_arms.csv', index=False)
+    _write_json(out / 'step0_arms.json', dict(
+        generated=_now(), host=_host(), seed=SH_SEED,
+        note=("the matrices as the arms define them (arm_array; normalized hemibrain matrix, mean row sum 1); "
+              "sha256_as_run: the matrix's sha256 equals the matrix_sha256 of step 1's runs (runs_1.csv)"),
+        provenance=H.code_commits()))
+    print(st.round(4).to_string(), flush=True)
+    return st
+
+
 def part_0() -> Dict[str, pd.DataFrame]:
     """Step 0 (the module docstring): step0_blocks.csv, step0_prediction.csv, step0.json."""
     out = out_dir()
@@ -364,7 +418,7 @@ def part_0() -> Dict[str, pd.DataFrame]:
     print(json.dumps({k: v for k, v in summary.items() if k not in ('provenance', 'prediction_mean_over_wirings')},
                      indent=1), flush=True)
     print(mean.round(3).to_string(), flush=True)
-    return dict(blocks=bt, prediction=pr)
+    return dict(blocks=bt, prediction=pr, arms=part_0_arms())
 
 
 # ---------------------------------------------------------------------------
@@ -957,12 +1011,14 @@ def chain() -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
-    ap.add_argument('--part', required=True, choices=('0', 'check', '1', 'score1', '2', 'T', 'score', 'variants', 'chain',
-                                                      'commands'))
+    ap.add_argument('--part', required=True, choices=('0', '0arms', 'check', '1', 'score1', '2', 'T', 'score', 'variants',
+                                                      'chain', 'commands'))
     ap.add_argument('--arms', nargs='+', default=None, help='arms for parts 1, 2 and T (default: all / the passing ones)')
     a = ap.parse_args()
     if a.part == '0':
         part_0()
+    elif a.part == '0arms':
+        part_0_arms()
     elif a.part == 'check':
         part_check()
     elif a.part == '1':
