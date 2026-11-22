@@ -1220,6 +1220,7 @@ Canonical experiment names for summary reports:
 | E123 | the form of the inhibition among KCs: draws of the shuffle, random sparse matrices and the inhibition as a part of APL |
 | E124 | the inhibition among KCs as a part of APL, fitted with a KC-KC scale for each condition |
 | E125 | the part of the inhibition among KCs that outlasts the block: a pooled neuron or a KC's own feedback in place of the matrix |
+| E126 | the ladder of the pooled survivor: one neuron per KC type along the dose and KC groups without type |
 
 ## Model-output archive (data/model_outputs/ in the shared directory)
 
