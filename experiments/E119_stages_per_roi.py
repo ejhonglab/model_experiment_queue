@@ -51,13 +51,14 @@ Parts (CLI `--part`):
 - C, the same fly's claw-to-soma step (part 0b's trials; `--part C`): C1 the step per pair from the same trials (c1_step.csv),
   C2 the somata's response rate against the claws' summed response (c2_curve.csv).
 - table: comparison_table.md and outcome.json.
+- means: the model's per-ROI statistics averaged over the wirings, from A's and B's tables (roi_means.csv).
 
 Outputs: <shared>/results/E119_stages_per_roi/ (the CSVs, comparison_table.md, outcome.json, provenance_<part>.json);
 caches under outputs/E119_stages_per_roi/.
 
 Usage (from the repository root; light, no simulations):
     OMP_NUM_THREADS=2 OMP_THREAD_LIMIT=2 nice -n 10 ./venv/bin/python -u experiments/E119_stages_per_roi.py --part A
-    ... --part B; --part C; --part table
+    ... --part B; --part C; --part table; --part means
 """
 from __future__ import annotations
 
@@ -1221,11 +1222,32 @@ def write_table() -> None:
     print('\n'.join(L), flush=True)
 
 
+ROI_STATS = ('rate', 'opr_mean', 'inhibited', 'resp_cv', 'top1', 'totals_cv')
+
+
+def roi_means() -> pd.DataFrame:
+    """The model's per-ROI statistics averaged over the wirings (roi_means.csv), from part A's a2_roi_stats.csv and part
+    B's b1_roi_stats.csv (no simulation): one row per stage, criterion, reading, share, pool and cond, with the mean over
+    the wirings of each of `ROI_STATS` and the number of wirings `n`. The flies' rows are left out (a2_spread.csv and
+    b1_spread.csv give theirs)."""
+    od = out_dir()
+    keys = ['stage', 'criterion', 'reading', 'share', 'pool', 'cond']
+    parts = []
+    for name in ('a2_roi_stats.csv', 'b1_roi_stats.csv'):
+        rt = pd.read_csv(od / name, dtype={'pool': str})
+        m = rt[rt.reading != 'flies']
+        g = m.groupby(keys, dropna=False, sort=False)
+        parts.append(g[list(ROI_STATS)].mean().join(g.size().rename('n')).reset_index())
+    out = pd.concat(parts, ignore_index=True)
+    out.to_csv(od / 'roi_means.csv', index=False)
+    return out
+
+
 # ---------------------------------------------------------------------------
 
 def main(argv: Optional[Sequence[str]] = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
-    ap.add_argument('--part', required=True, choices=('A', 'B', 'C', 'table'))
+    ap.add_argument('--part', required=True, choices=('A', 'B', 'C', 'table', 'means'))
     a = ap.parse_args(argv)
     if a.part == 'A':
         part_a()
@@ -1233,6 +1255,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         part_b()
     elif a.part == 'C':
         part_c()
+    elif a.part == 'means':
+        roi_means()
     else:
         write_table()
 
