@@ -1,4 +1,5 @@
 """reports.report_values.format_value: signs, rounding to zero and the specs the templates use."""
+import numpy as np
 import pytest
 
 from reports.report_values import format_value
@@ -20,6 +21,14 @@ from reports.report_values import format_value
     (3.6, 'd', '4'),
     ('-0.0004733129370330814', '+.4f', '−0.0005'),
     ('four', '+.4f', 'four'),
+    (2, 'w', 'two'),
+    (6.0, 'w', 'six'),
+    (np.int64(3), 'w', 'three'),
+    (0, 'w', 'zero'),
+    (20, 'w', 'twenty'),
+    (21, 'w', '21'),
+    (-1, 'w', '−1'),
+    ('3', 'w', 'three'),
     ('as written', None, 'as written'),
 ])
 def test_format_value(value, spec, expected):

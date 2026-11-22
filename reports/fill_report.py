@@ -4,8 +4,8 @@ markdown and a sidecar of every value's source, and optionally build the HTML pa
 
 - fill: template -> filled markdown (+ `<out>.values.json` sidecar). With tooltips (default), each
   value is written as `⟦pv:value§source⟧`, which md_to_artifact.py renders as a span whose hover
-  text names the source. `~ spec` is a Python format spec (`.2f`, `+.3f`, `d`); negatives get a
-  Unicode minus. (`|` cannot be used inside placeholders: it separates table cells.)
+  text names the source. `~ spec` is a Python format spec (`.2f`, `+.3f`, `d`), or `w` for a count
+  in words (report_values.format_value); negatives get a Unicode minus. (`|` cannot be used inside placeholders: it separates table cells.)
 - --check SIDECAR: re-resolves every key of a sidecar and lists values whose sources changed.
 - --compare CURRENT_MD: compares the filled markdown (tooltips stripped) with another markdown
   line by line and lists every differing table cell / sentence with its row, column and key.

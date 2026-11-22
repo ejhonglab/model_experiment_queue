@@ -48,6 +48,7 @@ Outcomes: flies fail -> (c); flies hold, the repeat check fails -> (d); both hol
 Outputs (<shared>/results/E128_bouton_groups/): part0.json, a_readings.csv, a_shares.csv, a_null.csv,
 a_null_summary.csv, a_repeat.csv, b_deals.csv (summary per fly, wiring, variant), b_wirings.csv, b_leads.csv,
 verdict.json, comparison_table.md, figure.png, provenance.json; the deals themselves under outputs/E128_bouton_groups/.
+The write-up checks (analyses/E128_writeup_*.py) add writeup_*.csv and provenance_writeup_*.json (`save_writeup`).
 
 Usage (from the repository root; light, no simulation):
     OMP_NUM_THREADS=2 OMP_THREAD_LIMIT=2 nice -n 10 ./venv/bin/python -u experiments/E128_bouton_groups.py --part all
@@ -95,6 +96,29 @@ def local_dir() -> Path:
 
 def _write_json(path: Path, obj) -> None:
     path.write_text(json.dumps(obj, indent=1, default=lambda x: x.item() if hasattr(x, 'item') else str(x)) + '\n')
+
+
+def save_writeup(tables: Dict[str, pd.DataFrame], script: str, out: Optional[Path] = None, **extra) -> Path:
+    """Saves the tables of a write-up check (analyses/E128_writeup_*.py; no simulation).
+
+    Args:
+        tables: {name: table}, each written as <out>/writeup_<name>.csv, without the index.
+        script: the check's path from the repository root (`H.script_path(__file__)`).
+        out: the folder; by default the results folder (`out_dir()`).
+        **extra: more entries for the provenance file.
+
+    Returns:
+        The provenance file written beside the tables, provenance_writeup_<name>.json (<name> the script's name after
+        "E128_writeup_"), with the code's commits and the tables' names.
+    """
+    out = Path(out) if out is not None else out_dir()
+    out.mkdir(parents=True, exist_ok=True)
+    for name, T in tables.items():
+        T.to_csv(out / f'writeup_{name}.csv', index=False)
+    p = out / f"provenance_writeup_{Path(script).stem.replace('E128_writeup_', '')}.json"
+    _write_json(p, dict(script=script, **H.code_commits(), generated=time.strftime('%Y-%m-%d %H:%M:%S %Z'),
+                        tables=[f'writeup_{n}.csv' for n in tables], **extra))
+    return p
 
 
 def _e119():

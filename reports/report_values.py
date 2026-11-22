@@ -2,8 +2,8 @@
 """Resolve report placeholders to values with recorded provenance.
 
 A placeholder in report markdown is `{{key ~ spec}}` (spec: a Python format spec such as `.2f`
-or `+.3f`; negative numbers are written with a Unicode minus; `|` is not used because it
-separates table cells). Keys:
+or `+.3f`, or `w` for a count in words, "two" for 2; negative numbers are written with a Unicode
+minus; `|` is not used because it separates table cells). Keys:
 
 - `data:<name>` or `data:<name>.lo` / `.hi`: an entry of the data-target registry
   (results/data_targets/data_targets.json in the shared directory, written by
@@ -213,10 +213,15 @@ def resolve(key: str) -> Resolved:
     return _resolve_table(key)
 
 
+_WORDS = ('zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve',
+          'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty')
+
+
 def format_value(value: Any, spec: Optional[str]) -> str:
     """`value` formatted with `spec` (Python format spec), Unicode minus for negatives; a value
     that rounds to zero carries no minus sign; strings (literals) without a spec are returned as
-    written."""
+    written. The spec `w` writes a count in words: the value rounded to an integer, spelled out
+    from zero to twenty ("two flies") and in digits outside that range."""
     if isinstance(value, str):
         if not spec:
             return value
@@ -224,6 +229,9 @@ def format_value(value: Any, spec: Optional[str]) -> str:
             value = float(value)
         except ValueError:
             return value
+    if spec == 'w':
+        n = int(round(float(value)))
+        return _WORDS[n] if 0 <= n < len(_WORDS) else str(n).replace('-', '−')
     if spec:
         s = format(float(value) if not spec.endswith('d') else int(round(float(value))), spec)
     else:
