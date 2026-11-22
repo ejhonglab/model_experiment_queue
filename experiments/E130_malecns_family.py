@@ -733,6 +733,33 @@ def part_1(names: Sequence[str] = S1_RUNS) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 # check
 
+def e10_default_explained(rec: Mapping) -> dict:
+    """Check (iv)'s reading when the first evaluation differs from C2's saved history: it passes if every column that
+    differs is one of the calibrated readout's (apl_cal_*, mean_dist_cal_*, term_apl_cal, and the loss they enter) and
+    differs by at most 1e-12 relative, and if today's code on C2's saved spike counts (no simulation; E72's `distances`,
+    `H.apl_effect_decomposition`) gives the check's values of apl_cal_rmse and mean_dist_cal_off exactly: the
+    difference is then in the calibration's last digits on the same counts, not in the run (the counts-based columns,
+    rates, ρ's and block, are equal). With no difference it passes as exact."""
+    from experiments import E72_wiring_population as E72
+    diffs = {k: v for k, v in rec.get('history_differs', {}).items()}
+    diffs.update(rec.get('row_differs', {}))
+    if rec.get('exact'):
+        return dict(passes=True, differences_explained='none (exact)')
+    cal = all(k.startswith(('apl_cal_', 'mean_dist_cal_', 'term_apl_cal')) or k == 'loss' for k in diffs)
+    tiny = all(abs(a - b) <= 1e-12 * max(abs(a), abs(b)) for a, b in diffs.values())
+    o = E83.saved_fit('real')['saved']
+    d = E72.distances(o, 'cal')
+    dec, _ = H.apl_effect_decomposition(d['on'], d['off'], H.yang_apl_effect())
+    now = dict(apl_cal_rmse=float(dec['apl_effect_rmse']), mean_dist_cal_off=float(d['off'].mean()))
+    # (the history's CSV keeps 16 significant digits)
+    same_now = all(k not in diffs or diffs[k][0] == float(f'{now[k]:.16g}') for k in now)
+    ok = bool(rec.get('n_history_columns') and cal and tiny and same_now)
+    return dict(passes=ok, differences_explained=dict(only_calibrated_columns=bool(cal), within_1e_12=bool(tiny),
+                recomputed_from_saved_counts=now, check_equals_recomputation=bool(same_now),
+                note=("the first evaluation's calibrated-readout columns equal today's code on C2's saved counts; C2's "
+                      "history has them from the code of its run (E67), which differs in the last digits")))
+
+
 def part_check(smoke: bool = True) -> dict:
     """The checks (the module docstring), each kept once passed; check.json. Raises if one fails."""
     from experiments import E110_no_kckc as E110
@@ -774,7 +801,7 @@ def part_check(smoke: bool = True) -> dict:
     _write_json(path, res)
     print(f'E130 check (iii) README counts: {counts}', flush=True)
     # (iv) E10_joint_fit.py with --connectome hemibrain-first, exact start
-    if smoke and not res.get('e10_default', {}).get('exact'):
+    if smoke and 'differences_explained' not in res.get('e10_default', {}) and not res.get('e10_default', {}).get('exact'):
         name = 'e10_default_exact'
         cmd = [str(H.HERE / 'venv' / 'bin' / 'python'), '-u', 'experiments/E10_joint_fit.py', '-k', '2', '--aplpn-max', '3',
                '--rate-target', 'ctrl_frac', '--loss', 'apl', '--apl-readout', 'both', '--tag', '_cap3_check0', '--maxfev',
@@ -792,6 +819,10 @@ def part_check(smoke: bool = True) -> dict:
         res['e10_default'] = dict(ex, returncode=rec['returncode'], seconds=rec['seconds'], command=cmd, checked=_now())
         _write_json(path, res)
         print(f"E130 check (iv) E10 --connectome {FIRST}: exact {res['e10_default']['exact']}", flush=True)
+    if smoke and res.get('e10_default') and 'differences_explained' not in res['e10_default']:
+        res['e10_default'].update(e10_default_explained(res['e10_default']))
+        _write_json(path, res)
+        print(f"E130 check (iv) differences explained: {res['e10_default']['differences_explained']}", flush=True)
     # (v) smoke fits on the new connectomes
     if smoke:
         for c in ('malecns-left', 'hemibrain-argmax'):
@@ -813,7 +844,7 @@ def part_check(smoke: bool = True) -> dict:
             _write_json(path, res)
             print(f'E130 check (v) smoke {c}: {res[key]}', flush=True)
     res['passes'] = bool(res.get('identity', {}).get('exact') and all(v['same'] for v in res['readme_counts'].values())
-                         and (not smoke or (res.get('e10_default', {}).get('exact')
+                         and (not smoke or (res.get('e10_default', {}).get('passes')
                                             and all(res.get(f'smoke_{c}', {}).get('passes') for c in ('malecns-left', 'hemibrain-argmax')))))
     res['checked'] = _now()
     _write_json(path, res)
