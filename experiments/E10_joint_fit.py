@@ -447,6 +447,31 @@ def off_kckc_tag(s: Optional[float]) -> str:
     return '' if s is None else f'kckcoff{_tag_number(float(s))}_'
 
 
+# (E130) the connectome of the base: the hemibrain with each claw on its PN's lowest-ID bouton (the family's, E3's
+# BOUTON pin; the default), the hemibrain with each claw on its main bouton (olfsysm's default since 60cddc3), or one
+# calyx of the male CNS (olfsysm's pn2kc_connections 'malecns-left' / 'malecns-right', main bouton only)
+CONNECTOMES = ('hemibrain-first', 'hemibrain-argmax', 'malecns-left', 'malecns-right')
+DEFAULT_CONNECTOME = 'hemibrain-first'
+
+
+def connectome_kws(connectome: str = DEFAULT_CONNECTOME) -> dict:
+    """(E130) The fit_mb_model kwargs that select `connectome` (one of CONNECTOMES) over E3's BOUTON: {} for the
+    default; multibouton_claws 'argmax' for 'hemibrain-argmax'; pn2kc_connections and multibouton_claws 'argmax' for
+    the male CNS's calyces."""
+    raise NotImplementedError('E130 stub')
+
+
+def connectome_tag(connectome: str = DEFAULT_CONNECTOME) -> str:
+    """(E130) The tag part of --connectome: cx-<connectome>_; '' for the default."""
+    raise NotImplementedError('E130 stub')
+
+
+def connectome_base(orn: pd.DataFrame, connectome: str, out_dir: Path) -> Dict[str, float]:
+    """(E130) The bouton base's tuned parameters on `connectome`: E3's procedure (fit_mb_model tuned to 5 % with APL
+    on, E3's BOUTON kwargs with `connectome_kws`), cached as JSON in `out_dir`; E3's saved parameters for the default."""
+    raise NotImplementedError('E130 stub')
+
+
 APLKC_FLAT_KINDS =('uniform', 'connectome', 'offclaw', 'offclaw_ped', 'allsyn', 'allsyn_even', 'allsyn_even_calyx')
 # (E96) the components built from the counts of APL's synapses per KC (`aplkc_flat_counts`); (E99) 'allsyn_even' (T1)
 # each KC's count of all of APL's synapses (on its kept claws, on no claw in the calyx, in the peduncle) and
@@ -2308,9 +2333,14 @@ def main() -> None:
         help="(E124) the blocked condition's KC-KC scale, absolute and fixed (0: no inhibition among KCs with APL off), in "
             'place of the APL-on one, which is fitted (or held by --kckc-fixed) as without it; the breadth runs unchanged; '
             'off by default; tag part kckcoff<S>_; not with --apl-residual or --block-proxy')
+    ap.add_argument('--connectome', choices=list(CONNECTOMES), default=DEFAULT_CONNECTOME,
+        help="(E130) the base's connectome: hemibrain-first (the default, the family's), hemibrain-argmax, malecns-left, "
+            'malecns-right; tag part cx-<connectome>_ when not the default')
     ap.add_argument('--smoke', action='store_true', help='time a few evaluations and exit')
     ap.add_argument('--figure-only', action='store_true', help='only redraw the figures from saved results')
     args = ap.parse_args()
+    if args.connectome != DEFAULT_CONNECTOME:
+        ap.error('--connectome other than the default: not implemented yet (E130 stub)')
 
     res_dir = H.results_dir(args.experiment)
     out_dir = H.outputs_dir(args.experiment)
