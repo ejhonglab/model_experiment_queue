@@ -14,9 +14,11 @@ its total weight in both.
 - Step 1, the ladder (`--part step1`): X one neuron per KC type (E122's TY, as E125's TY50), at d 0.75 and 0.25: TY75,
   TY25 (16 runs; tags S1_<arm>_<wiring>). TY75 runs first, since step 2's gate is on it.
 - Step 2, groups without type (`--part step2`, gated): X one neuron per group, the KCs dealt at random into groups of
-  the KC types' sizes (`random_groups`: the model KCs' type labels permuted with numpy's default_rng(seed)), each
-  group's block entries its members' total incoming hemibrain weight over its size squared (`group_survivor`, which
-  with the groups the types is E122's TY exactly), two draws (seeds 0, 1) at d 0.75: RG75s0, RG75s1 (16 runs; tags
+  the KC types' sizes (`random_groups`: the model KCs' type labels permuted with numpy's default_rng(seed)), the
+  group with the size of type t having for its block entries that type's total incoming hemibrain weight over its
+  size squared (`group_survivor`, reading B: the entry values are the neuron per type's and only the membership
+  changes; with the groups the types it is E122's TY exactly), two draws (seeds 0, 1) at d 0.75: RG75s0, RG75s1
+  (16 runs; tags
   S2_<arm>_<wiring>). Refused unless verdict.json (from `--part score` after step 1) has the gate open: TY75 keeps the
   gain by E125's class, is no corner, and has no threshold under 60 Hz on any wiring (`gate`).
 - References, read and not run again (E125's `collect`): the family, KC-KC at zero (E110's part A; part B beside),
@@ -27,7 +29,9 @@ Parts (CLI `--part`):
 - check: (i) the hemibrain matrix is E123's (sha256 against E123's HBab runs); (ii) with d 0 (Z0: on HB, off zeros) the
   two-simulator runner reproduces E123's held point S1_HBab_real exactly (spike counts; factors to 1e-12 relative);
   (iii) the survivor matrices: E126's TY at d 0.5 is E125's TY50 (sha256 of both conditions' matrices against E125's
-  runs), `group_survivor` on the types is E122's TY exactly, and each draw's groups have the types' sizes. check.json;
+  runs), `group_survivor` on the types is E122's TY exactly, and each draw's groups have the types' sizes, the total
+  weight and, entry by entry, the TY value of the type whose size they have (`survivor_check`, run again, matrices
+  only, before step 2). check.json;
   failing stops everything.
 - step1, step2 (simulations, resumable, per lane; `--wirings`, `--arms`): rows in runs_<step>_<host>_<lane>.csv (a tag
   in any host's runs_1_*.csv / runs_2_*.csv is skipped), held points in starts_<step>_<host>_<lane>.json, provenance
@@ -97,7 +101,10 @@ GROUP_SEEDS = (0, 1)
 STEP2_ARMS = tuple(f'RG75s{s}' for s in GROUP_SEEDS)
 STEPS = {1: STEP1_ARMS, 2: STEP2_ARMS}
 ARMS = STEP1_ARMS + STEP2_ARMS
-FORMS = dict(E125.FORMS, RG='one neuron per group of KCs dealt at random into groups of the KC types\' sizes')
+FORMS = dict(E125.FORMS, RG='one neuron per group of KCs dealt at random into groups of the KC types\' sizes, each '
+                               'group with the entry value of the type whose size it has')
+GROUP_READING = ("B: the group with the size of type t has t's entry value (t's total incoming hemibrain weight over "
+                 "its size squared); only the membership differs from TY")
 E125_ARMS = E125.ARMS                                               # read (PO25..PO75, DG25..DG75, TY50)
 LADDER = E125.LADDER                                                # E124's rungs (read)
 E123_U = E125.E123_U
@@ -185,17 +192,45 @@ def random_groups(types: np.ndarray, seed: int) -> np.ndarray:
     return types[np.random.default_rng(seed).permutation(len(types))]
 
 
-def group_survivor(ref: np.ndarray, labels: np.ndarray) -> np.ndarray:
-    """One neuron per group (the groups named by TYPES; other labels get none): within each group every entry its
-    members' total incoming weight of `ref` (rows are post) over its size squared. With labels = the types this is
-    E122's TY exactly; the total is `ref`'s when every KC is in a group."""
+def group_survivor(ref: np.ndarray, labels: np.ndarray, types: np.ndarray) -> np.ndarray:
+    """One neuron per group (the groups named by TYPES, each with its type's size; other labels get none), reading B:
+    within the group named t every entry is type t's total incoming weight of `ref` (rows are post) over t's size
+    squared, so the entry values are E122's TY's and only the membership changes. With labels = the types this is
+    TY exactly; the total is `ref`'s when every KC is in a group of its type's size."""
+    labels = np.asarray(labels, dtype=object)
+    types = np.asarray(types, dtype=object)
     n = len(labels)
     out = np.zeros((n, n))
     for t in TYPES:
         m = labels == t
+        k = types == t
+        if m.sum() != k.sum():
+            raise ValueError(f'group {t!r} has {int(m.sum())} KCs, type {t!r} {int(k.sum())}')
         if m.any():
-            out[np.ix_(m, m)] = ref[m].sum() / m.sum() / m.sum()
+            out[np.ix_(m, m)] = ref[k].sum() / k.sum() / k.sum()
     return out
+
+
+def reading_a_row_sums(ref: np.ndarray, types: np.ndarray, d: float = 0.75,
+                       seeds: Sequence[int] = None) -> pd.DataFrame:
+    """For the write-up (matrices only, no simulation): under reading A (each random group's entries its own members'
+    total incoming weight of `ref` over its size squared, the rule before reading B), each KC's row sum of d X against
+    the pooled neuron's (E122's U, every entry the total over n squared) at the same d, for each draw. One row per KC
+    and draw: seed, kc (position), type, group, row_sum_A, row_sum_pooled, ratio (A / pooled)."""
+    types = np.asarray(types, dtype=object)
+    n = len(types)
+    pooled = d * float(ref.sum()) / n
+    rows = []
+    for s in (GROUP_SEEDS if seeds is None else seeds):
+        g = random_groups(types, s)
+        rs = np.zeros(n)
+        for t in TYPES:
+            m = g == t
+            if m.any():
+                rs[m] = d * ref[m].sum() / m.sum()      # m.sum() entries of ref[m].sum() / m.sum()**2 in each row
+        rows.append(pd.DataFrame(dict(seed=s, kc=np.arange(n), type=types, group=g, row_sum_A=rs,
+                                      row_sum_pooled=pooled, ratio=rs / pooled)))
+    return pd.concat(rows, ignore_index=True)
 
 
 def condition_arrays(arm: str, ref: np.ndarray, types: np.ndarray) -> Dict[str, np.ndarray]:
@@ -203,7 +238,7 @@ def condition_arrays(arm: str, ref: np.ndarray, types: np.ndarray) -> Dict[str, 
     if form_of(arm) != 'RG':
         return E125.condition_arrays(arm, ref, types)
     d = dose_of(arm)
-    X = group_survivor(ref, random_groups(types, seed_of(arm)))
+    X = group_survivor(ref, random_groups(types, seed_of(arm)), types)
     return {'on': (1.0 - d) * ref + d * X, 'off': d * X}
 
 
@@ -214,7 +249,7 @@ def group_info(arm: str, types: np.ndarray) -> dict:
         return {}
     g = random_groups(types, seed_of(arm))
     comp = {t: {u: int(((g == t) & (types == u)).sum()) for u in TYPES} for t in TYPES}
-    return dict(group_seed=seed_of(arm), group_sizes=json.dumps({t: int((g == t).sum()) for t in TYPES}),
+    return dict(group_seed=seed_of(arm), group_reading=GROUP_READING, group_sizes=json.dumps({t: int((g == t).sum()) for t in TYPES}),
                 group_composition=json.dumps(comp), group_same_as_type=float((g == types).mean()))
 
 
@@ -345,6 +380,40 @@ def all_done(step: int) -> bool:
 # ---------------------------------------------------------------------------
 # check
 
+def survivor_check(r: np.ndarray, types: np.ndarray) -> dict:
+    """The random-group survivors' check (matrices only): `group_survivor` on the types is E122's TY exactly; each
+    draw's groups have the types' sizes, keep the total weight, and every entry of a group's block equals the TY entry
+    value of the type whose size it has (reading B), with zeros outside the blocks. `ok` all of these."""
+    types = np.asarray(types, dtype=object)
+    sizes = {t: int((types == t).sum()) for t in TYPES}
+    TYm = E122.arm_array('TY', r, types)
+    ty_val = {t: float(TYm[np.ix_(types == t, types == t)].flat[0]) for t in TYPES if (types == t).any()}
+    draws = {}
+    for a in STEP2_ARMS:
+        g = random_groups(types, seed_of(a))
+        X = condition_arrays(a, r, types)['off'] / dose_of(a)
+        blocks = np.zeros(X.shape, dtype=bool)
+        vals_ok = True
+        for t in ty_val:
+            m = g == t
+            blocks[np.ix_(m, m)] = True
+            vals_ok &= bool(np.allclose(X[np.ix_(m, m)], ty_val[t], rtol=1e-12, atol=0))
+        draws[a] = dict(sizes={t: int((g == t).sum()) for t in TYPES}, same_as_type=float((g == types).mean()),
+                        total=float(X.sum()), ref_total=float(r.sum()), entries_are_TY_values=vals_ok,
+                        zero_outside_blocks=not X[~blocks].any())
+    surv = dict(reading=GROUP_READING,
+                groups_on_types_is_TY=bool(np.array_equal(group_survivor(r, types, types), TYm)),
+                type_sizes=sizes, ty_entry_values=ty_val, draws=draws,
+                draws_keep_sizes=all(d['sizes'] == sizes for d in draws.values()),
+                draws_keep_total=all(abs(d['total'] - d['ref_total']) <= 1e-9 * d['ref_total'] for d in draws.values()),
+                draws_entries_are_TY_values=all(d['entries_are_TY_values'] and d['zero_outside_blocks']
+                                                for d in draws.values()),
+                all_kcs_typed=bool(np.isin(types, TYPES).all()))
+    surv['ok'] = bool(surv['groups_on_types_is_TY'] and surv['draws_keep_sizes'] and surv['draws_keep_total']
+                      and surv['draws_entries_are_TY_values'])
+    return surv
+
+
 def part_check() -> dict:
     """(i) the hemibrain matrix is E123's; (ii) Z0 (d 0) on 'real' reproduces E123's S1_HBab_real exactly; (iii) the
     survivors: TY at d 0.5 is E125's TY50, `group_survivor` on the types is E122's TY, the draws keep the types' sizes.
@@ -368,22 +437,10 @@ def part_check() -> dict:
     ty50 = condition_arrays('TY50', r, types)
     sha_ty50 = {c: frame_sha256(pd.DataFrame(ty50[c], index=ref.index, columns=ref.columns)) for c in ('on', 'off')}
     e125_ty50 = {c: sorted(set(r125.loc[r125['arm'] == 'TY50', f'matrix_{c}_sha256'])) for c in ('on', 'off')}
-    sizes = {t: int((types == t).sum()) for t in TYPES}
-    draws = {}
-    for a in STEP2_ARMS:
-        g = random_groups(types, seed_of(a))
-        X = condition_arrays(a, r, types)['off'] / dose_of(a)
-        draws[a] = dict(sizes={t: int((g == t).sum()) for t in TYPES}, same_as_type=float((g == types).mean()),
-                        total=float(X.sum()), ref_total=float(r.sum()))
-    surv = dict(ty50_same_as_E125={c: e125_ty50[c] == [sha_ty50[c]] for c in ('on', 'off')},
-                ty50_sha256=sha_ty50, e125_ty50_sha256=e125_ty50,
-                groups_on_types_is_TY=bool(np.array_equal(group_survivor(r, types), E122.arm_array('TY', r, types))),
-                type_sizes=sizes, draws=draws,
-                draws_keep_sizes=all(d['sizes'] == sizes for d in draws.values()),
-                draws_keep_total=all(abs(d['total'] - d['ref_total']) <= 1e-9 * d['ref_total'] for d in draws.values()),
-                all_kcs_typed=bool(np.isin(types, TYPES).all()))
-    surv_ok = bool(all(surv['ty50_same_as_E125'].values()) and surv['groups_on_types_is_TY'] and surv['draws_keep_sizes']
-                   and surv['draws_keep_total'])
+    surv = survivor_check(r, types)
+    surv.update(ty50_same_as_E125={c: e125_ty50[c] == [sha_ty50[c]] for c in ('on', 'off')},
+                ty50_sha256=sha_ty50, e125_ty50_sha256=e125_ty50)
+    surv_ok = bool(all(surv['ty50_same_as_E125'].values()) and surv['ok'])
     cc = E108._commits_clean()
     P = E83.wiring_parts('real')
     t0 = time.time()
@@ -456,6 +513,13 @@ def part_runs(step: int, arms: Optional[Sequence[str]] = None, wirings: Sequence
         if not ok:
             raise RuntimeError(f'E126 step 2 refused: {why}')
         print(f'E126 step 2: gate open ({why})', flush=True)
+        # the random-group survivors under reading B, checked again here (check.json may predate the reading)
+        ref, types = _model_ref()
+        sc = dict(survivor_check(ref.to_numpy(dtype=float), types), checked=_now(), host=_host())
+        E122._write_json(out_dir() / 'check_step2_survivors.json', sc)
+        if not sc['ok']:
+            raise RuntimeError('E126 step 2 refused: the random-group survivor check failed (check_step2_survivors.json)')
+        print(f"E126 step 2: random-group survivors checked ({GROUP_READING})", flush=True)
     lane = lane or f'step{step}-{lane_name(wirings)}'
     table = out_dir() / f'runs_{step}_{_host()}_{lane}.csv'
     prov_path = out_dir() / f'provenance_{step}_{_host()}_{lane}.json'

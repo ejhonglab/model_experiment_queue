@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Tests for E126 (the ladder of the pooled survivor; experiments/E126_kckc_survivor_ladder.py): the arms' names, the
-random groups (the types' sizes, seeded, the survivor on the types E122's TY), the two conditions' matrices (E125's for
+random groups (the types' sizes, seeded, the survivor on the types E122's TY, on the groups TY's entry values: reading B; reading A's row sums), the two conditions' matrices (E125's for
 TY), the planned points, the "differ" rule, the gate and the outcomes' flags. No model simulation."""
 
 import numpy as np
@@ -48,18 +48,47 @@ def test_random_groups():
         assert np.array_equal(g, X.random_groups(types, s))             # seeded
         assert (g != types).any()
     assert not np.array_equal(X.random_groups(types, 0), X.random_groups(types, 1))
-    # the survivor on the types is E122's TY exactly; on the groups it keeps the total
-    assert np.array_equal(X.group_survivor(ref, types), E122.arm_array('TY', ref, types))
-    G = X.group_survivor(ref, X.random_groups(types, 0))
-    assert np.isclose(G.sum(), ref.sum())
+    # the survivor on the types is E122's TY exactly; on the groups (reading B) each group has the TY entry value of
+    # the type whose size it has, and the total is kept
+    TY = E122.arm_array('TY', ref, types)
+    assert np.array_equal(X.group_survivor(ref, types, types), TY)
     g = X.random_groups(types, 0)
+    G = X.group_survivor(ref, g, types)
+    assert np.isclose(G.sum(), ref.sum())
     for t in X.TYPES:
-        m = g == t
-        assert np.allclose(G[np.ix_(m, m)], ref[m].sum() / m.sum() ** 2)
+        m, k = g == t, types == t
+        assert np.allclose(G[np.ix_(m, m)], ref[k].sum() / k.sum() ** 2)
+        assert np.allclose(G[np.ix_(m, m)], TY[np.ix_(k, k)][0, 0])
         assert not G[np.ix_(m, ~m)].any()
+    # the same multiset of entry values as TY: only the membership changes
+    assert np.allclose(np.sort(G.ravel()), np.sort(TY.ravel()))
+    with pytest.raises(ValueError):
+        X.group_survivor(ref, np.where(types == 'g', 'ab', types).astype(object), types)
+    sc = X.survivor_check(ref, types)
+    assert sc['ok'] and sc['draws_entries_are_TY_values'] and sc['groups_on_types_is_TY']
     info = X.group_info('RG75s0', types)
     assert info['group_seed'] == 0 and 0 < info['group_same_as_type'] < 1
     assert X.group_info('TY75', types) == {}
+    assert info['group_reading'].startswith('B')
+
+
+def test_reading_a_row_sums():
+    ref, types = _toy()
+    d = 0.75
+    rs = X.reading_a_row_sums(ref, types, d=d)
+    n = len(types)
+    assert len(rs) == n * len(X.GROUP_SEEDS) and set(rs['seed']) == set(X.GROUP_SEEDS)
+    assert np.allclose(rs['row_sum_pooled'], d * ref.sum() / n)
+    for s in X.GROUP_SEEDS:
+        g = X.random_groups(types, s)
+        A = np.zeros_like(ref)
+        for t in X.TYPES:
+            m = g == t
+            A[np.ix_(m, m)] = ref[m].sum() / m.sum() ** 2
+        r = rs[rs['seed'] == s].sort_values('kc')
+        assert np.allclose(r['row_sum_A'], d * A.sum(axis=1))
+        assert np.allclose(r['ratio'], d * A.sum(axis=1) / (d * ref.sum() / n))
+        assert list(r['group']) == list(g)
 
 
 @pytest.mark.parametrize('arm', list(X.ARMS) + ['TY50', 'Z0'])
@@ -72,7 +101,7 @@ def test_condition_arrays(arm):
         assert all(np.array_equal(c[k], e[k]) for k in ('on', 'off'))
     if arm == 'Z0':
         return
-    Xs = (X.group_survivor(ref, X.random_groups(types, X.seed_of(arm))) if X.form_of(arm) == 'RG'
+    Xs = (X.group_survivor(ref, X.random_groups(types, X.seed_of(arm)), types) if X.form_of(arm) == 'RG'
           else E125.survivor_array('TY', ref, types))
     assert np.allclose(c['on'], (1 - d) * ref + d * Xs)
     assert np.allclose(c['off'], d * Xs)
