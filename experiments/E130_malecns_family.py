@@ -1416,7 +1416,7 @@ def write_variants() -> pd.DataFrame:
         name = r['unit'] if r['kind'] == 'S1' else r['target']
         what = ("C2's factors on the calyx's base, both response rates held (step 1)" if r['kind'] == 'S1'
                 else f"refitted as E72's part B from the {r['start']} start (step 2)")
-        rows.append(dict(tag=r['tag'], variant=r['tag'], part='S1' if r['kind'] == 'S1' else 'fit', base='bouton', k=K,
+        rows.append(dict(tag=r['tag'], variant=r['tag'], part='S1' if r['kind'] == 'S1' else 'fit', base=f'bouton_{c}', k=K,
                          connectome=c, pn2kc_connections=kws.get('pn2kc_connections', 'hemibrain'),
                          multibouton_claws=kws['multibouton_claws'], target=name, kckc0=is_kckc0(name),
                          kind=f"C2's family on {SHORT[c]}{', KC-KC 0' if is_kckc0(name) else ''}: {what}",
@@ -1433,6 +1433,15 @@ def write_variants() -> pd.DataFrame:
     df.to_csv(out / 'variants.csv', index=False)
     if parts:
         pd.concat(parts, ignore_index=True).to_csv(out / 'model_pair_distances_long.csv', index=False)
+    # (for archive_tools/migrate_model_output_params.py: each variant's base kwargs by its `base` name)
+    _write_json(out / 'provenance.json', dict(
+        generated=_now(), host=_host(), script=SCRIPT, **H.code_commits(), kc_kc_tau=J.TAU, breadth_k=K,
+        bases={f'bouton_{c}': J.base_kws(None, connectome=c) for c in CALYCES},
+        base_params={c: calyx_base(c) for c in CALYCES},
+        note=("C2's family (E67) on each calyx: E10_joint_fit.py's bouton base with --connectome <calyx> (its kwargs under "
+              "bases), each calyx's own tuned base (base_params, bases.json), breadth-weighted APL->KC (exponent 2), the "
+              "calyx's KC-KC matrix (matrices/; the hemibrain's from olfsysm); per-run provenance in provenance_1_<host>.json "
+              "and the fits' provenance_<tag>.json")))
     return df
 
 
