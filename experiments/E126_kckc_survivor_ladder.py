@@ -679,7 +679,8 @@ def outcomes(classes: Mapping[str, dict], comps: Mapping[str, dict], g: Mapping)
     rg = {r: classes.get(r, {}) for r in STEP2_ARMS}
     step2_done = all(c.get('complete') for c in rg.values())
     ty_lower = [r for r in STEP2_ARMS if comps.get(f'{r}|TY75', {}).get('verdict') == 'TY75 lower']
-    rg_keep = {r: bool(c.get('keeps_gain')) and not c.get('corner') for r, c in rg.items()}
+    rg_keep = {r: (bool(c.get('keeps_gain')) and not c.get('corner')) if c.get('complete') else None
+               for r, c in rg.items()}
     out = dict(a=a, b=b, between_a_b=between, gate_open=bool(g.get('open')), step2_complete=step2_done,
                draws_keep_gain=rg_keep, ty75_lower_than=ty_lower,
                types_needed=bool(a and step2_done and (not all(rg_keep.values()) or bool(ty_lower))) if step2_done else None,
