@@ -1224,6 +1224,8 @@ Canonical experiment names for summary reports:
 | E126 | the ladder of the pooled survivor: one neuron per KC type along the dose and KC groups without type |
 | E127 | an expansive output at the PN boutons |
 | E128 | the flies' bouton totals by tuning group |
+| E129 | the inhibition that outlasts the block reduced to a static level |
+| E130 | the best family on the male CNS's two calyces |
 
 ## Model-output archive (data/model_outputs/ in the shared directory)
 
