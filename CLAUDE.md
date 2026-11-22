@@ -1222,6 +1222,7 @@ Canonical experiment names for summary reports:
 | E125 | the part of the inhibition among KCs that outlasts the block: a pooled neuron or a KC's own feedback in place of the matrix |
 | E126 | the ladder of the pooled survivor: one neuron per KC type along the dose and KC groups without type |
 | E127 | an expansive output at the PN boutons |
+| E128 | the flies' bouton totals by tuning group |
 
 ## Model-output archive (data/model_outputs/ in the shared directory)
 
