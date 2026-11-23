@@ -1290,6 +1290,12 @@ at each completion: `./venv/bin/python reports/build_since_yang_new_data.py` (fr
 reads only what build_summary.py made), then
 `./venv/bin/python reports/save_report_copy.py outputs/_artifacts/since_yang_new_data/index.html since_yang_new_data --current current-since-yang-new-data.html`.
 
+The Report tab's fifth view, "The last 1.5 weeks", is a concise summary of the experiments completed from 2026-11-12 to
+2026-11-23 and of the two then running (written at Tom's request, 2026-11-23), rebuilt only on request and not kept current
+at each completion: `./venv/bin/python reports/build_recent_weeks.py` (from reports/recent_weeks_template.md; reads only what
+build_summary.py made), then
+`./venv/bin/python reports/save_report_copy.py outputs/_artifacts/recent_weeks/index.html recent_weeks --current current-recent-weeks.html`.
+
 Every artifact page we publish (per-experiment summaries, add_to_reports pages) must also exist as a
 self-contained file under
 `<shared>/reports/`, the same document the artifact's share > export download gives. The

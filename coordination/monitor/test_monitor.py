@@ -501,10 +501,11 @@ def test_http(tmp_path):
     ('since-priority-changes', 'Since the priority changes', 'since_priority_changes', 'experiments',
         'since-yang-new-data'),
     ('since-yang-new-data', "Since Yang's new data", 'since_yang_new_data', 'since-priority-changes',
-        'questions-for-yang'),
+        'recent-weeks'),
+    ('recent-weeks', 'The last 1.5 weeks', 'recent_weeks', 'since-yang-new-data', 'questions-for-yang'),
 ])
 def test_digest_views(tmp_path, view, label, name, prev, nxt):
-    """The third and fourth Report views, the digest pages: their sub-tabs (in REPORTS' order) and frame
+    """The third to fifth Report views, the digest pages: their sub-tabs (in REPORTS' order) and frame
     sources come from REPORTS, their files are served and listed once a copy is saved, and the missing-file
     page shows until then."""
     make_shared(tmp_path, time.time())
@@ -522,9 +523,9 @@ def test_digest_views(tmp_path, view, label, name, prev, nxt):
             experiments=dict(src='/report/experiments', rep=1),
             monitor=dict(src='/monitor'),
             **{v: dict(src='/report/' + v, rep=1) for v in ('since-priority-changes', 'since-yang-new-data',
-                'questions-for-yang')})
+                'recent-weeks', 'questions-for-yang')})
         assert list(views) == ['summary', 'experiments', 'since-priority-changes', 'since-yang-new-data',
-            'questions-for-yang', 'monitor']
+            'recent-weeks', 'questions-for-yang', 'monitor']
         # no copy saved yet: the missing-file page, and nothing listed
         with pytest.raises(urllib.error.HTTPError) as e:
             urllib.request.urlopen(base + '/report/' + view)

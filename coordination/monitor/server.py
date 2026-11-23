@@ -792,6 +792,7 @@ REPORTS = {
     'experiments': ('Experiments and mechanisms', 'current-report.html'),
     'since-priority-changes': ('Since the priority changes', 'current-since-priority-changes.html'),
     'since-yang-new-data': ("Since Yang's new data", 'current-since-yang-new-data.html'),
+    'recent-weeks': ('The last 1.5 weeks', 'current-recent-weeks.html'),
     # its page has a form whose answers POST /api/answers saves (ANSWERS_DIR, below)
     'questions-for-yang': ('Questions for Yang', 'current-questions-for-yang.html'),
 }
