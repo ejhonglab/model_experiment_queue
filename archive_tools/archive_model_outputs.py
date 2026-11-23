@@ -67,6 +67,7 @@ PARAM_COLS = ['tag', 'variant', 'base', 'config', 'kind', 'point', 'part', 'seed
     'aplpn_hold', 'aplkc_flat', 'aplkc_flat_size', 'aplkc_flat_unit', 'stimuli',
     'apl_residual', 'apl_residual_fitted', 'apl_residual_lo', 'apl_residual_hi', 'off_wAPLKC_scale', 'off_wAPLPN_scale',
     'change', 'search', 'size', 'panel', 'connectome', 'pn2kc_connections', 'kckc_matrix', 'kckc_matrix_tag', 'off_kckc_scale',
+    'mbc1_inh', 'mbc1_tau', 'mbc1_thr', 'mbc1_pooled', 'mbc1_claws_only', 'wMBC1_scale',
     'init_from', 'init_thr', 'loss_variant', 'method', 'maxfev', 'kckc0', 'thr0_factor',
     'n_kcs', 'n_glomeruli', 'rate_on', 'rate_off', 'rate_acute_off', 'rate_homeo_full_off',
     'rate_homeo_data_off', 'error']
