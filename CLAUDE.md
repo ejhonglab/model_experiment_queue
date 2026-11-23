@@ -1511,6 +1511,16 @@ hemibrain refit under it scored slightly worse than the family's 'first' fit (E1
 part, all in the shape part): "keep argmax. it seems like it would make the most sense in general"; some metrics
 getting worse is not reason enough to go back. The queue's existing fits keep 'first', pinned.
 
+MB-C1 (Tom, 2026-11-23 13:37, in hal's terminal: "coordinate with viki and let that agent do what it thinks makes sense
+with MB-C1 too, including changes to connectomes table in claude.md"). Pratyush's hemibrain MB-C1 tables are part of his
+curated hemibrain and inside the rule: KC claw to and from MB-C1 (the 2025-12-09 export, whose claw IDs are the
+wiring's) and PN bouton to and from MB-C1 (2025-12-05), in olfsysm's pyolfsysm/data/from_pratyush/2025-12-05/. pyolfsysm
+reads them with `connectome_MBC1_weights` and `connectome_MBC1_KCKC_weights` (olfsysm ce3e20b, at Yang's request). The
+hemibrain has two MB-C1_R cells with about half the synapses each; by Yang's defaults (2026-11-23) the KC x KC matrix pools
+them as one neuron and counts all of each KC's calyx synapses with MB-C1, whatever their claw (about half are on the
+wiring's claws). Pratyush's male-CNS MBC1 tables (data/Male-CNS_Tom/) are inside the rule as his male CNS, but nothing
+loads them yet; the MB-C1 to APL tables are not read. Nothing else in the hold changes.
+
 ## Data from Remy and Yang
 
 If they are useful, there should be copies of Remy's KC data and some of Yang's KC data
