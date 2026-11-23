@@ -1506,7 +1506,10 @@ reference_data/make_connectome.py, built from Pratyush's male-CNS run 2026-10-25
 may be read, as a cross-check or as a source. Tom also said, in the same exchange, that olfsysm's `multibouton_claws`
 default becomes 'argmax' everywhere ("make it default for everything, and rebuild outputs for hong-data using this. set
 explicit flags in old code as needed to reproduce"), and: "also listen to yang for now in general on new defaults or
-olfsysm code changes" (until he says he wants to be in full charge again).
+olfsysm code changes" (until he says he wants to be in full charge again). On 2026-11-23 he kept 'argmax' after the
+hemibrain refit under it scored slightly worse than the family's 'first' fit (E130: +0.0025 on the calibrated pattern
+part, all in the shape part): "keep argmax. it seems like it would make the most sense in general"; some metrics
+getting worse is not reason enough to go back. The queue's existing fits keep 'first', pinned.
 
 ## Data from Remy and Yang
 
