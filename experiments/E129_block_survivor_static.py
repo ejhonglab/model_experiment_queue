@@ -16,7 +16,7 @@ matrix is replaced by the arm's inhibition, with one scale bisected (E69's `bise
 family's APL-off response count (`target_off`, the response rate 0.150). Any change of the per-pair APL effect then comes
 from the distances with APL off.
 
-The arms (tags S1_<arm>_<wiring> for steps 1a and 1b, S1c_Z_<wiring>, S2_<arm>_<wiring>):
+The arms (tags S1_<arm>_<wiring> for steps 1a and 1b, S1c_Z_<wiring>, S2_<arm>_<wiring>, S3_MB_<wiring>):
 - T (step 1a), the time course removed: a static inhibition (olfsysm's `ext_inh`, KCs x odors, subtracted from each
   KC's input while the odor is on, where KC-KC enters and in the same units, `E95_static_apl.set_ext_inh_ko`) equal to
   each KC's and odor's time-mean of the family's own KC-KC input with APL off, and the KC-KC scale 0.
@@ -32,11 +32,10 @@ The arms (tags S1_<arm>_<wiring> for steps 1a and 1b, S1c_Z_<wiring>, S2_<arm>_<
   APL scales (APL->KC, KC->APL, bouton->APL) bisected to the family's APL-on count, the threshold the fit's; each paired
   with the APL-off held run of G and of Y where that arm at least keeps the gain (kinds 'C50|G', 'C0|G', 'C50|Y',
   'C0|Y').
-- MB (step 3): MB-C1's counted synapses in the matrix's place with APL off. Refused without --tom-approved-mbc1 (Tom's
-  word on Pratyush's hemibrain MB-C1 tables, which the loader does not read); not implemented until then. Its reading,
-  fixed now: one neuron, its input from each KC and its output to each KC MB-C1's synapse counts summed over the KC's
-  claws, so the matrix in HB's place is the outer product (output x input) scaled to HB's total weight, filtered with
-  50 ms, its scale bisected as P's.
+- MB (step 3): MB-C1's counted synapses in the matrix's place with APL off, everything else as P (readings 11, 12). One
+  neuron, the hemibrain's two MB-C1_R cells pooled; its output to each KC and its input from each KC all of that KC's
+  calyx synapses with MB-C1, whatever their claw. The matrix in HB's place is their outer product (output x input)
+  scaled to HB's total weight, filtered with 50 ms, its scale bisected as P's.
 - References, read and not run: the family; KC-KC at zero (E110's part A, 'E110_A'); the step-0 preview 'Gpre'.
 
 Readings the entry leaves open, fixed here before any run:
@@ -87,6 +86,19 @@ Readings the entry leaves open, fixed here before any run:
     simulator sets it (fixed_thr + 2 x spontaneous input, read from olfsysm) and against fixed_thr; the share of KC x
     odor entries whose level is above the KC's threshold ('level_above_thr_share'), flagged as hard to defend when
     positive ('level_above_thr').
+11. Step 3's MB-C1, changed before any step-3 run. Until 2026-11-23 this docstring fixed each KC's counts "summed over
+    the KC's claws" and refused step 3 without Tom's word. Tom's word is recorded: on 2026-11-23 13:37 he left MB-C1 to
+    viki's session (CLAUDE.md, "Connectome data", dbe77ba), and Yang chose the reading in viki's terminal. Only about
+    half of MB-C1's calyx synapses with the wiring's KCs are on the wiring's claws (on the hemibrain wiring 56 % of its
+    output onto them and 53 % of their input to it), so the claws-only reading would drop the rest; and the hemibrain's
+    two MB-C1_R cells, with about half the synapses each, are pooled as one neuron.
+12. Step 3's matrix is therefore pyolfsysm's `connectome_MBC1_KCKC_weights(kc_ids, normalize=False)` with its
+    defaults (pooled=True, claws_only=False; olfsysm ce3e20b), for the model's KC IDs in the simulator's order
+    (`mbc1_counts`). It is checked equal to the outer product of `connectome_MBC1_weights`'s per-KC counts (rank 1,
+    nonnegative, the diagonal kept where HB's is 0) and scaled to HB's total weight as U is (`scaled_to_total`). The
+    eight wirings keep the hemibrain's 1732 KCs in one order (they re-draw the claws' inputs), so it is the same matrix
+    on each. The per-KC counts are saved beside each run (<tag>_mbc1_counts.parquet), their coverage (`mbc1_summary`)
+    goes in the runs table.
 
 Parts (CLI `--part`):
 - step0 (no simulation): the preview and the split; step0_preview.csv, step0_runs.csv, step0_preview.json,
@@ -96,15 +108,16 @@ Parts (CLI `--part`):
   inhibition at factor 1 with KC-KC 0 changes the counts (the static inhibition is read) and (iv) S's runner at factor
   1 changes them (the 1 s filter is read). identity_<host>_<lane>.json; step 1a refuses to run until every wiring has
   passed (`identity_passed`).
-- step1a, step1b, step1c, step2 (simulations, resumable, per lane `--wirings`; a point is claimed by mkdir of
+- step1a, step1b, step1c, step2, step3 (simulations, resumable, per lane `--wirings`; a point is claimed by mkdir of
   results/E129_block_survivor_static/claims/<tag>/ and skipped when done or claimed, `--reclaim` taking over a claim left
   by a process that died): rows in runs_<step>_<host>_<lane>.csv, provenance (`H.model_provenance` per point) in
   provenance_<step>_<host>_<lane>.json; runs saved locally (outputs/E129_block_survivor_static/<step>/) and in the
   model-output archive (data/model_outputs/E129_block_survivor_static/<step>/), static inhibitions beside
-  (<tag>_ext_inh.parquet). Steps 1b, 1c and 2 refuse unless verdict.json (from `score`) opens their gate.
-- step3: refused without --tom-approved-mbc1.
-- score (no simulation): readings.csv, runs.csv, verdict.json (classes, gates, comparisons, outcomes), comparison_table.md,
-  provenance_score.json.
+  (<tag>_ext_inh.parquet), MB-C1's per-KC counts beside step 3's (<tag>_mbc1_counts.parquet). Steps 1b, 1c and 2
+  refuse unless verdict.json (from `score`) opens their gate; steps 1a and 3 need only the identities.
+- score (no simulation): readings.csv, runs.csv, verdict.json (classes, gates, comparisons, outcomes, step 3's reading),
+  comparison_table.md, provenance_score.json. Step 3 is a description: MB gets a class, and MB against P and against S
+  by the "differ" rule; it opens no gate and enters none of the outcomes (a) to (f).
 - variants: variants.csv and model_pair_distances_long.csv (raw spike counts) for the archive.
 - plan: the points a lane would run.
 
@@ -114,15 +127,18 @@ told apart from another. No correlation chooses anything, no pair is weighted, a
 read.
 
 The holds (CLAUDE.md, "Connectome data (Tom, 2026-11-17)"): only the model's hemibrain wiring and E72's seven re-draws of
-it, and the model loader's hemibrain KC->KC counts and KC types (step 3's MB-C1 tables wait on Tom's word); no olfsysm
-change; nothing is published. The simulation parts import no module another session may be editing (E122 to E126 are
-read only by score, step0 and variants).
+it, the model loader's hemibrain KC->KC counts and KC types, and for step 3 Pratyush's hemibrain MB-C1 tables as
+pyolfsysm reads them (inside the rule since 2026-11-23, CLAUDE.md's MB-C1 paragraph); no olfsysm change; nothing is
+published. The simulation parts import no module another session may be editing (E122 to E126 are read only by score,
+step0 and variants).
 
 Usage (from the repository root; 16 threads, under nice; one lane per population):
     ./venv/bin/python -u experiments/E129_block_survivor_static.py --part step0
     OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 PYTHONUNBUFFERED=1 nice -n 10 ./venv/bin/python -u experiments/E129_block_survivor_static.py --part identity
     OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 PYTHONUNBUFFERED=1 nice -n 10 ./venv/bin/python -u experiments/E129_block_survivor_static.py --part step1a --wirings real P1 P2 M1
     OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 PYTHONUNBUFFERED=1 nice -n 10 ./venv/bin/python -u experiments/E129_block_survivor_static.py --part step1a --wirings P3 P4 M2 M3
+    OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 PYTHONUNBUFFERED=1 nice -n 10 ./venv/bin/python -u experiments/E129_block_survivor_static.py --part step3 --wirings real P1 P2 M1
+    OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 PYTHONUNBUFFERED=1 nice -n 10 ./venv/bin/python -u experiments/E129_block_survivor_static.py --part step3 --wirings P3 P4 M2 M3
     ./venv/bin/python -u experiments/E129_block_survivor_static.py --part score
 """
 from __future__ import annotations
@@ -151,9 +167,11 @@ POPS = ('S4', 'T4')
 TYPES = ('g', "a'b'", 'ab')
 TYPE_COL = {'g': 'g', "a'b'": 'apbp', 'ab': 'ab'}
 STATIC_ARMS = ('T', 'G', 'K', 'Y', 'KP')
-STEPS = {'step1a': ('G', 'T', 'P', 'S'), 'step1b': ('K', 'Y', 'KP'), 'step1c': ('Z',), 'step2': ('C50', 'C0')}
-TAG_PREFIX = {'step1a': 'S1', 'step1b': 'S1', 'step1c': 'S1c', 'step2': 'S2'}
+STEPS = {'step1a': ('G', 'T', 'P', 'S'), 'step1b': ('K', 'Y', 'KP'), 'step1c': ('Z',), 'step2': ('C50', 'C0'),
+         'step3': ('MB',)}
+TAG_PREFIX = {'step1a': 'S1', 'step1b': 'S1', 'step1c': 'S1c', 'step2': 'S2', 'step3': 'S3'}
 STEP_OF = {a: s for s, arms in STEPS.items() for a in arms}
+STEP3_ARMS = STEPS['step3']
 ON_DOSE = {'C50': 0.5, 'C0': 0.0}
 PAIR_WITH = ('G', 'Y')
 ARM_LABELS = {
@@ -167,8 +185,17 @@ ARM_LABELS = {
     'Z': 'no inhibition among KCs and no static level with APL off, not bisected (the acute reading)',
     'C50': "APL on with the hemibrain matrix at 0.5 of the fit's KC-KC scale, the tied APL scales re-held",
     'C0': 'APL on with KC-KC 0, the tied APL scales re-held',
+    'MB': ("MB-C1's counted synapses in the matrix's place with APL off (the two MB-C1_R cells pooled, all of each "
+           "KC's calyx synapses), scaled to its total weight, 50 ms"),
     'Gpre': "preview: the family's APL-on runs with E110 part A's APL-off runs (KC-KC 0, threshold re-held)",
 }
+# the KC-KC matrix with APL off of each runner kind (variants.csv's kckc_matrix); static arms and Z have KC-KC 0
+OFF_MATRIX = {'HB': 'hemibrain (connectome_KCKC_weights), 50 ms', 'U': "E122's uniform neuron U (HB's total), 50 ms",
+              'slow': 'hemibrain (connectome_KCKC_weights), 1 s',
+              'MB': ("MB-C1 (connectome_MBC1_KCKC_weights, pooled, all calyx synapses, normalize=False) scaled to HB's "
+                     "total, 50 ms")}
+MBC1_KWS = dict(pooled=True, claws_only=False, normalize=False)
+MBC1_SOURCE = 'pyolfsysm.mb_model.connectome_MBC1_KCKC_weights(kc_ids, pooled=True, claws_only=False, normalize=False)'
 PULSE_S = 0.5
 SLOW_TAU_S = 1.0
 KP_SEED = 0
@@ -184,7 +211,7 @@ REFS = ('family', 'E110_A', 'Gpre')
 READOUTS = ('raw', 'cal')
 PARAM_KEYS = E83.PARAM_KEYS
 COMPARISONS = (('G', 'T'), ('P', 'S'), ('T', 'P'), ('T', 'S'), ('G', 'P'), ('G', 'S'), ('K', 'Y'), ('K', 'KP'),
-               ('Y', 'G'), ('K', 'T'))
+               ('Y', 'G'), ('K', 'T'), ('MB', 'P'), ('MB', 'S'))
 _CACHE: dict = {}
 
 
@@ -257,6 +284,60 @@ def uniform_neuron(ref: np.ndarray) -> np.ndarray:
     """E122's U: every entry total / N^2 (the diagonal included), `ref`'s total weight."""
     n = ref.shape[0]
     return np.full((n, n), float(ref.sum()) / n / n)
+
+
+def mbc1_counts(kc_index: pd.Index) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Step 3's MB-C1 as a KC x KC matrix of counted synapses for the model's KCs, in their order (readings 11, 12).
+
+    The matrix is pyolfsysm's `connectome_MBC1_KCKC_weights(ids, **MBC1_KWS)`: the two MB-C1_R cells pooled, all of
+    each KC's calyx synapses with MB-C1, products of counts (post x pre). It is checked to be exactly the outer product
+    of `connectome_MBC1_weights`'s per-KC counts, which are returned beside it.
+
+    Returns:
+        (the matrix, post x pre, indexed by the KC IDs; the per-KC counts, indexed as `kc_index`, columns 'from_mbc1'
+        (MB-C1 -> KC synapses) and 'to_mbc1' (KC -> MB-C1 synapses)).
+    """
+    from pyolfsysm.mb_model import connectome_MBC1_KCKC_weights, connectome_MBC1_weights
+    ids = pd.Index(kc_index.get_level_values(H.KC_ID_LEVEL))
+    M = connectome_MBC1_KCKC_weights(ids, **MBC1_KWS)
+    if not all(np.array_equal(x.to_numpy(), ids.to_numpy()) for x in (M.index, M.columns)):
+        raise RuntimeError("the MB-C1 matrix is not in the model KCs' order")
+    w_out, w_in, _, _ = connectome_MBC1_weights()
+    counts = pd.DataFrame({'from_mbc1': w_out.reindex(ids).fillna(0.0).to_numpy(dtype=float),
+                           'to_mbc1': w_in.reindex(ids).fillna(0.0).to_numpy(dtype=float)}, index=kc_index)
+    if not np.array_equal(M.to_numpy(dtype=float), np.outer(counts['from_mbc1'], counts['to_mbc1'])):
+        raise RuntimeError("the MB-C1 matrix is not the outer product of MB-C1's per-KC counts (pooled, all calyx "
+                           "synapses)")
+    return M, counts
+
+
+def scaled_to_total(A: np.ndarray, ref: np.ndarray) -> np.ndarray:
+    """`A` (nonnegative, a positive total) scaled to `ref`'s total weight, as U has HB's (reading 12)."""
+    A = np.asarray(A, dtype=float)
+    tot = float(A.sum())
+    if not (np.isfinite(tot) and tot > 0) or (A < 0).any():
+        raise ValueError(f'a matrix with total {tot} and min {A.min()} cannot be scaled')
+    return A * (float(np.asarray(ref, dtype=float).sum()) / tot)
+
+
+def mbc1_summary(counts: pd.DataFrame, types: np.ndarray) -> dict:
+    """The coverage of step 3's matrix on the model's KCs, from the per-KC counts (`mbc1_counts`): the number of KCs
+    with output from MB-C1 ('n_kcs_from'), with input to it ('n_kcs_to'), either, both and neither; the synapse totals;
+    and per KC type its KCs' share of the matrix's weight onto them ('share_onto_<type>', the row sums, proportional to
+    'from_mbc1') and from them ('share_from_<type>', the column sums, proportional to 'to_mbc1')."""
+    o = counts['from_mbc1'].to_numpy(dtype=float)
+    i = counts['to_mbc1'].to_numpy(dtype=float)
+    types = np.asarray(types, dtype=object)
+    if types.shape != o.shape:
+        raise ValueError(f'{types.shape} types for {o.size} KCs')
+    row = dict(n_kcs=int(o.size), n_kcs_from=int((o > 0).sum()), n_kcs_to=int((i > 0).sum()),
+               n_kcs_any=int(((o > 0) | (i > 0)).sum()), n_kcs_both=int(((o > 0) & (i > 0)).sum()),
+               n_kcs_none=int(((o == 0) & (i == 0)).sum()), synapses_from=float(o.sum()), synapses_to=float(i.sum()))
+    for t in TYPES:
+        m = types == t
+        row[f'share_onto_{TYPE_COL[t]}'] = float(o[m].sum() / o.sum()) if o.sum() > 0 else np.nan
+        row[f'share_from_{TYPE_COL[t]}'] = float(i[m].sum() / i.sum()) if i.sum() > 0 else np.nan
+    return row
 
 
 def sha256_array(a: np.ndarray) -> str:
@@ -427,15 +508,18 @@ def _preload() -> None:
 
 class OffRunner:
     """The APL-off condition of one wiring at its fit (the module docstring), on one of E83's simulators: kind 'HB' (the
-    hemibrain matrix as the family has it, 50 ms), 'U' (E122's uniform neuron in its place, 50 ms) or 'slow' (the
-    hemibrain matrix, `kc_kc_tau` SLOW_TAU_S). `run(kckc_factor, ext)`: APL->KC and APL->bouton 0, the KC-KC scale the
-    fit's times `kckc_factor`, the static inhibition `ext` (KCs x odors in the outputs' order; None for none) set for
-    that run only; every other parameter the fit's.
+    hemibrain matrix as the family has it, 50 ms), 'U' (E122's uniform neuron in its place, 50 ms), 'slow' (the
+    hemibrain matrix, `kc_kc_tau` SLOW_TAU_S) or 'MB' (MB-C1's counted synapses in its place, scaled to its total
+    weight, 50 ms; readings 11, 12). `run(kckc_factor, ext)`: APL->KC and APL->bouton 0, the KC-KC scale the fit's times
+    `kckc_factor`, the static inhibition `ext` (KCs x odors in the outputs' order; None for none) set for that run only;
+    every other parameter the fit's.
 
     Attributes: w, kind, p, saved, target_off, size, kc_index, types, Tm (T's base, reading 1), tau, matrix_sha256,
-    matrix_max_diff (the simulator's KC-KC matrix against the expected one), thr (each KC's threshold, after a run)."""
+    matrix_max_diff (the simulator's KC-KC matrix against the expected one), thr (each KC's threshold, after a run);
+    for kind 'MB' also mbc1_kc_counts (`mbc1_counts`'s per-KC counts) and mbc1 (`mbc1_summary`, with 'scale_to_hb' the
+    factor from counts to the matrix and 'counts_sha256'), None otherwise."""
 
-    KINDS = ('HB', 'U', 'slow')
+    KINDS = ('HB', 'U', 'slow', 'MB')
 
     def __init__(self, w: str, kind: str = 'HB'):
         from experiments import E10_joint_fit as J
@@ -452,9 +536,18 @@ class OffRunner:
         HB = hemibrain_matrix(self.kc_index)
         ref = HB.to_numpy(dtype=float)
         expected, extra = ref, None
+        self.mbc1_kc_counts, self.mbc1 = None, None
         if kind == 'U':
             expected = uniform_neuron(ref)
             extra = dict(_wKCKC=pd.DataFrame(expected, index=HB.index, columns=HB.columns))
+        elif kind == 'MB':
+            Mc, counts = mbc1_counts(self.kc_index)
+            A = Mc.to_numpy(dtype=float)
+            expected = scaled_to_total(A, ref)
+            extra = dict(_wKCKC=pd.DataFrame(expected, index=HB.index, columns=HB.columns))
+            self.mbc1_kc_counts = counts
+            self.mbc1 = dict(mbc1_summary(counts, self.types), scale_to_hb=float(ref.sum() / A.sum()),
+                             counts_sha256=sha256_array(counts.to_numpy(dtype=float)))
         self.sim, self.info = E83.build_simulator(w, extra_kws=extra)
         cells = self.info['cells']
         self.mp, self.rv = cells['mp'].cell_contents, cells['rv'].cell_contents
@@ -495,13 +588,13 @@ class OffRunner:
 
     def arm_fn(self, arm: str) -> Tuple[Callable[[float], Tuple[pd.DataFrame, pd.DataFrame]], Optional[np.ndarray]]:
         """(f -> outputs, the static base or None) of an arm on this runner."""
-        need = {'P': 'U', 'S': 'slow'}.get(arm, 'HB')
+        need = runner_kind(arm)
         if need != self.kind:
             raise ValueError(f'arm {arm} needs a {need} runner, not {self.kind}')
         if arm in STATIC_ARMS:
             base = static_base(arm, self.Tm, self.types)
             return (lambda f: self.run(0.0, float(f) * base)), base
-        if arm in ('P', 'S'):
+        if arm in ('P', 'S', 'MB'):
             return (lambda f: self.run(float(f), None)), None
         if arm == 'Z':
             return (lambda f: self.run(0.0, None)), None
@@ -509,7 +602,7 @@ class OffRunner:
 
 
 def runner_kind(arm: str) -> str:
-    return {'P': 'U', 'S': 'slow', 'C50': 'on', 'C0': 'on'}.get(arm, 'HB')
+    return {'P': 'U', 'S': 'slow', 'MB': 'MB', 'C50': 'on', 'C0': 'on'}.get(arm, 'HB')
 
 
 def held_off(runner: OffRunner, arm: str, label: str) -> dict:
@@ -560,14 +653,17 @@ def held_on(w: str, dose: float, label: str) -> dict:
 # ---------------------------------------------------------------------------
 # saving and loading runs
 
-def save_run(step: str, tag: str, o: Mapping[str, tuple], ext: Optional[pd.DataFrame] = None) -> None:
-    """The run's conditions (and the static inhibition), locally and in the model-output archive."""
+def save_run(step: str, tag: str, o: Mapping[str, tuple], ext: Optional[pd.DataFrame] = None,
+             extras: Optional[Mapping[str, pd.DataFrame]] = None) -> None:
+    """The run's conditions (and the static inhibition, and any `extras` as <tag>_<name>.parquet), locally and in the
+    model-output archive."""
     for d in (local_dir(step), archive_dir() / step):
         d.mkdir(parents=True, exist_ok=True)
         items = [(f'{tag}_{cc}_{k}.parquet', x) for c, cc in (('on', 'on'), ('off', 'acute_off')) if c in o
                  for k, x in (('responses', o[c][0]), ('spike_counts', o[c][1]))]
         if ext is not None:
             items.append((f'{tag}_ext_inh.parquet', ext))
+        items += [(f'{tag}_{name}.parquet', x) for name, x in (extras or {}).items()]
         for name, x in items:
             p = d / name
             tmp = p.with_name(f'.{p.name}.{os.getpid()}.tmp')
@@ -798,7 +894,8 @@ def planned(step: str, wirings: Sequence[str] = WIRINGS, arms: Optional[Sequence
 
 
 def step_allowed(step: str) -> Tuple[bool, str]:
-    if step == 'step1a':
+    """Steps 1a and 3 need only the identities; steps 1b, 1c and 2 their gate in verdict.json."""
+    if step in ('step1a', 'step3'):
         return identity_passed(), 'the identities have not passed on every wiring (run --part identity)'
     g = gates_from_verdict()
     key = {'step1b': 'step1b', 'step1c': 'step1c', 'step2': 'step2'}[step]
@@ -827,13 +924,15 @@ def run_row(step: str, tag: str, arm: str, w: str, res: dict, o: Mapping[str, tu
         row.pop('kind', None)
         row.update(level_realism(res['ext'], res['thr'], runner.types, float(P['p']['fixed_thr'])))
         row['thr_p50'] = float(np.median(res['thr']))
+        if runner.mbc1 is not None:
+            row.update({f'mbc1_{k}': v for k, v in runner.mbc1.items()})
     row.update(cc)
     return row
 
 
 def part_runs(step: str, wirings: Sequence[str] = WIRINGS, lane: Optional[str] = None, reclaim: bool = False,
               arms: Optional[Sequence[str]] = None) -> pd.DataFrame:
-    """Steps 1a, 1b, 1c and 2 (the module docstring), resumable, one point claimed at a time."""
+    """Steps 1a, 1b, 1c, 2 and 3 (the module docstring), resumable, one point claimed at a time."""
     from experiments import E108_paa_extrapolation as E108
     ok, why = step_allowed(step)
     if not ok:
@@ -856,7 +955,7 @@ def part_runs(step: str, wirings: Sequence[str] = WIRINGS, lane: Optional[str] =
         try:
             E108._still_clean(cc)
             P = E83.wiring_parts(w)
-            ext_df = None
+            ext_df, extras = None, None
             if step == 'step2':
                 if runner is not None:
                     runner = None
@@ -875,20 +974,25 @@ def part_runs(step: str, wirings: Sequence[str] = WIRINGS, lane: Optional[str] =
                 o = {'on': P['saved']['on'], 'off': res['off']}
                 if res['ext'] is not None:
                     ext_df = pd.DataFrame(res['ext'], index=runner.kc_index, columns=P['saved']['off'][1].columns)
+                if runner.mbc1_kc_counts is not None:
+                    extras = {'mbc1_counts': runner.mbc1_kc_counts}
                 change = (f"arm {arm} ({ARM_LABELS[arm]}): the APL-on run the family's saved one; with APL off "
                           + ('the static inhibition (ext_inh) factor x its base, KC-KC 0' if arm in STATIC_ARMS else
                              'KC-KC 0 and no static inhibition, not bisected' if arm == 'Z' else
                              f'the KC-KC scale factor x the fit\'s ({runner.kind} matrix, tau {runner.tau:g} s)')
                           + ", bisected to the family's APL-off count; threshold and the rest the fit's")
-            save_run(step, tag, o, ext_df)
+            save_run(step, tag, o, ext_df, extras)
             row = run_row(step, tag, arm, w, res, o, cc, lane, runner)
             E83._append_row(table, row)
             prov = _read_json(prov_path) or dict(part=step, lane=lane, script=SCRIPT, points={})
-            prov['points'][tag] = dict(H.model_provenance(orn_deltas=P['orn']), held=dict(
+            held = dict(
                 change=change, factor=res['factor'], fit=f"{P['folder']}:{P['tag']}",
                 kckc_matrix_sha256=None if runner is None or step == 'step2' else runner.matrix_sha256,
                 kc_kc_tau_off=None if runner is None or step == 'step2' else runner.tau,
-                bracket=list(E83.APL_BRACKET if step == 'step2' else SCALE_BRACKET), history=res['history']))
+                bracket=list(E83.APL_BRACKET if step == 'step2' else SCALE_BRACKET), history=res['history'])
+            if step != 'step2' and runner is not None and runner.mbc1 is not None:
+                held['mbc1'] = dict(runner.mbc1, **mbc1_provenance())
+            prov['points'][tag] = dict(H.model_provenance(orn_deltas=P['orn']), held=held)
             _write_json(prov_path, prov)
             print(f"E129 {tag}: factor {res['factor']:.4f} ({res.get('n_off', res.get('n_on'))}/"
                   f"{res.get('target_off', res.get('target_on'))}); corner {res['corner']}; bands {row.get('in_bands')}; "
@@ -901,12 +1005,15 @@ def part_runs(step: str, wirings: Sequence[str] = WIRINGS, lane: Optional[str] =
     return runs_table(step)
 
 
-def part_step3(tom_approved_mbc1: bool = False) -> None:
-    """Step 3, refused without Tom's word on the MB-C1 tables (the module docstring fixes its reading)."""
-    if not tom_approved_mbc1:
-        raise SystemExit("E129 step 3 waits on Tom's word on Pratyush's hemibrain MB-C1 tables (--tom-approved-mbc1)")
-    raise NotImplementedError('E129 step 3: written once Tom has approved the MB-C1 tables (KCclaw-to-MBC1unit and '
-                              'MBC1unit-to-KCclaw of run 2025-12-05); their reading is fixed in the module docstring')
+def mbc1_provenance() -> dict:
+    """Where step 3's matrix comes from: the function and its arguments (`MBC1_SOURCE`), and the two tables it reads
+    (pyolfsysm's `mbc1_synapse_paths`, file names and sha256)."""
+    import hashlib
+    from pyolfsysm.mb_model import mbc1_synapse_paths
+    tables = {k: dict(file=Path(mbc1_synapse_paths[k]).name,
+                      sha256=hashlib.sha256(Path(mbc1_synapse_paths[k]).read_bytes()).hexdigest())
+              for k in ('KC>MBC1', 'MBC1>KC')}
+    return dict(source=MBC1_SOURCE, tables=tables)
 
 
 # ---------------------------------------------------------------------------
@@ -1063,8 +1170,13 @@ def gates(classes: Mapping[str, dict]) -> dict:
     return out
 
 
+def _is_step3(comparison: str) -> bool:
+    return bool(set(comparison.split('|')) & set(STEP3_ARMS))
+
+
 def outcomes(classes: Mapping[str, dict], comps: Mapping[str, dict]) -> dict:
-    """The entry's outcomes as flags (the module docstring); None where an arm they need is not run."""
+    """The entry's outcomes as flags (the module docstring); None where an arm they need is not run. Step 3's arm and
+    its comparisons enter none of them (`step3_reading`)."""
     def done(a):
         return bool(classes.get(a, {}).get('complete'))
 
@@ -1074,7 +1186,8 @@ def outcomes(classes: Mapping[str, dict], comps: Mapping[str, dict]) -> dict:
     def keeps(a):
         return bool(classes.get(a, {}).get('at_least_keeps_gain'))
 
-    arms = [a for a in classes if a not in REFS]
+    arms = [a for a in classes if a not in REFS + STEP3_ARMS]
+    comps = {k: c for k, c in comps.items() if not _is_step3(k)}
     told = [k for k, c in comps.items() if c.get('verdict', '').endswith('lower')]
     return dict(
         a=eq('G') if done('G') else None,
@@ -1084,6 +1197,22 @@ def outcomes(classes: Mapping[str, dict], comps: Mapping[str, dict]) -> dict:
         e=comps.get('S|P', {}).get('verdict'),
         f=bool(any(classes[a].get('corner') for a in arms if done(a)) or (bool(comps) and not told)),
         told_apart=told)
+
+
+def step3_reading(classes: Mapping[str, dict], comps: Mapping[str, dict], runs: pd.DataFrame) -> dict:
+    """Step 3's reading, a description: MB's class (reading 6, its corners included), the gain it keeps, its mean
+    factor, MB against P and against S by E126's "differ" rule (`comparisons` 'MB|P', 'MB|S'), and the MB-C1 matrix's
+    coverage (`mbc1_summary`, the same on every wiring). It opens no gate and enters no outcome."""
+    c = classes.get('MB', {})
+    if not c.get('complete'):
+        return dict(complete=False)
+    sub = runs[runs['kind'] == 'MB']
+    cov = {k[len('mbc1_'):]: (lambda v: v.item() if hasattr(v, 'item') else v)(sub[k].iloc[0])
+           for k in sub.columns if k.startswith('mbc1_') and len(sub)}
+    return dict(complete=True, cls=c.get('cls'), at_least_keeps_gain=bool(c.get('at_least_keeps_gain')),
+                corner=bool(c.get('corner')), corner_wirings=c.get('corner_wirings', []), gain_kept=c.get('gain_kept'),
+                factor_mean=c.get('factor_mean'),
+                differ={k: comps[k].get('verdict') for k in ('MB|P', 'MB|S') if k in comps}, mbc1=cov)
 
 
 def half_way_check(rd: pd.DataFrame) -> dict:
@@ -1194,6 +1323,7 @@ def score() -> dict:
              g_minus_gpre=g_minus, g_matches_preview=(None if g_minus is None else
                                                       bool(all(abs(x) <= PREVIEW_TOL for x in g_minus.values()))),
              acute=acute_table(runs),
+             **({'step3': step3_reading(classes, comps, runs)} if 'MB' in kinds else {}),
              rules=dict(within=WITHIN, corner_wirings_max=CORNER_WIRINGS_MAX, differ_wirings=DIFFER_WIRINGS,
                         rate_tol=RATE_TOL, scale_bracket=list(SCALE_BRACKET), scale_step=SCALE_STEP,
                         targets=list(targets()), populations=list(POPS)),
@@ -1204,6 +1334,16 @@ def score() -> dict:
     print(json.dumps(dict(classes={a: c.get('cls') for a, c in classes.items()}, gates=g,
                           outcomes=v['outcomes']), default=str), flush=True)
     return v
+
+
+def kckc_matrix_of(kind: str, tag: str) -> str:
+    """variants.csv's kckc_matrix: the KC-KC matrix with APL on (the hemibrain's, at the variant's wKCKC_scale) and with
+    APL off (`OFF_MATRIX` of the APL-off arm's runner; 'none' for the static arms and Z, whose KC-KC scale is 0)."""
+    off_arm = kind.split('|')[-1]
+    off = 'none (KC-KC 0)' if off_arm in STATIC_ARMS + ('Z',) else OFF_MATRIX[runner_kind(off_arm)]
+    if off_arm in STEP3_ARMS:
+        off += f'; per-KC counts {STEP_OF[off_arm]}/{tag}_mbc1_counts.parquet'
+    return f'on: {OFF_MATRIX["HB"]}; off: {off}'
 
 
 def write_variants() -> pd.DataFrame:
@@ -1225,7 +1365,8 @@ def write_variants() -> pd.DataFrame:
                          kc_kc_tau_off=getattr(r, 'kc_kc_tau_off', np.nan), level_mean=getattr(r, 'level_mean', np.nan),
                          rate_on=r.rate_on, rate_off=r.rate_off, max_count_on=r.max_count_on,
                          max_count_off=r.max_count_off, realism_flag=r.realism_flag, corner=bool(r.corner),
-                         subdir=STEP_OF.get(arm)))
+                         subdir=STEP_OF.get(arm), kckc_matrix=kckc_matrix_of(r.kind, r.tag),
+                         off_kckc_scale=getattr(r, 'kckc_scale_off', np.nan)))
         parts.append(pd.concat({(rows[-1]['variant'], 'on'): H.model_rdms(*o['on'])[H.PRIMARY_MODEL_RDM],
                                 (rows[-1]['variant'], 'acute_off'): H.model_rdms(*o['off'])[H.PRIMARY_MODEL_RDM]},
                                names=['tag', 'condition', 'odor_a', 'odor_b']).rename('distance').reset_index())
@@ -1236,16 +1377,17 @@ def write_variants() -> pd.DataFrame:
     return df
 
 
-def main() -> None:
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
-    ap.add_argument('--part', required=True, choices=('step0', 'identity') + tuple(STEPS) + ('step3', 'score', 'variants',
-                                                                                             'plan'))
+    ap.add_argument('--part', required=True, choices=('step0', 'identity') + tuple(STEPS) + ('score', 'variants', 'plan'))
     ap.add_argument('--wirings', nargs='+', default=None, choices=list(WIRINGS))
     ap.add_argument('--lane', default=None, help='the lane name in the tables (default the wirings joined by -)')
     ap.add_argument('--reclaim', action='store_true', help='take over claims left by a process that died')
-    ap.add_argument('--tom-approved-mbc1', action='store_true',
-                    help="(step3) Tom has approved Pratyush's hemibrain MB-C1 tables for this experiment")
-    a = ap.parse_args()
+    return ap
+
+
+def main() -> None:
+    a = build_parser().parse_args()
     ws = list(a.wirings or WIRINGS)
     if a.part == 'step0':
         part_step0()
@@ -1253,8 +1395,6 @@ def main() -> None:
         part_identity(ws, a.lane)
     elif a.part in STEPS:
         part_runs(a.part, ws, a.lane, a.reclaim)
-    elif a.part == 'step3':
-        part_step3(a.tom_approved_mbc1)
     elif a.part == 'score':
         score()
     elif a.part == 'variants':

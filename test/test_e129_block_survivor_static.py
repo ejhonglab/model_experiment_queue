@@ -4,7 +4,9 @@ experiments/E129_block_survivor_static.py), on made-up data: the time-mean of th
 olfsysm's filter), the static arms' bases (reading 2), the split (reading 9), the realism of a level, the runner's
 identities on a toy simulator with olfsysm's KC equations (the hemibrain matrix at scale 1 reproduces the saved APL-off
 run exactly; a static inhibition of zeros changes nothing; the odor order of the static inhibition), the bisection of one
-scale with its corner rule, the lanes and claims, and the classes, "differ" rule, gates and outcomes. No model
+scale with its corner rule, the lanes and claims, and the classes, "differ" rule, gates and outcomes. Step 3: MB-C1's
+matrix (olfsysm's loader on hemibrain KC IDs, skipped without it; KC order, rank 1, nonnegative, scaled to HB's total),
+its runner on the toy, its lanes, its reading, and that it changes none of step 1's planning or outcomes. No model
 simulation."""
 
 import types as _types
@@ -233,8 +235,23 @@ def toy(monkeypatch):
     monkeypatch.setattr(X.E83, 'wiring_parts', lambda w: parts)
     monkeypatch.setattr(X.E83, 'build_simulator', build)
     monkeypatch.setattr(X, 'hemibrain_matrix', lambda idx: hb.copy())
+    monkeypatch.setattr(X, 'mbc1_counts', lambda idx: _toy_mbc1(idx))
     monkeypatch.setattr(X, '_preload', lambda: None)
     return m, parts
+
+
+def _toy_mbc1(kc_index):
+    """A made-up MB-C1 for the toy's KCs: output mostly onto the gamma KCs, input from a few KCs of every type, some
+    KCs with neither; the matrix their outer product, as `mbc1_counts` returns it."""
+    types = X.kc_types_of(kc_index)
+    n = len(types)
+    rng = np.random.default_rng(7)
+    o = np.where(types == 'g', rng.poisson(8.0, n), rng.poisson(1.0, n)).astype(float)
+    i = rng.poisson(2.0, n).astype(float)
+    o[-3:], i[-3:] = 0.0, 0.0
+    ids = pd.Index(kc_index.get_level_values(H.KC_ID_LEVEL))
+    M = pd.DataFrame(np.outer(o, i), index=ids, columns=ids)
+    return M, pd.DataFrame({'from_mbc1': o, 'to_mbc1': i}, index=kc_index)
 
 
 def test_runner_identities(toy):
@@ -286,6 +303,115 @@ def test_runner_kinds(toy):
         X.OffRunner('real', 'nope')
 
 
+def test_runner_mb(toy):
+    """Step 3's runner: MB-C1's counts in HB's place, scaled to HB's total weight (rank 1, nonnegative, in the KCs'
+    order), 50 ms; its scale bisected as P's; its coverage beside."""
+    m, parts = toy
+    ref = _toy_matrix(m.types, 5)
+    M, counts = _toy_mbc1(m.idx)
+    R = X.OffRunner('real', 'MB')
+    assert R.kind == 'MB' and R.tau == pytest.approx(0.05)
+    out = R.run(1.0)
+    W = np.asarray(m.W, dtype=float)                                       # the matrix the simulator ran with
+    assert np.allclose(W, M.to_numpy() * ref.sum() / M.to_numpy().sum())
+    assert W.sum() == pytest.approx(ref.sum()) and (W >= 0).all() and np.linalg.matrix_rank(W) == 1
+    assert R.matrix_sha256 == X.sha256_array(W)
+    assert (out[1].to_numpy() != parts['saved']['off'][1].to_numpy()).any()
+    assert R.mbc1_kc_counts.index.equals(R.kc_index)
+    assert R.mbc1['n_kcs'] == m.n and R.mbc1['n_kcs_none'] == 3
+    assert R.mbc1['scale_to_hb'] == pytest.approx(ref.sum() / M.to_numpy().sum())
+    assert R.mbc1['share_onto_g'] > 0.5
+    with pytest.raises(ValueError):
+        R.arm_fn('P')                                                       # P on the MB runner
+    with pytest.raises(ValueError):
+        X.OffRunner('real', 'HB').arm_fn('MB')
+    res = X.held_off(R, 'MB', 'toy MB')
+    assert res['ext'] is None and res['factor'] > 0
+    assert res['params_off']['wKCKC_scale'] == pytest.approx(3.0 * res['factor'])
+    assert res['params_off']['wAPLKC_scale'] == 0.0 and res['params_off']['wAPLPN_scale'] == 0.0
+    assert res['corner'] == (res['at_bound'] or not res['held'])
+
+
+def _mbc1_or_skip():
+    mb = pytest.importorskip('pyolfsysm.mb_model')
+    if not (hasattr(mb, 'connectome_MBC1_KCKC_weights') and all(p.exists() for p in mb.mbc1_synapse_paths.values())):
+        pytest.skip("pyolfsysm without the hemibrain MB-C1 loader or its tables (olfsysm >= ce3e20b)")
+    return mb
+
+
+def test_mbc1_counts_hemibrain():
+    """`mbc1_counts` on hemibrain KC IDs in a shuffled order: olfsysm's pooled all-synapse matrix (its defaults,
+    normalize=False), in the KCs' order on both axes, the outer product of the per-KC counts (rank 1, nonnegative),
+    zero for KCs without MB-C1; scaled to a reference's total."""
+    mb = _mbc1_or_skip()
+    w_out, w_in, _, _ = mb.connectome_MBC1_weights()
+    with_mb = w_out.index.union(w_in.index)
+    others = mb.connectome_KCKC_weights(normalize=False).index.difference(with_mb)[:20]
+    assert len(others) == 20
+    rng = np.random.default_rng(0)
+    ids = np.concatenate([with_mb.to_numpy()[:200], others.to_numpy()])
+    ids = ids[rng.permutation(ids.size)]
+    idx = pd.MultiIndex.from_arrays([ids, rng.choice(list(X.TYPES), ids.size)], names=[H.KC_ID_LEVEL, H.KC_TYPE_LEVEL])
+    M, counts = X.mbc1_counts(idx)
+    assert np.array_equal(M.index.to_numpy(), ids) and np.array_equal(M.columns.to_numpy(), ids)
+    assert counts.index.equals(idx)
+    A = M.to_numpy(dtype=float)
+    assert (A >= 0).all() and np.linalg.matrix_rank(A) == 1
+    assert np.array_equal(counts['from_mbc1'].to_numpy(), w_out.reindex(ids).fillna(0).to_numpy())
+    assert np.array_equal(counts['to_mbc1'].to_numpy(), w_in.reindex(ids).fillna(0).to_numpy())
+    no = np.isin(ids, others)
+    assert not A[no].any() and not A[:, no].any()
+    assert M.equals(mb.connectome_MBC1_KCKC_weights(pd.Index(ids), normalize=False))
+    assert M.equals(mb.connectome_MBC1_KCKC_weights(pd.Index(ids), pooled=True, claws_only=False, normalize=False))
+    ref = np.random.default_rng(1).random((ids.size, ids.size))
+    S = X.scaled_to_total(A, ref)
+    assert S.sum() == pytest.approx(ref.sum()) and np.linalg.matrix_rank(S) == 1 and (S >= 0).all()
+    s = X.mbc1_summary(counts, X.kc_types_of(idx))
+    assert s['n_kcs_none'] == 20 and s['n_kcs_any'] == 200 and s['n_kcs'] == 220
+
+
+def test_scaled_to_total_and_summary():
+    ref = np.full((3, 3), 2.0)
+    A = np.outer([1.0, 0.0, 3.0], [2.0, 1.0, 0.0])
+    S = X.scaled_to_total(A, ref)
+    assert S.sum() == pytest.approx(18.0) and np.allclose(S, A * 18.0 / A.sum())
+    for bad in (np.zeros((3, 3)), -A):
+        with pytest.raises(ValueError):
+            X.scaled_to_total(bad, ref)
+    types = np.array(['g', 'ab', 'g'], dtype=object)
+    c = pd.DataFrame({'from_mbc1': [1.0, 0.0, 3.0], 'to_mbc1': [2.0, 1.0, 0.0]})
+    s = X.mbc1_summary(c, types)
+    assert (s['n_kcs_from'], s['n_kcs_to'], s['n_kcs_any'], s['n_kcs_both'], s['n_kcs_none']) == (2, 2, 3, 1, 0)
+    assert s['share_onto_g'] == 1.0 and s['share_onto_ab'] == 0.0 and s['share_onto_apbp'] == 0.0
+    assert s['share_from_g'] == pytest.approx(2 / 3) and s['share_from_ab'] == pytest.approx(1 / 3)
+    with pytest.raises(ValueError):
+        X.mbc1_summary(c, types[:2])
+
+
+def test_save_run_extras(tmp_path, monkeypatch):
+    monkeypatch.setattr(X, 'local_dir', lambda part='': tmp_path / 'local' / part)
+    monkeypatch.setattr(X, 'archive_dir', lambda: tmp_path / 'archive')
+    idx = pd.MultiIndex.from_arrays([[1, 2], ['g', 'ab']], names=[H.KC_ID_LEVEL, H.KC_TYPE_LEVEL])
+    s = pd.DataFrame([[0.0, 3.0], [2.0, 1.0]], index=idx, columns=['a', 'b'])
+    o = {'on': ((s >= 2).astype(float), s), 'off': ((s >= 2).astype(float), s)}
+    c = pd.DataFrame({'from_mbc1': [1.0, 0.0], 'to_mbc1': [0.0, 2.0]}, index=idx)
+    X.save_run('step3', 'S3_MB_real', o, None, {'mbc1_counts': c})
+    for d in (tmp_path / 'local' / 'step3', tmp_path / 'archive' / 'step3'):
+        assert pd.read_parquet(d / 'S3_MB_real_mbc1_counts.parquet').equals(c)
+        assert not (d / 'S3_MB_real_ext_inh.parquet').exists()
+    back = X.load_run('step3', 'S3_MB_real')
+    assert back['off'][1].equals(s) and back['on'][1].equals(s)
+
+
+def test_kckc_matrix_of():
+    assert X.kckc_matrix_of('G', 'S1_G_real').endswith('off: none (KC-KC 0)')
+    assert X.kckc_matrix_of('C50|G', 'S2_C50_real').endswith('off: none (KC-KC 0)')
+    assert X.OFF_MATRIX['U'] in X.kckc_matrix_of('P', 'S1_P_real')
+    assert X.OFF_MATRIX['slow'] in X.kckc_matrix_of('S', 'S1_S_real')
+    mb = X.kckc_matrix_of('MB', 'S3_MB_P3')
+    assert X.OFF_MATRIX['MB'] in mb and 'step3/S3_MB_P3_mbc1_counts.parquet' in mb
+
+
 def test_runner_checks(toy, monkeypatch):
     m, _ = toy
     m.mp.kc.ves_p = 0.1
@@ -331,9 +457,19 @@ def test_planned_lanes():
     assert len(s) == len(t) == 16 and not {X.tag_of(*p) for p in s} & {X.tag_of(*p) for p in t}
     assert s[:2] == [('G', 'real'), ('T', 'real')] and [a for a, _ in s[8:]] == ['P'] * 4 + ['S'] * 4
     assert {X.tag_of(*p) for p in s + t} == {f'S1_{a}_{w}' for a in 'GTPS' for w in X.WIRINGS}
+    # step 1a's lanes as they were run (G and T per wiring, then P, then S)
+    for ws, got in ((X.S_WIRINGS, s), (X.T_WIRINGS, t)):
+        assert got == [(a, w) for w in ws for a in ('G', 'T')] + [(a, w) for a in ('P', 'S') for w in ws]
+    assert X.STEPS['step1a'] == ('G', 'T', 'P', 'S') and X.step_arms('step1a') == ('G', 'T', 'P', 'S')
     assert [a for a, _ in X.planned('step1b', ['real'], ('K', 'Y'))] == ['K', 'Y']
     assert X.planned('step2', ['P3']) == [('C50', 'P3'), ('C0', 'P3')]
     assert X.tag_of('Z', 'M2') == 'S1c_Z_M2' and X.tag_of('C0', 'real') == 'S2_C0_real'
+    # step 3: one MB run per wiring, tags S3_MB_<wiring>, the matrix kind 'MB'
+    s3, t3 = X.planned('step3', X.S_WIRINGS), X.planned('step3', X.T_WIRINGS)
+    assert s3 == [('MB', w) for w in X.S_WIRINGS] and t3 == [('MB', w) for w in X.T_WIRINGS]
+    assert [X.tag_of(*p) for p in s3 + t3] == [f'S3_MB_{w}' for w in X.WIRINGS]
+    assert X.step_arms('step3', {}) == ('MB',) and X.STEP_OF['MB'] == 'step3' and X.runner_kind('MB') == 'MB'
+    assert ('MB', 'P') in X.COMPARISONS and ('MB', 'S') in X.COMPARISONS
 
 
 def test_claims(tmp_path, monkeypatch):
@@ -348,21 +484,31 @@ def test_claims(tmp_path, monkeypatch):
 
 def test_step_gates_refuse(tmp_path, monkeypatch):
     monkeypatch.setattr(X, 'out_dir', lambda: tmp_path)
-    for step in ('step1a', 'step1b', 'step1c', 'step2'):
+    for step in ('step1a', 'step1b', 'step1c', 'step2', 'step3'):
         ok, why = X.step_allowed(step)
         assert not ok and why
     with pytest.raises(SystemExit):
         X.part_runs('step1a', ['real'])
     with pytest.raises(SystemExit):
-        X.part_step3(False)
-    with pytest.raises(NotImplementedError):
-        X.part_step3(True)
+        X.part_runs('step3', ['real'])
     assert X.step_arms('step1b', {}) == ('K', 'Y')
     assert X.step_arms('step1b', {'kp': {'open': True}}) == ('K', 'Y', 'KP')
     X._write_json(tmp_path / 'identity_h_a.json', {'wirings': {w: {'passes': True} for w in X.S_WIRINGS}})
     assert not X.identity_passed()
     X._write_json(tmp_path / 'identity_h_b.json', {'wirings': {w: {'passes': True} for w in X.T_WIRINGS}})
     assert X.identity_passed()
+    # step 3 needs only the identities (as step 1a); 1b, 1c and 2 still their gates
+    assert X.step_allowed('step3')[0] and X.step_allowed('step1a')[0]
+    assert not any(X.step_allowed(s)[0] for s in ('step1b', 'step1c', 'step2'))
+
+
+def test_step3_refusal_gone():
+    """Step 3 is an ordinary step: no refusal, no --tom-approved-mbc1 flag."""
+    assert not hasattr(X, 'part_step3')
+    a = X.build_parser().parse_args(['--part', 'step3', '--wirings', 'P3', 'P4', 'M2', 'M3'])
+    assert a.part == 'step3' and a.wirings == ['P3', 'P4', 'M2', 'M3'] and not a.reclaim
+    with pytest.raises(SystemExit):
+        X.build_parser().parse_args(['--part', 'step3', '--tom-approved-mbc1'])
 
 
 # ---------------------------------------------------------------------------
@@ -434,3 +580,24 @@ def test_outcomes():
     o = X.outcomes({'G': c('keeps the gain'), 'T': c('equal'), 'K': c('keeps the gain')},
                    {'G|T': dict(verdict='not told apart')})
     assert o['c'] is True and o['f']
+    # step 3's arm and comparisons change none of the outcomes
+    for mb, comps in ((c('corner (no class)'), {'MB|P': dict(verdict='no class (corner)')}),
+                      (c('equal'), {'MB|P': dict(verdict='MB lower'), 'MB|S': dict(verdict='S lower')})):
+        base_cls = {'G': c('keeps the gain'), 'T': c('equal'), 'K': c('keeps the gain'), 'P': c('neither'),
+                    'S': c('keeps the gain')}
+        base_comps = {'G|T': dict(verdict='not told apart'), 'S|P': dict(verdict='not told apart')}
+        assert X.outcomes(dict(base_cls, MB=mb), dict(base_comps, **comps)) == X.outcomes(base_cls, base_comps)
+
+
+def test_step3_reading():
+    runs = pd.DataFrame([dict(kind='MB', wiring=w, factor=0.5, mbc1_n_kcs_any=np.int64(1487), mbc1_share_onto_g=0.83,
+                              mbc1_counts_sha256='ab') for w in X.WIRINGS])
+    assert X.step3_reading({}, {}, runs) == dict(complete=False)
+    cls = dict(MB=dict(complete=True, cls='keeps the gain', at_least_keeps_gain=True, corner=False, corner_wirings=[],
+                       gain_kept={'S4': 0.6}, factor_mean=0.5))
+    r = X.step3_reading(cls, {'MB|P': dict(verdict='not told apart'), 'MB|S': dict(verdict='S lower'),
+                              'G|T': dict(verdict='G lower')}, runs)
+    assert r['complete'] and r['cls'] == 'keeps the gain' and r['at_least_keeps_gain'] and not r['corner']
+    assert r['differ'] == {'MB|P': 'not told apart', 'MB|S': 'S lower'}
+    assert r['mbc1'] == {'n_kcs_any': 1487, 'share_onto_g': 0.83, 'counts_sha256': 'ab'}
+    assert type(r['mbc1']['n_kcs_any']) is int                              # JSON-serializable as a number
