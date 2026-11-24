@@ -1337,7 +1337,98 @@ only by the host that wrote it; "For one of Tom's hosts" publish requests (from 
 experiment and note pages) go to hal by default and to atlas only if hal has not answered within about
 fifteen minutes.
 
-## The main goal for new experiments (Tom, 2026-11-09 17:55; replaces the 13:00 version)
+## The main goal for new experiments (Yang's request of 2026-11-24, about 09:00, in viki's terminal; adopted by Tom on 2026-11-24 09:30, in hal's terminal, relayed by hal: "yang's new direction was something we both decided on together. you can go ahead with whatever the planner comes up with"; planned by a Fable subagent, claude-fable-5-2, spawned from viki 2026-11-24 09:11; it replaces the version of 2026-11-09 17:55, kept below)
+
+**The target.** The main target is the overall fit of the model's responses, as populations, to the recorded populations at every stage of the megamat panel: ORNs, PN dendrites, PN boutons, KC claws and KC somata of wild-type flies. The KC somata of the validation2 panel and of the kiwi / control mixtures test whether a fit holds on odors it was not fitted to. No single feature of the responses is the target. The data are the lab's ORN and PN-dendrite recordings and Remy's bouton, claw and soma recordings.
+
+**A population.** A population is the table of trial-mean responses of all units of one stage (glomeruli, bouton regions, claw regions, KCs) to the odors of one panel. A bouton region has no glomerulus label, a claw region is not assigned to a KC, and a recorded KC cannot be matched to a model KC. So a model is compared with the flies on what does not depend on which unit is which.
+
+**The three views of a population,** the same at every stage:
+- "strength by odor": each odor's response rate (the fraction of units that respond to it) as a multiple of the mean over the panel's odors, and each odor's mean response likewise;
+- "sharing between odors": for each pair of odors, the cosine distance between their responses across the units, once on who responds and once on how strongly the responders respond;
+- "breadth among units": the distribution of the number of odors a unit responds to.
+
+Where the units are named glomeruli (ORNs, PN dendrites) a fourth view is read, "the matrix itself": each glomerulus's response to each odor.
+
+**One-fly units.** A view's error is the root mean squared difference between the model's view and the flies' mean view, over the view's entries (the odors, the pairs, the bins). It is divided by the root mean squared distance of one fly's view from the mean view of the other flies. A value of 1 says that the model is as far from the flies as one fly is from the others. "The floor" is what a resampled set of the same flies gives against the measured set: about 0.25 for the 11 control recordings.
+
+**The population error** of a stage is the root mean square of its views' errors in one-fly units: one number per stage, panel and condition, lower is better. **The megamat stage error** is the root mean square of the population errors of the megamat panel's PN dendrites, PN boutons, KC claws and KC somata. It is the quantity to improve.
+
+**Why these measures and not others.**
+- A correlation between two sets of distances (ρ on odor-odor distances) reads one view, and sees neither its level nor its spread (rule 1 of 2026-11-13). The same holds for response rate ρ.
+- One distance between the whole distributions of the units' tuning (an energy distance) was tried by the planner on saved runs. It does not tell models apart: on the control flies' KCs a random-wiring model reads 1.5 times the fly-to-fly mean and the best family 1.1 to 1.4 times. It stays as a guard.
+- A list of features, each with its own tolerance, cannot be combined. One-fly units put every view on one scale, and no entry inside a view is weighted by its reliability (rule 3).
+- The views hold what earlier statistics held one at a time: response rate ρ reads strength by odor, ρ on odor-odor distances reads sharing, and the band on odors per KC reads breadth.
+- The equal weight of the views is a convention. Every view's error is always given beside the combined number.
+
+**Like for like.** Both sides are read the same way, stage by stage:
+- the flies' responses in baseline-noise units, with one response criterion per stage;
+- the model's units sampled and pooled as the recording was made (the driver line's glomeruli, about 14 claws to a claw region);
+- the model's values through one monotone curve per stage, set on the pooled distribution of values and never on anything about odors, so that an indicator's unknown curve is neither counted as error nor used to hide one;
+- the model through the flies' measurement noise, or the flies with their trial noise removed where an unbiased estimate exists.
+
+A stage's reading is fixed before any model is read on it. A stage whose verdict changes with the reading is "not readable" and stays out of the megamat stage error until a reading holds.
+
+**How the stages are read together.**
+- "The stage table": for each stage, the flies' floor and the model's population error with its views, the model run end to end from the ORN input.
+- "The step table": for each step between neighbouring stages, the change of each view from one stage to the next, the model's beside the flies', with an interval from resampling the flies of both stages.
+- "The no-step yardstick": the error of taking the upstream recordings' view as the prediction for the downstream stage. A model explains a step only so far as it is nearer the downstream recordings than that.
+- "A step by itself": where the upstream units are named glomeruli, the step is also run from the recorded upstream stage, so that an upstream error is not charged to it.
+
+**The model as a population of flies.** A model is read on its eight wirings, each as one fly: every wiring's error, their mean, and the error of the wirings' mean view (the error common to the wirings). Fits use the four searched wirings and are read on the four others.
+
+**The panels and their roles.**
+
+| panel | recorded stages | role |
+|---|---|---|
+| megamat, 17 odors at 10^-3 | ORNs (9 flies), PN dendrites (7), PN boutons (5), KC claws (4), KC somata (Remy's wild-type flies; one fly recorded at claws and somata on the same trials) | fitted |
+| validation2, 22 odors | ORNs (6 flies), KC somata (20 flies) | held out |
+| kiwi / control mixtures | ORNs (9 flies), KC somata (11 flies) | held out |
+| the APL16 panel | KC somata: control flies (11 recordings), APL output blocked (TNT) (8 recordings) | held out; the realism bands and the APL effect |
+
+Nothing is fitted to a held-out panel without Tom's or Yang's word.
+
+**Choosing and gating** (the rules of 2026-11-13, carried over):
+1. Variants are compared, chosen and gated on the megamat stage error, with every stage's population error and its views beside. No variant is chosen by a correlation; ρ on odor-odor distances and response rate ρ are still reported.
+2. The measure decides only once it is shown to be consistent: the order of the saved variants against one half of the flies and against the other must agree at 0.8 or more (the pattern part's 0.82 is the yardstick). Until the baseline shows this, no choice rests on it.
+3. An improvement lowers the megamat stage error on held-out wirings and held-out flies by more than the wirings' spread. It raises no stage's population error and no held-out panel's by more than that stage's own spread. No stage is bought with another.
+4. A view's share, a stage's share and a single odor's share of an error are leads, never results.
+5. Near-ties are confirmed on held-out flies, wirings or panels.
+
+**Realism** stays a constraint: reported, not optimized.
+- The four bands hold for every model run on the APL16 panel, and a flagged result still gets its "Realism flag:" post.
+- On megamat the overall response rate is an operating point, held at the flies' value and reported beside it: 0.0915 in Remy's four megamat flies by her criterion, against the control flies' 0.068.
+- Every note names any parameter that would be hard to defend physiologically. The family's fits hold one already: about seven tenths of APL's inhibition is made at the PN boutons, where the connectome puts about a tenth of APL's calyx synapses.
+
+**The APL-effect statistics** are still computed and reported for every model run with APL on and off: the loss, its mean and pattern parts, the amplitude and shape parts, and the two correlations. They keep their rows in the best-models table and their series in the progress plot. They leave the first line of proposals and every gate. They are read as a held-out test: what the APL of a model fitted to wild-type stages does. The rules of 2026-11-13 still say how they are read.
+
+**Limits in force.** No new wet-lab experiments. No search of many free input factors across odors or glomeruli. Only Pratyush's hemibrain and male CNS. No bouton identities from position or tuning. Only Yang's processed products. Remy's processed data without the bouton fly 2022-10-21 fly02. The concentration rule and the mixture rule as before.
+
+**Running and held work.**
+- The differences between the hemibrain and the male CNS's left calyx moved one at a time (E133) is written up on its steps 0 to 2 and completed. Its steps 3 and 4 return to proposed_experiments.md, open on Tom's word: they bear on the previous goal and on hong-data's male CNS models.
+- The open proposals stay as they are. The megamat input search (E117) stays held: it searches input factors.
+- Earlier notes are not rewritten. Notes written after the adoption open with the stage table.
+
+**Where it stood on 2026-11-24.** The first three rows are a planner's read-only probe of saved runs (raw spike counts, no curve and no noise on the model's side), which the baseline experiment replaces with committed code. The model is the best family on its eight wirings. The APL16 panel's values involve paa, euc and -aPine, whose model input is the ORN data within 1 log10 unit of the flies' concentrations.
+
+| stage, panel and statistic | the flies | the best family | read from |
+|---|---|---|---|
+| KC somata, APL16 panel, APL on: population error (one-fly units) | floor 0.25; one recording against the others 0.98 (0.56 to 1.29) | 1.01 (0.94 to 1.10) | the planner's probe |
+| its views: strength by odor / sharing on who responds / sharing on how strongly / breadth | floors 0.26 / 0.25 / 0.26 / 0.24 | 1.29 / 1.13 / 1.15 / 0.28 | the planner's probe |
+| KC somata, APL16 panel, APL off: population error | floor 0.28; one recording against the others 0.93 (0.59 to 1.62) | 1.01 (0.94 to 1.08) | the planner's probe |
+| megamat PNs: spread of the odors' totals over 12 odors | 0.312 (0.283 to 0.367) in the PN dendrites | 0.074 | E90, E120 |
+| megamat PN boutons: spread of the odors' totals | 0.375 (0.357 to 0.412) | 0.103, below the flies' range on 8 of 8 wirings | E119 |
+| megamat KC claws | — | no reading of the model's claws is kept | E119 |
+| megamat KC somata: ρ on odor-odor distances against Remy's flies, 66 pairs | Remy's flies against the control flies 0.847 | 0.824; the ORN input alone 0.861 | E115 |
+| validation2 KC somata: ρ on odor-odor distances, 136 pairs | ceiling 0.951 | 0.676; the ORN input alone 0.681 | E107 |
+
+The family was fitted to the APL16 panel's recordings. Its megamat and validation2 values in one-fly units do not exist yet.
+
+**The previous main goal (Tom, 2026-11-09 17:55), kept for the record:** the APL effect on odor-odor distances, pair by pair, scored by the APL-effect loss with its mean and pattern parts and read by the rules of 2026-11-13. The best family stood at a calibrated pattern part of 0.048 on its eight wirings, against a floor of 0.029, with the mean APL effect at the flies' +0.178.
+
+The realism bands, their response criterion and the rules of 2026-11-13 for reading the APL effect, which this section keeps, are defined in the next section, the previous goal's, kept as it was.
+
+## The previous main goal: the APL effect (Tom, 2026-11-09 17:55; replaced on 2026-11-24; its realism bands, response criterion and rules of 2026-11-13 still hold)
 
 The main target is the APL effect on odor-odor distances, pair by pair: for each of the 120 odor pairs,
 the distance with APL on minus the distance with APL off. In the KC data that is the control flies'
