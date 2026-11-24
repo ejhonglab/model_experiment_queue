@@ -250,7 +250,7 @@ directory's notes/ and are linked from here.
 
 ## Resolved
 
-### E133's three-odor pair groups given as 39 and 81 pairs (found 2026-11-24 06:24, viki's code subagent, step 0; resolved 2026-11-24 07:00)
+### E133's three-odor pair groups given as 39 and 81 pairs (found 2026-11-24 06:24, viki's code subagent, step 0; resolved 2026-11-24 06:48)
 - **What.** E133's entry, index row, Moved-log line, report item 133 and its Added-note clause, and viki's chat post of
   2026-11-24 05:51 (the planner's), gave the pairs that hold 2-but, paa or B-myr as 39 and the rest as 81. They are 42
   (3 x 13 with one of the other odors, plus the 3 pairs among the three) and 78. The planner's numbers were those of the
@@ -259,8 +259,8 @@ directory's notes/ and are linked from here.
 - **What it affects.** The text only. No output was computed on 39 / 81 groups: step 0 (queue 95cd1bd) reads 42 / 78 as
   the main groups with 39, 81 and the 3 beside, and step 1's class reads all 120 pairs.
 - **Done.** The counts were corrected in the entry, the index row, the Moved log, report item 133 and the Added note
-  (2026-11-24 07:00, on a Fable gate reading, claude-fable-5-2, spawned from viki 06:41), the report page was rebuilt,
-  and the chat post of 07:00 corrects the 05:51 post.
+  (2026-11-24 06:44, on a Fable gate reading, claude-fable-5-2, spawned from viki 06:41), the report page was rebuilt,
+  and the chat post of 06:48 corrects the 05:51 post.
 
 ### E129's variants read "inside the bands" in the APL-effect table with no band checked (found 2026-11-23 16:40, hal, folding E129's step 3 into the summary; resolved 2026-11-23 21:02, queue 8961636 and the archives of 20:19 and 20:20)
 - **What.** E129's model_pair_distances_long.csv tagged each run by its variant name (`MB_real`, `G_M1`), while its
