@@ -17,7 +17,12 @@ The numbers E131's note gives that the score's tables do not give directly:
   table (what the entry used), MB-C1's synapses against APL's on the claws and in the calyx, the per-synapse weight of
   each arm against a KC->KC synapse, step 0's fixed numbers (D100's threshold, L100's ratio, the cells' agreement) and
   activities, each gamma KC's MB-C1 input at m 1 against its KC-KC input, and the KC data's values (the registry's) the
-  note sets beside the model's.
+  note sets beside the model's;
+- `differ_extra`: comparisons the entry did not fix, by the experiment's own "differ" rule (E129's `differ` through
+  experiments/E131_mbc1_cells.py, as the score's comparisons use it, on readings.csv and runs.csv): each MB-C1 arm
+  against the family, and the slow and the thresholded cells (L100, D100) against the plain cells at a quarter of the
+  dose (B25). Per comparison: the verdict, the wirings on which each is lower (against all recordings), whether each
+  is lower on all ten targets, the corner arms, a minus b over all eight wirings, on S and T, and wiring by wiring.
 
 The figure (E131_pattern_part_classes.png): left, each arm's calibrated pattern part minus the family's on S's and T's
 populations, against all recordings (filled) and each half (open), with the 0.003 margin; right, wiring by wiring
@@ -25,10 +30,12 @@ against all recordings.
 
 Checks (raise on failure): the mean over the eight wirings of each runs.csv statistic equals readings.csv's all8 run_
 column; verdict.json's d_family equals arm minus family; the per-synapse weights computed here equal runs.csv's
-mbc1_per_synapse_vs_kckc; the step-0 totals equal step0_synapses.csv's.
+mbc1_per_synapse_vs_kckc; the step-0 totals equal step0_synapses.csv's; the score's own comparisons, recomputed by the
+same rule from readings.csv and runs.csv, equal verdict.json's.
 
 Writes writeup_class_margins.csv, writeup_wiring_summary.csv, writeup_cost_split.csv, writeup_run_ranges.csv,
-writeup_yardsticks.csv, E131_pattern_part_classes.png and provenance_writeup_tables.json to the results folder.
+writeup_yardsticks.csv, writeup_differ_extra.csv, E131_pattern_part_classes.png and provenance_writeup_tables.json to
+the results folder.
 
 Usage (from the repository root): ./venv/bin/python analyses/E131_writeup_tables.py [--out DIR]
 """
@@ -54,6 +61,10 @@ ARMS = ('B25', 'B100', 'B400', 'R50', 'H50', 'X50', 'L100', 'D100', 'P100')
 CLASSED = ('PO50', 'TY50') + ARMS
 FORM_PAIRS = (('L100', 'B100'), ('D100', 'B100'), ('P100', 'B100'), ('R50', 'H50'), ('X50', 'PO50'), ('X50', 'TY50'),
               ('B25', 'B100'), ('B100', 'B400'), ('R50', 'B100'))
+MBC1_ARMS = ('B25', 'B100', 'B400', 'R50', 'X50', 'L100', 'D100', 'P100')
+# the "differ" comparisons the entry did not fix, (a, b)
+EXTRA_PAIRS = tuple((a, 'family') for a in MBC1_ARMS) + (('L100', 'B25'), ('D100', 'B25'))
+DIFFER_KEYS = ('verdict', 'n_wirings_a_lower', 'n_wirings_b_lower', 'a_lower_on_all_targets', 'b_lower_on_all_targets')
 RUN_STATS = ('fixed_thr', 'wAPLKC_scale', 'wKCKC_scale', 'wMBC1_scale', 'rate_on', 'rate_off', 'ratio', 'rate_rho_on',
              'rate_rho_off', 'opk_on_tv', 'opk_off_tv', 'max_count_on', 'max_count_off', 'rate_on_g', 'rate_off_g',
              'ratio_g', 'rate_on_apbp', 'rate_off_apbp', 'rate_on_ab', 'rate_off_ab', 'mbc1_act_on', 'mbc1_act_off',
@@ -268,6 +279,54 @@ def yardsticks(step0: dict, synapses: pd.DataFrame, runs: pd.DataFrame, registry
     return pd.DataFrame(rows)
 
 
+def _cal(readings: pd.DataFrame, kind: str, unit: str, col: str = 'all_pattern') -> float:
+    r = readings[(readings.kind == kind) & (readings.unit == unit) & (readings.readout == 'cal')]
+    if len(r) != 1:
+        raise ValueError(f'{kind} {unit}: {len(r)} calibrated rows')
+    return float(r[col].iloc[0])
+
+
+def differ_extra(readings: pd.DataFrame, runs: pd.DataFrame, verdict: dict,
+                 pairs: Sequence[Tuple[str, str]] = EXTRA_PAIRS) -> pd.DataFrame:
+    """The "differ" rule (experiments/E131_mbc1_cells.py's `differ`, E129's) on comparisons the entry did not fix,
+    after checking that it reproduces verdict.json's comparisons from the same readings.csv and runs.csv.
+
+    Returns:
+        one row per (a, b): group, a, b, verdict, the wirings on which each is lower (counts and names), whether each
+        is lower on all ten targets, the targets on which each is lower, the corner arms, a minus b in the calibrated
+        pattern part over all eight wirings, on S and T against all recordings, its range over the ten targets, and
+        wiring by wiring (d_<wiring>).
+    """
+    from experiments import E131_mbc1_cells as E131
+    for key, c in verdict.get('comparisons', {}).items():
+        a, b = key.split('|')
+        r = E131.differ(readings, runs, a, b)
+        bad = {k: (r.get(k), c.get(k)) for k in DIFFER_KEYS if r.get(k) != c.get(k)}
+        if bad:
+            raise ValueError(f'{key}: the rule on readings.csv differs from verdict.json: {bad}')
+    rows = []
+    for a, b in pairs:
+        r = E131.differ(readings, runs, a, b)
+        if r['verdict'] == 'incomplete':
+            raise ValueError(f'{a}|{b}: incomplete')
+        pw = r['d_per_wiring']
+        per_t = [v for t in r['d_per_target'].values() for v in t.values()]
+        row = dict(group='arm_vs_family' if b == 'family' else 'form_vs_B25', a=a, b=b, verdict=r['verdict'],
+                   n_wirings_a_lower=r['n_wirings_a_lower'], n_wirings_b_lower=r['n_wirings_b_lower'],
+                   wirings_a_lower=' '.join(w for w in WIRINGS if pw[w] < 0),
+                   wirings_b_lower=' '.join(w for w in WIRINGS if pw[w] > 0),
+                   a_lower_on_all_targets=r['a_lower_on_all_targets'],
+                   b_lower_on_all_targets=r['b_lower_on_all_targets'], n_targets=len(per_t),
+                   n_targets_a_lower=sum(v < 0 for v in per_t), n_targets_b_lower=sum(v > 0 for v in per_t),
+                   corner_arms=' '.join(r['corner_arms']),
+                   a_minus_b_all8=_cal(readings, a, 'all8') - _cal(readings, b, 'all8'),
+                   a_minus_b_S4=r['d_per_target']['all']['S4'], a_minus_b_T4=r['d_per_target']['all']['T4'],
+                   a_minus_b_target_min=min(per_t), a_minus_b_target_max=max(per_t))
+        row.update({f'd_{w}': pw[w] for w in WIRINGS})
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
 def draw(margins: pd.DataFrame, per_wiring: pd.DataFrame, path: Path, within: float) -> None:
     """Draws the two panels to `path` (PNG)."""
     import matplotlib
@@ -346,27 +405,32 @@ def main(argv=None) -> None:
     C = cost_split(verdict)
     R = run_ranges(runs, readings)
     Y = yardsticks(step0, synapses, runs, registry)
+    D = differ_extra(readings, runs, verdict)
     M.to_csv(out / 'writeup_class_margins.csv', index=False)
     W.merge(WS, on=['kind', 'target']).to_csv(out / 'writeup_wiring_summary.csv', index=False)
     C.to_csv(out / 'writeup_cost_split.csv', index=False)
     R.to_csv(out / 'writeup_run_ranges.csv', index=False)
     Y.to_csv(out / 'writeup_yardsticks.csv', index=False)
+    D.to_csv(out / 'writeup_differ_extra.csv', index=False)
     fig = out / 'E131_pattern_part_classes.png'
     draw(M, W, fig, within)
     prov = dict(script=H.script_path(__file__), **H.code_commits(), generated=time.strftime('%Y-%m-%d %H:%M:%S %Z'),
                 verdict_generated=verdict.get('generated'),
                 inputs={str(p.relative_to(H.shared_dir())): _sha256(p) for p in paths.values()},
                 outputs=[fig.name, 'writeup_class_margins.csv', 'writeup_wiring_summary.csv', 'writeup_cost_split.csv',
-                         'writeup_run_ranges.csv', 'writeup_yardsticks.csv'],
+                         'writeup_run_ranges.csv', 'writeup_yardsticks.csv', 'writeup_differ_extra.csv'],
+                differ_extra_pairs=[f'{a}|{b}' for a, b in EXTRA_PAIRS],
                 checks=['class targets: d_family = arm - family', 'runs.csv means over 8 = readings.csv all8 run_',
                         'per-synapse weights = runs.csv mbc1_per_synapse_vs_kckc',
-                        'step-0 synapse totals = step0.json dose_arithmetic'])
+                        'step-0 synapse totals = step0.json dose_arithmetic',
+                        "the differ rule on readings.csv and runs.csv = verdict.json's comparisons"])
     (out / 'provenance_writeup_tables.json').write_text(json.dumps(prov, indent=1, default=str) + '\n')
     pd.set_option('display.width', 200)
     print(M[M.target == 'all'].pivot(index='kind', columns='population', values='minus_family').round(4))
     print(WS[WS.target == 'all'].round(4).to_string(index=False))
     print(C[C.target == 'all'].round(4).to_string(index=False))
     print(Y.to_string(index=False))
+    print(D.drop(columns=[f'd_{w}' for w in WIRINGS]).round(4).to_string(index=False))
     print(f'wrote {fig}')
 
 
