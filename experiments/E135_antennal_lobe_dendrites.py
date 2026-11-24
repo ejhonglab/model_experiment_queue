@@ -765,9 +765,102 @@ def saved_stage_rows(sources: Optional[Mapping[str, pd.DataFrame]] = None, units
     after the stage's curve (the lock's default pn_dendrite reading, no noise). `sources` maps a label to its table
     (default the analysis of 2026-11-17's versions.csv and E90's saved PN stage of the family's real wiring, APL on);
     E102's and E114's saved PN summaries (b_pn.csv, pn_stage.csv) hold no glomerulus table and are quoted as they are
-    by `saved_stage_summaries`. Reads saved model outputs: run as its own part (`--part step0_saved`)."""
-    raise NotImplementedError('step0_saved reads saved model outputs; implemented with the step-1 reading once hal '
-                              'confirms it may run before the gate')
+    by `saved_stage_summaries`. Reads saved model outputs: run as its own part (`--part step0_saved`).
+
+    Returns one row per source and glomerulus (model_gain, measured_gain, data_over_model on the source's odors) and,
+    per source, a row with glomerulus '_all' holding the matrix view's error and the three views' (`read_prediction`
+    against all PN flies on the source's odors and the shared glomeruli)."""
+    from data_prep import stage_population_data as D
+    glom = shared_glomeruli()
+    if sources is None:
+        sources = default_saved_sources()
+    pop = pn_population(units)
+    orn_t = recorded_stage(ORN_KEY, units)
+    rows = []
+    for label, (pn, orn_in) in sources.items():
+        od = [o for o in MEGAMAT_ODORS if o in pn.columns and o in orn_in.columns]
+        gl = [g for g in glom if g in pn.index and g in orn_in.index]
+        x = orn_in.loc[gl, od].to_numpy(dtype=float)
+        y = pn.loc[gl, od].to_numpy(dtype=float)
+        sm, _, _ = _slopes(x, y)
+        meas = measured_step(fly_stack(orn_t, gl, od), fly_stack(pop.tables, gl, od), gl, od)
+        mrel = _relative(sm)
+        for i, g in enumerate(gl):
+            rows.append(dict(source=label, glomerulus=g, n_odors=len(od), model_gain=float(mrel[i]),
+                             measured_gain=float(meas.loc[g, 'gain']),
+                             data_over_model=float(meas.loc[g, 'gain'] / mrel[i]) if mrel[i] > 0 else np.nan))
+        tgt = Target.make(pop, od, gl)
+        sc = read_prediction(pn.loc[gl, od], tgt)
+        rows.append(dict(source=label, glomerulus='_all', n_odors=len(od),
+                         **{k: v for k, v in sc.as_series().items()}))
+    return pd.DataFrame(rows)
+
+
+def default_saved_sources() -> Dict[str, Tuple[pd.DataFrame, pd.DataFrame]]:
+    """The saved PN stages with glomerulus tables: each version of the analysis of 2026-11-17 (results/
+    yang_orn_pn_gh146/versions.csv, in sample, 12 odors; its ORN input `apl16_orn_deltas`) and E90's family on the
+    real wiring, APL on (stage_readings' `load_e90_run` and `stage_changes`, the settled pre-odor level; its own input),
+    as (PN table, ORN input), odors abbreviated."""
+    from kcq import stage_readings as R
+    orn = H.apl16_orn_deltas()
+    orn.columns = [H.odor_abbrev(c) for c in orn.columns]
+    out = {}
+    v = pd.read_csv(H.shared_dir() / 'results' / 'yang_orn_pn_gh146' / 'versions.csv')
+    v = v[(v['sample'] == 'in_sample') & ~v.version.isin(['orn_input', 'orn_dff', 'gh146'])]
+    for name, sub in v.groupby('version'):
+        out[f'yang_orn_pn_gh146:{name}'] = (sub.pivot(index='glomerulus', columns='odor', values='value'), orn)
+    run = R.load_e90_run('real', 'B')
+    od = [o for o in R.run_odors(run) if o in MEGAMAT_ODORS]
+    pn = R.stage_changes(run, 'pn_dendrite', 'on', od)
+    pn.index = pn.index.astype(str)
+    out['E90:B:real:on'] = (pn, R.stage_changes(run, 'orn', 'on', od))
+    return out
+
+
+def saved_stage_summaries() -> pd.DataFrame:
+    """E102's and E114's saved PN-stage summaries against the dendrites (results/E102_antennal_lobe_normalization/
+    b_pn.csv, d_pn_*.csv, e_pn_*.csv; results/E114_input_compression/pn_stage.csv), quoted with their file."""
+    d = H.shared_dir() / 'results'
+    out = []
+    for f in sorted((d / 'E102_antennal_lobe_normalization').glob('*_pn*.csv')) + [d / 'E114_input_compression' /
+                                                                                  'pn_stage.csv']:
+        if f.exists():
+            t = pd.read_csv(f, comment='#')
+            t.insert(0, 'file', str(f.relative_to(d)))
+            out.append(t)
+    return pd.concat(out, ignore_index=True) if out else pd.DataFrame()
+
+
+def part_step0_saved(units: str = FIT_UNITS) -> pd.DataFrame:
+    """The saved PN stages against the dendrites (`saved_stage_rows`, `saved_stage_summaries`):
+    step0_saved_stages.csv, step0_saved_summaries.csv, provenance_step0_saved.json. Reads saved model outputs, no
+    simulation."""
+    require_e134_lock()
+    t0 = time.time()
+    rows = saved_stage_rows(units=units)
+    rows.to_csv(out_dir() / 'step0_saved_stages.csv', index=False)
+    saved_stage_summaries().to_csv(out_dir() / 'step0_saved_summaries.csv', index=False)
+    _write_json(out_dir() / 'provenance_step0_saved.json', dict(script=H.script_path(__file__), part='step0_saved',
+                host=_host(), time=_now(), seconds=time.time() - t0, units=units, **H.code_commits()))
+    return rows
+
+
+def pn_population(units: str = FIT_UNITS):
+    """viki's PN-dendrite population (lock-checked) in `units`: 'noise' as locked; 'dff' the same rows (and single
+    trials) times their noise SD (`recorded_stage`'s reader), the criterion then not in the trials' units."""
+    from data_prep import stage_population_data as D
+    require_e134_lock()
+    pop = D.load_population(*PN_KEY, trials=True)
+    if units == 'noise':
+        return pop
+    if units != 'dff':
+        raise ValueError(f'{units=}')
+    long = D.pn_dendrite_long()
+    recorded_stage(PN_KEY, 'noise')                          # the reader against the locked tables
+    long = long.assign(value=long.value * long.noise_sd).drop(columns='noise_sd')
+    spec = dict(units='dF/F', criterion=pop.criterion, window=pop.window, notes=pop.notes,
+                recording_site=pop.recording_site)
+    return D.population_from_long(PN_KEY, long, trials=True, spec=spec)
 
 
 # ---------------------------------------------------------------------------
@@ -1707,10 +1800,123 @@ def part_step1(n_perm: int = N_PERMUTATIONS) -> dict:
     Not run yet: it waits on E134's gate, the lock's folds, and the family's olfsysm parameters for the PN stage
     (E83's `build_simulator(...)` info['cells']['mp']), which a model build reads."""
     require_e134_gate()
-    read_lock()
-    raise NotImplementedError('step 1 is assembled from the tested pieces (fit_global, fit_gains, fit_lateral, '
-                              'cross_fit, keep_rung, the permutations) once the gate opens and a planner has fixed the '
-                              "fold count, the fit's loss and the units (the report's questions)")
+    lock = read_lock()
+    t0 = time.time()
+    stage, info = family_stage('megamat')
+    ident = info['identity']
+    units = lock.get('fit_units', FIT_UNITS)
+    pop = pn_population(units)
+    orn_t = recorded_stage(ORN_KEY, units)
+    gl = [g for g in lock['glomeruli'] if g in stage.glomeruli]
+    model_gl = list(H.apl16_orn_deltas().index)
+    pool = [g for g in model_gl if g in set().union(*[set(t.index) for t in orn_t.values()]) and g in stage.glomeruli]
+    out = run_rungs(stage, pop, fly_stack(orn_t, gl, MEGAMAT_ODORS), fly_stack(orn_t, pool, MEGAMAT_ODORS), pool,
+                    lock, n_perm=n_perm)
+    d = out_dir()
+    out['rungs'].to_csv(d / 'step1_rungs.csv', index=False)
+    out['controls'].to_csv(d / 'step1_controls.csv', index=False)
+    tabs = []
+    for r, by in out['tables'].items():
+        for direction, t in by.items():
+            x = t.stack().rename('value').reset_index()
+            x.columns = ['glomerulus', 'odor', 'value']
+            tabs.append(x.assign(rung=r, direction=direction))
+    pd.concat(tabs, ignore_index=True).to_csv(d / 'step1_tables.csv', index=False)
+    fits = rung_fits_all_flies(stage, pop, fly_stack(orn_t, gl, MEGAMAT_ODORS), fly_stack(orn_t, pool, MEGAMAT_ODORS),
+                               pool, lock, out)
+    _write_json(d / 'step1_fits.json', dict(folds=out['folds'], state=out['state'], selected=out['selected'],
+                                            excluded=out['excluded'], r2=out['r2'], highest_kept=out['highest_kept'],
+                                            all_flies=fits))
+    _write_json(d / 'provenance_step1.json', dict(script=H.script_path(__file__), part='step1', host=_host(),
+                time=_now(), seconds=time.time() - t0, lock_sha256=_sha256(LOCK_COPY), units=units,
+                identity=ident, n_perm=n_perm, **H.model_provenance(orn_deltas=stage.delta)))
+    return out
+
+
+def family_stage(panel: str = 'megamat', wiring: str = 'real') -> Tuple[PNStage, dict]:
+    """The family's PN stage on a panel's input ('megamat': E107's `panel_input`; 'apl16': the lab's input): E83's
+    `build_simulator(wiring, orn=..., breadth=<the lab input's>)`, its olfsysm variables read into a `PNStage` (rows
+    the wiring's glomeruli, columns the input's odors abbreviated, in olfsysm's order through the simulator's
+    'odor_order'), checked against olfsysm's own layers (`check_identity`) on a copy of the build's variables. A model
+    build: after E134's gate only."""
+    require_e134_gate()
+    from experiments import E83_cross_wiring_fit as X
+    orn = panel_orn(panel)
+    sim, info = X.build_simulator(wiring, orn=orn, breadth=X.wiring_parts(wiring)['breadth'])
+    cells = info['cells']
+    mp, rv = cells['mp'].cell_contents, cells['rv'].cell_contents
+    order = np.asarray(cells['odor_order'].cell_contents, dtype=int)
+    names = [None] * len(order)
+    for j, i in enumerate(order):
+        names[int(i)] = H.odor_abbrev(orn.columns[j])
+    gl = [str(g) for g in dict.fromkeys(info['W'].columns.get_level_values('glomerulus'))]
+    stage = PNStage.from_mp(mp, gl, names)
+    want = orn.copy()
+    want.columns = [H.odor_abbrev(c) for c in want.columns]
+    want = want.reindex(index=gl, columns=names).fillna(0.0)
+    if not np.allclose(stage.delta.to_numpy(), want.to_numpy(), atol=1e-12):
+        raise RuntimeError(f"{wiring} {panel}: olfsysm's delta is not the panel's input on the wiring's glomeruli")
+    ident = stage.check_identity(mp, rv)
+    return stage, dict(sim=sim, info=info, mp=mp, rv=rv, identity=ident, orn=orn)
+
+
+def panel_orn(panel: str) -> pd.DataFrame:
+    """The model's ORN input of a panel: 'megamat' E107's `panel_input('megamat')` (17 odors on the lab input's 36
+    glomeruli), 'apl16' the lab's input (`apl16_orn_deltas`)."""
+    if panel == 'megamat':
+        from experiments import E107_validation2_panel as E107
+        return E107.panel_input('megamat')
+    if panel == 'apl16':
+        return H.apl16_orn_deltas()
+    raise ValueError(f'{panel=}')
+
+
+def rung_fits_all_flies(stage: PNStage, pop, orn: np.ndarray, orn_partners: np.ndarray,
+                        partner_names: Sequence[str], lock: Mapping, rungs_out: Mapping) -> dict:
+    """The rungs refitted on all PN flies for step 2: fold by fold (each odor's table from the fit that left it out)
+    and once on all odors (for the APL16 input's odors outside the folds); R1's parameters, R2's gains (measured or
+    fitted, as step 1 chose), R3's selected terms (each fold's own partner of each selected glomerulus and rank).
+    PROVISIONAL: which flies step 2's tables are fitted to is a planner's question (see the report)."""
+    gl = [g for g in lock['glomeruli'] if g in stage.glomeruli]
+    folds = [list(f) for f in lock['folds']]
+    odors = [o for f in folds for o in f]
+    sets = [(k, [o for o in odors if o not in set(f)]) for k, f in enumerate(folds)] + [('all', odors)]
+    out = {}
+    for k, train in sets:
+        t = Target.make(pop, train, gl)
+        r1 = fit_global(stage, t)['params']
+        meas = measured_for(t, orn, orn_partners, partner_names)
+        start = measured_gain_start(meas['step'], model_gains(stage, r1, gl, train))
+        terms = Terms(gains=start)
+        if rungs_out['r2'] == 'R2f':
+            terms = fit_gains(stage, t, r1, start)['terms']
+        r2 = terms
+        for g, rank in rungs_out['selected']:
+            cp = meas['partners']
+            x = cp[(cp.glomerulus == g) & (cp['rank'] == rank)]
+            if len(x) and str(x.partner.iloc[0]) in stage.glomeruli:
+                terms = fit_lateral(stage, t, r1, terms, g, str(x.partner.iloc[0]))['terms']
+        out[str(k)] = dict(held_out=[o for o in odors if o not in set(train)], R1=r1, R2=r2.as_dict(),
+                           R3=terms.as_dict())
+    return out
+
+
+def rung_table(stage: PNStage, fits: Mapping[str, dict], rung: str, reading: str = 'preset') -> pd.DataFrame:
+    """A rung's table of PN rates on a stage's input for step 2 (`rung_fits_all_flies`' fits): each odor a fold held
+    out from that fold's fit, every other odor (the APL16 input's paa, euc, -aPine, B-myr) from the fit on all odors;
+    rates in `reading`."""
+    held = {o: k for k, f in fits.items() if k != 'all' for o in f['held_out']}
+    cache: Dict[str, pd.DataFrame] = {}
+    cols = {}
+    for o in stage.odors:
+        k = held.get(o, 'all')
+        if k not in fits:
+            continue
+        if k not in cache:
+            f = fits[k]
+            cache[k] = stage.run(f['R1'], None if rung == 'R1' else Terms.from_dict(f[rung]), reading=reading)
+        cols[o] = cache[k][o]
+    return pd.DataFrame(cols)[[o for o in stage.odors if o in cols]]
 
 
 # ---------------------------------------------------------------------------
@@ -1835,27 +2041,79 @@ def solve_input(stage: PNStage, target: pd.DataFrame, glomeruli: Optional[Sequen
         edge['n'] = n_edge
         return (x.sum(axis=0) + fixed) / nG - m, x
 
+    # the mean delta of each odor at which the solved deltas have that mean: F(m) = mean(solved(m)) - m, bracketed
+    # outward from the input's own mean, then the Illinois method, every odor at once
+    thr = delta_tol / nG
     m0 = d[:, cols].mean(axis=0)
-    F0, x = solved_at(m0)
-    m1 = m0 + F0
-    it, moved = 1, float(np.abs(F0).max())
-    while it < max_outer and moved > delta_tol / nG:
-        F1, x = solved_at(m1)
-        it += 1
-        moved = float(np.abs(F1).max())
-        den = F1 - F0
-        step = np.where(np.abs(den) > 1e-15, F1 * (m1 - m0) / np.where(den == 0, 1.0, den), -F1)
-        m0, F0, m1 = m1, F1, m1 - step
-    d[np.ix_(rows, cols)] = x
-    got = PNStage(pd.DataFrame(d, index=G, columns=stage.odors), pd.Series(stage.spont, index=G), sp).run(
-        reading=reading)
-    diff = float(np.nanmax(np.abs(got.loc[gl, od].to_numpy() - T)))
-    rec = dict(outer=it, max_abs_diff=diff, at_edge=int(edge['n']), tol=tol, last_mean_move=moved,
+    F0, x0 = solved_at(m0)
+    it = 1
+    done = np.abs(F0) <= thr
+    lo_m, flo, hi_m, fhi = m0.copy(), F0.copy(), m0.copy(), F0.copy()
+    step = np.where(np.abs(F0) > 1e-3, F0, np.sign(F0) * 1e-3)
+    found = done.copy()
+    # (outward on both sides: F falls with m where the solved mean rises more slowly than m, and rises where faster)
+    for _ in range(max_outer):
+        if found.all():
+            break
+        for sgn in (1.0, -1.0):
+            m1 = np.where(found, m0, m0 + sgn * step)
+            F1, _ = solved_at(m1)
+            it += 1
+            cross = ~found & (np.sign(F1) != np.sign(F0))
+            lo_m, flo = np.where(cross, m0, lo_m), np.where(cross, F0, flo)
+            hi_m, fhi = np.where(cross, m1, hi_m), np.where(cross, F1, fhi)
+            found = found | cross
+            if found.all():
+                break
+        step = np.where(found, step, 2.0 * step)
+    x, moved = x0, float(np.abs(F0).max())
+    if not done.all():
+        side = np.zeros(len(cols))
+        for _ in range(max_outer):
+            den = fhi - flo
+            m = np.where(done, m0, np.where(den != 0, hi_m - fhi * (hi_m - lo_m) / np.where(den != 0, den, 1.0),
+                                            0.5 * (lo_m + hi_m)))
+            Fm, x = solved_at(m)
+            it += 1
+            moved = float(np.abs(Fm[~done]).max())
+            if moved <= thr:
+                break
+            same = (np.sign(Fm) == np.sign(flo)) & ~done
+            other = ~same & ~done
+            lo_m, flo = np.where(same, m, lo_m), np.where(same, Fm, flo)
+            hi_m, fhi = np.where(other, m, hi_m), np.where(other, Fm, fhi)
+            fhi = np.where(same & (side == -1), fhi / 2, fhi)
+            flo = np.where(other & (side == 1), flo / 2, flo)
+            side = np.where(same, -1.0, np.where(other, 1.0, side))
+    def check(xs):
+        dd = d.copy()
+        dd[np.ix_(rows, cols)] = xs
+        got = PNStage(pd.DataFrame(dd, index=G, columns=stage.odors), pd.Series(stage.spont, index=G), sp).run(
+            reading=reading)
+        return dd, got, float(np.nanmax(np.abs(got.loc[gl, od].to_numpy() - T)))
+
+    d_best, got, diff = check(x)
+    edges, how = int(edge['n']), 'bracketed'
+    if diff > tol or edges:
+        # no self-consistent mean found cleanly (strong normalization can make the rates nearly blind to the mean):
+        # plain alternation from the input's own mean, keeping the deltas whose exact rates are nearest the target
+        m = m0.copy()
+        for _ in range(max_outer):
+            Fm, xm = solved_at(m)
+            it += 1
+            dd, gg, df = check(xm)
+            if edge['n'] == 0 and (df < diff or edges):
+                d_best, got, diff, edges, how = dd, gg, df, 0, 'alternation'
+            if diff <= tol:
+                break
+            m = m + Fm
+    rec = dict(outer=it, max_abs_diff=diff, at_edge=edges, tol=tol, last_mean_move=moved, method=how,
                others_max_change=float(np.abs(got.iloc[others][od].to_numpy() - base.iloc[others][od].to_numpy()
                                               ).max()) if others else 0.0)
     rec['converged'] = bool(rec['max_abs_diff'] <= tol and rec['at_edge'] == 0)
-    rec['fixed_point'] = bool(moved <= delta_tol / nG)
-    return pd.DataFrame(d, index=G, columns=stage.odors), rec
+    rec['fixed_point'] = bool(moved <= thr)
+    rec['bracketed'] = bool(found.all())
+    return pd.DataFrame(d_best, index=G, columns=stage.odors), rec
 
 
 def _solve_entries(sp: StageParams, spont: np.ndarray, rows: np.ndarray, cols: np.ndarray, T: np.ndarray,
@@ -1997,16 +2255,72 @@ def release(tag: str, root: Optional[Path] = None) -> None:
     E134R.release(tag, root=out_dir() if root is None else root)
 
 
+def arm_table(arm: Arm, stage: PNStage, dendrites: Optional[pd.DataFrame], glomeruli: Sequence[str],
+              fits: Optional[Mapping[str, dict]] = None, rung: Optional[str] = None, seed: int = SEED,
+              out_of_bounds: Optional[str] = None) -> Tuple[pd.DataFrame, List[str], dict]:
+    """An arm's table of PN rates on a stage's input ('preset' reading) and the glomeruli it sets.
+
+    'R1': the R1 fits' stage (`rung_table`); 'rung' / 'rung_glom_perm': the highest kept rung (its terms' glomerulus
+    labels permuted, `permute_terms`, for the control); 'imposed' and its permutations: the dendrites (fly mean of all
+    PN flies, glomeruli x odors) on the shared glomeruli, glomerulus or odor labels permuted for the controls, rank for
+    rank on the stage's own rates (`imposed_rates`, with the stage's reachable bounds and the `out_of_bounds` policy)."""
+    rng = np.random.default_rng(seed)
+    gl = [g for g in glomeruli if g in stage.glomeruli]
+    rec: dict = dict(arm=arm.arm, panel=arm.panel)
+    if arm.arm == 'R1':
+        return rung_table(stage, fits, 'R1'), list(stage.glomeruli), rec
+    if arm.arm in ('rung', 'rung_glom_perm'):
+        if arm.arm == 'rung':
+            return rung_table(stage, fits, rung), list(stage.glomeruli), rec
+        pf = {k: dict(f, **{rung: permute_terms(Terms.from_dict(f[rung]), gl, np.random.default_rng(seed)).as_dict()})
+              for k, f in fits.items()}
+        return rung_table(stage, pf, rung), list(stage.glomeruli), rec
+    own = stage.run(reading='preset')
+    den = dendrites.loc[gl, [o for o in dendrites.columns if o in stage.odors]].astype(float)
+    if arm.arm in ('imposed_glom_perm',):
+        den = permute_glomerulus_labels(den, gl, rng)
+    elif arm.arm == 'imposed_odor_perm':
+        cols = list(den.columns)
+        perm = [cols[i] for i in rng.permutation(len(cols))]
+        den = pd.DataFrame(den[perm].to_numpy(), index=den.index, columns=cols)
+    elif arm.arm not in ('imposed', 'imposed_route2_repeat'):
+        raise ValueError(arm)
+    tab, r = imposed_rates(own, den, gl, bounds=stage.rate_bounds(), out_of_bounds=out_of_bounds)
+    rec.update(r)
+    return tab, gl, rec
+
+
+def arm_input(stage: PNStage, table: pd.DataFrame, set_glomeruli: Sequence[str], route: int) -> Tuple[dict, dict]:
+    """How an arm's table enters the family's simulator: route 1, extra_kws=dict(pn_rates=<the set entries>) on the
+    panel's input (`route1_pn_rates`); route 2, the input solved on the stage (`solve_input`: the set glomeruli at the
+    table's rates, the other input glomeruli at their own rates there, the LN on the solved input), as orn=. Returns
+    (build_simulator's keyword arguments, the record)."""
+    if route == 1:
+        return dict(extra_kws=dict(pn_rates=route1_pn_rates(table, set_glomeruli))), dict(route=1)
+    if route != 2:
+        raise ValueError(f'{route=}')
+    own = stage.run(reading='preset')
+    target = own.copy()
+    target.loc[list(set_glomeruli)] = table.loc[list(set_glomeruli), own.columns].to_numpy()
+    rows = [g for g in stage.glomeruli if np.any(stage.delta.loc[g].to_numpy() != 0) or g in set(set_glomeruli)]
+    solved, rec = solve_input(stage, target.loc[rows], rows)
+    if not rec['converged']:
+        raise RuntimeError(f'route 2: the solve did not converge: {rec}')
+    return dict(orn=solved), dict(route=2, solve=rec)
+
+
 def part_step2(lane: Optional[str] = None, reverse: bool = False, reclaim: bool = False) -> pd.DataFrame:
     """Step 2, resumable, one point claimed at a time; refuses before E134's gate. A point: its arm's table of PN rates
-    (step 1's kept rung or R1; the imposed dendrites and their permutations), the ORN input solved for it on the
-    wiring's PN stage (route 2; route 1 once viki's option is pushed), the family's simulator on that input (E83's
-    `build_simulator`, breadth held at the lab input's), both response rates re-held, every stage saved and read as
-    E134's step 3 (atlas's runner's `run_stages`, `check_identity`, `save_run`, which take a point of their own panels:
-    they need an ORN-input override first, a request to atlas)."""
+    (`arm_table`: step 1's kept rung or R1 from `rung_fits_all_flies`; the imposed dendrites and their permutations),
+    entered by route 1 (fit_mb_model's pn_rates) or route 2 (the solved input) (`arm_input`), the family's simulator on
+    it (`family_stage`'s E83 `build_simulator`, breadth held at the lab input's), both response rates re-held, every
+    stage saved and read as E134's step 3 (atlas's runner: its `held_targets`, `run_stages`, `check_identity`,
+    `save_run`, still stubs at E135's commit, which take a point of their own panels and need an ORN-input and
+    extra-kwargs override, a request to atlas)."""
     require_e134_gate()
-    raise NotImplementedError('step 2 waits on E134\'s gate and on atlas\'s step-3 runner (an ORN-input override of '
-                              'build_point); its points, claims, tables and solved inputs are implemented')
+    raise NotImplementedError("step 2's runs wait on E134's gate and on atlas's step-3 runner (an ORN-input and "
+                              "extra-kwargs override of its build_point and run_stages); E135's points, claims, arm "
+                              'tables and both routes are implemented')
 
 
 def class_thresholds(stage_table: Optional[pd.DataFrame] = None) -> dict:
@@ -2112,7 +2426,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     if a.part == 'step0':
         part_step0(n_boot=a.n_boot, seed=a.seed)
     elif a.part == 'step0_saved':
-        saved_stage_rows()
+        part_step0_saved()
     elif a.part == 'lock':
         write_lock(a.n_folds, a.seed)
     elif a.part == 'step1':

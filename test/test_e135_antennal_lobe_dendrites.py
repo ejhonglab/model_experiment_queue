@@ -323,6 +323,32 @@ def test_run_rungs_end_to_end(fit_case):
     assert all(len(v) == 2 for v in out['folds']['R1'].values())
 
 
+def test_rung_table_and_arms(fit_case):
+    st, pop, true, odors = fit_case
+    tA, tB = E.Terms(gains={'g0': 2.0}), E.Terms(gains={'g0': 0.5})
+    fits = {'0': dict(held_out=odors[:5], R1={}, R2=tA.as_dict()), '1': dict(held_out=odors[5:8], R1={},
+            R2=tB.as_dict()), 'all': dict(held_out=[], R1={'pn_inhadd': 60.0}, R2=E.Terms().as_dict())}
+    tab = E.rung_table(st, fits, 'R2')
+    pd.testing.assert_series_equal(tab[odors[0]], st.run(terms=tA, reading='preset')[odors[0]])
+    pd.testing.assert_series_equal(tab[odors[6]], st.run(terms=tB, reading='preset')[odors[6]])
+    pd.testing.assert_series_equal(tab[odors[9]], st.run({'pn_inhadd': 60.0}, E.Terms(), reading='preset')[odors[9]])
+    gl = st.glomeruli[:6]
+    den = pd.DataFrame(np.random.default_rng(0).normal(size=(6, len(odors))), index=gl, columns=odors)
+    imp, set_gl, rec = E.arm_table(E.Arm('megamat', 'imposed'), st, den, gl)
+    assert set_gl == gl and rec['n_mapped'] == 6 * len(odors)
+    perm, _, _ = E.arm_table(E.Arm('megamat', 'imposed_odor_perm'), st, den, gl)
+    assert not np.allclose(perm.loc[gl].to_numpy(), imp.loc[gl].to_numpy())
+    kw, r1 = E.arm_input(st, imp, gl, route=1)
+    assert np.isnan(kw['extra_kws']['pn_rates'].loc[st.glomeruli[6:]]).all().all()
+    d2 = st.delta.copy()
+    d2.loc[gl[:2]] = d2.loc[gl[:2]].to_numpy() * 1.3                  # a reachable table: another input's rates
+    tab2 = E.PNStage(d2, pd.Series(st.spont, index=st.glomeruli), st.sp).run(reading='preset')
+    kw2, r2 = E.arm_input(st, tab2, st.glomeruli, route=2)
+    back = E.PNStage(kw2['orn'], pd.Series(st.spont, index=st.glomeruli), st.sp).run(reading='preset')
+    assert np.abs(back.to_numpy() - tab2.to_numpy()).max() <= E.SOLVE_TOL_HZ
+    np.testing.assert_allclose(kw2['orn'].to_numpy(), d2.to_numpy(), atol=0.5)
+
+
 def test_permutations_and_measured_start():
     rng = np.random.default_rng(0)
     x = pd.DataFrame(np.arange(12.0).reshape(4, 3), index=list('abcd'))
