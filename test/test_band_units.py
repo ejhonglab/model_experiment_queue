@@ -211,3 +211,44 @@ def test_e73_fixed_unit_flags(monkeypatch):
         assert f.fixed_realism_flag == S.realism_flag(r['rate_on'], r['rate_off'], f.fixed_rate_rho_on, f.fixed_opk_on_tv,
             f.fixed_opk_off_tv, units='noise')
     assert 'APL-on response rate' in fx.loc['v1', 'fixed_realism_flag']
+
+
+def test_archive_alias(tmp_path, monkeypatch):
+    """E87's and E88's D1 arms take their APL-off responses from another run (the family's fit on the wiring, or E88's
+    base), and E113's refits are found in fits/refit_<wiring>/ under their run names; nothing else is redirected, and an
+    ambiguous match is None."""
+    rng = np.random.default_rng(5)
+    r = {c: pd.DataFrame((rng.random((400, 16)) < p).astype(float), columns=LABELS)
+         for c, p in (('on', 0.07), ('acute_off', 0.15))}
+    f87, f88, f113 = (tmp_path / n for n in ('E87_inhibition_form', 'E88_responder_sets', 'E113_input_within_spread'))
+    fam, tag_p1 = S.FAMILY_RUNS['P1']
+    for d in (f87 / 'D', f88 / 'D1', f113 / 'fits' / 'refit_M3', f113 / 'fits' / 'refit_P3', tmp_path / fam):
+        d.mkdir(parents=True)
+    r['on'].to_parquet(f87 / 'D' / 'D1_chosen_P1_on_responses.parquet')
+    r['acute_off'].to_parquet(tmp_path / fam / f'{tag_p1}_acute_off_responses.parquet')
+    r['on'].to_parquet(f88 / 'D1' / 'D1_uniform_real_on_responses.parquet')
+    r['acute_off'].to_parquet(f88 / 'D1' / 'base_real_acute_off_responses.parquet')
+    for c in r:
+        r[c].to_parquet(f113 / 'fits' / 'refit_M3' / f'wiring-x-seed3_input-D2_k2_refit_{c}_responses.parquet')
+        for run in ('a', 'b'):
+            r[c].to_parquet(f113 / 'fits' / 'refit_P3' / f'{run}_refit_{c}_responses.parquet')
+    monkeypatch.setattr(S, 'ARCHIVE', tmp_path)
+    assert S.archive_responses(f87, 'D1_chosen_P1', 'acute_off') == tmp_path / fam / f'{tag_p1}_acute_off_responses.parquet'
+    assert S.archive_responses(f87, 'D1_chosen_P1', 'on') == f87 / 'D' / 'D1_chosen_P1_on_responses.parquet'
+    assert S.archive_responses(f87, 'D1_chosen_P2', 'acute_off') is None
+    assert S.archive_responses(f88, 'D1_uniform_real', 'acute_off') == f88 / 'D1' / 'base_real_acute_off_responses.parquet'
+    assert S.archive_responses(f88, 'D1_uniform_P2', 'acute_off') is None
+    got = S.archive_responses(f113, 'refit_M3', 'on')
+    assert got == f113 / 'fits' / 'refit_M3' / 'wiring-x-seed3_input-D2_k2_refit_on_responses.parquet'
+    assert S.archive_responses(f113, 'refit_P3', 'on') is None
+    assert S.archive_alias('E10_joint_fit', 'k0', 'on') is None
+    assert S.archive_alias('E87_inhibition_form', 'D2_b3_thr_noise_real', 'acute_off') is None
+    rates = S.archive_rates(f88, 'D1_uniform_real')
+    assert rates['rate_on'] == pytest.approx(r['on'].mean().mean())
+    assert rates['rate_off'] == pytest.approx(r['acute_off'].mean().mean())
+
+
+def test_family_runs_are_e83_members():
+    """`FAMILY_RUNS` is E83's `members()` (the family's eight wirings at their own fits)."""
+    from experiments import E83_cross_wiring_fit as E
+    assert S.FAMILY_RUNS == E.members()

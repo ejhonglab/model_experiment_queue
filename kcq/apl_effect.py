@@ -107,6 +107,34 @@ HELD_VARIANTS = (('E97_glomerulus_claw_shares', E97_WITHHELD), ('E4_substrate', 
 # folders below a results folder or the model-output archive that hold outputs withheld from queue work: never read
 WITHHELD_DIR = re.compile(r'^withheld_')
 
+# the family's eight wirings at their own fits (E83's `members`, from E77's and E72's): {wiring: (archive folder, run tag)}
+FAMILY_RUNS = {'real': ('E67_apl_effect_fits', 'rate0.068_aplboth_k2_cap3'),
+               **{f'P{n}': ('E72_wiring_population', f'wiring-claw_permutation_within_type-seed{n}_rate0.068_aplboth_k2_cap3')
+                  for n in (1, 2, 3, 4)},
+               **{f'M{n}': ('E72_wiring_population', f'wiring-curveball_within_type_matched-seed{n}_rate0.068_aplboth_k2_cap3')
+                  for n in (1, 2, 3)}}
+
+
+def archive_alias(folder: str, tag: str, name: str) -> Optional[Tuple[str, str]]:
+    """Where a variant's archived responses are when they are not `<tag>_<name>_responses.parquet` in its own archive
+    folder: (archive folder, a glob below it), or None.
+
+    - E87's D1 arms (`D1_<form>_<wiring>`) change only the APL-on condition; their APL-off run is the family's own fit on the
+      wiring (E83's `saved_fit`, `FAMILY_RUNS`), archived with E67 or E72.
+    - E88's D1 arms likewise; their APL-off run is the base on the wiring, archived as D1/base_<wiring>.
+    - E113's refits (`refit_<wiring>`) are archived in fits/refit_<wiring>/ under their run names.
+    """
+    m = re.fullmatch(r'D1_.+_(real|[PM]\d)', tag)
+    if m and name == 'acute_off':
+        if folder == 'E87_inhibition_form' and m.group(1) in FAMILY_RUNS:
+            f, t = FAMILY_RUNS[m.group(1)]
+            return f, f'{t}_{name}_responses.parquet'
+        if folder == 'E88_responder_sets':
+            return folder, f'D1/base_{m.group(1)}_{name}_responses.parquet'
+    if folder == 'E113_input_within_spread' and re.fullmatch(r'refit_(real|[PM]\d)', tag):
+        return folder, f'fits/{tag}/*_refit_{name}_responses.parquet'
+    return None
+
 
 def held(folder: str, tag: str) -> bool:
     """True for a variant in `HELD_VARIANTS` (no new reading)."""
@@ -192,13 +220,19 @@ def _archive_index(d: str) -> Dict[str, Tuple[Path, ...]]:
 def archive_responses(folder: Path, tag: str, name: str) -> Optional[Path]:
     """The model-output archive's `<tag>_<name>_responses.parquet` (`name` 'on' or 'acute_off') for a results folder:
     at the archive folder's root, else in its subfolders (B/, D/, from_<host>/B/, ...; the layout from E77 on), when
-    exactly one has it; None otherwise."""
+    exactly one has it; else where `archive_alias` points, when exactly one file matches there; None otherwise."""
     d = ARCHIVE / folder.name
     fname = f'{tag}_{name}_responses.parquet'
     if (d / fname).exists():
         return d / fname
     found = _archive_index(str(d)).get(fname, ())
-    return found[0] if len(found) == 1 else None
+    if found:
+        return found[0] if len(found) == 1 else None
+    alias = archive_alias(folder.name, tag, name)
+    if alias is None:
+        return None
+    hits = sorted((ARCHIVE / alias[0]).glob(alias[1]))
+    return hits[0] if len(hits) == 1 else None
 
 
 def archive_rates(folder: Path, tag: str) -> Optional[dict]:
