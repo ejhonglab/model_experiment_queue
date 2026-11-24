@@ -21,18 +21,29 @@ The populations (`POPULATIONS`; keys (stage, panel, cohort)) and where each come
 - the APL16 panel: KC somata of the control flies (cohort 'control', 11 recordings) and of APL output blocked (TNT)
   ('tnt', 8 recordings), data/yang_apl16_kc_noise_units/.
 
-Units (`Population.units`) and criteria (`CRITERIA`), one per stage:
+Units (`Population.units`) and criteria (`CRITERIA`, `response_criterion`), one per stage and, for the KC somata, one
+per set of recordings:
 - 'baseline-noise SD' where the recordings' frames are on hand: the window mean minus the pre-odor mean, over the SD
   of the unit's frames within the pre-odor windows (each window's mean removed, pooled over trials). Boutons and claws
-  2.0 (E119), KC somata 1.9684 (the realism bands' criterion, notes/response_criterion_decision.md).
+  2.0 (E119). KC somata (the planner's reading 14, 2026-11-24; `soma_footing`, recorded in the lock's soma_criteria):
+  - the APL16 somata 1.9684 (the realism bands' criterion, notes/response_criterion_decision.md: the level at which the
+    control flies keep the response rate of their recorder's own criterion);
+  - Remy's megamat somata the level at which the mean over her four flies of each fly's response rate over the 17
+    odors is 0.0915, the megamat operating point (`MEGAMAT_SOMA_RATE`), found by the bisection that gave 1.9684;
+  - validation2's somata and the same-fly fly on megamat's footing: each group's values (`V2_GROUP_SUFFIX`: the 13
+    recordings whose ThorImage name ends in _tsub03, and the 7 others) times megamat's median noise bridge over the
+    group's, then megamat's level. The population files hold these values (`FOOTED`).
 - 'trial-noise SD' for the glomeruli (ORNs, PN dendrites), whose processed tables hold one dF/F per trial and no
   frames: the trial mean over a robust SD of the unit's single trials about their odor means (per fly and glomerulus,
   1.4826 times the median absolute residual over the panel's trials, each residual scaled by sqrt(n / (n - 1)) for n
   trials of the odor). Criterion 2.0. The lock's `noise_bridge` gives, on the stages that have both, the ratio of this
   unit to the baseline-noise unit.
 - 'session z (Fc_zscore)' for the mixtures' KC somata (olfdb dataset 8 holds trial means of Remy's whole-session
-  z-score and no frames or trials): criterion `MIXTURE_Z_CRITERION`, the z at which Remy's four megamat flies have the
-  response rate their baseline-noise criterion gives (`z_bridge`, computed by `--copy` and recorded in the lock).
+  z-score and no frames or trials): criterion `mixture_z_criterion()`, the z at which Remy's four megamat flies have
+  the response rate their baseline-noise criterion (megamat's level) gives (`z_bridge`, recorded in the lock).
+
+The lock also records the readings the other hosts' code applies (`RULES`): the megamat stage error's composition, the
+split-half rule, the step class and the measure gate's two readings.
 
 Every population is built by `--build` into one long parquet file, <shared>/data/stage_populations/populations/
 <stage>__<panel>__<cohort>.parquet (columns fly, unit, odor, repeat, value; repeat -1 for a trial mean where the source
@@ -113,8 +124,102 @@ APL16_ODORS = ('2h', 'IaA', 'pa', '2-but', 'eb', 'ep', '6al', 't2h', '1-8ol', '1
 PANEL_ODORS = {'megamat': MEGAMAT_ODORS, 'validation2': VALIDATION2_ODORS, 'kmix': KMIX_ODORS, 'cmix': CMIX_ODORS,
                'apl16': APL16_ODORS}
 
-# one response criterion per stage, in the stage's units; the mixtures' somata (session z) take MIXTURE_Z_CRITERION
+# one response criterion per stage, in the stage's units; for the KC somata it is the APL16 somata's, and the other
+# soma panels take theirs from `response_criterion` (megamat's level, the mixtures' z bridge)
 CRITERIA = {'orn': 2.0, 'pn_dendrite': 2.0, 'pn_bouton': 2.0, 'kc_claw': 2.0, 'kc_soma': 1.9684}
+# the KC somata's criterion per set of recordings (the planner's reading 14, claude-fable-5-2, spawned from viki
+# 2026-11-24 11:11): Remy's megamat somata at the level that gives the megamat operating point, the others on its footing
+MEGAMAT_SOMA_RATE = 0.0915      # the megamat operating point: Remy's four flies by her criterion, the model's held rate
+# kcq.data_targets.criterion_threshold's search (geometric bisection), which gave the APL16 somata's 1.9684
+CRITERION_SEARCH = dict(lo=0.1, hi=100.0, steps=60, decimals=4)
+V2_GROUP_SUFFIX = '_tsub03'     # validation2's KC acquisitions whose ThorImage name ends so (13 of 20) form one group
+# the populations whose values are put on megamat's footing (times megamat's median noise bridge over their group's)
+FOOTED: Tuple[Tuple[str, str, str], ...] = (('kc_soma', 'validation2', 'wild_type'), ('kc_soma', 'megamat', 'same_fly'))
+SOMA_CRITERION_RULE = (
+    "APL16 somata: 1.9684 baseline-noise SDs, unchanged (the level at which the control flies keep the response rate of "
+    "their recorder's own criterion, 1 z; notes/response_criterion_decision.md)",
+    "Remy's megamat somata: the level, in their baseline-noise units, at which the mean over her four flies of each "
+    "fly's response rate over the 17 odors equals 0.0915, the megamat operating point (the model's held rate, two or more "
+    'spikes); the geometric bisection of kcq.data_targets.criterion_threshold, rounded to 4 decimals',
+    "validation2 somata: each group's values (the recordings whose ThorImage name ends in _tsub03, and the others) "
+    "multiplied by megamat's median noise bridge over the group's, then megamat's level",
+    "the same-fly megamat fly: its values multiplied by megamat's median noise bridge over its own, then megamat's level",
+    "the mixtures' somata (session z): the z bridge's rule unchanged (the z at which the pooled Fc_zscore trial means of "
+    "Remy's four megamat flies respond at the pooled rate of their baseline-noise trial means above the criterion), at "
+    "megamat's level",
+    "the noise bridge: a fly's median over its units of the trial-noise SD (robust_trial_sd) in baseline-noise units; a "
+    "group's, the median over its flies; megamat's, the median over its four flies",
+)
+# the readings the lock fixes for the other hosts' code (the planner's answer on the open readings, claude-fable-5-2,
+# spawned from viki 2026-11-24 11:11): atlas's runner and hal's scoring apply them
+RULES = {
+    'source': "the planner's answer on the open readings (claude-fable-5-2, spawned from viki 2026-11-24 11:11)",
+    'megamat_stage_error': dict(
+        reading='3',
+        stages=['pn_dendrite', 'pn_bouton', 'kc_claw', 'kc_soma'],
+        combine="root mean square of the stages' population errors (the goal text)",
+        population_error={'pn_dendrite': 'error_with_matrix', 'pn_bouton': 'error', 'kc_claw': 'error',
+                          'kc_soma': 'error'},
+        views={'pn_dendrite': ['strength', 'sharing', 'breadth', 'matrix'],
+               'pn_bouton': ['strength', 'sharing', 'breadth'], 'kc_claw': ['strength', 'sharing', 'breadth'],
+               'kc_soma': ['strength', 'sharing', 'breadth']},
+        over_wirings="a model's value is the mean over its wirings of each wiring's megamat stage error",
+        beside=["the three-view value (every stage's population error on strength, sharing and breadth)",
+                "the value of the wirings' mean views (the error common to the wirings)"],
+        why='a model right only up to a relabelling of glomeruli is wrong, and the three unit-free views cannot see it',
+        caution="one curve for all glomeruli cannot absorb glomerulus-specific signal strength: if the PN dendrites' "
+                'class differs with and without the matrix view, the write-up says so',
+        not_readable='a stage that is not readable stays out until a reading holds (the goal text)'),
+    'split_halves': dict(
+        reading='4 and the curve note',
+        pairing='each split pairs a random half of the control recordings with a random half of the TNT recordings',
+        from_the_half=['curve', 'noise', 'reference', 'one-fly units'],
+        rule='when a half is scored, everything the reading takes from the flies comes from that half',
+        apl_off='the curve is set on the control half; the noise and the reference come from the TNT half',
+        beside=["the shared curve: curve and noise from all recordings, the half's one-fly units, on the same variants "
+                'and splits',
+                "all recordings' one-fly units (--units-from all), on the same variants and splits"],
+        consistency="Spearman's rho over the variants between the two halves' values, the mean over splits",
+        n_splits=200,
+        reduced_draw='a seeded draw of at least 500 variants and 100 splits if the full run would pass an hour, fixed '
+                     'beforehand and written in the provenance',
+        min_variants=500, min_splits=100,
+        why='a second set of flies would set its own curve; with the curve from all recordings both halves score a '
+            'model already read against all of them'),
+    'step_class': dict(
+        reading='6',
+        distance="per part, the root mean square over the part's entries of the model's change minus the flies' "
+                 'measured change',
+        inside_if='the distance is no larger than the 95th percentile of the same distance for resampled flies (both '
+                  'stages resampled, as kcq.population_fit.step_interval draws them)',
+        percentile=95,
+        view_inside_if='every part of the view is inside',
+        explained_if='every view is inside on 6 of the 8 wirings',
+        min_wirings=6, n_wirings=8,
+        other_classes='"no better than no step" if the model\'s downstream error is at or above the no-step yardstick, '
+                      'otherwise "in part" (the entry)',
+        description="the per-entry 90 % intervals stay as the description (the entries inside, e.g. '7 of 15')",
+        why='with 136 pairs and 90 % intervals even resampled flies miss about one entry in ten, so "every entry '
+            'inside" can never hold'),
+    'gate': dict(
+        A_wiring_check=dict(
+            rule='passes if the mean over the eight wirings is 1.2 or less, each wiring scored against the other seven '
+                 "read as the flies, in the seven's own one-fly units",
+            statistic='mean over the wirings', max=1.2,
+            beside=['the range over the wirings', 'the number of wirings above 1.2'],
+            replaces="atlas's stub, every wiring at 1.2 or less: the most atypical fly is above 1.2 in 12 of 13 "
+                     'populations of flies_table.md'),
+        B_reading=dict(
+            rule='the gate is read on the default reading, with halves as in split_halves, on both conditions; '
+                 '"usable" needs 0.8 in each',
+            reading='default', conditions=['on, against the control flies', 'off, against APL output blocked (TNT)'],
+            min_consistency=0.8,
+            beside=['the raw reading (two or more spikes, no curve, no noise)'],
+            why='halves of four TNT recordings are the nearest stand-in for the megamat claws and somata, which have '
+                'four flies in all'),
+        otherwise='each view is tested singly, the views at 0.8 or more form the measure, and the goal text goes back to '
+                  'Tom and Yang (the entry)'),
+}
 UNITS_BASELINE = 'baseline-noise SD'
 UNITS_TRIAL = 'trial-noise SD'
 UNITS_SESSION_Z = 'session z (Fc_zscore)'
@@ -139,7 +244,8 @@ LOCK_COPY = HERE / 'experiments' / 'E134_lock.json'     # ... and its committed 
 DATA = SHARED / 'data' / 'stage_populations'            # what `--copy` copied and reduced, and `--build`'s files
 SOURCES_DIR = DATA / 'sources'
 POP_DIR = DATA / 'populations'
-OLFDB = 'http://hal:8080'
+SOMA_FOOTING_PATH = POP_DIR / 'soma_footing.json'      # `write_soma_footing`: the KC somata's criteria and factors
+OLFDB ='http://hal:8080'
 OLFDB_DATASETS = {'orn_megamat': 1, 'orn_validation2': 4, 'orn_mixtures': 5, 'kc_mixtures': 8}
 REMY_TENSOR = SHARED.parents[1] / 'Remy' / 'odor_space_collab' / 'analysis_outputs'
 REMY_V2_DIR = REMY_TENSOR / 'data_by_acq_2' / 'kc_soma_nls'
@@ -241,10 +347,13 @@ def panel_odors(panel: str) -> Tuple[str, ...]:
 
 
 def response_criterion(stage: str, panel: str, cohort: str = 'wild_type') -> float:
-    """The stage's response criterion in its units: `CRITERIA[stage]`, except the mixtures' KC somata (session z),
-    whose criterion is the z bridge recorded by `--copy` (`mixture_z_criterion`)."""
+    """The population's response criterion in its units: `CRITERIA[stage]`, except the KC somata of megamat (Remy's
+    flies and the same fly) and validation2, which take megamat's level (`megamat_soma_criterion`), and of the mixtures
+    (session z), which take the z bridge at that level (`mixture_z_criterion`). The APL16 somata keep 1.9684."""
     if stage == 'kc_soma' and panel in MIXTURE_PANELS:
         return mixture_z_criterion()
+    if stage == 'kc_soma' and panel in ('megamat', 'validation2'):
+        return megamat_soma_criterion()
     return CRITERIA[stage]
 
 
@@ -597,6 +706,7 @@ def v2_qc_drops() -> pd.DataFrame:
                              stim=q.stim_to_drop.astype(str).to_numpy())).drop_duplicates()
 
 
+@lru_cache(maxsize=2)                   # read twice by --build (the footing, the population); callers do not mutate it
 def v2_soma_long(copy_dir: Optional[Path] = None) -> Tuple[pd.DataFrame, List[dict]]:
     """Remy's validation2 KC somata in baseline-noise units, from her respvec files (peak_amp of Fc, the 2 to 8 s mean
     minus the -10 to -0.5 s mean; baseline_std of Fc, the SD of each trial's -10 to -0.5 s frames): per cell, the
@@ -736,10 +846,11 @@ def megamat_soma_long(copy_dir: Optional[Path] = None) -> pd.DataFrame:
 
 
 def z_bridge(copy_dir: Optional[Path] = None, criterion: float = CRITERIA['kc_soma']) -> dict:
-    """The session-z criterion equivalent to the KC somata's baseline-noise criterion, on Remy's four megamat flies:
+    """The session-z criterion equivalent to a baseline-noise criterion of the KC somata, on Remy's four megamat flies:
     the z at which the fraction of (cell, odor) trial means of her respvec Fc_zscore above it equals the fraction of
     baseline-noise trial means above `criterion`, pooled over the flies' cells and odors (each fly weighted by its
-    cells). The criterion of the mixtures' KC somata, which olfdb holds in session z only."""
+    cells). At megamat's level (`soma_footing_contents`) it is the criterion of the mixtures' KC somata, which olfdb
+    holds in session z only."""
     d = megamat_copy_dir() if copy_dir is None else Path(copy_dir)
     r = pd.read_parquet(d / 'frames_reduced.parquet')
     r = r[np.isfinite(r.sd) & (r.sd > 0) & r.stim.str.split(' @ ').str[0].isin(MEGAMAT_ODORS)]
@@ -752,11 +863,224 @@ def z_bridge(copy_dir: Optional[Path] = None, criterion: float = CRITERIA['kc_so
 
 @lru_cache(maxsize=None)
 def mixture_z_criterion() -> float:
-    """The z bridge recorded in sources/remy_megamat_kc_soma/z_bridge.json (`z_bridge`), rounded to 4 decimals."""
-    b = _read_json(megamat_copy_dir() / 'z_bridge.json')
-    if b is None:
-        raise FileNotFoundError('sources/remy_megamat_kc_soma/z_bridge.json: run --copy first')
-    return round(float(b['z']), 4)
+    """The mixtures' KC somata's criterion: the z bridge at megamat's level (`soma_footing`'s mixtures.z_criterion,
+    `z_bridge` rounded to 4 decimals)."""
+    return float(soma_footing()['mixtures']['z_criterion'])
+
+
+# ---------------------------------------------------------------------------
+# the KC somata's criteria per set of recordings (the planner's reading 14)
+
+def fly_rate(table: pd.DataFrame, criterion: float) -> float:
+    """A fly's overall response rate: its share of unit x odor trial means above `criterion`, over the entries it has
+    (the odors it was given), as `response_rates` reads it."""
+    a = np.asarray(table, dtype=float)
+    ok = np.isfinite(a)
+    return float((a[ok] > criterion).mean()) if ok.any() else float('nan')
+
+
+def criterion_at_rate(tables: Sequence[pd.DataFrame], target: float, lo: float = CRITERION_SEARCH['lo'],
+                      hi: float = CRITERION_SEARCH['hi'], steps: int = CRITERION_SEARCH['steps']) -> float:
+    """The criterion at which the mean over flies of each fly's response rate (`fly_rate`) comes down to `target`:
+    geometric bisection on [lo, hi], `steps` steps, as kcq.data_targets.criterion_threshold chose the APL16 somata's
+    1.9684. Unrounded."""
+    arrs = [np.asarray(t, dtype=float) for t in tables]
+    arrs = [a[np.isfinite(a)] for a in arrs]
+    for _ in range(int(steps)):
+        mid = np.sqrt(lo * hi)
+        r = np.mean([float((a > mid).mean()) for a in arrs])
+        lo, hi = (mid, hi) if r > target else (lo, mid)
+    return float(np.sqrt(lo * hi))
+
+
+def fly_noise_bridges(pop: Population) -> Dict[str, float]:
+    """Per fly of a population with single trials, the median over its units of the trial-noise SD
+    (`robust_trial_sd`) in the population's units: the noise bridge (1 if the trial-to-trial noise were the unit)."""
+    out = {}
+    for fly in pop.flies:
+        t = pop.trials[fly]
+        reps = sorted(set(t.columns.get_level_values('repeat')))
+        X = np.stack([t.xs(r, axis=1, level='repeat').reindex(columns=list(pop.odors)).to_numpy() for r in reps])
+        out[fly] = float(np.nanmedian(robust_trial_sd(X)))
+    return out
+
+
+def v2_groups() -> Dict[str, str]:
+    """validation2's KC flies ('date/fly_num') -> their group: 'tsub03' if the acquisition's ThorImage name ends in
+    `V2_GROUP_SUFFIX`, else 'other'."""
+    out = {}
+    for acq in v2_acqs():
+        date, fly, thor = acq.split('__', 2)
+        out[f'{date}/{int(fly[3:])}'] = 'tsub03' if thor.endswith(V2_GROUP_SUFFIX) else 'other'
+    return out
+
+
+def _raw_soma(key: Tuple[str, str, str], d: pd.DataFrame) -> Population:
+    """A population of the somata's long rows as built, before any footing (the criterion left undefined)."""
+    spec = dict(units=UNITS_BASELINE, criterion=float('nan'), window={}, notes=[], recording_site=RECORDING_SITE[key[0]])
+    return population_from_long(key, d, trials=True, spec=spec)
+
+
+def _rates(tables: Dict[str, pd.DataFrame], criterion: float, factors: Optional[Dict[str, float]] = None) -> dict:
+    """Per fly `fly_rate` (values times the fly's factor first), and their mean, min and max."""
+    per = {f: fly_rate(t * (1.0 if factors is None else factors[f]), criterion) for f, t in tables.items()}
+    v = list(per.values())
+    return dict(per_fly=per, mean=float(np.mean(v)), min=float(np.min(v)), max=float(np.max(v)))
+
+
+def soma_footing_contents() -> dict:
+    """The KC somata's criteria by `SOMA_CRITERION_RULE`, from the sources (no population file is read): megamat's
+    level and per-fly response rates, the noise bridges, validation2's groups and factors, the same fly's factor, the
+    z bridge at megamat's level and the mixtures' response rates; every response rate also at the APL16 somata's
+    criterion (the lock's for every soma panel until the readings of 2026-11-24 11:11), and a table of the cohorts."""
+    apl = float(CRITERIA['kc_soma'])
+    dec = int(CRITERION_SEARCH['decimals'])
+    # megamat: the level
+    mm = _raw_soma(('kc_soma', 'megamat', 'wild_type'), megamat_soma_long())
+    c_raw = criterion_at_rate([mm.tables[f] for f in mm.flies], MEGAMAT_SOMA_RATE)
+    c = round(c_raw, dec)
+    mm_bridge = fly_noise_bridges(mm)
+    ref = float(np.median(list(mm_bridge.values())))
+    mm_new, mm_old = _rates(mm.tables, c), _rates(mm.tables, apl)
+    megamat = dict(flies=list(mm.flies), target_rate=MEGAMAT_SOMA_RATE, criterion=c, criterion_unrounded=c_raw,
+                   per_fly_rate=mm_new['per_fly'], rate_mean=mm_new['mean'],
+                   per_fly_rate_at_apl16_criterion=mm_old['per_fly'], rate_mean_at_apl16_criterion=mm_old['mean'],
+                   noise_bridge_per_fly=mm_bridge, noise_bridge_median=ref)
+    # validation2: the groups and their factors
+    v2 = _raw_soma(('kc_soma', 'validation2', 'wild_type'), v2_soma_long()[0])
+    groups = v2_groups()
+    if set(groups) != set(v2.flies):
+        raise ValueError(f'validation2 groups {sorted(groups)} differ from the flies {list(v2.flies)}')
+    v2_bridge = fly_noise_bridges(v2)
+    gr = {}
+    for g in ('tsub03', 'other'):
+        fl = [f for f in v2.flies if groups[f] == g]
+        b = [v2_bridge[f] for f in fl]
+        gr[g] = dict(flies=fl, n_flies=len(fl), noise_bridge_median=float(np.median(b)),
+                     noise_bridge_min=float(np.min(b)), noise_bridge_max=float(np.max(b)),
+                     factor=ref / float(np.median(b)))
+    v2_fac = {f: gr[groups[f]]['factor'] for f in v2.flies}
+    v2_new, v2_old = _rates(v2.tables, c, v2_fac), _rates(v2.tables, apl)
+    for g, x in gr.items():
+        x['rate_mean'] = float(np.mean([v2_new['per_fly'][f] for f in x['flies']]))
+        x['rate_mean_at_apl16_criterion'] = float(np.mean([v2_old['per_fly'][f] for f in x['flies']]))
+    validation2 = dict(group_rule=f"ThorImage name ends in {V2_GROUP_SUFFIX} ('tsub03') or not ('other')",
+                       group_per_fly={f: groups[f] for f in v2.flies}, groups=gr, factor_per_fly=v2_fac,
+                       noise_bridge_per_fly=v2_bridge, per_fly_rate=v2_new['per_fly'], rate_mean=v2_new['mean'],
+                       per_fly_rate_at_apl16_criterion=v2_old['per_fly'], rate_mean_at_apl16_criterion=v2_old['mean'])
+    # the same fly
+    sf = _raw_soma(('kc_soma', 'megamat', 'same_fly'), same_fly_long('kc_soma'))
+    sf_bridge = fly_noise_bridges(sf)
+    sf_fac = {f: ref / b for f, b in sf_bridge.items()}
+    sf_new, sf_old = _rates(sf.tables, c, sf_fac), _rates(sf.tables, apl)
+    same_fly = dict(flies=list(sf.flies), noise_bridge_per_fly=sf_bridge, factor_per_fly=sf_fac,
+                    per_fly_rate=sf_new['per_fly'], rate_mean=sf_new['mean'],
+                    per_fly_rate_at_apl16_criterion=sf_old['per_fly'], rate_mean_at_apl16_criterion=sf_old['mean'])
+    # the mixtures: the z bridge at megamat's level (and at the APL16 somata's, the lock's before)
+    zb, zb_apl = z_bridge(criterion=c), z_bridge(criterion=apl)
+    zc, zc_apl = round(float(zb['z']), dec), round(float(zb_apl['z']), dec)
+    panels = {}
+    for panel in MIXTURE_PANELS:
+        t = {f: s.pivot_table(index='unit', columns='odor', values='value', aggfunc='mean')
+             for f, s in mixture_kc_long(panel).groupby('fly', sort=True)}
+        new, old = _rates(t, zc), _rates(t, zc_apl)
+        panels[panel] = dict(per_fly_rate=new['per_fly'], rate_mean=new['mean'], per_fly_rate_at_apl16_criterion=
+                             old['per_fly'], rate_mean_at_apl16_criterion=old['mean'])
+    mixtures = dict(z_bridge=zb, z_criterion=zc, z_bridge_at_apl16_criterion=zb_apl,
+                    z_criterion_at_apl16_criterion=zc_apl, panels=panels)
+    # the APL16 somata, unchanged
+    apl16 = {}
+    for cohort in ('control', 'tnt'):
+        p = population_from_long(('kc_soma', 'apl16', cohort), apl16_long(cohort),
+                                 spec=dict(units=UNITS_BASELINE, criterion=apl, window={}, notes=[], recording_site=''))
+        r = _rates(p.tables, apl)
+        apl16[cohort] = dict(criterion=apl, per_fly_rate=r['per_fly'], rate_mean=r['mean'])
+    criteria = {'apl16/control': apl, 'apl16/tnt': apl, 'megamat/wild_type': c, 'megamat/same_fly': c,
+                'validation2/wild_type': c, 'kmix/wild_type': zc, 'cmix/wild_type': zc}
+
+    def row(label, crit, units, factor, n, new, old, old_crit):
+        return dict(cohort=label, criterion=crit, units=units, factor=factor, n_flies=n, rate_mean=new['mean'],
+                    rate_min=new['min'], rate_max=new['max'], rate_mean_at_apl16_criterion=old['mean'],
+                    apl16_criterion=old_crit)
+    tab = [row(f'apl16, {"control flies" if k == "control" else "APL output blocked (TNT)"}', apl, UNITS_BASELINE,
+               1.0, len(v['per_fly_rate']), _summ(v['per_fly_rate']), _summ(v['per_fly_rate']), apl)
+           for k, v in apl16.items()]
+    tab.append(row("megamat, Remy's four flies", c, UNITS_BASELINE, 1.0, len(mm.flies), mm_new, mm_old, apl))
+    for g, x in gr.items():
+        lab = (f'validation2, the {x["n_flies"]} {g} recordings' if g == 'tsub03' else
+               f'validation2, the {x["n_flies"]} other recordings')
+        tab.append(row(lab, c, UNITS_BASELINE, x['factor'], x['n_flies'],
+                       _summ({f: v2_new['per_fly'][f] for f in x['flies']}),
+                       _summ({f: v2_old['per_fly'][f] for f in x['flies']}), apl))
+    tab.append(row('validation2, all', c, UNITS_BASELINE, None, len(v2.flies), v2_new, v2_old, apl))
+    tab.append(row('megamat, the same fly', c, UNITS_BASELINE, list(sf_fac.values())[0], len(sf.flies), sf_new, sf_old,
+                   apl))
+    for panel in MIXTURE_PANELS:
+        x = panels[panel]
+        tab.append(row(f'{panel} (session z)', zc, UNITS_SESSION_Z, None, len(x['per_fly_rate']),
+                       _summ(x['per_fly_rate']), _summ(x['per_fly_rate_at_apl16_criterion']), zc_apl))
+    return dict(rule=list(SOMA_CRITERION_RULE),
+                source="the planner's reading 14 (claude-fable-5-2, spawned from viki 2026-11-24 11:11)",
+                host=_host(), time=_now(), target_rate=MEGAMAT_SOMA_RATE, search=dict(CRITERION_SEARCH),
+                apl16_criterion=apl, criteria=criteria,
+                noise_bridge_reference=dict(population='kc_soma__megamat__wild_type', median=ref),
+                megamat=megamat, validation2=validation2, same_fly=same_fly, mixtures=mixtures, apl16=apl16, table=tab)
+
+
+def _summ(per_fly: Dict[str, float]) -> dict:
+    v = list(per_fly.values())
+    return dict(per_fly=per_fly, mean=float(np.mean(v)), min=float(np.min(v)), max=float(np.max(v)))
+
+
+def write_soma_footing() -> dict:
+    """Write `soma_footing_contents()` to populations/soma_footing.json, and the z bridge at megamat's level to
+    sources/remy_megamat_kc_soma/z_bridge.json (the rule unchanged); clears the readers' caches."""
+    f = soma_footing_contents()
+    _write_json(SOMA_FOOTING_PATH, f)
+    _write_json(megamat_copy_dir() / 'z_bridge.json',
+                dict(f['mixtures']['z_bridge'], rule="z_bridge at megamat's soma criterion (populations/soma_footing.json)"))
+    soma_footing.cache_clear()
+    mixture_z_criterion.cache_clear()
+    return f
+
+
+@lru_cache(maxsize=None)
+def soma_footing() -> dict:
+    """The KC somata's criteria and factors (`soma_footing_contents`): populations/soma_footing.json, else the committed
+    lock's soma_criteria."""
+    f = _read_json(SOMA_FOOTING_PATH)
+    if f is None:
+        f = (read_lock() or {}).get('soma_criteria')
+    if f is None:
+        raise FileNotFoundError(f'{SOMA_FOOTING_PATH}: run --build first')
+    return f
+
+
+def megamat_soma_criterion() -> float:
+    """Megamat's soma level (`soma_footing`'s megamat.criterion): Remy's megamat somata, the same fly and validation2."""
+    return float(soma_footing()['megamat']['criterion'])
+
+
+def soma_factors(key: Tuple[str, str, str]) -> Optional[Dict[str, float]]:
+    """Per fly, the factor a `FOOTED` population's values are multiplied by (megamat's median noise bridge over the
+    group's); None for every other population."""
+    if key == ('kc_soma', 'validation2', 'wild_type'):
+        return {str(k): float(v) for k, v in soma_footing()['validation2']['factor_per_fly'].items()}
+    if key == ('kc_soma', 'megamat', 'same_fly'):
+        return {str(k): float(v) for k, v in soma_footing()['same_fly']['factor_per_fly'].items()}
+    return None
+
+
+def footed(key: Tuple[str, str, str], d: pd.DataFrame, factors: Optional[Dict[str, float]] = None) -> pd.DataFrame:
+    """Long rows put on megamat's footing: every value times its fly's factor (`soma_factors(key)` unless given);
+    unchanged for a population that is not `FOOTED`."""
+    fac = soma_factors(key) if factors is None else factors
+    if fac is None:
+        return d
+    missing = sorted(set(d.fly) - set(fac))
+    if missing:
+        raise ValueError(f'{pop_name(key)}: no footing factor for {missing}')
+    return d.assign(value=d.value.to_numpy(dtype=float) * d.fly.map(fac).to_numpy(dtype=float))
 
 
 # ---------------------------------------------------------------------------
@@ -821,8 +1145,7 @@ def copy_sources(sha: bool = True) -> dict:
         rec.append(dict(kind='remy_megamat_frames', source=str(s['trials']), copy=None))
     pd.concat(red, ignore_index=True).to_parquet(md / 'frames_reduced.parquet', index=False)
     _write_json(md / 'frames_reduced_summary.json', summ)
-    _write_json(md / 'z_bridge.json', z_bridge(md))
-    mixture_z_criterion.cache_clear()
+    write_soma_footing()                                        # megamat's soma level, the footing, the z bridge
     # sha256
     for r in rec:
         r['source_entry'] = file_entry(Path(r['source']), sha=sha) if not r['source'].startswith('http') else None
@@ -860,7 +1183,8 @@ every source with its path, bytes and sha256, and its copy here. Read only from 
   reduced from her iscell_soma/xrds_suite2p_trials.nc (0.85 to 1.55 GB each; not copied, their sha256 in files.csv):
   per good cell (her `good_xid` clusters) and trial, the 2 to 8 s mean minus the -10 to -0.5 s mean of Fc (`dfc`), the
   cell's pre-odor SD (`sd`, the root mean square over trials of each trial's SD) and her respvec Fc_zscore
-  (`z_respvec`). `z_bridge.json`: the session-z criterion of the mixtures' KC somata (the module's `z_bridge`).
+  (`z_respvec`). `z_bridge.json`: the session-z criterion of the mixtures' KC somata (the module's `z_bridge`, at
+  megamat's soma level; rewritten by `--build`, with ../../populations/soma_footing.json).
 """)
 
 
@@ -884,7 +1208,18 @@ def population_spec(key: Tuple[str, str, str]) -> dict:
                      'unit)')
     if panel in MIXTURE_PANELS and stage == 'kc_soma':
         notes.append('session z (Fc_zscore) trial means from olfdb dataset 8; no frames or single trials on hand, so not '
-                     'in baseline-noise units; the criterion is the z bridge on the 2022 megamat flies')
+                     "in baseline-noise units; the criterion is the z bridge on the 2022 megamat flies at megamat's soma "
+                     'level')
+    if key == ('kc_soma', 'validation2', 'wild_type'):
+        notes.append("on megamat's footing: each group's values (ThorImage name ending in _tsub03, or not) multiplied by "
+                     "megamat's median noise bridge over the group's, then megamat's soma level (the lock's "
+                     'soma_criteria)')
+    if key == ('kc_soma', 'megamat', 'same_fly'):
+        notes.append("on megamat's footing: the fly's values multiplied by megamat's median noise bridge over its own, "
+                     "then megamat's soma level (the lock's soma_criteria)")
+    if key == ('kc_soma', 'megamat', 'wild_type'):
+        notes.append("criterion: the level at which the mean over the four flies of each fly's response rate over the 17 "
+                     'odors is 0.0915, the megamat operating point (the lock\'s soma_criteria)')
     if panel in MIXTURE_PANELS and stage == 'orn':
         notes.append('the mixture ORN flies (2024) are not the KC flies (2022); measured mixtures used as measured')
     if stage in ('orn', 'pn_dendrite'):
@@ -908,7 +1243,37 @@ def population_spec(key: Tuple[str, str, str]) -> dict:
     else:
         window = {}
     return dict(units=units, criterion=response_criterion(stage, panel, cohort), window=window, notes=notes,
-                recording_site=RECORDING_SITE[stage])
+                recording_site=RECORDING_SITE[stage], criterion_rule=criterion_rule(key))
+
+
+def criterion_rule(key: Tuple[str, str, str]) -> str:
+    """How the population's response criterion is set (`SOMA_CRITERION_RULE` for the KC somata)."""
+    stage, panel, cohort = key
+    if stage != 'kc_soma':
+        return f'the stage\'s criterion, {CRITERIA[stage]:g} {"trial" if stage in ("orn", "pn_dendrite") else "baseline"}' \
+               '-noise SDs'
+    if panel == 'apl16':
+        return SOMA_CRITERION_RULE[0]
+    if key == ('kc_soma', 'megamat', 'wild_type'):
+        return SOMA_CRITERION_RULE[1]
+    if key == ('kc_soma', 'validation2', 'wild_type'):
+        return SOMA_CRITERION_RULE[2]
+    if key == ('kc_soma', 'megamat', 'same_fly'):
+        return SOMA_CRITERION_RULE[3]
+    return SOMA_CRITERION_RULE[4]
+
+
+def footing_entry(key: Tuple[str, str, str]) -> Optional[dict]:
+    """For a `FOOTED` population, what its values were multiplied by (the lock's populations[...]['footing'])."""
+    if key not in FOOTED:
+        return None
+    f = soma_footing()
+    out = dict(rule="values times megamat's median noise bridge over the group's (the fly's, for the same fly)",
+               reference=f['noise_bridge_reference'], factor_per_fly=soma_factors(key))
+    if key == ('kc_soma', 'validation2', 'wild_type'):
+        out['group_per_fly'] = f['validation2']['group_per_fly']
+        out['groups'] = {g: {k: v for k, v in x.items() if k != 'flies'} for g, x in f['validation2']['groups'].items()}
+    return out
 
 
 def source_paths(key: Tuple[str, str, str]) -> List[Path]:
@@ -947,7 +1312,7 @@ def build_long(key: Tuple[str, str, str]) -> Tuple[pd.DataFrame, List[dict]]:
     if stage == 'pn_dendrite':
         return pn_dendrite_long().drop(columns='noise_sd'), excl
     if cohort == 'same_fly':
-        return same_fly_long(stage), excl
+        return footed(key, same_fly_long(stage)), excl
     if stage in ('pn_bouton', 'kc_claw'):
         return per_roi_long(stage), excl
     if panel == 'apl16':
@@ -956,7 +1321,7 @@ def build_long(key: Tuple[str, str, str]) -> Tuple[pd.DataFrame, List[dict]]:
         return mixture_kc_long(panel), excl
     if panel == 'validation2':
         d, e = v2_soma_long()
-        return d, excl + e
+        return footed(key, d), excl + e
     if panel == 'megamat':
         excl.append(dict(what='flies', reason="Remy's 14 older megamat flies (2018-2019): partial panels and another "
                          'pipeline (peak_amp of 2024-11-12); not read'))
@@ -969,6 +1334,11 @@ def build_populations(keys: Optional[Sequence[Tuple[str, str, str]]] = None, pop
     keys = POPULATIONS if keys is None else keys
     pd_ = POP_DIR if pop_dir is None else Path(pop_dir)
     pd_.mkdir(parents=True, exist_ok=True)
+    if pop_dir is None and (not SOMA_FOOTING_PATH.exists() or any(k[0] == 'kc_soma' and k[1] != 'apl16' for k in keys)):
+        t0 = time.time()
+        f = write_soma_footing()                                # the somata's criteria and factors, before their files
+        print(f"soma footing: megamat's level {f['megamat']['criterion']}, mixtures' z {f['mixtures']['z_criterion']} "
+              f'({time.time() - t0:.0f} s)', flush=True)
     summ = _read_json(pd_ / 'summary.json') or {}
     for key in keys:
         t0 = time.time()
@@ -1001,9 +1371,14 @@ Made by `data_prep/stage_population_data.py` (model_experiment_queue) on {_host(
   frames exist (boutons, claws, KC somata of megamat, the same fly, validation2 and APL16), trial-noise SDs for the
   glomeruli (ORNs, PN dendrites; dF/F per trial only), Remy's session z for the mixtures' KC somata (olfdb dataset 8).
   The module's docstring defines each.
+- KC somata criteria, one per set of recordings (`populations/soma_footing.json`, the lock's soma_criteria): the APL16
+  somata 1.9684; Remy's megamat somata the level at which her four flies respond at 0.0915 (the megamat operating
+  point); validation2's somata and the same fly on megamat's footing (each group's values, the recordings named
+  _tsub03 and the others, times megamat's median noise bridge over the group's, as stored in their files), then
+  megamat's level; the mixtures' session z at the z bridge of megamat's level.
 - `populations/summary.json`: rows, flies, units and odors per fly, exclusions; `populations/checks.json`: the checks
   against the existing loaders (the pebbled table, E119's per-ROI reading, the bands' APL16 table, pyolfsysm's
-  `load_remy_megamat_kc_responses`, Remy's per-fly validation2 matrices) and the noise bridge.
+  `load_remy_megamat_kc_responses`, Remy's per-fly validation2 matrices), the noise bridge and the soma footing.
 
 Excluded everywhere: the bouton fly 2022-10-21 fly02. Panels: megamat, validation2, kmix and cmix (the kiwi and the
 control mixtures; each KC fly had one of the two), apl16.
@@ -1209,7 +1584,8 @@ def check_megamat_vs_loader(tol: float = 1e-9) -> dict:
 def noise_bridge() -> dict:
     """On every population with single trials in baseline-noise units, the median over units of the trial-noise SD
     (`robust_trial_sd`, in baseline-noise units): how the glomeruli's trial-noise unit compares with the baseline-noise
-    unit of the stages that have frames (1 if the trial-to-trial noise were the baseline noise)."""
+    unit of the stages that have frames (1 if the trial-to-trial noise were the baseline noise). Of the population
+    files as built: for a `FOOTED` population also `per_fly_raw`, before its values were put on megamat's footing."""
     out = {}
     for key in POPULATIONS:
         spec = population_spec(key)
@@ -1218,13 +1594,44 @@ def noise_bridge() -> dict:
         p = load_population(*key, trials=True, check_lock=False)
         if p.trials is None:
             continue
-        meds = []
-        for fly in p.flies:
-            t = p.trials[fly]
-            reps = sorted(set(t.columns.get_level_values('repeat')))
-            X = np.stack([t.xs(r, axis=1, level='repeat').reindex(columns=list(p.odors)).to_numpy() for r in reps])
-            meds.append(float(np.nanmedian(robust_trial_sd(X))))
-        out[pop_name(key)] = dict(median_over_flies=float(np.median(meds)), per_fly=meds)
+        br = fly_noise_bridges(p)
+        meds = [br[f] for f in p.flies]
+        out[pop_name(key)] = dict(median_over_flies=float(np.median(meds)), per_fly=meds, flies=list(p.flies))
+        fac = soma_factors(key)
+        if fac is not None:
+            raw = [br[f] / fac[f] for f in p.flies]
+            out[pop_name(key)].update(per_fly_raw=raw, median_over_flies_raw=float(np.median(raw)),
+                                      factor_per_fly=[fac[f] for f in p.flies])
+    return out
+
+
+def check_soma_footing(bridge: dict, tol: float = 1e-9, rate_tol: float = 5e-4) -> dict:
+    """The footing against the files as built: megamat's flies respond at `MEGAMAT_SOMA_RATE` (within `rate_tol`) at
+    its level; the noise bridges of the megamat file, and of the `FOOTED` files divided by their factors, are the
+    footing's (from the sources, within `tol`); each `FOOTED` file's flies respond at the footing's rates."""
+    f = soma_footing()
+    out = dict(megamat_rate=f['megamat']['rate_mean'], target=MEGAMAT_SOMA_RATE,
+               megamat_rate_ok=bool(abs(f['megamat']['rate_mean'] - MEGAMAT_SOMA_RATE) <= rate_tol))
+    diffs = {}
+    for name, src, key in (('kc_soma__megamat__wild_type', f['megamat'], 'per_fly'),
+                           ('kc_soma__validation2__wild_type', f['validation2'], 'per_fly_raw'),
+                           ('kc_soma__megamat__same_fly', f['same_fly'], 'per_fly_raw')):
+        b = bridge.get(name)
+        if b is None:
+            diffs[name] = float('nan')
+            continue
+        built = dict(zip(b['flies'], b[key]))
+        diffs[name] = float(max(abs(built[k] - v) for k, v in src['noise_bridge_per_fly'].items()))
+    out['bridge_max_abs_diff'] = diffs
+    rd = {}
+    for key, src in ((('kc_soma', 'validation2', 'wild_type'), f['validation2']),
+                     (('kc_soma', 'megamat', 'same_fly'), f['same_fly'])):
+        p = load_population(*key, check_lock=False)
+        r = response_rates(p)['per_fly']
+        rd[pop_name(key)] = float(max(abs(r[k] - v) for k, v in src['per_fly_rate'].items()))
+    out['rate_max_abs_diff'] = rd
+    out['passed'] = bool(out['megamat_rate_ok'] and all(np.isfinite(v) and v <= tol for v in diffs.values())
+                         and all(v <= tol for v in rd.values()))
     return out
 
 
@@ -1244,6 +1651,11 @@ def run_checks() -> dict:
         checks['noise_bridge'] = noise_bridge()
     except Exception as e:
         checks['noise_bridge'] = dict(error=repr(e))
+    try:
+        checks['soma_footing'] = check_soma_footing(checks['noise_bridge'])
+    except Exception as e:
+        checks['soma_footing'] = dict(passed=False, error=repr(e))
+    print('soma_footing', checks['soma_footing'].get('passed'), flush=True)
     checks['passed'] = bool(all(v.get('passed', True) for k, v in checks.items() if isinstance(v, dict)
                                 and k != 'noise_bridge'))
     _write_json(POP_DIR / 'checks.json', checks)
@@ -1320,16 +1732,30 @@ def lock_contents(sha_sources: bool = True) -> dict:
             has_trials=pop.has_trials, response_rate=response_rates(pop),
             flies=s.get('flies'), n_flies=len(s.get('flies') or []), odors=list(odors),
             odors_per_fly=s.get('odors_per_fly'), units_per_fly=s.get('units_per_fly'),
-            exclusions=s.get('exclusions', []), criterion=spec['criterion'], units=spec['units'],
+            exclusions=s.get('exclusions', []), criterion=spec['criterion'], criterion_rule=spec['criterion_rule'],
+            footing=footing_entry(key), units=spec['units'],
             window={k: list(v) for k, v in spec['window'].items()}, unit_kind=UNIT_KIND[key[0]],
             named_units=NAMED_UNITS[key[0]], recording_site=spec['recording_site'], notes=spec['notes'],
             breadth_bins={str(n): [list(b) for b in breadth_bins(n)] for n in sizes if n >= 4})
     files_csv = SOURCES_DIR / 'files.csv'
+    try:
+        footing = soma_footing()
+    except FileNotFoundError:
+        footing = None
     return dict(
         experiment='E134_population_baseline', step='0, the lock', host=_host(), time=_now(), commits=_commits(),
+        revision=dict(previous=previous_lock(),
+                      changes="the KC somata's criterion per set of recordings (reading 14: soma_criteria, the "
+                              "populations' criterion, criterion_rule and footing; validation2's and the same fly's "
+                              "files on megamat's footing; the mixtures' z bridge at megamat's level), and the readings "
+                              'in rules (3, 4 with the curve note, 6, the gate\'s A and B)',
+                      planned_by='a Fable subagent, claude-fable-5-2, spawned from viki 2026-11-24 11:11'),
         populations=pops,
-        stages=dict(criteria=CRITERIA, mixture_z_criterion=mixture_z_criterion() if
-                    (megamat_copy_dir() / 'z_bridge.json').exists() else None,
+        stages=dict(criteria=CRITERIA,
+                    criteria_note="one criterion per stage, and for the KC somata one per set of recordings "
+                                  '(kc_soma_criteria): CRITERIA\'s kc_soma is the APL16 somata\'s',
+                    kc_soma_criteria=(footing or {}).get('criteria'),
+                    mixture_z_criterion=(footing or {}).get('mixtures', {}).get('z_criterion'),
                     units={UNITS_BASELINE: 'window mean minus pre-odor mean over the SD of the pre-odor frames',
                            UNITS_TRIAL: 'trial mean over the robust SD of single trials about their odor means '
                                         '(1.4826 MAD, residuals scaled by sqrt(n/(n-1)))',
@@ -1350,9 +1776,23 @@ def lock_contents(sha_sources: bool = True) -> dict:
                      'or the repository (<queue>) where they are under one',
         checks=checks,
         readings=model_readings(),
+        rules=RULES,
+        soma_criteria=footing,
         remy_megamat_criterion_rate=remy_criterion_rate(),
         note='Written by data_prep/stage_population_data.py --lock before any model is read on these populations; '
              'load_population refuses a population file whose sha256 differs from this.')
+
+
+def previous_lock(path: Path = LOCK_COPY) -> Optional[dict]:
+    """The committed lock this one replaces: its time, host, queue commit and the last commit of the lock file."""
+    old = _read_json(path)
+    if old is None:
+        return None
+    r = subprocess.run(['git', '-C', str(HERE), 'log', '-1', '--format=%H', '--', str(path)], capture_output=True,
+                       text=True)
+    return dict(time=old.get('time'), host=old.get('host'), queue_commit=(old.get('commits') or {}).get('queue_commit'),
+                lock_commit=r.stdout.strip() or None, kc_soma_criteria=(old.get('stages') or {}).get('kc_soma_criteria'),
+                mixture_z_criterion=(old.get('stages') or {}).get('mixture_z_criterion'))
 
 
 def write_lock(path: Path = LOCK_PATH, copy: Path = LOCK_COPY) -> dict:
