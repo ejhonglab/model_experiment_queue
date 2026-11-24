@@ -48,8 +48,11 @@ as the flies (`leave_one_out` on the wirings) is the measure gate's check (1.2 o
 flies of a half (split-half consistency) in that half's own units or in all flies'.
 
 The steps between stages: the change of each part from the upstream to the downstream stage (entry by entry, on the
-odors both stages have), with an interval from resampling the flies of both stages; and the no-step yardstick, the
-error of taking the upstream flies' mean parts as the prediction for the downstream flies.
+odors both stages have), with an interval from resampling the flies of both stages (the description); the step's
+resampled distance, by which a step is classed (the planner's ruling of 2026-11-24 11:34): per part, the RMS distance
+of a model's per-entry change from the flies' change, inside if at or below the 95th percentile of the same distance
+for resampled flies (`step_resample`, `step_distance`; how many wirings must be inside is the runner's); and the
+no-step yardstick, the error of taking the upstream flies' mean parts as the prediction for the downstream flies.
 
 The energy distance between the sets of the units' tuning vectors (each unit's responses to the panel's odors) is kept
 as a guard only: the model's mean distance to the flies as a multiple of the mean distance between two flies, with an
@@ -435,18 +438,36 @@ def stack_views(views: Sequence[Mapping[str, pd.Series]], ref: FlyReference) -> 
 def score_arrays(arrays: Mapping[str, np.ndarray], ref: FlyReference, index: Optional[Sequence] = None) -> pd.DataFrame:
     """Scores many sets of parts at once (`stack_views`' arrays) against the flies; one row per set, with the
     `Score.as_series` columns."""
+    return score_rows(arrays, {p: ref.mean[p].to_numpy(dtype=float) for p in arrays},
+        {p: ref.one_fly[p] for p in arrays}, index)
+
+
+def score_rows(arrays: Mapping[str, np.ndarray], means: Mapping[str, np.ndarray],
+        units: Mapping[str, Union[float, np.ndarray]], index: Optional[Sequence] = None) -> pd.DataFrame:
+    """`score_arrays` with a reference of its own for each row (e.g. one set of parts scored against each half of
+    many splits of the recordings at once).
+
+    Args:
+        arrays: per part, sets x entries (`stack_views`' arrays, columns the reference's entries).
+        means: per part, the flies' mean part: entries (one reference for every row) or sets x entries.
+        units: per part, the one-fly unit: a number or one per set.
+        index: the rows' labels.
+
+    Returns:
+        One row per set, with the `Score.as_series` columns.
+    """
     n = len(next(iter(arrays.values())))
     cols: Dict[str, np.ndarray] = {}
     n_missing = np.zeros(n)
     for p, A in arrays.items():
-        m = ref.mean[p].to_numpy(dtype=float)
-        d = A - m[None, :]
-        defined = np.isfinite(m)[None, :]
+        m = np.broadcast_to(np.asarray(means[p], dtype=float), A.shape)
+        d = A - m
+        defined = np.isfinite(m)
         n_missing += (defined & ~np.isfinite(A)).sum(axis=1)
         with np.errstate(invalid='ignore'):
             ok = np.isfinite(d)
             msd = np.where(ok.any(axis=1), np.where(ok, d ** 2, 0.0).sum(axis=1) / np.maximum(ok.sum(axis=1), 1), np.nan)
-            cols['part_' + p.replace('/', '_')] = np.sqrt(msd) / ref.one_fly[p]
+            cols['part_' + p.replace('/', '_')] = np.sqrt(msd) / np.asarray(units[p], dtype=float)
     out = pd.DataFrame(cols, index=index)
     for v in (*VIEWS, NAMED_VIEW):
         ps = ['part_' + f'{v}_{p}' for p in PARTS[v] if f'{v}/{p}' in arrays]
@@ -595,21 +616,197 @@ def step_interval(upstream: Sequence[Population], downstream: Sequence[Populatio
         Per part, a DataFrame indexed by entry with columns 'change' (the measured flies' mean change), 'lo' and 'hi'
         (the `ci` interval of the resampled change).
     """
-    odors = common_odors(list(upstream) + list(downstream)) if odors is None else list(odors)
-    up = fly_reference(upstream, odors, breadth_edges, parts)
-    down = fly_reference(downstream, odors, breadth_edges, parts)
-    rng = np.random.default_rng(seed)
-    du = rng.integers(0, len(up.flies), size=(n_boot, len(up.flies)))
-    dd = rng.integers(0, len(down.flies), size=(n_boot, len(down.flies)))
+    rs = step_resample(upstream, downstream, odors, breadth_edges, n_boot, seed, parts)
     q = ((1 - ci) / 2, 1 - (1 - ci) / 2)
     out = {}
-    for p, ch in step_change(up.mean, down.mean).items():
-        U = up.parts[p].reindex(columns=ch.index).to_numpy(dtype=float)
-        D = down.parts[p].reindex(columns=ch.index).to_numpy(dtype=float)
-        B = _nanmean_rows(D[dd]) - _nanmean_rows(U[du])
+    for p, ch in rs.change.items():
+        B = rs.resampled[p]
         lo, hi = np.nanquantile(B, q[0], axis=0), np.nanquantile(B, q[1], axis=0)
         out[p] = pd.DataFrame({'change': ch.to_numpy(dtype=float), 'lo': lo, 'hi': hi}, index=ch.index)
     return out
+
+
+STEP_DISTANCE_Q = 0.95
+STEP_DRAWS = ('sets', 'one_fly')
+
+
+@dataclass
+class StepResample:
+    """The flies' side of one step (upstream stage -> downstream stage) for the step's resampled distance.
+
+    Attributes:
+        change: per part, the measured flies' mean change by entry (downstream minus upstream, `step_change`).
+        resampled: per part, n_boot x entries: the change of each resampled set of flies (columns `change`'s entries).
+        n_up, n_down: the flies of each stage.
+        draw: what one resample is ('sets', 'one_fly'; `step_resample`).
+        corrected: whether the resampled deviations were scaled by sqrt(n / (n - 1)) per stage.
+        seed: of the resampling.
+    """
+    change: Dict[str, pd.Series]
+    resampled: Dict[str, np.ndarray]
+    n_up: int
+    n_down: int
+    draw: str = 'sets'
+    corrected: bool = False
+    seed: int = SEED
+
+    def distances(self, part: str) -> np.ndarray:
+        """The RMS distance of each resampled change from the measured change over the entries both define."""
+        return _rms_rows(self.resampled[part] - self.change[part].to_numpy(dtype=float)[None, :])
+
+
+def _rms_rows(D: np.ndarray) -> np.ndarray:
+    ok = np.isfinite(D)
+    with np.errstate(invalid='ignore', divide='ignore'):
+        msd = np.where(ok, D ** 2, 0.0).sum(axis=1) / np.maximum(ok.sum(axis=1), 1)
+        return np.where(ok.any(axis=1), np.sqrt(msd), np.nan)
+
+
+def step_resample(upstream: Sequence[Population], downstream: Sequence[Population],
+        odors: Optional[Sequence[str]] = None, breadth_edges: BinSpec = APL16_BREADTH_EDGES, n_boot: int = N_BOOT,
+        seed: int = SEED, parts: Optional[Sequence[str]] = None, draw: str = 'sets',
+        correct: bool = False) -> StepResample:
+    """The flies' change of each part between two stages and its resamples (`step_interval`'s draws).
+
+    Args:
+        upstream, downstream: the two stages' flies (at least two each).
+        odors: the odors read (default those every fly of both stages has).
+        breadth_edges: the breadth bins.
+        n_boot: resamples.
+        seed: of the resampling.
+        parts: the parts to read (default those both stages have).
+        draw: 'sets' (`step_interval`'s: each stage's flies drawn with replacement, independently, as many as it has,
+            the change of their mean parts), or 'one_fly' (one fly drawn from each stage: the change of a single
+            animal, the spread of one wiring's change if the model were a fly).
+        correct: scale each stage's resampled deviation from its measured mean part by sqrt(n / (n - 1)) ('sets'
+            only), which removes the bootstrap's shrinkage of a mean's variance by (n - 1) / n (a quarter of the
+            variance for four flies).
+
+    Returns:
+        A `StepResample`.
+    """
+    if draw not in STEP_DRAWS:
+        raise ValueError(f'{draw=}')
+    if correct and draw != 'sets':
+        raise ValueError("the correction applies to draw 'sets' only")
+    odors = common_odors(list(upstream) + list(downstream)) if odors is None else list(odors)
+    up = fly_reference(upstream, odors, breadth_edges, parts)
+    down = fly_reference(downstream, odors, breadth_edges, parts)
+    nu, nd = len(up.flies), len(down.flies)
+    rng = np.random.default_rng(seed)
+    k_u, k_d = (nu, nd) if draw == 'sets' else (1, 1)
+    du = rng.integers(0, nu, size=(n_boot, k_u))
+    dd = rng.integers(0, nd, size=(n_boot, k_d))
+    change, resampled = {}, {}
+    for p, ch in step_change(up.mean, down.mean).items():
+        U = up.parts[p].reindex(columns=ch.index).to_numpy(dtype=float)
+        D = down.parts[p].reindex(columns=ch.index).to_numpy(dtype=float)
+        bu, bd = _nanmean_rows(U[du]), _nanmean_rows(D[dd])
+        if correct:
+            mu = up.mean[p].reindex(ch.index).to_numpy(dtype=float)
+            md = down.mean[p].reindex(ch.index).to_numpy(dtype=float)
+            bu = mu + (bu - mu) * np.sqrt(nu / (nu - 1))
+            bd = md + (bd - md) * np.sqrt(nd / (nd - 1))
+        change[p] = ch
+        resampled[p] = bd - bu
+    return StepResample(change=change, resampled=resampled, n_up=nu, n_down=nd, draw=draw, corrected=bool(correct),
+        seed=seed)
+
+
+def step_null_distance(upstream: Sequence[Population], downstream: Sequence[Population],
+        odors: Optional[Sequence[str]] = None, breadth_edges: BinSpec = APL16_BREADTH_EDGES,
+        q: float = STEP_DISTANCE_Q, n_boot: int = N_BOOT, seed: int = SEED, parts: Optional[Sequence[str]] = None,
+        draw: str = 'sets', correct: bool = False) -> Dict[str, float]:
+    """Per part, the threshold of the step class: the `q` quantile of the RMS distance of a resampled change from the
+    flies' measured change, over all the entries the measured change defines (the lock's rules -> step_class).
+
+    The draws are `step_resample`'s, the same as `step_interval`'s for the same `n_boot` and `seed`, so the measured
+    change is the one `step_interval` gives. A model's change of a part is inside when its RMS distance from that
+    change is at or below the threshold; for a model that lacks some of a part's entries, `step_distance` compares
+    it with the null on the entries it has.
+
+    Args:
+        upstream, downstream: the two stages' flies.
+        odors: the odors read (default those every fly of both stages has).
+        breadth_edges: the breadth bins.
+        q: the quantile (0.95 by the lock).
+        n_boot, seed, parts, draw, correct: as `step_resample`.
+
+    Returns:
+        {part: threshold} (NaN for a part with no defined entry).
+    """
+    rs = step_resample(upstream, downstream, odors, breadth_edges, n_boot, seed, parts, draw, correct)
+    out = {}
+    for p in rs.change:
+        d = rs.distances(p)
+        out[p] = float(np.quantile(d[np.isfinite(d)], q)) if np.isfinite(d).any() else np.nan
+    return out
+
+
+def step_distance(model_changes: Union[Mapping[str, pd.Series], Mapping[str, Mapping[str, pd.Series]],
+        Sequence[Mapping[str, pd.Series]]], flies: StepResample, q: float = STEP_DISTANCE_Q) -> pd.DataFrame:
+    """The step's resampled distance (the step class's reading, 2026-11-24): per model (wiring) and part, the RMS
+    distance of the model's per-entry change from the flies' change, against the same distance for resampled flies.
+
+    A model's distance is over the entries that it and the flies' change define (the others are counted,
+    `n_missing`); each resampled change's distance is taken over the same entries, so a model that lacks entries is
+    compared with a null on those it has. "Inside" is the model's distance at or below the `q` quantile of the
+    resampled distances. How many wirings must be inside is the caller's (six of eight, the runner's).
+
+    Args:
+        model_changes: one model's change (`step_change`'s dict, part -> Series by entry), several as a mapping
+            name -> change, or a sequence of changes (named by position).
+        flies: `step_resample`'s flies' side of the step.
+        q: the quantile of the resampled distances a model's distance is compared with.
+
+    Returns:
+        One row per model and part (by part in the flies' order, then the models in the given order): model, part,
+        distance, threshold (the `q` quantile of the resampled distances), inside (False where the distance is NaN),
+        share_closer (the share of resampled changes closer to the flies' change than the model's), resampled_median,
+        n_entries (scored), n_missing.
+    """
+    if isinstance(model_changes, Mapping) and all(isinstance(v, pd.Series) for v in model_changes.values()):
+        models = {'model': model_changes}
+    elif isinstance(model_changes, Mapping):
+        models = dict(model_changes)
+    else:
+        models = {str(i): m for i, m in enumerate(model_changes)}
+    names = list(models)
+    rows = []
+    for p, ch in flies.change.items():
+        c = ch.to_numpy(dtype=float)
+        M = np.array([np.asarray(models[n][p].reindex(ch.index), dtype=float) if p in models[n]
+            else np.full(len(c), np.nan) for n in names]).reshape(len(names), len(c))
+        dm = M - c[None, :]
+        use = np.isfinite(dm)
+        dist = _rms_rows(dm)
+        D2 = (flies.resampled[p] - c[None, :]) ** 2
+        okb = np.isfinite(D2)
+        W = use.astype(float)
+        with np.errstate(invalid='ignore', divide='ignore'):
+            null = np.sqrt((np.where(okb, D2, 0.0) @ W.T) / (okb.astype(float) @ W.T))   # n_boot x models
+        thr = np.array([np.nanquantile(null[:, i], q) if np.isfinite(null[:, i]).any() else np.nan
+            for i in range(len(names))])
+        med = np.array([np.nanmedian(null[:, i]) if np.isfinite(null[:, i]).any() else np.nan
+            for i in range(len(names))])
+        fin = np.isfinite(null)
+        closer = np.array([np.mean(null[fin[:, i], i] < dist[i]) if np.isfinite(dist[i]) and fin[:, i].any()
+            else np.nan for i in range(len(names))])
+        for i, n in enumerate(names):
+            rows.append(dict(model=n, part=p, distance=dist[i], threshold=thr[i],
+                inside=bool(np.isfinite(dist[i]) and dist[i] <= thr[i]), share_closer=closer[i],
+                resampled_median=med[i], n_entries=int(use[i].sum()),
+                n_missing=int((np.isfinite(c) & ~np.isfinite(M[i])).sum())))
+    return pd.DataFrame(rows, columns=['model', 'part', 'distance', 'threshold', 'inside', 'share_closer',
+        'resampled_median', 'n_entries', 'n_missing'])
+
+
+def population_step_change(upstream: Population, downstream: Population, odors: Sequence[str],
+        breadth_edges: BinSpec = APL16_BREADTH_EDGES, parts: Optional[Sequence[str]] = None) -> Dict[str, pd.Series]:
+    """One model wiring's change of each part from its upstream to its downstream population (`step_change` of their
+    views on `odors`), the input of `step_distance`."""
+    return step_change(population_views(upstream, odors, breadth_edges, parts),
+        population_views(downstream, odors, breadth_edges, parts))
 
 
 def no_step_score(upstream: Sequence[Population], downstream: FlyReference) -> Score:

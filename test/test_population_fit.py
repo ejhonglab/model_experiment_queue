@@ -301,3 +301,110 @@ def test_fly_populations_adapter(gen):
         P.as_population(f.values)
     assert P.as_population(f) is f
     assert P.as_population(f.values, 2.0, at_or_above=True).responds.sum().sum() == (f.values >= 2.0).sum().sum()
+
+
+def test_score_rows_is_score_arrays_with_a_reference_per_row(gen, ref, flies):
+    pops = [gen.fly(f'x{i}') for i in range(3)]
+    arrays = P.stack_views([P.population_views(p, ref.odors, ref.breadth_edges) for p in pops], ref)
+    halves = [P.subset_reference(ref, [0, 2, 4, 6, 8]), P.subset_reference(ref, [1, 3, 5, 7, 9, 10])]
+    # each set scored against both halves at once: rows (set 0, half 0), (set 0, half 1), ...
+    rep = {p: np.repeat(A, 2, axis=0) for p, A in arrays.items()}
+    means = {p: np.tile(np.array([h.mean[p].to_numpy() for h in halves]), (3, 1)) for p in arrays}
+    units = {p: np.tile([h.one_fly[p] for h in halves], 3) for p in arrays}
+    got = P.score_rows(rep, means, units)
+    for i in range(3):
+        for j, h in enumerate(halves):
+            want = P.score_arrays({p: A[i:i + 1] for p, A in arrays.items()}, h).iloc[0]
+            pd.testing.assert_series_equal(got.iloc[2 * i + j], want, check_names=False, rtol=1e-12)
+    # one reference for every row is score_arrays itself
+    same = P.score_rows(arrays, {p: ref.mean[p].to_numpy() for p in arrays}, ref.one_fly)
+    pd.testing.assert_frame_equal(same, P.score_arrays(arrays, ref))
+
+
+@pytest.fixture(scope='module')
+def step_flies(gen):
+    """A planted step: the same flies' populations upstream, and downstream a sparser criterion on other flies."""
+    up = [gen.fly(f'u{i}', n_units=250) for i in range(6)]
+    down = [P.Population.from_criterion(gen.fly(f'd{i}', n_units=250).values, 2.0, name=f'd{i}') for i in range(6)]
+    return up, down
+
+
+def test_step_interval_is_the_resampled_change(step_flies):
+    up, down = step_flies
+    st = P.step_interval(up, down, n_boot=300, seed=4)
+    rs = P.step_resample(up, down, n_boot=300, seed=4)
+    for p, df in st.items():
+        assert np.allclose(df['change'], rs.change[p])
+        assert np.allclose(df['lo'], np.nanquantile(rs.resampled[p], 0.05, axis=0), equal_nan=True)
+        assert np.allclose(df['hi'], np.nanquantile(rs.resampled[p], 0.95, axis=0), equal_nan=True)
+
+
+def test_step_distance_resampled_flies_are_inside_about_95_percent(step_flies):
+    up, down = step_flies
+    rs = P.step_resample(up, down, n_boot=1000, seed=0)
+    other = P.step_resample(up, down, n_boot=400, seed=1)
+    models = [{p: pd.Series(other.resampled[p][i], index=other.change[p].index) for p in other.change}
+        for i in range(400)]
+    t = P.step_distance(models, rs)
+    assert set(t.part) == set(rs.change) and len(t) == 400 * len(rs.change)
+    share = t.groupby('part')['inside'].mean()
+    assert ((share > 0.9) & (share < 0.99)).all(), share
+    # the flies' own measured change is at distance 0
+    own = P.step_distance(rs.change, rs)
+    assert (own['distance'] == 0).all() and own['inside'].all() and list(own.model.unique()) == ['model']
+    assert np.allclose(own['threshold'], [np.quantile(rs.distances(p), 0.95) for p in rs.change])
+
+
+def test_step_distance_shifted_change_is_outside(step_flies):
+    up, down = step_flies
+    rs = P.step_resample(up, down, n_boot=500, seed=0)
+    shifted = {p: c + 3 * np.nanstd(rs.resampled[p], axis=0) for p, c in rs.change.items()}
+    t = P.step_distance({'shifted': shifted, 'flies': rs.change}, rs).set_index(['model', 'part'])
+    for p in rs.change:
+        assert not t.loc[('shifted', p), 'inside'] and t.loc[('shifted', p), 'share_closer'] > 0.99
+        assert t.loc[('flies', p), 'inside']
+
+
+def test_step_distance_missing_entries(step_flies):
+    up, down = step_flies
+    rs = P.step_resample(up, down, n_boot=300, seed=2)
+    ch = {p: c.copy() for p, c in rs.change.items()}
+    ch['sharing/who'].iloc[:20] = np.nan
+    del ch['breadth/bins']
+    t = P.step_distance({'m': ch}, rs).set_index('part')
+    assert t.loc['sharing/who', 'n_missing'] == 20 and t.loc['sharing/who', 'n_entries'] == 100
+    # the null is taken on the entries the model has
+    c = rs.change['sharing/who'].to_numpy()
+    d = np.sqrt(np.nanmean((rs.resampled['sharing/who'][:, 20:] - c[None, 20:]) ** 2, axis=1))
+    assert t.loc['sharing/who', 'threshold'] == pytest.approx(np.quantile(d, 0.95))
+    b = t.loc['breadth/bins']
+    assert np.isnan(b['distance']) and not b['inside'] and b['n_missing'] == len(rs.change['breadth/bins'])
+
+
+def test_step_resample_draws_and_correction(step_flies):
+    up, down = step_flies
+    sets = P.step_resample(up, down, n_boot=400, seed=3)
+    one = P.step_resample(up, down, n_boot=400, seed=3, draw='one_fly')
+    corr = P.step_resample(up, down, n_boot=400, seed=3, correct=True)
+    for p in sets.change:
+        # one fly per stage spreads about sqrt(n) times as widely as a set's mean
+        assert np.median(one.distances(p)) > 1.5 * np.median(sets.distances(p))
+        # with as many flies upstream as downstream the correction scales every deviation by sqrt(n / (n - 1))
+        assert np.allclose(corr.distances(p), sets.distances(p) * np.sqrt(6 / 5), equal_nan=True)
+    with pytest.raises(ValueError):
+        P.step_resample(up, down, draw='one_fly', correct=True)
+
+
+def test_step_null_distance_is_the_step_distance_threshold(step_flies):
+    up, down = step_flies
+    odors = P.common_odors(up + down)
+    nulls = P.step_null_distance(up, down, odors, P.APL16_BREADTH_EDGES, 0.95)
+    rs = P.step_resample(up, down, odors)
+    t = P.step_distance(rs.change, rs).set_index('part')
+    assert set(nulls) == set(rs.change)
+    for p, thr in nulls.items():
+        assert thr == pytest.approx(t.loc[p, 'threshold'])
+        # the runner's distance of a model's change, against it
+        st = P.step_interval(up, down, odors)[p]
+        assert np.allclose(st['change'], rs.change[p])
+    assert P.step_null_distance(up, down, odors, q=0.5)['sharing/who'] < nulls['sharing/who']
