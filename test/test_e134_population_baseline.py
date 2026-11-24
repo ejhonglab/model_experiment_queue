@@ -310,3 +310,19 @@ def test_build_overrides_reach_the_simulator(monkeypatch):
     assert seen['extra_kws'] is None and not any(k.startswith(('extra_kws.', 'orn_override')) for k in plain)
     with pytest.raises(ValueError):
         B.build_point(B.Point(model='uniform_draw', panel='megamat', reading='fitted'), extra_kws=dict(pn_rates=rates))
+
+
+def test_step2_loads_claw_boutons_for_bouton_pools(monkeypatch):
+    """Step 2 loads E90's runs with each claw's bouton when a claw reading pools by bouton (viki's step 2 stopped on
+    'curve_noise_b14' at 13:14), and not when no reading to be read needs it; E107's runs are loaded as before."""
+    calls = []
+    monkeypatch.setattr(R, 'load_e90_run', lambda tag, part='B', settled=True, with_claw_bouton=False:
+                        calls.append((tag, part, with_claw_bouton)) or tag)
+    assert B.needs_claw_bouton() and B.needs_claw_bouton(['curve_noise_b14'])
+    assert not B.needs_claw_bouton(['curve_noise']) and not B.needs_claw_bouton(['curve_noise_g3'])
+    e90 = [s for s in B.STEP2_SOURCES if s.source.startswith('E90') and 'kc_claw' in s.stages][0]
+    B.step2_runs(e90, with_claw_bouton=True)
+    assert calls and all(cb for _, _, cb in calls)
+    calls.clear()
+    B.step2_runs(e90)
+    assert calls and not any(cb for _, _, cb in calls)

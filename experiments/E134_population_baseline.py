@@ -451,9 +451,16 @@ def save_populations(readings: Mapping[str, R.ModelReading], part: str, source: 
 # ---------------------------------------------------------------------------
 # step 2: the saved runs
 
-def step2_runs(source: Source) -> List[List[R.SavedRun]]:
+def needs_claw_bouton(readings: Optional[Sequence[str]] = None) -> bool:
+    """Whether the claws' readings to be read (each stage's default and alternatives, or those named) include a
+    pool by bouton ('b<n>'), which needs each claw's bouton in a saved E90 run's metadata."""
+    return any(str(rd.pool).startswith('b') for _, rd in _reading_sets(['kc_claw'], readings))
+
+
+def step2_runs(source: Source, with_claw_bouton: bool = False) -> List[List[R.SavedRun]]:
     """A source's saved runs, grouped into families read together (E90's eight wirings; E107's eight per panel and
-    reading; the D1 fits; B5's one run); a run whose files are missing is left out and reported."""
+    reading; the D1 fits; B5's one run); a run whose files are missing is left out and reported. `with_claw_bouton`
+    loads E90's runs with each claw's bouton (`R.load_e90_run`), for the claws' 'b<n>' pools (`needs_claw_bouton`)."""
     groups: Dict[tuple, List[R.SavedRun]] = {}
     for tag in source.tags:
         try:
@@ -461,7 +468,8 @@ def step2_runs(source: Source) -> List[List[R.SavedRun]]:
                 panel, reading, wiring = tag.split('_', 2)
                 run, key = R.load_e107_run(panel, reading, wiring), (panel, reading)
             else:
-                run, key = R.load_e90_run(tag, source.part), (source.part,)
+                cb = with_claw_bouton and 'kc_claw' in source.stages
+                run, key = R.load_e90_run(tag, source.part, with_claw_bouton=cb), (source.part,)
         except FileNotFoundError as e:
             print(f'{source.source} {tag}: not found ({e})', flush=True)
             continue
@@ -489,8 +497,9 @@ def part_step2(readings: Optional[Sequence[str]] = None) -> pd.DataFrame:
     t0 = time.time()
     flies = R.FlyCache()
     scores, gates, curves = [], [], {}
+    claw_bouton = needs_claw_bouton(readings)
     for src in STEP2_SOURCES:
-        for runs in step2_runs(src):
+        for runs in step2_runs(src, with_claw_bouton=claw_bouton):
             for stage, rd in _reading_sets([s for s in src.stages if s in runs[0].stages()], readings):
                 fam = R.read_family(runs, stages=[stage], readings={stage: rd}, lock=lock, flies=flies)
                 sc = score_family(fam, rd.name, flies)
