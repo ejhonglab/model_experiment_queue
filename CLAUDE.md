@@ -1229,6 +1229,9 @@ Canonical experiment names for summary reports:
 | E131 | MB-C1's two cells beside the inhibition among KCs |
 | E132 | recurrent excitation among KCs with a pooled inhibition |
 | E133 | the differences between the hemibrain and the male CNS's left calyx moved one at a time |
+| E134 | the models as populations at every recorded stage |
+| E135 | the antennal lobe held to the recorded PN dendrites |
+| E136 | the best family fitted to all megamat stages at once |
 
 ## Model-output archive (data/model_outputs/ in the shared directory)
 
