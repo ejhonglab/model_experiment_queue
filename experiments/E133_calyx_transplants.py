@@ -44,7 +44,12 @@ Parts (CLI `--part`):
   runs1.csv, verdict1.json, step1_table.md.
 - variants (no simulation): variants.csv and model_pair_distances_long.csv for kcq/apl_effect.py and the archive.
 - step2 (simulations; only on step 1's "kept" or "mixed"): the six arms on each host's four wirings, through
-  experiments/E133_builders.py.
+  experiments/E133_builders.py (`--arms` also takes step 3's options, e.g. 'S-three', 'C-g', 'A-aplkc', 'S-dmr', and
+  `--hosts` the male right, whose donor is the hemibrain: step 3's points on the same runner); each row carries the
+  transplant's size (`E133_builders.size_row`, columns size_*).
+- step2p (simulations; only on step 1's "re-dealt" or "mixed"): step 2′, the left's six re-draws: PA (the within-type
+  claw permutations of seeds 1 to 3 with each claw's APL weights moving with its input) and CI (E59's co-input-
+  preserving shuffle at seeds 1 to 3), each on the left's own tables.
 - commands: the lanes' command lines.
 
 Readings the entry leaves open, fixed here before any run (the reading closest to E130's code):
@@ -1013,18 +1018,24 @@ def point_tables(pt: Point) -> Tuple[dict, dict]:
     if pt.step == 1:
         return calyx_tables(pt.calyx, pt.seed), dict(change='none')
     from experiments import E133_builders as B
-    host, donor = calyx_tables(pt.calyx, pt.seed), calyx_tables(DONOR[pt.calyx], 0)
+    own = B.parse_arm(pt.arm)['base'] in B.PRIME_ARMS
+    host = calyx_tables(pt.calyx, 0 if own else pt.seed)
+    dc = B.donor_of(pt.calyx, pt.arm)
+    donor = calyx_tables(dc, 0) if dc else None
     T = dict(B.build(pt.arm, host, donor, seed=pt.seed))
     if not T['W'].equals(host['W']):
         T['breadth'] = breadth_run(T)
+        T['meta'] = dict(T['meta'], breadth_sha256=sha256_frame(T['breadth'].to_frame()))
     T['label'] = tag_of(pt)
-    return T, dict(change=f'arm {pt.arm} of {DONOR[pt.calyx]} on {pt.calyx} seed {pt.seed}', meta=T.get('meta', {}))
+    change = (f'{pt.arm} re-draw of {pt.calyx} seed {pt.seed}' if own else
+              f'arm {pt.arm} of {dc} on {pt.calyx} seed {pt.seed}')
+    return T, dict(change=change, meta=T.get('meta', {}))
 
 
 def reference_of(pt: Point) -> Tuple[int, int]:
     """The guard's reference (largest counts, APL on / off): E130's S1_<calyx> in step 1; in step 2 the host wiring's
     own run (E130's for seed 0, step 1's otherwise)."""
-    if pt.step == 1 or pt.seed == 0:
+    if pt.step == 1 or pt.seed == 0 or str(pt.arm).split('-')[0] == 'CI':
         return reference_max_counts(pt.calyx)
     o = load_run(tag_of(Point(1, pt.calyx, pt.seed, None)))
     if o is None:
@@ -1083,6 +1094,9 @@ def run_point(pt: Point, lane: str, table: Path, prov_path: Path, cc: dict, recl
         row.update(corner_flags(res, T['base']))
         row.update(guard_flags(rr['max_count_on'], rr['max_count_off'], reference_of(pt)))
         row['no_class'] = bool(not row['in_bands'] or row['corner'] or row['guard_max_count'])
+        if pt.step == 2:
+            from experiments import E133_builders as B
+            row.update({k: (json.dumps(v) if isinstance(v, (dict, list)) else v) for k, v in B.size_row(T['meta']).items()})
         row.update(olfsysm_build())
         row.update(cc)
         from experiments import E83_cross_wiring_fit as E83
@@ -1094,8 +1108,11 @@ def run_point(pt: Point, lane: str, table: Path, prov_path: Path, cc: dict, recl
             targets=dict(on=res['target_on'], off=res['target_off']),
             hold=("C2's five scales as factors on the calyx's own base, KC-KC at C2's scale; fixed_thr re-held with APL "
                   "off, then the tied APL scales with APL on (E77_input_screen.hold_rates), as E130's step 1"),
-            kckc_matrix=(dict(source=f"E130's malecns_kckc (results/{E130_EXP}/matrices.json)", sha256=T['meta'].get('kckc_sha256'))
-                         if pt.calyx in MALE else "olfsysm's hemibrain KC->KC counts (connectome_KCKC_weights)"),
+            kckc_matrix=(dict(source=T['meta'].get('kckc_source', f"E130's malecns_kckc (results/{E130_EXP}/matrices.json)"),
+                              sha256=T['meta'].get('kckc_sha256'))
+                         if (pt.calyx in MALE or T.get('kckc') is not None)
+                         else "olfsysm's hemibrain KC->KC counts (connectome_KCKC_weights)"),
+            transplant=T['meta'].get('transplant'),
             kws=res.get('kws'), breadth_sha256=res.get('breadth_sha256'), W_sha256=row['W_sha256'], history=res.get('history')))
         _write_json(prov_path, prov)
         print(f"E133 {tag}: thr x{res['thr_factor']:.4f}, APL x{res['apl_factor']:.4f} ({res['n_on']}/{res['target_on']} on, "
@@ -1394,6 +1411,38 @@ def planned_step2(hosts: Sequence[str] = HOSTS, arms: Optional[Sequence[str]] = 
     return pts[::-1] if reverse else pts
 
 
+PRIME_SEEDS = (1, 2, 3)
+
+
+def planned_step2p(arms: Sequence[str] = ('PA', 'CI'), seeds: Sequence[int] = PRIME_SEEDS, reverse: bool = False) -> List[Point]:
+    """Step 2′'s points: PA and CI on the left at seeds 1 to 3 (6), arm by arm."""
+    pts = [Point(2, LEFT, int(s), a) for a in arms for s in seeds]
+    return pts[::-1] if reverse else pts
+
+
+def step2p_gate() -> Optional[str]:
+    """Why step 2′ may not run (None when it may): step 1's class must be "re-dealt" or "mixed" (verdict1.json)."""
+    cls = _read_json(out_dir() / 'verdict1.json').get('class')
+    if cls not in ('re-dealt', 'mixed'):
+        return f"step 1's class is {cls!r} (step 2′ runs on 're-dealt' or 'mixed')"
+    return None
+
+
+def _step2_lane(pts: Sequence[Point], lane: str, reclaim: bool) -> pd.DataFrame:
+    """Step 2's or 2′'s points of a lane, claimed one at a time as step 1's (the builders and the donors' replay first)."""
+    _preload()
+    from experiments import E133_builders as B
+    from experiments import E108_paa_extrapolation as E108
+    cc = E108._commits_clean()
+    cs = [pt.calyx for pt in pts] + [d for d in (B.donor_of(pt.calyx, pt.arm) for pt in pts) if d]
+    replay_on_host(list(dict.fromkeys(cs)))
+    table = out_dir() / f'runs_2_{_host()}_{lane}.csv'
+    prov_path = out_dir() / f'provenance_2_{_host()}_{lane}.json'
+    for pt in pts:
+        run_point(pt, lane, table, prov_path, cc, reclaim)
+    return runs_table(2)
+
+
 def step2_gate() -> Optional[str]:
     """Why step 2 may not run (None when it may): step 1's class must be "kept" or "mixed" (verdict1.json)."""
     cls = _read_json(out_dir() / 'verdict1.json').get('class')
@@ -1409,31 +1458,35 @@ def part_step2(hosts: Sequence[str] = HOSTS, arms: Optional[Sequence[str]] = Non
     why = step2_gate()
     if why:
         raise SystemExit(f'E133 step 2 refused: {why}')
-    _preload()
-    from experiments import E133_builders  # noqa: F401  (loaded before the commit check)
-    from experiments import E108_paa_extrapolation as E108
-    cc = E108._commits_clean()
-    replay_on_host(list(dict.fromkeys(list(hosts) + [DONOR[h] for h in hosts])))
     lane = lane or ('-'.join(CODE[h] for h in hosts) + ('-' + '-'.join(arms) if arms else '') + ('-rev' if reverse else ''))
-    table = out_dir() / f'runs_2_{_host()}_{lane}.csv'
-    prov_path = out_dir() / f'provenance_2_{_host()}_{lane}.json'
-    for pt in planned_step2(hosts, arms, seeds, reverse):
-        run_point(pt, lane, table, prov_path, cc, reclaim)
-    return runs_table(2)
+    return _step2_lane(planned_step2(hosts, arms, seeds, reverse), lane, reclaim)
+
+
+def part_step2p(arms: Sequence[str] = ('PA', 'CI'), seeds: Sequence[int] = PRIME_SEEDS, lane: Optional[str] = None,
+                reverse: bool = False, reclaim: bool = False) -> pd.DataFrame:
+    """Step 2′'s points (PA and CI on the left at seeds 1 to 3), claimed one at a time; refused by `step2p_gate`."""
+    why = step2p_gate()
+    if why:
+        raise SystemExit(f'E133 step 2′ refused: {why}')
+    lane = lane or ('ml-' + '-'.join(arms) + ('-rev' if reverse else ''))
+    return _step2_lane(planned_step2p(arms, seeds, reverse), lane, reclaim)
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     ap.add_argument('--part', required=True,
-                    choices=('step0', 'check', 'step1', 'smoke', 'score1', 'variants', 'step2', 'commands'))
+                    choices=('step0', 'check', 'step1', 'smoke', 'score1', 'variants', 'step2', 'step2p', 'commands'))
     ap.add_argument('--calyces', nargs='+', default=list(CALYCES), choices=list(CALYCES),
                     help='step1 / check: the calyces of the lane')
     ap.add_argument('--seeds', nargs='+', type=int, default=None, help='step1: the seeds (default 1 to 7)')
     ap.add_argument('--reverse', action='store_true', help='step1 / step2: run the lane from its other end')
     ap.add_argument('--lane', default=None, help="the lane's name (default from its calyces, seeds and direction)")
     ap.add_argument('--reclaim', action='store_true', help="take over the points' claims (a process that died)")
-    ap.add_argument('--hosts', nargs='+', default=list(HOSTS), choices=list(HOSTS), help='step2: the host calyces')
-    ap.add_argument('--arms', nargs='+', default=None, help='step2: the arms (default all six)')
+    ap.add_argument('--hosts', nargs='+', default=list(HOSTS), choices=list(CALYCES),
+                    help="step2: the host calyces (the male right for step 3)")
+    ap.add_argument('--arms', nargs='+', default=None,
+                    help="step2: the arms (default all six; step 3's options as E133_builders.parse_arm reads them); "
+                         "step2p: PA and / or CI")
     ap.add_argument('--scratch', default=None, help='smoke: the scratch folder (default outputs/.../smoke)')
     a = ap.parse_args()
     if a.part == 'step0':
@@ -1450,6 +1503,9 @@ def main() -> None:
         write_variants()
     elif a.part == 'step2':
         part_step2(a.hosts, a.arms, tuple(a.seeds) if a.seeds else HOST_SEEDS, a.lane, a.reverse, a.reclaim)
+    elif a.part == 'step2p':
+        part_step2p(tuple(a.arms) if a.arms else ('PA', 'CI'), tuple(a.seeds) if a.seeds else PRIME_SEEDS, a.lane,
+                    a.reverse, a.reclaim)
     elif a.part == 'commands':
         print_commands()
 
