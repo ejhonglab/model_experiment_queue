@@ -8,36 +8,6 @@ directory's notes/ and are linked from here.
 
 ## Open
 
-### E129's variants read "inside the bands" in the APL-effect table with no band checked (found 2026-11-23 16:40, hal, folding E129's step 3 into the summary)
-- **What.** E129's model_pair_distances_long.csv tagged each run by its variant name (`MB_real`, `G_M1`), while its
-  archived responses carry the run tag (`S3_MB_real_on_responses.parquet`, `S1_G_M1_...`). `kcq/apl_effect.py` looks
-  the archive up by the distances' tag, and no table it reads has E129's response rates. So results/apl_effect/
-  by_variant.csv read "inside the bands (odors per KC and the response rate ρ not scored ...)" with an empty
-  `realism_flag` for all 40 of E129's variants. That included step 3's 8 runs, which E129's own runs.csv flags (odors per
-  KC with APL off 0.26 to 0.39 from the flies, band 0.22).
-- **What it affects.** by_variant.csv's realism columns for E129 from 2026-11-22 to 2026-11-23 17:10. E129's own tables,
-  note and summary passage read runs.csv and were right. No E129 variant is a best on any statistic, so the progress
-  plot and the best-models table did not change.
-- **Done.** Queue 770d923: E129 tags the distances by the run tag (`distances_tag`, with a test). The variants were
-  rewritten (the same 9600 distances, new tags), re-archived and scored at the summary build of 2026-11-23 17:10. All 40
-  rows now have response rates and odors per KC from the archive, and the 8 step-3 rows carry the flag.
-- **The five other experiments (checked 2026-11-23 17:22, atlas).** by_variant.csv had rows of E87 (40 of 52), E88 (12 of 12),
-  E113 (4 of 164), E10 (3 of 9) and E53 (1 of 5) with odors per KC unscored. There were three kinds:
-  - E87's and E88's D1 arms (52 rows; no response rates either) change only the APL-on condition. Their APL-off run is
-    another run's: for E87 the family's own fit on the wiring (E83's `saved_fit`: E67's or E72's archive), and for E88 its
-    base on the wiring (D1/base_<wiring>). Both were checked: the arms' APL-off distances equal those runs' to 2e-16.
-  - E113's refits (`refit_<wiring>`, 4 rows) are archived in fits/refit_<wiring>/ under their run names, the same kind
-    of tag mismatch as E129's.
-  - Not archived at all (4 rows): E10's k0, k1 and thr70_k2 (run on hal on 2026-11-05; thr70_k2 is not
-    thr70_k2_fromk2, whose rates differ) and E53's thr40_gain1.5_rate0.068_kckc20_k2_cap3 (run on viki).
-- **Done for the first two kinds.** `kcq.apl_effect.archive_alias` (with `FAMILY_RUNS`, checked against E83's
-  `members()` by a test) points the lookup at those files, with tests in test/test_band_units.py. Read that way, all 56
-  rows have response rates and odors per KC. None is newly flagged; the 8 E87 rows already flagged by the response rate ρ
-  stay flagged. The table changes at the next summary build. No D1 arm or refit is a best on any statistic.
-- **Remains.** The 4 unarchived runs: hal (E10) and viki (E53) check whether their outputs/ still hold the response
-  matrices and archive them with `archive_tools/archive_model_outputs.py`, or say that they are gone; then this entry is
-  resolved.
-
 ### The progress plot's ρ line ends on two points of kinds the plot is meant to leave out (found 2026-11-16, hal, the report pages' revision)
 - **What.** `reports/summary_progress_plot.py` leaves out oracle inputs and random, shuffled or re-drawn wirings by tag
   (`EXCLUDE_VARIANT`: `^input-searched_`, `^oracle_half`, `wiring-`, `^popfit_[PM]\d`, ...). From E83 on, variants carry
@@ -279,6 +249,40 @@ directory's notes/ and are linked from here.
   These two tables and the structure targets' are still typed.
 
 ## Resolved
+
+### E129's variants read "inside the bands" in the APL-effect table with no band checked (found 2026-11-23 16:40, hal, folding E129's step 3 into the summary; resolved 2026-11-23 21:02, queue 8961636 and the archives of 20:19 and 20:20)
+- **What.** E129's model_pair_distances_long.csv tagged each run by its variant name (`MB_real`, `G_M1`), while its
+  archived responses carry the run tag (`S3_MB_real_on_responses.parquet`, `S1_G_M1_...`). `kcq/apl_effect.py` looks
+  the archive up by the distances' tag, and no table it reads has E129's response rates. So results/apl_effect/
+  by_variant.csv read "inside the bands (odors per KC and the response rate ρ not scored ...)" with an empty
+  `realism_flag` for all 40 of E129's variants. That included step 3's 8 runs, which E129's own runs.csv flags (odors per
+  KC with APL off 0.26 to 0.39 from the flies, band 0.22).
+- **What it affects.** by_variant.csv's realism columns for E129 from 2026-11-22 to 2026-11-23 17:10. E129's own tables,
+  note and summary passage read runs.csv and were right. No E129 variant is a best on any statistic, so the progress
+  plot and the best-models table did not change.
+- **Done.** Queue 770d923: E129 tags the distances by the run tag (`distances_tag`, with a test). The variants were
+  rewritten (the same 9600 distances, new tags), re-archived and scored at the summary build of 2026-11-23 17:10. All 40
+  rows now have response rates and odors per KC from the archive, and the 8 step-3 rows carry the flag.
+- **The five other experiments (checked 2026-11-23 17:22, atlas).** by_variant.csv had rows of E87 (40 of 52), E88 (12 of 12),
+  E113 (4 of 164), E10 (3 of 9) and E53 (1 of 5) with odors per KC unscored. There were three kinds:
+  - E87's and E88's D1 arms (52 rows; no response rates either) change only the APL-on condition. Their APL-off run is
+    another run's: for E87 the family's own fit on the wiring (E83's `saved_fit`: E67's or E72's archive), and for E88 its
+    base on the wiring (D1/base_<wiring>). Both were checked: the arms' APL-off distances equal those runs' to 2e-16.
+  - E113's refits (`refit_<wiring>`, 4 rows) are archived in fits/refit_<wiring>/ under their run names, the same kind
+    of tag mismatch as E129's.
+  - Not archived at all (4 rows): E10's k0, k1 and thr70_k2 (run on hal on 2026-11-05; thr70_k2 is not
+    thr70_k2_fromk2, whose rates differ) and E53's thr40_gain1.5_rate0.068_kckc20_k2_cap3 (run on viki).
+- **Done for the first two kinds.** `kcq.apl_effect.archive_alias` (with `FAMILY_RUNS`, checked against E83's
+  `members()` by a test) points the lookup at those files, with tests in test/test_band_units.py. Read that way, all 56
+  rows have response rates and odors per KC. None is newly flagged; the 8 E87 rows already flagged by the response rate ρ
+  stay flagged. The table changes at the next summary build. No D1 arm or refit is a best on any statistic.
+- **The 4 unarchived runs, archived.** hal archived E10's k0, k1 and thr70_k2 at 20:20; their distances match to 1.1e-16.
+  viki archived E53's run at 20:19.
+- **Rescored.** At the summary build of 2026-11-23 20:55 (queue 8961636 and later), every row of the six experiments has
+  odors per KC: E87 52 of 52, E88 12, E113 164, E10 9, E53 5 and E129 40.
+- **Flags.** One is new: E10's k0 (the first joint fit with k 0, 2026-11-05) is outside the odors-per-KC band with APL
+  on, at 0.19 from the flies against 0.155. It is not a best on any statistic and is in no summary table. E10's
+  thr70_k2 keeps its response-rate-ratio flag, and no other flag changed.
 
 ### E131's entry and the report's item 131 gave MB-C1's input from the modelled KCs as its output (found 2026-11-23 17:02, the code subagent's reading 13, and 20:00, E131's placement planner; resolved 2026-11-23 20:36)
 - **What.** E131's planning arithmetic read the KC→MB-C1 table as MB-C1's output: "4,716 output synapses onto the
