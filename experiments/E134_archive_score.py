@@ -325,6 +325,11 @@ def _measures(arrays: Dict[str, np.ndarray], ref: P.FlyReference, rates: np.ndar
         idx: np.ndarray) -> pd.DataFrame:
     """Every measure of every variant against the recordings `idx` (their reference `ref`)."""
     out = P.score_arrays(arrays, ref)
+    if 'view_strength' in out and 'view_sharing' in out:
+        # the two-view error (strength and sharing), tested beside the strength-only measure at Tom's request
+        # (2026-11-24, after E134's gate read the three-view error not usable): the RMS of the two views' errors,
+        # as `error` is the RMS over all views
+        out['error_strength_sharing'] = np.sqrt((out['view_strength'] ** 2 + out['view_sharing'] ** 2) / 2)
     out['dist_rho'] = _rowwise_spearman(dists, np.nanmean(fly_dists[idx], axis=0))
     out['rate_rho'] = _rowwise_spearman(rates, np.nanmean(fly_rates[idx], axis=0))
     if energy is not None:
