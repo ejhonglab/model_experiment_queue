@@ -31,8 +31,24 @@ by breadth, by odor, per wiring and pooled, APL on and off, both plateau reading
 and odor: plateau, time to 50 % and 90 %, both readings), step0_gate.json, provenance.json. Per-wiring spike times
 and APL traces under outputs/E121_onset_race/step0/.
 
+Part `reads` (no simulation; added 2026-11-23 for the note): the reads a Fable planner made inline from step 0's saved
+traces and spike times when it read the split gate (claude-fable-5-2, spawned from viki 2026-11-23 21:37), by its
+stated definitions, so the note quotes committed code. APL's levels count its activity before the odor (a KC meets
+APL's whole activity, not its rise above rest): per wiring and odor, on APL on's trace, rest (the trace at the last step
+at or before 0 s), peak (its maximum over the pulse) and its time, and sustained (its mean over the last LATE_WINDOW s
+of the pulse); a response's level at completion is the trace at the last step at or before its second spike, read as
+a fraction of the peak and of the sustained level. Survival: among the KC x odor entries responding with APL off, the
+survivors respond with APL on too; the APL-off second spike's time and spike count are scored as tellers of survival by
+their AUC (Mann-Whitney). Windows: per condition, responders with two or more spikes in [0, 0.1), [0.25, 0.5) and after
+the pulse (half-open windows), the shares of spikes in the first 100 ms and after the pulse, and spike counts. Beside
+them the family's per-odor response rates relative to the mean odor's against the control flies', the family's realism
+table (results/apl_effect/by_variant.csv), and the values the planner's reasons cite from other experiments' tables.
+Writes reads_*.csv, reads_summary.json (with the planner's check values against the code's) and provenance_reads.json.
+The saved spike times are checked against the archives' spike counts and step 0's hashes first.
+
 Usage (from the repository root):
     OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ./venv/bin/python -u experiments/E121_onset_race.py step0
+    ./venv/bin/python experiments/E121_onset_race.py reads
 """
 from __future__ import annotations
 
@@ -67,6 +83,12 @@ WIRINGS.update({f'P{i}': ('E72_wiring_population', f'wiring-claw_permutation_wit
 WIRINGS.update({f'M{i}': ('E72_wiring_population', f'wiring-curveball_within_type_matched-seed{i}_{TAG}')
                 for i in range(1, 4)})
 CONDITIONS = ('on', 'off')
+# (the reads: half-open windows [lo, hi) in s from onset; a response completing before EARLY_T2 counts as early)
+READ_WINDOWS = (('first100', 0.0, 0.1), ('last250', 0.25, STIM_END), ('after', STIM_END, float('inf')))
+EARLY_T2 = 0.045
+# (absorbs the float difference between a spike's time and the trace's step times, which are rounded to 0.1 ms)
+TIME_TOL = 1e-9
+LEVEL_BYS = (('overall', None), ('group', 'group'), ('breadth', 'breadth_bin'), ('odor', 'odor_name'))
 
 
 def odor_name(col) -> str:
@@ -402,11 +424,523 @@ def step0(out_dir: Optional[Path] = None, res_dir: Optional[Path] = None,
     return gate
 
 
+# --- part reads: the planner's reads of step 0's saved files (no simulation) ---
+
+def apl_levels(trace: np.ndarray, time_s: np.ndarray, stim_end: float = STIM_END,
+               late_window: float = LATE_WINDOW) -> Dict[str, float]:
+    """Returns APL's levels of one trace, each including its level before the odor (not measured from it).
+
+    Args:
+        trace: APL activity per time step.
+        time_s: the steps' times, seconds from odor onset (increasing).
+        stim_end: the pulse's end, seconds from onset.
+        late_window: the sustained level is the mean over the pulse's last `late_window` s.
+
+    Returns dict with 'rest' (the trace at the last step at or before 0 s), 'peak' (its maximum over the pulse,
+    0 < t <= stim_end, as `apl_rise`'s), 't_peak' (the time of the first such maximum), 'sustained' (its mean over
+    stim_end - late_window < t <= stim_end, `apl_rise`'s 'late' plateau), 'rest_over_peak' and 'peak_over_sustained'.
+    """
+    trace = np.asarray(trace, dtype=float)
+    time_s = np.asarray(time_s, dtype=float)
+    if trace.shape != time_s.shape:
+        raise ValueError('trace and time_s differ in shape')
+    pre = np.nonzero(time_s <= 0)[0]
+    if not len(pre):
+        raise ValueError('no step at or before onset')
+    during = np.nonzero((time_s > 0) & (time_s <= stim_end))[0]
+    late = (time_s > stim_end - late_window) & (time_s <= stim_end)
+    i_pk = during[int(np.argmax(trace[during]))]
+    rest, peak, sus = float(trace[pre[-1]]), float(trace[i_pk]), float(trace[late].mean())
+    return dict(rest=rest, peak=peak, t_peak=float(time_s[i_pk]), sustained=sus, rest_over_peak=rest / peak,
+                peak_over_sustained=peak / sus)
+
+
+def level_at(trace: np.ndarray, time_s: np.ndarray, t: Sequence[float]) -> np.ndarray:
+    """Returns the trace at the last step at or before each time in `t` (NaN before the first step).
+
+    A spike's time equals a step's time up to rounding; TIME_TOL absorbs that, so a spike at a step reads that step.
+    """
+    trace = np.asarray(trace, dtype=float)
+    time_s = np.asarray(time_s, dtype=float)
+    idx = np.searchsorted(time_s, np.asarray(t, dtype=float) + TIME_TOL, side='right') - 1
+    out = np.full(idx.shape, np.nan)
+    ok = idx >= 0
+    out[ok] = trace[idx[ok]]
+    return out
+
+
+def auc(pos: Sequence[float], neg: Sequence[float]) -> float:
+    """Returns the AUC of telling `pos` from `neg` by larger values: P(a pos value > a neg value) plus half the
+    probability of a tie (the Mann-Whitney U over the product of the sizes). Negate both for 'smaller favours pos'."""
+    pos, neg = np.asarray(pos, dtype=float), np.asarray(neg, dtype=float)
+    if not (len(pos) and len(neg)):
+        return float('nan')
+    r = pd.Series(np.concatenate([pos, neg])).rank(method='average').to_numpy()
+    n1 = len(pos)
+    return float((r[:n1].sum() - n1 * (n1 + 1) / 2) / (n1 * len(neg)))
+
+
+def window_counts(spikes: pd.DataFrame, lo: float, hi: float) -> pd.Series:
+    """Returns the number of spikes in [lo, hi) per (kc, odor) with any there (index kc, odor)."""
+    m = (spikes['time_s'] >= lo - TIME_TOL) & (spikes['time_s'] < hi - TIME_TOL)
+    return spikes[m].groupby(['kc', 'odor']).size()
+
+
+def window_reads(spikes: pd.DataFrame) -> Dict[str, float]:
+    """Returns one wiring and condition's firing in READ_WINDOWS (from its spikes, one row per spike).
+
+    A responder has two or more spikes over the trial. Returns dict with 'n_responders', 'n_<window>' (KC x odor with
+    two or more spikes in the window), 'share_responders_first100' and '_last250' (n_<window> / n_responders), 'share_spikes_<window>'
+    (of all spikes), 'share_exactly_two' (of responders), 'median_spikes' and 'max_spikes' (per responder; the
+    largest count per KC and odor), 'n_spikes', and the second spikes' 't2_p05', 't2_median', 't2_p95' (s).
+    """
+    n = spikes.groupby(['kc', 'odor']).size()
+    resp = n[n >= 2]
+    out: Dict[str, float] = dict(n_responders=int(len(resp)), n_spikes=int(len(spikes)))
+    t = spikes['time_s']
+    for name, lo, hi in READ_WINDOWS:
+        out[f'n_{name}'] = int((window_counts(spikes, lo, hi) >= 2).sum())
+        out[f'share_spikes_{name}'] = float(((t >= lo - TIME_TOL) & (t < hi - TIME_TOL)).mean())
+    for name in ('first100', 'last250'):
+        out[f'share_responders_{name}'] = out[f'n_{name}'] / out['n_responders'] if len(resp) else float('nan')
+    out['share_exactly_two'] = float((resp == 2).mean())
+    out['median_spikes'] = float(resp.median())
+    out['max_spikes'] = int(n.max())
+    t2 = second_spike_times(spikes)['t_complete']
+    out.update(t2_p05=float(t2.quantile(0.05)), t2_median=float(t2.median()), t2_p95=float(t2.quantile(0.95)))
+    return out
+
+
+def levels_at_completion(completion: pd.DataFrame, apl: pd.DataFrame, levels: pd.DataFrame) -> pd.DataFrame:
+    """Adds APL's level at each response's completion (its second spike) to `completion_table`'s rows.
+
+    Args:
+        completion: one wiring and condition's `completion_table` rows.
+        apl: odors x time steps, APL on's trace of the wiring (columns the times from onset).
+        levels: `apl_levels` per odor of the same trace (index odor_name).
+
+    Adds 'apl_level' (the trace at the last step at or before the second spike), 'frac_peak', 'frac_sustained' (that
+    level over the odor's peak and sustained level, both counting APL's level before the odor), 'below_sustained'
+    and 'before_peak' (the second spike before the peak's time).
+    """
+    t = apl.columns.to_numpy(dtype=float)
+    c = completion.copy()
+    lvl = np.full(len(c), np.nan)
+    for odor, idx in c.groupby('odor_name').indices.items():
+        lvl[idx] = level_at(apl.loc[odor].to_numpy(dtype=float), t, c['t_complete'].to_numpy()[idx])
+    lv = levels.loc[c['odor_name']]
+    c['apl_level'] = lvl
+    c['frac_peak'] = lvl / lv['peak'].to_numpy()
+    c['frac_sustained'] = lvl / lv['sustained'].to_numpy()
+    c['below_sustained'] = c['frac_sustained'] < 1
+    c['before_peak'] = c['t_complete'].to_numpy() < lv['t_peak'].to_numpy() - TIME_TOL
+    return c
+
+
+def level_summary(rows: pd.DataFrame) -> pd.DataFrame:
+    """Returns the level at completion over `levels_at_completion` rows: overall, by group, breadth and odor.
+
+    Columns 'by', 'level', 'n', 'frac_peak_median', '_q25', '_q75', 'frac_sustained_median', '_q25', '_q75',
+    'share_below_sustained', 'share_before_peak'.
+    """
+    out = []
+    for by, col in LEVEL_BYS:
+        groups = [('all', rows)] if col is None else list(rows.groupby(col, sort=True))
+        for level, g in groups:
+            d = dict(by=by, level=str(level), n=int(len(g)))
+            for k in ('frac_peak', 'frac_sustained'):
+                d[f'{k}_median'] = float(g[k].median())
+                d[f'{k}_q25'] = float(g[k].quantile(0.25))
+                d[f'{k}_q75'] = float(g[k].quantile(0.75))
+            d['share_below_sustained'] = float(g['below_sustained'].mean())
+            d['share_before_peak'] = float(g['before_peak'].mean())
+            out.append(d)
+    return pd.DataFrame(out)
+
+
+def survival_reads(comp_on: pd.DataFrame, comp_off: pd.DataFrame) -> Dict[str, float]:
+    """Returns who survives APL among the APL-off responders of one wiring (`second_spike_times` rows per condition).
+
+    A survivor responds to the odor with APL off and with APL on; the removed respond with APL off only. The APL-off
+    second spike's time is scored as a teller of survival with earlier favouring survival ('auc_t2'), the APL-off spike
+    count with more favouring it ('auc_count'), 0.5 being chance. Beside them, the APL-on responders that do not
+    respond with APL off ('n_on_not_off', 'share_on_not_off' of the APL-on responders).
+    """
+    on = set(zip(comp_on['kc'].to_numpy(), comp_on['odor'].to_numpy()))
+    off = set(zip(comp_off['kc'].to_numpy(), comp_off['odor'].to_numpy()))
+    surv = np.array([k in on for k in zip(comp_off['kc'].to_numpy(), comp_off['odor'].to_numpy())], dtype=bool)
+    t2, nsp = comp_off['t_complete'].to_numpy(dtype=float), comp_off['n_spikes'].to_numpy(dtype=float)
+    n_on_not_off = sum(k not in off for k in on)
+    return dict(n_off_responders=int(len(comp_off)), n_survivors=int(surv.sum()), n_removed=int((~surv).sum()),
+                auc_t2=auc(-t2[surv], -t2[~surv]), auc_count=auc(nsp[surv], nsp[~surv]),
+                median_t2_survivors=float(np.median(t2[surv])), median_t2_removed=float(np.median(t2[~surv])),
+                share_early_survivors=float((t2[surv] < EARLY_T2 - TIME_TOL).mean()),
+                share_early_removed=float((t2[~surv] < EARLY_T2 - TIME_TOL).mean()),
+                n_on_responders=int(len(on)), n_on_not_off=int(n_on_not_off),
+                share_on_not_off=float(n_on_not_off / len(on)) if on else float('nan'))
+
+
+# The planner's check values (2026-11-23 21:52; e121g_notebrief.txt), in the units given: name -> (values, scale,
+# decimals). The code's values (times in s, shares as fractions) are multiplied by `scale` and agree when within half
+# a unit of the last decimal.
+PLANNER_CHECKS: Dict[str, Tuple[Tuple[float, ...], float, int]] = {
+    'n_on_responses_pooled': ((15175,), 1, 0),
+    'rest_over_peak_range_wirings': ((0.32, 0.33), 1, 2),
+    'peak_over_sustained_range_wirings': ((1.55, 1.59), 1, 2),
+    't_peak_range_ms': ((67, 93), 1000, 0),
+    'frac_peak_median': ((0.80,), 1, 2),
+    'frac_peak_iqr': ((0.74, 0.86), 1, 2),
+    'frac_peak_median_range_wirings': ((0.79, 0.82), 1, 2),
+    'frac_sustained_median': ((1.27,), 1, 2),
+    'frac_sustained_iqr': ((1.16, 1.38), 1, 2),
+    'below_sustained_pct': ((3.7,), 100, 1),
+    'before_peak_pct': ((99.6,), 100, 1),
+    'before_peak_pct_range_wirings': ((99.0, 100.0), 100, 1),
+    'frac_peak_ester_alcohol_other': ((0.79, 0.81, 0.81), 1, 2),
+    'frac_peak_breadth_1_8plus': ((0.84, 0.77), 1, 2),
+    'frac_peak_odor_pa_bmyr_ms': ((0.77, 0.87, 0.87), 1, 2),
+    'n_off_responders_range': ((3960, 4633), 1, 0),
+    'n_survivors_range': ((1310, 1580), 1, 0),
+    'auc_t2_range': ((0.60, 0.63), 1, 2),
+    'auc_count_range': ((0.64, 0.68), 1, 2),
+    'median_t2_survivors_ms_range': ((34, 36), 1000, 0),
+    'median_t2_removed_ms_range': ((38, 40), 1000, 0),
+    'early_removed_pct_range': ((69, 72), 100, 0),
+    'early_survivors_pct_range': ((87, 91), 100, 0),
+    'n_on_not_off_range': ((312, 621), 1, 0),
+    'on_not_off_pct_range': ((16, 32), 100, 0),
+    'on_n_responders_mean': ((1897,), 1, 0),
+    'on_n_first100_mean': ((1891,), 1, 0),
+    'on_n_last250_mean': ((96,), 1, 0),
+    'on_n_last250_range': ((58, 152), 1, 0),
+    'on_n_after_mean': ((0,), 1, 0),
+    'on_spikes_first100_pct_mean': ((80,), 100, 0),
+    'on_spikes_first100_pct_range': ((74, 86), 100, 0),
+    'on_exactly_two_pct_mean': ((44,), 100, 0),
+    'on_exactly_two_pct_range': ((40, 48), 100, 0),
+    'on_median_spikes': ((3,), 1, 0),
+    'off_n_responders_mean': ((4167,), 1, 0),
+    'off_n_last250_mean': ((1113,), 1, 0),
+    'off_spikes_first100_pct_mean': ((50,), 100, 0),
+    't2_on_S_p05_p95_median_ms': ((31, 56, 41), 1000, 0),
+    'rel_rate_ms_family_flies': ((0.45, 0.81), 1, 2),
+    'rel_rate_1-8ol_family_flies': ((0.87, 0.68), 1, 2),
+}
+
+
+def check_planner(code: Dict[str, Sequence[float]],
+                  checks: Dict[str, Tuple[Tuple[float, ...], float, int]] = PLANNER_CHECKS) -> List[dict]:
+    """Returns one row per check: the planner's values, the code's (scaled), and whether they agree within rounding."""
+    rows = []
+    for name, (want, scale, nd) in checks.items():
+        got = tuple(float(x) * scale for x in code[name])
+        if len(got) != len(want):
+            raise ValueError(f'{name}: {len(got)} values, the check has {len(want)}')
+        ok = all(abs(g - w) <= 0.5 * 10 ** -nd + 1e-9 for g, w in zip(got, want))
+        rows.append(dict(name=name, planner=list(want), code=[round(g, nd + 2) for g in got], decimals=nd,
+                         agrees=bool(ok)))
+    return rows
+
+
+def _file_sha(path: Path) -> str:
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def _range(x) -> Tuple[float, float]:
+    x = list(x)
+    return float(min(x)), float(max(x))
+
+
+def reason_values(shared: Path) -> pd.DataFrame:
+    """Returns the values the planner's reasons cite from other experiments, each read from its committed table.
+
+    Columns 'reason', 'experiment', 'file', 'selector', 'column', 'value'. The family's calibrated pattern parts and the
+    spread of its calibrated loss over the eight wirings come from E129's readings (the family's own rows), static APL
+    from E95's readings, APL's time constant at the 2 s pulse from E82's runs (each arm minus the fit's 2 s point with
+    the default time constant, part B1), the searched input's gain from E86's gate and the male calyces from E130's
+    readings.
+    """
+    res = shared / 'results'
+    rows = []
+
+    def add(reason, exp, file, sel, col, value):
+        rows.append(dict(reason=reason, experiment=exp, file=str(Path('results') / file), selector=sel, column=col,
+                         value=float(value)))
+
+    f129 = 'E129_block_survivor_static/readings.csv'
+    r = pd.read_csv(res / f129)
+    fam = r[(r['kind'] == 'family') & (r['readout'] == 'cal')].set_index('unit')
+    for u, lab in (('all8', 'all eight wirings'), ('S4', 'S'), ('T4', 'T'), ('real', 'the hemibrain wiring')):
+        add(f"the family's calibrated pattern part, {lab}", 'E129', f129, f'kind family, readout cal, unit {u}',
+            'all_pattern', fam.loc[u, 'all_pattern'])
+    one = fam.loc[[u for u in fam.index if u in WIRINGS or u == 'real']]
+    add("the family's calibrated pattern part, lowest of the eight wirings", 'E129', f129,
+        'kind family, readout cal, single wirings', 'all_pattern', one['all_pattern'].min())
+    add("the family's calibrated pattern part, highest of the eight wirings", 'E129', f129,
+        'kind family, readout cal, single wirings', 'all_pattern', one['all_pattern'].max())
+    add("the family's calibrated loss, SD over the eight wirings (ddof 1; E72's draw term)", 'E129', f129,
+        'kind family, readout cal, single wirings', 'all_loss', one['all_loss'].std(ddof=1))
+
+    f95 = 'E95_static_apl/readings.csv'
+    r = pd.read_csv(res / f95)
+    for v, lab in (('C2_bcko', 'the whole APL static per KC and odor (C2)'), ('ref', 'the fits (reference)')):
+        x = r[(r['variant'] == v) & (r['unit'] == 'S') & (r['readout'] == 'cal')]
+        add(f'static APL, S: {lab}', 'E95', f95, f'variant {v}, unit S, readout cal', 'z8_pattern',
+            x['z8_pattern'].iloc[0])
+
+    f82 = 'E82_flies_protocol/runs.csv'
+    r = pd.read_csv(res / f82).set_index('point_id')
+    for model in ('fit0', 'C2'):
+        base = r.loc[f'B1_{model}', 'cal_pattern']
+        for p in r.index[(r['part'] == 'B5') & (r['model'] == model) & ~r['identity'].astype(bool)]:
+            add(f"APL's time constant {r.loc[p, 'apl_taum']:g} s at the 2 s pulse, {model}, minus its B1 point",
+                'E82', f82, f'{p} minus B1_{model}', 'cal_pattern', r.loc[p, 'cal_pattern'] - base)
+
+    f86 = 'E86_reduced_input_candidate/gate.csv'
+    r = pd.read_csv(res / f86)
+    add('the reduced searched input on held-out wirings against unseen recordings, mean gain of the two splits',
+        'E86', f86, 'change gate', 'g', r.loc[r['change'] == 'gate', 'g'].iloc[0])
+
+    f130 = 'E130_malecns_family/readings.csv'
+    r = pd.read_csv(res / f130)
+    r = r[r['readout'] == 'cal'].set_index('unit')
+    for u, lab in (('fit:malecns-left', 'the male CNS left calyx'), ('fit:malecns-right', 'the male CNS right calyx'),
+                   ('family:real', 'the hemibrain wiring')):
+        add(f'the family fitted on {lab}, calibrated pattern part', 'E130', f130, f'unit {u}, readout cal',
+            'all_pattern', r.loc[u, 'all_pattern'])
+    return pd.DataFrame(rows)
+
+
+def reads(out_dir: Optional[Path] = None, res_dir: Optional[Path] = None) -> dict:
+    """Computes the planner's reads from step 0's saved traces and spike times (no simulation) and writes them.
+
+    Writes to `res_dir` (results/E121_onset_race/): reads_apl_levels.csv (per wiring and odor), reads_levels.csv (the
+    level at completion, per wiring and pooled, overall and by group, breadth and odor), reads_survival.csv,
+    reads_windows.csv (per wiring and condition), reads_relative_rates.csv, reads_realism_family.csv, reads_reasons.csv,
+    reads_summary.json (the headline values and the planner's checks) and provenance_reads.json. Returns the summary.
+    """
+    from kcq import harness as H
+    out_dir = out_dir or (H.outputs_dir(EXPERIMENT) / 'step0')
+    res_dir = res_dir or H.results_dir(EXPERIMENT)
+    shared = H.shared_dir()
+    step0_prov = json.loads((res_dir / 'provenance.json').read_text())
+    hashes = step0_prov['spike_times_sha256']
+    inputs: Dict[str, str] = {}
+    lev_rows, comp_rows, surv_rows, win_rows, checks = [], [], [], [], {}
+    pooled_spikes: Dict[str, List[pd.DataFrame]] = {}
+    n_kcs = None
+    for lab in WIRINGS:
+        exp, tag = WIRINGS[lab]
+        arch = shared / 'data' / 'model_outputs' / exp / 'rebuild' / tag
+        sp, cmp_ = {}, {}
+        for c in CONDITIONS:
+            p = out_dir / f'{lab}_{c}_spike_times.parquet'
+            inputs[str(p)] = _file_sha(p)
+            sp[c] = pd.read_parquet(p)
+            if _sha(sp[c]) != hashes[f'{lab}_{c}_spike_times']:
+                raise RuntimeError(f'{p}: not the spike times step 0 saved (hash differs)')
+            ap_ = arch / ('expected_spike_counts_on.parquet' if c == 'on' else
+                          'expected_spike_counts_acute_off.parquet')
+            inputs[str(ap_)] = _file_sha(ap_)
+            expect = pd.read_parquet(ap_).to_numpy()
+            got = np.zeros_like(expect)
+            np.add.at(got, (sp[c]['kc'].to_numpy(), sp[c]['odor'].to_numpy()), 1)
+            if not np.array_equal(got, expect):
+                raise RuntimeError(f'{lab} {c}: the saved spike times do not add up to the archive\'s spike counts')
+            n_kcs = expect.shape[0] if n_kcs is None else n_kcs
+            if expect.shape[0] != n_kcs:
+                raise RuntimeError('the wirings differ in their number of KCs')
+            checks[f'{lab}_{c}'] = dict(hash_matches_step0=True, counts_match_archive=True)
+        p = out_dir / f'{lab}_on_apl_trace.parquet'
+        inputs[str(p)] = _file_sha(p)
+        apl = pd.read_parquet(p)
+        apl.columns = apl.columns.astype(float)
+        t = apl.columns.to_numpy(dtype=float)
+        lv = pd.DataFrame({o: apl_levels(apl.loc[o].to_numpy(dtype=float), t) for o in apl.index}).T
+        lv.index.name = 'odor_name'
+        lev_rows.append(lv.reset_index().assign(wiring=lab, group=lambda d: d['odor_name'].map(odor_group)))
+        if lev_rows[0]['odor_name'].tolist() != list(apl.index):
+            raise RuntimeError(f'{lab}: odors in another order than the first wiring\'s')
+        odors = list(apl.index)
+        for c in CONDITIONS:
+            cmp_[c] = second_spike_times(sp[c])
+            w = window_reads(sp[c])
+            win_rows.append(dict(wiring=lab, condition=c, **w))
+        comp = levels_at_completion(completion_table(sp['on'], odors, n_kcs), apl, lv)
+        comp['wiring'] = lab
+        comp_rows.append(comp)
+        surv_rows.append(dict(wiring=lab, **survival_reads(cmp_['on'], cmp_['off'])))
+        for c in CONDITIONS:
+            done = pooled_spikes.setdefault(c, [])
+            done.append(sp[c].assign(kc=sp[c]['kc'] + len(done) * n_kcs))
+    L = pd.concat(lev_rows, ignore_index=True)
+    C = pd.concat(comp_rows, ignore_index=True)
+    SV = pd.DataFrame(surv_rows)
+    # (pooled over the wirings: each wiring's KCs counted apart)
+    for c in CONDITIONS:
+        win_rows.append(dict(wiring='pooled', condition=c,
+                             **window_reads(pd.concat(pooled_spikes[c], ignore_index=True))))
+    W = pd.DataFrame(win_rows)
+    lev_sum = []
+    for name, members in [(lab, [lab]) for lab in WIRINGS] + [('pooled', list(WIRINGS))]:
+        s = level_summary(C[C['wiring'].isin(members)])
+        s.insert(0, 'wiring', name)
+        lev_sum.append(s)
+    LS = pd.concat(lev_sum, ignore_index=True)
+
+    # the family's per-odor response rates with APL on against the control flies' (relative to the mean odor's)
+    cnt = C.groupby('odor_name').size().reindex(odors)
+    fam_rate = cnt / (len(WIRINGS) * n_kcs)
+    f_yang = shared / 'data' / 'yang_apl16_kc_olfdb' / 'computed' / 'response_fraction_recording_mean.csv'
+    inputs[str(f_yang)] = _file_sha(f_yang)
+    y = pd.read_csv(f_yang)
+    y = y[y['genotype'] == 'TNT3c'].set_index('odor')['frac_responding_mean'].reindex(odors)
+    if y.isna().any():
+        raise RuntimeError(f'{f_yang}: odors missing')
+    noise = pd.Series({o: H.data_target(f'noise_ctrl_frac_{o}') for o in odors})
+    RR = pd.DataFrame({'family_rate_on': fam_rate, 'family_rel': fam_rate / fam_rate.mean(),
+                       'flies_frac_1z': y, 'flies_rel_1z': y / y.mean(),
+                       'flies_frac_noise': noise, 'flies_rel_noise': noise / noise.mean()})
+    RR.index.name = 'odor_name'
+    RR.insert(0, 'group', [odor_group(o) for o in RR.index])
+
+    # the family's standard realism table (results/apl_effect/by_variant.csv)
+    from kcq import apl_effect as AE
+    f_bv = shared / 'results' / 'apl_effect' / 'by_variant.csv'
+    inputs[str(f_bv)] = _file_sha(f_bv)
+    bv = pd.read_csv(f_bv)
+    rrows = []
+    for lab, (exp, tag) in WIRINGS.items():
+        x = bv[(bv['folder'] == exp) & (bv['tag'] == tag)]
+        if len(x) != 1:
+            raise RuntimeError(f'{lab}: {len(x)} rows in by_variant.csv for {exp}/{tag}')
+        x = x.iloc[0]
+        rrows.append(dict(wiring=lab, rate_on=x['rate_on'], rate_off=x['rate_off'], ratio=x['rate_off'] / x['rate_on'],
+                          rate_rho_on=x['rate_rho_on'], rate_rho_off=x['rate_rho_off'], opk_on_tv=x['opk_on_tv'],
+                          opk_off_tv=x['opk_off_tv'], realism=x['realism'],
+                          raw_loss=x['spike_counts_cosine__apl_effect_rmse'],
+                          raw_pattern=x['spike_counts_cosine__apl_effect_rmse_centered'],
+                          raw_mean_effect=x['spike_counts_cosine__apl_effect_mean']))
+    RF = pd.DataFrame(rrows)
+    mean = RF.drop(columns=['wiring', 'realism']).mean()
+    RF = pd.concat([RF, pd.DataFrame([dict(wiring='mean', realism='', **mean.to_dict())])], ignore_index=True)
+    kc_data = dict(rate_on=H.data_target('noise_ctrl_frac'), rate_off=H.data_target('noise_tnt_frac'),
+                   ratio=H.data_target('noise_rate_ratio_fraction'),
+                   rate_rho_ceiling_on=H.data_target('ctrl_rate_rho_ceiling'),
+                   rate_rho_ceiling_off=H.data_target('tnt_rate_rho_ceiling'),
+                   opk_on_band=H.data_target('noise_ctrl_odors_per_kc_tv_max'),
+                   opk_off_band=H.data_target('noise_tnt_odors_per_kc_tv_max'),
+                   rate_on_band=list(AE.RATE_ON_BAND), ratio_band=list(AE.RATE_RATIO_BAND),
+                   rate_rho_on_min=AE.RATE_RHO_MIN, apl_effect_mean=H.data_target('apl_effect_mean'),
+                   apl_effect_rmse_floor=H.data_target('apl_effect_rmse_floor'),
+                   apl_effect_pattern_floor=H.data_target('apl_effect_pattern_floor'))
+
+    RS = reason_values(shared)
+
+    # the headline values, in the planner's terms
+    lw = L.groupby('wiring')[['rest_over_peak', 'peak_over_sustained']].mean()
+    pooled = LS[LS['wiring'] == 'pooled'].set_index(['by', 'level'])
+    perw = LS[(LS['wiring'] != 'pooled') & (LS['by'] == 'overall')].set_index('wiring')
+    on = W[(W['condition'] == 'on') & (W['wiring'] != 'pooled')].set_index('wiring')
+    off = W[(W['condition'] == 'off') & (W['wiring'] != 'pooled')].set_index('wiring')
+    po = pooled.loc[('overall', 'all')]
+    code = {
+        'n_on_responses_pooled': (len(C),),
+        'rest_over_peak_range_wirings': _range(lw['rest_over_peak']),
+        'peak_over_sustained_range_wirings': _range(lw['peak_over_sustained']),
+        't_peak_range_ms': _range(L['t_peak']),
+        'frac_peak_median': (po['frac_peak_median'],),
+        'frac_peak_iqr': (po['frac_peak_q25'], po['frac_peak_q75']),
+        'frac_peak_median_range_wirings': _range(perw['frac_peak_median']),
+        'frac_sustained_median': (po['frac_sustained_median'],),
+        'frac_sustained_iqr': (po['frac_sustained_q25'], po['frac_sustained_q75']),
+        'below_sustained_pct': (po['share_below_sustained'],),
+        'before_peak_pct': (po['share_before_peak'],),
+        'before_peak_pct_range_wirings': _range(perw['share_before_peak']),
+        'frac_peak_ester_alcohol_other': tuple(pooled.loc[('group', g), 'frac_peak_median']
+                                              for g in ('ester', 'alcohol', 'other')),
+        'frac_peak_breadth_1_8plus': tuple(pooled.loc[('breadth', b), 'frac_peak_median'] for b in ('1', '8+')),
+        'frac_peak_odor_pa_bmyr_ms': tuple(pooled.loc[('odor', o), 'frac_peak_median'] for o in ('pa', 'B-myr', 'ms')),
+        'n_off_responders_range': _range(SV['n_off_responders']),
+        'n_survivors_range': _range(SV['n_survivors']),
+        'auc_t2_range': _range(SV['auc_t2']),
+        'auc_count_range': _range(SV['auc_count']),
+        'median_t2_survivors_ms_range': _range(SV['median_t2_survivors']),
+        'median_t2_removed_ms_range': _range(SV['median_t2_removed']),
+        'early_removed_pct_range': _range(SV['share_early_removed']),
+        'early_survivors_pct_range': _range(SV['share_early_survivors']),
+        'n_on_not_off_range': _range(SV['n_on_not_off']),
+        'on_not_off_pct_range': _range(SV['share_on_not_off']),
+        'on_n_responders_mean': (on['n_responders'].mean(),),
+        'on_n_first100_mean': (on['n_first100'].mean(),),
+        'on_n_last250_mean': (on['n_last250'].mean(),),
+        'on_n_last250_range': _range(on['n_last250']),
+        'on_n_after_mean': (on['n_after'].mean(),),
+        'on_spikes_first100_pct_mean': (on['share_spikes_first100'].mean(),),
+        'on_spikes_first100_pct_range': _range(on['share_spikes_first100']),
+        'on_exactly_two_pct_mean': (on['share_exactly_two'].mean(),),
+        'on_exactly_two_pct_range': _range(on['share_exactly_two']),
+        'on_median_spikes': (on['median_spikes'].median(),),
+        'off_n_responders_mean': (off['n_responders'].mean(),),
+        'off_n_last250_mean': (off['n_last250'].mean(),),
+        'off_spikes_first100_pct_mean': (off['share_spikes_first100'].mean(),),
+        't2_on_S_p05_p95_median_ms': (on.loc['S', 't2_p05'], on.loc['S', 't2_p95'], on.loc['S', 't2_median']),
+        'rel_rate_ms_family_flies': (RR.loc['ms', 'family_rel'], RR.loc['ms', 'flies_rel_1z']),
+        'rel_rate_1-8ol_family_flies': (RR.loc['1-8ol', 'family_rel'], RR.loc['1-8ol', 'flies_rel_1z']),
+    }
+    pc = check_planner(code)
+    now = datetime.now(timezone.utc).isoformat(timespec='seconds')
+    summary = dict(
+        experiment=EXPERIMENT, part='reads', time=now, n_kcs=n_kcs, wirings=list(WIRINGS),
+        code_values={k: [float(x) for x in v] for k, v in code.items()},
+        planner_checks=pc, planner_checks_disagree=[r['name'] for r in pc if not r['agrees']],
+        kc_data=kc_data, input_checks=checks,
+        definitions=dict(
+            levels=("APL on's trace (inh_sims), each level including APL's activity before the odor: rest the trace at "
+                    "the last step at or before 0 s, peak its maximum over 0 < t <= 0.5 s and its time, sustained its "
+                    f"mean over the last {LATE_WINDOW} s of the pulse; rest / peak and peak / sustained as the mean "
+                    "over the 16 odors per wiring"),
+            completion='the second spike (two or more spikes: a response); the level at completion is the trace at '
+                       'the last step at or before it, as a fraction of the odor\'s peak and sustained level',
+            breadth='the number of the 16 odors the KC responds to with APL on',
+            survival=('among the KC x odor entries responding with APL off, survivors respond with APL on too; AUC of '
+                      'the APL-off second spike time (earlier favours survival) and spike count (more favours it); '
+                      f'early: second spike before {EARLY_T2 * 1000:g} ms'),
+            windows=f'half-open windows {[(n, lo, hi) for n, lo, hi in READ_WINDOWS]} s from onset; a window '
+                    'responder has two or more spikes in it',
+            relative_rates=("APL on, the family's responders per odor pooled over the eight wirings over the mean "
+                            "odor's; the control flies' fraction responding (trial mean above 1 z, "
+                            "response_fraction_recording_mean.csv, TNT3c, 16 odors) and in baseline-noise units "
+                            "(registry noise_ctrl_frac_<odor>), each over the mean of the 16 odors")),
+    )
+    L.to_csv(res_dir / 'reads_apl_levels.csv', index=False)
+    LS.to_csv(res_dir / 'reads_levels.csv', index=False)
+    SV.to_csv(res_dir / 'reads_survival.csv', index=False)
+    W.to_csv(res_dir / 'reads_windows.csv', index=False)
+    RR.to_csv(res_dir / 'reads_relative_rates.csv')
+    RF.to_csv(res_dir / 'reads_realism_family.csv', index=False)
+    RS.to_csv(res_dir / 'reads_reasons.csv', index=False)
+    (res_dir / 'reads_summary.json').write_text(json.dumps(summary, indent=1, default=str) + '\n')
+    prov = dict(script='experiments/E121_onset_race.py', part='reads', time=now, code_commits=H.code_commits(),
+                inputs_sha256=inputs, step0_provenance=str(res_dir / 'provenance.json'),
+                reasons_sources=sorted(set(RS['file'])), registry=str(H.data_targets_path()),
+                how='no simulation: reads of step 0\'s saved spike times and APL traces (checked against step 0\'s '
+                    'hashes and the archives\' spike counts), results/apl_effect/by_variant.csv, Yang\'s response '
+                    'fractions, the data-target registry and the other experiments\' tables in reads_reasons.csv')
+    (res_dir / 'provenance_reads.json').write_text(json.dumps(prov, indent=1, default=str) + '\n')
+    return summary
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('part', choices=['step0'])
+    ap.add_argument('part', choices=['step0', 'reads'])
     ap.add_argument('--wirings', nargs='+', choices=list(WIRINGS), default=None)
     args = ap.parse_args()
+    if args.part == 'reads':
+        s = reads()
+        print(json.dumps(dict(planner_checks_disagree=s['planner_checks_disagree'],
+                              checks=[r for r in s['planner_checks'] if not r['agrees']]), indent=1))
+        return
     gate = step0(wirings=args.wirings)
     print(json.dumps({k: gate[k] for k in ('verdict', 'share_on_pooled', 'share_on_pooled_plateau_max',
                                             'apl_frac_peak_at_completion_on', 'apl_peak_over_late',
