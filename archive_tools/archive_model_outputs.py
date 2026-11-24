@@ -88,6 +88,8 @@ HAND_BUILT = {
 # archives, b_stage_summary_*.csv reads part B's runs; variants.csv has one row per saved stage run)
 PARAMS_TABLES = {
     'E120_bouton_stage_measured': ('variants.csv',),
+    # E134: one row per saved step-3 run; its *_summary.csv tables (step 1's flies) are readings
+    'E134_population_baseline': ('variants.csv',),
 }
 
 # experiments whose step folders repeat their files' names: per folder pattern (fnmatch on the file's folder under

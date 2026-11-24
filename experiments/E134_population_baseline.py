@@ -1583,9 +1583,63 @@ def print_commands() -> None:
             print(f"{host}: {pre.format(t=t)} --part step3 --lane {name}{' --reverse' if rev else ''}")
 
 
+# the columns of variants.csv taken from the runs tables as they are (absolute parameters of both conditions, the held
+# point's targets and factors, the response rates and the largest counts)
+VARIANT_COLUMNS: Tuple[str, ...] = (
+    'fixed_thr', 'wAPLKC_scale', 'wKCAPL_scale', 'wAPLPN_scale', 'wPNAPL_scale', 'wKCKC_scale', 'wAPLKC', 'wKCAPL',
+    'off_fixed_thr', 'off_wAPLKC_scale', 'off_wKCAPL_scale', 'off_wAPLPN_scale', 'off_wPNAPL_scale', 'off_wKCKC_scale',
+    'off_wAPLKC', 'off_wKCAPL', 'thr_factor', 'apl_factor', 'target_on', 'target_off', 'frac_on_target',
+    'frac_off_target', 'at_bound_thr', 'at_bound_apl', 'held_off_rule', 'fit_fixed_thr', 'n_kcs', 'n_odors', 'rate_on',
+    'rate_off', 'rate_ratio', 'max_count_on', 'max_count_off', 'stages', 'input_sha256', 'host', 'lane', 'time',
+    'queue_commit', 'pyolfsysm_commit')
+
+
+def _point_info(tag: str) -> dict:
+    """A step-3 point's info as its lane's provenance recorded it (the Built's info: the model's kwargs, its fit's folder
+    and tag, the breadth's rule); {} where no lane recorded it."""
+    for f in sorted(out_dir().glob('provenance_3_*.json')):
+        info = _read_json(f).get('points', {}).get(tag, {}).get('info')
+        if info:
+            return info
+    return {}
+
+
+def write_variants() -> pd.DataFrame:
+    """variants.csv: one row per saved step-3 run (the archive's step3/<tag>_<on|acute_off>_..., `runs_table`), for the
+    model-output archive's params.csv. It holds the tag (the files' variant name), the panel, input reading
+    ('fitted' / 'held'), model and wiring, a description, the absolute parameters of both conditions
+    (`VARIANT_COLUMNS`), the model's kwargs from the lane's provenance, and the readings the score reads it with (the
+    lock's, `R.reading_definitions`, by name). Step 2's runs are other experiments' (E90, E107) and have their own
+    params.csv."""
+    runs = runs_table()
+    rows = []
+    names = {s: [r.name for r in R.readings_of(s)] for s in R.STAGES}
+    for r in runs.to_dict('records'):
+        tag = str(r['tag'])
+        pt = parse_tag(tag)
+        info = _point_info(tag)
+        fam = is_family(pt)
+        what = (f"C2's family on wiring {pt.model}, on the {pt.panel} input, "
+                + ('at its fit\'s parameters' if pt.reading == 'fitted'
+                   else 'with both response rates re-held at the panel\'s flies (E77 hold_rates)')
+                if fam else f"{BESIDE_MODELS.get(pt.model, pt.model)}; on the {pt.panel} input")
+        stages = [s for s in str(r.get('stages', '')).split('+') if s]
+        row = dict(tag=tag, variant=tag, part='step3', subdir=R.STEP3_PART, panel=pt.panel, reading=pt.reading,
+                   model=r.get('model'), wiring=r.get('wiring'), kind=what,
+                   **{c: r.get(c) for c in VARIANT_COLUMNS if c in r},
+                   kws=info.get('kws'), fit_folder=info.get('fit_folder'), fit_tag=info.get('fit_tag'),
+                   breadth=info.get('breadth'),
+                   readings='; '.join(f"{s}: {', '.join(names[s])}" for s in R.STAGES))
+        rows.append(row)
+    df = pd.DataFrame(rows)
+    df.to_csv(out_dir() / 'variants.csv', index=False)
+    print(f'variants.csv: {len(df)} runs -> {out_dir() / "variants.csv"}', flush=True)
+    return df
+
+
 def main(argv: Optional[Sequence[str]] = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
-    ap.add_argument('--part', required=True, choices=('step2', 'step3', 'score', 'commands'))
+    ap.add_argument('--part', required=True, choices=('step2', 'step3', 'score', 'variants', 'commands'))
     ap.add_argument('--models', nargs='+', default=None,
                     help='step3: the wirings and beside models of the lane (default all)')
     ap.add_argument('--panels', nargs='+', default=None, choices=list(R.INPUT_PANELS),
@@ -1603,6 +1657,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         part_step3(a.models, a.panels, a.readings, a.lane or _host(), a.reverse, a.reclaim)
     elif a.part == 'score':
         part_score()
+    elif a.part == 'variants':
+        write_variants()
     elif a.part == 'commands':
         print_commands()
 

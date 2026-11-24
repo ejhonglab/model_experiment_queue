@@ -349,3 +349,26 @@ def test_save_populations_with_a_multiindex(tmp_path, monkeypatch):
     assert claw.to_numpy().tolist() == [[0.0, 1.0], [2.0, 3.0], [4.0, 5.0]]
     pn = pd.read_parquet(tmp_path / 'E90-B__C2__real__pn_dendrite__apl16__on.parquet')
     assert list(pn.index) == ['DM1', 'DL5', 'VA2']
+
+
+def test_write_variants(tmp_path, monkeypatch):
+    """variants.csv has one row per run of the runs tables, the tag as the files' variant name, both conditions'
+    absolute parameters, the held point's targets, and the model's kwargs from the lane's provenance."""
+    monkeypatch.setattr(B, 'out_dir', lambda: tmp_path)
+    common = dict(model='C2', fixed_thr=100.0, wAPLKC_scale=0.1, off_fixed_thr=100.0, off_wAPLKC_scale=0.0,
+                  rate_on=0.09, rate_off=0.18, stages='pn+bouton+claw', host='h', lane='l')
+    B._append_csv(tmp_path / 'runs_3_h_l.csv', dict(tag='megamat_fitted_real', panel='megamat', reading='fitted',
+                                                     wiring='real', **common))
+    B._append_csv(tmp_path / 'runs_3_h_l.csv', {**dict(tag='megamat_held_P1', panel='megamat', reading='held',
+                                                       wiring='P1', **common),
+                                                **{c: 1.0 for c in B.HELD_EXTRA_COLUMNS}})
+    B._write_json(tmp_path / 'provenance_3_h_l.json', dict(points={'megamat_held_P1': dict(info=dict(
+        kws="{'kc_kc_inh': 26.4}", fit_folder='E72_wiring_population', fit_tag='t', breadth='held'))}))
+    df = B.write_variants()
+    back = pd.read_csv(tmp_path / 'variants.csv')
+    assert list(back.tag) == ['megamat_fitted_real', 'megamat_held_P1'] and list(back.variant) == list(back.tag)
+    held = back.set_index('tag').loc['megamat_held_P1']
+    assert held.thr_factor == 1.0 and held.fixed_thr == 100.0 and held.kws == "{'kc_kc_inh': 26.4}"
+    assert held.fit_folder == 'E72_wiring_population' and 'kc_claw:' in held.readings
+    assert back.set_index('tag').loc['megamat_fitted_real', 'kws'] != back.set_index('tag').loc['megamat_fitted_real', 'kws']
+    assert (back.subdir == 'step3').all() and len(df) == 2
