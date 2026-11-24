@@ -231,6 +231,8 @@ def yardsticks(step0: dict, synapses: pd.DataFrame, runs: pd.DataFrame, registry
         if (w - r['mbc1_per_synapse_vs_kckc'].astype(float)).abs().max() > 1e-6:
             raise ValueError(f'{kind}: per-synapse weight differs from runs.csv')
         add('per_synapse', kind, w.mean(), f'dose m {m.mean():.4g} of the fitted KC-KC scale')
+        add('per_synapse_input_table', kind, (m / (tot['mbc1_in'] / tot['kckc_out'])).mean(),
+            "the same by the entry's arithmetic (the input table's count in place of the output table's)")
     # Step 0's fixed numbers and the cells' activities in the family's runs.
     for name in ('threshold', 'late_ratio'):
         v = pd.Series(step0[name])
