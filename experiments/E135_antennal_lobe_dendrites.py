@@ -2277,9 +2277,9 @@ def collect_controls(root: Optional[Path] = None) -> pd.DataFrame:
 
 
 def family_stage(panel: str = 'megamat', wiring: str = 'real') -> Tuple[PNStage, dict]:
-    """The family's PN stage on a panel's input ('megamat': E107's `panel_input`; 'apl16': the lab's input): E83's
+    """The family's PN stage on a panel's input (`panel_orn`: megamat, apl16, validation2, mixtures): E83's
     `build_simulator(wiring, orn=..., breadth=<the lab input's>)`, its olfsysm variables read into a `PNStage` (rows
-    the wiring's glomeruli, columns the input's odors abbreviated, in olfsysm's order through the simulator's
+    the wiring's glomeruli, columns the input's odors by `odor_labels`, in olfsysm's order through the simulator's
     'odor_order'), checked against olfsysm's own layers (`check_identity`) on a copy of the build's variables. A model
     build: after E134's gate only."""
     require_e134_gate()
@@ -2290,12 +2290,13 @@ def family_stage(panel: str = 'megamat', wiring: str = 'real') -> Tuple[PNStage,
     mp, rv = cells['mp'].cell_contents, cells['rv'].cell_contents
     order = np.asarray(cells['odor_order'].cell_contents, dtype=int)
     names = [None] * len(order)
+    labels = odor_labels(orn.columns)
     for j, i in enumerate(order):
-        names[int(i)] = H.odor_abbrev(orn.columns[j])
+        names[int(i)] = labels[j]
     gl = [str(g) for g in dict.fromkeys(info['W'].columns.get_level_values('glomerulus'))]
     stage = PNStage.from_mp(mp, gl, names)
     want = orn.copy()
-    want.columns = [H.odor_abbrev(c) for c in want.columns]
+    want.columns = labels
     want = want.reindex(index=gl, columns=names).fillna(0.0)
     if not np.allclose(stage.delta.to_numpy(), want.to_numpy(), atol=1e-12):
         raise RuntimeError(f"{wiring} {panel}: olfsysm's delta is not the panel's input on the wiring's glomeruli")
@@ -2305,12 +2306,15 @@ def family_stage(panel: str = 'megamat', wiring: str = 'real') -> Tuple[PNStage,
 
 def panel_orn(panel: str) -> pd.DataFrame:
     """The model's ORN input of a panel: 'megamat' E107's `panel_input('megamat')` (17 odors on the lab input's 36
-    glomeruli), 'apl16' the lab's input (`apl16_orn_deltas`)."""
+    glomeruli), 'apl16' the lab's input (`apl16_orn_deltas`), 'validation2' and 'mixtures' E134's `panel_input`."""
     if panel == 'megamat':
         from experiments import E107_validation2_panel as E107
         return E107.panel_input('megamat')
     if panel == 'apl16':
         return H.apl16_orn_deltas()
+    if panel in ('validation2', 'mixtures'):
+        from experiments import E134_population_baseline as E134R
+        return E134R.panel_input(panel)
     raise ValueError(f'{panel=}')
 
 
@@ -2372,12 +2376,14 @@ def scale_record(fits: Mapping[str, dict], rungs: Sequence[str] = ('R1', 'R2', '
 
 
 def rung_table(stage: PNStage, fits: Mapping[str, dict], rung: str, reading: str = 'preset',
-               scaled: bool = True) -> pd.DataFrame:
+               scaled: bool = True, fold_odors: Optional[Sequence[str]] = None) -> pd.DataFrame:
     """A rung's table of PN rates on a stage's input for step 2 (`rung_fits_all_flies`' fits): each odor a fold held
     out from that fold's fit, every other odor (the APL16 input's paa, euc, -aPine, B-myr) from the fit on all odors;
     rates in `reading`, each fit's table times its scale factor for `rung` (set on the megamat input, ruling 5) unless
-    not `scaled`."""
-    held = {o: k for k, f in fits.items() if k != 'all' for o in f['held_out']}
+    not `scaled`. `fold_odors` limits the odors taken from the fold fits (default every fold's held-out odors; () takes
+    every odor from the fit on all odors)."""
+    keep = None if fold_odors is None else set(fold_odors)
+    held = {o: k for k, f in fits.items() if k != 'all' for o in f['held_out'] if keep is None or o in keep}
     cache: Dict[str, pd.DataFrame] = {}
     cols = {}
     for o in stage.odors:
@@ -2394,6 +2400,66 @@ def rung_table(stage: PNStage, fits: Mapping[str, dict], rung: str, reading: str
             cache[k] = x
         cols[o] = cache[k][o]
     return pd.DataFrame(cols)[[o for o in stage.odors if o in cols]]
+
+
+def odor_labels(columns: Sequence) -> List[str]:
+    """An input's odor labels as the stage names them: abbreviated (`H.odor_abbrev`) where the abbreviations are
+    unique (the megamat, APL16 and validation2 inputs), else the full names (the mixtures, whose stimuli share odors at
+    several concentrations)."""
+    ab = [H.odor_abbrev(c) for c in columns]
+    return ab if len(set(ab)) == len(ab) else [str(c) for c in columns]
+
+
+def stage_on_input(stage: PNStage, orn: pd.DataFrame) -> PNStage:
+    """The family's PN stage with another ORN input: `orn` (glomeruli x odors of deltas, e.g. E134's `panel_input`)
+    on the stage's glomeruli (glomeruli the input lacks at 0, as olfsysm's delta holds them), columns named by
+    `odor_labels`, with the stage's spontaneous rates and layer parameters. Those do not depend on the panel: the
+    model's spontaneous rates are Hallem's per glomerulus on the wiring's glomeruli (fit_mb_model's sfr), and the
+    family's ORN, LN and PN parameters are olfsysm's defaults on every panel."""
+    d = orn.copy()
+    d.columns = odor_labels(orn.columns)
+    d.index = d.index.astype(str)
+    d = d.reindex(index=stage.glomeruli).fillna(0.0)
+    return PNStage(d, pd.Series(stage.spont, index=stage.glomeruli), stage.sp)
+
+
+def kept_stage_table(fits: Mapping[str, dict], rung: str, stage: PNStage, orn: Optional[pd.DataFrame] = None,
+                     panel: Optional[str] = None, fold_odors: Optional[Sequence[str]] = None) -> Tuple[pd.DataFrame, dict]:
+    """E135's PN stage as a table of PN rates on any ORN input, as step 2's route 1 takes it (for E136's arm A1 on
+    validation2 and the mixtures as much as on megamat and APL16).
+
+    The table is in `pn_evoked_rates`' reading ('preset'), each fit's rates times its scale factor (ruling 5: set once
+    per fit on the megamat input), and clipped to the stage's `pn_rate_bounds` on that input, BOUNDS_MARGIN_HZ inside
+    (ruling 7). Pass it as `extra_kws=dict(pn_rates=route1_pn_rates(table, list(table.index)))` to E83's
+    `build_simulator` (or E134's `build_point`) on the same input; the odor's LN stays the model's.
+
+    Args:
+        fits: step 1's fits on all seven PN flies (step1_fits.json's 'all_flies', `rung_fits_all_flies`).
+        rung: 'R1', or the kept rung: 'R2' / 'R3' (step1_fits.json's 'step2_rung'; 'R2m' and 'R2f' read as 'R2').
+        stage: the family's PN stage on its wiring (`family_stage(panel)` after E134's gate, or any panel's build of
+            the same wiring when `orn` is given).
+        orn: the ORN input (glomeruli x odors of deltas), put on `stage` (`stage_on_input`); default `stage`'s own.
+        panel: the input's panel: on 'megamat' and 'apl16' each megamat odor comes from the fold fit that left it out
+            (the megamat odors at the fits' 10^-3), every other odor from the fit to all 17 odors; on any other panel
+            (validation2, the mixtures) every odor from the fit to all 17 odors.
+        fold_odors: overrides which odors come from their fold fits.
+
+    Returns:
+        (the table: the stage's glomeruli x the input's odors, Hz; the record: rung, panel, the odors from fold fits,
+        the scale factors (`scale_record`, those outside 0.5 to 2 named) and the clip's (`clip_table`)).
+    """
+    r = {'R2m': 'R2', 'R2f': 'R2'}.get(rung, rung)
+    if r not in ('R1', 'R2', 'R3'):
+        raise ValueError(f'{rung=}: R1, R2 or R3')
+    st = stage if orn is None else stage_on_input(stage, orn)
+    if fold_odors is None:
+        fold_odors = list(MEGAMAT_ODORS) if panel in ('megamat', 'apl16') else []
+    tab = rung_table(st, fits, r, fold_odors=fold_odors)
+    tab, crec = clip_table(tab, st.rate_bounds(), list(st.glomeruli), None, CLIP_POLICY)
+    held = {o for k, f in fits.items() if k != 'all' for o in f['held_out']}
+    used = sorted(o for o in tab.columns if o in set(fold_odors) and o in held)
+    return tab, dict(rung=r, panel=panel, fold_odors=used, scale=scale_record(fits, (r,)), clip=crec,
+                     reading='preset', margin_hz=BOUNDS_MARGIN_HZ)
 
 
 # ---------------------------------------------------------------------------

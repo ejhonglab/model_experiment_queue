@@ -690,3 +690,32 @@ def test_measured_for_reads_the_slope_rule(fit_case):
     start = E.measured_gain_start(s, E.model_gains(st, {}, st.glomeruli, odors))
     for g in s.index[~s.follows]:
         assert start[g] == 1.0
+
+
+def test_kept_stage_table_on_another_input(fit_case):
+    """E136's request: the kept rung (or R1) on any ORN input, in route 1's reading, at each fit's scale factor and
+    clipped to the bounds on that input; on a held-out panel every odor from the fit to all 17 odors."""
+    st, pop, true, odors = fit_case
+    fits = {'0': dict(held_out=odors[:5], R1={}, R2=E.Terms(gains={'g0': 2.0}).as_dict(),
+                      scale={'R1': 1.0, 'R2': 0.8}),
+            'all': dict(held_out=[], R1={'pn_inhadd': 60.0}, R2=E.Terms(gains={'g1': 0.5}).as_dict(),
+                        scale={'R1': 1.2, 'R2': 1.5})}
+    rng = np.random.default_rng(7)
+    new = pd.DataFrame(rng.uniform(-10, 120, (6, 3)), index=st.glomeruli[:6], columns=['x @ -2', 'y @ -2', 'y @ -3'])
+    tab, rec = E.kept_stage_table(fits, 'R2f', st, orn=new, panel='validation2')
+    assert list(tab.columns) == ['x @ -2', 'y @ -2', 'y @ -3']                  # names kept where abbreviations collide
+    on = E.stage_on_input(st, new)
+    assert (on.delta.loc[st.glomeruli[6:]] == 0).all().all()
+    want = on.run({'pn_inhadd': 60.0}, E.Terms(gains={'g1': 0.5}), reading='preset') * 1.5
+    want, _ = E.clip_table(want, on.rate_bounds(), on.glomeruli)
+    pd.testing.assert_frame_equal(tab, want[tab.columns])
+    assert rec['rung'] == 'R2' and rec['fold_odors'] == [] and rec['clip']['policy'] == 'clip'
+    # on the megamat input, the megamat odors from the fold fit that left them out
+    mm, r2 = E.kept_stage_table(fits, 'R2', st, panel='megamat')
+    raw = st.run({}, E.Terms(gains={'g0': 2.0}), reading='preset') * 0.8
+    raw, _ = E.clip_table(raw, st.rate_bounds(), st.glomeruli)
+    pd.testing.assert_series_equal(mm[odors[0]], raw[odors[0]])
+    assert r2['fold_odors'] == sorted(odors[:5])
+    with pytest.raises(ValueError):
+        E.kept_stage_table(fits, 'R0', st)
+    assert E.odor_labels(['2h @ -3', 'pa @ -3']) == ['2h', 'pa']
