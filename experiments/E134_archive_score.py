@@ -454,6 +454,11 @@ def _cal_job(job: Tuple[str, str, str, float]) -> dict:
         return dict(folder=folder, tag=tag, error=repr(ex)[:200])
 
 
+def _init_cal() -> None:
+    # a module-level initializer: os.environ.setdefault itself cannot be pickled for the forkserver pool's workers
+    os.environ.setdefault('OMP_NUM_THREADS', '1')
+
+
 def calibrated_pattern_parts(variants: pd.DataFrame, jobs: int = 1, target: Optional[float] = None) -> pd.DataFrame:
     """Each variant's pattern part under the calibrated readout (as analyses/apl_effect_metrics.py --readout cal reads
     it: the saturating readout's K calibrated on the APL-on counts to the control flies' responders-only participation
@@ -462,8 +467,7 @@ def calibrated_pattern_parts(variants: pd.DataFrame, jobs: int = 1, target: Opti
     target = H.data_target('ctrl_participation_ratio_resp') if target is None else target
     work = [(r.folder, r.tag, r.archive_dir, target) for r in variants.itertuples()]
     if jobs > 1:
-        with ProcessPoolExecutor(max_workers=jobs, initializer=os.environ.setdefault,
-                initargs=('OMP_NUM_THREADS', '1')) as ex:
+        with ProcessPoolExecutor(max_workers=jobs, initializer=_init_cal) as ex:
             res = list(ex.map(_cal_job, work, chunksize=4))
     else:
         res = [_cal_job(w) for w in work]

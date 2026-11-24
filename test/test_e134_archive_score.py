@@ -250,6 +250,11 @@ def test_calibrated_pattern_parts(planted, tmp_path):
     K = H.calibrate_readout(on, 'saturating', 3.0, stat='participation_ratio', responders_min=2.0)
     s = H.apl_effect_stats_readout(on, off, 'saturating', K)
     assert got['K'] == pytest.approx(K) and got['cal_pattern_part'] == pytest.approx(s['apl_effect_rmse_centered'])
+    # the worker pool (its initializer must pickle for the forkserver start method; 2026-11-24 it did not)
+    v2 = pd.concat([v, v.assign(tag='v')], ignore_index=True)
+    got2 = E.calibrated_pattern_parts(v2, jobs=2, target=3.0)
+    assert 'error' not in got2.columns or got2['error'].isna().all()
+    assert got2['cal_pattern_part'].tolist() == pytest.approx([s['apl_effect_rmse_centered']] * 2)
 
 
 def test_readings_are_stage_readings_soma_readings():
