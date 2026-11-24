@@ -868,6 +868,37 @@ def in_memory_run(tag: str, out: Mapping[str, dict], built, info: Mapping[str, o
     return run
 
 
+def archive_dir() -> Path:
+    """<shared>/data/model_outputs/E136_stage_population_fit/[measure_<name>/]."""
+    d = H.shared_dir() / 'data' / 'model_outputs' / EXPERIMENT
+    return d / _measure_sub() if _measure_sub() else d
+
+
+def fit_dirs(arm: str) -> List[Path]:
+    """Where a fit's saved evaluations are: outputs/.../fit_<arm>/ on the host that ran it (every evaluation), then the
+    archive's fit_<arm>/ (the best evaluation, `archive_best`)."""
+    return [local_dir(f'fit_{arm}'), archive_dir() / f'fit_{arm}']
+
+
+def archive_best(arm: str, i: int) -> List[Path]:
+    """Copies a fit's best evaluation (every S wiring's files, '<arm>_e<i>_<wiring>_*') from this host's
+    outputs/.../fit_<arm>/ to the archive's fit_<arm>/, so the score can read it on any host."""
+    import shutil
+    src, dst = local_dir(f'fit_{arm}'), archive_dir() / f'fit_{arm}'
+    dst.mkdir(parents=True, exist_ok=True)
+    out = []
+    for w in S_WIRINGS:
+        files = sorted(src.glob(f'{arm}_e{i}_{w}_*'))
+        if not any(f.name.endswith('_run.json') for f in files):
+            raise FileNotFoundError(f'{arm} eval {i} {w}: not saved under {src}')
+        for f in sorted(files, key=lambda f: f.name.endswith('_run.json')):   # the run.json last, as it says complete
+            tmp = dst / f'.{f.name}.{_host()}.{os.getpid()}.tmp'
+            shutil.copyfile(f, tmp)
+            os.replace(tmp, dst / f.name)
+            out.append(dst / f.name)
+    return out
+
+
 def save_eval(arm: str, i: int, runs: Mapping[str, 'R.SavedRun']) -> List[Path]:
     """An evaluation's runs under outputs/.../fit_<arm>/ (E134's step-3 layout, `save_step3_run`; tag
     '<arm>_e<i>_<wiring>')."""
@@ -1181,6 +1212,8 @@ def fit_arm(arm: str, control: bool = False, maxfev: Optional[int] = None, resum
                best_z=bz, at_bound=flags, best=dict(best), messages=messages, claw_mode=m.claw_mode,
                seconds=round(time.time() - t0, 1), host=_host(), time=_now(), **_commits())
     out['factors'] = {k: (float(np.exp(v)) if k in FACTORS else CLAW_THR_UNIT * v) for k, v in bz.items()}
+    if save_stages:
+        out['archived'] = [str(p) for p in archive_best(name, int(best['eval']))]
     _write_json(out_dir() / f'fit_{name}.json', out)
     return out
 
@@ -1412,7 +1445,7 @@ def score_megamat(arm: str, stages: Sequence[str], half: Optional[str] = 'held',
         if arm != FAMILY and w in S_WIRINGS:
             f = _read_json(out_dir() / f'fit_{arm}.json')
             try:
-                r = R.load_step3_run(f"{arm}_e{f['best_eval']}_{w}", dirs=[local_dir(f'fit_{arm}')]) if f else None
+                r = R.load_step3_run(f"{arm}_e{f['best_eval']}_{w}", dirs=fit_dirs(arm)) if f else None
             except FileNotFoundError:
                 r = None
         else:

@@ -343,3 +343,20 @@ def test_gate_on_the_adopted_measure(monkeypatch, tmp_path):
     finally:
         F.set_measure('all')
     assert set(F.START_CHECK['strength']) == {'stage_error', *(f'{s}_error' for s in F.LOSS_STAGES)}
+
+
+def test_archive_best(monkeypatch, tmp_path):
+    loc, arch = tmp_path / 'local', tmp_path / 'arch'
+    monkeypatch.setattr(F, 'local_dir', lambda part='': (loc / part).mkdir(parents=True, exist_ok=True) or loc / part)
+    monkeypatch.setattr(F, 'archive_dir', lambda: arch)
+    for w in F.S_WIRINGS:
+        for suf in ('on_spike_counts.parquet', 'run.json'):
+            (loc / 'fit_A0').mkdir(parents=True, exist_ok=True)
+            (loc / 'fit_A0' / f'A0_e3_{w}_{suf}').write_text(w)
+            (loc / 'fit_A0' / f'A0_e4_{w}_{suf}').write_text('other')
+    out = F.archive_best('A0', 3)
+    assert len(out) == 8 and sorted(p.name for p in (arch / 'fit_A0').iterdir()) == sorted(p.name for p in out)
+    assert (arch / 'fit_A0' / 'A0_e3_real_run.json').read_text() == 'real'
+    assert F.fit_dirs('A0') == [loc / 'fit_A0', arch / 'fit_A0']
+    with pytest.raises(FileNotFoundError):
+        F.archive_best('A0', 9)
