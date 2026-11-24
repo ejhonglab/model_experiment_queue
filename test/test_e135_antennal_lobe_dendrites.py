@@ -293,9 +293,48 @@ def test_cross_fit_assembles_held_out_columns(fit_case):
     assert se >= 0 and isinstance(kept, bool)
 
 
+def test_matrix_loss_is_the_affine_reading(fit_case):
+    from kcq import stage_readings as R
+    st, pop, true, odors = fit_case
+    tgt = E.Target.make(pop, odors, st.glomeruli)
+    U = st.run().loc[st.glomeruli, odors]
+    fv, fw = R.pooled_fly_values(pop, odors)
+    c = R.fit_stage_curve(U.to_numpy().ravel(), fv, fw, 'affine')
+    m = tgt.ref.mean['matrix/values'].reindex([f'{g}|{o}' for g in st.glomeruli for o in odors]).to_numpy()
+    want = np.sqrt(np.nanmean((c(U.to_numpy()).ravel() - m) ** 2)) / tgt.ref.one_fly['matrix/values']
+    assert E.matrix_loss(U, tgt) == pytest.approx(want, rel=1e-12)
+
+
+def test_run_rungs_end_to_end(fit_case):
+    st, pop, true, odors = fit_case
+    rng = np.random.default_rng(2)
+    orn = (st.delta.loc[st.glomeruli, odors].to_numpy()[None] * 0.02
+           + rng.normal(scale=0.01, size=(5, len(st.glomeruli), len(odors))))
+    flies = [str(f) for f in pop.flies]
+    lock = dict(glomeruli=st.glomeruli, folds=[odors[:5], odors[5:]], halves=dict(half_a=flies[:2], half_b=flies[2:]))
+    out = E.run_rungs(st, pop, orn, orn, st.glomeruli, lock, n_boot=10, n_perm=1, max_lateral_steps=1,
+                      global_maxiter=12, verbose=False)
+    r = out['rungs'].set_index('rung')
+    assert list(r.index) == ['R0', 'R1', 'R2m', 'R2f', 'R3']
+    assert r.loc['R2f', 'point'] < r.loc['R0', 'point']          # the planted gains are found out of sample
+    assert out['r2'] in ('R2m', 'R2f') and out['highest_kept'] in ('R0', 'R1', out['r2'], 'R3')
+    assert {'R1', 'R2m', 'R2f'} <= set(out['controls'].columns)
+    assert set(out['tables']['R2f']) == {'half_a->half_b', 'half_b->half_a'}
+    assert all(len(v) == 2 for v in out['folds']['R1'].values())
+
+
 def test_permutations_and_measured_start():
     rng = np.random.default_rng(0)
     x = pd.DataFrame(np.arange(12.0).reshape(4, 3), index=list('abcd'))
+    pop, _ = _pn_population(pd.DataFrame(rng.normal(size=(3, 4)), index=['a', 'b', 'c'],
+                                         columns=['o0', 'o1', 'o2', 'o3']))
+    q = E.permute_odor_labels(pop, np.random.default_rng(1), ['2h', 'IaA', 'pa'])
+    f = pop.flies[0]
+    assert q.tables[f]['2-but'].equals(pop.tables[f]['2-but'])
+    assert sorted(q.tables[f][['2h', 'IaA', 'pa']].to_numpy().ravel()) == sorted(
+        pop.tables[f][['2h', 'IaA', 'pa']].to_numpy().ravel())
+    np.testing.assert_allclose(q.trials[f].T.groupby(level=0).mean().T[['2h', 'IaA', 'pa']].to_numpy(),
+                               q.tables[f][['2h', 'IaA', 'pa']].to_numpy())
     p = E.permute_glomerulus_labels(x, ['a', 'b', 'c'], rng)
     assert sorted(p.loc[['a', 'b', 'c']].to_numpy().ravel()) == sorted(x.loc[['a', 'b', 'c']].to_numpy().ravel())
     assert p.loc['d'].equals(x.loc['d'])

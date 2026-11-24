@@ -453,9 +453,11 @@ def candidate_partners(resid: pd.DataFrame, orn_mean: pd.DataFrame, own: Optiona
             continue
         Xc = X[np.ix_(cand, np.flatnonzero(ok))]
         r = _corr_rows(e[ok][None, :], Xc)[0]
-        perm = np.array([rng.permutation(e[ok]) for _ in range(n_perm)])
-        best_perm = np.nanmax(_corr_rows(perm, Xc) ** 2, axis=1)
-        chance = float(np.nanpercentile(best_perm, 95))
+        if n_perm > 0:
+            perm = np.array([rng.permutation(e[ok]) for _ in range(n_perm)])
+            chance = float(np.nanpercentile(np.nanmax(_corr_rows(perm, Xc) ** 2, axis=1), 95))
+        else:
+            chance = np.nan
         order = np.argsort(-(r ** 2))
         for k, j in enumerate(order[:n]):
             row = dict(glomerulus=str(g), rank=k + 1, partner=partners[cand[j]], r=float(r[j]), r2=float(r[j] ** 2),
@@ -1191,6 +1193,21 @@ class Target:
     odors: List[str]
     glomeruli: List[str]
     ref: P.FlyReference
+    _loss: Optional[tuple] = field(default=None, repr=False)
+
+    def loss_terms(self) -> tuple:
+        """(the flies' pooled mean and variance, the mean matrix part in glomeruli x odors order, its one-fly unit),
+        computed once, for `matrix_loss`."""
+        if self._loss is None:
+            from kcq import stage_readings as R
+            fv, fw = R.pooled_fly_values(self.flies, self.odors)
+            w = fw / fw.sum()
+            mf = float(np.sum(w * fv))
+            vf = float(np.sum(w * (fv - mf) ** 2))
+            m = self.ref.mean['matrix/values'].reindex([f'{g}{P.PAIR_SEP}{o}' for g in self.glomeruli
+                                                        for o in self.odors]).to_numpy(dtype=float)
+            self._loss = (mf, vf, m, float(self.ref.one_fly['matrix/values']))
+        return self._loss
 
     @classmethod
     def make(cls, flies, odors: Sequence[str], glomeruli: Sequence[str], parts: Optional[Sequence[str]] = None,
@@ -1220,17 +1237,19 @@ def read_prediction(pred: pd.DataFrame, target: Target, reading=None, seed_index
 
 def matrix_loss(pred: pd.DataFrame, target: Target) -> float:
     """The fit's loss: the matrix view's error in one-fly units after an affine curve set on the pooled values (no
-    noise; `fit_reading`)."""
-    from kcq import stage_readings as R
-    U = pred.reindex(index=target.glomeruli, columns=target.odors).astype(float)
-    fv, fw = R.pooled_fly_values(target.flies, target.odors)
-    c = R.fit_stage_curve(U.to_numpy().ravel(), fv, fw, 'affine')
-    V = c(U.to_numpy())
-    m = target.ref.mean['matrix/values'].reindex([f'{g}{P.PAIR_SEP}{o}' for g in target.glomeruli
-                                                  for o in target.odors]).to_numpy(dtype=float)
-    d = V.ravel() - m
+    noise; `fit_reading`; stage_readings' 'affine' curve: the model's pooled mean and SD onto the flies')."""
+    return matrix_loss_array(pred.reindex(index=target.glomeruli, columns=target.odors).to_numpy(dtype=float), target)
+
+
+def matrix_loss_array(U: np.ndarray, target: Target) -> float:
+    """`matrix_loss` of an array in the target's glomeruli x odors order."""
+    mf, vf, m, unit = target.loss_terms()
+    x = U[np.isfinite(U)]
+    sm = float(x.std())
+    scale = float(np.sqrt(vf) / sm) if sm > 0 else 0.0
+    d = (scale * U + (mf - scale * float(x.mean()))).ravel() - m
     ok = np.isfinite(d)
-    return float(np.sqrt(np.mean(d[ok] ** 2)) / target.ref.one_fly['matrix/values'])
+    return float(np.sqrt(np.mean(d[ok] ** 2)) / unit)
 
 
 def _log_bounds(name: str) -> Tuple[float, float]:
@@ -1285,18 +1304,17 @@ def fit_gains(stage: PNStage, target: Target, params: Mapping[str, float], start
     base = Terms() if base is None else base
     gl = target.glomeruli
     grid = np.exp(np.linspace(np.log(GAIN_BOUNDS[0]), np.log(GAIN_BOUNDS[1]), n_grid))
-    Y = gain_grid(stage, gl, params, base, grid)
+    oi = [stage.odors.index(o) for o in target.odors]
+    Y = gain_grid(stage, gl, params, base, grid)[:, :, oi]
     lg = np.log(grid)
-    rest = stage.run(params, base)
-
-    def table(z):
-        X = rest.copy()
-        for i, g in enumerate(gl):
-            X.loc[g] = [np.interp(z[i], lg, Y[i, :, j]) for j in range(Y.shape[2])]
-        return X
+    step = lg[1] - lg[0]
+    ar = np.arange(len(gl))
 
     def f(z):
-        return matrix_loss(table(z), target)
+        pos = np.clip((z - lg[0]) / step, 0.0, len(lg) - 1.0)
+        i0 = np.minimum(np.floor(pos).astype(int), len(lg) - 2)
+        w = (pos - i0)[:, None]
+        return matrix_loss_array(Y[ar, i0] * (1 - w) + Y[ar, i0 + 1] * w, target)
     z0 = np.log(np.clip([start.get(g, 1.0) for g in gl], *GAIN_BOUNDS))
     r = optimize.minimize(f, z0, method='L-BFGS-B', bounds=[(lg[0], lg[-1])] * len(gl),
                           options=dict(maxiter=maxiter, eps=1e-4))
@@ -1361,16 +1379,25 @@ def keep_rung(err_rung: np.ndarray, err_below: np.ndarray, point_rung: float, po
     return bool((point_below - point_rung) > mult * se), se
 
 
-def permute_odor_labels(flies, rng: np.random.Generator):
-    """viki's population with its odor labels permuted (one permutation of the columns, for every fly)."""
-    perm = list(rng.permutation(len(flies.odors)))
-    cols = [flies.odors[i] for i in perm]
+def permute_odor_labels(flies, rng: np.random.Generator, odors: Optional[Sequence[str]] = None):
+    """viki's population with its odor labels permuted among `odors` (default all the panel's; one permutation of the
+    columns, for every fly and its trials), the other columns kept."""
+    odors = list(flies.odors if odors is None else odors)
+    perm = [odors[i] for i in rng.permutation(len(odors))]
+    ren = dict(zip(perm, odors))
     tables = {}
     for f, t in flies.tables.items():
-        x = t[cols].copy()
-        x.columns = list(flies.odors)
+        x = t.copy()
+        x[odors] = t[perm].to_numpy()
         tables[f] = x
-    return dataclasses.replace(flies, tables=tables, trials=None)
+    trials = None
+    if flies.trials:
+        trials = {}
+        for f, t in flies.trials.items():
+            x = t.copy()
+            x.columns = pd.MultiIndex.from_tuples([(ren.get(o, o), r) for o, r in t.columns], names=t.columns.names)
+            trials[f] = x.sort_index(axis=1)
+    return dataclasses.replace(flies, tables=tables, trials=trials)
 
 
 def permute_glomerulus_labels(x: pd.DataFrame, glomeruli: Sequence[str], rng: np.random.Generator) -> pd.DataFrame:
@@ -1413,35 +1440,264 @@ def held_out_draws(pred: pd.DataFrame, target: Target, n_boot: int = N_BOOT_KEEP
     return out
 
 
+def fold_map(table: pd.DataFrame, target: Target) -> pd.DataFrame:
+    """A fold's table of PN rates in the fit flies' units: through the fit's own affine curve (`matrix_loss`'s), set on
+    the fold's training odors only, applied to every odor. A curve absorbs the rates' scale, so the global parameters
+    can change it from fold to fold; the folds' held-out columns are comparable only through these maps, as in the
+    analysis of 2026-11-17 (its `loo`)."""
+    mf, vf, _, _ = target.loss_terms()
+    x = table.reindex(index=target.glomeruli, columns=target.odors).to_numpy(dtype=float)
+    x = x[np.isfinite(x)]
+    sm = float(x.std())
+    scale = float(np.sqrt(vf) / sm) if sm > 0 else 0.0
+    return table * scale + (mf - scale * float(x.mean()))
+
+
 def cross_fit(fit_one: Callable[[Target, List[str]], Tuple[pd.DataFrame, dict]], folds: Sequence[Sequence[str]],
               fit_targets: Mapping[str, Callable[[List[str]], Target]], read_targets: Mapping[str, Target],
               directions: Sequence[Tuple[str, str]] = (('half_a', 'half_b'), ('half_b', 'half_a')),
-              n_boot: int = N_BOOT_KEEP, seed: int = SEED) -> dict:
+              n_boot: int = N_BOOT_KEEP, seed: int = SEED, map_folds: bool = True) -> dict:
     """A rung fitted fold by fold on one half and read on the other: per direction (fit half, read half), for each
     fold the fit on the fit half's flies and the other folds' odors (`fit_one(target, train_odors)` -> (the table of PN
     rates on every odor, the fit's record)), the held-out columns assembled into one table (each odor by the fit that
-    left it out), read on the read half (`read_prediction`) with bootstrap draws of its matrix error
-    (`held_out_draws`). Returns per direction the table, the score, the draws and the folds' records, and the mean
+    left it out; with `map_folds` each fold's table first in the fit flies' units, `fold_map`), read on the read half
+    (`read_prediction`) with bootstrap draws of its matrix error (`held_out_draws`). Returns per direction the table
+    (and 'table_hz', the folds' own rates assembled unmapped), the score, the draws and the folds' records, and the mean
     over directions ('point', 'draws')."""
     out = {}
     for fit_half, read_half in directions:
-        cols, recs = {}, []
+        cols, cols_hz, recs = {}, {}, []
         for k, fold in enumerate(folds):
             train = [o for f in folds for o in f if o not in set(fold)]
-            tab, rec = fit_one(fit_targets[fit_half](train), train)
+            t = fit_targets[fit_half](train)
+            tab, rec = fit_one(t, train)
+            mapped = fold_map(tab, t) if map_folds else tab
             for o in fold:
-                cols[o] = tab[o]
+                cols[o] = mapped[o]
+                cols_hz[o] = tab[o]
             recs.append(dict(fold=k, held_out=list(fold), **rec))
         tgt = read_targets[read_half]
         table = pd.DataFrame(cols)[tgt.odors]
         sc = read_prediction(table, tgt)
         draws = held_out_draws(table, tgt, n_boot, seed)
-        out[f'{fit_half}->{read_half}'] = dict(table=table, score=sc, draws=draws, folds=recs,
-                                                point=float(sc.parts['matrix/values']))
+        out[f'{fit_half}->{read_half}'] = dict(table=table, table_hz=pd.DataFrame(cols_hz)[tgt.odors], score=sc,
+                                                draws=draws, folds=recs, point=float(sc.parts['matrix/values']))
     keys = list(out)
     out['point'] = float(np.mean([out[k]['point'] for k in keys]))
     out['draws'] = np.mean([out[k]['draws'] for k in keys], axis=0)
     return out
+
+
+N_PERM_CONTROL = 5
+N_BOOT_MEASURED = 200
+
+
+def measured_for(target: Target, orn: np.ndarray, orn_partners: np.ndarray, partner_names: Sequence[str],
+                 n_boot: int = N_BOOT_MEASURED, seed: int = SEED, odors_all: Sequence[str] = MEGAMAT_ODORS) -> dict:
+    """The measured step on a fit target's flies and odors (step 0's reading): its gains with the follows rule and its
+    candidate partners. `orn` and `orn_partners` are the ORN recordings (flies x the target's glomeruli / the
+    partner pool x `odors_all`), in the target's units."""
+    oi = [list(odors_all).index(o) for o in target.odors]
+    pn = fly_stack(target.flies.tables, target.glomeruli, target.odors)
+    o = orn[:, :, oi]
+    st = measured_step(o, pn, target.glomeruli, target.odors)
+    iv, _ = step_intervals(o, pn, target.glomeruli, target.odors, n_boot, seed)
+    st = st.join(iv)
+    st['follows_provisional'] = follows_rule(st)
+    res = residuals(o, pn, st, target.glomeruli, target.odors)
+    om = pd.DataFrame(_nanmean(orn_partners[:, :, oi]), index=list(partner_names), columns=target.odors)
+    cp = candidate_partners(res, om, n=N_CANDIDATES, n_perm=0)
+    return dict(step=st, partners=cp)
+
+
+def _key(t: Target) -> tuple:
+    return (tuple(t.flies.flies), tuple(t.odors))
+
+
+def run_rungs(stage: PNStage, pop, orn: np.ndarray, orn_partners: np.ndarray, partner_names: Sequence[str],
+              lock: Mapping, directions: Sequence[Tuple[str, str]] = (('half_a', 'half_b'), ('half_b', 'half_a')),
+              n_boot: int = N_BOOT_KEEP, seed: int = SEED, n_perm: int = N_PERM_CONTROL,
+              max_lateral_steps: Optional[int] = None, global_maxiter: int = 400, verbose: bool = True) -> dict:
+    """Step 1's rungs on the PN stage alone, in order, each cross-fitted (`cross_fit`: fitted fold by fold on one half
+    of the PN flies, read on the other half on the odors it did not see).
+
+    R0 the stage as it is; R1 the global parameters (`fit_global`); R2 with the gains, measured (R2m: the measured gain
+    over the R1 stage's own, `measured_gain_start`, no fit) and fitted from there (R2f, `fit_gains`), R2 being R2f if it
+    is kept against R2m (`keep_rung`), else R2m; R3 with lateral terms, forward-selected among each glomerulus's
+    N_CANDIDATES best measured partners in each fold (a term is a glomerulus and a partner rank, so each fold uses its
+    own partners; its weight fitted fold by fold, `fit_lateral`), added one at a time while the held-out error falls and
+    the term gains more than the same term fitted to dendrites with odor labels permuted (n_perm permutations among
+    the fold's training odors). Each rung is compared with the rung below by `keep_rung`; R1 and R2f are also refitted to
+    odor-permuted dendrites (the controls, reported). `pop` is viki's PN population in the fit's units, its odors named
+    as the stage's; `lock` gives 'halves', 'folds' and 'glomeruli'.
+
+    Returns dict with 'rungs' (one row per rung: point and per-direction held-out matrix errors, the view errors, the SE
+    and kept against the rung below), 'controls' (the permuted refits' points), 'selected' (R3's terms), 'folds' (per
+    rung the folds' records), 'tables' (per rung the assembled held-out tables per direction), 'highest_kept'."""
+    gl = [g for g in lock['glomeruli'] if g in stage.glomeruli]
+    folds = [list(f) for f in lock['folds']]
+    halves_ = dict(lock['halves'])
+    odors = [o for f in folds for o in f]
+    fit_t = {h: (lambda train, fl=fl: Target.make(flies_subset(pop, fl), train, gl)) for h, fl in halves_.items()}
+    read_t = {h: Target.make(flies_subset(pop, fl), [o for o in pop.odors if o in odors], gl)
+              for h, fl in halves_.items()}
+    st: Dict[tuple, dict] = {}
+    res: Dict[str, dict] = {}
+
+    def say(msg):
+        if verbose:
+            print(f'{_now()} step 1: {msg}', flush=True)
+
+    def cf(fit_one, targets=None):
+        return cross_fit(fit_one, folds, targets or fit_t, read_t, directions, n_boot, seed)
+
+    def f0(t, train):
+        return stage.run(), {}
+
+    def fitters(ns: Dict[tuple, dict]):
+        """R1, R2m and R2f's fold fits, keeping each fold's state in `ns` (the real fits' or a control's own)."""
+        def f1(t, train):
+            r = fit_global(stage, t, maxiter=global_maxiter)
+            ns.setdefault(_key(t), {})['R1'] = r['params']
+            return stage.run(r['params']), dict(params=r['params'], loss=r['loss'], at_bounds=r['at_bounds'])
+
+        def f2m(t, train):
+            s_ = ns[_key(t)]
+            meas = measured_for(t, orn, orn_partners, partner_names, seed=seed)
+            start = measured_gain_start(meas['step'], model_gains(stage, s_['R1'], gl, train))
+            s_.update(meas=meas, R2m=Terms(gains=start))
+            return stage.run(s_['R1'], s_['R2m']), dict(gains=start)
+
+        def f2f(t, train):
+            s_ = ns[_key(t)]
+            r = fit_gains(stage, t, s_['R1'], s_['R2m'].gains)
+            s_['R2f'] = r['terms']
+            return stage.run(s_['R1'], r['terms']), dict(gains=r['terms'].gains, loss=r['loss'],
+                                                         at_bounds=r['at_bounds'])
+        return f1, f2m, f2f
+
+    f1, f2m, f2f = fitters(st)
+    say('R0')
+    res['R0'] = cf(f0)
+    say('R1')
+    res['R1'] = cf(f1)
+    say('R2m')
+    res['R2m'] = cf(f2m)
+    say('R2f')
+    res['R2f'] = cf(f2f)
+    r2f_kept, _ = keep_rung(res['R2f']['draws'], res['R2m']['draws'], res['R2f']['point'], res['R2m']['point'])
+    r2 = 'R2f' if r2f_kept else 'R2m'
+    for k in st:
+        st[k]['R2'] = st[k][r2]
+        st[k]['R3'] = Terms(gains=dict(st[k]['R2'].gains), laterals=[])
+
+    def partner(k, g, rank):
+        cp = st[k]['meas']['partners']
+        x = cp[(cp.glomerulus == g) & (cp['rank'] == rank)]
+        return None if not len(x) else str(x.partner.iloc[0])
+
+    def lateral_fit(term, targets_key_map=None, store=None):
+        g, rank = term
+
+        def f(t, train):
+            k = _key(t) if targets_key_map is None else targets_key_map[_key(t)]
+            s_ = st[k]
+            p_ = partner(k, g, rank)
+            if p_ is None or p_ not in stage.glomeruli:
+                return stage.run(s_['R1'], s_['R3']), dict(partner=None)
+            r = fit_lateral(stage, t, s_['R1'], s_['R3'], g, p_)
+            if store is not None:
+                store[k] = r['terms']
+            return stage.run(s_['R1'], r['terms']), dict(partner=p_, weight=r['weight'], loss=r['loss'])
+        return f
+
+    current = res[r2]
+    selected, excluded, steps = [], set(), 0
+    cands = [(g, r) for g in gl for r in range(1, N_CANDIDATES + 1)]
+    rng = np.random.default_rng(seed)
+    while max_lateral_steps is None or steps < max_lateral_steps:
+        n_of = {g: sum(1 for x in selected if x[0] == g) for g in gl}
+        trial = [c for c in cands if c not in selected and c not in excluded and n_of[c[0]] < MAX_LATERAL]
+        if not trial:
+            break
+        say(f'R3 step {steps + 1}: {len(trial)} candidate terms')
+        best, best_out, best_store = None, None, None
+        for c in trial:
+            store: Dict[tuple, Terms] = {}
+            out = cf(lateral_fit(c, store=store))
+            if best_out is None or out['point'] < best_out['point']:
+                best, best_out, best_store = c, out, store
+        gain = current['point'] - best_out['point']
+        if gain <= 0:
+            break
+        # the same term fitted to odor-permuted dendrites (the fold's training odors permuted)
+        perm_gains = []
+        for _ in range(n_perm):
+            pseed = int(rng.integers(1 << 30))
+            kmap: Dict[tuple, tuple] = {}
+
+            def make_perm(h, fl=None):
+                def mk(train, fl=halves_[h]):
+                    base_t = Target.make(flies_subset(pop, fl), train, gl)
+                    pt = Target.make(permute_odor_labels(flies_subset(pop, fl), np.random.default_rng(pseed), train),
+                                     train, gl)
+                    kmap[_key(pt)] = _key(base_t)
+                    return pt
+                return mk
+            out_p = cf(lateral_fit(best, targets_key_map=kmap), {h: make_perm(h) for h in halves_})
+            perm_gains.append(current['point'] - out_p['point'])
+        if n_perm and gain <= float(np.mean(perm_gains)):
+            excluded.add(best)
+            say(f'R3: {best} gains {gain:.4f}, no more than odor-permuted ({np.mean(perm_gains):.4f}); left out')
+            continue
+        selected.append(best)
+        for k, terms in best_store.items():
+            st[k]['R3'] = terms
+        current = best_out
+        steps += 1
+        say(f'R3: {best} added, held-out error {current["point"]:.4f} (gain {gain:.4f}; permuted '
+            f'{np.mean(perm_gains) if perm_gains else float("nan"):.4f})')
+    res['R3'] = current if selected else res[r2]
+
+    # the controls: R1 and R2f refitted to odor-permuted dendrites
+    controls = []
+    for i in range(n_perm):
+        pseed = int(rng.integers(1 << 30))
+        pt = {h: (lambda train, fl=fl, pseed=pseed: Target.make(
+            permute_odor_labels(flies_subset(pop, fl), np.random.default_rng(pseed), train), train, gl))
+            for h, fl in halves_.items()}
+        c1, c2m, c2f = fitters({})
+        o1 = cf(c1, pt)
+        o2m = cf(c2m, pt)
+        o2f = cf(c2f, pt)
+        controls.append(dict(perm=i, seed=pseed, R1=o1['point'], R2m=o2m['point'], R2f=o2f['point']))
+
+    order = ['R0', 'R1', 'R2m', 'R2f', 'R3']
+    below = dict(R1='R0', R2m='R1', R2f='R1', R3=r2)
+    rows = []
+    for r in order:
+        o = res[r]
+        row = dict(rung=r, point=o['point'])
+        for d in [k for k in o if '->' in k]:
+            row[f'point_{d}'] = o[d]['point']
+            sc = o[d]['score']
+            row.update({f'{d}_{k}': v for k, v in sc.as_series().items() if k.startswith(('error', 'view_'))})
+        if r in below:
+            kept, se = keep_rung(o['draws'], res[below[r]]['draws'], o['point'], res[below[r]]['point'])
+            row.update(below=below[r], se_vs_below=se, kept=kept)
+        rows.append(row)
+    rungs = pd.DataFrame(rows)
+    kept = rungs.set_index('rung')['kept'].to_dict()
+    highest = 'R0'
+    for r in ('R1', r2, 'R3'):
+        if kept.get(r) and (r != 'R3' or selected):
+            highest = r
+    return dict(rungs=rungs, controls=pd.DataFrame(controls), selected=[list(x) for x in selected],
+                excluded=[list(x) for x in excluded], r2=r2, highest_kept=highest,
+                folds={r: {d: res[r][d]['folds'] for d in res[r] if '->' in d} for r in order},
+                tables={r: {d: res[r][d]['table'] for d in res[r] if '->' in d} for r in order},
+                state={str(k): dict(R1=v.get('R1'), R2=v['R2'].as_dict() if 'R2' in v else None,
+                                    R3=v['R3'].as_dict() if 'R3' in v else None) for k, v in st.items()})
 
 
 def part_step1(n_perm: int = N_PERMUTATIONS) -> dict:
