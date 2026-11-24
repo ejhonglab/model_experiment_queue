@@ -267,6 +267,18 @@ directory's notes/ and are linked from here.
 
 ## Resolved
 
+### E129's note gave step 3's mechanism numbers with no script, a claw share without its denominator, and one range off by 0.01 (found 2026-11-23 17:16, hal's summary planner; resolved 2026-11-23 17:27)
+- **What.** E129_block_survivor_static.md's step-3 numbers were computed by hand from the archive: the share of APL-off
+  responses carried by the 467 KCs without MB-C1 output, their response rates, and the odors-per-KC shares and ranges.
+  The share of MB-C1's synapses on the wiring's claws, 56 % / 53 %, did not name its denominator (MB-C1's calyx synapses
+  with the wiring's KCs); viki's 13:38 chat post gave 54 % / 51 % (of all its calyx synapses). The step-3 Realism table
+  gave S's odors-per-KC distance with APL off as 0.08 to 0.11 over the wirings; it is 0.07 to 0.11 (0.07499 on P3).
+- **What it affects.** The note and its page only. The script reproduces every other hand-computed value; no class,
+  verdict or summary number changes.
+- **Done.** analyses/E129_writeup_mbc1_mechanism.py (8432260, d64116c) writes results/E129_block_survivor_static/
+  writeup_mbc1_mechanism.csv, checked against runs.csv, verdict.json and the MB-C1 loader. The note cites it, names both
+  denominators and corrects the range; the page is rebuilt and saved (reports/E129_block_survivor_static.html, 17:27).
+
 ### E112's realism table labels the flies' 1 z values as baseline-noise units (found 2026-11-20 13:39, viki's write-up subagent for E112; resolved 2026-11-22)
 - **What.** results/E112_rho_like_for_like/realism.csv has a "flies" row labelled "baseline-noise units, 1.97 SD".
   Its values were the 1 z ones, from the registry's ctrl_frac, tnt_frac and rate_ratio_fraction: 0.068 / 0.150, ratio
