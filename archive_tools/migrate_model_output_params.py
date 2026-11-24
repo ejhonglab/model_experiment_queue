@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 import re
 import shutil
 from datetime import datetime
@@ -445,6 +446,9 @@ def main() -> None:
     args = ap.parse_args()
     dirs = [ARCHIVE / e for e in args.experiments] if args.experiments else sorted(
         (p for p in ARCHIVE.glob('E*') if (p / 'params.csv').exists()), key=lambda p: int(p.name.split('_')[0][1:]))
+    missing = [d.name for d in dirs if not d.is_dir()]
+    if missing:
+        sys.exit(f'no archive folder for {", ".join(missing)} in {ARCHIVE}')
     stamp = datetime.now().strftime('%Y%m%d-%H%M%S')
     all_logs = []
     for d in dirs:

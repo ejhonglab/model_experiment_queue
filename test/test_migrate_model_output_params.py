@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Tests for archive_tools/migrate_model_output_params.py's command line: a named archive folder without a params.csv is
-skipped with a line, not an error. Needs the shared directory (the module reads it at import); skipped without it."""
+skipped with a line, not an error, and a name with no folder at all (a typo) exits with a message. Needs the shared
+directory (the module reads it at import); skipped without it."""
 
 import sys
 
@@ -22,3 +23,11 @@ def test_folder_without_params_is_skipped(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert 'E0_spike_times_only: no params.csv, nothing to fill' in out
     assert not (tmp_path / 'params_migration_log.csv').exists()
+
+
+def test_missing_folder_exits(tmp_path, monkeypatch):
+    monkeypatch.setattr(M, 'ARCHIVE', tmp_path)
+    monkeypatch.setattr(sys, 'argv', ['migrate_model_output_params.py', 'E0_typo'])
+    with pytest.raises(SystemExit) as e:
+        M.main()
+    assert 'no archive folder for E0_typo' in str(e.value.code)
