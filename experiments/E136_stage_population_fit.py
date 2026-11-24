@@ -203,18 +203,61 @@ IDENTITY_TOL = 1e-9
 
 ReadPoint = namedtuple('ReadPoint', 'arm panel wiring half')
 
+# the measure the loss and the classes read (E134's gate of 2026-11-24 15:19 read the three-view population error "not
+# usable" and left the measure to Tom and Yang; the planner's cut is strength by odor alone, with the two-view error
+# beside): 'all' every view (the PN dendrites on four, the matrix view included), or the views named. A measure other than
+# 'all' writes every output in a folder of its own (`out_dir`, `local_dir`: measure_<name>/). Set by --measure
+# (`set_measure`).
+MEASURES: Dict[str, Optional[Tuple[str, ...]]] = {
+    'all': None,
+    'strength': ('strength',),
+    'strength_sharing': ('strength', 'sharing'),
+}
+MEASURE = 'all'
+
+
+def set_measure(name: str) -> None:
+    """Sets the measure in force (MEASURES)."""
+    global MEASURE
+    if name not in MEASURES:
+        raise ValueError(f'measure {name!r} not in {sorted(MEASURES)}')
+    MEASURE = name
+
+
+def measure_parts(views: Optional[Sequence[str]]) -> Optional[List[str]]:
+    """hal's parts of the views named (None for every part)."""
+    from kcq import population_fit as P
+    return None if views is None else [p for p in P.ALL_PARTS if p.split('/')[0] in views]
+
+
+def error_column(stage: str, views: Optional[Sequence[str]]) -> str:
+    """The population error's column of a stage under a measure: the PN dendrites on four views where the matrix view
+    is read, otherwise the error over the views read."""
+    return 'error_with_matrix' if stage == 'pn_dendrite' and (views is None or 'matrix' in views) else 'error'
+
 
 # ---------------------------------------------------------------------------
 # paths and guards
 
+def _measure_sub() -> str:
+    return '' if MEASURE == 'all' else f'measure_{MEASURE}'
+
+
 def out_dir() -> Path:
-    """<shared>/results/E136_stage_population_fit/ (created)."""
-    return H.results_dir(EXPERIMENT)
+    """<shared>/results/E136_stage_population_fit/[measure_<name>/] (created)."""
+    d = H.results_dir(EXPERIMENT)
+    if _measure_sub():
+        d = d / _measure_sub()
+        d.mkdir(parents=True, exist_ok=True)
+    return d
 
 
 def local_dir(part: str = '') -> Path:
-    """outputs/E136_stage_population_fit/[<part>/] (created)."""
-    d = H.outputs_dir(EXPERIMENT) / part if part else H.outputs_dir(EXPERIMENT)
+    """outputs/E136_stage_population_fit/[measure_<name>/][<part>/] (created)."""
+    d = H.outputs_dir(EXPERIMENT)
+    for x in (_measure_sub(), part):
+        if x:
+            d = d / x
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -345,17 +388,19 @@ def permute_population(pop, perm: Mapping[str, str]):
 class Flies:
     """The flies a loss reads against: for reading (curve, noise, criterion) a FlyCache of one half of each stage's
     flies (all of them for `half` None); for scoring, per stage the references of the half (its mean views) in all the
-    stage's flies' one-fly units, with the odor labels as recorded and, for the control, under each permutation.
+    stage's flies' one-fly units, with the odor labels as recorded and, for the control, under each permutation; on the
+    views of `views` ('measure': the measure in force, MEASURES; None every view).
 
-    Attributes: half, stages, panel, full (per stage, viki's population of all flies), names (per stage, the halves'
-    fly names), perms (the control's permutations, or []), cache (the FlyCache)."""
+    Attributes: half, stages, panel, views, full (per stage, viki's population of all flies), names (per stage, the
+    halves' fly names), perms (the control's permutations, or []), cache (the FlyCache)."""
 
     def __init__(self, half: Optional[str], stages: Sequence[str] = LOSS_STAGES,
                  perms: Optional[Sequence[Mapping[str, str]]] = None, panel: str = PANEL, seed: int = HALF_SEED,
-                 full: Optional[Mapping[str, object]] = None):
+                 full: Optional[Mapping[str, object]] = None, views: Optional[Sequence[str]] = 'measure'):
         if half is not None and half not in HALVES:
             raise ValueError(f'{half=}')
         self.half, self.stages, self.panel = half, tuple(stages), panel
+        self.views = MEASURES[MEASURE] if views == 'measure' else (None if views is None else tuple(views))
         self.full = dict(full) if full is not None else all_flies(stages, panel)
         self.names = {st: split_names(fl, seed) for st, fl in self.full.items()}
         self.perms = list(perms or [])
@@ -378,7 +423,7 @@ class Flies:
             od = [o for o in odors if o in set(have)]
             if perm is not None:
                 fp = [permute_population(f, self.perms[perm]) for f in fp]
-            ref = P.fly_reference(fp, od, B.breadth_edges(len(od)))
+            ref = P.fly_reference(fp, od, B.breadth_edges(len(od)), parts=measure_parts(self.views))
             if self.half is not None:
                 ref = P.subset_reference(ref, self.names[stage][self.half], keep_units=True)
             self._refs[key] = ref
@@ -839,7 +884,7 @@ class StageLoss:
             key = (st, self.flies.panel, 'on')
             pops = [reads[w].populations[key] for w in runs]
             odors = list(pops[0].values.columns)
-            col = 'error_with_matrix' if st == 'pn_dendrite' else 'error'
+            col = error_column(st, self.flies.views)
             tab = P.wirings_as_flies(pops, self.flies.reference(st, odors))
             out[f'{st}_error'] = float(tab.loc['common', col])
             out.update({f'{st}_{c}': float(tab.loc['common', c]) for c in tab.columns if c.startswith('view_')})
@@ -895,7 +940,7 @@ def identity(arm: str = 'A0', wirings: Sequence[str] = S_WIRINGS) -> dict:
     lock = R.require_lock()
     m = ArmModel(arm, wirings, lock=lock)
     runs = m.run({}, tag_prefix='identity_')
-    flies = Flies(None)
+    flies = Flies(None, views=None)
     rec = dict(arm=arm, wirings=list(wirings), time=_now(), host=_host(), holds={}, counts={}, readings={}, scores={})
     ok = True
     for w, run in runs.items():
@@ -1140,7 +1185,8 @@ def read_targets(wiring: str, panel: str, n_odors: int, lock: Optional[Mapping] 
 
 def read_dirs() -> List[Path]:
     """Where the reads' runs are: outputs/.../read/, then the archive's."""
-    return [local_dir('read'), H.shared_dir() / 'data' / 'model_outputs' / EXPERIMENT / 'read']
+    arch = H.shared_dir() / 'data' / 'model_outputs' / EXPERIMENT
+    return [local_dir('read'), (arch / _measure_sub() if _measure_sub() else arch) / 'read']
 
 
 def _append_row(path: Path, row: Mapping) -> None:
@@ -1313,12 +1359,14 @@ def score_megamat(arm: str, stages: Sequence[str], half: Optional[str] = 'held',
 
 def score_panels(arm: str, flies: Optional['R.FlyCache'] = None) -> pd.DataFrame:
     """An arm's KC somata on the held-out panels (the validation2, mixture and APL16 inputs on the eight wirings, every
-    panel and condition the runs are read on with flies to read them against, default readings): E134's `score_family`
-    rows (each wiring's population error, their mean and the error of their mean views, beside the flies' floor and one
-    recording against the others), with the input."""
+    panel and condition the runs are read on with flies to read them against, default readings), under the measure in
+    force: per (input, panel, condition) each wiring's population error, their mean and the error of their mean views
+    (hal's `wirings_as_flies` against all the panel's flies, E134's `fly_side_read`), with the views."""
     from experiments import E134_population_baseline as B
+    from kcq import population_fit as P
     flies = flies if flies is not None else R.FlyCache()
     lock = R.require_lock()
+    views = MEASURES[MEASURE]
     rows = []
     for panel in READ_PANELS:
         if panel == PANEL:
@@ -1328,12 +1376,22 @@ def score_panels(arm: str, flies: Optional['R.FlyCache'] = None) -> pd.DataFrame
             continue
         reads = {w: R.read_run(r, stages=['kc_soma'], lock=lock, flies=flies, seed_index=seed_index(w))
                  for w, r in zip(WIRINGS, runs)}
-        sc = B.score_family(reads, R.DEFAULT_READINGS['kc_soma'].name, flies)
-        if len(sc):
-            sc.insert(0, 'input', panel)
-            sc.insert(0, 'arm', arm)
-            rows.append(sc)
-    return pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
+        for key in sorted({k for rd in reads.values() for k in rd.populations}):
+            st, pan, cond = key
+            fl = flies.get(key)
+            if fl is None:
+                continue
+            pops = [reads[w].populations[key] for w in WIRINGS]
+            fp, have = B.fly_side_read(fl)
+            od = [o for o in pops[0].values.columns if o in set(have)]
+            ref = P.fly_reference(fp, od, B.breadth_edges(len(od)), parts=measure_parts(views))
+            tab = P.wirings_as_flies(pops, ref)
+            for name, row in tab.iterrows():
+                wiring = str(name).partition('/')[2] or str(name)
+                rows.append(dict(arm=arm, input=panel, stage=st, panel=pan, condition=cond, wiring=wiring,
+                                 measure=MEASURE, n_odors=len(od), n_flies=len(fp),
+                                 **{k: float(v) for k, v in row.items()}))
+    return pd.DataFrame(rows)
 
 
 def apl16_realism(on: pd.DataFrame, off: pd.DataFrame) -> dict:
@@ -1566,8 +1624,14 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     ap.add_argument('--lane', default='1')
     ap.add_argument('--reclaim', action='store_true')
     ap.add_argument('--reverse', action='store_true')
+    ap.add_argument('--measure', choices=tuple(MEASURES), default='all',
+                    help="the views the loss and the classes read (outputs of a measure other than 'all' in "
+                         "measure_<name>/)")
     a = ap.parse_args(argv)
     check_wirings()
+    set_measure(a.measure)
+    if a.part == 'identity' and a.measure != 'all':
+        raise SystemExit('the identity reads every view (against E134\'s score)')
     if a.part == 'identity':
         print(json.dumps(identity(a.arm or 'A0', a.wirings or S_WIRINGS), indent=1, default=str))
     elif a.part == 'claw_identity':

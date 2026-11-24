@@ -297,3 +297,25 @@ def test_classes():
     assert run({'P3': 0.6, 'P4': 1.0, 'M2': 1.0, 'M3': 1.0})['cls'] == 'does not improve'
     c = F.compare({w: 0.9 for w in F.T_WIRINGS}, {w: 1.0 for w in F.T_WIRINGS}, 0.04)
     assert c['change'] == pytest.approx(-0.1) and c['se'] == pytest.approx(0.02) and c['improves']
+
+
+def test_measures():
+    assert F.MEASURE == 'all' and F.measure_parts(None) is None
+    assert F.measure_parts(('strength',)) == ['strength/rate', 'strength/mean']
+    assert F.error_column('pn_dendrite', None) == 'error_with_matrix'
+    assert F.error_column('pn_dendrite', ('strength',)) == 'error' == F.error_column('kc_soma', None)
+    full = planted_full()
+    runs = _planted_runs()
+    try:
+        F.set_measure('strength')
+        fl = F.Flies('fit', F.LOSS_STAGES, full=full)
+        assert fl.views == ('strength',)
+        assert set(fl.reference('kc_soma', list(ODORS)).parts) == {'strength/rate', 'strength/mean'}
+        res = F.StageLoss(F.LOSS_STAGES, fl, LOCK, subset_glomeruli=GL)(runs)
+        assert res['kc_soma_error'] == pytest.approx(res['kc_soma_view_strength'])
+        assert 'kc_soma_view_sharing' not in res
+        assert F._measure_sub() == 'measure_strength'
+    finally:
+        F.set_measure('all')
+    with pytest.raises(ValueError):
+        F.set_measure('sharing_only')
