@@ -1226,6 +1226,7 @@ Canonical experiment names for summary reports:
 | E128 | the flies' bouton totals by tuning group |
 | E129 | the inhibition that outlasts the block reduced to a static level |
 | E130 | the best family on the male CNS's two calyces |
+| E131 | MB-C1's two cells beside the inhibition among KCs |
 
 ## Model-output archive (data/model_outputs/ in the shared directory)
 
