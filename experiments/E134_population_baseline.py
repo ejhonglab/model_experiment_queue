@@ -711,18 +711,44 @@ def _simulator_built(sim, cells: Mapping, W: pd.DataFrame, params: dict, orn: pd
                  info=info)
 
 
+def _override_record(orn: Optional[pd.DataFrame], extra_kws: Optional[Mapping]) -> dict:
+    """What a run built with overrides records in its info: the input's sha256 when `orn` was given, and each of
+    `extra_kws` as its value, or as its sha256 when it is a table (e.g. E135's pn_rates)."""
+    from experiments.E77_input_screen import frame_sha256
+    rec = {}
+    if orn is not None:
+        rec['orn_override_sha256'] = frame_sha256(orn)
+    for k, v in dict(extra_kws or {}).items():
+        rec[f'extra_kws.{k}'] = (f'sha256:{frame_sha256(v)}' if isinstance(v, (pd.DataFrame, pd.Series))
+                                 else v if np.isscalar(v) or v is None else str(v))
+    return rec
+
+
 def build_family(label: str, panel: str, params: Optional[Mapping[str, float]] = None,
-                 orn: Optional[pd.DataFrame] = None) -> Built:
+                 orn: Optional[pd.DataFrame] = None, extra_kws: Optional[Mapping] = None) -> Built:
     """One wiring of the family on a panel's input (E83's `build_simulator`, the breadth held at the lab input's, as
-    E107's `run_fitted`), at its fit's parameters or `params`."""
+    E107's `run_fitted`), at its fit's parameters or `params`.
+
+    Args:
+        label: one of E83's wirings.
+        panel: the panel whose input is used when `orn` is None (`panel_input`).
+        params: the parameters (default the wiring's fit's).
+        orn: an ORN input in place of the panel's (e.g. E135's solved input); the breadth stays the lab input's.
+        extra_kws: further `make_fixed_param_kc_simulator` kwargs passed through E83's `build_simulator` (e.g.
+            E135's `dict(pn_rates=<glomeruli x odors>)`, olfsysm's preset PN rates). Both overrides are recorded in
+            the Built's info (`_override_record`).
+    """
     from experiments import E83_cross_wiring_fit as E83
     Pp = E83.wiring_parts(label)
+    given = orn
     orn = panel_input(panel) if orn is None else orn
     p = dict(Pp['p'] if params is None else params)
-    sim, info = E83.build_simulator(label, orn=orn, breadth=Pp['breadth'], params=p)
+    sim, info = E83.build_simulator(label, orn=orn, breadth=Pp['breadth'], params=p,
+                                    extra_kws=None if not extra_kws else dict(extra_kws))
     return _simulator_built(sim, info['cells'], info['W'], p, orn, R.STAGE_FILES,
                             dict(model=FAMILY, wiring=label, fit_folder=Pp['folder'], fit_tag=Pp['tag'],
-                                 kws=info['kws'], breadth='held at the lab input\'s (E83 wiring_parts)'))
+                                 kws=info['kws'], breadth='held at the lab input\'s (E83 wiring_parts)',
+                                 **_override_record(given, extra_kws)))
 
 
 def _fit_mb_model_built(name: str, orn: pd.DataFrame, kws: Mapping, params: Mapping[str, float], info: dict) -> Built:
@@ -833,13 +859,15 @@ def build_beside(model: str, panel: str) -> Built:
     raise ValueError(f'{model=}')
 
 
-def build_point(pt: Point, params: Optional[Mapping[str, float]] = None) -> Built:
+def build_point(pt: Point, params: Optional[Mapping[str, float]] = None, orn: Optional[pd.DataFrame] = None,
+                extra_kws: Optional[Mapping] = None) -> Built:
     """A point's model on its panel's input: the family's wiring (`build_family`, at `params` for a held point's second
-    build) or a beside model (`build_beside`)."""
+    build, with `orn` / `extra_kws` overrides for other experiments' points, e.g. E135's step 2) or a beside model
+    (`build_beside`, which takes no overrides)."""
     if is_family(pt):
-        return build_family(pt.model, pt.panel, params)
-    if params is not None:
-        raise ValueError('a beside model runs at its own parameters')
+        return build_family(pt.model, pt.panel, params, orn=orn, extra_kws=extra_kws)
+    if params is not None or orn is not None or extra_kws:
+        raise ValueError('a beside model runs at its own parameters and input')
     return build_beside(pt.model, pt.panel)
 
 

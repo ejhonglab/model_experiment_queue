@@ -283,3 +283,30 @@ def test_runs_csv_union_and_old_files(tmp_path, monkeypatch):
         f.write('z,1,2\n')
     with pytest.raises(ValueError):
         B.read_runs_csv(q)
+
+
+def test_build_overrides_reach_the_simulator(monkeypatch):
+    """build_point passes an ORN-input override and extra kwargs (E135's pn_rates) through build_family to E83's
+    build_simulator, records them in the Built's info (a table by its sha256), and refuses them for a beside model."""
+    from experiments import E83_cross_wiring_fit as E83
+    seen = {}
+    orn = pd.DataFrame(np.arange(6.0).reshape(3, 2), index=['DM1', 'DL5', 'VA2'], columns=['2h', 'pa'])
+    rates = pd.DataFrame(np.ones((1, 2)), index=['DM1'], columns=['2h', 'pa'])
+
+    def fake_build(label, orn=None, breadth=None, params=None, input_tag=None, extra_kws=None):
+        seen.update(label=label, orn=orn, extra_kws=extra_kws)
+        return 'sim', dict(cells='cells', W='W', kws=dict(a=1))
+
+    monkeypatch.setattr(E83, 'wiring_parts', lambda label: dict(p=dict(fixed_thr=1.0), breadth=None, folder='f', tag='t'))
+    monkeypatch.setattr(E83, 'build_simulator', fake_build)
+    monkeypatch.setattr(B, '_simulator_built', lambda sim, cells, W, p, orn, stages, info: info)
+    pt = B.Point(model='real', panel='megamat', reading='fitted')
+    info = B.build_point(pt, orn=orn, extra_kws=dict(pn_rates=rates, scale=2.0))
+    assert seen['orn'] is orn and seen['extra_kws']['pn_rates'] is rates and seen['extra_kws']['scale'] == 2.0
+    from experiments.E77_input_screen import frame_sha256
+    assert info['extra_kws.pn_rates'] == 'sha256:' + frame_sha256(rates) and info['extra_kws.scale'] == 2.0
+    assert info['orn_override_sha256'] == frame_sha256(orn)
+    plain = B.build_point(pt)
+    assert seen['extra_kws'] is None and not any(k.startswith(('extra_kws.', 'orn_override')) for k in plain)
+    with pytest.raises(ValueError):
+        B.build_point(B.Point(model='uniform_draw', panel='megamat', reading='fitted'), extra_kws=dict(pn_rates=rates))
