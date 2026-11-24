@@ -21,6 +21,13 @@ fa3543d (`mbc1_inh` with uniform cell weights) is the same in exact arithmetic b
 instead of each KC's activity, so it is not E129's run in floating point; the check part measures it on 'real'
 (`route_diagnostic`). The checks below must pass with 0 differing spike counts before any run.
 
+The route's cost and the alternative (2026-11-23, hal). The feedback-cell route also gave 0 differing spike counts
+against E129's S1_P_real at E129's factor, but only empirically, at one point; the matrix route is kept because its
+input to olfsysm is identical by construction, so U0's whole bisection follows E129's. Its price is speed: U is dense
+(N^2 entries), and a simulation with the pooled neuron present takes about 2.5 times the family's (35 s against 14 s
+on a quiet hal at 16 threads, 85 s against 33 s at a load of about 48), memory-bound, so two lanes at once do not
+halve the total.
+
 Readings the entry leaves open, fixed here before any run:
 1. The pooled hold (step 1's arms; E129's, extended to both conditions; `pooled_hold`): the threshold stays the fit's.
    With APL off (APL->KC and APL->bouton 0) the pooled scale b = s x f is bisected (E69's `bisect_factor` through
