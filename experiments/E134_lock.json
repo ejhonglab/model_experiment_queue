@@ -1,0 +1,3384 @@
+{
+ "experiment": "E134_population_baseline",
+ "step": "0, the lock",
+ "host": "viki",
+ "time": "2026-11-24 10:29",
+ "commits": {
+  "queue_commit": "afc9ef7c8a89c9e47b5f39454e47483155e9b0a1",
+  "queue_dirty": true,
+  "pyolfsysm_commit": "b1e89d7d119bbbb4888f31de4d94938dbc4bd60a",
+  "pyolfsysm_dirty": false,
+  "al_analysis_commit": "d891fe786ac5a103ef1ccb40bf108b3b5e16078e",
+  "al_analysis_dirty": false,
+  "hong2p_commit": "484da09afe90ce4dd37e8b9039b1881136b78b68",
+  "hong2p_dirty": false
+ },
+ "populations": {
+  "orn__megamat__wild_type": {
+   "key": [
+    "orn",
+    "megamat",
+    "wild_type"
+   ],
+   "file": {
+    "path": "<shared>/data/stage_populations/populations/orn__megamat__wild_type.parquet",
+    "bytes": 162591,
+    "mtime": "2026-11-24 10:26:03",
+    "sha256": "de37c9b215515030bec3ff6c108a27ba13b7a546abae82586e4b327f78d144d6"
+   },
+   "sources": [
+    {
+     "path": "<shared>/data/stage_populations/sources/olfdb/ds1_long.csv",
+     "bytes": 2000173,
+     "mtime": "2026-11-24 10:22:26",
+     "sha256": "8032591a7c6451c0cb7036ece856a20e38ec0964d806a824577c7cd9141e5dac"
+    }
+   ],
+   "has_trials": true,
+   "response_rate": {
+    "mean_over_flies": 0.6199274155129191,
+    "per_fly": {
+     "2023-04-22/2": 0.5263157894736842,
+     "2023-04-22/3": 0.6076190476190476,
+     "2023-04-26/2": 0.5196078431372549,
+     "2023-04-26/3": 0.5882352941176471,
+     "2023-05-08/1": 0.7837837837837838,
+     "2023-05-08/3": 0.6274509803921569,
+     "2023-05-09/1": 0.6470588235294118,
+     "2023-05-10/1": 0.6408668730650154,
+     "2023-06-22/1": 0.6384083044982699
+    },
+    "per_odor": {
+     "2h": 0.7974081556124899,
+     "IaA": 0.751597425230036,
+     "pa": 0.7482603789105338,
+     "2-but": 0.5175698844945491,
+     "eb": 0.6709000390630938,
+     "ep": 0.6706364996870673,
+     "6al": 0.7023950679265437,
+     "t2h": 0.6999510715196989,
+     "1-8ol": 0.5285270822938521,
+     "1-5ol": 0.7286091265967427,
+     "1-6ol": 0.7876693810130342,
+     "ms": 0.4449423033530361,
+     "B-cit": 0.38098196235451137,
+     "Lin": 0.4140494615210818,
+     "aa": 0.43134266508879515,
+     "benz": 0.6371646672472266,
+     "va": 0.6050948117511584
+    }
+   },
+   "flies": [
+    "2023-04-22/2",
+    "2023-04-22/3",
+    "2023-04-26/2",
+    "2023-04-26/3",
+    "2023-05-08/1",
+    "2023-05-08/3",
+    "2023-05-09/1",
+    "2023-05-10/1",
+    "2023-06-22/1"
+   ],
+   "n_flies": 9,
+   "odors": [
+    "2h",
+    "IaA",
+    "pa",
+    "2-but",
+    "eb",
+    "ep",
+    "6al",
+    "t2h",
+    "1-8ol",
+    "1-5ol",
+    "1-6ol",
+    "ms",
+    "B-cit",
+    "Lin",
+    "aa",
+    "benz",
+    "va"
+   ],
+   "odors_per_fly": {
+    "2023-04-22/2": 15,
+    "2023-04-22/3": 15,
+    "2023-04-26/2": 17,
+    "2023-04-26/3": 17,
+    "2023-05-08/1": 17,
+    "2023-05-08/3": 17,
+    "2023-05-09/1": 17,
+    "2023-05-10/1": 17,
+    "2023-06-22/1": 17
+   },
+   "units_per_fly": {
+    "2023-04-22/2": 38,
+    "2023-04-22/3": 35,
+    "2023-04-26/2": 36,
+    "2023-04-26/3": 34,
+    "2023-05-08/1": 37,
+    "2023-05-08/3": 36,
+    "2023-05-09/1": 38,
+    "2023-05-10/1": 38,
+    "2023-06-22/1": 34
+   },
+   "exclusions": [],
+   "criterion": 2.0,
+   "units": "trial-noise SD",
+   "window": {},
+   "unit_kind": "glomerulus",
+   "named_units": true,
+   "recording_site": "axon terminals (pebbled > GCaMP6f, antennal lobe glomeruli)",
+   "notes": [
+    "dF/F per trial from processed tables (no frames on hand): trial-noise units"
+   ],
+   "breadth_bins": {
+    "15": [
+     [
+      0,
+      0
+     ],
+     [
+      1,
+      1
+     ],
+     [
+      2,
+      3
+     ],
+     [
+      4,
+      7
+     ],
+     [
+      8,
+      15
+     ]
+    ],
+    "17": [
+     [
+      0,
+      0
+     ],
+     [
+      1,
+      1
+     ],
+     [
+      2,
+      3
+     ],
+     [
+      4,
+      8
+     ],
+     [
+      9,
+      17
+     ]
+    ]
+   }
+  },
+  "pn_dendrite__megamat__wild_type": {
+   "key": [
+    "pn_dendrite",
+    "megamat",
+    "wild_type"
+   ],
+   "file": {
+    "path": "<shared>/data/stage_populations/populations/pn_dendrite__megamat__wild_type.parquet",
+    "bytes": 100700,
+    "mtime": "2026-11-24 10:26:03",
+    "sha256": "8a0c368d467db0a002a55e942f2e02f7097797a68dcd544aaa952d3959dd624b"
+   },
+   "sources": [
+    {
+     "path": "<shared>/data/stage_populations/sources/gh146/GH146_ij_certain-roi_stats.p",
+     "bytes": 194980,
+     "mtime": "2026-11-07 17:46:59",
+     "sha256": "8972967d169e3a2c71017bb9b83d4928a523127cc9e1ecd8a91a80ccd5daf777"
+    }
+   ],
+   "has_trials": true,
+   "response_rate": {
+    "mean_over_flies": 0.42152132883804866,
+    "per_fly": {
+     "2023-06-22/2": 0.40365111561866124,
+     "2023-06-23/1": 0.4117647058823529,
+     "2023-06-24/1": 0.42190669371196754,
+     "2023-07-19/1": 0.4180672268907563,
+     "2023-07-19/2": 0.4198782961460446,
+     "2023-07-28/1": 0.3764705882352941,
+     "2023-07-28/2": 0.4989106753812636
+    },
+    "per_odor": {
+     "2h": 0.5584192144290666,
+     "IaA": 0.46344306304897437,
+     "pa": 0.45529700002606405,
+     "2-but": 0.4076787343289806,
+     "eb": 0.5044022206583783,
+     "ep": 0.5182034039669507,
+     "6al": 0.45096515234446277,
+     "t2h": 0.4386941903198061,
+     "1-8ol": 0.30569656214976415,
+     "1-5ol": 0.5627776474574504,
+     "1-6ol": 0.6832136992728125,
+     "ms": 0.2816018974639664,
+     "B-cit": 0.2048432246461803,
+     "Lin": 0.23702478692626475,
+     "aa": 0.19863346104725416,
+     "benz": 0.5501556024708734,
+     "va": 0.34481272968957694
+    }
+   },
+   "flies": [
+    "2023-06-22/2",
+    "2023-06-23/1",
+    "2023-06-24/1",
+    "2023-07-19/1",
+    "2023-07-19/2",
+    "2023-07-28/1",
+    "2023-07-28/2"
+   ],
+   "n_flies": 7,
+   "odors": [
+    "2h",
+    "IaA",
+    "pa",
+    "2-but",
+    "eb",
+    "ep",
+    "6al",
+    "t2h",
+    "1-8ol",
+    "1-5ol",
+    "1-6ol",
+    "ms",
+    "B-cit",
+    "Lin",
+    "aa",
+    "benz",
+    "va"
+   ],
+   "odors_per_fly": {
+    "2023-06-22/2": 17,
+    "2023-06-23/1": 17,
+    "2023-06-24/1": 17,
+    "2023-07-19/1": 17,
+    "2023-07-19/2": 17,
+    "2023-07-28/1": 17,
+    "2023-07-28/2": 17
+   },
+   "units_per_fly": {
+    "2023-06-22/2": 29,
+    "2023-06-23/1": 27,
+    "2023-06-24/1": 29,
+    "2023-07-19/1": 28,
+    "2023-07-19/2": 29,
+    "2023-07-28/1": 25,
+    "2023-07-28/2": 27
+   },
+   "exclusions": [],
+   "criterion": 2.0,
+   "units": "trial-noise SD",
+   "window": {},
+   "unit_kind": "glomerulus",
+   "named_units": true,
+   "recording_site": "dendrites (GH146 > GCaMP6f, antennal lobe glomeruli)",
+   "notes": [
+    "dF/F per trial from processed tables (no frames on hand): trial-noise units"
+   ],
+   "breadth_bins": {
+    "17": [
+     [
+      0,
+      0
+     ],
+     [
+      1,
+      1
+     ],
+     [
+      2,
+      3
+     ],
+     [
+      4,
+      8
+     ],
+     [
+      9,
+      17
+     ]
+    ]
+   }
+  },
+  "pn_bouton__megamat__wild_type": {
+   "key": [
+    "pn_bouton",
+    "megamat",
+    "wild_type"
+   ],
+   "file": {
+    "path": "<shared>/data/stage_populations/populations/pn_bouton__megamat__wild_type.parquet",
+    "bytes": 2184535,
+    "mtime": "2026-11-24 10:26:03",
+    "sha256": "7440f96b6eb2e00386f5828259784e4b2e92cacd30403ea6ced1854fe9f611f6"
+   },
+   "sources": [
+    {
+     "path": "<shared>/data/remy_per_roi/window_means.parquet",
+     "bytes": 107319595,
+     "mtime": "2026-11-20 13:59:21",
+     "sha256": "74aee28dfc62570fd513f9dcb9f3349b7f9a9d1e6b391473ba4dd6a78f374e30"
+    },
+    {
+     "path": "<shared>/data/remy_per_roi/noise_sd.parquet",
+     "bytes": 365950,
+     "mtime": "2026-11-20 13:59:21",
+     "sha256": "3514fa3dedf4f1c72e2b12846581ce2f5c15c28ca367f062e74a442d5af4915d"
+    },
+    {
+     "path": "<shared>/data/remy_per_roi/lock.json",
+     "bytes": 44881,
+     "mtime": "2026-11-20 13:59:21",
+     "sha256": "ce491d47d3ce23d80dbd141f612db74e84f97e35d32c6941615f508cb950b9c3"
+    }
+   ],
+   "has_trials": true,
+   "response_rate": {
+    "mean_over_flies": 0.32432885701087544,
+    "per_fly": {
+     "2022-10-26__fly01__megamat1_001": 0.411379158404935,
+     "2022-10-26__fly02__megamat1": 0.29581362135142375,
+     "2022-11-13__fly01__megamat1": 0.40138797091870454,
+     "2022-11-13__fly02__megamat1_002": 0.21125143513203215,
+     "2022-11-13__fly03__megamat1": 0.30181209924728186
+    },
+    "per_odor": {
+     "2h": 0.3995500978841462,
+     "IaA": 0.4687647767328845,
+     "pa": 0.4726834220331684,
+     "2-but": 0.36045537328894184,
+     "eb": 0.4848658352508373,
+     "ep": 0.5019961386128077,
+     "6al": 0.321742110251527,
+     "t2h": 0.23697769266028387,
+     "1-8ol": 0.2834409175343663,
+     "1-5ol": 0.39583216671909943,
+     "1-6ol": 0.3538879668364657,
+     "ms": 0.14096012153881946,
+     "B-cit": 0.23588761676411477,
+     "Lin": 0.2179945009211361,
+     "aa": 0.2159675905425047,
+     "benz": 0.29019136934171846,
+     "va": 0.13239287227206115
+    }
+   },
+   "flies": [
+    "2022-10-26__fly01__megamat1_001",
+    "2022-10-26__fly02__megamat1",
+    "2022-11-13__fly01__megamat1",
+    "2022-11-13__fly02__megamat1_002",
+    "2022-11-13__fly03__megamat1"
+   ],
+   "n_flies": 5,
+   "odors": [
+    "2h",
+    "IaA",
+    "pa",
+    "2-but",
+    "eb",
+    "ep",
+    "6al",
+    "t2h",
+    "1-8ol",
+    "1-5ol",
+    "1-6ol",
+    "ms",
+    "B-cit",
+    "Lin",
+    "aa",
+    "benz",
+    "va"
+   ],
+   "odors_per_fly": {
+    "2022-10-26__fly01__megamat1_001": 17,
+    "2022-10-26__fly02__megamat1": 17,
+    "2022-11-13__fly01__megamat1": 17,
+    "2022-11-13__fly02__megamat1_002": 17,
+    "2022-11-13__fly03__megamat1": 17
+   },
+   "units_per_fly": {
+    "2022-10-26__fly01__megamat1_001": 1068,
+    "2022-10-26__fly02__megamat1": 659,
+    "2022-11-13__fly01__megamat1": 890,
+    "2022-11-13__fly02__megamat1_002": 871,
+    "2022-11-13__fly03__megamat1": 1055
+   },
+   "exclusions": [
+    {
+     "stage": "pn_bouton",
+     "panel": "megamat",
+     "fly": "2022-10-21__fly02__megamat1_001__dsub3",
+     "reason": "Remy's dashboards and bouton analysis leave it out (median cellprob 0.03); data/remy_per_roi/README.md"
+    }
+   ],
+   "criterion": 2.0,
+   "units": "baseline-noise SD",
+   "window": {
+    "response": [
+     0.5,
+     3.0
+    ],
+    "pre": [
+     -5.0,
+     -0.2
+    ]
+   },
+   "unit_kind": "bouton_region",
+   "named_units": false,
+   "recording_site": "boutons (calyx, per suite2p ROI)",
+   "notes": [],
+   "breadth_bins": {
+    "17": [
+     [
+      0,
+      0
+     ],
+     [
+      1,
+      1
+     ],
+     [
+      2,
+      3
+     ],
+     [
+      4,
+      8
+     ],
+     [
+      9,
+      17
+     ]
+    ]
+   }
+  },
+  "kc_claw__megamat__wild_type": {
+   "key": [
+    "kc_claw",
+    "megamat",
+    "wild_type"
+   ],
+   "file": {
+    "path": "<shared>/data/stage_populations/populations/kc_claw__megamat__wild_type.parquet",
+    "bytes": 1269264,
+    "mtime": "2026-11-24 10:26:03",
+    "sha256": "e379d5d261affaf8e2dc54e4a5f9dbf1329181b11a904fcf19c1aab6473df784"
+   },
+   "sources": [
+    {
+     "path": "<shared>/data/remy_per_roi/window_means.parquet",
+     "bytes": 107319595,
+     "mtime": "2026-11-20 13:59:21",
+     "sha256": "74aee28dfc62570fd513f9dcb9f3349b7f9a9d1e6b391473ba4dd6a78f374e30"
+    },
+    {
+     "path": "<shared>/data/remy_per_roi/noise_sd.parquet",
+     "bytes": 365950,
+     "mtime": "2026-11-20 13:59:21",
+     "sha256": "3514fa3dedf4f1c72e2b12846581ce2f5c15c28ca367f062e74a442d5af4915d"
+    },
+    {
+     "path": "<shared>/data/remy_per_roi/lock.json",
+     "bytes": 44881,
+     "mtime": "2026-11-20 13:59:21",
+     "sha256": "ce491d47d3ce23d80dbd141f612db74e84f97e35d32c6941615f508cb950b9c3"
+    }
+   ],
+   "has_trials": true,
+   "response_rate": {
+    "mean_over_flies": 0.2732265936375037,
+    "per_fly": {
+     "2023-04-11__fly02__megamat1": 0.3230103806228374,
+     "2023-04-11__fly03__megamat1": 0.3098168427173176,
+     "2023-04-13__fly01__megamat1_001": 0.3213096559378468,
+     "2023-04-15__fly02__megamat1": 0.13876949527201277
+    },
+    "per_odor": {
+     "2h": 0.3855306376257322,
+     "IaA": 0.26426607972302935,
+     "pa": 0.3003816285610161,
+     "2-but": 0.30093266565637455,
+     "eb": 0.334854736235168,
+     "ep": 0.26965483137295926,
+     "6al": 0.26929903022998725,
+     "t2h": 0.2605723687160275,
+     "1-8ol": 0.260142638704796,
+     "1-5ol": 0.29160849493583874,
+     "1-6ol": 0.2879755579211542,
+     "ms": 0.2636866255927897,
+     "B-cit": 0.25284874550174685,
+     "Lin": 0.23542006832466456,
+     "aa": 0.24920228852263113,
+     "benz": 0.20547215697730087,
+     "va": 0.21300353723634552
+    }
+   },
+   "flies": [
+    "2023-04-11__fly02__megamat1",
+    "2023-04-11__fly03__megamat1",
+    "2023-04-13__fly01__megamat1_001",
+    "2023-04-15__fly02__megamat1"
+   ],
+   "n_flies": 4,
+   "odors": [
+    "2h",
+    "IaA",
+    "pa",
+    "2-but",
+    "eb",
+    "ep",
+    "6al",
+    "t2h",
+    "1-8ol",
+    "1-5ol",
+    "1-6ol",
+    "ms",
+    "B-cit",
+    "Lin",
+    "aa",
+    "benz",
+    "va"
+   ],
+   "odors_per_fly": {
+    "2023-04-11__fly02__megamat1": 17,
+    "2023-04-11__fly03__megamat1": 17,
+    "2023-04-13__fly01__megamat1_001": 17,
+    "2023-04-15__fly02__megamat1": 17
+   },
+   "units_per_fly": {
+    "2023-04-11__fly02__megamat1": 680,
+    "2023-04-11__fly03__megamat1": 607,
+    "2023-04-13__fly01__megamat1_001": 636,
+    "2023-04-15__fly02__megamat1": 479
+   },
+   "exclusions": [],
+   "criterion": 2.0,
+   "units": "baseline-noise SD",
+   "window": {
+    "response": [
+     0.5,
+     3.0
+    ],
+    "pre": [
+     -5.0,
+     -0.2
+    ]
+   },
+   "unit_kind": "claw_region",
+   "named_units": false,
+   "recording_site": "claws (calyx, per suite2p ROI)",
+   "notes": [],
+   "breadth_bins": {
+    "17": [
+     [
+      0,
+      0
+     ],
+     [
+      1,
+      1
+     ],
+     [
+      2,
+      3
+     ],
+     [
+      4,
+      8
+     ],
+     [
+      9,
+      17
+     ]
+    ]
+   }
+  },
+  "kc_soma__megamat__wild_type": {
+   "key": [
+    "kc_soma",
+    "megamat",
+    "wild_type"
+   ],
+   "file": {
+    "path": "<shared>/data/stage_populations/populations/kc_soma__megamat__wild_type.parquet",
+    "bytes": 4131703,
+    "mtime": "2026-11-24 10:26:04",
+    "sha256": "b7abd9ef92731a52bf8fec0bf001909f47e617dc337ae22281c2eedad5833fd6"
+   },
+   "sources": [
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_megamat_kc_soma/frames_reduced.parquet",
+     "bytes": 8365764,
+     "mtime": "2026-11-24 10:22:53",
+     "sha256": "a9d2c74589d7e050efa5268e26fb05be14ae0952389d643ed2122a4ee119879d"
+    }
+   ],
+   "has_trials": true,
+   "response_rate": {
+    "mean_over_flies": 0.2284516313832311,
+    "per_fly": {
+     "2022-10-10/1": 0.17887407701075375,
+     "2022-10-10/2": 0.15571095571095572,
+     "2022-10-11/1": 0.3172566477015735,
+     "2022-11-10/1": 0.26196484510964146
+    },
+    "per_odor": {
+     "2h": 0.27493002992759813,
+     "IaA": 0.2520487186958308,
+     "pa": 0.28286547169369436,
+     "2-but": 0.2615841077148913,
+     "eb": 0.2837061311850619,
+     "ep": 0.3091233255873107,
+     "6al": 0.22599849647501738,
+     "t2h": 0.23688259501271364,
+     "1-8ol": 0.2047245154744157,
+     "1-5ol": 0.23004064819005351,
+     "1-6ol": 0.2790655603093896,
+     "ms": 0.16104872225195413,
+     "B-cit": 0.13822772229231473,
+     "Lin": 0.14432803161292918,
+     "aa": 0.24786903331156596,
+     "benz": 0.1972534327935304,
+     "va": 0.15398119098665763
+    }
+   },
+   "flies": [
+    "2022-10-10/1",
+    "2022-10-10/2",
+    "2022-10-11/1",
+    "2022-11-10/1"
+   ],
+   "n_flies": 4,
+   "odors": [
+    "2h",
+    "IaA",
+    "pa",
+    "2-but",
+    "eb",
+    "ep",
+    "6al",
+    "t2h",
+    "1-8ol",
+    "1-5ol",
+    "1-6ol",
+    "ms",
+    "B-cit",
+    "Lin",
+    "aa",
+    "benz",
+    "va"
+   ],
+   "odors_per_fly": {
+    "2022-10-10/1": 17,
+    "2022-10-10/2": 17,
+    "2022-10-11/1": 17,
+    "2022-11-10/1": 17
+   },
+   "units_per_fly": {
+    "2022-10-10/1": 2374,
+    "2022-10-10/2": 2145,
+    "2022-10-11/1": 2471,
+    "2022-11-10/1": 1352
+   },
+   "exclusions": [
+    {
+     "what": "flies",
+     "reason": "Remy's 14 older megamat flies (2018-2019): partial panels and another pipeline (peak_amp of 2024-11-12); not read"
+    }
+   ],
+   "criterion": 1.9684,
+   "units": "baseline-noise SD",
+   "window": {
+    "response": [
+     2.0,
+     8.0
+    ],
+    "pre": [
+     -10.0,
+     -0.5
+    ]
+   },
+   "unit_kind": "kc",
+   "named_units": false,
+   "recording_site": "somata (nuclear GCaMP6s, per cell)",
+   "notes": [
+    "Remy's four 2022 flies with the whole panel; her 14 older flies (2018-2019, partial panels, another pipeline) are not used"
+   ],
+   "breadth_bins": {
+    "17": [
+     [
+      0,
+      0
+     ],
+     [
+      1,
+      1
+     ],
+     [
+      2,
+      3
+     ],
+     [
+      4,
+      8
+     ],
+     [
+      9,
+      17
+     ]
+    ]
+   }
+  },
+  "kc_claw__megamat__same_fly": {
+   "key": [
+    "kc_claw",
+    "megamat",
+    "same_fly"
+   ],
+   "file": {
+    "path": "<shared>/data/stage_populations/populations/kc_claw__megamat__same_fly.parquet",
+    "bytes": 361542,
+    "mtime": "2026-11-24 10:26:04",
+    "sha256": "339cb793db257b5eded65b972a72fe6956138650a9e1f86311e02358bd93b0bc"
+   },
+   "sources": [
+    {
+     "path": "<shared>/data/remy_per_roi/same_fly_trials.npz",
+     "bytes": 2149324,
+     "mtime": "2026-11-20 13:59:26",
+     "sha256": "4b363674237af950c2f556043f4668828a9fca6a44020380a6122d1480faf706"
+    }
+   ],
+   "has_trials": true,
+   "response_rate": {
+    "mean_over_flies": 0.5277042602236831,
+    "per_fly": {
+     "2023-04-11/3/megamat1_redo": 0.5277042602236831
+    },
+    "per_odor": {
+     "2h": 0.6298984034833092,
+     "IaA": 0.5312046444121916,
+     "pa": 0.521044992743106,
+     "2-but": 0.49927431059506533,
+     "eb": 0.6066763425253991,
+     "ep": 0.4862119013062409,
+     "6al": 0.5370101596516691,
+     "t2h": 0.47750362844702465,
+     "1-8ol": 0.532656023222061,
+     "1-5ol": 0.6226415094339622,
+     "1-6ol": 0.6240928882438317,
+     "ms": 0.5195936139332366,
+     "B-cit": 0.5224963715529753,
+     "Lin": 0.521044992743106,
+     "aa": 0.40638606676342526,
+     "benz": 0.5181422351233672,
+     "va": 0.41509433962264153
+    }
+   },
+   "flies": [
+    "2023-04-11/3/megamat1_redo"
+   ],
+   "n_flies": 1,
+   "odors": [
+    "2h",
+    "IaA",
+    "pa",
+    "2-but",
+    "eb",
+    "ep",
+    "6al",
+    "t2h",
+    "1-8ol",
+    "1-5ol",
+    "1-6ol",
+    "ms",
+    "B-cit",
+    "Lin",
+    "aa",
+    "benz",
+    "va"
+   ],
+   "odors_per_fly": {
+    "2023-04-11/3/megamat1_redo": 17
+   },
+   "units_per_fly": {
+    "2023-04-11/3/megamat1_redo": 689
+   },
+   "exclusions": [],
+   "criterion": 2.0,
+   "units": "baseline-noise SD",
+   "window": {
+    "response": [
+     0.5,
+     3.0
+    ],
+    "pre": [
+     -5.0,
+     -0.2
+    ]
+   },
+   "unit_kind": "claw_region",
+   "named_units": false,
+   "recording_site": "claws (calyx, per suite2p ROI)",
+   "notes": [
+    "one fly (2023-04-11 fly 3, megamat1_redo), claws and somata on the same trials (E119 part 0b)"
+   ],
+   "breadth_bins": {
+    "17": [
+     [
+      0,
+      0
+     ],
+     [
+      1,
+      1
+     ],
+     [
+      2,
+      3
+     ],
+     [
+      4,
+      8
+     ],
+     [
+      9,
+      17
+     ]
+    ]
+   }
+  },
+  "kc_soma__megamat__same_fly": {
+   "key": [
+    "kc_soma",
+    "megamat",
+    "same_fly"
+   ],
+   "file": {
+    "path": "<shared>/data/stage_populations/populations/kc_soma__megamat__same_fly.parquet",
+    "bytes": 1077415,
+    "mtime": "2026-11-24 10:26:04",
+    "sha256": "5479dbf097e30a395e4abad041766a72bf41f1ac18d92fe61c3e56731ce5e4cb"
+   },
+   "sources": [
+    {
+     "path": "<shared>/data/remy_per_roi/same_fly_trials.npz",
+     "bytes": 2149324,
+     "mtime": "2026-11-20 13:59:26",
+     "sha256": "4b363674237af950c2f556043f4668828a9fca6a44020380a6122d1480faf706"
+    }
+   ],
+   "has_trials": true,
+   "response_rate": {
+    "mean_over_flies": 0.24659632894927014,
+    "per_fly": {
+     "2023-04-11/3/megamat1_redo": 0.24659632894927014
+    },
+    "per_odor": {
+     "2h": 0.34791154791154794,
+     "IaA": 0.2648648648648649,
+     "pa": 0.2909090909090909,
+     "2-but": 0.29434889434889433,
+     "eb": 0.3208845208845209,
+     "ep": 0.35036855036855036,
+     "6al": 0.22457002457002456,
+     "t2h": 0.1832923832923833,
+     "1-8ol": 0.2004914004914005,
+     "1-5ol": 0.2968058968058968,
+     "1-6ol": 0.28157248157248155,
+     "ms": 0.18968058968058968,
+     "B-cit": 0.16904176904176904,
+     "Lin": 0.21572481572481572,
+     "aa": 0.21916461916461916,
+     "benz": 0.2122850122850123,
+     "va": 0.13022113022113022
+    }
+   },
+   "flies": [
+    "2023-04-11/3/megamat1_redo"
+   ],
+   "n_flies": 1,
+   "odors": [
+    "2h",
+    "IaA",
+    "pa",
+    "2-but",
+    "eb",
+    "ep",
+    "6al",
+    "t2h",
+    "1-8ol",
+    "1-5ol",
+    "1-6ol",
+    "ms",
+    "B-cit",
+    "Lin",
+    "aa",
+    "benz",
+    "va"
+   ],
+   "odors_per_fly": {
+    "2023-04-11/3/megamat1_redo": 17
+   },
+   "units_per_fly": {
+    "2023-04-11/3/megamat1_redo": 2035
+   },
+   "exclusions": [],
+   "criterion": 1.9684,
+   "units": "baseline-noise SD",
+   "window": {
+    "response": [
+     0.5,
+     3.0
+    ],
+    "pre": [
+     -5.0,
+     -0.2
+    ]
+   },
+   "unit_kind": "kc",
+   "named_units": false,
+   "recording_site": "somata (nuclear GCaMP6s, per cell)",
+   "notes": [
+    "one fly (2023-04-11 fly 3, megamat1_redo), claws and somata on the same trials (E119 part 0b)"
+   ],
+   "breadth_bins": {
+    "17": [
+     [
+      0,
+      0
+     ],
+     [
+      1,
+      1
+     ],
+     [
+      2,
+      3
+     ],
+     [
+      4,
+      8
+     ],
+     [
+      9,
+      17
+     ]
+    ]
+   }
+  },
+  "orn__validation2__wild_type": {
+   "key": [
+    "orn",
+    "validation2",
+    "wild_type"
+   ],
+   "file": {
+    "path": "<shared>/data/stage_populations/populations/orn__validation2__wild_type.parquet",
+    "bytes": 148618,
+    "mtime": "2026-11-24 10:26:04",
+    "sha256": "222e7e437e524a8867d491228658a01b556a4def1c03baeaf8f540a924f9b696"
+   },
+   "sources": [
+    {
+     "path": "<shared>/data/stage_populations/sources/olfdb/ds4_long.csv",
+     "bytes": 1645415,
+     "mtime": "2026-11-24 10:22:26",
+     "sha256": "6a40b16a29e82908cbcbca9dcf7724545b9d4d93cd15e16d2b42858fa21b1fd9"
+    }
+   ],
+   "has_trials": true,
+   "response_rate": {
+    "mean_over_flies": 0.37736779842043,
+    "per_fly": {
+     "2023-11-19/1": 0.3708133971291866,
+     "2023-11-21/1": 0.36486486486486486,
+     "2023-11-21/2": 0.32923832923832924,
+     "2023-11-21/3": 0.42424242424242425,
+     "2024-01-05/1": 0.371007371007371,
+     "2024-01-05/4": 0.40404040404040403
+    },
+    "per_odor": {
+     "paa": 0.4339714208135261,
+     "-aPine": 0.42135050029786875,
+     "euc": 0.3321089307931413,
+     "B-myr": 0.22809094519620834,
+     "+pul": 0.3908493513756672,
+     "-bCar": 0.1689452610505242,
+     "1-3ol": 0.39138784533521376,
+     "1o3one": 0.5222145222145221,
+     "1p3one": 0.3084729466308414,
+     "2-mba": 0.5941234757024231,
+     "2-mib": 0.21070919097234886,
+     "EtOct": 0.3973224236382132,
+     "PEA": 0.2547243599875179,
+     "Z4-7al": 0.42803684251052676,
+     "bbenz": 0.30210220341799293,
+     "geos": 0.39565476407581673,
+     "ger": 0.5035653061968851,
+     "guai": 0.48138523138523137,
+     "long": 0.4443385693385693,
+     "mchav": 0.4326598866072551,
+     "menth": 0.32553049000417417,
+     "sab": 0.3345470977049924
+    }
+   },
+   "flies": [
+    "2023-11-19/1",
+    "2023-11-21/1",
+    "2023-11-21/2",
+    "2023-11-21/3",
+    "2024-01-05/1",
+    "2024-01-05/4"
+   ],
+   "n_flies": 6,
+   "odors": [
+    "paa",
+    "-aPine",
+    "euc",
+    "B-myr",
+    "+pul",
+    "-bCar",
+    "1-3ol",
+    "1o3one",
+    "1p3one",
+    "2-mba",
+    "2-mib",
+    "EtOct",
+    "PEA",
+    "Z4-7al",
+    "bbenz",
+    "geos",
+    "ger",
+    "guai",
+    "long",
+    "mchav",
+    "menth",
+    "sab"
+   ],
+   "odors_per_fly": {
+    "2023-11-19/1": 22,
+    "2023-11-21/1": 22,
+    "2023-11-21/2": 22,
+    "2023-11-21/3": 22,
+    "2024-01-05/1": 22,
+    "2024-01-05/4": 22
+   },
+   "units_per_fly": {
+    "2023-11-19/1": 38,
+    "2023-11-21/1": 37,
+    "2023-11-21/2": 37,
+    "2023-11-21/3": 39,
+    "2024-01-05/1": 37,
+    "2024-01-05/4": 36
+   },
+   "exclusions": [],
+   "criterion": 2.0,
+   "units": "trial-noise SD",
+   "window": {},
+   "unit_kind": "glomerulus",
+   "named_units": true,
+   "recording_site": "axon terminals (pebbled > GCaMP6f, antennal lobe glomeruli)",
+   "notes": [
+    "the ORN recordings at -aPine 10^-1.5, euc 10^-1.75; the KC flies mostly at 10^-2 (within 1 log10 unit)",
+    "dF/F per trial from processed tables (no frames on hand): trial-noise units"
+   ],
+   "breadth_bins": {
+    "22": [
+     [
+      0,
+      0
+     ],
+     [
+      1,
+      2
+     ],
+     [
+      3,
+      5
+     ],
+     [
+      6,
+      10
+     ],
+     [
+      11,
+      22
+     ]
+    ]
+   }
+  },
+  "kc_soma__validation2__wild_type": {
+   "key": [
+    "kc_soma",
+    "validation2",
+    "wild_type"
+   ],
+   "file": {
+    "path": "<shared>/data/stage_populations/populations/kc_soma__validation2__wild_type.parquet",
+    "bytes": 8363788,
+    "mtime": "2026-11-24 10:26:05",
+    "sha256": "2f0f467f314c40b8caab2037b2f26abc34976a8bee10f0508c51050a790e47ca"
+   },
+   "sources": [
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/aggregate/df_acqs.csv",
+     "bytes": 1426,
+     "mtime": "2024-04-05 00:11:14",
+     "sha256": "b41c2854739d53764e6307346d1a8b2debfc260a1221c5493861e7894c50db6f"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-10-16__fly02__validation2i_tsub03/respvec/xrds_peak_amp.nc",
+     "bytes": 6673072,
+     "mtime": "2024-04-03 10:09:22",
+     "sha256": "8be4ca8b72d465759dcbf6b3c3a5cd4b84cd262982a6959577dd992e4ed47af0"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-10-16__fly02__validation2i_tsub03/respvec/xrds_baseline_std.nc",
+     "bytes": 6673072,
+     "mtime": "2024-04-03 10:09:22",
+     "sha256": "bdefe9456ad0a0070b8e6f6a6765be5b7eecae3591f73078834739eb4b640ed2"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-10-16__fly03__validation2i_tsub03/respvec/xrds_peak_amp.nc",
+     "bytes": 6874600,
+     "mtime": "2024-04-04 14:41:17",
+     "sha256": "3c31852aa87359c7461e27d392aa34e7f5333942e2d66f6b108d53df89ec17d0"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-10-16__fly03__validation2i_tsub03/respvec/xrds_baseline_std.nc",
+     "bytes": 6874600,
+     "mtime": "2024-04-04 14:41:17",
+     "sha256": "ae68b0a0a1a81b3fcad7de63700b1def1f061b5042b25cc097ebe575ec19a02a"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-11-03__fly01__validation2iwm/respvec/xrds_peak_amp.nc",
+     "bytes": 7295072,
+     "mtime": "2024-04-03 10:16:00",
+     "sha256": "ac9dc8a071f94b458380dded784beec4aa5f5cf090888627e4fe83bb0dd2e004"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-11-03__fly01__validation2iwm/respvec/xrds_baseline_std.nc",
+     "bytes": 7295072,
+     "mtime": "2024-04-03 10:16:00",
+     "sha256": "0f2a38e7028f82fff076348fc94ba8387543bf8b7db212866c2794947683c056"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-11-03__fly03__validation2iwm/respvec/xrds_peak_amp.nc",
+     "bytes": 4787168,
+     "mtime": "2024-04-03 10:16:56",
+     "sha256": "86be211ebad032ad20841bf5aa817554ff4e57114ad7f88a245fca8ba528fd25"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-11-03__fly03__validation2iwm/respvec/xrds_baseline_std.nc",
+     "bytes": 4787168,
+     "mtime": "2024-04-03 10:16:56",
+     "sha256": "c210a55b021960c56846e2f7e1c2c22eb3b49c0133a409ad2668c7b5e414fa24"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-11-07__fly02__validation2iwmh_tsub03/respvec/xrds_peak_amp.nc",
+     "bytes": 6441688,
+     "mtime": "2024-04-03 10:17:35",
+     "sha256": "7c7a7b6d046956d93958e1676340c6463b7d975cf464c4fce4a2e86779c777c0"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-11-07__fly02__validation2iwmh_tsub03/respvec/xrds_baseline_std.nc",
+     "bytes": 6441688,
+     "mtime": "2024-04-03 10:17:35",
+     "sha256": "cf7c96a852538e8e2f8dcc67641a74295053e5c3ee619cb475ffd11f91fbb0cc"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-11-21__fly01__validation2iwmh1_tsub03/respvec/xrds_peak_amp.nc",
+     "bytes": 8190752,
+     "mtime": "2024-04-03 10:18:22",
+     "sha256": "5a50757e2f20b7b22a48ef837a70e014a444d483bbfabe1746291f0e869c1e73"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-11-21__fly01__validation2iwmh1_tsub03/respvec/xrds_baseline_std.nc",
+     "bytes": 8190752,
+     "mtime": "2024-04-03 10:18:22",
+     "sha256": "e9bb36782f1b329c22d8c136df678767b8a29604ce7be5446799669ed9846d6e"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-11-29__fly03__validation2iwmh1_tsub03/respvec/xrds_peak_amp.nc",
+     "bytes": 7914584,
+     "mtime": "2024-04-03 10:19:06",
+     "sha256": "ffa25854f9c143c117afce81d775f06a6a800d66f62b8748eced9a867f12a7af"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-11-29__fly03__validation2iwmh1_tsub03/respvec/xrds_baseline_std.nc",
+     "bytes": 7914584,
+     "mtime": "2024-04-03 10:19:06",
+     "sha256": "94f73171644d86e09334c7999c7c3fc6928c0ddb62e804cdd16e745cbd1dfc1a"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-11-29__fly04__validation2iwmh1_tsub03/respvec/xrds_peak_amp.nc",
+     "bytes": 6466568,
+     "mtime": "2024-04-03 10:19:46",
+     "sha256": "157b8abd389fab01b294b06db2bdcd8d7cbbfab7494e3c192d5d2cc30e58ee88"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-11-29__fly04__validation2iwmh1_tsub03/respvec/xrds_baseline_std.nc",
+     "bytes": 6466568,
+     "mtime": "2024-04-03 10:19:46",
+     "sha256": "3247ec734067e7e0e81f0d75ebb23ec69ce1ff4262ec01aded5948e21ab71860"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-10-17__fly01__validation2j_tsub03/respvec/xrds_peak_amp.nc",
+     "bytes": 7466744,
+     "mtime": "2024-04-03 10:20:28",
+     "sha256": "284478def73ab14cc8692a22fbc05b6f1885bfe8c8c33531ff75e67985236de5"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-10-17__fly01__validation2j_tsub03/respvec/xrds_baseline_std.nc",
+     "bytes": 7466744,
+     "mtime": "2024-04-03 10:20:29",
+     "sha256": "8c3c87e8d40af320fe9d140002a4c330c4f37a16c6f70066f634312dc4e8430c"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-10-17__fly02__validation2j_001_tsub03/respvec/xrds_peak_amp.nc",
+     "bytes": 7979272,
+     "mtime": "2024-04-03 10:21:12",
+     "sha256": "d2aa22c4c954e1ccded9d4ff6cb3af79f158baf3f0dd864f06f9af93cf33bcd6"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-10-17__fly02__validation2j_001_tsub03/respvec/xrds_baseline_std.nc",
+     "bytes": 7979272,
+     "mtime": "2024-04-03 10:21:13",
+     "sha256": "4ea132e00e7330da3dbc6d6373144fbec57da912fc428f4f3b9b53f7dd905188"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-11-02__fly01__validation2j_001/respvec/xrds_peak_amp.nc",
+     "bytes": 7640904,
+     "mtime": "2024-04-03 10:22:36",
+     "sha256": "17e8b6705678a56b89329fb407c87cd47773924fa3b9543951b25862ed4ff94a"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-11-02__fly01__validation2j_001/respvec/xrds_baseline_std.nc",
+     "bytes": 7640904,
+     "mtime": "2024-04-03 10:22:36",
+     "sha256": "5ce22e61e3fcfa1cae9e5311b40d984a7be257fcb03774cb49e8b5ad130ca22e"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-11-02__fly02__validation2j/respvec/xrds_peak_amp.nc",
+     "bytes": 6772592,
+     "mtime": "2024-04-03 10:23:47",
+     "sha256": "fc1854fb136cc1501c848a0bb1aa8b02f8d6b4a4369d7354f14824fd6740992e"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-11-02__fly02__validation2j/respvec/xrds_baseline_std.nc",
+     "bytes": 6772592,
+     "mtime": "2024-04-03 10:23:47",
+     "sha256": "8e7b165430cf67b6b6abf1687303f7af7dce710c0694ed96b73af6a1f56fb00a"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-12-06__fly01__validation2jwmh_001_tsub03/respvec/xrds_peak_amp.nc",
+     "bytes": 9001840,
+     "mtime": "2024-04-03 10:24:34",
+     "sha256": "de384edd6fb6362ef79e984060935c7b1903e6e75b170c39a2205dcad1416c49"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-12-06__fly01__validation2jwmh_001_tsub03/respvec/xrds_baseline_std.nc",
+     "bytes": 9001840,
+     "mtime": "2024-04-03 10:24:34",
+     "sha256": "224774dcc489e4ea4db2bdf48639fbbdcd636ace60f6943930f5b0d32428f285"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-12-06__fly02__validation2jwmh_001_tsub03/respvec/xrds_peak_amp.nc",
+     "bytes": 9661160,
+     "mtime": "2024-04-03 10:25:26",
+     "sha256": "81ffc2d77e7b9144e1578e9250234b7368cc0eaaba0cf617d9e8fe159fe6a9d7"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-12-06__fly02__validation2jwmh_001_tsub03/respvec/xrds_baseline_std.nc",
+     "bytes": 9661160,
+     "mtime": "2024-04-03 10:25:26",
+     "sha256": "1d673ef9420ea99c64b838ffc1df17a2a2765373be2f632875f27266b23d8163"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-10-19__fly01__validation2k_tsub03/respvec/xrds_peak_amp.nc",
+     "bytes": 8939640,
+     "mtime": "2024-04-03 10:26:14",
+     "sha256": "e612c39d754c3a4f95b6726ec93ebc5eebac9e53f2bf81cc1e239148ef5e644b"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-10-19__fly01__validation2k_tsub03/respvec/xrds_baseline_std.nc",
+     "bytes": 8939640,
+     "mtime": "2024-04-03 10:26:14",
+     "sha256": "6748e8e1ab6e8a24ba45fdcc5aebda11558dea7cfc7e0dcd91a429869224d574"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-10-25__fly01__validation2kwm/respvec/xrds_peak_amp.nc",
+     "bytes": 6989048,
+     "mtime": "2024-04-02 19:56:58",
+     "sha256": "7d9fa6371abbbd67e541f7ae55cddace6a5b7d6a053caebb6476cb8f28a00c03"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-10-25__fly01__validation2kwm/respvec/xrds_baseline_std.nc",
+     "bytes": 6989048,
+     "mtime": "2024-04-02 19:56:58",
+     "sha256": "59ac71eee1fa39976f9ee0c9664bbf84db09bdc04059591ce13d4af50a04459a"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-10-25__fly02__validation2kwm/respvec/xrds_peak_amp.nc",
+     "bytes": 5667920,
+     "mtime": "2024-03-28 12:03:25",
+     "sha256": "6cd12cf13b35db9e4c6d72d1d75ac1eff6bce2a6335fa21e13dd31927b19328b"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-10-25__fly02__validation2kwm/respvec/xrds_baseline_std.nc",
+     "bytes": 5667920,
+     "mtime": "2024-03-28 12:03:25",
+     "sha256": "b49e5c5bf13c912d92a3b8ab9346ddb62f274f8d7d00e3a83ca3c4e8cdf24693"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-12-13__fly01__validation2kwmh/respvec/xrds_peak_amp.nc",
+     "bytes": 9173512,
+     "mtime": "2024-04-03 09:59:45",
+     "sha256": "cace439d4bdb8e6faeec31dffad6ca087341651166a63c1a3a95d04f22ef98a0"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-12-13__fly01__validation2kwmh/respvec/xrds_baseline_std.nc",
+     "bytes": 9173512,
+     "mtime": "2024-04-03 09:59:45",
+     "sha256": "3a8b5bb685674187ab9948a2805fedff3720024cfda993810d5c1397ebb731ff"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-12-19__fly01__validation2kwmh_tsub03/respvec/xrds_peak_amp.nc",
+     "bytes": 8136016,
+     "mtime": "2024-04-02 15:18:17",
+     "sha256": "70689de7c870584235279740ed6dd29a7485e4766130200e1caf09131c913bc0"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-12-19__fly01__validation2kwmh_tsub03/respvec/xrds_baseline_std.nc",
+     "bytes": 8136016,
+     "mtime": "2024-04-02 15:18:17",
+     "sha256": "35c24369b2a1ec202860656a65ee9ef75cd91902fdb00fb165da3b8210facf14"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-12-19__fly02__validation2kwmh_tsub03/respvec/xrds_peak_amp.nc",
+     "bytes": 5374336,
+     "mtime": "2024-04-03 10:30:22",
+     "sha256": "c6c722c43e02cbdecc691f0d4b845e1fd7281561252e86ce46f11eb33617862b"
+    },
+    {
+     "path": "<shared>/data/stage_populations/sources/remy_validation2_kc_soma/2023-12-19__fly02__validation2kwmh_tsub03/respvec/xrds_baseline_std.nc",
+     "bytes": 5374336,
+     "mtime": "2024-04-03 10:30:22",
+     "sha256": "c02d7fcf188b1bea07d3984870d79751a7007f794a98f95de6efba76987bd52e"
+    },
+    {
+     "path": "<shared>/data/remy_validation2_kc/validation2/kc_soma/stim_to_drop_by_qcthresh.csv",
+     "bytes": 77762,
+     "mtime": "2026-11-17 17:06:18",
+     "sha256": "9bee57d2b4c14c6186d04a2048ce4aef760f824a31dc0bbd88d8b068f95fdbbf"
+    }
+   ],
+   "has_trials": true,
+   "response_rate": {
+    "mean_over_flies": 0.12723625568074243,
+    "per_fly": {
+     "2023-10-16/2": 0.20968660968660968,
+     "2023-10-16/3": 0.21201814058956917,
+     "2023-10-17/1": 0.11899038461538461,
+     "2023-10-17/2": 0.10470779220779221,
+     "2023-10-19/1": 0.08524590163934426,
+     "2023-10-25/1": 0.08751633986928105,
+     "2023-10-25/2": 0.11598566308243728,
+     "2023-11-02/1": 0.08270010131712259,
+     "2023-11-02/2": 0.12990855298547607,
+     "2023-11-03/1": 0.09212239583333333,
+     "2023-11-03/3": 0.07829861111111111,
+     "2023-11-07/2": 0.17965367965367965,
+     "2023-11-21/1": 0.1193483709273183,
+     "2023-11-29/3": 0.11878031878031878,
+     "2023-11-29/4": 0.11165501165501165,
+     "2023-12-06/1": 0.17089133089133088,
+     "2023-12-06/2": 0.10875955320399765,
+     "2023-12-13/1": 0.04986979166666667,
+     "2023-12-19/1": 0.1656332671957672,
+     "2023-12-19/2": 0.2029532967032967
+    },
+    "per_odor": {
+     "paa": 0.11919144031595245,
+     "-aPine": 0.12384947417018337,
+     "euc": 0.15269407016862596,
+     "B-myr": 0.08716160336221701,
+     "+pul": 0.1224156939838531,
+     "-bCar": 0.10171722748535868,
+     "1-3ol": 0.11065403193551424,
+     "1o3one": 0.17765345433336963,
+     "1p3one": 0.12821712367716864,
+     "2-mba": 0.2395999075195736,
+     "2-mib": 0.1021252359877687,
+     "EtOct": 0.1580768451824468,
+     "PEA": 0.11212957230287053,
+     "Z4-7al": 0.11116842130198529,
+     "bbenz": 0.10131221259091551,
+     "geos": 0.18425012208522706,
+     "ger": 0.13932635820621306,
+     "guai": 0.11966804036895144,
+     "long": 0.16002321138849945,
+     "mchav": 0.09117378105425207,
+     "menth": 0.11227666590349973,
+     "sab": 0.12107534687729114
+    }
+   },
+   "flies": [
+    "2023-10-16/2",
+    "2023-10-16/3",
+    "2023-10-17/1",
+    "2023-10-17/2",
+    "2023-10-19/1",
+    "2023-10-25/1",
+    "2023-10-25/2",
+    "2023-11-02/1",
+    "2023-11-02/2",
+    "2023-11-03/1",
+    "2023-11-03/3",
+    "2023-11-07/2",
+    "2023-11-21/1",
+    "2023-11-29/3",
+    "2023-11-29/4",
+    "2023-12-06/1",
+    "2023-12-06/2",
+    "2023-12-13/1",
+    "2023-12-19/1",
+    "2023-12-19/2"
+   ],
+   "n_flies": 20,
+   "odors": [
+    "paa",
+    "-aPine",
+    "euc",
+    "B-myr",
+    "+pul",
+    "-bCar",
+    "1-3ol",
+    "1o3one",
+    "1p3one",
+    "2-mba",
+    "2-mib",
+    "EtOct",
+    "PEA",
+    "Z4-7al",
+    "bbenz",
+    "geos",
+    "ger",
+    "guai",
+    "long",
+    "mchav",
+    "menth",
+    "sab"
+   ],
+   "odors_per_fly": {
+    "2023-10-16/2": 15,
+    "2023-10-16/3": 15,
+    "2023-10-17/1": 16,
+    "2023-10-17/2": 16,
+    "2023-10-19/1": 15,
+    "2023-10-25/1": 15,
+    "2023-10-25/2": 15,
+    "2023-11-02/1": 12,
+    "2023-11-02/2": 13,
+    "2023-11-03/1": 12,
+    "2023-11-03/3": 12,
+    "2023-11-07/2": 14,
+    "2023-11-21/1": 14,
+    "2023-11-29/3": 15,
+    "2023-11-29/4": 15,
+    "2023-12-06/1": 15,
+    "2023-12-06/2": 14,
+    "2023-12-13/1": 16,
+    "2023-12-19/1": 16,
+    "2023-12-19/2": 16
+   },
+   "units_per_fly": {
+    "2023-10-16/2": 936,
+    "2023-10-16/3": 1176,
+    "2023-10-17/1": 1092,
+    "2023-10-17/2": 1155,
+    "2023-10-19/1": 976,
+    "2023-10-25/1": 1020,
+    "2023-10-25/2": 930,
+    "2023-11-02/1": 1316,
+    "2023-11-02/2": 1716,
+    "2023-11-03/1": 1536,
+    "2023-11-03/3": 480,
+    "2023-11-07/2": 957,
+    "2023-11-21/1": 1425,
+    "2023-11-29/3": 962,
+    "2023-11-29/4": 858,
+    "2023-12-06/1": 1365,
+    "2023-12-06/2": 1458,
+    "2023-12-13/1": 960,
+    "2023-12-19/1": 1512,
+    "2023-12-19/2": 546
+   },
+   "exclusions": [
+    {
+     "fly": "2023-10-16/2",
+     "what": "stimulus",
+     "stim": "pfo @ 0.0",
+     "reason": "Remy's quality control ({'cell_mask_coord': 'rmap_nls_cluster', 'metric': 'correlation', 'qc_thresh': 0.3})"
+    },
+    {
+     "fly": "2023-11-03/1",
+     "what": "stimulus",
+     "stim": "-aPine @ -2.0",
+     "reason": "Remy's quality control ({'cell_mask_coord': 'rmap_nls_cluster', 'metric': 'correlation', 'qc_thresh': 0.3})"
+    },
+    {
+     "fly": "2023-11-03/1",
+     "what": "stimulus",
+     "stim": "Z4-7al @ -4.0",
+     "reason": "Remy's quality control ({'cell_mask_coord': 'rmap_nls_cluster', 'metric': 'correlation', 'qc_thresh': 0.3})"
+    },
+    {
+     "fly": "2023-11-03/1",
+     "what": "stimulus",
+     "stim": "euc @ -2.0",
+     "reason": "Remy's quality control ({'cell_mask_coord': 'rmap_nls_cluster', 'metric': 'correlation', 'qc_thresh': 0.3})"
+    },
+    {
+     "fly": "2023-11-03/1",
+     "what": "stimulus",
+     "stim": "geos @ -5.0",
+     "reason": "Remy's quality control ({'cell_mask_coord': 'rmap_nls_cluster', 'metric': 'correlation', 'qc_thresh': 0.3})"
+    },
+    {
+     "fly": "2023-11-03/3",
+     "what": "stimulus",
+     "stim": "-aPine @ -2.0",
+     "reason": "Remy's quality control ({'cell_mask_coord': 'rmap_nls_cluster', 'metric': 'correlation', 'qc_thresh': 0.3})"
+    },
+    {
+     "fly": "2023-11-03/3",
+     "what": "stimulus",
+     "stim": "Z4-7al @ -4.0",
+     "reason": "Remy's quality control ({'cell_mask_coord': 'rmap_nls_cluster', 'metric': 'correlation', 'qc_thresh': 0.3})"
+    },
+    {
+     "fly": "2023-11-03/3",
+     "what": "stimulus",
+     "stim": "euc @ -2.0",
+     "reason": "Remy's quality control ({'cell_mask_coord': 'rmap_nls_cluster', 'metric': 'correlation', 'qc_thresh': 0.3})"
+    },
+    {
+     "fly": "2023-11-03/3",
+     "what": "stimulus",
+     "stim": "geos @ -5.0",
+     "reason": "Remy's quality control ({'cell_mask_coord': 'rmap_nls_cluster', 'metric': 'correlation', 'qc_thresh': 0.3})"
+    },
+    {
+     "fly": "2023-11-07/2",
+     "what": "stimulus",
+     "stim": "-aPine @ -2.0",
+     "reason": "Remy's quality control ({'cell_mask_coord': 'rmap_nls_cluster', 'metric': 'correlation', 'qc_thresh': 0.3})"
+    },
+    {
+     "fly": "2023-11-07/2",
+     "what": "stimulus",
+     "stim": "Z4-7al @ -4.0",
+     "reason": "Remy's quality control ({'cell_mask_coord': 'rmap_nls_cluster', 'metric': 'correlation', 'qc_thresh': 0.3})"
+    },
+    {
+     "fly": "2023-11-21/1",
+     "what": "stimulus",
+     "stim": "2-mib @ -4.0",
+     "reason": "Remy's quality control ({'cell_mask_coord': 'rmap_nls_cluster', 'metric': 'correlation', 'qc_thresh': 0.3})"
+    },
+    {
+     "fly": "2023-11-21/1",
+     "what": "stimulus",
+     "stim": "B-myr @ -2.0",
+     "reason": "Remy's quality control ({'cell_mask_coord': 'rmap_nls_cluster', 'metric': 'correlation', 'qc_thresh': 0.3})"
+    },
+    {
+     "fly": "2023-11-29/3",
+     "what": "stimulus",
+     "stim": "euc @ -1.75",
+     "reason": "Remy's quality control ({'cell_mask_coord': 'rmap_nls_cluster', 'metric': 'correlation', 'qc_thresh': 0.3})"
+    },
+    {
+     "fly": "2023-11-29/4",
+     "what": "stimulus",
+     "stim": "euc @ -1.75",
+     "reason": "Remy's quality control ({'cell_mask_coord': 'rmap_nls_cluster', 'metric': 'correlation', 'qc_thresh': 0.3})"
+    },
+    {
+     "fly": "2023-10-17/1",
+     "what": "stimulus",
+     "stim": "pfo @ 0.0",
+     "reason": "Remy's quality control ({'cell_mask_coord': 'rmap_nls_cluster', 'metric': 'correlation', 'qc_thresh': 0.3})"
+    },
+    {
+     "fly": "2023-10-17/2",
+     "what": "stimulus",
+     "stim": "pfo @ 0.0",
+     "reason": "Remy's quality control ({'cell_mask_coord': 'rmap_nls_cluster', 'metric': 'correlation', 'qc_thresh': 0.3})"
+    },
+    {
+     "fly": "2023-11-02/1",
+     "what": "stimulus",
+     "stim": "+pul @ -2.0",
+     "reason": "Remy's quality control ({'cell_mask_coord': 'rmap_nls_cluster', 'metric': 'correlation', 'qc_thresh': 0.3})"
+    },
+    {
+     "fly": "2023-11-02/1",
+     "what": "stimulus",
+     "stim": "-aPine @ -2.0",
+     "reason": "Remy's quality control ({'cell_mask_coord': 'rmap_nls_cluster', 'metric': 'correlation', 'qc_thresh': 0.3})"
+    },
+    {
+     "fly": "2023-11-02/1",
+     "what": "stimulus",
+     "stim": "bbenz @ -2.0",
+     "reason": "Remy's quality control ({'cell_mask_coord': 'rmap_nls_cluster', 'metric': 'correlation', 'qc_thresh': 0.3})"
+    },
+    {
+     "fly": "2023-11-02/1",
+     "what": "stimulus",
+     "stim": "ger @ -3.0",
+     "reason": "Remy's quality control ({'cell_mask_coord': 'rmap_nls_cluster', 'metric': 'correlation', 'qc_thresh': 0.3})"
+    },
+    {
+     "fly": "2023-11-02/1",
+     "what": "stimulus",
+     "stim": "pfo @ 0.0",
+     "reason": "Remy's quality control ({'cell_mask_coord': 'rmap_nls_cluster', 'metric': 'correlation', 'qc_thresh': 0.3})"
+    },
+    {
+     "fly": "2023-11-02/2",
+     "what": "stimulus",
+     "stim": "+pul @ -2.0",
+     "reason": "Remy's quality control ({'cell_mask_coord': 'rmap_nls_cluster', 'metric': 'correlation', 'qc_thresh': 0.3})"
+    },
+    {
+     "fly": "2023-11-02/2",
+     "what": "stimulus",
+     "stim": "-aPine @ -2.0",
+     "reason": "Remy's quality control ({'cell_mask_coord': 'rmap_nls_cluster', 'metric': 'correlation', 'qc_thresh': 0.3})"
+    },
+    {
+     "fly": "2023-11-02/2",
+     "what": "stimulus",
+     "stim": "ger @ -3.0",
+     "reason": "Remy's quality control ({'cell_mask_coord': 'rmap_nls_cluster', 'metric': 'correlation', 'qc_thresh': 0.3})"
+    },
+    {
+     "fly": "2023-11-02/2",
+     "what": "stimulus",
+     "stim": "pfo @ 0.0",
+     "reason": "Remy's quality control ({'cell_mask_coord': 'rmap_nls_cluster', 'metric': 'correlation', 'qc_thresh': 0.3})"
+    },
+    {
+     "fly": "2023-12-06/1",
+     "what": "stimulus",
+     "stim": "euc @ -1.75",
+     "reason": "Remy's quality control ({'cell_mask_coord': 'rmap_nls_cluster', 'metric': 'correlation', 'qc_thresh': 0.3})"
+    },
+    {
+     "fly": "2023-12-06/2",
+     "what": "stimulus",
+     "stim": "B-myr @ -2.0",
+     "reason": "Remy's quality control ({'cell_mask_coord': 'rmap_nls_cluster', 'metric': 'correlation', 'qc_thresh': 0.3})"
+    },
+    {
+     "fly": "2023-12-06/2",
+     "what": "stimulus",
+     "stim": "euc @ -1.75",
+     "reason": "Remy's quality control ({'cell_mask_coord': 'rmap_nls_cluster', 'metric': 'correlation', 'qc_thresh': 0.3})"
+    },
+    {
+     "fly": "2023-10-19/1",
+     "what": "stimulus",
+     "stim": "geos @ -5.0",
+     "reason": "Remy's quality control ({'cell_mask_coord': 'rmap_nls_cluster', 'metric': 'correlation', 'qc_thresh': 0.3})"
+    },
+    {
+     "fly": "2023-10-19/1",
+     "what": "stimulus",
+     "stim": "pfo @ 0.0",
+     "reason": "Remy's quality control ({'cell_mask_coord': 'rmap_nls_cluster', 'metric': 'correlation', 'qc_thresh': 0.3})"
+    },
+    {
+     "fly": "2023-10-25/1",
+     "what": "stimulus",
+     "stim": "geos @ -5.0",
+     "reason": "Remy's quality control ({'cell_mask_coord': 'rmap_nls_cluster', 'metric': 'correlation', 'qc_thresh': 0.3})"
+    },
+    {
+     "fly": "2023-10-25/2",
+     "what": "stimulus",
+     "stim": "geos @ -5.0",
+     "reason": "Remy's quality control ({'cell_mask_coord': 'rmap_nls_cluster', 'metric': 'correlation', 'qc_thresh': 0.3})"
+    }
+   ],
+   "criterion": 1.9684,
+   "units": "baseline-noise SD",
+   "window": {
+    "response": [
+     2.0,
+     8.0
+    ],
+    "pre": [
+     -10.0,
+     -0.5
+    ]
+   },
+   "unit_kind": "kc",
+   "named_units": false,
+   "recording_site": "somata (nuclear GCaMP6s, per cell)",
+   "notes": [
+    "euc, -aPine and ger: each fly's one concentration pooled under one name (E107's POOLED; euc -2 / -1.75, -aPine -2 / -1.5, ger -2 / -3); geos at 10^-4 only (10^-5 left out); every fly was given part of the panel"
+   ],
+   "breadth_bins": {
+    "12": [
+     [
+      0,
+      0
+     ],
+     [
+      1,
+      1
+     ],
+     [
+      2,
+      2
+     ],
+     [
+      3,
+      5
+     ],
+     [
+      6,
+      12
+     ]
+    ],
+    "13": [
+     [
+      0,
+      0
+     ],
+     [
+      1,
+      1
+     ],
+     [
+      2,
+      2
+     ],
+     [
+      3,
+      6
+     ],
+     [
+      7,
+      13
+     ]
+    ],
+    "14": [
+     [
+      0,
+      0
+     ],
+     [
+      1,
+      1
+     ],
+     [
+      2,
+      3
+     ],
+     [
+      4,
+      6
+     ],
+     [
+      7,
+      14
+     ]
+    ],
+    "15": [
+     [
+      0,
+      0
+     ],
+     [
+      1,
+      1
+     ],
+     [
+      2,
+      3
+     ],
+     [
+      4,
+      7
+     ],
+     [
+      8,
+      15
+     ]
+    ],
+    "16": [
+     [
+      0,
+      0
+     ],
+     [
+      1,
+      1
+     ],
+     [
+      2,
+      3
+     ],
+     [
+      4,
+      7
+     ],
+     [
+      8,
+      16
+     ]
+    ],
+    "22": [
+     [
+      0,
+      0
+     ],
+     [
+      1,
+      2
+     ],
+     [
+      3,
+      5
+     ],
+     [
+      6,
+      10
+     ],
+     [
+      11,
+      22
+     ]
+    ]
+   }
+  },
+  "orn__kmix__wild_type": {
+   "key": [
+    "orn",
+    "kmix",
+    "wild_type"
+   ],
+   "file": {
+    "path": "<shared>/data/stage_populations/populations/orn__kmix__wild_type.parquet",
+    "bytes": 89158,
+    "mtime": "2026-11-24 10:26:05",
+    "sha256": "23988e150913e79ec67fef9a30717839c941de56cc212e1c4449b88977b2aace"
+   },
+   "sources": [
+    {
+     "path": "<shared>/data/stage_populations/sources/olfdb/ds5_long.csv",
+     "bytes": 2913486,
+     "mtime": "2026-11-24 10:22:27",
+     "sha256": "b5ad6b9dda68be53ebe6530a210622963ba979b2d8e6c2e43af31a6c0a1ce9b9"
+    }
+   ],
+   "has_trials": true,
+   "response_rate": {
+    "mean_over_flies": 0.4029191372740795,
+    "per_fly": {
+     "2024-09-03/1": 0.4146341463414634,
+     "2024-09-04/1": 0.2767857142857143,
+     "2024-09-11/1": 0.37202380952380953,
+     "2024-09-12/1": 0.375,
+     "2024-09-12/2": 0.40476190476190477,
+     "2024-09-25/1": 0.3869047619047619,
+     "2024-09-29/1": 0.5335365853658537,
+     "2024-10-01/1": 0.27631578947368424,
+     "2024-10-01/2": 0.5863095238095238
+    },
+    "per_odor": {
+     "EtOH": 0.3914426988881418,
+     "IAol": 0.37812688903831393,
+     "IaA": 0.39410857767725543,
+     "ea": 0.2387778389062086,
+     "eb": 0.4612445748517635,
+     "kmix0": 0.6060985797827902,
+     "kmix-1": 0.44150348771658143,
+     "kmix-2": 0.31205045133158094
+    }
+   },
+   "flies": [
+    "2024-09-03/1",
+    "2024-09-04/1",
+    "2024-09-11/1",
+    "2024-09-12/1",
+    "2024-09-12/2",
+    "2024-09-25/1",
+    "2024-09-29/1",
+    "2024-10-01/1",
+    "2024-10-01/2"
+   ],
+   "n_flies": 9,
+   "odors": [
+    "EtOH",
+    "IAol",
+    "IaA",
+    "ea",
+    "eb",
+    "kmix0",
+    "kmix-1",
+    "kmix-2"
+   ],
+   "odors_per_fly": {
+    "2024-09-03/1": 8,
+    "2024-09-04/1": 8,
+    "2024-09-11/1": 8,
+    "2024-09-12/1": 8,
+    "2024-09-12/2": 8,
+    "2024-09-25/1": 8,
+    "2024-09-29/1": 8,
+    "2024-10-01/1": 8,
+    "2024-10-01/2": 8
+   },
+   "units_per_fly": {
+    "2024-09-03/1": 41,
+    "2024-09-04/1": 42,
+    "2024-09-11/1": 42,
+    "2024-09-12/1": 41,
+    "2024-09-12/2": 42,
+    "2024-09-25/1": 42,
+    "2024-09-29/1": 41,
+    "2024-10-01/1": 38,
+    "2024-10-01/2": 42
+   },
+   "exclusions": [],
+   "criterion": 2.0,
+   "units": "trial-noise SD",
+   "window": {},
+   "unit_kind": "glomerulus",
+   "named_units": true,
+   "recording_site": "axon terminals (pebbled > GCaMP6f, antennal lobe glomeruli)",
+   "notes": [
+    "the mixture ORN flies (2024) are not the KC flies (2022); measured mixtures used as measured",
+    "dF/F per trial from processed tables (no frames on hand): trial-noise units"
+   ],
+   "breadth_bins": {
+    "8": [
+     [
+      0,
+      0
+     ],
+     [
+      1,
+      1
+     ],
+     [
+      2,
+      2
+     ],
+     [
+      3,
+      3
+     ],
+     [
+      4,
+      8
+     ]
+    ]
+   }
+  },
+  "kc_soma__kmix__wild_type": {
+   "key": [
+    "kc_soma",
+    "kmix",
+    "wild_type"
+   ],
+   "file": {
+    "path": "<shared>/data/stage_populations/populations/kc_soma__kmix__wild_type.parquet",
+    "bytes": 1427350,
+    "mtime": "2026-11-24 10:26:06",
+    "sha256": "d3040991327237cb5b70159cf77493f151ec6d4f492487ffb729ec3d2b1085e6"
+   },
+   "sources": [
+    {
+     "path": "<shared>/data/stage_populations/sources/olfdb/ds8_long.csv",
+     "bytes": 8779075,
+     "mtime": "2026-11-24 10:22:28",
+     "sha256": "86580988b132201d7661074cc3a70dab1eeea391c6cdfe93ce53784de0944e77"
+    }
+   ],
+   "has_trials": false,
+   "response_rate": {
+    "mean_over_flies": 0.187959622824898,
+    "per_fly": {
+     "2022-07-01/1": 0.16991362763915546,
+     "2022-07-02/1": 0.1455592105263158,
+     "2022-07-02/2": 0.1967828798185941,
+     "2022-07-11/1": 0.1852165725047081,
+     "2022-07-11/2": 0.21829739298358544,
+     "2022-07-12/3": 0.18779930343926862,
+     "2022-07-12/5": 0.21214837286265859
+    },
+    "per_odor": {
+     "EtOH": 0.28092071650470835,
+     "IAol": 0.10810033040334188,
+     "IaA": 0.2571418691366703,
+     "ea": 0.20096460296338206,
+     "eb": 0.2146372856715199,
+     "kmix0": 0.19359737345083902,
+     "kmix-1": 0.14414740248793634,
+     "kmix-2": 0.10416740198078635
+    }
+   },
+   "flies": [
+    "2022-07-01/1",
+    "2022-07-02/1",
+    "2022-07-02/2",
+    "2022-07-11/1",
+    "2022-07-11/2",
+    "2022-07-12/3",
+    "2022-07-12/5"
+   ],
+   "n_flies": 7,
+   "odors": [
+    "EtOH",
+    "IAol",
+    "IaA",
+    "ea",
+    "eb",
+    "kmix0",
+    "kmix-1",
+    "kmix-2"
+   ],
+   "odors_per_fly": {
+    "2022-07-01/1": 8,
+    "2022-07-02/1": 8,
+    "2022-07-02/2": 8,
+    "2022-07-11/1": 8,
+    "2022-07-11/2": 8,
+    "2022-07-12/3": 8,
+    "2022-07-12/5": 8
+   },
+   "units_per_fly": {
+    "2022-07-01/1": 2605,
+    "2022-07-02/1": 2584,
+    "2022-07-02/2": 1764,
+    "2022-07-11/1": 2655,
+    "2022-07-11/2": 3107,
+    "2022-07-12/3": 2297,
+    "2022-07-12/5": 1813
+   },
+   "exclusions": [],
+   "criterion": 0.7057,
+   "units": "session z (Fc_zscore)",
+   "window": {},
+   "unit_kind": "kc",
+   "named_units": false,
+   "recording_site": "somata (nuclear GCaMP6s, per cell)",
+   "notes": [
+    "session z (Fc_zscore) trial means from olfdb dataset 8; no frames or single trials on hand, so not in baseline-noise units; the criterion is the z bridge on the 2022 megamat flies"
+   ],
+   "breadth_bins": {
+    "8": [
+     [
+      0,
+      0
+     ],
+     [
+      1,
+      1
+     ],
+     [
+      2,
+      2
+     ],
+     [
+      3,
+      3
+     ],
+     [
+      4,
+      8
+     ]
+    ]
+   }
+  },
+  "orn__cmix__wild_type": {
+   "key": [
+    "orn",
+    "cmix",
+    "wild_type"
+   ],
+   "file": {
+    "path": "<shared>/data/stage_populations/populations/orn__cmix__wild_type.parquet",
+    "bytes": 89154,
+    "mtime": "2026-11-24 10:26:06",
+    "sha256": "0647f1419d351cddc9fe20a73acb4e94a236afaed4a58caf1bf1deb42de3dfc9"
+   },
+   "sources": [
+    {
+     "path": "<shared>/data/stage_populations/sources/olfdb/ds5_long.csv",
+     "bytes": 2913486,
+     "mtime": "2026-11-24 10:22:27",
+     "sha256": "b5ad6b9dda68be53ebe6530a210622963ba979b2d8e6c2e43af31a6c0a1ce9b9"
+    }
+   ],
+   "has_trials": true,
+   "response_rate": {
+    "mean_over_flies": 0.5625653734607521,
+    "per_fly": {
+     "2024-09-03/1": 0.5975609756097561,
+     "2024-09-04/1": 0.4642857142857143,
+     "2024-09-11/1": 0.5386904761904762,
+     "2024-09-12/1": 0.5274390243902439,
+     "2024-09-12/2": 0.6488095238095238,
+     "2024-09-25/1": 0.6041666666666666,
+     "2024-09-29/1": 0.6036585365853658,
+     "2024-10-01/1": 0.41776315789473684,
+     "2024-10-01/2": 0.6607142857142857
+    },
+    "per_odor": {
+     "ms": 0.4971235677269053,
+     "va": 0.4377882375314981,
+     "fur": 0.5563977694914795,
+     "2h": 0.5039699519802215,
+     "1o3ol": 0.595193946926938,
+     "cmix0": 0.729849691980629,
+     "cmix-1": 0.683932052353105,
+     "cmix-2": 0.49626776969524083
+    }
+   },
+   "flies": [
+    "2024-09-03/1",
+    "2024-09-04/1",
+    "2024-09-11/1",
+    "2024-09-12/1",
+    "2024-09-12/2",
+    "2024-09-25/1",
+    "2024-09-29/1",
+    "2024-10-01/1",
+    "2024-10-01/2"
+   ],
+   "n_flies": 9,
+   "odors": [
+    "ms",
+    "va",
+    "fur",
+    "2h",
+    "1o3ol",
+    "cmix0",
+    "cmix-1",
+    "cmix-2"
+   ],
+   "odors_per_fly": {
+    "2024-09-03/1": 8,
+    "2024-09-04/1": 8,
+    "2024-09-11/1": 8,
+    "2024-09-12/1": 8,
+    "2024-09-12/2": 8,
+    "2024-09-25/1": 8,
+    "2024-09-29/1": 8,
+    "2024-10-01/1": 8,
+    "2024-10-01/2": 8
+   },
+   "units_per_fly": {
+    "2024-09-03/1": 41,
+    "2024-09-04/1": 42,
+    "2024-09-11/1": 42,
+    "2024-09-12/1": 41,
+    "2024-09-12/2": 42,
+    "2024-09-25/1": 42,
+    "2024-09-29/1": 41,
+    "2024-10-01/1": 38,
+    "2024-10-01/2": 42
+   },
+   "exclusions": [],
+   "criterion": 2.0,
+   "units": "trial-noise SD",
+   "window": {},
+   "unit_kind": "glomerulus",
+   "named_units": true,
+   "recording_site": "axon terminals (pebbled > GCaMP6f, antennal lobe glomeruli)",
+   "notes": [
+    "the mixture ORN flies (2024) are not the KC flies (2022); measured mixtures used as measured",
+    "dF/F per trial from processed tables (no frames on hand): trial-noise units"
+   ],
+   "breadth_bins": {
+    "8": [
+     [
+      0,
+      0
+     ],
+     [
+      1,
+      1
+     ],
+     [
+      2,
+      2
+     ],
+     [
+      3,
+      3
+     ],
+     [
+      4,
+      8
+     ]
+    ]
+   }
+  },
+  "kc_soma__cmix__wild_type": {
+   "key": [
+    "kc_soma",
+    "cmix",
+    "wild_type"
+   ],
+   "file": {
+    "path": "<shared>/data/stage_populations/populations/kc_soma__cmix__wild_type.parquet",
+    "bytes": 707128,
+    "mtime": "2026-11-24 10:26:06",
+    "sha256": "c8016a8c4e6db1c83784887b8c356b27267c45917a8928ef83ba9a2af777c064"
+   },
+   "sources": [
+    {
+     "path": "<shared>/data/stage_populations/sources/olfdb/ds8_long.csv",
+     "bytes": 8779075,
+     "mtime": "2026-11-24 10:22:28",
+     "sha256": "86580988b132201d7661074cc3a70dab1eeea391c6cdfe93ce53784de0944e77"
+    }
+   ],
+   "has_trials": false,
+   "response_rate": {
+    "mean_over_flies": 0.18328355572111116,
+    "per_fly": {
+     "2022-03-29/2": 0.18061380099123142,
+     "2022-04-04/1": 0.2001302567919613,
+     "2022-07-20/2": 0.19224683544303797,
+     "2022-07-25/2": 0.1601433296582139
+    },
+    "per_odor": {
+     "ms": 0.17336034918643917,
+     "va": 0.11750215486521845,
+     "fur": 0.21082188658548565,
+     "2h": 0.1026165502707121,
+     "1o3ol": 0.29288509991690603,
+     "cmix0": 0.2563499897190166,
+     "cmix-1": 0.18260431943653666,
+     "cmix-2": 0.13012809578857454
+    }
+   },
+   "flies": [
+    "2022-03-29/2",
+    "2022-04-04/1",
+    "2022-07-20/2",
+    "2022-07-25/2"
+   ],
+   "n_flies": 4,
+   "odors": [
+    "ms",
+    "va",
+    "fur",
+    "2h",
+    "1o3ol",
+    "cmix0",
+    "cmix-1",
+    "cmix-2"
+   ],
+   "odors_per_fly": {
+    "2022-03-29/2": 8,
+    "2022-04-04/1": 8,
+    "2022-07-20/2": 8,
+    "2022-07-25/2": 8
+   },
+   "units_per_fly": {
+    "2022-03-29/2": 2623,
+    "2022-04-04/1": 2687,
+    "2022-07-20/2": 1106,
+    "2022-07-25/2": 1814
+   },
+   "exclusions": [],
+   "criterion": 0.7057,
+   "units": "session z (Fc_zscore)",
+   "window": {},
+   "unit_kind": "kc",
+   "named_units": false,
+   "recording_site": "somata (nuclear GCaMP6s, per cell)",
+   "notes": [
+    "session z (Fc_zscore) trial means from olfdb dataset 8; no frames or single trials on hand, so not in baseline-noise units; the criterion is the z bridge on the 2022 megamat flies"
+   ],
+   "breadth_bins": {
+    "8": [
+     [
+      0,
+      0
+     ],
+     [
+      1,
+      1
+     ],
+     [
+      2,
+      2
+     ],
+     [
+      3,
+      3
+     ],
+     [
+      4,
+      8
+     ]
+    ]
+   }
+  },
+  "kc_soma__apl16__control": {
+   "key": [
+    "kc_soma",
+    "apl16",
+    "control"
+   ],
+   "file": {
+    "path": "<shared>/data/stage_populations/populations/kc_soma__apl16__control.parquet",
+    "bytes": 8942762,
+    "mtime": "2026-11-24 10:26:08",
+    "sha256": "49f8f7aab40acc8a15b80f869d50d4ff507ebf60a911e0c8db5d2f27c978a405"
+   },
+   "sources": [
+    {
+     "path": "<shared>/data/yang_apl16_kc_noise_units/per_trial_long.parquet",
+     "bytes": 49691188,
+     "mtime": "2026-11-10 16:57:05",
+     "sha256": "cca4725d51c13c4296d88c531c67430b296be4bd2cda8c746b8a0602d532df1b"
+    }
+   ],
+   "has_trials": true,
+   "response_rate": {
+    "mean_over_flies": 0.0683100215155029,
+    "per_fly": {
+     "2024-07-10/2/L": 0.0634427374301676,
+     "2024-07-10/2/R": 0.08648181352459017,
+     "2024-07-12/2/L": 0.087442218798151,
+     "2024-07-26/4/R": 0.09943528693528693,
+     "2024-08-01/3/L": 0.06748466257668712,
+     "2024-08-01/3/R": 0.04221014492753623,
+     "2024-08-02/5/R": 0.04791491154170177,
+     "2024-08-09/3/L": 0.03965750337990086,
+     "2024-08-09/3/R": 0.06689826619071902,
+     "2024-08-14/1/L": 0.09292553191489361,
+     "2024-08-30/3/R": 0.057517159450897574
+    },
+    "per_odor": {
+     "2h": 0.10199737716053488,
+     "IaA": 0.063071573647436,
+     "pa": 0.08315492246596544,
+     "2-but": 0.09897107933771347,
+     "eb": 0.07702101482554376,
+     "ep": 0.08674000113773293,
+     "6al": 0.048749140865432444,
+     "t2h": 0.06674573801740992,
+     "1-8ol": 0.05145964523954378,
+     "1-5ol": 0.06584032158262604,
+     "1-6ol": 0.0981198948131735,
+     "ms": 0.05422949611323531,
+     "paa": 0.06220438335092169,
+     "-aPine": 0.033446403110686175,
+     "euc": 0.059893773484217566,
+     "B-myr": 0.04131557909587343
+    }
+   },
+   "flies": [
+    "2024-07-10/2/L",
+    "2024-07-10/2/R",
+    "2024-07-12/2/L",
+    "2024-07-26/4/R",
+    "2024-08-01/3/L",
+    "2024-08-01/3/R",
+    "2024-08-02/5/R",
+    "2024-08-09/3/L",
+    "2024-08-09/3/R",
+    "2024-08-14/1/L",
+    "2024-08-30/3/R"
+   ],
+   "n_flies": 11,
+   "odors": [
+    "2h",
+    "IaA",
+    "pa",
+    "2-but",
+    "eb",
+    "ep",
+    "6al",
+    "t2h",
+    "1-8ol",
+    "1-5ol",
+    "1-6ol",
+    "ms",
+    "paa",
+    "-aPine",
+    "euc",
+    "B-myr"
+   ],
+   "odors_per_fly": {
+    "2024-07-10/2/L": 16,
+    "2024-07-10/2/R": 16,
+    "2024-07-12/2/L": 16,
+    "2024-07-26/4/R": 16,
+    "2024-08-01/3/L": 16,
+    "2024-08-01/3/R": 16,
+    "2024-08-02/5/R": 16,
+    "2024-08-09/3/L": 16,
+    "2024-08-09/3/R": 16,
+    "2024-08-14/1/L": 16,
+    "2024-08-30/3/R": 16
+   },
+   "units_per_fly": {
+    "2024-07-10/2/L": 1790,
+    "2024-07-10/2/R": 1952,
+    "2024-07-12/2/L": 1947,
+    "2024-07-26/4/R": 1638,
+    "2024-08-01/3/L": 1956,
+    "2024-08-01/3/R": 2070,
+    "2024-08-02/5/R": 2374,
+    "2024-08-09/3/L": 2219,
+    "2024-08-09/3/R": 1961,
+    "2024-08-14/1/L": 2350,
+    "2024-08-30/3/R": 1894
+   },
+   "exclusions": [],
+   "criterion": 1.9684,
+   "units": "baseline-noise SD",
+   "window": {
+    "response": [
+     2.0,
+     8.0
+    ],
+    "pre": [
+     -5.0,
+     0.0
+    ]
+   },
+   "unit_kind": "kc",
+   "named_units": false,
+   "recording_site": "somata (nuclear GCaMP6s, per cell)",
+   "notes": [
+    "paa, euc and -aPine: the model input for these is ORN data within 1 log10 unit of the flies' concentrations (paa 10^-3 in the flies, 10^-4 in the input; -aPine and euc 10^-2 against 10^-1.5 and 10^-1.75)"
+   ],
+   "breadth_bins": {
+    "16": [
+     [
+      0,
+      0
+     ],
+     [
+      1,
+      1
+     ],
+     [
+      2,
+      3
+     ],
+     [
+      4,
+      7
+     ],
+     [
+      8,
+      16
+     ]
+    ]
+   }
+  },
+  "kc_soma__apl16__tnt": {
+   "key": [
+    "kc_soma",
+    "apl16",
+    "tnt"
+   ],
+   "file": {
+    "path": "<shared>/data/stage_populations/populations/kc_soma__apl16__tnt.parquet",
+    "bytes": 6709175,
+    "mtime": "2026-11-24 10:26:09",
+    "sha256": "8974700e8afc5b91c5f3b3b6071238cc2a96f3e34d566b8621bc119ab55f29c0"
+   },
+   "sources": [
+    {
+     "path": "<shared>/data/yang_apl16_kc_noise_units/per_trial_long.parquet",
+     "bytes": 49691188,
+     "mtime": "2026-11-10 16:57:05",
+     "sha256": "cca4725d51c13c4296d88c531c67430b296be4bd2cda8c746b8a0602d532df1b"
+    }
+   ],
+   "has_trials": true,
+   "response_rate": {
+    "mean_over_flies": 0.1556887951796307,
+    "per_fly": {
+     "2024-07-17/2/L": 0.1770040304523063,
+     "2024-07-17/3/L": 0.1745278229082047,
+     "2024-07-25/1/L": 0.1355217737652682,
+     "2024-08-01/4/R": 0.14709924768518517,
+     "2024-08-02/5/L": 0.14938603752759383,
+     "2024-08-07/3/L": 0.15923213493120283,
+     "2024-08-14/3/L": 0.14760638297872342,
+     "2024-08-14/3/R": 0.15513293118856122
+    },
+    "per_odor": {
+     "2h": 0.2098741720901346,
+     "IaA": 0.1534390329172603,
+     "pa": 0.17964745973598814,
+     "2-but": 0.18910758481639578,
+     "eb": 0.2195414288662731,
+     "ep": 0.20982493969059768,
+     "6al": 0.12600447316165375,
+     "t2h": 0.16412572972338652,
+     "1-8ol": 0.1196194272301299,
+     "1-5ol": 0.14799577787632265,
+     "1-6ol": 0.22023803462857255,
+     "ms": 0.12122892891985206,
+     "paa": 0.14754583495822163,
+     "-aPine": 0.06433211871507657,
+     "euc": 0.105466575337587,
+     "B-myr": 0.11302920420663912
+    }
+   },
+   "flies": [
+    "2024-07-17/2/L",
+    "2024-07-17/3/L",
+    "2024-07-25/1/L",
+    "2024-08-01/4/R",
+    "2024-08-02/5/L",
+    "2024-08-07/3/L",
+    "2024-08-14/3/L",
+    "2024-08-14/3/R"
+   ],
+   "n_flies": 8,
+   "odors": [
+    "2h",
+    "IaA",
+    "pa",
+    "2-but",
+    "eb",
+    "ep",
+    "6al",
+    "t2h",
+    "1-8ol",
+    "1-5ol",
+    "1-6ol",
+    "ms",
+    "paa",
+    "-aPine",
+    "euc",
+    "B-myr"
+   ],
+   "odors_per_fly": {
+    "2024-07-17/2/L": 16,
+    "2024-07-17/3/L": 16,
+    "2024-07-25/1/L": 16,
+    "2024-08-01/4/R": 16,
+    "2024-08-02/5/L": 16,
+    "2024-08-07/3/L": 16,
+    "2024-08-14/3/L": 16,
+    "2024-08-14/3/R": 16
+   },
+   "units_per_fly": {
+    "2024-07-17/2/L": 2233,
+    "2024-07-17/3/L": 2462,
+    "2024-07-25/1/L": 1883,
+    "2024-08-01/4/R": 1728,
+    "2024-08-02/5/L": 1812,
+    "2024-08-07/3/L": 2253,
+    "2024-08-14/3/L": 1880,
+    "2024-08-14/3/R": 2238
+   },
+   "exclusions": [],
+   "criterion": 1.9684,
+   "units": "baseline-noise SD",
+   "window": {
+    "response": [
+     2.0,
+     8.0
+    ],
+    "pre": [
+     -5.0,
+     0.0
+    ]
+   },
+   "unit_kind": "kc",
+   "named_units": false,
+   "recording_site": "somata (nuclear GCaMP6s, per cell)",
+   "notes": [
+    "paa, euc and -aPine: the model input for these is ORN data within 1 log10 unit of the flies' concentrations (paa 10^-3 in the flies, 10^-4 in the input; -aPine and euc 10^-2 against 10^-1.5 and 10^-1.75)"
+   ],
+   "breadth_bins": {
+    "16": [
+     [
+      0,
+      0
+     ],
+     [
+      1,
+      1
+     ],
+     [
+      2,
+      3
+     ],
+     [
+      4,
+      7
+     ],
+     [
+      8,
+      16
+     ]
+    ]
+   }
+  }
+ },
+ "stages": {
+  "criteria": {
+   "orn": 2.0,
+   "pn_dendrite": 2.0,
+   "pn_bouton": 2.0,
+   "kc_claw": 2.0,
+   "kc_soma": 1.9684
+  },
+  "mixture_z_criterion": 0.7057,
+  "units": {
+   "baseline-noise SD": "window mean minus pre-odor mean over the SD of the pre-odor frames",
+   "trial-noise SD": "trial mean over the robust SD of single trials about their odor means (1.4826 MAD, residuals scaled by sqrt(n/(n-1)))",
+   "session z (Fc_zscore)": "Remy's whole-session z of Fc"
+  },
+  "orn_recordings": "the ORN recordings are of the ORNs' axon terminals in the antennal lobe (pebbled > GCaMP6f), not of their somata or dendrites",
+  "recording_site": {
+   "orn": "axon terminals (pebbled > GCaMP6f, antennal lobe glomeruli)",
+   "pn_dendrite": "dendrites (GH146 > GCaMP6f, antennal lobe glomeruli)",
+   "pn_bouton": "boutons (calyx, per suite2p ROI)",
+   "kc_claw": "claws (calyx, per suite2p ROI)",
+   "kc_soma": "somata (nuclear GCaMP6s, per cell)"
+  }
+ },
+ "exclusions": {
+  "flies": [
+   {
+    "stage": "pn_bouton",
+    "panel": "megamat",
+    "fly": "2022-10-21__fly02__megamat1_001__dsub3",
+    "reason": "Remy's dashboards and bouton analysis leave it out (median cellprob 0.03); data/remy_per_roi/README.md"
+   }
+  ],
+  "rules": [
+   "the bouton fly 2022-10-21 fly02 in every analysis",
+   "Remy's validation2 quality-control drops at {\"cell_mask_coord\": \"rmap_nls_cluster\", \"metric\": \"correlation\", \"qc_thresh\": 0.3}",
+   "validation2 stimuli MethOH @ -2.0, pfo @ 0.0, geos @ -5.0",
+   "the solvent (pfo) in every panel",
+   "the mixture ORN panels' binary mixtures (odor2 not 'solvent') and pfo",
+   "units with a zero or undefined noise SD"
+  ]
+ },
+ "sources_files_csv": {
+  "path": "<shared>/data/stage_populations/sources/files.csv",
+  "bytes": 34748,
+  "mtime": "2026-11-24 10:23:38",
+  "sha256": "bc6cb7561f6e43c92f1fb3035cd6c9000c5704eb140665689bdf65ab9bd87904"
+ },
+ "sources_note": "files.csv lists every copied and reduced source (path, bytes, sha256), the large trial files on tensor and matrix included; paths in this lock are relative to the shared directory (<shared>) or the repository (<queue>) where they are under one",
+ "checks": {
+  "orn_megamat_vs_pebbled": {
+   "n_matched": 16188,
+   "n_olfdb": 16188,
+   "n_al": 16188,
+   "max_abs_diff": 1.9968846265427942e-07,
+   "passed": true
+  },
+  "per_roi_vs_e119": {
+   "max_abs_diff": {
+    "pn_bouton": 7.105427357601002e-15,
+    "kc_claw": 7.105427357601002e-15
+   },
+   "passed": true
+  },
+  "apl16_vs_trialmean": {
+   "per_cohort": {
+    "control": {
+     "max_abs_diff": 0.0,
+     "n_flies": 11
+    },
+    "tnt": {
+     "max_abs_diff": 0.0,
+     "n_flies": 8
+    }
+   },
+   "passed": true
+  },
+  "megamat_vs_loader": {
+   "index_levels": [
+    "thorimage",
+    "datefly",
+    "cell"
+   ],
+   "n_ref_cells": 8342,
+   "n_ours": 8342,
+   "n_matched": 8342,
+   "n_flies_cell_count_differs": 0,
+   "max_abs_diff": 1.7763568394002505e-15,
+   "passed": true
+  },
+  "v2_rdms_cosine": {
+   "per_fly": {
+    "2023-10-16__fly02__validation2i_tsub03": {
+     "max_abs_diff": 1.6653345369377348e-15,
+     "n_rois_remy": 936,
+     "n_rois_ours": 936
+    },
+    "2023-10-16__fly03__validation2i_tsub03": {
+     "max_abs_diff": 1.3322676295501878e-15,
+     "n_rois_remy": 1176,
+     "n_rois_ours": 1176
+    },
+    "2023-11-03__fly01__validation2iwm": {
+     "max_abs_diff": 8.881784197001252e-16,
+     "n_rois_remy": 1536,
+     "n_rois_ours": 1536
+    },
+    "2023-11-03__fly03__validation2iwm": {
+     "max_abs_diff": 9.992007221626409e-16,
+     "n_rois_remy": 480,
+     "n_rois_ours": 480
+    },
+    "2023-11-07__fly02__validation2iwmh_tsub03": {
+     "max_abs_diff": 9.992007221626409e-16,
+     "n_rois_remy": 957,
+     "n_rois_ours": 957
+    },
+    "2023-11-21__fly01__validation2iwmh1_tsub03": {
+     "max_abs_diff": 6.661338147750939e-16,
+     "n_rois_remy": 1425,
+     "n_rois_ours": 1425
+    },
+    "2023-11-29__fly03__validation2iwmh1_tsub03": {
+     "max_abs_diff": 1.1102230246251565e-15,
+     "n_rois_remy": 962,
+     "n_rois_ours": 962
+    },
+    "2023-11-29__fly04__validation2iwmh1_tsub03": {
+     "max_abs_diff": 8.881784197001252e-16,
+     "n_rois_remy": 858,
+     "n_rois_ours": 858
+    },
+    "2023-10-17__fly01__validation2j_tsub03": {
+     "max_abs_diff": 8.881784197001252e-16,
+     "n_rois_remy": 1092,
+     "n_rois_ours": 1092
+    },
+    "2023-10-17__fly02__validation2j_001_tsub03": {
+     "max_abs_diff": 1.5543122344752192e-15,
+     "n_rois_remy": 1155,
+     "n_rois_ours": 1155
+    },
+    "2023-11-02__fly01__validation2j_001": {
+     "max_abs_diff": 4.440892098500626e-16,
+     "n_rois_remy": 1316,
+     "n_rois_ours": 1316
+    },
+    "2023-11-02__fly02__validation2j": {
+     "max_abs_diff": 7.771561172376096e-16,
+     "n_rois_remy": 1716,
+     "n_rois_ours": 1716
+    },
+    "2023-12-06__fly01__validation2jwmh_001_tsub03": {
+     "max_abs_diff": 9.992007221626409e-16,
+     "n_rois_remy": 1365,
+     "n_rois_ours": 1365
+    },
+    "2023-12-06__fly02__validation2jwmh_001_tsub03": {
+     "max_abs_diff": 1.1102230246251565e-15,
+     "n_rois_remy": 1458,
+     "n_rois_ours": 1458
+    },
+    "2023-10-19__fly01__validation2k_tsub03": {
+     "max_abs_diff": 1.1102230246251565e-15,
+     "n_rois_remy": 976,
+     "n_rois_ours": 976
+    },
+    "2023-10-25__fly01__validation2kwm": {
+     "max_abs_diff": 1.3322676295501878e-15,
+     "n_rois_remy": 1020,
+     "n_rois_ours": 1020
+    },
+    "2023-10-25__fly02__validation2kwm": {
+     "max_abs_diff": 1.5543122344752192e-15,
+     "n_rois_remy": 930,
+     "n_rois_ours": 930
+    },
+    "2023-12-13__fly01__validation2kwmh": {
+     "max_abs_diff": 7.771561172376096e-16,
+     "n_rois_remy": 960,
+     "n_rois_ours": 960
+    },
+    "2023-12-19__fly01__validation2kwmh_tsub03": {
+     "max_abs_diff": 1.1102230246251565e-15,
+     "n_rois_remy": 1512,
+     "n_rois_ours": 1512
+    },
+    "2023-12-19__fly02__validation2kwmh_tsub03": {
+     "max_abs_diff": 4.440892098500626e-16,
+     "n_rois_remy": 546,
+     "n_rois_ours": 546
+    }
+   },
+   "passed": true,
+   "metric": "cosine",
+   "tol": 1e-06
+  },
+  "v2_rdms_correlation": {
+   "per_fly": {
+    "2023-10-16__fly02__validation2i_tsub03": {
+     "max_abs_diff": 2.220446049250313e-16,
+     "n_rois_remy": 936,
+     "n_rois_ours": 936
+    },
+    "2023-10-16__fly03__validation2i_tsub03": {
+     "max_abs_diff": 2.220446049250313e-16,
+     "n_rois_remy": 1176,
+     "n_rois_ours": 1176
+    },
+    "2023-11-03__fly01__validation2iwm": {
+     "max_abs_diff": 3.3306690738754696e-16,
+     "n_rois_remy": 1536,
+     "n_rois_ours": 1536
+    },
+    "2023-11-03__fly03__validation2iwm": {
+     "max_abs_diff": 2.220446049250313e-16,
+     "n_rois_remy": 480,
+     "n_rois_ours": 480
+    },
+    "2023-11-07__fly02__validation2iwmh_tsub03": {
+     "max_abs_diff": 2.220446049250313e-16,
+     "n_rois_remy": 957,
+     "n_rois_ours": 957
+    },
+    "2023-11-21__fly01__validation2iwmh1_tsub03": {
+     "max_abs_diff": 2.220446049250313e-16,
+     "n_rois_remy": 1425,
+     "n_rois_ours": 1425
+    },
+    "2023-11-29__fly03__validation2iwmh1_tsub03": {
+     "max_abs_diff": 2.220446049250313e-16,
+     "n_rois_remy": 962,
+     "n_rois_ours": 962
+    },
+    "2023-11-29__fly04__validation2iwmh1_tsub03": {
+     "max_abs_diff": 2.220446049250313e-16,
+     "n_rois_remy": 858,
+     "n_rois_ours": 858
+    },
+    "2023-10-17__fly01__validation2j_tsub03": {
+     "max_abs_diff": 2.220446049250313e-16,
+     "n_rois_remy": 1092,
+     "n_rois_ours": 1092
+    },
+    "2023-10-17__fly02__validation2j_001_tsub03": {
+     "max_abs_diff": 2.220446049250313e-16,
+     "n_rois_remy": 1155,
+     "n_rois_ours": 1155
+    },
+    "2023-11-02__fly01__validation2j_001": {
+     "max_abs_diff": 2.220446049250313e-16,
+     "n_rois_remy": 1316,
+     "n_rois_ours": 1316
+    },
+    "2023-11-02__fly02__validation2j": {
+     "max_abs_diff": 2.220446049250313e-16,
+     "n_rois_remy": 1716,
+     "n_rois_ours": 1716
+    },
+    "2023-12-06__fly01__validation2jwmh_001_tsub03": {
+     "max_abs_diff": 2.220446049250313e-16,
+     "n_rois_remy": 1365,
+     "n_rois_ours": 1365
+    },
+    "2023-12-06__fly02__validation2jwmh_001_tsub03": {
+     "max_abs_diff": 2.220446049250313e-16,
+     "n_rois_remy": 1458,
+     "n_rois_ours": 1458
+    },
+    "2023-10-19__fly01__validation2k_tsub03": {
+     "max_abs_diff": 2.220446049250313e-16,
+     "n_rois_remy": 976,
+     "n_rois_ours": 976
+    },
+    "2023-10-25__fly01__validation2kwm": {
+     "max_abs_diff": 2.220446049250313e-16,
+     "n_rois_remy": 1020,
+     "n_rois_ours": 1020
+    },
+    "2023-10-25__fly02__validation2kwm": {
+     "max_abs_diff": 2.220446049250313e-16,
+     "n_rois_remy": 930,
+     "n_rois_ours": 930
+    },
+    "2023-12-13__fly01__validation2kwmh": {
+     "max_abs_diff": 2.220446049250313e-16,
+     "n_rois_remy": 960,
+     "n_rois_ours": 960
+    },
+    "2023-12-19__fly01__validation2kwmh_tsub03": {
+     "max_abs_diff": 2.220446049250313e-16,
+     "n_rois_remy": 1512,
+     "n_rois_ours": 1512
+    },
+    "2023-12-19__fly02__validation2kwmh_tsub03": {
+     "max_abs_diff": 2.220446049250313e-16,
+     "n_rois_remy": 546,
+     "n_rois_ours": 546
+    }
+   },
+   "passed": true,
+   "metric": "correlation",
+   "tol": 1e-06
+  },
+  "noise_bridge": {
+   "pn_bouton__megamat__wild_type": {
+    "median_over_flies": 0.5190601433864802,
+    "per_fly": [
+     0.5606572080828786,
+     0.49052063478631963,
+     0.5688945679229167,
+     0.5190601433864802,
+     0.4808057810481449
+    ]
+   },
+   "kc_claw__megamat__wild_type": {
+    "median_over_flies": 0.7708916696336052,
+    "per_fly": [
+     0.7813831010406551,
+     0.8217148924633388,
+     0.7604002382265553,
+     0.7077175323911495
+    ]
+   },
+   "kc_soma__megamat__wild_type": {
+    "median_over_flies": 0.9107421057808396,
+    "per_fly": [
+     0.8180377982189646,
+     0.7010017700793253,
+     1.0034464133427146,
+     1.134398488751204
+    ]
+   },
+   "kc_claw__megamat__same_fly": {
+    "median_over_flies": 1.0307178963764947,
+    "per_fly": [
+     1.0307178963764947
+    ]
+   },
+   "kc_soma__megamat__same_fly": {
+    "median_over_flies": 0.8401261791924134,
+    "per_fly": [
+     0.8401261791924134
+    ]
+   },
+   "kc_soma__validation2__wild_type": {
+    "median_over_flies": 0.804206641712873,
+    "per_fly": [
+     0.9113305751751088,
+     0.933493784951625,
+     0.8151224016426646,
+     0.7737322657092295,
+     0.7883411413651448,
+     0.5231992427392536,
+     0.6033315079793887,
+     0.4807816534761475,
+     0.5401484565467043,
+     0.5153125082578496,
+     0.5044546734756576,
+     0.8587703880294054,
+     0.7934119062924454,
+     0.8825399696418876,
+     0.938616597341779,
+     0.9405902440190298,
+     0.8150013771333007,
+     0.46493324213869414,
+     0.9341989817293641,
+     1.0929086099026883
+    ]
+   },
+   "kc_soma__apl16__control": {
+    "median_over_flies": 0.5729383515502506,
+    "per_fly": [
+     0.5506463532803332,
+     0.5757780968312538,
+     0.6036723170271849,
+     0.7408214899792502,
+     0.5429971899265051,
+     0.49562473350972525,
+     0.4838116876412428,
+     0.535499049111331,
+     0.621281170830281,
+     0.5729383515502506,
+     0.5942500575144865
+    ]
+   },
+   "kc_soma__apl16__tnt": {
+    "median_over_flies": 0.7130128327300158,
+    "per_fly": [
+     0.7354299528258226,
+     0.709495628732855,
+     0.5417330724666348,
+     0.6821967822545363,
+     0.7165300367271766,
+     0.7798644506715676,
+     0.7258131205812096,
+     0.6613706840860551
+    ]
+   }
+  },
+  "passed": true
+ },
+ "readings": {
+  "stages": {
+   "orn": {
+    "default": {
+     "name": "curve_noise",
+     "stage": "orn",
+     "curve": "quantile",
+     "curve_set_on": "on",
+     "curve_scope": "wiring",
+     "fly_weighting": "fly",
+     "noise_aware_curve": false,
+     "noise": "residual",
+     "criterion": "flies",
+     "pool": null,
+     "subset": null,
+     "claw_spike_share": 0.0,
+     "glomeruli": "every_fly",
+     "settled_pre": true
+    },
+    "alternatives": [
+     {
+      "name": "affine_noise",
+      "stage": "orn",
+      "curve": "affine",
+      "curve_set_on": "on",
+      "curve_scope": "wiring",
+      "fly_weighting": "fly",
+      "noise_aware_curve": false,
+      "noise": "residual",
+      "criterion": "flies",
+      "pool": null,
+      "subset": null,
+      "claw_spike_share": 0.0,
+      "glomeruli": "every_fly",
+      "settled_pre": true
+     },
+     {
+      "name": "curve_nonoise",
+      "stage": "orn",
+      "curve": "quantile",
+      "curve_set_on": "on",
+      "curve_scope": "wiring",
+      "fly_weighting": "fly",
+      "noise_aware_curve": false,
+      "noise": "none",
+      "criterion": "flies",
+      "pool": null,
+      "subset": null,
+      "claw_spike_share": 0.0,
+      "glomeruli": "every_fly",
+      "settled_pre": true
+     }
+    ]
+   },
+   "pn_dendrite": {
+    "default": {
+     "name": "curve_noise",
+     "stage": "pn_dendrite",
+     "curve": "quantile",
+     "curve_set_on": "on",
+     "curve_scope": "wiring",
+     "fly_weighting": "fly",
+     "noise_aware_curve": false,
+     "noise": "residual",
+     "criterion": "flies",
+     "pool": null,
+     "subset": null,
+     "claw_spike_share": 0.0,
+     "glomeruli": "every_fly",
+     "settled_pre": true
+    },
+    "alternatives": [
+     {
+      "name": "affine_noise",
+      "stage": "pn_dendrite",
+      "curve": "affine",
+      "curve_set_on": "on",
+      "curve_scope": "wiring",
+      "fly_weighting": "fly",
+      "noise_aware_curve": false,
+      "noise": "residual",
+      "criterion": "flies",
+      "pool": null,
+      "subset": null,
+      "claw_spike_share": 0.0,
+      "glomeruli": "every_fly",
+      "settled_pre": true
+     },
+     {
+      "name": "curve_noise_shared28",
+      "stage": "pn_dendrite",
+      "curve": "quantile",
+      "curve_set_on": "on",
+      "curve_scope": "wiring",
+      "fly_weighting": "fly",
+      "noise_aware_curve": false,
+      "noise": "residual",
+      "criterion": "flies",
+      "pool": null,
+      "subset": null,
+      "claw_spike_share": 0.0,
+      "glomeruli": "shared28",
+      "settled_pre": true
+     }
+    ]
+   },
+   "pn_bouton": {
+    "default": {
+     "name": "curve_noise",
+     "stage": "pn_bouton",
+     "curve": "quantile",
+     "curve_set_on": "on",
+     "curve_scope": "wiring",
+     "fly_weighting": "fly",
+     "noise_aware_curve": false,
+     "noise": "residual",
+     "criterion": "flies",
+     "pool": "1",
+     "subset": "shared",
+     "claw_spike_share": 0.0,
+     "glomeruli": null,
+     "settled_pre": true
+    },
+    "alternatives": [
+     {
+      "name": "curve_noise_g3",
+      "stage": "pn_bouton",
+      "curve": "quantile",
+      "curve_set_on": "on",
+      "curve_scope": "wiring",
+      "fly_weighting": "fly",
+      "noise_aware_curve": false,
+      "noise": "residual",
+      "criterion": "flies",
+      "pool": "g3",
+      "subset": "shared",
+      "claw_spike_share": 0.0,
+      "glomeruli": null,
+      "settled_pre": true
+     },
+     {
+      "name": "affine_noise",
+      "stage": "pn_bouton",
+      "curve": "affine",
+      "curve_set_on": "on",
+      "curve_scope": "wiring",
+      "fly_weighting": "fly",
+      "noise_aware_curve": false,
+      "noise": "residual",
+      "criterion": "flies",
+      "pool": "1",
+      "subset": "shared",
+      "claw_spike_share": 0.0,
+      "glomeruli": null,
+      "settled_pre": true
+     }
+    ]
+   },
+   "kc_claw": {
+    "default": {
+     "name": "curve_noise",
+     "stage": "kc_claw",
+     "curve": "quantile",
+     "curve_set_on": "on",
+     "curve_scope": "wiring",
+     "fly_weighting": "fly",
+     "noise_aware_curve": false,
+     "noise": "residual",
+     "criterion": "flies",
+     "pool": "g14",
+     "subset": "all",
+     "claw_spike_share": 0.0,
+     "glomeruli": null,
+     "settled_pre": true
+    },
+    "alternatives": [
+     {
+      "name": "curve_noise_b14",
+      "stage": "kc_claw",
+      "curve": "quantile",
+      "curve_set_on": "on",
+      "curve_scope": "wiring",
+      "fly_weighting": "fly",
+      "noise_aware_curve": false,
+      "noise": "residual",
+      "criterion": "flies",
+      "pool": "b14",
+      "subset": "all",
+      "claw_spike_share": 0.0,
+      "glomeruli": null,
+      "settled_pre": true
+     },
+     {
+      "name": "curve_noise_share25",
+      "stage": "kc_claw",
+      "curve": "quantile",
+      "curve_set_on": "on",
+      "curve_scope": "wiring",
+      "fly_weighting": "fly",
+      "noise_aware_curve": false,
+      "noise": "residual",
+      "criterion": "flies",
+      "pool": "g14",
+      "subset": "all",
+      "claw_spike_share": 0.25,
+      "glomeruli": null,
+      "settled_pre": true
+     },
+     {
+      "name": "affine_noise",
+      "stage": "kc_claw",
+      "curve": "affine",
+      "curve_set_on": "on",
+      "curve_scope": "wiring",
+      "fly_weighting": "fly",
+      "noise_aware_curve": false,
+      "noise": "residual",
+      "criterion": "flies",
+      "pool": "g14",
+      "subset": "all",
+      "claw_spike_share": 0.0,
+      "glomeruli": null,
+      "settled_pre": true
+     }
+    ]
+   },
+   "kc_soma": {
+    "default": {
+     "name": "curve_noise",
+     "stage": "kc_soma",
+     "curve": "quantile",
+     "curve_set_on": "on",
+     "curve_scope": "wiring",
+     "fly_weighting": "fly",
+     "noise_aware_curve": false,
+     "noise": "residual",
+     "criterion": "flies",
+     "pool": null,
+     "subset": null,
+     "claw_spike_share": 0.0,
+     "glomeruli": null,
+     "settled_pre": true
+    },
+    "alternatives": [
+     {
+      "name": "raw",
+      "stage": "kc_soma",
+      "curve": "none",
+      "curve_set_on": "on",
+      "curve_scope": "wiring",
+      "fly_weighting": "fly",
+      "noise_aware_curve": false,
+      "noise": "none",
+      "criterion": "model_spikes",
+      "pool": null,
+      "subset": null,
+      "claw_spike_share": 0.0,
+      "glomeruli": null,
+      "settled_pre": true
+     },
+     {
+      "name": "affine_noise",
+      "stage": "kc_soma",
+      "curve": "affine",
+      "curve_set_on": "on",
+      "curve_scope": "wiring",
+      "fly_weighting": "fly",
+      "noise_aware_curve": false,
+      "noise": "residual",
+      "criterion": "flies",
+      "pool": null,
+      "subset": null,
+      "claw_spike_share": 0.0,
+      "glomeruli": null,
+      "settled_pre": true
+     },
+     {
+      "name": "curve_noise_own",
+      "stage": "kc_soma",
+      "curve": "quantile",
+      "curve_set_on": "own",
+      "curve_scope": "wiring",
+      "fly_weighting": "fly",
+      "noise_aware_curve": false,
+      "noise": "residual",
+      "criterion": "flies",
+      "pool": null,
+      "subset": null,
+      "claw_spike_share": 0.0,
+      "glomeruli": null,
+      "settled_pre": true
+     }
+    ]
+   }
+  },
+  "constants": {
+   "MODEL_WINDOW": [
+    0.0,
+    0.5
+   ],
+   "PRE_WINDOW": [
+    -0.5,
+    0.0
+   ],
+   "SETTLED_PRE_WINDOW": [
+    -0.25,
+    0.0
+   ],
+   "CLAW_REGION_SIZE": 14,
+   "N_CURVE_KNOTS": 201,
+   "N_NOISE_BINS": 10,
+   "MODEL_SPIKES": 2.0,
+   "POOL_SEED": 0,
+   "NOISE_SEED": 0
+  }
+ },
+ "remy_megamat_criterion_rate": {
+  "mean": 0.09149168289914929,
+  "per_fly": {
+   "0": 0.08466463508480315,
+   "1": 0.09084881659085652,
+   "2": 0.0946156984678588,
+   "3": 0.0958375814530786
+  },
+  "source": "pyolfsysm load_remy_megamat_kc_binary_responses (Remy's df_stim_responders_from_peak.csv)"
+ },
+ "note": "Written by data_prep/stage_population_data.py --lock before any model is read on these populations; load_population refuses a population file whose sha256 differs from this."
+}
