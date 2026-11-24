@@ -1272,18 +1272,27 @@ class FlyCache:
         return self._got[key] if self._got[key] is not None else default
 
 
-def _noise_cache_key(fl: 'D.Population', kind: str, odors: Sequence[str]) -> tuple:
-    return (id(fl), kind, tuple(odors))
-
-
-_NOISE_CACHE: Dict[tuple, NoiseModel] = {}
+def subset_flies(flies: 'D.Population', keep: Sequence[str]) -> 'D.Population':
+    """The population of some of its flies (e.g. one half of the recordings): tables and trials restricted to `keep`
+    (in the population's order), everything else kept. A split-half test passes each half's population to the reading
+    (`read_stage`'s `flies`, `SomaReading.for_flies`), so that its curve and its noise are set on that half alone; a
+    reading given all recordings shares one curve between the halves."""
+    import dataclasses
+    ks = set(str(k) for k in keep)
+    kept = tuple(f for f in flies.flies if str(f) in ks)
+    return dataclasses.replace(flies, flies=kept, tables={f: flies.tables[f] for f in kept},
+                               trials=None if flies.trials is None else {f: flies.trials[f] for f in kept
+                                                                         if f in flies.trials})
 
 
 def _fly_noise_cached(fl: 'D.Population', kind: str, odors: Sequence[str]) -> NoiseModel:
-    key = _noise_cache_key(fl, kind, odors)
-    if key not in _NOISE_CACHE:
-        _NOISE_CACHE[key] = fly_noise(fl, kind, odors)
-    return _NOISE_CACHE[key]
+    """`fly_noise`, cached on the population object itself (by kind and odors), so that a cached model is never
+    another population's (a half from `subset_flies` is a new object, with its own)."""
+    cache = fl.__dict__.setdefault('_stage_readings_noise', {})
+    key = (kind, tuple(odors))
+    if key not in cache:
+        cache[key] = fly_noise(fl, kind, odors)
+    return cache[key]
 
 
 def has_trials(flies: Optional['D.Population']) -> bool:
@@ -1340,7 +1349,8 @@ def read_stage(run: SavedRun, stage: str, panel: str, odors: Sequence[str], read
         flies: condition -> the flies it is read against (`fly_side`; None where there are none). The curve is set
             against the flies of `reading.curve_set_on`'s condition ('on', or each condition's own, falling back to
             APL on's where a condition has none); the noise and the criterion are each condition's flies', falling back
-            to APL on's.
+            to APL on's. A split-half test passes each half's flies (`subset_flies`), so that the curve and the noise
+            are the half's; given all recordings, the halves share them.
         seed_index: the wiring's index (pooling and noise seeds).
         curve: a curve already set (scope 'family'), used for every condition.
         glomeruli: the named stages' glomeruli (default `driver_glomeruli` of the reading's rule on the APL-on flies).
@@ -1453,25 +1463,66 @@ class SomaReading:
     `reading(counts, condition='off', curve_counts=counts_on)` the APL-off condition with the curve set on the APL-on
     counts (a reading with `curve_set_on` 'on' refuses APL off without them, ValueError).
 
+    The curve, the noise and the criterion come from the flies the reading holds: by default all recordings of each
+    cohort (viki's), so the readings of a split-half test share them unless it gives each half its own reading. A
+    split-half test on paired control and TNT halves makes one reading per half, by the recordings' names (viki's
+    `Population.flies`, as hal's `fly_populations` names them):
+
+        half = SomaReading('curve_noise', 'apl16', recordings={'on': control_half, 'off': tnt_half})
+        pop_on = half(counts_on)
+        pop_off = half(counts_off, condition='off', curve_counts=counts_on)
+
+    or from populations already restricted, `for_flies({'on': subset_flies(control, control_half), 'off': ...})`.
+    Each half's curve is set on that half's pooled values, its noise on that half's trials and its criterion is the
+    cohort's; the cohort's other recordings are not read.
+
     Args:
         name: a 'kc_soma' reading's name (`readings_of('kc_soma')`).
         panel: the panel of the counts ('apl16' for the archive).
         seed_index: the noise seed's index.
-        flies: condition -> the flies (planted ones in tests); default viki's (`fly_side`, after the lock).
+        flies: condition -> the flies (planted ones in tests, or a half's population); default viki's (`fly_side`,
+            after the lock).
+        recordings: condition -> the names of the recordings of that condition's cohort to set the curve and the
+            noise on (`subset_flies` of `flies` or of viki's population); default all of them. A condition left out
+            keeps all its recordings.
     """
 
     def __init__(self, name: str, panel: str = 'apl16', seed_index: int = 0,
-                 flies: Optional[Mapping[str, Optional['D.Population']]] = None):
+                 flies: Optional[Mapping[str, Optional['D.Population']]] = None,
+                 recordings: Optional[Mapping[str, Sequence[str]]] = None):
         self.reading = reading_by_name('kc_soma', name)
         self.panel = panel
         self.seed_index = seed_index
+        self.recordings = {c: tuple(str(x) for x in v) for c, v in (recordings or {}).items()}
         self._flies = (FlyCache({('kc_soma', panel, c): v for c, v in flies.items()}, fallback=False)
                        if flies is not None else None)
+        self._subsets: Dict[str, Optional['D.Population']] = {}
 
     def flies(self, condition: str) -> Optional['D.Population']:
-        if self._flies is None:
-            self._flies = FlyCache()
-        return self._flies.get(('kc_soma', self.panel, condition))
+        """The flies a condition is read against: its cohort's (`flies` or viki's), restricted to `recordings`."""
+        if condition not in self._subsets:
+            if self._flies is None:
+                self._flies = FlyCache()
+            fl = self._flies.get(('kc_soma', self.panel, condition))
+            if fl is not None and condition in self.recordings:
+                missing = set(self.recordings[condition]) - set(str(f) for f in fl.flies)
+                if missing:
+                    raise KeyError(f'kc_soma {self.panel} {condition}: no recordings {sorted(missing)}')
+                fl = subset_flies(fl, self.recordings[condition])
+            self._subsets[condition] = fl
+        return self._subsets[condition]
+
+    def for_flies(self, flies: Mapping[str, Optional['D.Population']]) -> 'SomaReading':
+        """The same reading with its curve, noise and criterion taken from `flies` (condition -> population, e.g. one
+        half of the recordings, `subset_flies`)."""
+        return SomaReading(self.reading.name, self.panel, self.seed_index, flies)
+
+    def for_recordings(self, recordings: Mapping[str, Sequence[str]]) -> 'SomaReading':
+        """The same reading with its curve and noise set on these recordings of each condition's cohort (see
+        `recordings`); the flies it was given, if any, are kept."""
+        r = SomaReading(self.reading.name, self.panel, self.seed_index, recordings=recordings)
+        r._flies = self._flies
+        return r
 
     def __call__(self, counts: pd.DataFrame, condition: str = 'on',
                  curve_counts: Optional[pd.DataFrame] = None) -> P.Population:
