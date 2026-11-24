@@ -252,10 +252,13 @@ def test_energy_distance():
     assert P.energy_distance(x, x) == pytest.approx(0.0, abs=1e-9)
     assert P.energy_distance(x, x + 1) > 0.5
     big = rng.normal(size=(500, 3))
-    # each set is subsampled on its own, so a set against itself is near 0, not at it
-    near = P.energy_distance(big, big, max_units=200, seed=1)
-    assert near < 0.3 * P.energy_distance(big, big + 1, max_units=200, seed=1)
-    assert near == P.energy_distance(big, big, max_units=200, seed=1)
+    # a set's draw depends only on the set and the seed: a set against itself is 0, against another draw of it is not
+    assert P.energy_distance(big, big, max_units=200, seed=1) == pytest.approx(0.0, abs=1e-9)
+    other = P.energy_distance(big, big[::-1], max_units=200, seed=1)
+    assert 0 < other < 0.3 * P.energy_distance(big, big + 1, max_units=200, seed=1)
+    x, y = P.energy_sample(big, 200, 1), P.energy_sample(big + 1, 200, 1)
+    assert P.energy_from_samples(x, y, P.mean_self_distance(x), P.mean_self_distance(y)) == pytest.approx(
+        P.energy_distance(big, big + 1, max_units=200, seed=1))
 
 
 def test_energy_guard(gen, flies):

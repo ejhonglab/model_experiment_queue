@@ -217,9 +217,9 @@ def odor_pairs(odors: Sequence[str]) -> List[str]:
     return [f'{a}{PAIR_SEP}{b}' for a, b in itertools.combinations(odors, 2)]
 
 
-def _cosine_pairs(X: np.ndarray) -> np.ndarray:
-    """Upper-triangle cosine distances between the columns of X (units x odors; NaN counted as 0; a column that is
-    all NaN or all 0 gives NaN)."""
+def cosine_pairs(X: np.ndarray) -> np.ndarray:
+    """Upper-triangle cosine distances between the columns of X (units x odors), in `odor_pairs`' order (NaN counted
+    as 0; a column that is all NaN or all 0 gives NaN)."""
     absent = np.all(np.isnan(X), axis=0)
     X0 = np.nan_to_num(X, nan=0.0)
     norm = np.sqrt((X0 ** 2).sum(axis=0))
@@ -271,10 +271,10 @@ def population_views(pop: Population, odors: Optional[Sequence[str]] = None,
         out['strength/mean'] = _relative(V.mean(axis=0))
     pairs = odor_pairs(odors)
     if 'sharing/who' in want:
-        out['sharing/who'] = pd.Series(_cosine_pairs(R.to_numpy(dtype=float)), index=pairs)
+        out['sharing/who'] = pd.Series(cosine_pairs(R.to_numpy(dtype=float)), index=pairs)
     if 'sharing/how_strongly' in want:
         W = V.where(R > 0.5, 0.0).where(V.notna())
-        out['sharing/how_strongly'] = pd.Series(_cosine_pairs(W.to_numpy(dtype=float)), index=pairs)
+        out['sharing/how_strongly'] = pd.Series(cosine_pairs(W.to_numpy(dtype=float)), index=pairs)
     if 'breadth/bins' in want:
         if V.isna().all(axis=0).any():
             out['breadth/bins'] = pd.Series(np.nan, index=breadth_labels(breadth_edges))
@@ -643,24 +643,38 @@ def rank_map(values: pd.DataFrame, reference: np.ndarray) -> pd.DataFrame:
     return pd.DataFrame(out, index=values.index, columns=values.columns)
 
 
+def energy_sample(x: np.ndarray, max_units: int = ENERGY_MAX_UNITS, seed: int = SEED) -> np.ndarray:
+    """The units (rows) of one set that `energy_distance` uses: rows with a NaN dropped, then at most `max_units`
+    drawn without replacement by a generator of `seed` (so a set's draw depends only on the set and the seed)."""
+    x = np.asarray(x, dtype=float)
+    x = x.reshape(len(x), -1)
+    x = x[np.isfinite(x).all(axis=1)]
+    if len(x) > max_units:
+        x = x[np.sort(np.random.default_rng(seed).choice(len(x), max_units, replace=False))]
+    return x
+
+
+def energy_from_samples(x: np.ndarray, y: np.ndarray, exx: Optional[float] = None,
+        eyy: Optional[float] = None) -> float:
+    """The energy distance of two drawn sets (`energy_sample`), with their mean within-set distances E|X-X'| and
+    E|Y-Y'| passed in when already known (`mean_self_distance`)."""
+    if not len(x) or not len(y):
+        return np.nan
+    exx = mean_self_distance(x) if exx is None else exx
+    eyy = mean_self_distance(y) if eyy is None else eyy
+    return float(np.sqrt(max(2 * cdist(x, y).mean() - exx - eyy, 0.0)))
+
+
+def mean_self_distance(x: np.ndarray) -> float:
+    """E|X-X'| over all pairs of rows, each row with itself included (scipy's convention)."""
+    return float(cdist(x, x).mean()) if len(x) else np.nan
+
+
 def energy_distance(a: np.ndarray, b: np.ndarray, max_units: int = ENERGY_MAX_UNITS, seed: int = SEED) -> float:
     """Energy distance between two sets of units' tuning vectors (rows), sqrt(2 E|X-Y| - E|X-X'| - E|Y-Y'|) with
     Euclidean norms and all pairs counted (scipy.stats.energy_distance's convention in one dimension), on at most
-    `max_units` units drawn from each set (rows with a NaN are dropped)."""
-    rng = np.random.default_rng(seed)
-    sets = []
-    for x in (a, b):
-        x = np.asarray(x, dtype=float)
-        x = x.reshape(len(x), -1)
-        x = x[np.isfinite(x).all(axis=1)]
-        if len(x) > max_units:
-            x = x[rng.choice(len(x), max_units, replace=False)]
-        sets.append(x)
-    x, y = sets
-    if not len(x) or not len(y):
-        return np.nan
-    e = 2 * cdist(x, y).mean() - cdist(x, x).mean() - cdist(y, y).mean()
-    return float(np.sqrt(max(e, 0.0)))
+    `max_units` units of each set (`energy_sample`; rows with a NaN are dropped)."""
+    return energy_from_samples(energy_sample(a, max_units, seed), energy_sample(b, max_units, seed))
 
 
 def _tuning(pop: Population, odors: Sequence[str], reference: Optional[np.ndarray]) -> np.ndarray:
