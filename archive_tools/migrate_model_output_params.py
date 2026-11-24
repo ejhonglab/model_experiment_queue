@@ -448,6 +448,10 @@ def main() -> None:
     stamp = datetime.now().strftime('%Y%m%d-%H%M%S')
     all_logs = []
     for d in dirs:
+        if not (d / 'params.csv').exists():
+            # an archive with no variants (e.g. E121's spike times only) has no params.csv to fill
+            print(f'{d.name}: no params.csv, nothing to fill')
+            continue
         m = Migration(d)
         if not m.run():
             continue
