@@ -8,6 +8,23 @@ directory's notes/ and are linked from here.
 
 ## Open
 
+### E129's variants read "inside the bands" in the APL-effect table with no band checked (found 2026-11-23 16:40, hal, folding E129's step 3 into the summary)
+- **What.** E129's model_pair_distances_long.csv tagged each run by its variant name (`MB_real`, `G_M1`), while its
+  archived responses carry the run tag (`S3_MB_real_on_responses.parquet`, `S1_G_M1_...`). `kcq/apl_effect.py` looks
+  the archive up by the distances' tag, and no table it reads has E129's response rates. So results/apl_effect/
+  by_variant.csv read "inside the bands (odors per KC and the response rate ρ not scored ...)" with an empty
+  `realism_flag` for all 40 of E129's variants. That included step 3's 8 runs, which E129's own runs.csv flags (odors per
+  KC with APL off 0.26 to 0.39 from the flies, band 0.22).
+- **What it affects.** by_variant.csv's realism columns for E129 from 2026-11-22 to 2026-11-23 17:10. E129's own tables,
+  note and summary passage read runs.csv and were right. No E129 variant is a best on any statistic, so the progress
+  plot and the best-models table did not change.
+- **Done.** Queue 770d923: E129 tags the distances by the run tag (`distances_tag`, with a test). The variants were
+  rewritten (the same 9600 distances, new tags), re-archived and scored at the summary build of 2026-11-23 17:10. All 40
+  rows now have response rates and odors per KC from the archive, and the 8 step-3 rows carry the flag.
+- **Remains.** by_variant.csv has rows of five other experiments whose archive folders hold responses that the table
+  does not match: E87 (40 of 52 rows), E88 (12 of 12), E113 (4 of 164), E10 (3 of 9) and E53 (1 of 5). It is not checked
+  whether these have the same mismatch or are rows with no archived run of their own (data-side or oracle readings).
+
 ### The progress plot's ρ line ends on two points of kinds the plot is meant to leave out (found 2026-11-16, hal, the report pages' revision)
 - **What.** `reports/summary_progress_plot.py` leaves out oracle inputs and random, shuffled or re-drawn wirings by tag
   (`EXCLUDE_VARIANT`: `^input-searched_`, `^oracle_half`, `wiring-`, `^popfit_[PM]\d`, ...). From E83 on, variants carry
