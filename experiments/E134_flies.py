@@ -15,7 +15,9 @@ committed lock):
 - the no-step yardstick of every downstream stage: the error, in the downstream flies' one-fly units, of the upstream
   flies' mean parts taken as the prediction, beside the downstream flies' own floor and range;
 - Remy's megamat KC somata against Yang's control flies on the 12 odors the panels share, each in the other's one-fly
-  units.
+  units, at two criteria for the megamat flies (`MEGAMAT_CRITERIA`): the lock's (megamat's own level) and the APL16
+  somata's 1.9684 (the lock's for every soma panel until the readings of 2026-11-24 11:11);
+- in flies_table.md, the KC somata's criteria and response rates per set of recordings (the lock's soma_criteria).
 
 The measures are hal's kcq/population_fit.py (`fly_reference`, `floor`, `leave_one_out`, `step_interval`,
 `no_step_score`, `score_many`, `score_views`, `mean_views`, `fly_energy_matrix`, `rank_map`); this script only calls
@@ -34,6 +36,7 @@ Usage (from the repository root):
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import itertools
 import json
 import time
@@ -64,6 +67,9 @@ CI = 0.9
 # validation2: the odor set a population is read on is the largest set of odors held by at least this many of its flies
 V2_MIN_FLIES = 6
 MEGAMAT12 = D.APL16_ODORS[:12]
+# the megamat flies' criteria in the megamat-against-control reading: the lock's, and the APL16 somata's (the lock's
+# before the readings of 2026-11-24 11:11)
+MEGAMAT_CRITERIA: Tuple[str, ...] = ('lock', 'apl16')
 
 
 def out_dir():
@@ -274,29 +280,46 @@ def no_step_yardstick(n_boot: int = N_BOOT, seed: int = SEED) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 # Remy's megamat somata against the control flies
 
-def megamat_vs_control(n_boot: int = N_BOOT, seed: int = SEED) -> pd.DataFrame:
+def megamat_criterion(name: str, megamat: D.Population) -> float:
+    """The megamat flies' criterion `name` of `MEGAMAT_CRITERIA`: 'lock' (the population's, megamat's own level) or
+    'apl16' (the APL16 somata's, `D.CRITERIA['kc_soma']`)."""
+    return float(megamat.criterion) if name == 'lock' else float(D.CRITERIA['kc_soma'])
+
+
+def megamat_vs_control(n_boot: int = N_BOOT, seed: int = SEED,
+                       criteria: Sequence[str] = MEGAMAT_CRITERIA) -> pd.DataFrame:
     """Remy's megamat KC somata against Yang's control flies on the 12 odors the panels share: each megamat fly and the
     megamat flies' mean parts in the control flies' one-fly units, and the reverse, each beside the reference's own
-    floor and range on the same odors (flies_megamat_vs_control.csv)."""
+    floor and range on the same odors, with the megamat flies at each criterion of `criteria` (columns criterion,
+    megamat_criterion, and the megamat flies' mean response rate over the 17 odors and the 12; the control flies keep
+    the lock's 1.9684) (flies_megamat_vs_control.csv)."""
     odors = list(MEGAMAT12)
     e = edges(len(odors))
-    sides = {'megamat': flies_of(('kc_soma', 'megamat', 'wild_type')), 'control': flies_of(('kc_soma', 'apl16', 'control'))}
+    mm = recorded(('kc_soma', 'megamat', 'wild_type'))
+    control = flies_of(('kc_soma', 'apl16', 'control'))
     rows = []
-    for ref_side, other in (('control', 'megamat'), ('megamat', 'control')):
-        ref = P.fly_reference(sides[ref_side], odors, e)
-        each = P.score_many(sides[other], ref)
-        mv = P.mean_views([P.population_views(f, odors, e, list(ref.parts)) for f in sides[other]])
-        common = P.score_views(mv, ref).as_series()
-        fl = P.floor(ref, n_boot=n_boot, seed=seed).mean()
-        loo = P.leave_one_out(sides[ref_side], ref=ref).mean()
-        for col in common.index:
-            if col == 'n_missing':
-                continue
-            rows.append(dict(reference=ref_side, scored=other, name=col, each_mean=float(each[col].mean()),
-                             each_min=float(each[col].min()), each_max=float(each[col].max()),
-                             mean_views=float(common[col]), ref_floor=float(fl.get(col, np.nan)),
-                             ref_loo_mean=float(loo.get(col, np.nan)), n_scored=len(sides[other]),
-                             n_ref=len(sides[ref_side]), n_odors=len(odors)))
+    for cname in criteria:
+        crit = megamat_criterion(cname, mm)
+        mmc = dataclasses.replace(mm, criterion=crit)
+        sides = {'megamat': P.fly_populations(mmc), 'control': control}
+        rate17 = float(np.mean([D.fly_rate(mmc.tables[f], crit) for f in mmc.flies]))
+        rate12 = float(np.mean([D.fly_rate(mmc.tables[f][odors], crit) for f in mmc.flies]))
+        for ref_side, other in (('control', 'megamat'), ('megamat', 'control')):
+            ref = P.fly_reference(sides[ref_side], odors, e)
+            each = P.score_many(sides[other], ref)
+            mv = P.mean_views([P.population_views(f, odors, e, list(ref.parts)) for f in sides[other]])
+            common = P.score_views(mv, ref).as_series()
+            fl = P.floor(ref, n_boot=n_boot, seed=seed).mean()
+            loo = P.leave_one_out(sides[ref_side], ref=ref).mean()
+            for col in common.index:
+                if col == 'n_missing':
+                    continue
+                rows.append(dict(criterion=cname, megamat_criterion=crit, megamat_rate_17=rate17,
+                                 megamat_rate_12=rate12, reference=ref_side, scored=other, name=col,
+                                 each_mean=float(each[col].mean()), each_min=float(each[col].min()),
+                                 each_max=float(each[col].max()), mean_views=float(common[col]),
+                                 ref_floor=float(fl.get(col, np.nan)), ref_loo_mean=float(loo.get(col, np.nan)),
+                                 n_scored=len(sides[other]), n_ref=len(sides[ref_side]), n_odors=len(odors)))
     return pd.DataFrame(rows)
 
 
@@ -401,18 +424,27 @@ def write_table() -> None:
         vv = g[g.name.str.startswith('view_')]
         L.append(f'- {_label(down)} from {_label(up)}: ' + '; '.join(
             f'{r.name[5:]} {_f(r.no_step)} / {_f(r.down_loo_mean)}' for r in vv.itertuples()))
+    if 'criterion' not in mc:                                   # a CSV from before the two criteria
+        mc = mc.assign(criterion='lock', megamat_criterion=np.nan, megamat_rate_17=np.nan, megamat_rate_12=np.nan)
     L += ['', "## Remy's megamat KC somata against the control flies (12 shared odors)", '',
-          '| reference flies | scored flies | each scored fly: mean (range) | their mean views | reference floor | '
-          'reference one fly against the others |', '|---|---|---:|---:|---:|---:|']
-    for (rs, sc), g in mc.groupby(['reference', 'scored'], sort=False):
+          "The megamat flies at each criterion (the lock's, megamat's own level; and the APL16 somata's 1.9684, the "
+          "lock's before the readings of 2026-11-24 11:11); the control flies at 1.9684 throughout.", '',
+          '| megamat criterion | megamat flies\' response rate, 17 / 12 odors | reference flies | scored flies | '
+          'each scored fly: mean (range) | their mean views | reference floor | reference one fly against the others |',
+          '|---:|---:|---|---|---:|---:|---:|---:|']
+    lab = {'control': 'control flies (APL16)', 'megamat': "Remy's megamat flies"}
+    for (cn, rs, sc), g in mc.groupby(['criterion', 'reference', 'scored'], sort=False):
         r = g[g.name == 'error'].iloc[0]
-        lab = {'control': 'control flies (APL16)', 'megamat': "Remy's megamat flies"}
-        L.append(f'| {lab[rs]} ({r.n_ref}) | {lab[sc]} ({r.n_scored}) | {_f(r.each_mean)} ({_f(r.each_min)} to '
-                 f'{_f(r.each_max)}) | {_f(r.mean_views)} | {_f(r.ref_floor)} | {_f(r.ref_loo_mean)} |')
+        L.append(f'| {_f(r.megamat_criterion, ".4f")} ({cn}) | {_f(r.megamat_rate_17, ".4f")} / '
+                 f'{_f(r.megamat_rate_12, ".4f")} | {lab[rs]} ({r.n_ref}) | {lab[sc]} ({r.n_scored}) | '
+                 f'{_f(r.each_mean)} ({_f(r.each_min)} to {_f(r.each_max)}) | {_f(r.mean_views)} | {_f(r.ref_floor)} | '
+                 f'{_f(r.ref_loo_mean)} |')
     L += ['', 'By view (their mean views):', '']
-    for (rs, sc), g in mc.groupby(['reference', 'scored'], sort=False):
+    for (cn, rs, sc), g in mc.groupby(['criterion', 'reference', 'scored'], sort=False):
         vv = g[g.name.str.startswith('view_')]
-        L.append(f'- {sc} in {rs} units: ' + '; '.join(f'{r.name[5:]} {_f(r.mean_views)}' for r in vv.itertuples()))
+        L.append(f'- {sc} in {rs} units, megamat at the {cn} criterion: ' +
+                 '; '.join(f'{r.name[5:]} {_f(r.mean_views)}' for r in vv.itertuples()))
+    L += soma_criteria_lines(D.read_lock())
     L += ['', 'Concentrations: on the APL16 panel the model input of paa, euc and -aPine is ORN data within 1 log10 unit '
           'of the flies\' concentrations; the 12 shared odors here are all at 10^-3 in both panels. Validation2\'s KC '
           'flies were each given part of the panel; they are read on the largest odor set at least '
@@ -420,12 +452,42 @@ def write_table() -> None:
     (od / 'flies_table.md').write_text('\n'.join(L) + '\n')
 
 
+def soma_criteria_lines(lock: Optional[dict]) -> List[str]:
+    """flies_table.md's section on the KC somata's criteria per set of recordings, from the lock's soma_criteria (none
+    when the lock has none)."""
+    f = (lock or {}).get('soma_criteria')
+    if not f:
+        return []
+    L = ['', "## The KC somata's response criteria, per set of recordings", '',
+         "From the lock's soma_criteria (the planner's reading 14). Validation2's groups and the same fly are on megamat's "
+         "footing: their values times megamat's median noise bridge over the group's "
+         f"({_f(f['noise_bridge_reference']['median'], '.4f')}, over the four megamat flies). The last two columns are "
+         "the lock's criterion for every soma panel before the readings of 2026-11-24 11:11.", '',
+         '| KC somata | flies | criterion | values times | response rate, mean (range) | before: criterion | '
+         'before: response rate |', '|---|---:|---:|---:|---:|---:|---:|']
+    for r in f['table']:
+        z = ' z' if 'session z' in r['units'] else ''
+        L.append(f"| {r['cohort']} | {r['n_flies']} | {_f(r['criterion'], '.4f')}{z} | "
+                 f"{_f(r['factor'], '.3f') if r['factor'] is not None else '—'} | {_f(r['rate_mean'], '.4f')} "
+                 f"({_f(r['rate_min'], '.3f')} to {_f(r['rate_max'], '.3f')}) | {_f(r['apl16_criterion'], '.4f')}{z} | "
+                 f"{_f(r['rate_mean_at_apl16_criterion'], '.4f')} |")
+    g = f['validation2']['groups']
+    L += ['', 'Noise bridge (median trial-noise SD in baseline-noise units, before the footing): megamat '
+          f"{_f(f['noise_bridge_reference']['median'], '.3f')}; validation2 tsub03 {_f(g['tsub03']['noise_bridge_median'], '.3f')} "
+          f"({_f(g['tsub03']['noise_bridge_min'], '.2f')} to {_f(g['tsub03']['noise_bridge_max'], '.2f')}), other "
+          f"{_f(g['other']['noise_bridge_median'], '.3f')} ({_f(g['other']['noise_bridge_min'], '.2f')} to "
+          f"{_f(g['other']['noise_bridge_max'], '.2f')}); the same fly "
+          f"{_f(list(f['same_fly']['noise_bridge_per_fly'].values())[0], '.3f')}."]
+    return L
+
+
 def provenance(n_boot: int, seed: int, t0: float) -> None:
     from kcq import harness as H
     D._write_json(out_dir() / 'provenance_flies.json', dict(
         script=H.script_path(__file__), host=D._host(), time=D._now(), seconds=round(time.time() - t0),
         commits=H.code_commits(), n_boot=n_boot, seed=seed, ci=CI, v2_min_flies=V2_MIN_FLIES,
-        lock=str(D.LOCK_COPY), lock_time=(D.read_lock() or {}).get('time')))
+        megamat_criteria=list(MEGAMAT_CRITERIA), lock=str(D.LOCK_COPY), lock_time=(D.read_lock() or {}).get('time'),
+        lock_sha256=D.sha256_file(D.LOCK_COPY) if D.LOCK_COPY.exists() else None))
 
 
 def main(argv: Optional[Sequence[str]] = None) -> None:

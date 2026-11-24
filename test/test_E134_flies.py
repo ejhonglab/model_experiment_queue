@@ -96,8 +96,27 @@ def test_same_fly_step_has_no_interval(planted):
 def test_megamat_vs_control_runs(planted):
     m = E.megamat_vs_control(n_boot=50)
     assert set(m.reference) == {'control', 'megamat'}
-    e = m[(m.reference == 'control') & (m.name == 'error')].iloc[0]
+    assert set(m.criterion) == set(E.MEGAMAT_CRITERIA)
+    e = m[(m.criterion == 'lock') & (m.reference == 'control') & (m.name == 'error')].iloc[0]
     assert np.isfinite(e.mean_views) and e.n_odors == 12
+    assert e.megamat_criterion == 1.0                           # the planted population's criterion
+    o = m[(m.criterion == 'apl16') & (m.reference == 'control') & (m.name == 'error')].iloc[0]
+    assert o.megamat_criterion == D.CRITERIA['kc_soma']
+    assert o.megamat_rate_17 < e.megamat_rate_17                # a higher criterion: fewer responses
+
+
+def test_soma_criteria_lines():
+    assert E.soma_criteria_lines({}) == []
+    row = dict(cohort='validation2, the 13 tsub03 recordings', n_flies=13, criterion=5.9, units=D.UNITS_BASELINE,
+               factor=1.03, rate_mean=0.05, rate_min=0.02, rate_max=0.08, apl16_criterion=1.9684,
+               rate_mean_at_apl16_criterion=0.15)
+    g = dict(noise_bridge_median=0.88, noise_bridge_min=0.77, noise_bridge_max=1.09)
+    f = dict(noise_bridge_reference=dict(median=0.91), table=[row, dict(row, cohort='kmix (session z)', factor=None,
+             units=D.UNITS_SESSION_Z)], validation2=dict(groups=dict(tsub03=g, other=g)),
+             same_fly=dict(noise_bridge_per_fly={'x': 0.84}))
+    L = E.soma_criteria_lines(dict(soma_criteria=f))
+    assert any('tsub03' in x and '1.030' in x for x in L)
+    assert any(x.startswith('| kmix (session z)') and ' z |' in x and '| — |' in x for x in L)
 
 
 def test_energy_rows(planted, monkeypatch):

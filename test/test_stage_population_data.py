@@ -156,6 +156,60 @@ def test_z_bridge_planted(tmp_path):
     assert abs(b['rate_noise'] - np.mean(v > 0.5)) < 1e-12
 
 
+def test_fly_rate_and_criterion_at_rate_planted():
+    rng = np.random.default_rng(4)
+    tabs = [pd.DataFrame(rng.exponential(s, size=(400, 17))) for s in (1.0, 1.5, 2.0, 3.0)]
+    tabs[1].iloc[:10, :3] = np.nan                              # entries a fly was not given are not counted
+    assert D.fly_rate(tabs[1], -1.0) == 1.0
+    a = tabs[1].to_numpy()
+    assert D.fly_rate(tabs[1], 2.0) == pytest.approx(np.mean(a[np.isfinite(a)] > 2.0))
+    c = D.criterion_at_rate(tabs, 0.0915)
+    assert np.mean([D.fly_rate(t, c) for t in tabs]) == pytest.approx(0.0915, abs=2e-4)
+    # exponential tails: the level sits where the flies' mean survival is 0.0915
+    surv = lambda x: np.mean([np.exp(-x / s) for s in (1.0, 1.5, 2.0, 3.0)])
+    assert abs(surv(c) - 0.0915) < 0.01
+
+
+def test_footed_scales_each_fly():
+    d = _planted_long(n_flies=2)
+    key = ('kc_soma', 'validation2', 'wild_type')
+    out = D.footed(key, d, factors={'fly0': 2.0, 'fly1': 0.5})
+    np.testing.assert_allclose(out.value[d.fly == 'fly0'], 2.0 * d.value[d.fly == 'fly0'])
+    np.testing.assert_allclose(out.value[d.fly == 'fly1'], 0.5 * d.value[d.fly == 'fly1'])
+    with pytest.raises(ValueError):
+        D.footed(key, d, factors={'fly0': 2.0})
+    assert D.footed(('kc_soma', 'apl16', 'control'), d) is d   # not footed: unchanged
+
+
+def test_response_criterion_per_cohort(monkeypatch):
+    f = dict(megamat=dict(criterion=5.5), mixtures=dict(z_criterion=1.9))
+    monkeypatch.setattr(D, 'soma_footing', lambda: f)
+    D.mixture_z_criterion.cache_clear()
+    try:
+        assert D.response_criterion('kc_soma', 'apl16', 'control') == D.CRITERIA['kc_soma'] == 1.9684
+        assert D.response_criterion('kc_soma', 'apl16', 'tnt') == 1.9684
+        assert D.response_criterion('kc_soma', 'megamat', 'wild_type') == 5.5
+        assert D.response_criterion('kc_soma', 'megamat', 'same_fly') == 5.5
+        assert D.response_criterion('kc_soma', 'validation2', 'wild_type') == 5.5
+        assert D.response_criterion('kc_soma', 'kmix', 'wild_type') == 1.9
+        assert D.response_criterion('kc_claw', 'megamat', 'same_fly') == 2.0
+        assert D.response_criterion('orn', 'megamat', 'wild_type') == 2.0
+    finally:
+        D.mixture_z_criterion.cache_clear()
+
+
+def test_rules_name_the_readings():
+    R = D.RULES
+    m = R['megamat_stage_error']
+    assert m['stages'] == ['pn_dendrite', 'pn_bouton', 'kc_claw', 'kc_soma']
+    assert m['population_error']['pn_dendrite'] == 'error_with_matrix' and 'matrix' in m['views']['pn_dendrite']
+    assert all(len(m['views'][s]) == 3 for s in m['stages'][1:])
+    assert R['split_halves']['from_the_half'] == ['curve', 'noise', 'reference', 'one-fly units']
+    assert R['step_class']['percentile'] == 95 and R['step_class']['min_wirings'] == 6
+    assert R['gate']['A_wiring_check']['max'] == 1.2 and R['gate']['B_reading']['min_consistency'] == 0.8
+    json.dumps(R)                                               # the lock holds it as it is
+
+
 def test_lock_refuses_a_changed_file(tmp_path, monkeypatch):
     key = ('kc_soma', 'apl16', 'control')
     d = _planted_long()
@@ -222,5 +276,33 @@ def test_built_populations_flies_and_names():
 def test_checks_against_the_existing_loaders_passed():
     c = json.loads((D.POP_DIR / 'checks.json').read_text())
     for name in ('orn_megamat_vs_pebbled', 'per_roi_vs_e119', 'apl16_vs_trialmean', 'megamat_vs_loader',
-                 'v2_rdms_cosine', 'v2_rdms_correlation'):
+                 'v2_rdms_cosine', 'v2_rdms_correlation', 'soma_footing'):
         assert c[name]['passed'], (name, c[name])
+
+
+@pytest.mark.skipif(not _built() or D.read_lock() is None or 'soma_criteria' not in (D.read_lock() or {}),
+                    reason='no built populations or no lock with soma_criteria on this host')
+def test_lock_soma_criteria_and_rules():
+    L = D.read_lock()
+    f = L['soma_criteria']
+    assert L['rules'] == json.loads(json.dumps(D.RULES))
+    assert abs(f['megamat']['rate_mean'] - D.MEGAMAT_SOMA_RATE) < 5e-4
+    c = f['megamat']['criterion']
+    for name in ('kc_soma__megamat__wild_type', 'kc_soma__megamat__same_fly', 'kc_soma__validation2__wild_type'):
+        assert L['populations'][name]['criterion'] == c
+    for name in ('kc_soma__apl16__control', 'kc_soma__apl16__tnt'):
+        assert L['populations'][name]['criterion'] == 1.9684 and L['populations'][name]['footing'] is None
+    for name in ('kc_soma__kmix__wild_type', 'kc_soma__cmix__wild_type'):
+        assert L['populations'][name]['criterion'] == f['mixtures']['z_criterion']
+    ref = f['noise_bridge_reference']['median']
+    assert ref == pytest.approx(np.median(list(f['megamat']['noise_bridge_per_fly'].values())))
+    g = f['validation2']['groups']
+    assert g['tsub03']['n_flies'] + g['other']['n_flies'] == 20
+    for x in g.values():
+        assert x['factor'] == pytest.approx(ref / x['noise_bridge_median'])
+    # the files hold the footed values: the built bridge over the factor is the raw one
+    nb = L['checks']['noise_bridge']['kc_soma__validation2__wild_type']
+    np.testing.assert_allclose(nb['per_fly_raw'], [f['validation2']['noise_bridge_per_fly'][k] for k in nb['flies']])
+    rr = L['populations']['kc_soma__validation2__wild_type']['response_rate']['per_fly']
+    for k, v in f['validation2']['per_fly_rate'].items():
+        assert rr[k] == pytest.approx(v)
