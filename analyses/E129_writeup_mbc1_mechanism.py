@@ -16,7 +16,11 @@ The numbers the note gives for why MB-C1's arm fails, which until 2026-11-23 wer
 - per wiring and condition, the shares of KCs responding to 0, 1, 2-3, 4-7 and 8 or more of the 16 odors
   (`odors_per_kc`), and their total variation distance from the flies' (`odors_per_kc_tv_from_flies`; the flies:
   control flies for APL on, APL output blocked (TNT) for APL off, the registry's noise_ctrl_ / noise_tnt_odors_per_kc_*,
-  the bands' noise-SD criterion).
+  the bands' noise-SD criterion);
+- MB-C1's arm's calibrated pattern part minus the family's and minus KC-KC at zero's (E110 part A), against all
+  recordings and each half A to D (`pattern_part_minus_family`, `pattern_part_minus_E110_A`; group the target), per
+  wiring and for the populations' readings (wiring 'S4' searched, 'T4' held out, 'all8'; the loss of the population's
+  mean distances, as readings.csv and the classes read them), from readings.csv.
 
 Arms: 'family' (the family's saved runs, E67's on the real wiring and E72's seven re-draws, the (folder, tag) of
 runs.csv's family rows), 'P' and 'S' (step 1a's pooled neuron and matrix at 1 s, S1_P_<w>, S1_S_<w>), 'MB' (step 3,
@@ -26,7 +30,8 @@ wirings (the KCs are the same 1732 on every wiring, so a mean of rates over wiri
 Checks (raise on failure): every archived responses table equals its spike counts at two or more spikes; the arms'
 KCs and odors are the same on a wiring; the per-KC MB-C1 counts are the same on all eight wirings and equal the
 loader's; each arm's per-type response rates and odors-per-KC distances equal runs.csv's (rate_<cond>_<type>,
-opk_<cond>_tv), which the score computed from the same runs.
+opk_<cond>_tv), which the score computed from the same runs; the pattern-part margins equal verdict.json's (MB's
+d_family_per_wiring, and its class targets' arm minus E110_A per population).
 
 Writes writeup_mbc1_mechanism.csv (columns stat, arm, wiring, cond, group, value) and
 provenance_writeup_mbc1_mechanism.json (inputs with sha256, definitions, the checks) to the results folder.
@@ -71,7 +76,13 @@ DEFINITIONS = {
         "2-3, 4-7 or 8 or more of the 16 odors (group '0', '1', '2_3', '4_7', '8plus')",
     'odors_per_kc_tv_from_flies': "total variation distance of the arm's odors-per-KC distribution from the flies' "
         "(control flies for 'on', APL output blocked (TNT) for 'off'), as runs.csv's opk_<cond>_tv",
+    'pattern_part_minus_family': "MB-C1's arm's calibrated pattern part minus the family's (positive: MB worse), "
+        "against all recordings ('all') or one half ('A' to 'D'); per wiring, or the populations' readings ('S4', 'T4', "
+        "'all8')",
+    'pattern_part_minus_E110_A': "the same, minus KC-KC at zero's (E110 part A)",
 }
+PATTERN_TARGETS = ('all', 'A', 'B', 'C', 'D')
+POPULATIONS = ('S4', 'T4', 'all8')
 
 
 def _sha256(path: Path) -> str:
@@ -160,8 +171,30 @@ def mbc1_counts(w: str) -> Tuple[pd.DataFrame, Path]:
     return pd.read_parquet(p), p
 
 
-def compute(runs: pd.DataFrame) -> Tuple[pd.DataFrame, dict]:
-    """The table (rows: stat, arm, wiring, cond, group, value) and the provenance's inputs and checks."""
+def margin_rows(readings: pd.DataFrame, verdict: dict) -> Tuple[List[dict], float]:
+    """MB's calibrated pattern part minus the family's and KC-KC at zero's, per wiring and population and target
+    (`pattern_part_minus_family`, `pattern_part_minus_E110_A`), from readings.csv; returns the rows and the largest
+    difference from verdict.json's values."""
+    rd = readings[readings.readout == 'cal'].set_index(['kind', 'unit'])
+    rows, diff = [], 0.0
+    c = verdict['classes']['MB']['targets']
+    for ref in ('family', 'E110_A'):
+        for unit in WIRINGS + POPULATIONS:
+            for t in PATTERN_TARGETS:
+                v = float(rd.loc[('MB', unit), f'{t}_pattern'] - rd.loc[(ref, unit), f'{t}_pattern'])
+                rows.append(dict(stat=f'pattern_part_minus_{ref}', arm='MB', wiring=unit, cond='-', group=t, value=v))
+                if ref == 'family' and t == 'all' and unit in WIRINGS:
+                    diff = max(diff, abs(v - float(c['all']['d_family_per_wiring'][unit])))
+                if unit in ('S4', 'T4'):
+                    p = c[t]['populations'][unit]
+                    diff = max(diff, abs(v - (float(p['arm']) - float(p[ref]))))
+    return rows, diff
+
+
+def compute(runs: pd.DataFrame, readings: Optional[pd.DataFrame] = None,
+            verdict: Optional[dict] = None) -> Tuple[pd.DataFrame, dict]:
+    """The table (rows: stat, arm, wiring, cond, group, value) and the provenance's inputs and checks; the pattern-part
+    margins only when `readings` and `verdict` are passed."""
     rows, all_out, all_in = mbc1_synapse_rows()
     family = family_members(runs)
     inputs: Dict[str, str] = {}
@@ -230,6 +263,17 @@ def compute(runs: pd.DataFrame) -> Tuple[pd.DataFrame, dict]:
     for cond in CONDS:
         for b, v in zip(OPK_BINS, flies_opk(cond)):
             rows.append(dict(stat='odors_per_kc', arm='flies', wiring='-', cond=cond, group=b, value=float(v)))
+    if readings is not None and verdict is not None:
+        m_rows, m_diff = margin_rows(readings, verdict)
+        checks['max_abs_diff_margins_vs_verdict'] = m_diff
+        if m_diff > TOL:
+            raise RuntimeError(f'the pattern-part margins differ from verdict.json by up to {m_diff}')
+        m = pd.DataFrame(m_rows)
+        on_w = m[m.wiring.isin(WIRINGS)]
+        agg_rows += [dict(stat=r.stat, arm=r.arm, wiring=f'{s}8', cond=r.cond, group=r.group, value=float(getattr(r, s)))
+                     for r in on_w.groupby(['stat', 'arm', 'cond', 'group'], sort=False)['value']
+                     .agg(['min', 'max']).reset_index().itertuples() for s in ('min', 'max')]
+        rows += m_rows
     table = pd.concat([pd.DataFrame(rows), pw, pd.DataFrame(agg_rows)], ignore_index=True)
     return table, dict(inputs=inputs, checks=checks, family_members={w: list(v) for w, v in family.items()})
 
@@ -242,13 +286,15 @@ def main(argv=None) -> None:
     res = H.results_dir(EXPERIMENT)
     out = args.out or res
     out.mkdir(parents=True, exist_ok=True)
-    runs_path = res / 'runs.csv'
-    runs = pd.read_csv(runs_path)
-    table, info = compute(runs)
+    paths = {k: res / f for k, f in (('runs', 'runs.csv'), ('readings', 'readings.csv'), ('verdict', 'verdict.json'))}
+    verdict = json.loads(paths['verdict'].read_text())
+    table, info = compute(pd.read_csv(paths['runs']), pd.read_csv(paths['readings']), verdict)
     csv = out / 'writeup_mbc1_mechanism.csv'
     table.to_csv(csv, index=False)
-    info['inputs'][str(runs_path.relative_to(H.shared_dir()))] = _sha256(runs_path)
+    for p in paths.values():
+        info['inputs'][str(p.relative_to(H.shared_dir()))] = _sha256(p)
     prov = dict(script=H.script_path(__file__), **H.code_commits(), generated=time.strftime('%Y-%m-%d %H:%M:%S %Z'),
+                verdict_generated=verdict.get('generated'),
                 response_min_spikes=RESPONSE_MIN_SPIKES,
                 mbc1_source=("pyolfsysm.mb_model.connectome_MBC1_weights() and, on the hemibrain claw x bouton wiring "
                              "connectome_wPNKC(prat_claws=True, prat_boutons=True), connectome_MBC1_weights("
@@ -260,6 +306,8 @@ def main(argv=None) -> None:
     with pd.option_context('display.max_rows', 400, 'display.width', 160):
         print(show.pivot_table(index=['stat', 'arm', 'cond', 'group'], columns='wiring', values='value',
                                sort=False).round(4))
+        mg = table[table.stat.str.startswith('pattern_part_minus')]
+        print(mg.pivot_table(index=['stat', 'wiring'], columns='group', values='value', sort=False).round(4))
     print(f'wrote {csv}')
 
 
