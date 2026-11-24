@@ -326,3 +326,26 @@ def test_step2_loads_claw_boutons_for_bouton_pools(monkeypatch):
     calls.clear()
     B.step2_runs(e90)
     assert calls and not any(cb for _, _, cb in calls)
+
+
+def test_save_populations_with_a_multiindex(tmp_path, monkeypatch):
+    """save_populations writes a population whose units have a MultiIndex (viki's step 2 stopped on the claws at
+    13:25), keeping the levels and names as strings, as it writes a flat index."""
+    monkeypatch.setattr(B, 'local_dir', lambda sub: tmp_path)
+    mi = pd.MultiIndex.from_tuples([(1, 10), (1, 11), (2, 12)], names=['kc_id', 'claw_id'])
+    flat = pd.Index(['DM1', 'DL5', 'VA2'], name='glomerulus')
+
+    class Pop:
+        def __init__(self, idx):
+            self.values = pd.DataFrame(np.arange(6.0).reshape(3, 2), index=idx, columns=['2h', 'pa'])
+
+    class Reading:
+        model, wiring = 'C2', 'real'
+        populations = {('kc_claw', 'apl16', 'on'): Pop(mi), ('pn_dendrite', 'apl16', 'on'): Pop(flat)}
+
+    B.save_populations({'r': Reading()}, 'step2', 'E90:B')
+    claw = pd.read_parquet(tmp_path / 'E90-B__C2__real__kc_claw__apl16__on.parquet')
+    assert list(claw.index.names) == ['kc_id', 'claw_id'] and claw.index[0] == ('1', '10')
+    assert claw.to_numpy().tolist() == [[0.0, 1.0], [2.0, 3.0], [4.0, 5.0]]
+    pn = pd.read_parquet(tmp_path / 'E90-B__C2__real__pn_dendrite__apl16__on.parquet')
+    assert list(pn.index) == ['DM1', 'DL5', 'VA2']

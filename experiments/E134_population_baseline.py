@@ -444,8 +444,16 @@ def save_populations(readings: Mapping[str, R.ModelReading], part: str, source: 
         for (stage, panel, cond), pop in r.populations.items():
             v = pop.values.copy()
             v.columns = [str(c) for c in v.columns]
-            v.index = v.index.astype(str)
+            v.index = _str_index(v.index)
             v.to_parquet(d / f"{source.replace(':', '-')}__{r.model}__{r.wiring}__{stage}__{panel}__{cond}.parquet")
+
+
+def _str_index(idx: pd.Index) -> pd.Index:
+    """An index with its labels as strings for parquet: a MultiIndex (e.g. claws' (kc_id, claw_id) or pooled units)
+    keeps its levels and names, each level's labels cast to str (a MultiIndex cannot be cast with astype)."""
+    if isinstance(idx, pd.MultiIndex):
+        return pd.MultiIndex.from_tuples([tuple(str(x) for x in t) for t in idx], names=idx.names)
+    return idx.astype(str)
 
 
 # ---------------------------------------------------------------------------
