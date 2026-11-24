@@ -96,11 +96,12 @@ def test_halves_and_folds_and_follows_rule():
     assert len(a) == 3 and len(b) == 4 and set(a) | set(b) == set(flies) and E.halves(flies) == (a, b)
     folds = E.odor_folds(5)
     assert sorted(o for f in folds for o in f) == sorted(E.MEGAMAT_ODORS) and len(folds) == 5
-    assert len(E.odor_folds(17)) == 17
-    with pytest.raises(ValueError):
-        E.write_lock(None)
-    st = pd.DataFrame(dict(r_lo=[0.2, -0.1], gain=[1.5, 0.3]), index=['a', 'b'])
-    assert E.follows_rule(st).tolist() == [True, False]
+    assert len(E.odor_folds(17)) == 17 and all(len(f) == 1 for f in E.odor_folds(E.N_FOLDS))
+    assert E.odor_folds(6) == E.odor_folds(6) and len(E.odor_folds(E.N_FOLDS_FALLBACK)) == 6
+    # ruling 2: the slope's interval, not r's
+    st = pd.DataFrame(dict(r_lo=[0.2, 0.3, -0.1], slope_lo=[0.1, -0.05, 0.2], gain=[1.5, 0.3, 1.0]),
+                      index=['a', 'b', 'c'])
+    assert E.follows_rule(st).tolist() == [True, False, True]
 
 
 def test_gate_refuses_until_e134_records_usable(tmp_path):
@@ -312,15 +313,31 @@ def test_run_rungs_end_to_end(fit_case):
            + rng.normal(scale=0.01, size=(5, len(st.glomeruli), len(odors))))
     flies = [str(f) for f in pop.flies]
     lock = dict(glomeruli=st.glomeruli, folds=[odors[:5], odors[5:]], halves=dict(half_a=flies[:2], half_b=flies[2:]))
-    out = E.run_rungs(st, pop, orn, orn, st.glomeruli, lock, n_boot=10, n_perm=1, max_lateral_steps=1,
-                      global_maxiter=12, verbose=False)
+    out = E.run_rungs(st, pop, orn, orn, st.glomeruli, lock, n_boot=10, n_perm_lateral=2, n_perm_control=1,
+                      max_lateral_terms=1, check_fifth=True, global_maxiter=12, verbose=False)
     r = out['rungs'].set_index('rung')
     assert list(r.index) == ['R0', 'R1', 'R2m', 'R2f', 'R3']
     assert r.loc['R2f', 'point'] < r.loc['R0', 'point']          # the planted gains are found out of sample
     assert out['r2'] in ('R2m', 'R2f') and out['highest_kept'] in ('R0', 'R1', out['r2'], 'R3')
-    assert {'R1', 'R2m', 'R2f'} <= set(out['controls'].columns)
+    # each rung against the highest kept rung below it, in both readings
+    assert r.loc['R1', 'below'] == 'R0'
+    low = 'R1' if r.loc['R1', 'kept'] else 'R0'
+    assert r.loc['R2m', 'below'] == low and r.loc['R2f', 'below'] == low
+    assert {'kept_affine_noise', 'reading_dependent', 'point_affine_noise', 'kept_vs_R2m'} <= set(r.columns)
+    assert r.loc['R1', 'reading_dependent'] == (r.loc['R1', 'kept'] != r.loc['R1', 'kept_affine_noise'])
+    assert set(out['highest_kept_by_reading']) == {E.KEEP_READING, E.BESIDE_READING}
+    assert {'R1', 'R2m', 'R2f', 'R1_affine_noise'} <= set(out['controls'].columns)
+    assert out['controls'].seed.iloc[0] == E.control_seed(0)
     assert set(out['tables']['R2f']) == {'half_a->half_b', 'half_b->half_a'}
     assert all(len(v) == 2 for v in out['folds']['R1'].values())
+    assert all('not_following' in f for v in out['folds']['R2m'].values() for f in v)
+    assert len(out['selected']) <= 1
+    for s_ in out['lateral_steps']:
+        assert s_['needed'] == E.lateral_min_exceeded(2) and len(s_['perm_gains']) == 2
+        assert s_['passes'] == (s_['n_exceeded'] >= s_['needed'])
+    if out['selected']:
+        assert out['fifth'] is not None and 'would_pass' in out['fifth']
+    assert E.step2_rung(out['highest_kept']) in (None, 'R2', 'R3')
 
 
 def test_rung_table_and_arms(fit_case):
@@ -328,16 +345,37 @@ def test_rung_table_and_arms(fit_case):
     tA, tB = E.Terms(gains={'g0': 2.0}), E.Terms(gains={'g0': 0.5})
     fits = {'0': dict(held_out=odors[:5], R1={}, R2=tA.as_dict()), '1': dict(held_out=odors[5:8], R1={},
             R2=tB.as_dict()), 'all': dict(held_out=[], R1={'pn_inhadd': 60.0}, R2=E.Terms().as_dict())}
-    tab = E.rung_table(st, fits, 'R2')
+    tab = E.rung_table(st, fits, 'R2', scaled=False)
     pd.testing.assert_series_equal(tab[odors[0]], st.run(terms=tA, reading='preset')[odors[0]])
     pd.testing.assert_series_equal(tab[odors[6]], st.run(terms=tB, reading='preset')[odors[6]])
     pd.testing.assert_series_equal(tab[odors[9]], st.run({'pn_inhadd': 60.0}, E.Terms(), reading='preset')[odors[9]])
+    with pytest.raises(KeyError, match='scale'):
+        E.rung_table(st, fits, 'R2')
+    for k, f in fits.items():                                        # ruling 5: one factor per fit
+        f['scale'] = {'R2': dict(zip(fits, (2.0, 0.5, 1.5)))[k], 'R1': dict(zip(fits, (1.0, 1.0, 3.0)))[k]}
+    tab_s = E.rung_table(st, fits, 'R2')
+    np.testing.assert_allclose(tab_s[odors[0]], 2.0 * tab[odors[0]])
+    np.testing.assert_allclose(tab_s[odors[6]], 0.5 * tab[odors[6]])
+    np.testing.assert_allclose(tab_s[odors[9]], 1.5 * tab[odors[9]])
     gl = st.glomeruli[:6]
     den = pd.DataFrame(np.random.default_rng(0).normal(size=(6, len(odors))), index=gl, columns=odors)
     imp, set_gl, rec = E.arm_table(E.Arm('megamat', 'imposed'), st, den, gl)
     assert set_gl == gl and rec['n_mapped'] == 6 * len(odors)
-    perm, _, _ = E.arm_table(E.Arm('megamat', 'imposed_odor_perm'), st, den, gl)
+    assert rec['clip']['policy'] == 'clip' and rec['clip']['n_set'] == 6 * len(odors)      # ruling 7, by default
+    lo, hi = st.rate_bounds()
+    assert (imp.loc[gl].to_numpy() >= lo.loc[gl].to_numpy() + E.BOUNDS_MARGIN_HZ - 1e-9).all()
+    perm, _, _ = E.arm_table(E.Arm('megamat', 'imposed_odor_perm'), st, den, gl, seed=E.arm_seed('real'))
     assert not np.allclose(perm.loc[gl].to_numpy(), imp.loc[gl].to_numpy())
+    perm2, _, r2_ = E.arm_table(E.Arm('megamat', 'imposed_odor_perm'), st, den, gl, seed=E.arm_seed('P1'))
+    assert r2_['seed'] == E.SEED + 1 and not np.allclose(perm2.loc[gl].to_numpy(), perm.loc[gl].to_numpy())
+    again, _, _ = E.arm_table(E.Arm('megamat', 'imposed_odor_perm'), st, den, gl, seed=E.arm_seed('P1'))
+    pd.testing.assert_frame_equal(again, perm2)
+    dff, _, rd = E.arm_table(E.Arm('megamat', 'imposed_dff'), st, den * 3.0 + 1.0, gl)
+    assert rd['units'] == 'dff' and E.arm_units(E.Arm('megamat', 'imposed')) == E.FIT_UNITS
+    pd.testing.assert_frame_equal(dff, imp)                           # rank for rank: a monotone map changes nothing
+    r1, set_r1, rr = E.arm_table(E.Arm('megamat', 'R1'), st, None, gl, fits=fits)
+    assert set_r1 == st.glomeruli and rr['rung'] == 'R1' and rr['clip']['n_set'] == r1.size
+    assert rr['scale']['factors']['R1'] == {'0': 1.0, '1': 1.0, 'all': 3.0} and rr['scale']['named'] == {'R1': ['all']}
     kw, r1 = E.arm_input(st, imp, gl, route=1)
     assert np.isnan(kw['extra_kws']['pn_rates'].loc[st.glomeruli[6:]]).all().all()
     d2 = st.delta.copy()
@@ -366,7 +404,7 @@ def test_permutations_and_measured_start():
     assert p.loc['d'].equals(x.loc['d'])
     t = E.permute_terms(E.Terms(gains={'a': 2.0, 'b': 0.5}), ['a', 'b', 'c'], rng)
     assert sorted(t.gains.values()) == [0.5, 2.0]
-    meas = pd.DataFrame(dict(gain=[2.0, 0.1, 1.0], follows_provisional=[True, True, False]), index=['a', 'b', 'c'])
+    meas = pd.DataFrame(dict(gain=[2.0, 0.1, 1.0], follows=[True, True, False]), index=['a', 'b', 'c'])
     s = E.measured_gain_start(meas, pd.Series([0.5, 1.0, 1.0], index=['a', 'b', 'c']))
     assert s == {'a': 4.0, 'b': 0.25, 'c': 1.0}
 
@@ -379,19 +417,25 @@ def test_planned_points():
     assert len(pts) == 73 and len(E.planned_step2(with_rung=False)) == 49
     assert len({E.tag_of(a, w) for a, w in pts}) == 73
     assert E.planned_step2(reverse=True)[0] == pts[-1]
+    dff = E.planned_step2(with_dff_repeat=True)
+    assert len(dff) == 97 and {a.arm for a, _ in dff[73:]} == set(E.DFF_REPEAT_ARMS)
+    assert [E.arm_seed(w) for w in E.WIRINGS] == list(range(E.SEED, E.SEED + 8))
 
 
-def _scores(soma_drop, bouton_ratio, perm_drop=0.0, r1_share=0.0, rung_share=0.0):
+def _scores(soma_drop, bouton_ratio, perm_drop=0.0, r1_share=0.0, rung_share=0.0, perm_bouton=1.0):
+    """Planted step-2 scores: the imposed arm lowers the somata's error by `soma_drop` and brings the boutons'
+    strength-by-odor error to `bouton_ratio` of E134's; R1 and the rung give their shares of both gains."""
     rows = []
     for w in E.WIRINGS:
-        for arm, sd, br in (('imposed', soma_drop, bouton_ratio), ('imposed_glom_perm', perm_drop, 1.0),
-                            ('imposed_odor_perm', perm_drop, 1.0), ('R1', r1_share * soma_drop, 1.0),
-                            ('rung', rung_share * soma_drop, 1.0), ('rung_glom_perm', 0.0, 1.0)):
+        for arm, sd, br in (('imposed', soma_drop, bouton_ratio), ('imposed_glom_perm', perm_drop, perm_bouton),
+                            ('imposed_odor_perm', perm_drop, perm_bouton),
+                            ('R1', r1_share * soma_drop, 1.0 - r1_share * (1.0 - bouton_ratio)),
+                            ('rung', rung_share * soma_drop, 1.0 - rung_share * (1.0 - bouton_ratio)),
+                            ('rung_glom_perm', 0.0, 1.0)):
             rows.append(dict(arm=arm, wiring=w, stage='kc_soma', error=1.0 - sd, error_base=1.0, strength=1.0,
                              strength_base=1.0))
-            bdrop = 0.6 if arm == 'imposed' else (r1_share * 0.6 if arm == 'R1' else
-                                                  rung_share * 0.6 if arm == 'rung' else 0.0)
-            rows.append(dict(arm=arm, wiring=w, stage='pn_bouton', error=1.0 - bdrop, error_base=1.0,
+            # the boutons' population error barely moves: the carry classes read their strength by odor
+            rows.append(dict(arm=arm, wiring=w, stage='pn_bouton', error=0.99, error_base=1.0,
                              strength=br * 2.0, strength_base=2.0))
     return pd.DataFrame(rows)
 
@@ -399,16 +443,250 @@ def _scores(soma_drop, bouton_ratio, perm_drop=0.0, r1_share=0.0, rung_share=0.0
 def test_classes():
     c = E.classify(_scores(0.3, 0.4))
     assert c['upstream'] and not c['boutons_only'] and not c['global_carry'] and not c['terms_carry']
+    assert E.outcome(c)['outcome'] == 'c'
     c = E.classify(_scores(0.3, 0.4, r1_share=0.6))
-    assert c['upstream'] and c['global_carry']
+    assert c['upstream'] and c['global_carry'] and E.outcome(c)['outcome'] == 'a'
+    c = E.classify(_scores(0.3, 0.4, r1_share=0.4))
+    assert c['upstream'] and not c['global_carry']
     c = E.classify(_scores(0.3, 0.4, rung_share=0.7))
-    assert c['terms_carry'] and not c['global_carry']
+    assert c['terms_carry'] and not c['global_carry'] and E.outcome(c)['outcome'] == 'b'
     c = E.classify(_scores(0.02, 0.4))
-    assert c['boutons_only'] and not c['upstream']
-    c = E.classify(_scores(0.3, 0.9))
-    assert c['not_upstream']
+    assert c['boutons_only'] and not c['upstream'] and E.outcome(c)['outcome'] == 'd'
+    c = E.classify(_scores(0.3, 0.9, r1_share=0.9))
+    assert c['not_upstream'] and not c['permuted_as_much']
+    assert not c['global_carry']                                     # carry is read only when upstream holds
+    assert E.outcome(c) == dict(outcome='needs the dF/F repeat', pending='e', cls='not_upstream')
     c = E.classify(_scores(0.3, 0.4, perm_drop=0.35))
-    assert not c['upstream']
+    assert not c['upstream'] and c['permuted_as_much'] and c['not_upstream']
+    assert E.outcome(c)['pending'] == 'f'
     thr = E.class_thresholds(pd.DataFrame(dict(stage='kc_soma', wiring=list(E.WIRINGS),
                                                error=np.linspace(1.0, 1.07, 8))))
     assert thr['kc_soma']['threshold'] == pytest.approx(3 * np.std(np.linspace(1.0, 1.07, 8), ddof=1) / np.sqrt(8))
+    c = E.classify(_scores(0.3, 0.4), thr)
+    assert c['thresholds']['soma_drop'] == c['thresholds']['soma_within'] == thr['kc_soma']['threshold']
+
+
+def test_outcome_dff_guard():
+    base = E.classify(_scores(0.3, 0.9))
+    same = E.classify(_scores(0.25, 0.95))
+    other = E.classify(_scores(0.3, 0.4))
+    assert E.outcome(base, same) == dict(outcome='e', cls='not_upstream', cls_dff='not_upstream')
+    assert E.outcome(base, other)['outcome'] == 'unit-dependent' and E.outcome(base, other)['pending'] == 'e'
+    sc = _scores(0.3, 0.9)
+    d = sc[sc.arm.isin(E.IMPOSED_ARMS)].assign(arm=lambda x: x.arm + E.DFF_SUFFIX, error=0.6)
+    both = pd.concat([sc, d], ignore_index=True)
+    ds = E.dff_scores(both)
+    assert set(ds.arm) == set(sc.arm) and (ds[ds.arm == 'imposed'].error == 0.6).all()
+    assert len(ds) == len(sc)
+
+
+def test_class_thresholds_read_the_held_runs():
+    """Ruling 10: the somata's thresholds from E134's runs held at the megamat flies' response rate (group
+    'megamat_held'), the megamat panel, APL on, the default reading, the eight wirings only."""
+    from kcq import stage_readings as R
+    rows = []
+    rng = np.random.default_rng(0)
+    for group, scale in (('megamat_held', 0.02), ('megamat_fitted', 0.2)):
+        for st in E.CLASS_STAGES:
+            for w in list(E.WIRINGS) + ['mean', 'common']:
+                for cond in ('on', 'off'):
+                    for rd in (R.DEFAULT_READINGS[st].name, 'affine_noise'):
+                        rows.append(dict(group=group, stage=st, panel='megamat', condition=cond, reading=rd, wiring=w,
+                                         error=1.0 + scale * rng.normal()))
+    t = pd.DataFrame(rows)
+    thr = E.class_thresholds(t)
+    held = t[(t.group == 'megamat_held') & (t.stage == 'kc_soma') & (t.condition == 'on')
+             & (t.reading == R.DEFAULT_READINGS['kc_soma'].name) & t.wiring.isin(E.WIRINGS)].error
+    assert thr['kc_soma']['n_wirings'] == 8
+    assert thr['kc_soma']['threshold'] == pytest.approx(3 * held.std(ddof=1) / np.sqrt(8))
+    assert set(thr) == set(E.CLASS_STAGES)
+    with pytest.raises(KeyError):
+        E.class_thresholds(t[t.group == 'megamat_fitted'])
+    agree = E.routes_agree({'pn_bouton': 1.0, 'kc_claw': 1.0, 'kc_soma': 1.0},
+                           {'pn_bouton': 1.0 + 0.5 * thr['pn_bouton']['threshold'], 'kc_claw': 1.0,
+                            'kc_soma': 1.0 + 2 * thr['kc_soma']['threshold']}, thr)
+    assert agree['stages']['pn_bouton']['agree'] and not agree['stages']['kc_soma']['agree'] and not agree['agree']
+
+
+# ---------------------------------------------------------------------------
+# the rulings' other pieces
+
+def test_step0_readings_and_unit_dependence():
+    """Step 0 in a reading of planted recordings (`step0_units` on given data) and the gains whose side of 1 differs
+    between readings (ruling 1)."""
+    gains = np.array([0.5, 1.0, 1.2, 2.0, 0.8, 1.5])
+    orn, pn, _ = _flies(gains, n_orn=6, n_pn=7, n_odors=17)
+    gl, od = [f'g{i}' for i in range(6)], list(E.MEGAMAT_ODORS)
+    data = dict(orn=orn, pn=pn, orn_all=orn, partners=gl, pn_flies=[f'f{i}' for i in range(7)], orn_units='dff',
+                pn_units='noise')
+    r = E.step0_units('orn_dff_pn_noise', gl, od, n_boot=50, data=data)
+    st = r['step']
+    assert set(st.flies) == {'all', 'half_a', 'half_b'} and {'follows', 'slope_lo', 'orn_units'} <= set(st.columns)
+    assert (st.orn_units == 'dff').all() and (st.pn_units == 'noise').all()
+    assert st.follows.all()
+    # a second reading in which the PN side of each glomerulus is rescaled (as by a per-glomerulus noise SD)
+    sc = np.array([1.0, 1.0, 0.7, 1.0, 1.6, 1.0])[None, :, None]
+    r2 = E.step0_units('noise', gl, od, n_boot=50, data=dict(data, pn=pn * sc, orn_units='noise'))
+    dep = E.unit_dependence(pd.concat([st, r2['step']], ignore_index=True), ['orn_dff_pn_noise', 'noise']
+                            ).set_index('glomerulus')
+    side = lambda g, u: dep.loc[g, f'side_{u}']
+    for g in gl:
+        assert dep.loc[g, 'unit_dependent'] == (side(g, 'orn_dff_pn_noise') != side(g, 'noise'))
+    assert dep.unit_dependent.any() and not dep.loc['g3', 'unit_dependent']
+    assert set(E.STEP_READINGS) == {'dff', 'noise', 'orn_dff_pn_noise'} and E.RUNG_STEP_READING == 'orn_dff_pn_noise'
+
+
+def test_keep_rule_against_each_direction():
+    rng = np.random.default_rng(0)
+    below = 1.0 + 0.01 * rng.normal(size=200)
+    rung = below - 0.2
+    assert E.keep_rung(rung, below, 0.8, 1.0)[0]
+    assert E.keep_rung(rung, below, 0.8, 1.0, dir_rung=[0.7, 0.9], dir_below=[0.95, 1.05])[0]
+    assert not E.keep_rung(rung, below, 0.8, 1.0, dir_rung=[0.5, 1.1], dir_below=[0.95, 1.05])[0]
+    assert not E.keep_rung(below - 0.001 + 0.01 * rng.normal(size=200), below, 0.999, 1.0)[0]
+    o = dict(by_reading={'r': dict(point=0.8, draws=rung, directions={'a->b': 0.7, 'b->a': 0.9})}, **{'a->b': {},
+             'b->a': {}})
+    b = dict(by_reading={'r': dict(point=1.0, draws=below, directions={'a->b': 0.95, 'b->a': 1.05})})
+    k = E.keep_against(o, b, 'r')
+    assert k['kept'] and k['no_higher_each_direction'] and k['diff'] == pytest.approx(0.2)
+    assert [E.lateral_min_exceeded(n) for n in (20, 10, 5, 2, 1, 0)] == [19, 10, 5, 2, 1, 0]
+    assert len({E.control_seed(i) for i in range(5)}) == 5 and E.control_seed(3) == E.control_seed(3)
+
+
+def test_scale_factor_holds_the_models_rate_scale(fit_case):
+    st, pop, true, odors = fit_case
+    gl, train = st.glomeruli[:6], odors[:7]
+    fit = dict(R1={'pn_inhadd': 80.0, 'pn_tanhsc': 3.0}, R2=E.Terms(gains={'g0': 2.0}).as_dict())
+    for rung in ('R1', 'R2'):
+        f = E.rung_scale_factor(st, fit, rung, train, gl)
+        x = st.run(fit['R1'], None if rung == 'R1' else E.Terms.from_dict(fit['R2']), reading='preset')
+        base = st.run(reading='preset')
+        assert np.std((f * x).loc[gl, train].to_numpy()) == pytest.approx(np.std(base.loc[gl, train].to_numpy()))
+    rec = E.scale_record({'0': dict(scale={'R1': 0.4, 'R2': 1.0}), 'all': dict(scale={'R1': 1.1, 'R2': 2.5})},
+                         ('R1', 'R2'))
+    assert rec['named'] == {'R1': ['0'], 'R2': ['all']}
+
+
+def test_clip_table_both_sides(planted):
+    mp, rv, st = planted
+    lo, hi = st.rate_bounds()
+    t = st.run(reading='preset')
+    t.loc['g0', 'o0'] = lo.loc['g0', 'o0'] - 5.0
+    t.loc['g1', 'o1'] = hi.loc['g1', 'o1'] + 3.0
+    t.loc['g2', 'o2'] = np.nan
+    out, rec = E.clip_table(t, (lo, hi), ['g0', 'g1', 'g2'])
+    assert rec['n_outside'] == 2 and rec['largest_excursion_hz'] == pytest.approx(5.0)
+    assert out.loc['g0', 'o0'] == pytest.approx(lo.loc['g0', 'o0'] + E.BOUNDS_MARGIN_HZ)
+    assert out.loc['g1', 'o1'] == pytest.approx(hi.loc['g1', 'o1'] - E.BOUNDS_MARGIN_HZ)
+    assert np.isnan(out.loc['g2', 'o2']) and rec['n_set'] == 3 * len(st.odors) - 1
+    assert rec['share_clipped'] == rec['n_clipped'] / rec['n_set']
+    assert rec['named'] == (rec['share_clipped'] > E.CLIP_NAME_SHARE)
+    pd.testing.assert_frame_equal(out.loc[st.glomeruli[3:]], t.loc[st.glomeruli[3:]])
+    with pytest.raises(ValueError, match='outside'):
+        E.clip_table(t, (lo, hi), ['g0'], policy=None)
+    many = t.copy()
+    many.loc['g0'] = lo.loc['g0'] - 1.0
+    assert E.clip_table(many, (lo, hi), ['g0'])[1]['named']
+
+
+def test_route2_leaves_glomeruli_without_input_and_reports(planted):
+    """Ruling 9: the glomeruli without input are not solved (their drift and the LN's change are reported), and a
+    target out of reach is reported as not converged, not forced."""
+    mp, rv, st = planted
+    noinput = [g for g in st.glomeruli if not np.any(st.delta.loc[g].to_numpy() != 0)]
+    assert noinput == ['g8', 'g9']
+    d2 = st.delta.copy()
+    d2.loc[['g0', 'g1']] *= 1.4
+    tab = E.PNStage(d2, pd.Series(st.spont, index=st.glomeruli), st.sp).run(reading='preset')
+    kw, rec = E.arm_input(st, tab, st.glomeruli, route=2)                 # a reachable table on every glomerulus
+    assert rec['converged'] and rec['n_solved'] == 8 and rec['n_without_input'] == 2
+    assert rec['set_without_input'] == noinput
+    pd.testing.assert_frame_equal(kw['orn'].loc[noinput], st.delta.loc[noinput])
+    assert rec['no_input_max_drift_hz'] > 0 and rec['ln_change']['inhA_max_abs'] > 0
+    assert rec['ln_change']['pn_inh_factor_max_rel'] > 0
+    lo, hi = st.rate_bounds()
+    bad = tab.copy()
+    bad.loc['g0'] = hi.loc['g0'] + 50.0                               # out of reach
+    kw3, rec3 = E.arm_input(st, bad, ['g0'], route=2)
+    assert not rec3['converged'] and 'orn' in kw3                       # reported, not forced, and not raised
+
+
+def test_imposed_check_reads_the_table_in_e134s_reading(planted):
+    """Ruling 8: a route-1 table's PN rates in E134's reading (the port's prediction: the drive shifted by a constant
+    times the unit kernel) against the table; the terms of the port are such shifts, so the prediction is exact."""
+    mp, rv, st = planted
+    t = E.Terms(gains={'g0': 1.6, 'g3': 0.6}, laterals=[('g5', 'g6', 0.3)])
+    table = st.run(terms=t, reading='preset')
+    pred = E.predicted_stage_rates(st, table, ['g0', 'g3', 'g5'])
+    want = st.run(terms=t, reading='stage')
+    np.testing.assert_allclose(pred.loc[['g0', 'g3', 'g5']].to_numpy(), want.loc[['g0', 'g3', 'g5']].to_numpy(),
+                               atol=1e-5)
+    pd.testing.assert_frame_equal(pred.loc[['g1', 'g2']], st.run(reading='stage').loc[['g1', 'g2']])
+    chk = E.imposed_run_check(table, pred, ['g0', 'g3', 'g5'], pn_matrix_error=0.33)
+    d = np.abs(table.loc[['g0', 'g3', 'g5']].to_numpy() - pred.loc[['g0', 'g3', 'g5']].to_numpy()).max()
+    assert chk['max_abs_diff_hz'] == pytest.approx(d) and chk['named'] == (d > E.IMPOSED_CHECK_HZ)
+    assert chk['pn_matrix_error'] == 0.33 and chk['flies_floor'] == E.PN_MATRIX_FLOOR_NOTE
+    assert E.imposed_run_check(table, table + 0.6, ['g0'])['named']
+    assert not E.imposed_run_check(table, table + 0.4, ['g0'])['named']
+
+
+def test_timing_projection_and_budget():
+    """The timing helper on a small planted case, the projection's arithmetic, and the fallback on cost only: 5
+    controls and 17 folds, then 3 and 17, then 3 and 6 (flagged if still above the budget)."""
+    small = dict(n_glomeruli=12, n_input=10, n_shared=8, n_odors=17, n_pn_flies=4, n_trials=3)
+    c = E.planted_step1(small)
+    assert c['orn'].shape == (9, 8, 17) and c['orn_partners'].shape == (9, 10, 17)
+    assert len(c['lock']['folds']) == 17 and sorted(sum(c['lock']['halves'].values(), [])) == sorted(c['pop'].flies)
+    tm = E.time_step1(case=c, global_maxiter=3)
+    assert set(tm['unit_seconds']) == {'target', 'run', 'R1', 'measured', 'gains', 'lateral', 'read'}
+    assert all(v >= 0 for v in tm['unit_seconds'].values())
+    u = dict(target=1.0, run=1.0, R1=10.0, measured=1.0, gains=5.0, lateral=1.0, read=1.0)
+    p = E.project_step1(u, n_folds=2, n_perm_control=1, n_perm_lateral=1, max_terms=1, check_fifth=False,
+                        n_candidates=2, n_directions=2)
+    F = 4
+    want_r0 = F * 2 + 2
+    want_r1 = F * 12 + 2
+    want_r2m = F * 3 + 2
+    want_r2f = F * 7 + 2
+    want_r3 = 2 * (F * 3 + 2) + (F * 4 + 2)
+    want_all = 3 * (1 + 10 + 1 + 5 + 1)
+    assert p['breakdown_hours']['R3'] * 3600 == pytest.approx(want_r3)
+    assert p['real_lane_hours'] * 3600 == pytest.approx(want_r0 + want_r1 + want_r2m + want_r2f + want_r3 + want_all)
+    assert p['control_lane_hours'] * 3600 == pytest.approx(want_r1 + want_r2m + want_r2f)
+    cheap = E.choose_budget({k: 1e-3 for k in u})
+    assert (cheap['n_perm_control'], cheap['n_folds'], cheap['within_budget']) == (5, 17, True)
+    p53 = [E.project_step1(u, 17, nc)['total_lane_hours'] for nc in (5, 3)]
+    mid = E.choose_budget(u, budget=(p53[0] + p53[1]) / 2)
+    assert (mid['n_perm_control'], mid['n_folds']) == (3, 17) and len(mid['tried']) == 2
+    dear = E.choose_budget(u, budget=1e-6)
+    assert (dear['n_perm_control'], dear['n_folds'], dear['within_budget']) == (3, 6, False)
+
+
+def test_lock_records_the_rulings_and_is_written_once(tmp_path, monkeypatch):
+    r = E.lock_rules(17, 5)
+    assert r['directions'] == [['half_a', 'half_b'], ['half_b', 'half_a']] and r['n_folds'] == 17
+    assert r['units']['measured_step'] == dict(orn='dff', pn='noise') and r['units']['fit_pn'] == 'noise'
+    assert r['loss']['keep_reading'] == E.KEEP_READING and r['loss']['beside_reading'] == 'affine_noise'
+    assert r['permutations'] == dict(r['permutations'], lateral=20, lateral_min_exceeded=19, control=5)
+    assert r['clip']['policy'] == 'clip' and r['clip']['margin_hz'] == E.BOUNDS_MARGIN_HZ
+    assert r['r3']['max_terms'] == 4
+    lock = tmp_path / 'E135_lock.json'
+    lock.write_text('{}')
+    monkeypatch.setattr(E, 'LOCK_COPY', lock)
+    with pytest.raises(FileExistsError):
+        E.write_lock()
+
+
+def test_measured_for_reads_the_slope_rule(fit_case):
+    st, pop, true, odors = fit_case
+    tgt = E.Target.make(pop, odors, st.glomeruli)
+    rng = np.random.default_rng(4)
+    orn = (st.delta.loc[st.glomeruli, odors].to_numpy()[None] * 0.02
+           + rng.normal(scale=0.01, size=(5, len(st.glomeruli), len(odors))))
+    orn[:, 3] = rng.normal(scale=0.5, size=(5, len(odors)))           # g3's terminals carry nothing of its dendrites
+    m = E.measured_for(tgt, orn, orn, st.glomeruli, n_boot=100, odors_all=odors)
+    s = m['step']
+    assert (s.follows == (s.slope_lo > 0)).all()
+    start = E.measured_gain_start(s, E.model_gains(st, {}, st.glomeruli, odors))
+    for g in s.index[~s.follows]:
+        assert start[g] == 1.0
