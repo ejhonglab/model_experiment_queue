@@ -289,7 +289,7 @@ def part_step2(readings: Optional[Sequence[str]] = None) -> pd.DataFrame:
 
 def tag_of(pt: Point) -> str:
     """'<panel>_<reading>_<model>' (E107's `run_tag` form), e.g. 'megamat_fitted_real', 'validation2_fitted_reference'."""
-    if pt.panel not in R.PANELS or pt.reading not in STEP3_READINGS:
+    if pt.panel not in R.INPUT_PANELS or pt.reading not in STEP3_READINGS:
         raise ValueError(f'{pt}')
     return f'{pt.panel}_{pt.reading}_{pt.model}'
 
@@ -474,7 +474,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     ap.add_argument('--part', required=True, choices=('step2', 'step3', 'score', 'commands'))
     ap.add_argument('--models', nargs='+', default=None,
                     help='step3: the wirings and beside models of the lane (default all)')
-    ap.add_argument('--panels', nargs='+', default=None, choices=list(R.PANELS), help='step3: the panels (default all)')
+    ap.add_argument('--panels', nargs='+', default=None, choices=list(R.INPUT_PANELS),
+                    help='step3: the input panels (default all)')
     ap.add_argument('--readings', nargs='+', default=None,
                     help="step3: 'fitted' and / or 'held'; step2: the stage readings by name (default each stage's "
                          "default and alternatives)")
