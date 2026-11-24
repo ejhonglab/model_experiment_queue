@@ -20,8 +20,8 @@ The numbers E131's note gives that the score's tables do not give directly:
   note sets beside the model's;
 - `differ_extra`: comparisons the entry did not fix, by the experiment's own "differ" rule (E129's `differ` through
   experiments/E131_mbc1_cells.py, as the score's comparisons use it, on readings.csv and runs.csv): each MB-C1 arm
-  against the family, and the slow and the thresholded cells (L100, D100) against the plain cells at a quarter of the
-  dose (B25). Per comparison: the verdict, the wirings on which each is lower (against all recordings), whether each
+  against the family, the slow and the thresholded cells (L100, D100) against the plain cells at a quarter of the
+  dose (B25), and the dose curve (B25 against B100, B100 against B400). Per comparison: the verdict, the wirings on which each is lower (against all recordings), whether each
   is lower on all ten targets, the corner arms, a minus b over all eight wirings, on S and T, and wiring by wiring.
 
 The figure (E131_pattern_part_classes.png): left, each arm's calibrated pattern part minus the family's on S's and T's
@@ -63,7 +63,10 @@ FORM_PAIRS = (('L100', 'B100'), ('D100', 'B100'), ('P100', 'B100'), ('R50', 'H50
               ('B25', 'B100'), ('B100', 'B400'), ('R50', 'B100'))
 MBC1_ARMS = ('B25', 'B100', 'B400', 'R50', 'X50', 'L100', 'D100', 'P100')
 # the "differ" comparisons the entry did not fix, (a, b)
-EXTRA_PAIRS = tuple((a, 'family') for a in MBC1_ARMS) + (('L100', 'B25'), ('D100', 'B25'))
+EXTRA_PAIRS = (tuple((a, 'family') for a in MBC1_ARMS) + (('L100', 'B25'), ('D100', 'B25'))
+               + (('B25', 'B100'), ('B100', 'B400')))
+EXTRA_GROUP = {('L100', 'B25'): 'form_vs_B25', ('D100', 'B25'): 'form_vs_B25', ('B25', 'B100'): 'dose_curve',
+               ('B100', 'B400'): 'dose_curve'}
 DIFFER_KEYS = ('verdict', 'n_wirings_a_lower', 'n_wirings_b_lower', 'a_lower_on_all_targets', 'b_lower_on_all_targets')
 RUN_STATS = ('fixed_thr', 'wAPLKC_scale', 'wKCKC_scale', 'wMBC1_scale', 'rate_on', 'rate_off', 'ratio', 'rate_rho_on',
              'rate_rho_off', 'opk_on_tv', 'opk_off_tv', 'max_count_on', 'max_count_off', 'rate_on_g', 'rate_off_g',
@@ -311,7 +314,7 @@ def differ_extra(readings: pd.DataFrame, runs: pd.DataFrame, verdict: dict,
             raise ValueError(f'{a}|{b}: incomplete')
         pw = r['d_per_wiring']
         per_t = [v for t in r['d_per_target'].values() for v in t.values()]
-        row = dict(group='arm_vs_family' if b == 'family' else 'form_vs_B25', a=a, b=b, verdict=r['verdict'],
+        row = dict(group=EXTRA_GROUP.get((a, b), 'arm_vs_family'), a=a, b=b, verdict=r['verdict'],
                    n_wirings_a_lower=r['n_wirings_a_lower'], n_wirings_b_lower=r['n_wirings_b_lower'],
                    wirings_a_lower=' '.join(w for w in WIRINGS if pw[w] < 0),
                    wirings_b_lower=' '.join(w for w in WIRINGS if pw[w] > 0),
