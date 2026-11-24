@@ -261,10 +261,58 @@ def _read_json(path: Path) -> dict:
     return json.loads(path.read_text()) if path.exists() else {}
 
 
+# the columns a held point's row carries beyond a fitted point's, in `run_point`'s order (inserted before 'stages'); they
+# also let `read_runs_csv` read a file whose header was written by a fitted row (viki's runs_3 file of 2026-11-24 12:26)
+HELD_EXTRA_COLUMNS = ('thr_factor', 'apl_factor', 'target_on', 'target_off', 'frac_on_target', 'frac_off_target',
+                      'at_bound_thr', 'at_bound_apl', 'hold_n_sims', 'held_off_rule', 'fit_fixed_thr')
+
+
+def read_runs_csv(path: Path) -> pd.DataFrame:
+    """A lane's runs_3 table. A file written before the union fix (`_append_csv`) can hold held rows under a fitted
+    row's shorter header: those rows are read with `HELD_EXTRA_COLUMNS` inserted before 'stages'. ValueError for any
+    other row length."""
+    import csv
+    import io
+    try:
+        return pd.read_csv(path)
+    except pd.errors.ParserError:
+        pass
+    with open(path, newline='') as f:
+        rows = list(csv.reader(f))
+    header, body = rows[0], [r for r in rows[1:] if r]
+    i = header.index('stages')
+    held = header[:i] + list(HELD_EXTRA_COLUMNS) + header[i:]
+    parts = []
+    for names in (header, held):
+        group = [r for r in body if len(r) == len(names)]
+        if group:
+            buf = io.StringIO()
+            csv.writer(buf).writerows([names] + group)
+            buf.seek(0)
+            parts.append(pd.read_csv(buf).assign(_line=[body.index(r) for r in group]))
+    if sum(len(p) for p in parts) != len(body):
+        raise ValueError(f'{path}: rows of {sorted({len(r) for r in body})} fields under a header of {len(header)}')
+    return pd.concat(parts, ignore_index=True, sort=False).sort_values('_line').drop(columns='_line').reset_index(drop=True)
+
+
 def _append_csv(path: Path, row: Mapping) -> None:
-    df = pd.DataFrame([dict(row)])
+    """Appends one row to a lane's table. When the row's columns differ from the file's, the file is rewritten with the
+    union of the columns (the file's order, then the row's new ones) and replaced atomically; only the lane's own
+    process writes its file."""
+    new = pd.DataFrame([dict(row)])
     path.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(path, mode='a', header=not path.exists(), index=False)
+    if not path.exists():
+        new.to_csv(path, index=False)
+        return
+    old = read_runs_csv(path)
+    if list(old.columns) == list(new.columns):
+        new.to_csv(path, mode='a', header=False, index=False)
+        return
+    cols = list(old.columns) + [c for c in new.columns if c not in old.columns]
+    df = pd.concat([old, new], ignore_index=True, sort=False)[cols]
+    tmp = path.with_name(f'.{path.name}.{_host()}.{os.getpid()}.tmp')
+    df.to_csv(tmp, index=False)
+    os.replace(tmp, path)
 
 
 def _differ(a: pd.DataFrame, b: pd.DataFrame) -> int:
@@ -1008,7 +1056,7 @@ def load_run(tag: str) -> Optional[R.SavedRun]:
 
 def runs_table() -> pd.DataFrame:
     """Every row of every host's and lane's runs_3_*.csv, the last row per tag."""
-    fs = [pd.read_csv(p) for p in sorted(out_dir().glob('runs_3_*.csv'))]
+    fs = [read_runs_csv(p) for p in sorted(out_dir().glob('runs_3_*.csv'))]
     if not fs:
         return pd.DataFrame(columns=['tag'])
     return pd.concat(fs, ignore_index=True, sort=False).drop_duplicates('tag', keep='last').reset_index(drop=True)
@@ -1057,6 +1105,7 @@ def run_point(pt: Point, lane: str, table: Path, prov_path: Path, reclaim: bool 
                          frac_on_target=f_on, frac_off_target=f_off, at_bound_thr=hold['at_bound_thr'],
                          at_bound_apl=hold['at_bound_apl'], hold_n_sims=hold['n_sims'], held_off_rule=HELD_OFF_RULE,
                          fit_fixed_thr=float(Pp['p']['fixed_thr']))
+            assert tuple(extra) == HELD_EXTRA_COLUMNS
         else:
             built = build_point(pt)
             params, params_off = built.params, built.params_off

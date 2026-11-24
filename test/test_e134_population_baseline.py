@@ -248,3 +248,38 @@ def test_held_rebuild_reproduces_the_hold(tmp_path):
     np.testing.assert_array_equal(run.conditions['on']['claw_pre'].to_numpy(),
                                   R._abbrev(out['on']['claw_pre_settled']).to_numpy())
     print(f'held rebuild identity: {time.time() - t0:.0f} s, {hold["n_sims"]} simulations in the hold')
+
+
+def test_runs_csv_union_and_old_files(tmp_path, monkeypatch):
+    """A held row after fitted rows widens the lane's table to the union of the columns (rewritten in place, read back
+    whole); a file written before that fix, with a held row under a fitted row's header, is read with the held columns
+    inserted before 'stages'; any other row length is refused."""
+    base = dict(tag='a', panel='megamat', reading='fitted', fixed_thr=1.0, rate_on=0.1, stages='pn+kc', host='h',
+                queue_commit='x')
+    held = dict(base, tag='b', reading='held')
+    held = {**{k: v for k, v in held.items() if k not in ('stages', 'host', 'queue_commit')},
+            **{c: i + 0.5 for i, c in enumerate(B.HELD_EXTRA_COLUMNS)}, 'stages': 'pn+kc', 'host': 'h', 'queue_commit': 'x'}
+    monkeypatch.setattr(B, 'out_dir', lambda: tmp_path)
+    p = tmp_path / 'runs_3_h_l.csv'
+    B._append_csv(p, base)
+    B._append_csv(p, dict(base, tag='c'))
+    B._append_csv(p, held)
+    df = B.read_runs_csv(p)
+    assert list(df.tag) == ['a', 'c', 'b'] and df.columns[-1] == B.HELD_EXTRA_COLUMNS[-1]
+    assert df.loc[df.tag == 'b', 'thr_factor'].item() == 0.5 and df.loc[df.tag == 'a', 'thr_factor'].isna().item()
+    B._append_csv(p, dict(base, tag='d'))
+    assert list(B.read_runs_csv(p).tag) == ['a', 'c', 'b', 'd']
+    # the old layout: the held row appended under the fitted header
+    q = tmp_path / 'runs_3_old_l.csv'
+    pd.DataFrame([base]).to_csv(q, index=False)
+    pd.DataFrame([held]).to_csv(q, mode='a', header=False, index=False)
+    with pytest.raises(pd.errors.ParserError):
+        pd.read_csv(q)
+    old = B.read_runs_csv(q)
+    assert list(old.tag) == ['a', 'b'] and old.loc[1, 'fit_fixed_thr'] == len(B.HELD_EXTRA_COLUMNS) - 0.5
+    assert old.loc[1, 'host'] == 'h' and old.loc[1, 'stages'] == 'pn+kc'
+    assert set(B.runs_table().tag) == {'a', 'b', 'c', 'd'}
+    with open(q, 'a') as f:
+        f.write('z,1,2\n')
+    with pytest.raises(ValueError):
+        B.read_runs_csv(q)
