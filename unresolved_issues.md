@@ -8,6 +8,29 @@ directory's notes/ and are linked from here.
 
 ## Open
 
+### The report and the summary cite Manoim et al. 2022 for KC–KC inhibition without its negative in the calyx (found 2026-11-24, Tom; checked by hal)
+
+- **What.** The report page ("Candidate mechanisms, ranked", item 5) cites Manoim et al. 2022 (Curr Biol) for KC–KC
+  inhibition through mAChR-B, and sets it beside the hemibrain's claw-to-claw synapses in the calyx. Tom pointed out
+  that the paper also looked at the calyx and found no effect there. Its text (PMC9613607) says:
+  - "Overexpression of mAChR-B-HA revealed expression in the axonal lobes and cell bodies but not in the dendrites at the
+    calyx";
+  - "no effect was observed in the dendritic arborizations in the calyx";
+  - the lateral suppression was imaged in the γ lobe, and the modulation "occurs locally at KC presynaptic axonal
+    terminals".
+- **What it affects.** It does not affect a number. It affects the reading of the family's KC–KC term, whose matrix is
+  counted from claw-to-claw synapses in the calyx and acts on spiking, which the somatic recordings see. It also affects
+  every passage that offers muscarinic transmission among KCs as that term's carrier:
+  - the report's item 5;
+  - the summary's "Biophysical realizations" block, its recurrent-excitation section ("One reading keeps the counted
+    synapses"), its pending item on what the KC–KC inhibition stands for, and the `kc_kc_inh` glossary entry;
+  - E132's note (its question for Tom and Yang).
+  hal's notes with the quotes: notes/manoim2022_kckc_axonal_not_calyx.md in the shared directory.
+- **What has been done.** The paper was read, the note written and the finding posted in chat.md (2026-11-24, hal).
+- **What remains.** Corrected text for the report's item 5 and for the summary's passages, from a planning subagent; a
+  line in E132's note. Then rebuild and save the report page and the summary. The entry moves to Resolved when these are
+  in.
+
 ### The progress plot's ρ line ends on two points of kinds the plot is meant to leave out (found 2026-11-16, hal, the report pages' revision)
 - **What.** `reports/summary_progress_plot.py` leaves out oracle inputs and random, shuffled or re-drawn wirings by tag
   (`EXCLUDE_VARIANT`: `^input-searched_`, `^oracle_half`, `wiring-`, `^popfit_[PM]\d`, ...). From E83 on, variants carry
