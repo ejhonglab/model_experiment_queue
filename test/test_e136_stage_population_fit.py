@@ -319,3 +319,27 @@ def test_measures():
         F.set_measure('all')
     with pytest.raises(ValueError):
         F.set_measure('sharing_only')
+
+
+def test_gate_on_the_adopted_measure(monkeypatch, tmp_path):
+    import json
+    monkeypatch.setattr(F, 'e134_dir', lambda: tmp_path)
+    (tmp_path / 'score_classes.json').write_text('{"stages": {}}')
+    (tmp_path / 'score_stage_table.csv').write_text('x\n')
+    (tmp_path / F.GATE_FILE).write_text(json.dumps(dict(verdict='usable', verdict_as_read='not usable',
+                                                        measure=dict(views=['strength'], adopted=True))))
+    try:
+        with pytest.raises(RuntimeError, match='--measure strength'):
+            F.require_gate()
+        F.set_measure('strength_sharing')
+        with pytest.raises(RuntimeError, match='not .strength_sharing'):
+            F.require_gate()
+        F.set_measure('strength')
+        assert F.require_gate()['gate']['measure']['views'] == ['strength']
+        (tmp_path / F.GATE_FILE).write_text(json.dumps(dict(verdict='usable',
+                                                            measure=dict(views=['strength'], adopted=False))))
+        with pytest.raises(RuntimeError, match='not adopted'):
+            F.require_gate()
+    finally:
+        F.set_measure('all')
+    assert set(F.START_CHECK['strength']) == {'stage_error', *(f'{s}_error' for s in F.LOSS_STAGES)}

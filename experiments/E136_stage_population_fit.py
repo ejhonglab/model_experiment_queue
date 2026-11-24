@@ -200,6 +200,13 @@ CLAW_THR_CHECK_HZ = 40.0
 IMPROVE_SE = 2.0
 # the identity's tolerance on the population errors against E134's score ("to rounding")
 IDENTITY_TOL = 1e-9
+# the start check (the re-read on the adopted measure): A0's first evaluation (z = 0, E134's held points) on strength
+# against the fit half, as the planner read it from E134's saved runs (4 decimals): the loss, then the four stages
+START_CHECK: Dict[str, Dict[str, float]] = {
+    'strength': dict(stage_error=0.9747, pn_dendrite_error=1.1284, pn_bouton_error=1.0516, kc_claw_error=0.7938,
+                     kc_soma_error=0.8892),
+}
+START_CHECK_TOL = 6e-5
 
 ReadPoint = namedtuple('ReadPoint', 'arm panel wiring half')
 
@@ -305,12 +312,24 @@ def seed_index(wiring: str) -> int:
 
 def require_gate() -> dict:
     """E134's measure gate (results/E134_population_baseline/measure_gate.json) and its classes (score_classes.json);
-    RuntimeError unless the gate's verdict is 'usable' and the stage table is in. Returns {'gate', 'classes'}."""
+    RuntimeError unless the gate's verdict is 'usable', the stage table is in, and, where the gate names an adopted
+    measure (its 'measure' block: 'views', 'adopted'; strength by odor alone since 2026-11-24 15:28), the measure in
+    force reads exactly those views (the re-read on the adopted measure, planned by a Fable subagent, claude-fable-5-2,
+    from disco 15:26). Returns {'gate', 'classes'}."""
     g = _read_json(e134_dir() / GATE_FILE)
     if not g:
         raise RuntimeError(f'E134 has no {GATE_FILE} yet: no fit before its measure gate reads "usable"')
     if str(g.get('verdict')) != 'usable':
         raise RuntimeError(f"E134's measure gate reads {g.get('verdict')!r}, not 'usable'")
+    meas = g.get('measure') or {}
+    if meas.get('views') is not None:
+        want = MEASURES[MEASURE]
+        if not meas.get('adopted'):
+            raise RuntimeError(f"the gate's measure {meas['views']} is not adopted")
+        if want is None or set(want) != set(meas['views']):
+            names = [k for k, v in MEASURES.items() if v is not None and set(v) == set(meas['views'])]
+            raise RuntimeError(f"the adopted measure is {meas['views']}, not {MEASURE!r}: run with --measure "
+                               f"{names[0] if names else '?'}")
     c = _read_json(e134_dir() / 'score_classes.json')
     if not c or not (e134_dir() / 'score_stage_table.csv').exists():
         raise RuntimeError("E134's stage table is not in (score_classes.json, score_stage_table.csv)")
@@ -323,9 +342,53 @@ def require_e135() -> dict:
     raise RuntimeError('A1 waits on E135: what it hands on is not defined yet')
 
 
+def stage_classes_on_measure(views: Sequence[str], scores: Optional[pd.DataFrame] = None,
+                             group: str = START_GROUP) -> Dict[str, dict]:
+    """E134's stage class (`classify_stages`' rule) on a measure of fewer views, from E134's committed score table
+    (score_scores.csv): per stage of LOSS_STAGES and each of its first two readings, each of the eight wirings' error on
+    the measure's views (the root mean square of its view_<view> columns) against the stage's most atypical fly on the
+    same views (hal's `leave_one_out` with the measure's parts, all the stage's megamat flies); 'inside' on
+    E134's INSIDE_MIN_WIRINGS of 8, 'far' above its FAR_ERROR on as many, else 'between'; 'not readable' where the two
+    readings differ."""
+    from experiments import E134_population_baseline as B
+    from kcq import population_fit as P
+    sc = scores if scores is not None else pd.read_csv(e134_dir() / 'score_scores.csv')
+    out = {}
+    for st, fl in all_flies(LOSS_STAGES).items():
+        fp, have = B.fly_side_read(fl)
+        od = [o for o in have]
+        loo = P.leave_one_out(fp, od, B.breadth_edges(len(od)), parts=measure_parts(views))
+        yard = float(loo['error'].max())
+        by = {}
+        for rd in R.readings_of(st)[:2]:
+            x = sc[(sc.group == group) & (sc.stage == st) & (sc.panel == PANEL) & (sc.condition == 'on')
+                   & (sc.reading == rd.name) & sc.wiring.isin(WIRINGS)]
+            if len(x) < len(WIRINGS):
+                continue
+            err = np.sqrt((x[[f'view_{v}' for v in views]].astype(float) ** 2).mean(axis=1)).to_numpy()
+            inside, far = int((err <= yard).sum()), int((err > B.FAR_ERROR).sum())
+            by[rd.name] = dict(cls='inside' if inside >= B.INSIDE_MIN_WIRINGS else 'far' if far >= B.INSIDE_MIN_WIRINGS
+                               else 'between', n_inside=inside, n_far=far, max=float(err.max()))
+        vals = [v['cls'] for v in by.values()]
+        cls = (vals[0] if len(vals) == 2 and len(set(vals)) == 1 else 'not readable' if len(set(vals)) > 1
+               else f'{vals[0]} (one reading)' if vals else 'not scored')
+        out[st] = dict(by_reading=by, cls=cls, yardstick=yard, views=list(views))
+    return out
+
+
 def readable_stages(classes: Optional[Mapping] = None, group: str = START_GROUP) -> Tuple[str, ...]:
-    """The stages of LOSS_STAGES that E134 found readable (score_classes.json's stage classes of `group`, 'not
-    readable' left out), in stage order."""
+    """The stages of LOSS_STAGES that E134 found readable, in stage order: on every view (MEASURE 'all') from
+    score_classes.json's stage classes of `group` ('not readable' left out); on a measure of fewer views from
+    `stage_classes_on_measure` (written to <out_dir>/stage_classes.json), which must find all four readable (the re-read
+    on the adopted measure; RuntimeError otherwise)."""
+    if MEASURE != 'all':
+        cl = stage_classes_on_measure(MEASURES[MEASURE], group=group)
+        _write_json(out_dir() / 'stage_classes.json', dict(measure=MEASURE, group=group, classes=cl, time=_now(),
+                                                            host=_host(), **_commits()))
+        bad = [s for s in LOSS_STAGES if cl[s]['cls'] in ('not readable', 'not scored')]
+        if bad:
+            raise RuntimeError(f'on the measure {MEASURE!r} the stages {bad} are not readable: {cl}')
+        return LOSS_STAGES
     c = classes if classes is not None else _read_json(e134_dir() / 'score_classes.json')
     st = ((c or {}).get('stages') or {}).get(group)
     if not st:
@@ -1080,6 +1143,10 @@ def fit_arm(arm: str, control: bool = False, maxfev: Optional[int] = None, resum
                 row.update({f'{k}_{w}': v for k, v in run.info['params'].items()})
                 if run.info.get('claw_thr') is not None:
                     row[f'claw_thr_{w}'] = run.info['claw_thr']
+            if i == 0 and name == 'A0' and not any(zc) and MEASURE in START_CHECK:
+                bad = {k: (res[k], v) for k, v in START_CHECK[MEASURE].items() if abs(res[k] - v) > START_CHECK_TOL}
+                if bad:
+                    raise RuntimeError(f'the start check fails (got, expected): {bad}')
             hist.append(row)
             memo[zc] = res['loss_sim']
             pd.DataFrame(hist).to_csv(hist_path, index=False)
@@ -1108,7 +1175,8 @@ def fit_arm(arm: str, control: bool = False, maxfev: Optional[int] = None, resum
     bz = {k: float(best[f'z_{k}']) for k in searched}
     flags = at_bound(searched, [bz[k] for k in searched])
     flags += [f'hold at an end on {w}' for w in S_WIRINGS if best.get(f'hold_at_end_{w}')]
-    out = dict(arm=name, base_arm=base, searched=list(searched), stages=list(stages), start=START_GROUP,
+    out = dict(arm=name, base_arm=base, searched=list(searched), stages=list(stages), start=START_GROUP, measure=MEASURE,
+               gate_measure=gate['gate'].get('measure'), gate_verdict_as_read=gate['gate'].get('verdict_as_read'),
                n_evals=len(hist), n_calls=calls['n'], budget=budget, restarted=restarted, best_eval=int(best['eval']),
                best_z=bz, at_bound=flags, best=dict(best), messages=messages, claw_mode=m.claw_mode,
                seconds=round(time.time() - t0, 1), host=_host(), time=_now(), **_commits())
