@@ -112,7 +112,12 @@ measured candidates and added one at a time for as long as the held-out error fa
 
 The gates (the entry's Design 1 and Status): step 0 reads recordings only and runs on E134's committed lock. No fit
 (step 1) and no model run (step 2) before E134's measure gate reads "usable" and its megamat runs are scored
-(`require_e134_gate`); a planner then re-reads the thresholds. The timing helper fits planted data only.
+(`require_e134_gate`); a planner then re-reads the thresholds. The timing helper fits planted data only. Exception for
+step 1 (Tom, 2026-11-24 about 15:21, in hal's terminal, after E134's gate read "not usable" at 15:19): "Run step 1 now:
+fit the PN stage to the dendrites now on hal's and disco's lanes. Step 2's model runs still wait for the adopted
+measure." Step 1 and its controls (and the family's build they read the PN stage from) run when the gate is usable or
+when results/.../step1_authorized.json records Tom's authorization (`require_step1_allowed`; hal's session writes it);
+step 2 and the score keep `require_e134_gate`. The lock never needed the gate.
 
 Step 2 (up to 73 runs at fixed scales, both response rates re-held, on the family's eight wirings): on the megamat
 input R1, the highest kept rung (each odor predicted by the fit that left it out), that rung with its terms' glomerulus
@@ -364,10 +369,15 @@ def require_e134_lock() -> dict:
     return E134R.require_lock()
 
 
+def e134_results_dir() -> Path:
+    """<shared>/results/E134_population_baseline/: E134's gate, its stage table and its stage errors."""
+    return H.shared_dir() / 'results' / E134
+
+
 def e134_gate_status(results: Optional[Path] = None) -> dict:
     """What E134 has recorded of its measure gate: the verdict file's contents (E134_GATE_FILE) and whether its megamat
     runs are scored (E134_SCORED_FILE), in <shared>/results/E134_population_baseline/ (or `results`)."""
-    d = Path(results) if results is not None else H.shared_dir() / 'results' / E134
+    d = Path(results) if results is not None else e134_results_dir()
     gate = _read_json(d / E134_GATE_FILE)
     return dict(dir=str(d), gate_file=E134_GATE_FILE, gate=gate, verdict=gate.get('verdict'),
                 scored=(d / E134_SCORED_FILE).exists(), scored_file=E134_SCORED_FILE)
@@ -385,6 +395,44 @@ def require_e134_gate(results: Optional[Path] = None) -> dict:
             f"--part score; now: {'present' if st['scored'] else 'absent'}). A planner then re-reads E135's thresholds. "
             'Step 0 (recordings only) does not wait.')
     return st
+
+
+# Tom's authorization of step 1 before E134's gate (2026-11-24 about 15:21, in hal's terminal), as hal's session
+# records it in results/E135_antennal_lobe_dendrites/: {"authorized_by": "Tom", "when": ..., "words": ...}
+STEP1_AUTH_FILE = 'step1_authorized.json'
+STEP1_AUTH_KEYS: Tuple[str, ...] = ('authorized_by', 'when', 'words')
+
+
+def step1_authorization(root: Optional[Path] = None) -> dict:
+    """Tom's authorization of step 1 before E134's gate (results/.../STEP1_AUTH_FILE, or in `root`): its contents
+    where it is Tom's and has every key of STEP1_AUTH_KEYS non-empty, else {}."""
+    a = _read_json((out_dir() if root is None else Path(root)) / STEP1_AUTH_FILE)
+    if a.get('authorized_by') != 'Tom' or not all(a.get(k) for k in STEP1_AUTH_KEYS):
+        return {}
+    return a
+
+
+def require_step1_allowed(results: Optional[Path] = None, root: Optional[Path] = None) -> dict:
+    """Step 1 may run (its fits, its controls and the family's build they read the PN stage from): E134's measure gate
+    reads "usable" with its megamat runs scored (`require_e134_gate`, `results` its folder), or Tom has authorized
+    step 1 before the gate (`step1_authorization`, `root` its folder; Tom, 2026-11-24 about 15:21: "Run step 1 now: fit
+    the PN stage to the dendrites now on hal's and disco's lanes. Step 2's model runs still wait for the adopted
+    measure."). PermissionError naming both otherwise. Step 2 and the score do not use this: they keep
+    `require_e134_gate`.
+
+    Returns:
+        dict with 'how' ('gate' or 'authorized'), the gate's status and, where authorized, the authorization.
+    """
+    try:
+        return dict(how='gate', gate=require_e134_gate(results))
+    except PermissionError as e:
+        auth = step1_authorization(root)
+        if auth:
+            return dict(how='authorized', authorization=auth, gate=e134_gate_status(results))
+        where = (out_dir() if root is None else Path(root)) / STEP1_AUTH_FILE
+        raise PermissionError(f'{e} Step 1 may also run on Tom\'s authorization before the gate: {where} with '
+                              '{"authorized_by": "Tom", "when": ..., "words": ...} (written by hal\'s session); it is '
+                              'absent or incomplete.') from e
 
 
 # ---------------------------------------------------------------------------
@@ -2182,10 +2230,10 @@ def step2_rung(highest_kept: str) -> Optional[str]:
 
 
 def step1_inputs(lock: Mapping, panel: str = 'megamat') -> Tuple[Step1, PNStage, dict]:
-    """The family's PN stage on `panel` (`family_stage`, after E134's gate), viki's PN population in the lock's fit
+    """The family's PN stage on `panel` (`family_stage` for step 1: after E134's gate or Tom's authorization), viki's PN population in the lock's fit
     units, and the ORN recordings in dF/F (ruling 1) on the lock's glomeruli and on the partner pool: (`Step1` context,
     the stage, `family_stage`'s info)."""
-    stage, info = family_stage(panel)
+    stage, info = family_stage(panel, purpose='step1')
     units = lock.get('units', {})
     pop = pn_population(units.get('fit_pn', lock.get('fit_units', FIT_UNITS)))
     orn_t = recorded_stage(ORN_KEY, units.get('fit_orn', FIT_ORN_UNITS))
@@ -2201,8 +2249,9 @@ def part_step1() -> dict:
     held-out flies and odors, R3's lateral terms with their permuted fits (the lock's count), and the rungs refitted on
     all seven PN flies for step 2 with their scale factors (`rung_fits_all_flies`). The permuted refits of R1 and R2 run
     as processes of their own (`part_step1_control`). Refuses before E134's gate and this experiment's committed lock.
-    Writes step1_rungs.csv, step1_lateral.csv, step1_tables.csv, step1_fits.json and provenance_step1.json."""
-    require_e134_gate()
+    Writes step1_rungs.csv, step1_lateral.csv, step1_tables.csv, step1_fits.json and provenance_step1.json. Runs when
+    E134's gate is usable or on Tom's authorization (`require_step1_allowed`), which the provenance records."""
+    allowed = require_step1_allowed()
     lock = read_lock()
     t0 = time.time()
     ctx, stage, info = step1_inputs(lock)
@@ -2229,16 +2278,16 @@ def part_step1() -> dict:
                                             scale=scale_record(fits)))
     _write_json(d / 'provenance_step1.json', dict(script=H.script_path(__file__), part='step1', host=_host(),
                 time=_now(), seconds=time.time() - t0, lock_sha256=_sha256(LOCK_COPY), identity=info['identity'],
-                **H.model_provenance(orn_deltas=stage.delta)))
+                allowed=allowed, **H.model_provenance(orn_deltas=stage.delta)))
     return out
 
 
 def part_step1_control(perms: Sequence[int], lane: Optional[str] = None, reclaim: bool = False) -> pd.DataFrame:
     """R1's and R2's odor-permuted refits by index (`run_control`), each a process of its own on any lane (claimed by
     mkdir of claims/step1_control_<i>/); writes step1_control_<i>.json and gathers every one written so far into
-    step1_controls.csv (`collect_controls`). Refuses before E134's gate and the committed lock, and for an index the
-    lock does not count."""
-    require_e134_gate()
+    step1_controls.csv (`collect_controls`). Refuses before E134's gate (or Tom's authorization of step 1,
+    `require_step1_allowed`) and the committed lock, and for an index the lock does not count."""
+    allowed = require_step1_allowed()
     lock = read_lock()
     n = int(lock.get('permutations', {}).get('control', N_PERM_CONTROL))
     bad = [i for i in perms if not 0 <= int(i) < n]
@@ -2258,7 +2307,7 @@ def part_step1_control(perms: Sequence[int], lane: Optional[str] = None, reclaim
             row = run_control(ctx, int(i))
             _write_json(out_dir() / f'{tag}.json', dict(row=row, host=_host(), lane=lane, time=_now(),
                                                         seconds=time.time() - t0, lock_sha256=_sha256(LOCK_COPY),
-                                                        **H.code_commits()))
+                                                        allowed=allowed, **H.code_commits()))
         except BaseException:
             release(tag)
             raise
@@ -2276,13 +2325,17 @@ def collect_controls(root: Optional[Path] = None) -> pd.DataFrame:
     return t
 
 
-def family_stage(panel: str = 'megamat', wiring: str = 'real') -> Tuple[PNStage, dict]:
+def family_stage(panel: str = 'megamat', wiring: str = 'real', purpose: str = 'step2') -> Tuple[PNStage, dict]:
     """The family's PN stage on a panel's input (`panel_orn`: megamat, apl16, validation2, mixtures): E83's
     `build_simulator(wiring, orn=..., breadth=<the lab input's>)`, its olfsysm variables read into a `PNStage` (rows
     the wiring's glomeruli, columns the input's odors by `odor_labels`, in olfsysm's order through the simulator's
     'odor_order'), checked against olfsysm's own layers (`check_identity`) on a copy of the build's variables. A model
-    build: after E134's gate only."""
-    require_e134_gate()
+    build: for `purpose` 'step1' after E134's gate or Tom's authorization of step 1 (`require_step1_allowed`), for any
+    other purpose (step 2, E136) after E134's gate only (`require_e134_gate`)."""
+    if purpose == 'step1':
+        require_step1_allowed()
+    else:
+        require_e134_gate()
     from experiments import E83_cross_wiring_fit as X
     orn = panel_orn(panel)
     sim, info = X.build_simulator(wiring, orn=orn, breadth=X.wiring_parts(wiring)['breadth'])
@@ -3362,7 +3415,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     elif a.part == 'commands':
         print_commands()
     elif a.part == 'gate':
-        print(json.dumps(e134_gate_status(), indent=1))
+        print(json.dumps(dict(e134_gate_status(), step1_authorization=step1_authorization()), indent=1))
 
 
 if __name__ == '__main__':

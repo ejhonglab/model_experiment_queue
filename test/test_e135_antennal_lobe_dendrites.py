@@ -118,6 +118,65 @@ def test_gate_refuses_until_e134_records_usable(tmp_path):
         E.require_e134_gate(tmp_path)
 
 
+def _auth_env(tmp_path, monkeypatch):
+    """E134's results (no gate) and E135's results in tmp folders; the lock refused with a planted message, so that a
+    part that passes its gate stops there (before any model build)."""
+    e134, res = tmp_path / 'e134', tmp_path / 'res'
+    e134.mkdir()
+    res.mkdir()
+    monkeypatch.setattr(E, 'e134_results_dir', lambda: e134)
+    monkeypatch.setattr(E, 'out_dir', lambda: res)
+
+    def no_lock(path=None):
+        raise PermissionError('planted: no lock')
+
+    monkeypatch.setattr(E, 'read_lock', no_lock)
+    return e134, res
+
+
+def test_step1_refused_without_the_gate_or_toms_authorization(tmp_path, monkeypatch):
+    e134, res = _auth_env(tmp_path, monkeypatch)
+    with pytest.raises(PermissionError, match='measure_gate.json') as ex:
+        E.require_step1_allowed()
+    assert E.STEP1_AUTH_FILE in str(ex.value)
+    for bad in (dict(authorized_by='viki', when='2026-11-24 15:21', words='run it'),
+                dict(authorized_by='Tom', when='2026-11-24 15:21')):
+        (res / E.STEP1_AUTH_FILE).write_text(json.dumps(bad))
+        with pytest.raises(PermissionError, match='absent or incomplete'):
+            E.require_step1_allowed()
+    for part in (E.part_step1, lambda: E.part_step1_control([0])):
+        with pytest.raises(PermissionError, match='measure_gate.json'):
+            part()
+    with pytest.raises(PermissionError, match='measure_gate.json'):
+        E.family_stage('megamat', purpose='step1')
+    (e134 / E.E134_GATE_FILE).write_text(json.dumps(dict(verdict='usable')))
+    (e134 / E.E134_SCORED_FILE).write_text('{}')
+    assert E.require_step1_allowed()['how'] == 'gate'
+
+
+def test_step1_runs_on_toms_authorization(tmp_path, monkeypatch):
+    e134, res = _auth_env(tmp_path, monkeypatch)
+    (e134 / E.E134_GATE_FILE).write_text(json.dumps(dict(verdict='not usable')))
+    (e134 / E.E134_SCORED_FILE).write_text('{}')
+    auth = dict(authorized_by='Tom', when='2026-11-24 15:21', words='Run step 1 now')
+    (res / E.STEP1_AUTH_FILE).write_text(json.dumps(auth))
+    a = E.require_step1_allowed()
+    assert a['how'] == 'authorized' and a['authorization'] == auth and a['gate']['verdict'] == 'not usable'
+    for part in (E.part_step1, lambda: E.part_step1_control([0])):           # past the gate, stopped at the lock
+        with pytest.raises(PermissionError, match='planted: no lock'):
+            part()
+
+
+def test_step2_still_waits_on_the_gate_under_the_authorization(tmp_path, monkeypatch):
+    e134, res = _auth_env(tmp_path, monkeypatch)
+    (res / E.STEP1_AUTH_FILE).write_text(json.dumps(dict(authorized_by='Tom', when='2026-11-24 15:21', words='step 1')))
+    assert E.require_step1_allowed()['how'] == 'authorized'
+    for part in (E.part_step2, E.part_score, lambda: E.family_stage('megamat'),
+                 lambda: E.family_stage('apl16', 'P1', purpose='step2')):
+        with pytest.raises(PermissionError, match='measure_gate.json'):
+            part()
+
+
 # ---------------------------------------------------------------------------
 # the port against olfsysm
 
