@@ -280,6 +280,21 @@ directory's notes/ and are linked from here.
 
 ## Resolved
 
+### E131's entry and the report's item 131 gave MB-C1's input from the modelled KCs as its output (found 2026-11-23 17:02, the code subagent's reading 13, and 20:00, E131's placement planner; resolved 2026-11-23 20:36)
+- **What.** E131's planning arithmetic read the KC→MB-C1 table as MB-C1's output: "4,716 output synapses onto the
+  modelled KCs", 0.16 of the 30,112 KC→KC synapses among them, about a third of APL's onto KCs, about 6.5 per γ KC and
+  a share of the inhibitory synapses onto γ against APL's of about 0.3. MB-C1's output onto those KCs (the MB-C1→KC
+  table) is 12,135 synapses: 0.40 of the KC→KC synapses, 0.82 of APL's onto KCs on claws (0.49 in the calyx), 16.7 per
+  γ KC (APL's 14.5 on claws, 23.2 in the calyx), and a share against APL's of 0.54 (claws) or 0.42 (calyx).
+- **What it affects.** E131's entry text (its "Why" and realism yardsticks), the report's item 131 (0.16), and the
+  realism yardsticks a write-up would read the runs against (the weight per MB-C1 synapse and MB-C1's share of γ's
+  inhibition). Not the doses m, which are multiples of the fitted KC–KC scale, nor any run, class or table.
+- **Done.** The code subagent's reading 13 recorded it before any run, and viki's Status sub-bullet of 17:02 gave the
+  corrected numbers. The note's step 0 section (E131_mbc1_cells.md, "The correction (reading 13)") recomputes every number
+  from the output table (results/E131_mbc1_cells/writeup_yardsticks.csv, 1255a6f, beside the entry's arithmetic), and
+  E131's Completed entry repeats the correction. The report's item 131 now says 0.40, corrected from 0.16, in the
+  commit that resolves this; its page is rebuilt and saved. The entry's own text stays as written (history).
+
 ### E129's note gave step 3's mechanism numbers with no script, a claw share without its denominator, and one range off by 0.01 (found 2026-11-23 17:16, hal's summary planner; resolved 2026-11-23 17:27)
 - **What.** E129_block_survivor_static.md's step-3 numbers were computed by hand from the archive: the share of APL-off
   responses carried by the 467 KCs without MB-C1 output, their response rates, and the odors-per-KC shares and ranges.
