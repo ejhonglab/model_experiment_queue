@@ -131,7 +131,10 @@ def test_scoring_on_planted_readings():
     assert bool(one.passes.iloc[0]) == bool(one.error.mean() <= B.GATE_WIRING_MAX)
     st, inputs = B.step_table(fam, flies)
     steps = {f'{a}->{b}' for a, b in zip(R.STAGES[:-1], R.STAGES[1:])}
-    assert set(st.step) == steps and set(inputs) == steps and set(st.level) == {'entry', 'part_distance', 'population'}
+    assert set(st.step) == steps and set(inputs) == steps
+    assert set(st.level) == {'entry', 'part_distance', 'mean_distance', 'population'}
+    mean = st[st.level == 'mean_distance']
+    assert (mean.groupby(['step', 'part']).size() == 1).all() and (mean.distance >= 0).all()
     pop = st[st.level == 'population']
     assert np.isfinite(pop.no_step_error).all() and np.isfinite(pop.model_downstream_error).all()
     dist = st[st.level == 'part_distance']
@@ -140,8 +143,11 @@ def test_scoring_on_planted_readings():
     assert set(nulls) == steps
     assert all(np.isfinite(v) and v > 0 for thr in nulls.values() for v in thr.values())
     assert all(set(thr) <= set(dist.part) for thr in nulls.values())
-    classes = B.classify_steps(st, nulls)
+    classes = B.classify_steps(st, nulls, B.step_nulls(inputs, 'one_fly'))
     assert {c['cls'] for c in classes.values()} <= {'explained', 'in part', 'no better than no step'}
+    for c in classes.values():
+        assert c['read_on'] == "the wirings' mean change" and set(c['wirings_inside']) == {'sets', 'one_fly'}
+        assert all(v['n_wirings'] == len(B.WIRINGS) for v in c['wirings_inside']['one_fly'].values())
     # the class from planted thresholds: everything inside, or nothing
     big = {s_: {p: np.inf for p in dist.part.unique()} for s_ in steps}
     zero = {s_: {p: -1.0 for p in dist.part.unique()} for s_ in steps}
@@ -202,6 +208,14 @@ def test_consistency_gate(tmp_path, monkeypatch):
     g = B.consistency_gate()
     assert g['gate'] is True and g['curve_noise']['split_half_rho'] == {'on': 0.85, 'off': 0.82}
     assert g['raw']['passes'] is False
+    # with versions, the gate reads the ruled halves ('half') and quotes the others beside
+    vrows = [dict(r, version='half', split_half_rho=0.79 if r['condition'] == 'on' else 0.52) for r in rows] + \
+            [dict(r, version='shared_curve_all_units') for r in rows]
+    pd.DataFrame(vrows).to_csv(tmp_path / 'archive_consistency_curve_noise.csv', index=False)
+    g = B.consistency_gate()
+    assert g['gate'] is False and g['curve_noise']['split_half_rho'] == {'on': 0.79, 'off': 0.52}
+    assert g['curve_noise']['version'] == 'half'
+    assert g['curve_noise']['other_versions']['shared_curve_all_units'] == {'on': 0.85, 'off': 0.82}
 
 
 def test_commands_and_guard(capsys):

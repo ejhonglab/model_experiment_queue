@@ -171,6 +171,8 @@ STEP2_SOURCES: Tuple[Source, ...] = (
 )
 # the measure gate's second check: one wiring against the other wirings as flies
 GATE_WIRING_MAX = 1.2
+# the archive scoring's split-half version the gate reads (the half's own curve, noise and units)
+GATE_CONSISTENCY_VERSION = 'half'
 N_FLOOR = 1000
 
 # step 3: the points
@@ -1296,6 +1298,9 @@ def step_table(readings: Mapping[str, R.ModelReading], flies: R.FlyCache, panel:
                 d = x[part].reindex(df.index).to_numpy(dtype=float) - df['change'].to_numpy(dtype=float)
                 rows.append(dict(step=step, level='part_distance', part=part, wiring=w,
                                  distance=float(np.sqrt(np.nanmean(d ** 2))) if np.isfinite(d).any() else np.nan))
+            d = m.to_numpy(dtype=float) - df['change'].to_numpy(dtype=float)
+            rows.append(dict(step=step, level='mean_distance', part=part, wiring='mean',
+                             distance=float(np.sqrt(np.nanmean(d ** 2))) if np.isfinite(d).any() else np.nan))
         ref_d = P.fly_reference(pd_, od, edges)
         ns = P.no_step_score(pu, ref_d)
         model_err = float(P.wirings_as_flies(md, ref_d).loc['mean', 'error'])
@@ -1356,9 +1361,17 @@ def consistency_gate(readings: Sequence[str] = ()) -> dict:
             continue
         c = pd.read_csv(p)
         g = c[(c.measure == 'error') & (c.variant_set == 'inside_bands')]
+        others = {}
+        if 'version' in g.columns:
+            # the ruled split-half test is version 'half' (each half's own curve, noise and units; the planner's
+            # reading of 2026-11-24 11:34); the shared-curve and all-units versions are quoted beside
+            others = {str(v): {str(r.condition): float(r.split_half_rho) for r in x.itertuples()}
+                      for v, x in g.groupby('version', sort=False) if v != GATE_CONSISTENCY_VERSION}
+            g = g[g.version == GATE_CONSISTENCY_VERSION]
         rho = {str(r.condition): float(r.split_half_rho) for r in g.itertuples()}
         out[rd] = dict(split_half_rho=rho, passes=bool(rho and all(v >= GATE_CONSISTENCY_MIN for v in rho.values())
-                                                         and len(rho) >= 2), file=str(p))
+                                                         and len(rho) >= 2), file=str(p),
+                       version=GATE_CONSISTENCY_VERSION if others else None, other_versions=others)
     if default in out:
         out['gate'] = out[default]['passes']
     return out
@@ -1411,29 +1424,43 @@ def step_null_distance(upstream: Sequence[P.Population], downstream: Sequence[P.
     return out
 
 
-def classify_steps(step_tab: pd.DataFrame, nulls: Mapping[str, Mapping[str, float]]) -> Dict[str, dict]:
-    """Each step's class, as the lock's rules fix it (rules -> step_class; the planner's reading 6, chat.md 2026-11-24
-    11:34): a part is inside on a wiring when its RMS distance from the flies' change (`step_table`'s 'part_distance'
-    rows) is no larger than `nulls[step][part]` (`step_null_distance`, the 95th percentile of the resampled flies'
-    distances); a view is inside on a wiring when every part of it is; the step is 'explained' when every view is
-    inside on INSIDE_MIN_WIRINGS of the 8 wirings, 'no better than no step' when the model's downstream error (the
-    wirings' mean) is at or above the no-step yardstick, otherwise 'in part'. The per-entry intervals stay as the
-    description (the entries inside, of all, per part)."""
+def classify_steps(step_tab: pd.DataFrame, nulls: Mapping[str, Mapping[str, float]],
+                   nulls_beside: Optional[Mapping[str, Mapping[str, float]]] = None) -> Dict[str, dict]:
+    """Each step's class, as the gate planner ruled it (chat.md 2026-11-24 15:19, replacing the per-wiring rule of
+    11:34): a part is inside when the RMS distance of the wirings' mean change from the flies' change (`step_table`'s
+    'mean_distance' rows) is no larger than `nulls[step][part]` (`step_null_distance` with 'sets' and the (n - 1) / n
+    correction); a view is inside when every part of it is; the step is 'explained' when every view is inside, 'no
+    better than no step' when the model's downstream error (the wirings' mean) is at or above the no-step yardstick,
+    otherwise 'in part'. Beside, as descriptions: per view, the wirings inside under `nulls` and under `nulls_beside`
+    ('one_fly'), each wiring by its own change ('part_distance' rows, a view inside on a wiring when every part is);
+    the per-entry intervals (the entries inside, of all, per part)."""
+    def per_wiring(dist: pd.DataFrame, thr: Mapping[str, float]) -> Dict[str, dict]:
+        d = dist.copy()
+        d['inside'] = [bool(part in thr and np.isfinite(x) and x <= thr[part]) for part, x in zip(d.part, d.distance)]
+        d['view'] = [str(part).split('/')[0] for part in d.part]
+        out_v = {}
+        for v, x in d.groupby('view', sort=False):
+            per_w = x.groupby('wiring').inside.all()
+            out_v[v] = dict(n_wirings_inside=int(per_w.sum()), n_wirings=int(len(per_w)))
+        return out_v
+
     out = {}
     for step, df in step_tab.groupby('step', sort=False):
         pop = df[df.level == 'population']
-        dist = df[df.level == 'part_distance'].copy()
+        dist = df[df.level == 'part_distance']
+        mean = df[df.level == 'mean_distance'].copy()
         ent = df[df.level == 'entry']
         thr = nulls.get(step) or {}
-        dist['inside'] = [bool(part in thr and np.isfinite(d) and d <= thr[part]) for part, d in zip(dist.part,
-                                                                                                    dist.distance)]
-        dist['view'] = [str(part).split('/')[0] for part in dist.part]
-        views = {}
-        for v, x in dist.groupby('view', sort=False):
-            per_w = x.groupby('wiring').inside.all()
-            n_in = int(per_w.sum())
-            views[v] = dict(n_wirings_inside=n_in, n_wirings=int(len(per_w)),
-                            inside=bool(n_in >= min(INSIDE_MIN_WIRINGS, len(per_w))))
+        mean['inside'] = [bool(part in thr and np.isfinite(x) and x <= thr[part]) for part, x in zip(mean.part,
+                                                                                                 mean.distance)]
+        mean['view'] = [str(part).split('/')[0] for part in mean.part]
+        views = {v: dict(inside=bool(x.inside.all()), parts={str(r.part): dict(distance=float(r.distance),
+                                                                                threshold=float(thr.get(r.part, np.nan)))
+                                                              for r in x.itertuples()})
+                 for v, x in mean.groupby('view', sort=False)}
+        beside = dict(sets=per_wiring(dist, thr))
+        if nulls_beside is not None:
+            beside['one_fly'] = per_wiring(dist, nulls_beside.get(step) or {})
         entries = {part: f'{int(x.inside.sum())} of {len(x)}' for part, x in ent.groupby('part', sort=False)}
         if len(pop) and float(pop.model_downstream_error.iloc[0]) >= float(pop.no_step_error.iloc[0]):
             cls = 'no better than no step'
@@ -1441,7 +1468,8 @@ def classify_steps(step_tab: pd.DataFrame, nulls: Mapping[str, Mapping[str, floa
             cls = 'explained'
         else:
             cls = 'in part'
-        out[step] = dict(cls=cls, views=views, thresholds={k: float(v) for k, v in thr.items()},
+        out[step] = dict(cls=cls, read_on='the wirings\' mean change', views=views,
+                         thresholds={k: float(v) for k, v in thr.items()}, wirings_inside=beside,
                          entries_inside=entries)
     return out
 
@@ -1497,7 +1525,7 @@ def apl16_bands() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def part_score(step_draw: str = 'sets', step_correct: bool = False) -> dict:
+def part_score(step_draw: str = 'sets', step_correct: bool = True) -> dict:
     """Step 3's runs (and E107's validation2 runs of the family) read and scored as step 2's (default readings and
     alternatives); the stage table, the step table, the held-out panels, the classes, realism, score_table.md and
     provenance_score.json."""
@@ -1522,7 +1550,8 @@ def part_score(step_draw: str = 'sets', step_correct: bool = False) -> dict:
                 st.insert(0, 'group', g)
                 steps.append(st)
                 try:
-                    step_classes[g] = classify_steps(st, step_nulls(inputs, step_draw, step_correct))
+                    step_classes[g] = classify_steps(st, step_nulls(inputs, step_draw, step_correct),
+                                                     step_nulls(inputs, 'one_fly', False))
                 except NotImplementedError as e:
                     step_classes[g] = dict(error=str(e))
         print(f'score {g}: {time.time() - t0:.0f} s', flush=True)
@@ -1668,8 +1697,9 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     ap.add_argument('--reclaim', action='store_true', help="step3: take over the points' claims (a process that died)")
     ap.add_argument('--step-draw', default='sets', choices=('sets', 'one_fly'),
                     help="score: the step class's null (P.step_resample's draw; default %(default)s, as ruled)")
-    ap.add_argument('--step-correct', action='store_true',
-                    help="score: undo the bootstrap's (n - 1) / n shrinkage in the step class's null ('sets')")
+    ap.add_argument('--no-step-correct', dest='step_correct', action='store_false',
+                    help="score: leave the bootstrap's (n - 1) / n shrinkage in the step class's null (default: "
+                         "corrected, as the gate planner ruled at 15:19)")
     a = ap.parse_args(argv)
     if a.part == 'step2':
         part_step2(a.readings)
