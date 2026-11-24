@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """E132: the KC-KC synapses with a cholinergic sign: recurrent excitation among KCs through the hemibrain's claw-to-claw
-synapses, with a pooled inhibition and alone, read as a dose through zero. Steps 0 and 1 (no olfsysm change).
+synapses, with a pooled inhibition and alone, read as a dose through zero. Steps 0 and 1 (no olfsysm change) and step 2
+(on olfsysm's option for negative KC-KC weights, 45e5cf9).
 
 The entry is item E132 of experiment_priorities.md (moved into the list 2026-11-23; claimed by hal 21:00). "The family" is
 C2's breadth-2 APL-effect fit (E67) on E72 part B's eight wirings, each at its own fit (E83's `saved_fit`); S is real,
@@ -79,9 +80,39 @@ Readings the entry leaves open, fixed here before any run:
     b U @ n / 0.5 s, Hz) with APL on and off, over the fit's threshold; the largest count per KC and odor and the KCs
     with 20 or more spikes to some odor (E110's run_extras).
 
-Steps 2 to 4 (the excitation, the shuffle control and the male calyces, the refit) need the olfsysm option for negative
-KC-KC weights, held until Yang's OK: their arms are named here and the runner refuses any negative dose
-(`require_nonnegative`), whatever the matrix's entries.
+Step 2 (the excitation; Yang's OK for the option 2026-11-23 21:25; code 2026-11-24). It follows readings 1 to 6 as they
+stand; what is written below is how they are carried to negative doses, nothing re-planned:
+12. The option. olfsysm 45e5cf9 adds `mp.kc.allow_negative_kc_kc` (C++, default false) and fit_mb_model's
+    `allow_negative_kc_kc`. A step-2 runner is built with it on (`Runner(w, allow_negative=True)`: E83's
+    `build_simulator(w, extra_kws=dict(allow_negative_kc_kc=True))`, its mp's flag checked true); a step-1 runner without
+    it (the flag checked false where the build has it). The runner still feeds d HB + b U with 'wKCKC_scale' 1, so only
+    olfsysm's own check (`check_kc_kc_inh`) sees the negative entries; `combined_matrix` lets them through only for a
+    runner with the flag, b stays >= 0, and a negative dose on a build without the option raises SignedDoseError
+    (`negative_kckc_available`). Nothing negative is bisected: the pooled hold bisects b, the threshold hold the
+    threshold, both the tied APL scales, each of which lowers the response count as it rises (E69's `bisect_factor`).
+13. The flag check (part flagcheck, before any step-2 run): on 'real', a runner with the flag on and non-negative
+    matrices reproduces the family's saved run (matrix s, pooled 0) and step 1's S1_UI2_real at its held parameters,
+    APL on and off, with 0 differing spike counts and responses (flagcheck_<host>.json). Step 2 refuses until it has
+    passed with a build that has the option, and until step 1's checks have passed on every wiring.
+14. UX2, UX5, UX10 (the matrix at -2, -5, -10 beside the pooled neuron) by the pooled hold (reading 1, from b = s);
+    X2, X5, X10 (the matrix alone) by the threshold hold (reading 2, from the fit's threshold, d HB and no pooled
+    neuron). Order inside a lane (`planned_step2`): -2 on 'real' first in both arms (UX2 then X2, the stability smoke)
+    when the lane has 'real', then the UX arms wiring by wiring in the order the lane gives, then the X arms likewise;
+    `--reverse` reverses the whole list (a lane joining from the other end meets the others last). Every run saves its
+    spike times, as step 1's do (locally and in the archive, step2/), unless a condition has more than MAX_SPIKE_TIMES
+    spikes (a runaway): then its counts only, and its late share is NaN, recorded in the row ('spike_times_saved').
+15. Step 2's scoring (score; readings 3 to 6 unchanged): each arm's class and the stop rule (its dose 0 U0 for the UX
+    arms, E110's part A for the X arms); the candidates are the negative doses that pass, and if several pass the one
+    with the lowest pattern part on S's population against all recordings goes on (the entry's rule); if none passes
+    the experiment stops after step 2. "Differ" (reading 5): each UX against its mirror UI at the same size and against
+    U0 (the sign's own effect), each X against E110's part A and against the saved half matrix H50 (the entry's step
+    2), and UX against X at the same dose (outcome (d)'s "not told apart"). Beside them, no gate: the corners and the
+    thresholds under 60 Hz, the amplitude and shape parts, the spread ratio, Pearson r and ρ on the per-pair APL effect,
+    the mean APL effect under the readout and on raw counts (the latter also minus the family's and minus the dose 0's,
+    for outcome (b)), the raw-count loss, the largest counts, the KCs with 20 or more spikes, the late shares and γ's
+    off / on ratio.
+Steps 3 and 4 run only for a dose that passes (verdict.json 'step2'); their code is written then (`part_step3`,
+`part_step4` say which).
 
 Parts (CLI `--part`):
 - check (simulations, `--wirings`): (i) the runner at the fit's parameters (matrix s, pooled 0) reproduces the
@@ -101,13 +132,17 @@ Parts (CLI `--part`):
   <tag>/, `--reclaim` to take over a dead process's): step 1's U0, UI2, UI5, UI10. Rows in runs_<host>_<lane>.csv,
   provenance in provenance_<host>_<lane>.json, runs and spike times saved locally (outputs/E132_kckc_excitation/step1/)
   and in the model-output archive (data/model_outputs/E132_kckc_excitation/step1/).
+- flagcheck (simulations, `--wirings`, default real): reading 13, flagcheck_<host>.json.
+- step2 (simulations, resumable, per lane `--wirings`, `--arms`, `--reverse`; claims as for runs): step 2's UX2, UX5,
+  UX10, X2, X5, X10. Rows in runs_<host>_step2-<lane>.csv, provenance in provenance_<host>_step2-<lane>.json, runs and
+  spike times under outputs/E132_kckc_excitation/step2/ and data/model_outputs/E132_kckc_excitation/step2/.
 - score (no simulation): readings.csv, runs.csv, verdict.json, comparison_table.md, provenance_score.json.
 - variants: variants.csv and model_pair_distances_long.csv (raw spike counts, tagged by the run tag, the archive's file
   name, so kcq/apl_effect.py scores the realism bands).
-- plan: the points a lane would run.
+- plan: the points a lane would run (`--step 2` for step 2's).
 
 The holds (CLAUDE.md, "Connectome data"): only the model's hemibrain wiring and E72's seven re-draws of it, and the
-loader's hemibrain KC->KC counts and KC types; no olfsysm change; nothing is published.
+loader's hemibrain KC->KC counts and KC types; no olfsysm change but the option of reading 12; nothing is published.
 
 Usage (from the repository root; 16 threads, under nice):
     OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 PYTHONUNBUFFERED=1 nice -n 10 ./venv/bin/python -u experiments/E132_kckc_excitation.py --part check
@@ -116,6 +151,11 @@ Usage (from the repository root; 16 threads, under nice):
     OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 PYTHONUNBUFFERED=1 nice -n 10 ./venv/bin/python -u experiments/E132_kckc_excitation.py --part runs --wirings real P1 P2 M1
     OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 PYTHONUNBUFFERED=1 nice -n 10 ./venv/bin/python -u experiments/E132_kckc_excitation.py --part runs --wirings P3 P4 M2 M3
     ./venv/bin/python -u experiments/E132_kckc_excitation.py --part score && ./venv/bin/python -u experiments/E132_kckc_excitation.py --part variants
+  step 2 (on a build with the option):
+    OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 PYTHONUNBUFFERED=1 nice -n 10 ./venv/bin/python -u experiments/E132_kckc_excitation.py --part flagcheck
+    OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 PYTHONUNBUFFERED=1 nice -n 10 ./venv/bin/python -u experiments/E132_kckc_excitation.py --part step2 --wirings real P1 P2 M1
+    OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 PYTHONUNBUFFERED=1 nice -n 10 ./venv/bin/python -u experiments/E132_kckc_excitation.py --part step2 --wirings P3 P4 M2 M3
+    (another host, from the other end:) ... --part step2 --wirings real P1 P2 M1 P3 P4 M2 M3 --reverse
 """
 from __future__ import annotations
 
@@ -187,6 +227,14 @@ REFS = {
 # the "differ" comparisons of step 1 (a, b); descriptions, no gate
 COMPARISONS = (('UI2', 'U0'), ('UI5', 'U0'), ('UI10', 'U0'), ('UI10', 'UI2'), ('U0', 'E129_P'), ('U0', 'U'),
                ('U0', 'E110_A'), ('UI10', 'H50'))
+# step 2's (reading 15): each UX against its mirror and against U0, each X against E110's part A and H50, UX against X
+STEP2_COMPARISONS = tuple((x, MIRROR[x]) for x in ('UX2', 'UX5', 'UX10')) + tuple(
+    (x, 'U0') for x in ('UX2', 'UX5', 'UX10')) + tuple((x, 'E110_A') for x in ('X2', 'X5', 'X10')) + tuple(
+    (x, 'H50') for x in ('X2', 'X5', 'X10')) + (('UX2', 'X2'), ('UX5', 'X5'), ('UX10', 'X10'))
+STEP2_DOSES = {2: ('UX2', 'X2'), 5: ('UX5', 'X5'), 10: ('UX10', 'X10')}
+SMOKE = (('UX2', 'real'), ('X2', 'real'))
+FLAG_CHECK_ARM = 'UI2'
+MAX_SPIKE_TIMES = 20_000_000
 PULSE_S = 0.5
 STIM_END = 0.5
 LANDING_DOSES = (2.0, 5.0, 10.0)
@@ -218,7 +266,31 @@ _CACHE: dict = {}
 
 
 class SignedDoseError(NotImplementedError):
-    """A negative KC-KC dose before olfsysm has the option for negative KC-KC weights (held until Yang's OK)."""
+    """A negative KC-KC dose where it cannot run: on a build without olfsysm's option for negative KC-KC weights, on a
+    runner built without the flag, or in a part for step 1's arms."""
+
+
+class GateClosedError(NotImplementedError):
+    """A step that runs only for a dose that passes the stop rule (steps 3 and 4)."""
+
+
+def negative_kckc_available() -> bool:
+    """Whether the installed olfsysm has the option for negative KC-KC weights (olfsysm 45e5cf9): the C++ flag
+    `mp.kc.allow_negative_kc_kc` and fit_mb_model's `allow_negative_kc_kc`."""
+    import inspect
+    import olfsysm
+    from pyolfsysm.mb_model import fit_mb_model
+    return bool(hasattr(olfsysm.ModelParams().kc, 'allow_negative_kc_kc')
+                and 'allow_negative_kc_kc' in inspect.signature(fit_mb_model).parameters)
+
+
+def olfsysm_build() -> Dict[str, object]:
+    """The installed olfsysm's commit, its dirty flags and whether it has the option."""
+    import olfsysm
+    bi = olfsysm.build_info()
+    return dict(olfsysm_git_hash=bi.get('git_hash'), olfsysm_git_dirty=bi.get('git_dirty'),
+                olfsysm_cpp_dirty=bi.get('cpp_dirty'), olfsysm_source_sha256=bi.get('source_sha256'),
+                negative_kckc_option=negative_kckc_available())
 
 
 # ---------------------------------------------------------------------------
@@ -317,17 +389,23 @@ def _preload() -> None:
 # ---------------------------------------------------------------------------
 # the matrices and the runner
 
-def require_nonnegative(d: float, b: float = 0.0) -> None:
-    """Refuses a negative dose (SignedDoseError: olfsysm has no option for negative KC-KC weights yet, held until Yang's
-    OK) and a negative or non-finite pooled scale (ValueError)."""
+def require_dose(d: float, b: float = 0.0, allow_negative: bool = False) -> None:
+    """Refuses a non-finite dose or pooled scale and a negative pooled scale (ValueError: a pooled neuron is an
+    inhibition), and a negative dose unless `allow_negative` (SignedDoseError: it needs a runner built with olfsysm's
+    option for negative KC-KC weights, reading 12)."""
     d, b = float(d), float(b)
     if not (np.isfinite(d) and np.isfinite(b)):
         raise ValueError(f'dose {d}, pooled scale {b}')
-    if d < 0:
-        raise SignedDoseError(f'a negative KC-KC dose ({d:g}) needs the olfsysm option for negative KC-KC weights, '
-                              "held until Yang's OK")
+    if d < 0 and not allow_negative:
+        raise SignedDoseError(f'a negative KC-KC dose ({d:g}) needs a runner built with the olfsysm option for negative '
+                              'KC-KC weights (Runner(w, allow_negative=True); olfsysm 45e5cf9 or later)')
     if b < 0:
         raise ValueError(f'the pooled scale is {b:g}; a pooled neuron is an inhibition')
+
+
+def require_nonnegative(d: float, b: float = 0.0) -> None:
+    """`require_dose` without negative doses (step 1)."""
+    require_dose(d, b, allow_negative=False)
 
 
 def uniform_neuron(ref: np.ndarray) -> np.ndarray:
@@ -336,19 +414,23 @@ def uniform_neuron(ref: np.ndarray) -> np.ndarray:
     return np.full((n, n), float(ref.sum()) / n / n)
 
 
-def combined_matrix(HB: np.ndarray, U: np.ndarray, d: float, b: float):
-    """d HB + b U as a CSC matrix (post x pre), the KC-KC matrix of the route; refuses a negative dose or pooled scale.
+def combined_matrix(HB: np.ndarray, U: np.ndarray, d: float, b: float, allow_negative: bool = False):
+    """d HB + b U as a CSC matrix (post x pre), the KC-KC matrix of the route; refuses a negative pooled scale, and a
+    negative dose or negative entries unless `allow_negative` (`require_dose`).
 
-    At b 0 its entries and sparsity are those of the family's matrix (d HB + 0 = d HB exactly); at d 0 they are b U's.
+    At b 0 its entries and sparsity are those of the family's matrix (d HB + 0 = d HB exactly, also for d < 0: HB's
+    zeros give -0.0 + 0.0 = 0.0, dropped); at d 0 they are b U's.
     """
     from scipy.sparse import csc_matrix
-    require_nonnegative(d, b)
+    require_dose(d, b, allow_negative)
     HB, U = np.asarray(HB, dtype=float), np.asarray(U, dtype=float)
     if HB.shape != U.shape or HB.shape[0] != HB.shape[1]:
         raise ValueError(f'matrices {HB.shape}, {U.shape}')
+    if (HB < 0).any() or (U < 0).any():
+        raise ValueError('HB and U must be nonnegative (the sign is the dose\'s)')
     M = float(d) * HB + float(b) * U
-    if not np.isfinite(M).all() or (M < 0).any():
-        raise ValueError('the KC-KC matrix must be finite and nonnegative')
+    if not np.isfinite(M).all() or (not allow_negative and (M < 0).any()):
+        raise ValueError('the KC-KC matrix must be finite (and nonnegative without the option)')
     return csc_matrix(M)
 
 
@@ -358,26 +440,41 @@ class Runner:
     parameter as E83's simulator takes it. Before each call the simulator's unscaled KC-KC matrix (its closure cell
     'wKCKC_unscaled') is replaced by `combined_matrix(HB, U, d, b)` and 'wKCKC_scale' passed as 1, then restored.
 
-    Attributes: w, p (the fit's parameters), s (its KC-KC scale), saved, target_on, target_off, size, kc_index, types,
-    HB (the loader's matrix, checked equal to the simulator's), U, hb_sha256, u_sha256, mp, rv, sim, info."""
+    With `allow_negative` (step 2, reading 12) the simulator is built with olfsysm's option for negative KC-KC weights
+    on (E83's `build_simulator(w, extra_kws=dict(allow_negative_kc_kc=True))`), and negative doses are let through;
+    without it, the flag is checked off where the build has it.
 
-    def __init__(self, w: str):
+    Attributes: w, allow_negative, p (the fit's parameters), s (its KC-KC scale), saved, target_on, target_off, size,
+    kc_index, types, HB (the loader's matrix, checked equal to the simulator's), U, hb_sha256, u_sha256, mp, rv, sim,
+    info."""
+
+    def __init__(self, w: str, allow_negative: bool = False):
         from experiments import E10_joint_fit as J
         from experiments import E129_block_survivor_static as E129
         _preload()
+        if allow_negative and not negative_kckc_available():
+            raise SignedDoseError('the installed olfsysm has no option for negative KC-KC weights (olfsysm 45e5cf9: '
+                                  "mp.kc.allow_negative_kc_kc); pull olfsysm and run ./venv/bin/pip install -e ../olfsysm")
         P = E83.wiring_parts(w)
         self.w = w
+        self.allow_negative = bool(allow_negative)
         self.p = {k: float(P['p'][k]) for k in E83.PARAM_KEYS}
         self.s = float(self.p['wKCKC_scale'])
         self.saved = P['saved']
         self.target_on, self.target_off, self.size = int(P['target_on']), int(P['target_off']), int(P['size'])
         self.kc_index = self.saved['on'][1].index
         self.types = kc_types_of(self.kc_index)
-        self.sim, self.info = E83.build_simulator(w)
+        if self.allow_negative:
+            self.sim, self.info = E83.build_simulator(w, extra_kws=dict(allow_negative_kc_kc=True))
+        else:
+            self.sim, self.info = E83.build_simulator(w)
         cells = self.info['cells']
         self._cell = cells['wKCKC_unscaled']
         self._W0 = self._cell.cell_contents
         self.mp, self.rv = cells['mp'].cell_contents, cells['rv'].cell_contents
+        flag = getattr(self.mp.kc, 'allow_negative_kc_kc', None)
+        if (flag is not None or self.allow_negative) and bool(flag) != self.allow_negative:
+            raise RuntimeError(f"{w}: the simulator's mp.kc.allow_negative_kc_kc is {flag}, not {self.allow_negative}")
         HB = E129.hemibrain_matrix(self.kc_index).to_numpy(dtype=float)
         W0 = self._W0.toarray() if hasattr(self._W0, 'toarray') else np.asarray(self._W0, dtype=float)
         if not np.array_equal(W0, HB):
@@ -392,7 +489,7 @@ class Runner:
         key = (float(d), float(b))
         if key != self._key:
             self._M = None
-            self._M = combined_matrix(self.HB, self.U, d, b)
+            self._M = combined_matrix(self.HB, self.U, d, b, self.allow_negative)
             self._key = key
         return self._M
 
@@ -418,16 +515,16 @@ class Runner:
         gc.collect()
 
 
-def get_runner(w: str) -> Runner:
-    """The Runner of a wiring, cached (one at a time)."""
+def get_runner(w: str, allow_negative: bool = False) -> Runner:
+    """The Runner of a wiring (with or without the option's flag), cached (one at a time)."""
     c = _CACHE.get('runner')
-    if c is not None and c.w == w:
+    if c is not None and c.w == w and c.allow_negative == bool(allow_negative):
         return c
     if c is not None:
         c.close()
     _CACHE.pop('runner', None)
     gc.collect()
-    _CACHE['runner'] = Runner(w)
+    _CACHE['runner'] = Runner(w, allow_negative=allow_negative)
     return _CACHE['runner']
 
 
@@ -450,7 +547,7 @@ def pooled_hold(runner: Runner, d: float, label: str) -> dict:
     from experiments import E69_kc_firing_ceiling as E69
     from experiments import E77_input_screen as E77
     from pyolfsysm import tuning
-    require_nonnegative(d)
+    require_dose(d, allow_negative=runner.allow_negative)
     t0 = time.time()
     p = runner.params(d, runner.s)
     res = tuning.hold_rates(runner, p, target_off=runner.target_off, target_on=runner.target_on, size=runner.size,
@@ -465,12 +562,13 @@ def pooled_hold(runner: Runner, d: float, label: str) -> dict:
 
 
 def threshold_hold(runner: Runner, d: float, label: str) -> dict:
-    """Reading 2: the threshold hold of one point (no pooled neuron; E77's brackets), for step 2's arms alone; refuses a
-    negative dose until the olfsysm option exists."""
+    """Reading 2: the threshold hold of one point (no pooled neuron; E77's brackets and steps, as E77_input_screen's
+    `hold_rates` passes them to pyolfsysm.tuning.hold_rates), for step 2's arms alone; a negative dose needs a runner
+    with the option (reading 12)."""
     from experiments import E69_kc_firing_ceiling as E69
     from experiments import E77_input_screen as E77
     from pyolfsysm import tuning
-    require_nonnegative(d)
+    require_dose(d, allow_negative=runner.allow_negative)
     t0 = time.time()
     p = runner.params(d, 0.0)
     res = tuning.hold_rates(runner, p, target_off=runner.target_off, target_on=runner.target_on, size=runner.size,
@@ -501,18 +599,28 @@ def part_inputs(counts: pd.DataFrame, HB: np.ndarray, d: float, b: float, fixed_
                 pooled_in_over_thr=float(pooled_per_odor.mean() / fixed_thr))
 
 
-def run_realism(runner: Runner, res: Mapping, d: float) -> Tuple[dict, Dict[str, pd.DataFrame]]:
+def run_realism(runner: Runner, res: Mapping, d: float, max_spike_times: int = MAX_SPIKE_TIMES
+                ) -> Tuple[dict, Dict[str, pd.DataFrame]]:
     """Readings 10 and 11 of a held point: simulated again with spike times (which must reproduce the held counts) for
-    the late shares; the parts' inputs; returns (row, {'on', 'off': spike times})."""
+    the late shares; the parts' inputs; returns (row, {'on', 'off': spike times}). A condition whose held run has more
+    than `max_spike_times` spikes (a runaway) is not simulated again: no spike times, late share NaN,
+    'spike_times_saved_<c>' False."""
     row, spikes = {}, {}
     for c, q in (('on', res['params']), ('off', res['params_off'])):
-        r, s, spk = runner(dict(q), spike_times=True)
-        dd = _ndiff((r, s), res[c])
-        if dd['counts'] or dd['responses']:
-            raise RuntimeError(f'the held point simulated again differs from the held run ({c}: {dd})')
-        spikes[c] = spk
-        row[f'late_share_{c}'] = late_share(spk)
-        row[f'n_spikes_{c}'] = int(len(spk))
+        n_held = int(res[c][1].to_numpy(dtype=float).sum())
+        row[f'spike_times_saved_{c}'] = n_held <= max_spike_times
+        if n_held > max_spike_times:
+            row[f'late_share_{c}'] = float('nan')
+            row[f'n_spikes_{c}'] = n_held
+            s = res[c][1]
+        else:
+            r, s, spk = runner(dict(q), spike_times=True)
+            dd = _ndiff((r, s), res[c])
+            if dd['counts'] or dd['responses']:
+                raise RuntimeError(f'the held point simulated again differs from the held run ({c}: {dd})')
+            spikes[c] = spk
+            row[f'late_share_{c}'] = late_share(spk)
+            row[f'n_spikes_{c}'] = int(len(spk))
         for k, v in part_inputs(s, runner.HB, d, float(q.get('wU_scale', 0.0)), float(q['fixed_thr'])).items():
             row[f'{k}_{c}'] = v
     return row, spikes
@@ -1005,8 +1113,31 @@ def planned(wirings: Sequence[str] = WIRINGS, arms: Optional[Sequence[str]] = No
     arms = STEP1_ARMS if arms is None else tuple(arms)
     bad = [a for a in arms if a not in STEP1_ARMS]
     if bad:
-        raise SignedDoseError(f'{bad}: only step 1 runs before the olfsysm option for negative KC-KC weights')
+        raise SignedDoseError(f"{bad}: --part runs runs step 1's arms; step 2's run with --part step2")
     return [(a, w) for w in WIRINGS if w in wirings for a in STEP1_ARMS if a in arms]
+
+
+def planned_step2(wirings: Sequence[str] = WIRINGS, arms: Optional[Sequence[str]] = None,
+                  reverse: bool = False) -> List[Tuple[str, str]]:
+    """Step 2's (arm, wiring) points of a lane (reading 14): the smoke (UX2, then X2, on 'real') first when the lane has
+    'real', then the UX arms wiring by wiring in the order `wirings` gives (UX2, UX5, UX10 on each), then the X arms
+    likewise; `reverse` reverses the whole list."""
+    arms = STEP2_ARMS if arms is None else tuple(arms)
+    bad = [a for a in arms if a not in STEP2_ARMS]
+    if bad:
+        raise ValueError(f"{bad}: step 2's arms are {STEP2_ARMS}")
+    ws = list(dict.fromkeys(wirings))
+    unknown = [w for w in ws if w not in WIRINGS]
+    if unknown:
+        raise ValueError(f'wirings {unknown}')
+    pts = [p for p in SMOKE if p[0] in arms and p[1] in ws]
+    for group in (('UX2', 'UX5', 'UX10'), ('X2', 'X5', 'X10')):
+        pts += [(a, w) for w in ws for a in group if a in arms and (a, w) not in pts]
+    return pts[::-1] if reverse else pts
+
+
+def step2_lane(wirings: Sequence[str], reverse: bool = False) -> str:
+    return 'step2-' + lane_name(wirings) + ('-rev' if reverse else '')
 
 
 def runs_table() -> pd.DataFrame:
@@ -1061,7 +1192,8 @@ def run_row(tag: str, arm: str, w: str, res: Mapping, o: Mapping[str, tuple], re
             runner: Runner) -> dict:
     a = ARMS[arm]
     po = res['params_off']
-    row = dict(tag=tag, arm=arm, step=a['step'], hold=a['hold'], dose=a['dose'], wiring=w, fit_kckc_scale=runner.s,
+    row = dict(tag=tag, arm=arm, step=a['step'], hold=a['hold'], dose=a['dose'], pooled=a['pooled'], wiring=w,
+               allow_negative_kc_kc=runner.allow_negative, fit_kckc_scale=runner.s,
                fit_folder=E83.members()[w][0], fit_tag=E83.members()[w][1], pooled_factor=res['pooled_factor'],
                pooled_scale=res['pooled_scale'], thr_factor=res['thr_factor'], apl_factor=res['apl_factor'],
                n_on=res['n_on'], n_off=res['n_off'], target_on=res['target_on'], target_off=res['target_off'],
@@ -1081,6 +1213,85 @@ def run_row(tag: str, arm: str, w: str, res: Mapping, o: Mapping[str, tuple], re
     return row
 
 
+def hold_change(arm: str) -> str:
+    """The provenance's description of an arm's hold."""
+    a = ARMS[arm]
+    if a['hold'] == 'pooled':
+        return (f"arm {arm} ({ARM_LABELS[arm]}): the KC-KC matrix d HB + b U, d {a['dose']:g}; the pooled hold (b "
+                "bisected from the fit's KC-KC scale with APL off, then the tied APL scales with APL on; threshold the "
+                "fit's)")
+    return (f"arm {arm} ({ARM_LABELS[arm]}): the KC-KC matrix d HB, d {a['dose']:g}, no pooled neuron; the threshold "
+            "hold (the threshold bisected from the fit's with APL off, then the tied APL scales with APL on; E110's "
+            "part A, E77_input_screen.hold_rates' brackets)")
+
+
+def run_point(arm: str, w: str, lane: str, table: Path, prov_path: Path, cc: dict, reclaim: bool = False,
+              part_name: str = 'runs') -> Optional[dict]:
+    """One (arm, wiring) point of step 1 or 2, claimed (None if done or claimed elsewhere): the arm's hold on the
+    wiring's runner (with the option's flag for step 2), simulated again with spike times, saved (step<n>/), its row
+    appended to `table` and its provenance to `prov_path`. Returns the row."""
+    from experiments import E108_paa_extrapolation as E108
+    a = ARMS[arm]
+    tag = tag_of(arm, w)
+    if tag in set(runs_table()['tag']):
+        print(f'E132 {tag}: done', flush=True)
+        return None
+    if not claim(tag, lane, reclaim):
+        print(f'E132 {tag}: claimed by another process, skipped', flush=True)
+        return None
+    try:
+        E108._still_clean(cc)
+        P = E83.wiring_parts(w)
+        runner = get_runner(w, allow_negative=a['step'] >= 2)
+        d = float(a['dose'])
+        hold = pooled_hold if a['hold'] == 'pooled' else threshold_hold
+        res = hold(runner, d, f'E132 {tag}')
+        o = {'on': res['on'], 'off': res['off']}
+        extra = {}
+        if arm == 'U0':
+            e129 = _load_from('E129_block_survivor_static', 'step1a', f'S1_P_{w}')
+            dd = _ndiff(res['off'], e129['off'])
+            if dd['counts'] or dd['responses'] or res['pooled_factor'] != e129_factor(w):
+                raise RuntimeError(f"{tag}: the APL-off run is not E129's S1_P_{w} ({dd}, factor "
+                                   f"{res['pooled_factor']!r} against {e129_factor(w)!r})")
+            extra['off_is_e129'] = True
+        real, spikes = run_realism(runner, res, d)
+        real.update(extra)
+        if a['step'] >= 2:
+            real.update(olfsysm_build())
+        save_run(tag, o, spikes, part=f"step{a['step']}")
+        row = run_row(tag, arm, w, res, o, real, cc, lane, runner)
+        E83._append_row(table, row)
+        prov = _read_json(prov_path) or dict(part=part_name, lane=lane, script=SCRIPT, points={})
+        held = dict(change=hold_change(arm), route=ROUTE, fit=f"{P['folder']}:{P['tag']}", dose=d,
+                    pooled_scale=res['pooled_scale'], pooled_factor=res['pooled_factor'], hb_sha256=runner.hb_sha256,
+                    u_sha256=runner.u_sha256, allow_negative_kc_kc=runner.allow_negative, history=res['history'])
+        if a['hold'] == 'pooled':
+            held.update(bracket_pooled=list(SCALE_BRACKET), step_pooled=SCALE_STEP)
+        prov['points'][tag] = dict(H.model_provenance(orn_deltas=P['orn']), held=held)
+        _write_json(prov_path, prov)
+        late = '/'.join('nan' if not np.isfinite(row[f'late_share_{c}']) else f"{row[f'late_share_{c}']:.3f}"
+                        for c in CONDS)
+        print(f"E132 {tag}: b/s {res['pooled_factor']:.4f}, threshold {row['fixed_thr']:.1f} ({a['hold']} hold, "
+              f"first stage x{res['thr_factor']:.4f}), APL x{res['apl_factor']:.4f} ({res['n_on']}/{res['target_on']} "
+              f"on, {res['n_off']}/"
+              f"{res['target_off']} off); corner {res['corner']}; bands {row['in_bands']}; max off "
+              f"{row['max_count_off']}; KCs >= 20 off {row['n_kc_ge20_off']}; late on/off {late}; "
+              f"{res.get('seconds', 0):.0f}s", flush=True)
+        del res, o, spikes
+        gc.collect()
+        return row
+    except BaseException:
+        release(tag)
+        raise
+
+
+def _close_runner() -> None:
+    c = _CACHE.pop('runner', None)
+    if c is not None:
+        c.close()
+
+
 def part_runs(wirings: Sequence[str] = WIRINGS, lane: Optional[str] = None, reclaim: bool = False,
               arms: Optional[Sequence[str]] = None) -> pd.DataFrame:
     """Step 1's arms (the module docstring), resumable, one point claimed at a time."""
@@ -1094,71 +1305,114 @@ def part_runs(wirings: Sequence[str] = WIRINGS, lane: Optional[str] = None, recl
     prov_path = out_dir() / f'provenance_{_host()}_{lane}.json'
     cc = E108._commits_clean()
     for arm, w in pts:
-        tag = tag_of(arm, w)
-        if tag in set(runs_table()['tag']):
-            print(f'E132 {tag}: done', flush=True)
-            continue
-        if not claim(tag, lane, reclaim):
-            print(f'E132 {tag}: claimed by another process, skipped', flush=True)
-            continue
-        try:
-            E108._still_clean(cc)
-            P = E83.wiring_parts(w)
-            runner = get_runner(w)
-            d = float(ARMS[arm]['dose'])
-            res = pooled_hold(runner, d, f'E132 {tag}')
-            o = {'on': res['on'], 'off': res['off']}
-            extra = {}
-            if arm == 'U0':
-                e129 = _load_from('E129_block_survivor_static', 'step1a', f'S1_P_{w}')
-                dd = _ndiff(res['off'], e129['off'])
-                if dd['counts'] or dd['responses'] or res['pooled_factor'] != e129_factor(w):
-                    raise RuntimeError(f"{tag}: the APL-off run is not E129's S1_P_{w} ({dd}, factor "
-                                       f"{res['pooled_factor']!r} against {e129_factor(w)!r})")
-                extra['off_is_e129'] = True
-            real, spikes = run_realism(runner, res, d)
-            real.update(extra)
-            save_run(tag, o, spikes)
-            row = run_row(tag, arm, w, res, o, real, cc, lane, runner)
-            E83._append_row(table, row)
-            prov = _read_json(prov_path) or dict(part='runs', lane=lane, script=SCRIPT, points={})
-            prov['points'][tag] = dict(H.model_provenance(orn_deltas=P['orn']), held=dict(
-                change=(f"arm {arm} ({ARM_LABELS[arm]}): the KC-KC matrix d HB + b U, d {d:g}; the pooled hold (b "
-                        "bisected from the fit's KC-KC scale with APL off, then the tied APL scales with APL on; "
-                        "threshold the fit's)"),
-                route=ROUTE, fit=f"{P['folder']}:{P['tag']}", dose=d, pooled_scale=res['pooled_scale'],
-                pooled_factor=res['pooled_factor'], hb_sha256=runner.hb_sha256, u_sha256=runner.u_sha256,
-                bracket_pooled=list(SCALE_BRACKET), step_pooled=SCALE_STEP, history=res['history']))
-            _write_json(prov_path, prov)
-            print(f"E132 {tag}: b/s {res['pooled_factor']:.4f}, APL x{res['apl_factor']:.4f} ({res['n_on']}/"
-                  f"{res['target_on']} on, {res['n_off']}/{res['target_off']} off); corner {res['corner']}; bands "
-                  f"{row['in_bands']}; max off {row['max_count_off']}; late on/off {row['late_share_on']:.3f}/"
-                  f"{row['late_share_off']:.3f}; {res.get('seconds', 0):.0f}s", flush=True)
-            del res, o, spikes
-            gc.collect()
-        except BaseException:
-            release(tag)
-            raise
-    c = _CACHE.pop('runner', None)
-    if c is not None:
-        c.close()
+        run_point(arm, w, lane, table, prov_path, cc, reclaim, 'runs')
+    _close_runner()
     return runs_table()
 
 
-def part_step2(*args, **kwargs):
-    """Step 2 (UX2, UX5, UX10 with the pooled neuron; X2, X5, X10 alone): needs the olfsysm option."""
-    raise SignedDoseError("step 2 needs the olfsysm option for negative KC-KC weights (held until Yang's OK)")
+def flag_check_passed() -> bool:
+    """Reading 13: a flagcheck_*.json (any host) that passed on 'real' with a build that has the option and the
+    installed build's C++ sources (olfsysm's source_sha256)."""
+    sha = olfsysm_build()['olfsysm_source_sha256']
+    for p in out_dir().glob('flagcheck_*.json'):
+        r = _read_json(p)
+        b = r.get('olfsysm', {})
+        if (r.get('wirings', {}).get('real', {}).get('passes') and b.get('negative_kckc_option')
+                and b.get('olfsysm_source_sha256') == sha):
+            return True
+    return False
+
+
+def part_flag_check(wirings: Sequence[str] = ('real',)) -> dict:
+    """Reading 13: on each wiring, a runner with the option's flag on reproduces the family's saved run (matrix s, pooled
+    0) and step 1's FLAG_CHECK_ARM point at its held parameters (its runs row's params_on / params_off), APL on and off,
+    with 0 differing spike counts and responses: flagcheck_<host>.json."""
+    from experiments import E108_paa_extrapolation as E108
+    if not negative_kckc_available():
+        raise SignedDoseError('the installed olfsysm has no option for negative KC-KC weights (olfsysm 45e5cf9)')
+    _preload()
+    path = out_dir() / f'flagcheck_{_host()}.json'
+    res = dict(_read_json(path), host=_host(), script=SCRIPT, route=ROUTE, arm=FLAG_CHECK_ARM,
+               commits=E108._commits_clean(), olfsysm=olfsysm_build())
+    res.setdefault('wirings', {})
+    rt = runs_table().drop_duplicates('tag', keep='last').set_index('tag')
+    for w in wirings:
+        t0 = time.time()
+        R = get_runner(w, allow_negative=True)
+        fam = {c: _ndiff(R(q), R.saved[c]) for c, q in (('on', R.params(R.s, 0.0)), ('off', _off(R.params(R.s, 0.0))))}
+        tag = tag_of(FLAG_CHECK_ARM, w)
+        saved = load_run(tag, 'step1')
+        if tag not in rt.index or saved is None:
+            raise RuntimeError(f"{tag}: step 1's row or run is missing (local outputs, archive)")
+        q = {'on': json.loads(rt.loc[tag, 'params_on']), 'off': json.loads(rt.loc[tag, 'params_off'])}
+        step1 = {c: _ndiff(R(q[c]), saved[c]) for c in CONDS}
+        r = dict(family=fam, step1=dict(tag=tag, params=q, **step1), flag=bool(R.mp.kc.allow_negative_kc_kc),
+                 seconds=time.time() - t0, checked=_now())
+        r['passes'] = bool(r['flag'] and all(x[k] == 0 for x in (*fam.values(), *step1.values())
+                                             for k in ('counts', 'responses')))
+        res['wirings'][w] = r
+        _write_json(path, res)
+        print(f'E132 flag check {w}: {json.dumps(dict(family=fam, step1=step1, passes=r["passes"]))}', flush=True)
+    _close_runner()
+    res['passes'] = all(res['wirings'].get(w, {}).get('passes') for w in wirings)
+    _write_json(path, res)
+    return res
+
+
+def part_step2(wirings: Sequence[str] = WIRINGS, lane: Optional[str] = None, reclaim: bool = False,
+               arms: Optional[Sequence[str]] = None, reverse: bool = False) -> pd.DataFrame:
+    """Step 2 (reading 14): UX2, UX5, UX10 with the pooled neuron (pooled hold) and X2, X5, X10 alone (threshold
+    hold), resumable, one point claimed at a time; needs the option, step 1's checks and the flag check."""
+    from experiments import E108_paa_extrapolation as E108
+    pts = planned_step2(wirings, arms, reverse)
+    if not negative_kckc_available():
+        raise SignedDoseError('step 2 needs the olfsysm option for negative KC-KC weights (olfsysm 45e5cf9); pull '
+                              'olfsysm and run ./venv/bin/pip install -e ../olfsysm')
+    if not check_passed():
+        raise SystemExit('E132 step 2 refused: checks (i) and (ii) have not passed on every wiring (run --part check)')
+    if not flag_check_passed():
+        raise SystemExit('E132 step 2 refused: no flag check has passed with this build (run --part flagcheck)')
+    _preload()
+    lane = lane or step2_lane(wirings, reverse)
+    table = out_dir() / f'runs_{_host()}_{lane}.csv'
+    prov_path = out_dir() / f'provenance_{_host()}_{lane}.json'
+    cc = E108._commits_clean()
+    print(f'E132 step 2 lane {lane}: {[tag_of(a, w) for a, w in pts]}', flush=True)
+    for arm, w in pts:
+        run_point(arm, w, lane, table, prov_path, cc, reclaim, 'step2')
+    _close_runner()
+    return runs_table()
+
+
+def step2_outcome() -> dict:
+    """verdict.json's 'step2' (empty before step 2 is scored)."""
+    v = _read_json(out_dir() / 'verdict.json').get('step2')
+    return v if isinstance(v, dict) else {}
 
 
 def part_step3(*args, **kwargs):
-    """Step 3 (the shuffle control at a passing negative dose; the male calyces beside): needs the olfsysm option."""
-    raise SignedDoseError("step 3 needs the olfsysm option for negative KC-KC weights (held until Yang's OK)")
+    """Step 3, only for a dose that passes the stop rule (the entry's design item 6): the matrix shuffled within each
+    pair of KC types (E122's shuffle, seed 0) at that dose and hold on the eight wirings, and the male CNS's two
+    calyces beside, each at its own E130 fit with its own claw-to-claw matrix, at the dose and at its dose 0. Its code
+    is written once a dose passes; until then this says why it does not run."""
+    s = step2_outcome()
+    if not s.get('complete'):
+        raise GateClosedError('step 3 waits on step 2 (--part step2 on all eight wirings, then --part score)')
+    if s.get('goes_on') is None:
+        raise GateClosedError('no dose of step 2 passes the stop rule: the experiment stops after step 2 (no step 3)')
+    raise GateClosedError(f"{s['goes_on']} passes the stop rule: step 3's code (the shuffle control and the male "
+                          'calyces) is to be written')
 
 
 def part_step4(*args, **kwargs):
-    """Step 4 (the refit with a signed KC-KC scale in E10_joint_fit.py, the read on T, the sign control): needs the
-    option and E10_joint_fit.py's signed scale, written only if the gate opens."""
-    raise SignedDoseError('step 4 needs the olfsysm option and a signed KC-KC scale in E10_joint_fit.py')
+    """Step 4, only if step 3's control keeps less than half of the passing dose's gain over its dose 0 (design item
+    7): four refits on S with a signed KC-KC scale and the pooled scale free (E10_joint_fit.py needs the signed scale),
+    read on T, then the sign control. Written only if that gate opens."""
+    s = step2_outcome()
+    if s.get('goes_on') is None:
+        raise GateClosedError('step 4 runs only after a dose passes the stop rule and step 3 (none has)')
+    raise GateClosedError('step 4 runs only if step 3\'s control keeps less than half of the dose\'s gain; its code '
+                          '(a signed KC-KC scale in E10_joint_fit.py) is written then')
 
 
 # ---------------------------------------------------------------------------
@@ -1176,11 +1430,11 @@ def targets() -> Tuple[str, ...]:
 
 
 def collect() -> Tuple[Dict[Tuple[str, str], Dict[str, tuple]], pd.DataFrame]:
-    """Every run: the references (`references`) and step 1's runs."""
+    """Every run: the references (`references`) and step 1's and step 2's runs."""
     outs, runs = references()
     rows = runs.to_dict('records')
     for r in runs_table().to_dict('records'):
-        o = load_run(r['tag'])
+        o = load_run(r['tag'], f"step{int(r['step'])}")
         if o is None:
             continue
         outs[(r['arm'], r['wiring'])] = o
@@ -1317,16 +1571,20 @@ def stop_rule(rd: pd.DataFrame, runs: pd.DataFrame, arm: str) -> dict:
                 candidate=bool(passes and ARMS[arm]['dose'] < 0))
 
 
+KIND_COLS = ('kind', 'dose', 'pattern S4', 'pattern T4', 'd family S4', 'd family T4', 'amplitude S4', 'shape S4',
+             'spread ratio S4', 'Pearson r S4', 'ρ effect S4', 'mean effect (readout)', 'mean effect (raw)', 'loss (raw)',
+             'b / s', 'threshold', 'thr < 60 Hz', 'max count off', 'KCs ≥ 20 off', 'γ off / on', 'late on / off',
+             'corners', 'outside bands', 'class', 'stop rule')
+
+
 def comparison_md(rd: pd.DataFrame, runs: pd.DataFrame, kinds: Sequence[str], classes: Mapping[str, dict],
-                  stops: Mapping[str, dict]) -> str:
+                  stops: Mapping[str, dict], comps: Optional[Mapping[str, dict]] = None) -> str:
     from experiments import E123_kckc_form as E123
     lines = ['# E132 comparison tables (generated)', '',
              'Classes: ' + ', '.join(f"{a} {c.get('cls', 'incomplete')}" for a, c in classes.items()), '',
              '## The kinds (calibrated readout, all recordings)', '',
-             '| kind | dose | pattern S4 | pattern T4 | d family S4 | d family T4 | amplitude S4 | shape S4 | spread ratio '
-             'S4 | Pearson r S4 | ρ effect S4 | mean effect (readout) | mean effect (raw) | loss (raw) | b / s | threshold | '
-             'max count off | KCs ≥ 20 off | late on / off | corners | outside bands | class | stop rule |',
-             '|---|' + '---:|' * 19 + '---|---|---|']
+             '| ' + ' | '.join(KIND_COLS) + ' |',
+             '|---|' + '---:|' * (len(KIND_COLS) - 4) + '---|---|---|']
     for k in kinds:
         if not ((rd['kind'] == k) & (rd['unit'] == 'S4')).any():
             continue
@@ -1336,6 +1594,7 @@ def comparison_md(rd: pd.DataFrame, runs: pd.DataFrame, kinds: Sequence[str], cl
         def mean(col):
             return float(pd.to_numeric(sub[col], errors='coerce').mean()) if col in sub else np.nan
         sr = stops.get(k, {}).get('passes')
+        n60 = int(sub['thr_below_60'].astype(bool).sum()) if 'thr_below_60' in sub else 0
         lines.append(
             f"| {k} | {ARMS[k]['dose'] if k in ARMS else ''} | {_v(rd, k, 'S4', 'all_pattern'):.4f} | "
             f"{_v(rd, k, 'T4', 'all_pattern'):.4f} | {_v(rd, k, 'S4', 'all_pattern') - _v(rd, 'family', 'S4', 'all_pattern'):+.4f} | "
@@ -1344,16 +1603,89 @@ def comparison_md(rd: pd.DataFrame, runs: pd.DataFrame, kinds: Sequence[str], cl
             f"{_v(rd, k, 'S4', 'all_sd_ratio'):.3f} | {_v(rd, k, 'S4', 'all_pearson_effect'):.3f} | "
             f"{_v(rd, k, 'S4', 'all_rho_effect'):.3f} | {_v(rd, k, 'S4', 'mean_effect'):.3f} | "
             f"{_v(rd, k, 'S4', 'mean_effect', 'raw'):.3f} | {_v(rd, k, 'S4', 'all_loss', 'raw'):.4f} | "
-            f"{mean('pooled_factor'):.3f} | {mean('fixed_thr'):.1f} | {mean('max_count_off'):.1f} | "
-            f"{mean('n_kc_ge20_off'):.0f} | {mean('late_share_on'):.3f} / {mean('late_share_off'):.3f} | "
+            f"{mean('pooled_factor'):.3f} | {mean('fixed_thr'):.1f} | {n60} | {mean('max_count_off'):.1f} | "
+            f"{mean('n_kc_ge20_off'):.0f} | {mean('ratio_g'):.2f} | "
+            f"{mean('late_share_on'):.3f} / {mean('late_share_off'):.3f} | "
             f"{len(corners(runs, k)['corner_wirings'])} | {int((~sub['in_bands'].astype(bool)).sum())} | "
             f"{c.get('cls', '')} | {'' if sr is None else sr} |")
     lines.append('')
+    st = [(a, s) for a, s in stops.items() if s.get('complete')]
+    if st:
+        lines += ['## The stop rule (read on S; the negative doses are the candidates)', '',
+                  '| arm | dose | pattern S4 | d family S4 | (i) within 0.005 | (ii) max count ≤ 2× | (iii) bands, corners '
+                  '| dose 0 | d dose 0 S4 | S wirings lower | (iv) below dose 0 | passes | candidate |',
+                  '|---|---:|---:|---:|---|---|---|---|---:|---:|---|---|---|']
+        for a, s in st:
+            d0 = s.get('dose0') or {}
+            lines.append(f"| {a} | {s['dose']:g} | {s['pattern_S4']:.4f} | {s['d_family_S4']:+.4f} | {s['i_pattern']} | "
+                         f"{s['ii_max_count']} | {s['iii_bands_corners']} | {d0.get('kind', '')} | "
+                         f"{d0.get('d_S4', np.nan):+.4f} | {d0.get('n_s_wirings_lower', '')} | {s['iv_dose0']} | "
+                         f"{s['passes']} | {s['candidate']} |")
+        lines.append('')
+    if comps:
+        lines += ['## "Differ" (E126\'s rule: lower on 7 of 8 wirings and on both populations against all five '
+                  'targets)', '', '| a | b | verdict | wirings a lower | wirings b lower |', '|---|---|---|---:|---:|']
+        for c in comps.values():
+            lines.append(f"| {c['a']} | {c['b']} | {c['verdict']} | {c.get('n_wirings_a_lower', '')} | "
+                         f"{c.get('n_wirings_b_lower', '')} |")
+        lines.append('')
     for u in ('S4', 'T4', 'all8'):
         ks = [k for k in kinds if ((rd['kind'] == k) & (rd['unit'] == u)).any()]
         lines += [f'## {u}', '', E123.comparison_table(rd, ks, u), '']
     lines += ['## Runs and bands', '', E123.runs_bands_table(runs), '']
     return '\n'.join(lines)
+
+
+def step2_summary(rd: pd.DataFrame, runs: pd.DataFrame, classes: Mapping[str, dict], comps: Mapping[str, dict],
+                  stops: Mapping[str, dict]) -> dict:
+    """Reading 15's summary of step 2 for verdict.json: the candidates and the dose that goes on ('goes_on', the
+    lowest pattern part on S's population among the passing negative doses, once all six arms are complete; None
+    otherwise), each arm's class, stop-rule conditions, parts and realism beside, the sign's own effect (UX against its
+    mirror and U0), the arm alone against E110's part A and H50, and the pooled neuron's part per dose (UX against X,
+    and each arm's corners, bands and largest counts). Descriptions; the only decision is the stop rule's."""
+    have = [a for a in STEP2_ARMS if complete(runs, a)]
+    done = len(have) == len(STEP2_ARMS)
+    cands = [a for a in have if stops.get(a, {}).get('candidate')]
+    goes_on = min(cands, key=lambda a: stops[a]['pattern_S4']) if (done and cands) else None
+    fam_raw = {u: _v(rd, 'family', u, 'mean_effect', 'raw') for u in POPS + ('all8',)}
+    arms = {}
+    for a in have:
+        z = dose0_of(a)
+        s, c = stops[a], classes.get(a, {})
+        raw = {u: _v(rd, a, u, 'mean_effect', 'raw') for u in POPS + ('all8',)}
+        arms[a] = dict(
+            dose=ARMS[a]['dose'], hold=ARMS[a]['hold'], pooled=ARMS[a]['pooled'], dose0=z, cls=c.get('cls'),
+            keeps_gain=c.get('keeps_gain'), passes=s.get('passes'), candidate=s.get('candidate'),
+            conditions=dict(i_pattern=s.get('i_pattern'), ii_max_count=s.get('ii_max_count'),
+                            iii_bands_corners=s.get('iii_bands_corners'), iv_dose0=s.get('iv_dose0')),
+            pattern={u: _v(rd, a, u, 'all_pattern') for u in POPS + ('all8',)},
+            d_family={u: _v(rd, a, u, 'all_pattern') - _v(rd, 'family', u, 'all_pattern') for u in POPS + ('all8',)},
+            d_dose0={u: _v(rd, a, u, 'all_pattern') - _v(rd, z, u, 'all_pattern') for u in POPS + ('all8',)},
+            parts=c.get('parts'), mean_effect_cal={u: _v(rd, a, u, 'mean_effect') for u in POPS + ('all8',)},
+            mean_effect_raw=raw, mean_effect_raw_minus_family={u: raw[u] - fam_raw[u] for u in raw},
+            mean_effect_raw_minus_dose0={u: raw[u] - _v(rd, z, u, 'mean_effect', 'raw') for u in raw},
+            loss_raw={u: _v(rd, a, u, 'all_loss', 'raw') for u in POPS + ('all8',)},
+            corner_wirings=c.get('corner_wirings'), runs_outside_bands=c.get('runs_outside_bands'),
+            thr_below_60=c.get('thr_below_60'), max_count_off=s.get('max_count_off'),
+            **{k: c.get(k) for k in ('fixed_thr_mean', 'pooled_factor_mean', 'max_count_off_mean', 'n_kc_ge20_off_mean',
+                                     'late_share_on_mean', 'late_share_off_mean', 'ratio_g_mean',
+                                     'kckc_in_over_thr_off_mean', 'pooled_in_over_thr_off_mean')})
+
+    def verdict(a, b):
+        return comps.get(f'{a}|{b}', {}).get('verdict')
+    sign = {a: dict(vs_mirror=verdict(a, MIRROR[a]), mirror=MIRROR[a], vs_U0=verdict(a, 'U0'))
+            for a in ('UX2', 'UX5', 'UX10') if a in have}
+    alone = {a: dict(vs_E110_A=verdict(a, 'E110_A'), vs_H50=verdict(a, 'H50')) for a in ('X2', 'X5', 'X10') if a in have}
+    pooled_part = {}
+    for dose, (ux, x) in STEP2_DOSES.items():
+        if ux in have and x in have:
+            pooled_part[f'-{dose}'] = dict(differ=verdict(ux, x), **{
+                k: dict(corner_wirings=arms[k]['corner_wirings'], runs_outside_bands=arms[k]['runs_outside_bands'],
+                        ii_max_count=arms[k]['conditions']['ii_max_count'], passes=arms[k]['passes'])
+                for k in (ux, x)})
+    return dict(complete=done, arms_complete=have, candidates=cands, goes_on=goes_on,
+                stops_after_step2=bool(done and not cands), arms=arms, sign_effect=sign, alone=alone,
+                pooled_part=pooled_part)
 
 
 def score() -> dict:
@@ -1366,10 +1698,13 @@ def score() -> dict:
     mine = [k for k in kinds if k in ARMS]
     fm = flies_mean_effect()
     classes = {a: classify(rd, runs, a, fm) for a in kinds if a != 'family'}
-    comps = {f'{a}|{b}': differ(rd, runs, a, b) for a, b in COMPARISONS if a in kinds and b in kinds}
+    comps = {f'{a}|{b}': differ(rd, runs, a, b) for a, b in COMPARISONS + STEP2_COMPARISONS
+             if a in kinds and b in kinds}
     stops = {a: stop_rule(rd, runs, a) for a in mine}
     late = pd.read_csv(out / 'late_family.csv') if (out / 'late_family.csv').exists() else None
     mirror_lower = [a for a in ('UI2', 'UI5', 'UI10') if comps.get(f'{a}|U0', {}).get('verdict') == f'{a} lower']
+    step2 = (step2_summary(rd, runs, classes, comps, stops) if any(a in kinds for a in STEP2_ARMS)
+             else 'not run yet')
     v = dict(generated=_now(), host=_host(), route=ROUTE, checks_passed=check_passed(), flies_mean_effect=fm,
              classes=classes, comparisons=comps, stop_rule=stops,
              step1=dict(mirror_lower_than_U0=mirror_lower,
@@ -1379,19 +1714,21 @@ def score() -> dict:
                         outside_bands={a: classes[a].get('runs_outside_bands', []) for a in mine
                                        if classes[a].get('complete')}),
              late_family=None if late is None else late.to_dict('records'),
-             step2='not run: the olfsysm option for negative KC-KC weights is held until Yang\'s OK',
+             step2=step2, flag_check_passed=flag_check_passed() if any(a in kinds for a in STEP2_ARMS) else None,
              rules=dict(within=WITHIN, wirings_needed=N_WIRINGS_NEEDED, mean_tol=MEAN_TOL, raw_loss_tol=RAW_LOSS_TOL,
                         corner_wirings_max=CORNER_WIRINGS_MAX, differ_wirings=DIFFER_WIRINGS, rate_tol=RATE_TOL,
                         stop_slack=STOP_SLACK, max_count_factor=MAX_COUNT_FACTOR, dose0_wirings=DOSE0_WIRINGS,
                         targets=list(targets()), populations=list(POPS)),
              n_runs=int(len(runs)))
     _write_json(out / 'verdict.json', v)
-    (out / 'comparison_table.md').write_text(comparison_md(rd, runs, kinds, classes, stops))
+    (out / 'comparison_table.md').write_text(comparison_md(rd, runs, kinds, classes, stops, comps))
     _write_json(out / 'provenance_score.json', dict(generated=_now(), host=_host(), script=SCRIPT,
                                                     commits=H.code_commits()))
     print(json.dumps(dict(classes={a: c.get('cls') for a, c in classes.items()},
-                          stop_rule={a: s.get('passes') for a, s in stops.items()}, step1=v['step1']), default=str),
-          flush=True)
+                          stop_rule={a: s.get('passes') for a, s in stops.items()}, step1=v['step1'],
+                          step2=({k: step2[k] for k in ('complete', 'candidates', 'goes_on', 'stops_after_step2',
+                                                         'sign_effect', 'alone')}
+                                 if isinstance(step2, dict) else step2)), default=str), flush=True)
     return v
 
 
@@ -1408,10 +1745,12 @@ def write_variants() -> pd.DataFrame:
     rt = runs_table()
     rows, parts = [], []
     for r in rt.to_dict('records'):
-        o = load_run(r['tag'])
+        sub = f"step{int(r['step'])}"
+        o = load_run(r['tag'], sub)
         if o is None:
             continue
         arm = r['arm']
+        neg = bool(r.get('allow_negative_kc_kc')) if pd.notna(r.get('allow_negative_kc_kc')) else False
         rows.append(dict(
             tag=r['tag'], variant=r['tag'], part=f"S{r['step']}", arm=arm, arm_label=ARM_LABELS[arm], dose=r['dose'],
             hold=r['hold'], base='bouton', k=E83.BREADTH_K, wiring=r['wiring'],
@@ -1421,11 +1760,13 @@ def write_variants() -> pd.DataFrame:
             wAPLPN_scale=r['wAPLPN_scale'], wPNAPL_scale=r['wPNAPL_scale'], wKCKC_scale=r['wKCKC_scale'],
             kc_kc_inh=r['wKCKC_scale'], kc_kc_tau=0.05, wU_scale=r['wU_scale'], pooled_factor=r['pooled_factor'],
             kckc_matrix=("wKCKC_scale x hemibrain (connectome_KCKC_weights) + wU_scale x E122's uniform neuron U "
-                         "(HB's total / N^2 everywhere), both conditions, 50 ms"),
+                         "(HB's total / N^2 everywhere), both conditions, 50 ms"
+                         + ('; wKCKC_scale < 0 is excitation (allow_negative_kc_kc)' if neg else '')),
+            allow_negative_kc_kc=neg, olfsysm_git_hash=r.get('olfsysm_git_hash'),
             multibouton_claws='first', thr_factor=r['thr_factor'], apl_factor=r['apl_factor'], rate_on=r['rate_on'],
             rate_off=r['rate_off'], max_count_on=r['max_count_on'], max_count_off=r['max_count_off'],
             late_share_on=r.get('late_share_on'), late_share_off=r.get('late_share_off'),
-            realism_flag=r.get('realism_flag'), corner=bool(r['corner']), subdir='step1'))
+            realism_flag=r.get('realism_flag'), corner=bool(r['corner']), subdir=sub))
         key = distances_tag(r['tag'])
         parts.append(pd.concat({(key, 'on'): H.model_rdms(*o['on'])[H.PRIMARY_MODEL_RDM],
                                 (key, 'acute_off'): H.model_rdms(*o['off'])[H.PRIMARY_MODEL_RDM]},
@@ -1440,11 +1781,15 @@ def write_variants() -> pd.DataFrame:
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     ap.add_argument('--part', required=True, choices=('check', 'step0', 'late', 'runs', 'score', 'variants', 'plan',
-                                                      'step2', 'step3', 'step4'))
-    ap.add_argument('--wirings', nargs='+', default=None, choices=list(WIRINGS))
+                                                      'flagcheck', 'step2', 'step3', 'step4'))
+    ap.add_argument('--wirings', nargs='+', default=None, choices=list(WIRINGS),
+                    help='the lane\'s wirings (step 2: in this order; flagcheck: default real)')
     ap.add_argument('--arms', nargs='+', default=None, choices=list(ARMS))
-    ap.add_argument('--lane', default=None, help='the lane name in the tables (default the wirings joined by -)')
+    ap.add_argument('--lane', default=None, help='the lane name in the tables (default the wirings joined by -; '
+                                                 'step 2: step2-<wirings>[-rev])')
     ap.add_argument('--reclaim', action='store_true', help='take over claims left by a process that died')
+    ap.add_argument('--reverse', action='store_true', help="step2 / plan --step 2: run the lane's points in reverse")
+    ap.add_argument('--step', type=int, default=1, choices=(1, 2), help='plan: which step\'s points')
     ap.add_argument('--no-diagnostic', action='store_true', help="check: skip the route diagnostic on 'real'")
     return ap
 
@@ -1465,10 +1810,13 @@ def main() -> None:
     elif a.part == 'variants':
         write_variants()
     elif a.part == 'plan':
-        for arm, w in planned(ws, a.arms):
+        pts = planned_step2(ws, a.arms, a.reverse) if a.step == 2 else planned(ws, a.arms)
+        for arm, w in pts:
             print(tag_of(arm, w))
+    elif a.part == 'flagcheck':
+        part_flag_check(list(a.wirings or ('real',)))
     elif a.part == 'step2':
-        part_step2()
+        part_step2(ws, a.lane, a.reclaim, a.arms, a.reverse)
     elif a.part == 'step3':
         part_step3()
     elif a.part == 'step4':

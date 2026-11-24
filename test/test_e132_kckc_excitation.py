@@ -46,6 +46,35 @@ def test_require_nonnegative():
             X.require_nonnegative(d, b)
 
 
+def test_require_dose():
+    X.require_dose(-10.0, 3.0, allow_negative=True)
+    X.require_dose(-2.0, allow_negative=True)
+    with pytest.raises(X.SignedDoseError):
+        X.require_dose(-2.0, 3.0)
+    for d, b in ((-1.0, -1.0), (float('nan'), 0.0), (-1.0, float('inf'))):
+        with pytest.raises(ValueError):
+            X.require_dose(d, b, allow_negative=True)
+
+
+def test_negative_kckc_available_matches_the_build():
+    olfsysm = pytest.importorskip('olfsysm')
+    have = hasattr(olfsysm.ModelParams().kc, 'allow_negative_kc_kc')
+    assert X.negative_kckc_available() == have
+    b = X.olfsysm_build()
+    assert b['negative_kckc_option'] == have and b['olfsysm_git_hash']
+
+
+def test_the_option_is_off_by_default():
+    """Needs olfsysm's option (45e5cf9): the flag is off in a default ModelParams and fit_mb_model takes it."""
+    olfsysm = pytest.importorskip('olfsysm')
+    if not X.negative_kckc_available():
+        pytest.skip('the installed olfsysm has no option for negative KC-KC weights')
+    import inspect
+    from pyolfsysm.mb_model import fit_mb_model
+    assert olfsysm.ModelParams().kc.allow_negative_kc_kc is False
+    assert inspect.signature(fit_mb_model).parameters['allow_negative_kc_kc'].default is False
+
+
 def test_uniform_neuron_is_e129s():
     E129 = pytest.importorskip('experiments.E129_block_survivor_static')
     M = _toy_matrix(_toy_types())
@@ -74,6 +103,24 @@ def test_combined_matrix_is_the_familys_and_e129s():
         X.combined_matrix(HB, U[:-1, :-1], 1.0, 1.0)
 
 
+def test_combined_matrix_with_a_negative_dose():
+    """With the option: at b 0 the matrix alone is d HB with HB's sparsity (no -0.0 entries kept); beside the pooled
+    neuron it is d HB + b U entry for entry, negative where the excitation outweighs b U; b stays nonnegative."""
+    HB = _toy_matrix(_toy_types())
+    U = X.uniform_neuron(HB)
+    A, F = X.combined_matrix(HB, U, -5.0, 0.0, allow_negative=True), -5.0 * sparse.csc_matrix(HB)
+    assert np.array_equal(A.indptr, F.indptr) and np.array_equal(A.indices, F.indices)
+    assert np.array_equal(A.data, F.data) and (A.data < 0).all()
+    b = 0.6 * 26.4
+    A = X.combined_matrix(HB, U, -10.0, b, allow_negative=True).toarray()
+    assert np.array_equal(A, -10.0 * HB + b * U)
+    assert (A < 0).any() and (A > 0).any()
+    with pytest.raises(ValueError):
+        X.combined_matrix(HB, U, -10.0, -1.0, allow_negative=True)
+    with pytest.raises(ValueError):
+        X.combined_matrix(-HB, U, 2.0, b, allow_negative=True)
+
+
 # ---------------------------------------------------------------------------
 # the runner on a toy simulator
 
@@ -100,6 +147,7 @@ class _Toy:
         self.idx = pd.MultiIndex.from_arrays([np.arange(100, 100 + self.n), types], names=[H.KC_ID_LEVEL, H.KC_TYPE_LEVEL])
         self.odors = [f'od{j} @ -3' for j in range(n_od)]
         self.scales_seen = []
+        self.builds = []
 
     def simulate(self, params, spike_times=False):
         unknown = set(params) - set(self.KEYS)
@@ -145,6 +193,9 @@ def toy(monkeypatch):
                  size=int(saved['on'][0].size), folder='toy', tag='toy', orn=None)
 
     def build(w, **kw):
+        # (the option's flag, as fit_mb_model sets mp.kc.allow_negative_kc_kc from extra_kws)
+        m.mp.kc.allow_negative_kc_kc = bool((kw.get('extra_kws') or {}).get('allow_negative_kc_kc', False))
+        m.builds.append(dict(kw))
         cells = {'wKCKC_unscaled': m.cell, 'mp': _types.SimpleNamespace(cell_contents=m.mp),
                  'rv': _types.SimpleNamespace(cell_contents=m.rv),
                  'odor_order': _types.SimpleNamespace(cell_contents=m.order)}
@@ -155,6 +206,7 @@ def toy(monkeypatch):
     monkeypatch.setattr(X.E83, 'build_simulator', build)
     monkeypatch.setattr(E129, 'hemibrain_matrix', lambda idx: pd.DataFrame(m.W.copy(), index=ids, columns=ids))
     monkeypatch.setattr(X, '_preload', lambda: None)
+    monkeypatch.setattr(X, 'negative_kckc_available', lambda: True)
     X._CACHE.pop('runner', None)
     return m, parts
 
@@ -182,6 +234,50 @@ def test_runner_reproduces_the_family_and_the_pooled_arm(toy):
     with pytest.raises(ValueError):
         R(dict(R.params(R.s, 0.0), bogus=1.0))
     assert m.cell.cell_contents is W0
+
+
+def test_runner_with_the_flag(toy, monkeypatch):
+    """A step-2 runner is built with allow_negative_kc_kc through E83's extra_kws, its mp's flag on; with nonnegative
+    matrices it gives the step-1 runner's outputs exactly; a negative dose runs (excitation: more spikes than KC-KC at
+    0) only on it; without the option on the build it refuses."""
+    m, parts = toy
+    R1 = X.Runner('real')
+    assert R1.allow_negative is False and m.mp.kc.allow_negative_kc_kc is False
+    pts = [R1.params(R1.s, 0.0), X._off(R1.params(R1.s, 0.0)), R1.params(2.0, 0.7 * R1.s),
+           X._off(R1.params(0.0, 0.5 * R1.s))]
+    outs1 = [R1(q) for q in pts]
+    with pytest.raises(X.SignedDoseError):
+        R1(R1.params(-2.0, 0.0))
+    R2 = X.Runner('real', allow_negative=True)
+    assert m.builds[-1] == dict(extra_kws=dict(allow_negative_kc_kc=True))
+    assert R2.allow_negative and m.mp.kc.allow_negative_kc_kc is True
+    for q, o in zip(pts, outs1):
+        assert X._ndiff(R2(q), o) == dict(counts=0, responses=0)
+    zero = R2(X._off(R2.params(0.0, 0.0)))[1].to_numpy().sum()
+    exc = R2(X._off(R2.params(-2.0, 0.0)))[1].to_numpy().sum()
+    assert exc > zero
+    assert m.scales_seen[-1] == 1.0
+    # the cache keys on the flag
+    X._CACHE.pop('runner', None)
+    assert X.get_runner('real', allow_negative=True).allow_negative
+    assert not X.get_runner('real').allow_negative
+    X._CACHE.pop('runner', None)
+    monkeypatch.setattr(X, 'negative_kckc_available', lambda: False)
+    with pytest.raises(X.SignedDoseError):
+        X.Runner('real', allow_negative=True)
+
+
+def test_runner_refuses_a_flag_not_set(toy, monkeypatch):
+    m, parts = toy
+    build = X.E83.build_simulator
+
+    def no_flag(w, **kw):
+        out = build(w, **kw)
+        m.mp.kc.allow_negative_kc_kc = False
+        return out
+    monkeypatch.setattr(X.E83, 'build_simulator', no_flag)
+    with pytest.raises(RuntimeError):
+        X.Runner('real', allow_negative=True)
 
 
 def test_runner_refuses_another_matrix(toy, monkeypatch):
@@ -214,6 +310,43 @@ def test_pooled_hold(toy):
         X.pooled_hold(R, -2.0, 'toy UX2')
     with pytest.raises(X.SignedDoseError):
         X.threshold_hold(R, -2.0, 'toy X2')
+
+
+def test_holds_at_a_negative_dose(toy):
+    """Step 2's holds on a runner with the flag: the pooled hold at -2 keeps the fit's threshold and needs more pooled
+    inhibition than at 0; the threshold hold at -2 has no pooled neuron and raises the threshold; both hold the
+    targets; the step-1 runner refuses the dose."""
+    m, parts = toy
+    R = X.Runner('real', allow_negative=True)
+    u0 = X.pooled_hold(R, 0.0, 'toy U0')
+    ux = X.pooled_hold(R, -2.0, 'toy UX2')
+    assert ux['params']['fixed_thr'] == parts['p']['fixed_thr'] and ux['params_off']['wKCKC_scale'] == -2.0
+    assert ux['pooled_factor'] > u0['pooled_factor']
+    assert ux['held_on'] and ux['held_off'] and not ux['corner']
+    x = X.threshold_hold(R, -2.0, 'toy X2')
+    assert x['first_stage'] == 'fixed_thr' and x['pooled_scale'] == 0.0 and x['thr_factor'] > 1.0
+    for q in (x['params'], x['params_off']):
+        assert q['wU_scale'] == 0.0 and q['wKCKC_scale'] == -2.0
+    assert x['held_on'] and x['held_off'] and not x['corner']
+    X._CACHE.pop('runner', None)
+    R1 = X.Runner('real')
+    for hold in (X.pooled_hold, X.threshold_hold):
+        with pytest.raises(X.SignedDoseError):
+            hold(R1, -2.0, 'toy')
+
+
+def test_run_realism_without_spike_times_above_the_cap(toy):
+    m, parts = toy
+    R = X.Runner('real', allow_negative=True)
+    res = X.threshold_hold(R, -2.0, 'toy X2')
+    row, spikes = X.run_realism(R, res, -2.0, max_spike_times=0)
+    assert spikes == {}
+    for c in X.CONDS:
+        assert not row[f'spike_times_saved_{c}'] and np.isnan(row[f'late_share_{c}'])
+        assert row[f'n_spikes_{c}'] == res[c][1].to_numpy().sum() and np.isfinite(row[f'kckc_in_mean_{c}'])
+        assert row[f'kckc_in_mean_{c}'] < 0
+    row, spikes = X.run_realism(R, res, -2.0)
+    assert set(spikes) == set(X.CONDS) and all(row[f'spike_times_saved_{c}'] for c in X.CONDS)
 
 
 def test_run_realism_reproduces_and_reads_late_firing(toy):
@@ -320,12 +453,77 @@ def test_arms_and_tags():
     assert len(X.planned()) == 32
     with pytest.raises(X.SignedDoseError):
         X.planned(['real'], ['UX2'])
-    for f in (X.part_step2, X.part_step3, X.part_step4):
-        with pytest.raises(X.SignedDoseError):
-            f()
     assert all(a['dose'] < 0 for k, a in X.ARMS.items() if a['step'] == 2)
     assert all(a['dose'] >= 0 for k, a in X.ARMS.items() if a['step'] == 1)
     assert X.dose0_of('UI5') == 'U0' and X.dose0_of('X5') == 'E110_A' and X.dose0_of('U0') is None
+    assert X.dose0_of('UX10') == 'U0' and X.dose0_of('X2') == 'E110_A'
+
+
+def test_planned_step2():
+    """The smoke (UX2 then X2 on 'real') first when the lane has 'real', then the UX arms wiring by wiring in the
+    lane's order, then the X arms; reverse reverses it; 48 points over the eight wirings."""
+    a = X.planned_step2(['real', 'P1'])
+    assert a[:2] == [('UX2', 'real'), ('X2', 'real')]
+    assert a[2:] == [('UX5', 'real'), ('UX10', 'real'), ('UX2', 'P1'), ('UX5', 'P1'), ('UX10', 'P1'),
+                     ('X5', 'real'), ('X10', 'real'), ('X2', 'P1'), ('X5', 'P1'), ('X10', 'P1')]
+    b = X.planned_step2(['M3', 'P3'])
+    assert b[0] == ('UX2', 'M3') and b[3] == ('UX2', 'P3') and b[6] == ('X2', 'M3')
+    allp = X.planned_step2()
+    assert len(allp) == 48 and len(set(allp)) == 48 and allp[:2] == list(X.SMOKE)
+    assert X.planned_step2(reverse=True) == allp[::-1]
+    assert X.planned_step2(['P1', 'real'], ['X2', 'X10']) == [('X2', 'real'), ('X2', 'P1'), ('X10', 'P1'),
+                                                               ('X10', 'real')]
+    with pytest.raises(ValueError):
+        X.planned_step2(['real'], ['UI2'])
+    with pytest.raises(ValueError):
+        X.planned_step2(['S'])
+    assert X.step2_lane(['real', 'P1']) == 'step2-real-P1'
+    assert X.step2_lane(['real', 'P1'], reverse=True) == 'step2-real-P1-rev'
+    assert [X.tag_of(*p) for p in X.SMOKE] == ['S2_UX2_real', 'S2_X2_real']
+
+
+def test_part_refusals(tmp_path, monkeypatch):
+    """Step 2 refuses on a build without the option, before step 1's checks and before the flag check; steps 3 and 4
+    say why they do not run."""
+    monkeypatch.setattr(X, 'out_dir', lambda: tmp_path)
+    monkeypatch.setattr(X, 'negative_kckc_available', lambda: False)
+    with pytest.raises(X.SignedDoseError):
+        X.part_step2(['real'])
+    with pytest.raises(X.SignedDoseError):
+        X.part_flag_check(['real'])
+    monkeypatch.setattr(X, 'negative_kckc_available', lambda: True)
+    with pytest.raises(SystemExit, match='part check'):
+        X.part_step2(['real'])
+    monkeypatch.setattr(X, 'check_passed', lambda: True)
+    monkeypatch.setattr(X, 'olfsysm_build', lambda: dict(olfsysm_source_sha256='abc', negative_kckc_option=True))
+    with pytest.raises(SystemExit, match='flagcheck'):
+        X.part_step2(['real'])
+    for f in (X.part_step3, X.part_step4):
+        with pytest.raises(X.GateClosedError):
+            f()
+    X._write_json(tmp_path / 'verdict.json', dict(step2=dict(complete=True, goes_on=None)))
+    with pytest.raises(X.GateClosedError, match='stops after step 2'):
+        X.part_step3()
+    X._write_json(tmp_path / 'verdict.json', dict(step2=dict(complete=True, goes_on='UX2')))
+    with pytest.raises(X.GateClosedError, match='UX2 passes'):
+        X.part_step3()
+
+
+def test_flag_check_passed(tmp_path, monkeypatch):
+    monkeypatch.setattr(X, 'out_dir', lambda: tmp_path)
+    monkeypatch.setattr(X, 'olfsysm_build', lambda: dict(olfsysm_source_sha256='abc', negative_kckc_option=True))
+    assert not X.flag_check_passed()
+    X._write_json(tmp_path / 'flagcheck_h1.json', dict(wirings=dict(real=dict(passes=False)),
+                                                       olfsysm=dict(olfsysm_source_sha256='abc', negative_kckc_option=True)))
+    assert not X.flag_check_passed()
+    X._write_json(tmp_path / 'flagcheck_h2.json', dict(wirings=dict(real=dict(passes=True)),
+                                                       olfsysm=dict(olfsysm_source_sha256='old', negative_kckc_option=True)))
+    assert not X.flag_check_passed()
+    X._write_json(tmp_path / 'flagcheck_h3.json', dict(wirings=dict(real=dict(passes=True)),
+                                                       olfsysm=dict(olfsysm_source_sha256='abc', negative_kckc_option=True)))
+    assert X.flag_check_passed()
+    # step 1's check_*.json glob does not read the flag checks
+    assert X.check_wirings() == set()
 
 
 def test_claims(tmp_path, monkeypatch):
@@ -357,6 +555,14 @@ def test_save_load_and_the_archive_names(tmp_path, monkeypatch):
     for name in ('on', 'acute_off'):
         p = A.archive_responses(results, tag, name)
         assert p is not None and p.name == f'S1_UI2_real_{name}_responses.parquet'
+    # step 2's runs go to step2/, and load from there
+    X.save_run('S2_UX2_real', {'on': ((s >= 2).astype(float), s), 'off': ((s >= 2).astype(float), s + 1.0)},
+               {'on': spk}, part='step2')
+    assert X.load_run('S2_UX2_real') is None
+    back = X.load_run('S2_UX2_real', 'step2')
+    assert back['off'][1].equals(s + 1.0)
+    assert (tmp_path / 'archive' / X.EXPERIMENT / 'step2' / 'S2_UX2_real_on_spike_times.parquet').exists()
+    assert not (tmp_path / 'archive' / X.EXPERIMENT / 'step2' / 'S2_UX2_real_off_spike_times.parquet').exists()
 
 
 # ---------------------------------------------------------------------------
@@ -423,3 +629,64 @@ def test_stop_rule():
     rd, runs = _rd_runs({'family': 0.050, 'E110_A': 0.063, 'U0': 0.060, 'UI5': 0.0551})
     s = X.stop_rule(rd, runs, 'UI5')
     assert not s['i_pattern'] and not s['passes']
+
+
+def _step2_tables(vals, **kw):
+    """`_rd_runs` over the references, step 1's arms and step 2's, with `vals` overriding the defaults."""
+    base = {'family': 0.050, 'E110_A': 0.063, 'H50': 0.055, 'U0': 0.058, 'UI2': 0.057, 'UI5': 0.056, 'UI10': 0.054,
+            'UX2': 0.059, 'UX5': 0.060, 'UX10': 0.062, 'X2': 0.064, 'X5': 0.066, 'X10': 0.069}
+    return _rd_runs(dict(base, **vals), **kw)
+
+
+def _score_parts(rd, runs, kinds):
+    cls = {a: X.classify(rd, runs, a, 0.178) for a in kinds if a != 'family'}
+    comps = {f'{a}|{b}': X.differ(rd, runs, a, b) for a, b in X.COMPARISONS + X.STEP2_COMPARISONS
+             if a in kinds and b in kinds}
+    stops = {a: X.stop_rule(rd, runs, a) for a in kinds if a in X.ARMS}
+    return cls, comps, stops
+
+
+def test_step2_summary_no_dose_passes():
+    pytest.importorskip('experiments.E123_kckc_form')
+    pytest.importorskip('experiments.E108_paa_extrapolation')
+    rd, runs = _step2_tables({})
+    kinds = list(dict.fromkeys(runs['kind']))
+    cls, comps, stops = _score_parts(rd, runs, kinds)
+    s = X.step2_summary(rd, runs, cls, comps, stops)
+    assert s['complete'] and s['candidates'] == [] and s['goes_on'] is None and s['stops_after_step2']
+    # every comparison the entry names, and outcome (d)'s
+    for a, b in X.STEP2_COMPARISONS:
+        assert f'{a}|{b}' in comps
+    assert s['sign_effect']['UX5']['mirror'] == 'UI5'
+    assert s['sign_effect']['UX5']['vs_mirror'] == 'UI5 lower' and s['sign_effect']['UX5']['vs_U0'] == 'U0 lower'
+    assert s['alone']['X10']['vs_E110_A'] == 'E110_A lower' and s['alone']['X2']['vs_H50'] == 'H50 lower'
+    assert s['pooled_part']['-2']['differ'] == 'UX2 lower'
+    a = s['arms']['X5']
+    assert a['dose0'] == 'E110_A' and a['d_dose0']['S4'] == pytest.approx(0.003, abs=1e-4)
+    assert a['mean_effect_raw_minus_family']['all8'] == pytest.approx(0.0)
+    assert a['conditions']['i_pattern'] is False and a['passes'] is False
+    assert s['arms']['UX2']['cls'] == 'costs'
+
+
+def test_step2_summary_candidates_and_the_dose_that_goes_on():
+    """Two negative doses pass (within 0.005 of the family on S, below their dose 0 on S and on all of S's wirings); the
+    one with the lower pattern part on S goes on. A dose with corners on three wirings or a count above twice the
+    family's does not pass; the mirror's passing dose is not a candidate. Incomplete step 2 sends no dose on."""
+    pytest.importorskip('experiments.E123_kckc_form')
+    pytest.importorskip('experiments.E108_paa_extrapolation')
+    vals = {'UX2': 0.0540, 'UX5': 0.0530, 'X2': 0.0545, 'UX10': 0.0520, 'X5': 0.0520}
+    rd, runs = _step2_tables(vals, corner_wirings={'UX10': ('real', 'P1', 'P3')}, max_off={'X5': 150})
+    kinds = list(dict.fromkeys(runs['kind']))
+    cls, comps, stops = _score_parts(rd, runs, kinds)
+    s = X.step2_summary(rd, runs, cls, comps, stops)
+    assert s['candidates'] == ['UX2', 'UX5', 'X2'] and s['goes_on'] == 'UX5' and not s['stops_after_step2']
+    assert stops['UI10']['passes'] and not stops['UI10']['candidate']
+    assert not stops['UX10']['passes'] and not stops['UX10']['iii_bands_corners']
+    assert cls['UX10']['cls'] == 'corner (no class)'
+    assert not stops['X5']['passes'] and not stops['X5']['ii_max_count']
+    assert s['pooled_part']['-10']['UX10']['corner_wirings'] == ['P1', 'P3', 'real']
+    part = runs[~((runs['kind'] == 'X10') & (runs['wiring'] == 'M3'))]
+    cls, comps, stops = _score_parts(rd, part, kinds)
+    s = X.step2_summary(rd, part, cls, comps, stops)
+    assert not s['complete'] and 'X10' not in s['arms_complete'] and s['goes_on'] is None
+    assert not s['stops_after_step2']
