@@ -93,6 +93,12 @@ def test_secant_hold():
     run, calls = _counts_run(-2.5)
     x, _, info = F.secant_hold(run, 10000, 0.0, np.log(0.1), np.log(10.0), -3.0)
     assert x == 0.0 and info['n_sims'] == 1 and info['ok']
+    # far from the start on a curved count (a saturating response curve, as A4's first hold): the wider budget reaches it
+    def curved(x):
+        n = int(round(40000 / (1.0 + np.exp(2.0 * (x - 0.3)) ** 1.5)))
+        return pd.DataFrame(np.r_[np.ones(n), np.zeros(40000 - n)].reshape(-1, 1)), None
+    x, _, info = F.secant_hold(curved, 2500, 0.0, np.log(0.1), np.log(10.0), -3.0, F.HOLD_FIRST_MAX_SIMS)
+    assert info['ok'], info
     # out of reach: the hold ends at an end of its range and says so
     run, calls = _counts_run(-0.1)
     x, _, info = F.secant_hold(run, 100, 0.0, np.log(0.1), np.log(10.0), -1.0)

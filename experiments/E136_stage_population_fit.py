@@ -184,6 +184,10 @@ AT_BOUND_REL, AT_BOUND_HZ = 0.02, 2.0
 # first slope (d ln responses / d ln factor) where nothing is known yet
 HOLD_TOL = 0.005
 HOLD_MAX_SIMS = 8
+# a wiring's first hold has no evaluated point to start from (an arm's change at the family's start, e.g. A4's KC-KC at
+# 0, can move the threshold several-fold: about 4.5-fold in the smoke test of 2026-11-24), so it may take as many
+# simulations as E69's bisect_factor
+HOLD_FIRST_MAX_SIMS = 20
 HOLD_RANGE: Tuple[float, float] = (0.1, 10.0)
 HOLD_RANGE_DIVISIVE_APL: Tuple[float, float] = (0.01, 10.0)
 HOLD_MISS_PER = 0.1
@@ -540,7 +544,8 @@ def secant_hold(run: Callable[[float], tuple], target: int, x0: float, lo: float
     """The log factor x in [lo, hi] at which `run(x)`'s number of responses (falling with x) is within `tol` of
     `target`: from `x0`, Newton steps on ln(responses) with the slope `slope0` (or the secant slope of the last two
     points where it falls) until the target is bracketed, then the secant of the bracket's two ends kept within its
-    middle 90 %; at most `max_sims` runs.
+    middle 90 %, or the bracket's midpoint after two runs in a row on the same side of the target (so that a curved
+    count does not stall the secant); at most `max_sims` runs.
 
     Returns (x, outputs, info): the run nearest the target; info has 'n', 'target', 'n_sims', 'ok' (within `tol`),
     'at_end' (that run at an end of the range without reaching the target), 'miss' (|n - target| / target), 'slope'
@@ -549,6 +554,7 @@ def secant_hold(run: Callable[[float], tuple], target: int, x0: float, lo: float
     pts: List[Tuple[float, int, tuple]] = []
     slope = float(slope0)
     x = float(min(max(x0, lo), hi))
+    sides: List[bool] = []
     for _ in range(max_sims):
         out = run(x)
         n = n_responses(out[0])
@@ -558,9 +564,12 @@ def secant_hold(run: Callable[[float], tuple], target: int, x0: float, lo: float
         above = [q for q in pts if q[1] > target]
         below = [q for q in pts if q[1] < target]
         if above and below:
+            sides.append(n > target)
             a = max(above, key=lambda q: q[0])
             b = min(below, key=lambda q: q[0])
-            if a[0] < b[0]:
+            if a[0] < b[0] and len(sides) >= 3 and sides[-1] == sides[-2]:
+                xn = 0.5 * (a[0] + b[0])
+            elif a[0] < b[0]:
                 ya, yb = np.log(max(a[1], 1)), np.log(max(b[1], 1))
                 if yb != ya:
                     slope = float((yb - ya) / (b[0] - a[0]))
@@ -675,7 +684,8 @@ class ArmModel:
 
     def hold(self, wiring: str, z: Mapping[str, float]) -> Tuple[Dict[str, float], Dict[str, float], dict]:
         """Both response counts of a wiring held at `z` (`secant_hold`, warm-started from the evaluated point nearest
-        `z`): the APL-off count by the threshold, then the APL-on count by the APL->KC scale with its tied scales.
+        `z`, at most HOLD_MAX_SIMS simulations per rate, HOLD_FIRST_MAX_SIMS for the wiring's first hold): the APL-off
+        count by the threshold, then the APL-on count by the APL->KC scale with its tied scales.
         Returns (params, params_off, info: x_thr, x_apl, each hold's info, the held outputs)."""
         c = self.coords(z)
         mem = self.memory[wiring]
@@ -687,10 +697,11 @@ class ArmModel:
         t_off, t_on = self.targets[wiring]
         lt, ht = np.log(HOLD_RANGE[0]), np.log(HOLD_RANGE[1])
         la, ha = np.log(self.apl_range[0]), np.log(self.apl_range[1])
+        n_max = HOLD_MAX_SIMS if mem else HOLD_FIRST_MAX_SIMS
         xt, out_off, h_off = secant_hold(lambda x: sim(self.params_for(wiring, z, x, 0.0)[1]), t_off, xt0, lt, ht,
-                                         self.slopes[wiring]['thr'])
+                                         self.slopes[wiring]['thr'], n_max)
         xa, out_on, h_on = secant_hold(lambda x: sim(self.params_for(wiring, z, xt, x)[0]), t_on, xa0, la, ha,
-                                       self.slopes[wiring]['apl'])
+                                       self.slopes[wiring]['apl'], n_max)
         self.slopes[wiring] = dict(thr=h_off['slope'], apl=h_on['slope'])
         mem.append((c, xt, xa))
         p, poff, _ = self.params_for(wiring, z, xt, xa)
