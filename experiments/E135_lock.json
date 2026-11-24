@@ -1,0 +1,294 @@
+{
+ "experiment": "E135_antennal_lobe_dendrites",
+ "written": "2026-11-24 15:30",
+ "host": "hal",
+ "seed": 0,
+ "pn_flies": [
+  "2023-06-22/2",
+  "2023-06-23/1",
+  "2023-06-24/1",
+  "2023-07-19/1",
+  "2023-07-19/2",
+  "2023-07-28/1",
+  "2023-07-28/2"
+ ],
+ "halves": {
+  "half_a": [
+   "2023-06-24/1",
+   "2023-07-19/1",
+   "2023-07-19/2"
+  ],
+  "half_b": [
+   "2023-06-22/2",
+   "2023-06-23/1",
+   "2023-07-28/1",
+   "2023-07-28/2"
+  ]
+ },
+ "folds": [
+  [
+   "pa",
+   "2-but",
+   "1-6ol"
+  ],
+  [
+   "2h",
+   "eb",
+   "ms"
+  ],
+  [
+   "ep",
+   "t2h",
+   "va"
+  ],
+  [
+   "6al",
+   "B-cit",
+   "Lin"
+  ],
+  [
+   "1-8ol",
+   "1-5ol",
+   "aa"
+  ],
+  [
+   "IaA",
+   "benz"
+  ]
+ ],
+ "odors": [
+  "2h",
+  "IaA",
+  "pa",
+  "2-but",
+  "eb",
+  "ep",
+  "6al",
+  "t2h",
+  "1-8ol",
+  "1-5ol",
+  "1-6ol",
+  "ms",
+  "B-cit",
+  "Lin",
+  "aa",
+  "benz",
+  "va"
+ ],
+ "glomeruli": [
+  "D",
+  "DA2",
+  "DC1",
+  "DC2",
+  "DC3",
+  "DL1",
+  "DL5",
+  "DM1",
+  "DM2",
+  "DM3",
+  "DM4",
+  "DM5",
+  "DM6",
+  "DP1m",
+  "VA2",
+  "VA3",
+  "VA5",
+  "VA6",
+  "VA7l",
+  "VA7m",
+  "VC1",
+  "VC2",
+  "VL2a",
+  "VL2p",
+  "VM2",
+  "VM3",
+  "VM7d",
+  "VM7v"
+ ],
+ "fit_units": "noise",
+ "directions": [
+  [
+   "half_a",
+   "half_b"
+  ],
+  [
+   "half_b",
+   "half_a"
+  ]
+ ],
+ "n_folds": 6,
+ "units": {
+  "fit_pn": "noise",
+  "fit_orn": "dff",
+  "measured_step_reading": "orn_dff_pn_noise",
+  "measured_step": {
+   "orn": "dff",
+   "pn": "noise"
+  },
+  "imposed": "noise",
+  "imposed_dff_repeat": "dff",
+  "step0_readings": {
+   "dff": [
+    "dff",
+    "dff"
+   ],
+   "noise": [
+    "noise",
+    "noise"
+   ],
+   "orn_dff_pn_noise": [
+    "dff",
+    "noise"
+   ]
+  }
+ },
+ "loss": {
+  "fit": "the matrix view's error in one-fly units after an affine curve set on the pooled values of the training odors, no noise, the 28 shared glomeruli (`matrix_loss`)",
+  "keep_reading": "curve_noise",
+  "beside_reading": "affine_noise",
+  "reading_dependent": "a rung kept in one reading and not the other; the keep reading decides"
+ },
+ "keep": {
+  "rule": "lower than the highest kept rung below it (R0 counts as kept) by more than se_mult standard errors of the paired difference over resampled flies, on the mean of the two directions, and no higher in either direction",
+  "se_mult": 2.0,
+  "n_boot": 200
+ },
+ "permutations": {
+  "lateral": 20,
+  "lateral_min_exceeded": 19,
+  "control": 3,
+  "control_seed": "np.random.default_rng([SEED, CONTROL_SEED_TAG, i])",
+  "step2": "one seeded permutation per wiring, seed SEED + the wiring's index in WIRINGS"
+ },
+ "r3": {
+  "max_terms": 4,
+  "candidates": 2,
+  "max_per_glomerulus": 2,
+  "fifth": "checked and reported, never added"
+ },
+ "follows": "slope_lo > 0 (the 90 % interval of the slope over resampled flies above 0), in each fit",
+ "scale": {
+  "rule": "one positive factor per fit: the pooled SD of its evoked rates over the 28 shared glomeruli and its training odors equals the unchanged stage's there, set on the megamat input and applied to the APL16 table too",
+  "reading": "preset",
+  "named_outside": [
+   0.5,
+   2.0
+  ]
+ },
+ "clip": {
+  "policy": "clip",
+  "margin_hz": 0.1,
+  "name_share": 0.1,
+  "applies_to": "every table entering by route 1 (imposed, its permutations, R1, the rung); the same clipped table is route 2's target"
+ },
+ "imposed_check": {
+  "max_diff_hz": 0.5,
+  "pn_matrix_floor_note": 0.31
+ },
+ "budget": {
+  "n_perm_control": 3,
+  "n_folds": 6,
+  "projected_lane_hours": 3.9075864098469415,
+  "within_budget": true,
+  "budget_lane_hours": 8.0,
+  "projection": {
+   "n_folds": 6,
+   "n_perm_control": 3,
+   "n_perm_lateral": 20,
+   "max_terms": 4,
+   "check_fifth": true,
+   "real_lane_hours": 2.1093920944134394,
+   "control_lane_hours": 0.5993981051445008,
+   "total_lane_hours": 3.9075864098469415,
+   "breakdown_hours": {
+    "R0": 0.0007856032583448622,
+    "R1": 0.5879331554306878,
+    "R2m": 0.001761832767062717,
+    "R2f": 0.009703116946750218,
+    "R3": 1.1554847531848484,
+    "all_flies": 0.3537236328257455
+   },
+   "fold_fits_per_cross_fit": 12
+  },
+  "tried": [
+   {
+    "n_folds": 17,
+    "n_perm_control": 5,
+    "n_perm_lateral": 20,
+    "max_terms": 4,
+    "check_fifth": true,
+    "real_lane_hours": 5.8584146948655444,
+    "control_lane_hours": 1.6980896499421863,
+    "total_lane_hours": 14.348862944576476,
+    "breakdown_hours": {
+     "R0": 0.0021575487984551323,
+     "R1": 1.6657422799534267,
+     "R2m": 0.004923532406489055,
+     "R2f": 0.027423837582270304,
+     "R3": 3.2485924402872723,
+     "all_flies": 0.9095750558376312
+    },
+    "fold_fits_per_cross_fit": 34
+   },
+   {
+    "n_folds": 17,
+    "n_perm_control": 3,
+    "n_perm_lateral": 20,
+    "max_terms": 4,
+    "check_fifth": true,
+    "real_lane_hours": 5.8584146948655444,
+    "control_lane_hours": 1.6980896499421863,
+    "total_lane_hours": 10.952683644692103,
+    "breakdown_hours": {
+     "R0": 0.0021575487984551323,
+     "R1": 1.6657422799534267,
+     "R2m": 0.004923532406489055,
+     "R2f": 0.027423837582270304,
+     "R3": 3.2485924402872723,
+     "all_flies": 0.9095750558376312
+    },
+    "fold_fits_per_cross_fit": 34
+   },
+   {
+    "n_folds": 6,
+    "n_perm_control": 3,
+    "n_perm_lateral": 20,
+    "max_terms": 4,
+    "check_fifth": true,
+    "real_lane_hours": 2.1093920944134394,
+    "control_lane_hours": 0.5993981051445008,
+    "total_lane_hours": 3.9075864098469415,
+    "breakdown_hours": {
+     "R0": 0.0007856032583448622,
+     "R1": 0.5879331554306878,
+     "R2m": 0.001761832767062717,
+     "R2f": 0.009703116946750218,
+     "R3": 1.1554847531848484,
+     "all_flies": 0.3537236328257455
+    },
+    "fold_fits_per_cross_fit": 12
+   }
+  ],
+  "unit_seconds": {
+   "target": 0.02678370475769043,
+   "run": 0.19771647453308105,
+   "R1": 176.14426565170288,
+   "measured": 0.29286885261535645,
+   "gains": 2.6752541065216064,
+   "lateral": 0.6939597129821777,
+   "read": 0.06708478927612305
+  },
+  "timing_file": "/local/tensor/Tom/claude_kc_remapping/results/E135_antennal_lobe_dendrites/timing_step1.json"
+ },
+ "e134_lock_sha256": "30015d97ea916ae42ad5c8e85535604fc9ee431b04ad27e260c71fca8636f92c",
+ "commits": {
+  "queue_commit": "58c7fffa10078ea6ff86fe865ab74f68b90372f9",
+  "queue_dirty": false,
+  "pyolfsysm_commit": "b1e89d7d119bbbb4888f31de4d94938dbc4bd60a",
+  "pyolfsysm_dirty": false,
+  "al_analysis_commit": "d891fe786ac5a103ef1ccb40bf108b3b5e16078e",
+  "al_analysis_dirty": false,
+  "hong2p_commit": "484da09afe90ce4dd37e8b9039b1881136b78b68",
+  "hong2p_dirty": false
+ }
+}
