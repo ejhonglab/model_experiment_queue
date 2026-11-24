@@ -511,6 +511,7 @@ def step_intervals(orn: np.ndarray, pn: np.ndarray, glomeruli: Sequence[str], od
         cols = {}
         for k, B in (('gain', gains), ('r', rs), ('slope', sl)):
             cols[f'{k}_lo'], cols[f'{k}_hi'] = centered(point[k], B, q)
+        cols['r_lo'], cols['r_hi'] = np.clip(cols['r_lo'], -1.0, 1.0), np.clip(cols['r_hi'], -1.0, 1.0)
         g = pd.DataFrame(dict(cols, gain_boot_sd=np.nanstd(gains, axis=0),
                               log2_gain_boot_sd=np.nanstd(np.log2(np.where(gains > 0, gains, np.nan)), axis=0)),
                          index=pd.Index(list(glomeruli), name='glomerulus'))
