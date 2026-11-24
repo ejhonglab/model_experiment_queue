@@ -981,7 +981,33 @@ def build_populations(keys: Optional[Sequence[Tuple[str, str, str]]] = None, pop
                                    seconds=round(time.time() - t0, 1))
         print(f'{pop_name(key)}: {len(d)} rows, {d.fly.nunique()} flies ({time.time() - t0:.0f} s)', flush=True)
     _write_json(pd_ / 'summary.json', summ)
+    if pop_dir is None:
+        write_populations_readme()
     return summ
+
+
+def write_populations_readme() -> None:
+    """<shared>/data/stage_populations/README.md."""
+    DATA.mkdir(parents=True, exist_ok=True)
+    (DATA / 'README.md').write_text(f"""# E134's recorded populations, every stage and panel
+
+Made by `data_prep/stage_population_data.py` (model_experiment_queue) on {_host()}, {_now()}; read them with its
+`load_population(stage, panel, cohort)`, which checks each file's sha256 against the lock
+(results/E134_population_baseline/lock.json, committed as experiments/E134_lock.json).
+
+- `sources/`: what the share lacked, copied and reduced by `--copy` (README.md and files.csv there).
+- `populations/<stage>__<panel>__<cohort>.parquet`: one per population (15), long rows fly, unit, odor, repeat, value
+  (repeat -1: a trial mean, where the source has no single trials). Units: baseline-noise SDs where the recordings'
+  frames exist (boutons, claws, KC somata of megamat, the same fly, validation2 and APL16), trial-noise SDs for the
+  glomeruli (ORNs, PN dendrites; dF/F per trial only), Remy's session z for the mixtures' KC somata (olfdb dataset 8).
+  The module's docstring defines each.
+- `populations/summary.json`: rows, flies, units and odors per fly, exclusions; `populations/checks.json`: the checks
+  against the existing loaders (the pebbled table, E119's per-ROI reading, the bands' APL16 table, pyolfsysm's
+  `load_remy_megamat_kc_responses`, Remy's per-fly validation2 matrices) and the noise bridge.
+
+Excluded everywhere: the bouton fly 2022-10-21 fly02. Panels: megamat, validation2, kmix and cmix (the kiwi and the
+control mixtures; each KC fly had one of the two), apl16.
+""")
 
 
 # ---------------------------------------------------------------------------
