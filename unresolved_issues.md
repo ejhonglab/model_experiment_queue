@@ -8,6 +8,15 @@ directory's notes/ and are linked from here.
 
 ## Open
 
+### E134's score_classes.json quotes the shared-curve, all-units consistency rows in its gate block, not the ruled halves (found 2026-11-24 15:16, viki's gate planner)
+- **What.** experiments/E134_population_baseline.py's `consistency_gate` takes the last row per condition of
+  archive_consistency_<reading>.csv, which is the 'shared_curve_all_units' version (0.849 with APL on, 0.703 with APL off),
+  not the version the lock's `rules.split_halves` rules on, 'half' (0.792 / 0.520).
+- **What it affects.** The gate block of results/E134_population_baseline/score_classes.json (15:02). Its boolean is the same
+  (false either way), and the gate was read on the 'half' rows: measure_gate.json (15:19) quotes them.
+- **What remains.** atlas reads version 'half' in `consistency_gate`; viki re-scores from a clean checkout (with the step class
+  on the wirings' mean change, the gate planner's ruling) and moves this entry to Resolved.
+
 ### The progress plot's ρ line ends on two points of kinds the plot is meant to leave out (found 2026-11-16, hal, the report pages' revision)
 - **What.** `reports/summary_progress_plot.py` leaves out oracle inputs and random, shuffled or re-drawn wirings by tag
   (`EXCLUDE_VARIANT`: `^input-searched_`, `^oracle_half`, `wiring-`, `^popfit_[PM]\d`, ...). From E83 on, variants carry
