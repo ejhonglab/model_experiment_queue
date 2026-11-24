@@ -1404,6 +1404,8 @@ Nothing is fitted to a held-out panel without Tom's or Yang's word.
 
 **Limits in force.** No new wet-lab experiments. No search of many free input factors across odors or glomeruli. Only Pratyush's hemibrain and male CNS. No bouton identities from position or tuning. Only Yang's processed products. Remy's processed data without the bouton fly 2022-10-21 fly02. The concentration rule and the mixture rule as before.
 
+Not a search under that limit (Tom, 2026-11-24 09:38, in hal's terminal): an ORN input solved per glomerulus and odor so that the model's PN stage returns recorded data, such as the megamat PN dendrites on their 28 shared glomeruli and 12 odors. Such an input is fixed by the recordings, fitted to no KC target, and run beside permuted-label controls. Hal asked whether it falls under the limit, and Tom chose "Allowed": it is an inversion fixed by the dendrite data, not a search. Either route to the recorded dendrites may then be used: the PN stage's rates given directly (an olfsysm option that waits on Yang's OK) or the solved input (no wait).
+
 **Running and held work.**
 - The differences between the hemibrain and the male CNS's left calyx moved one at a time (E133) is written up on its steps 0 to 2 and completed. Its steps 3 and 4 return to proposed_experiments.md, open on Tom's word: they bear on the previous goal and on hong-data's male CNS models.
 - The open proposals stay as they are. The megamat input search (E117) stays held: it searches input factors.
