@@ -63,7 +63,8 @@ THR_LINE = 60.0
 TOL = 1e-9
 REGISTRY = ('noise_ctrl_frac', 'noise_tnt_frac', 'noise_rate_ratio_fraction', 'noise_ctrl_odors_per_kc_tv_max',
             'noise_tnt_odors_per_kc_tv_max', 'apl_effect_mean', 'apl_effect_pattern_floor', 'apl_effect_rmse_floor',
-            'apl_effect_rho_ceiling', 'ctrl_rate_rho_ceiling', 'tnt_rate_rho_ceiling', 'ctrl_ceiling', 'tnt_ceiling')
+            'apl_effect_rho_ceiling', 'ctrl_rate_rho_ceiling', 'tnt_rate_rho_ceiling', 'ctrl_ceiling', 'tnt_ceiling',
+            'ctrl_mean_dist', 'tnt_mean_dist')
 LABELS = {'E110_A': 'KC–KC\nat zero', 'PO50': 'PO50\nE125', 'TY50': 'TY50\nE125', 'B25': 'B25', 'B100': 'B100',
           'B400': 'B400\ncorner', 'R50': 'R50', 'H50': 'H50', 'X50': 'X50', 'L100': 'L100\n1 s',
           'D100': 'D100\nthresh-\nold', 'P100': 'P100\npooled'}
