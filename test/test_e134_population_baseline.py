@@ -422,3 +422,20 @@ def test_step_null_distance(monkeypatch):
     model = {'w': {'strength/rate': change['strength/rate'] + 0.05}}
     ref = P.step_distance(model, fake)
     assert thr['strength/rate'] == pytest.approx(float(ref.threshold.iloc[0]), rel=1e-12)
+
+
+def test_step_null_distance_passes_its_draw(monkeypatch):
+    """step_null_distance passes `draw` and `correct` to P.step_resample (the gate planner's choice of null), with the
+    ruling's 'sets' as the default."""
+    seen = []
+    fake = P.StepResample(change={'strength/rate': pd.Series([0.0, 1.0], index=list('ab'))},
+                          resampled={'strength/rate': np.array([[0.1, 1.1], [0.0, 0.8]])}, n_up=4, n_down=5)
+
+    def rs(*a, draw='sets', correct=False, **k):
+        seen.append((draw, correct))
+        return fake
+
+    monkeypatch.setattr(P, 'step_resample', rs)
+    B.step_null_distance([], [], [], None)
+    B.step_nulls({'s': ([], [], [], None)}, 'one_fly', True)
+    assert seen == [('sets', False), ('one_fly', True)]

@@ -1304,9 +1304,9 @@ def step_table(readings: Mapping[str, R.ModelReading], flies: R.FlyCache, panel:
     return pd.DataFrame(rows), inputs
 
 
-def step_nulls(inputs: Mapping[str, tuple]) -> Dict[str, Dict[str, float]]:
-    """`step_null_distance` of every step of `step_table`'s inputs."""
-    return {step: step_null_distance(*args) for step, args in inputs.items()}
+def step_nulls(inputs: Mapping[str, tuple], draw: str = 'sets', correct: bool = False) -> Dict[str, Dict[str, float]]:
+    """`step_null_distance` of every step of `step_table`'s inputs, with its `draw` and `correct`."""
+    return {step: step_null_distance(*args, draw=draw, correct=correct) for step, args in inputs.items()}
 
 
 def megamat_stage_error(scores: pd.DataFrame, group: str = 'megamat_fitted', condition: str = 'on') -> pd.DataFrame:
@@ -1391,13 +1391,18 @@ def classify_stages(scores: pd.DataFrame, panel: str = 'megamat', condition: str
 
 
 def step_null_distance(upstream: Sequence[P.Population], downstream: Sequence[P.Population], odors: Sequence[str],
-                       edges, q: float = STEP_NULL_Q) -> Dict[str, float]:
+                       edges, q: float = STEP_NULL_Q, draw: str = 'sets', correct: bool = False) -> Dict[str, float]:
     """Per part, the `q` quantile of the RMS distance of a resampled change (the flies of both stages resampled, hal's
-    `P.step_resample`, its default draw, number and seed) from the flies' measured change: the threshold a model's
+    `P.step_resample` at its default number and seed) from the flies' measured change: the threshold a model's
     change of that part must be within to be inside (the planner's reading, chat.md 2026-11-24 11:34). It equals hal's
     `P.step_distance` threshold for a wiring that has every entry of the part; parts with no finite distance are left
-    out (and so are never inside)."""
-    rs = P.step_resample(upstream, downstream, odors, edges)
+    out (and so are never inside).
+
+    `draw` and `correct` are `P.step_resample`'s: 'sets' (the ruling as written: a mean of resampled flies, against
+    which a wiring behaving exactly as one fly is rarely inside, hal's calibration, chat.md 2026-11-24 14:17) or
+    'one_fly' (one fly per stage, the null for a single wiring); `correct` undoes the bootstrap's (n - 1) / n shrinkage
+    ('sets' only). Which one the class uses is the gate planner's; `--part score --step-draw` sets it."""
+    rs = P.step_resample(upstream, downstream, odors, edges, draw=draw, correct=correct)
     out = {}
     for part in rs.change:
         d = rs.distances(part)
@@ -1492,7 +1497,7 @@ def apl16_bands() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def part_score() -> dict:
+def part_score(step_draw: str = 'sets', step_correct: bool = False) -> dict:
     """Step 3's runs (and E107's validation2 runs of the family) read and scored as step 2's (default readings and
     alternatives); the stage table, the step table, the held-out panels, the classes, realism, score_table.md and
     provenance_score.json."""
@@ -1517,7 +1522,7 @@ def part_score() -> dict:
                 st.insert(0, 'group', g)
                 steps.append(st)
                 try:
-                    step_classes[g] = classify_steps(st, step_nulls(inputs))
+                    step_classes[g] = classify_steps(st, step_nulls(inputs, step_draw, step_correct))
                 except NotImplementedError as e:
                     step_classes[g] = dict(error=str(e))
         print(f'score {g}: {time.time() - t0:.0f} s', flush=True)
@@ -1538,6 +1543,7 @@ def part_score() -> dict:
                            passes=bool(r.passes)) for r in g2.drop_duplicates(['source', 'stage', 'panel',
                                                                                 'condition']).itertuples()}
     classes = dict(stages={g: classify_stages(sc, group=g) for g in ('megamat_fitted', 'megamat_held')} if len(sc) else {},
+                   step_null=dict(draw=step_draw, correct=bool(step_correct), q=STEP_NULL_Q),
                    steps=step_classes, panels=classify_panels(sc) if len(sc) else {}, gate=gate,
                    megamat_stage_error={g: float(x[x.wiring == 'model'].stage_error.iloc[0])
                                         for g, x in se.groupby('group')} if len(se) else {})
@@ -1660,13 +1666,17 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     ap.add_argument('--lane', default=None, help="the lane's name (default the host's)")
     ap.add_argument('--reverse', action='store_true', help='step3: take the points from the other end')
     ap.add_argument('--reclaim', action='store_true', help="step3: take over the points' claims (a process that died)")
+    ap.add_argument('--step-draw', default='sets', choices=('sets', 'one_fly'),
+                    help="score: the step class's null (P.step_resample's draw; default %(default)s, as ruled)")
+    ap.add_argument('--step-correct', action='store_true',
+                    help="score: undo the bootstrap's (n - 1) / n shrinkage in the step class's null ('sets')")
     a = ap.parse_args(argv)
     if a.part == 'step2':
         part_step2(a.readings)
     elif a.part == 'step3':
         part_step3(a.models, a.panels, a.readings, a.lane or _host(), a.reverse, a.reclaim)
     elif a.part == 'score':
-        part_score()
+        part_score(a.step_draw, a.step_correct)
     elif a.part == 'variants':
         write_variants()
     elif a.part == 'commands':
