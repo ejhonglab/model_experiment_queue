@@ -65,7 +65,7 @@ Parts (CLI `--part`):
   (E134's held mixture rate) with the wiring's own ratio for APL off; the APL16 input at the wiring's own fit's two
   counts. The unrefitted family's reads are E134's megamat_held and mixtures_held runs and E90's part B (the APL16
   fit) where they exist; only its validation2 reads are run here.
-- score: the reads scored and classed (`score_megamat`, `score_panels`, `apl16_rows`, `classify`; not written yet).
+- score: the reads scored and classed (`score_megamat`, `score_panels`, `apl16_rows`, `classify`, `part_score`).
 
 The classes (the entry's, read as ruled): each wiring is one fly; a value is the mean over the four T wirings of each
 wiring's error (the error of the T wirings' mean views beside); a change is the mean over T of the arm minus the
@@ -794,8 +794,8 @@ class StageLoss:
     `megamat_stage_error`), their root mean square over the stages; for the control, the same under each permutation and
     their mean. Returns a dict: 'stage_error' (the recorded labels), '<stage>_error' and its views, each wiring's
     '<stage>_error_<wiring>' and 'stage_error_<wiring>', the error over the stages after the PN dendrites
-    ('stage_error_downstream'), 'stage_error_perm' and '<stage>_error_perm' (the permutations' means, for the
-    control), 'loss_stages' (the permutations' mean for the control, else 'stage_error') and the rates. With
+    ('stage_error_downstream', and each wiring's), 'stage_error_perm', '<stage>_error_perm' and each wiring's
+    'stage_error_perm_<wiring>' (the permutations' means, for the control), 'loss_stages' (the permutations' mean for the control, else 'stage_error') and the rates. With
     `check_pn`, the PN-dendrite error must be the same at every call."""
 
     def __init__(self, stages: Sequence[str], flies: Flies, lock: Optional[Mapping] = None,
@@ -823,6 +823,7 @@ class StageLoss:
         out: Dict[str, float] = {}
         common, each = [], {w: [] for w in runs}
         perm_common: List[List[float]] = [[] for _ in self.flies.perms]
+        perm_each: Dict[str, List[List[float]]] = {w: [[] for _ in self.flies.perms] for w in runs}
         for st in self.stages:
             key = (st, self.flies.panel, 'on')
             pops = [reads[w].populations[key] for w in runs]
@@ -838,6 +839,8 @@ class StageLoss:
             for k in range(len(self.flies.perms)):
                 tk = P.wirings_as_flies(pops, self.flies.reference(st, odors, k))
                 perm_common[k].append(float(tk.loc['common', col]))
+                for w, pop in zip(runs, pops):
+                    perm_each[w][k].append(float(tk.loc[pop.name, col]))
             if self.flies.perms:
                 out[f'{st}_error_perm'] = float(np.mean([pc[-1] for pc in perm_common]))
 
@@ -848,8 +851,13 @@ class StageLoss:
         out['stage_error_downstream'] = rms(down) if down else np.nan
         for w in runs:
             out[f'stage_error_{w}'] = rms(each[w])
+        for w in runs:
+            out[f'stage_error_downstream_{w}'] = rms([e for s, e in zip(self.stages, each[w]) if s != 'pn_dendrite']) \
+                if any(s != 'pn_dendrite' for s in self.stages) else np.nan
         if self.flies.perms:
             out['stage_error_perm'] = float(np.mean([rms(pc) for pc in perm_common]))
+            for w in runs:
+                out[f'stage_error_perm_{w}'] = float(np.mean([rms(pe) for pe in perm_each[w]]))
         out['loss_stages'] = out['stage_error_perm'] if self.flies.perms else out['stage_error']
         out.update(rates(runs))
         if self.check_pn and 'pn_dendrite' in self.stages:
@@ -1058,7 +1066,8 @@ def fit_arm(arm: str, control: bool = False, maxfev: Optional[int] = None, resum
 
 def read_tag(pt: ReadPoint) -> str:
     """'<arm>_<panel>_<wiring>' (the arm 'family' for the unrefitted family)."""
-    if pt.panel not in READ_PANELS or pt.wiring not in WIRINGS or (pt.arm not in ARMS and pt.arm != FAMILY):
+    if pt.panel not in READ_PANELS or pt.wiring not in WIRINGS or pt.arm not in (*ARMS, FAMILY, CONTROL) \
+            or (pt.arm == CONTROL and pt.panel != PANEL):
         raise ValueError(f'{pt}')
     return f'{pt.arm}_{pt.panel}_{pt.wiring}'
 
@@ -1067,12 +1076,16 @@ def planned_reads(arms: Optional[Sequence[str]] = None) -> List[ReadPoint]:
     """The reads at fixed parameters, in the order a forward lane takes them: the unrefitted family's validation2 reads
     (its other reads are E134's and E90's saved runs, `load_read`), then for each arm its fit on the megamat input on
     the T wirings (read against the held-out half; its S wirings are its fit's best evaluation), then on the eight
-    wirings with the validation2, the mixture and the APL16 inputs; `arms` (FAMILY among them for the family's) restricts
+    wirings with the validation2, the mixture and the APL16 inputs; the control's best point on the T wirings (read
+    against the held-out half under the permutations); `arms` (FAMILY and CONTROL among them for theirs) restricts
     the list."""
-    want = [FAMILY, *ARMS] if arms is None else list(arms)
+    want = [FAMILY, *ARMS, CONTROL] if arms is None else list(arms)
     pts = [ReadPoint(FAMILY, 'validation2', w, None) for w in WIRINGS] if FAMILY in want else []
     for a in want:
         if a == FAMILY:
+            continue
+        if a == CONTROL:
+            pts += [ReadPoint(CONTROL, PANEL, w, 'held') for w in T_WIRINGS]
             continue
         pts += [ReadPoint(a, PANEL, w, 'held') for w in T_WIRINGS]
         pts += [ReadPoint(a, p, w, None) for p in READ_PANELS if p != PANEL for w in WIRINGS]
@@ -1239,10 +1252,16 @@ def part_read(lane: str, arms: Optional[Sequence[str]] = None, reverse: bool = F
 # ---------------------------------------------------------------------------
 # the score
 
-def load_read(pt: ReadPoint) -> Optional['R.SavedRun']:
-    """A saved read (locally, else the archive); the unrefitted family's megamat and mixture runs are E134's saved
-    megamat_held and mixtures_held runs, and its APL16 runs E90's part B (the wirings' own fits); None if absent."""
+def load_read(pt: ReadPoint, claw_after: bool = False) -> Optional['R.SavedRun']:
+    """A saved read (locally, else the archive; with `claw_after` A3's run with its claws read after the threshold,
+    the same run elsewhere); the unrefitted family's megamat and mixture runs are E134's saved megamat_held and
+    mixtures_held runs, and its APL16 runs E90's part B (the wirings' own fits); None if absent."""
     from experiments import E134_population_baseline as B
+    if claw_after and pt.arm in ARMS and 'claw_thr' in ARMS[pt.arm].searched:
+        try:
+            return R.load_step3_run(f'{read_tag(pt)}_clawafter', dirs=read_dirs())
+        except FileNotFoundError:
+            return None
     if pt.arm == FAMILY and pt.panel in (PANEL, 'mixtures'):
         return B.load_run(B.tag_of(B.Point(pt.panel, 'held', pt.wiring)))
     if pt.arm == FAMILY and pt.panel == 'apl16':
@@ -1257,7 +1276,8 @@ def load_read(pt: ReadPoint) -> Optional['R.SavedRun']:
 
 
 def score_megamat(arm: str, stages: Sequence[str], half: Optional[str] = 'held',
-                  wirings: Sequence[str] = T_WIRINGS, perms: bool = False) -> Optional[Dict[str, float]]:
+                  wirings: Sequence[str] = T_WIRINGS, perms: bool = False,
+                  claw_after: bool = False) -> Optional[Dict[str, float]]:
     """An arm's (or the unrefitted family's) megamat stages on `wirings` against a half of the flies (all of them for
     None; under the control's permutations with `perms`): `StageLoss`'s dict. A fitted arm's S wirings are its fit's
     best evaluation (saved under outputs/.../fit_<arm>/). None while a run is missing."""
@@ -1271,7 +1291,7 @@ def score_megamat(arm: str, stages: Sequence[str], half: Optional[str] = 'held',
             except FileNotFoundError:
                 r = None
         else:
-            r = load_read(ReadPoint(arm, PANEL, w, half))
+            r = load_read(ReadPoint(arm, PANEL, w, half), claw_after)
         if r is None:
             return None
         runs[w] = r
@@ -1341,9 +1361,185 @@ def apl16_rows(arm: str) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def classify(scores: pd.DataFrame) -> dict:
-    """The entry's classes per arm (module docstring), the control's comparison and the "adds" test against A0."""
-    raise NotImplementedError('the classes are written once the reads exist')
+HOLDS_PANELS: Tuple[Tuple[str, str, str], ...] = (('validation2', 'validation2', 'on'), ('mixtures', 'kmix', 'on'),
+                                                   ('mixtures', 'cmix', 'on'), ('apl16', 'apl16', 'on'),
+                                                   ('apl16', 'apl16', 'off'))
+
+
+def _sd(x) -> float:
+    x = np.asarray(list(x), dtype=float)
+    return float(np.std(x, ddof=1)) if len(x) > 1 else np.nan
+
+
+def megamat_values(sc: Mapping[str, float], stages: Sequence[str], wirings: Sequence[str]) -> Dict[str, Dict[str, float]]:
+    """From `StageLoss`'s dict, per wiring its stage error ('stage'), its error over the stages after the PN dendrites
+    ('downstream') and each stage's population error."""
+    return {w: dict(stage=sc[f'stage_error_{w}'], downstream=sc.get(f'stage_error_downstream_{w}', np.nan),
+                    **{st: sc[f'{st}_error_{w}'] for st in stages}) for w in wirings}
+
+
+def panel_values(panels: pd.DataFrame, arm: str) -> Dict[Tuple[str, str, str], Dict[str, float]]:
+    """From `score_panels`' rows, per (input, panel, condition) of HOLDS_PANELS each wiring's KC population error."""
+    out = {}
+    for inp, pan, cond in HOLDS_PANELS:
+        x = panels[(panels.arm == arm) & (panels.input == inp) & (panels.panel == pan) & (panels.condition == cond)
+                   & panels.wiring.isin(WIRINGS)] if len(panels) else panels
+        out[(inp, pan, cond)] = {str(r.wiring): float(r.error) for r in x.itertuples()} if len(x) else {}
+    return out
+
+
+def compare(arm_v: Mapping[str, float], base_v: Mapping[str, float], spread: float,
+            wirings: Sequence[str] = T_WIRINGS) -> dict:
+    """The classes' comparison of one value as ruled: the per-wiring changes (arm minus the reference on the same
+    wiring) over `wirings`, their mean, the standard error over wirings (the larger of half the spread and the SD of
+    the changes over the wirings divided by sqrt(n)), and whether the change is an improvement (below -IMPROVE_SE
+    standard errors) or a worsening beyond the spread."""
+    ch = [arm_v[w] - base_v[w] for w in wirings if w in arm_v and w in base_v]
+    if len(ch) < len(wirings):
+        return dict(n=len(ch), complete=False)
+    mean = float(np.mean(ch))
+    se = float(max(spread / 2.0 if np.isfinite(spread) else 0.0, _sd(ch) / np.sqrt(len(ch))))
+    return dict(n=len(ch), complete=True, changes=[float(c) for c in ch], change=mean, se=se, spread=spread,
+                arm=float(np.mean([arm_v[w] for w in wirings])), ref=float(np.mean([base_v[w] for w in wirings])),
+                improves=bool(mean < -IMPROVE_SE * se), worse_than_spread=bool(np.isfinite(spread) and mean > spread))
+
+
+def classify(arm: str, stages: Sequence[str], mega: Mapping[str, Mapping[str, Dict[str, float]]],
+             panels: Mapping[str, Mapping[Tuple[str, str, str], Dict[str, float]]], spreads: Mapping[str, float],
+             realism: Mapping[str, Mapping[str, str]], fit: Mapping, control_fall: Optional[float],
+             mega_ctl: Optional[Mapping[str, Mapping[str, Dict[str, float]]]] = None) -> dict:
+    """One arm's class as the entry fixes it and the rulings read it, on the T wirings and the held-out half, against
+    the unrefitted family there (`mega` / `panels`: per arm, FAMILY included, the values of `megamat_values` /
+    `panel_values`; `spreads`: 'stage', each stage and each HOLDS_PANELS key as 'input/panel/condition', the SD over the
+    family's eight wirings; `realism`: per arm, per wiring its APL16 read's realism flag; `fit`: the arm's
+    fit_<arm>.json; `control_fall`: the control fit's fall of the megamat stage error on T against the permuted
+    held-out half). "Lower" in "one stage at another's cost" is read with the same margin as "improves"."""
+    a, f = mega[arm], mega[FAMILY]
+    m = compare({w: v['stage'] for w, v in a.items()}, {w: v['stage'] for w, v in f.items()}, spreads['stage'])
+    st = {s: compare({w: v[s] for w, v in a.items()}, {w: v[s] for w, v in f.items()}, spreads[s]) for s in stages}
+    pn = {}
+    for key in HOLDS_PANELS:
+        k = '/'.join(key)
+        pn[k] = compare(panels[arm].get(key, {}), panels[FAMILY].get(key, {}), spreads.get(k, np.nan))
+    rec = dict(arm=arm, megamat=m, stages=st, panels=pn)
+    reasons = []
+    if not m.get('complete') or not all(v.get('complete') for v in st.values()):
+        reasons.append('reads missing')
+    if fit.get('at_bound'):
+        reasons.append('at a bound: ' + ', '.join(fit['at_bound']))
+    left = [w for w in T_WIRINGS if realism.get(arm, {}).get(w) and not realism.get(FAMILY, {}).get(w)]
+    if left:
+        reasons.append('leaves a realism band on ' + ', '.join(left))
+    fall = -m['change'] if m.get('complete') else np.nan
+    rec.update(fall=fall, control_fall=control_fall)
+    if control_fall is not None and np.isfinite(fall) and not fall > control_fall:
+        reasons.append('no better than the permuted control')
+    stage_worse = [s for s, v in st.items() if v.get('worse_than_spread')]
+    panel_worse = [k for k, v in pn.items() if v.get('complete') and v.get('worse_than_spread')]
+    panel_missing = [k for k, v in pn.items() if not v.get('complete')]
+    improves = bool(m.get('improves')) and not stage_worse
+    rec.update(improves=improves, stage_worse=stage_worse, panel_worse=panel_worse, panel_missing=panel_missing)
+    if reasons:
+        cls = 'no class'
+    elif improves and not panel_worse and not panel_missing:
+        cls = 'holds'
+    elif improves and panel_worse:
+        cls = 'megamat only'
+    elif improves:
+        cls = 'improves (held-out panels not all read)'
+    elif m.get('improves') and stage_worse:
+        cls = "one stage at another's cost"
+    else:
+        cls = 'does not improve'
+    if arm != 'A0' and 'A0' in mega:
+        ad = compare({w: v['stage'] for w, v in a.items()}, {w: v['stage'] for w, v in mega['A0'].items()},
+                     spreads['stage'])
+        adds = bool(ad.get('improves'))
+        if arm == 'A1':
+            dn = compare({w: v['downstream'] for w, v in a.items()}, {w: v['downstream'] for w, v in mega['A0'].items()},
+                         spreads.get('downstream', np.nan))
+            adds = adds and bool(dn.get('improves'))
+            rec['adds_downstream'] = dn
+        rec.update(adds_vs_A0=ad, adds=adds)
+    rec.update(cls=cls, reasons=reasons)
+    return rec
+
+
+def realism_of(rows: pd.DataFrame) -> Dict[str, str]:
+    """Per wiring, the APL16 read's realism flag ('' inside every band)."""
+    return {str(r.wiring): (r.realism_flag if isinstance(r.realism_flag, str) else '') for r in rows.itertuples()} \
+        if len(rows) else {}
+
+
+def part_score(arms: Optional[Sequence[str]] = None) -> dict:
+    """The reads scored and classed: per arm (and the unrefitted family) the megamat stages on T against the held-out
+    half (and, beside, against all flies and the fit half, and on S from the fit), A3's under both claw readings, the
+    control's against the permuted held-out half, the held-out panels' KC population errors, the APL16 rows with the
+    realism bands; the spreads over the family's eight wirings; the classes (`classify`). Writes score_megamat.csv,
+    score_panels.csv, score_apl16.csv, classes.json and provenance_score.json."""
+    gate = require_gate()
+    stages = readable_stages(gate['classes'])
+    t0 = time.time()
+    arms = [a for a in (arms or ARMS) if (out_dir() / f'fit_{a}.json').exists()]
+    mrows, mega, mega_after, panels_rows = [], {}, {}, []
+    for a in [FAMILY, *arms]:
+        for half in ('held', None, 'fit'):
+            ws = WIRINGS if (a == FAMILY and half == 'held') else T_WIRINGS
+            sc = score_megamat(a, stages, half, ws)
+            if sc is None:
+                continue
+            vals = megamat_values(sc, stages, ws)
+            if half == 'held':
+                mega[a] = vals
+            for w, v in vals.items():
+                mrows.append(dict(arm=a, half=half or 'all', wiring=w, **v))
+            mrows.append(dict(arm=a, half=half or 'all', wiring='common', stage=sc['stage_error'],
+                              downstream=sc['stage_error_downstream'], **{s: sc[f'{s}_error'] for s in stages}))
+        if a in ARMS and 'claw_thr' in ARMS[a].searched:
+            sc = score_megamat(a, stages, 'held', T_WIRINGS, claw_after=True)
+            if sc is not None:
+                mega_after[a] = megamat_values(sc, stages, T_WIRINGS)
+        p = score_panels(a)
+        if len(p):
+            panels_rows.append(p)
+    panels = pd.concat(panels_rows, ignore_index=True) if panels_rows else pd.DataFrame()
+    pv = {a: panel_values(panels, a) for a in [FAMILY, *arms]}
+    fam = mega.get(FAMILY, {})
+    spreads = dict(stage=_sd(v['stage'] for v in fam.values()), downstream=_sd(v['downstream'] for v in fam.values()),
+                   **{s: _sd(v[s] for v in fam.values()) for s in stages})
+    for key in HOLDS_PANELS:
+        spreads['/'.join(key)] = _sd(pv[FAMILY].get(key, {}).values())
+    apl_rows = [apl16_rows(a) for a in [FAMILY, *arms]]
+    apl = pd.concat([r for r in apl_rows if len(r)], ignore_index=True) if any(len(r) for r in apl_rows) else \
+        pd.DataFrame()
+    realism = {a: realism_of(apl[apl.arm == a]) if len(apl) else {} for a in [FAMILY, *arms]}
+    control_fall = None
+    if (out_dir() / f'fit_{CONTROL}.json').exists():
+        fp = score_megamat(FAMILY, stages, 'held', T_WIRINGS, perms=True)
+        cp = score_megamat(CONTROL, stages, 'held', T_WIRINGS, perms=True)
+        if fp is not None and cp is not None:
+            control_fall = float(np.mean([fp[f'stage_error_perm_{w}'] - cp[f'stage_error_perm_{w}'] for w in T_WIRINGS]))
+    classes = {}
+    for a in arms:
+        fit = _read_json(out_dir() / f'fit_{a}.json')
+        if a not in mega or FAMILY not in mega:
+            classes[a] = dict(cls='reads missing')
+            continue
+        classes[a] = classify(a, stages, mega, pv, spreads, realism, fit, control_fall)
+        if a in mega_after:
+            alt = classify(a, stages, dict(mega, **{a: mega_after[a]}), pv, spreads, realism, fit, control_fall)
+            classes[a]['claws_after_threshold'] = dict(cls=alt['cls'], megamat=alt['megamat'])
+            if alt['cls'] != classes[a]['cls']:
+                classes[a]['reasons'].append('the class differs between the claws read before and after the threshold')
+                classes[a]['cls'] = 'no class'
+    pd.DataFrame(mrows).to_csv(out_dir() / 'score_megamat.csv', index=False)
+    panels.to_csv(out_dir() / 'score_panels.csv', index=False)
+    apl.to_csv(out_dir() / 'score_apl16.csv', index=False)
+    _write_json(out_dir() / 'classes.json', dict(stages=list(stages), spreads=spreads, control_fall=control_fall,
+                                                 classes=classes))
+    _write_json(out_dir() / 'provenance_score.json', dict(part='score', script=SCRIPT, lock=R.require_lock().get('sha256'),
+                seconds=round(time.time() - t0, 1), host=_host(), time=_now(), arms=arms, **_commits()))
+    return classes
 
 
 # ---------------------------------------------------------------------------
@@ -1376,8 +1572,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     elif a.part == 'read':
         require_gate()
         part_read(a.lane, None if a.arm is None else [a.arm], a.reverse, a.reclaim)
-    else:
-        raise NotImplementedError(f'--part {a.part} is not written yet')
+    elif a.part == 'score':
+        print(json.dumps(part_score(None if a.arm is None else [a.arm]), indent=1, default=str))
 
 
 if __name__ == '__main__':

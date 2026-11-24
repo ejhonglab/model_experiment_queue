@@ -236,7 +236,11 @@ def test_fit_refuses_before_the_gate(monkeypatch, tmp_path):
 
 def test_planned_reads_and_tags():
     pts = F.planned_reads()
-    assert len(pts) == len(set(pts)) == 8 + 28 * len(F.ARMS)
+    assert len(pts) == len(set(pts)) == 8 + 28 * len(F.ARMS) + 4
+    ctl = [pt for pt in pts if pt.arm == F.CONTROL]
+    assert [(pt.panel, pt.wiring, pt.half) for pt in ctl] == [(F.PANEL, w, 'held') for w in F.T_WIRINGS]
+    with pytest.raises(ValueError):
+        F.read_tag(F.ReadPoint(F.CONTROL, 'apl16', 'P3', None))
     fam = [pt for pt in pts if pt.arm == F.FAMILY]
     assert len(fam) == 8 and {pt.panel for pt in fam} == {'validation2'}
     a0 = [pt for pt in pts if pt.arm == 'A0']
@@ -255,3 +259,35 @@ def test_planned_reads_and_tags():
 def test_claw_identity_divisive():
     r = F.claw_identity('A2')
     assert r['exact'], r
+
+
+def _mega(stage_by_wiring, stages=('kc_claw', 'kc_soma')):
+    return {w: dict(stage=v, downstream=v, **{s: v for s in stages}) for w, v in stage_by_wiring.items()}
+
+
+def test_classes():
+    stages = ('kc_claw', 'kc_soma')
+    fam = {w: 1.0 for w in F.WIRINGS}
+    spreads = dict(stage=0.04, downstream=0.04, kc_claw=0.04, kc_soma=0.04, **{'/'.join(k): 0.05 for k in F.HOLDS_PANELS})
+    panels_fam = {k: {w: 1.0 for w in F.WIRINGS} for k in F.HOLDS_PANELS}
+    base = dict(mega={F.FAMILY: _mega(fam, stages)}, panels={F.FAMILY: panels_fam}, spreads=spreads,
+                realism={F.FAMILY: {}, 'A0': {}}, fit={}, control_fall=0.01)
+
+    def run(arm_vals, panel_shift=0.0, **over):
+        kw = {k: (dict(v) if isinstance(v, dict) else v) for k, v in base.items()}
+        kw['mega'][ 'A0'] = _mega(arm_vals, stages)
+        kw['panels']['A0'] = {k: {w: 1.0 + panel_shift for w in F.WIRINGS} for k in F.HOLDS_PANELS}
+        kw.update(over)
+        return F.classify('A0', stages, **kw)
+    better = {w: 0.9 for w in F.T_WIRINGS}           # a fall of 0.1 against a standard error of 0.02
+    assert run(better)['cls'] == 'holds'
+    assert run(better, panel_shift=0.1)['cls'] == 'megamat only'
+    assert run({w: 0.99 for w in F.T_WIRINGS})['cls'] == 'does not improve'
+    assert run(better, fit=dict(at_bound=['aplpn high']))['cls'] == 'no class'
+    assert run(better, control_fall=0.2)['cls'] == 'no class'
+    r = run(better, realism={F.FAMILY: {}, 'A0': {'P3': 'APL-on response rate 0.200'}})
+    assert r['cls'] == 'no class' and 'leaves a realism band on P3' in r['reasons']
+    # a fall carried by one wiring does not pass: the SD of the changes over T sets the standard error
+    assert run({'P3': 0.6, 'P4': 1.0, 'M2': 1.0, 'M3': 1.0})['cls'] == 'does not improve'
+    c = F.compare({w: 0.9 for w in F.T_WIRINGS}, {w: 1.0 for w in F.T_WIRINGS}, 0.04)
+    assert c['change'] == pytest.approx(-0.1) and c['se'] == pytest.approx(0.02) and c['improves']
