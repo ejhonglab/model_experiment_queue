@@ -372,3 +372,32 @@ def test_write_variants(tmp_path, monkeypatch):
     assert held.fit_folder == 'E72_wiring_population' and 'kc_claw:' in held.readings
     assert back.set_index('tag').loc['megamat_fitted_real', 'kws'] != back.set_index('tag').loc['megamat_fitted_real', 'kws']
     assert (back.subdir == 'step3').all() and len(df) == 2
+
+
+def test_claw_reader_hook(monkeypatch):
+    """read_model_stages reads the claws through `claw_reader` when one is given (E136's divisive APL), with E90's
+    claw_inputs' arguments, and through E90's claw_inputs otherwise."""
+    from experiments import E90_model_stages as E90
+    import pyolfsysm.mb_model as M
+    n_t, glom = 30, ['DM1', 'DL5']
+    W = pd.DataFrame(np.array([[1.0, 0.0], [0.5, 0.5], [0.0, 1.0]]),
+                     columns=pd.MultiIndex.from_tuples([('DM1', 1), ('DL5', 2)], names=['glomerulus', 'bouton_id']))
+    sims = dict(pn_sims=[np.ones((2, n_t))], bouton_sims=np.ones((1, 2, n_t)), inh_sims=[np.linspace(0, 1, n_t)])
+
+    class V:
+        def __init__(self, **kw):
+            self.__dict__.update(kw)
+
+    rv = V(pn=V(), kc=V(wAPLKC=np.array([0.1, 0.2, 0.3])))
+    monkeypatch.setattr(M, 'get_sim_var', lambda obj, name: sims[name])
+    monkeypatch.setattr(E90, 'step_times', lambda mp, rv: np.linspace(-1.0, 1.0, n_t))
+    seen = []
+
+    def reader(Wm, b, inh, wk):
+        seen.append((Wm.shape, b.shape, inh.shape, wk.shape))
+        return np.full((Wm.shape[0], b.shape[1]), 7.0)
+
+    st = B.read_model_stages(None, rv, W, np.array([0]), ['2h'], glom, ('pn', 'bouton', 'claw'), claw_reader=reader)
+    assert seen and seen[0][0] == (3, 2) and (st['claw_win'].to_numpy() == 7.0).all()
+    plain = B.read_model_stages(None, rv, W, np.array([0]), ['2h'], glom, ('pn', 'bouton', 'claw'))
+    assert not (plain['claw_win'].to_numpy() == 7.0).any()

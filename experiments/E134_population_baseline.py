@@ -889,12 +889,16 @@ def build_point(pt: Point, params: Optional[Mapping[str, float]] = None, orn: Op
 
 
 def read_model_stages(mp, rv, W: Optional[pd.DataFrame], order: np.ndarray, odors: Sequence[str],
-                      glomeruli: Sequence[str], stages: Sequence[str]) -> Dict[str, pd.DataFrame]:
+                      glomeruli: Sequence[str], stages: Sequence[str],
+                      claw_reader: Optional[Callable] = None) -> Dict[str, pd.DataFrame]:
     """The stage matrices of the last simulation, E90's `read_stages` with the settled pre-odor window beside: per stage
     of `stages` ('pn' glomeruli, 'bouton' boutons, 'claw' claws; x odors) the means over MODEL_WINDOW ('<stage>_win'),
     E90's PRE_WINDOW ('<stage>_pre') and SETTLED_PRE_WINDOW ('<stage>_pre_settled'), the claws as E90's
-    `claw_inputs`, and 'apl' (APL's activity over the three windows, per odor) where APL's activity was saved."""
+    `claw_inputs` (or `claw_reader`, with its signature: wiring, boutons x steps, APL's activity at the steps before,
+    the claws' scaled APL weights -> claws x steps; for a model whose claws are inhibited otherwise, e.g. E136's
+    divisive APL), and 'apl' (APL's activity over the three windows, per odor) where APL's activity was saved."""
     from experiments import E90_model_stages as E90
+    claw_reader = E90.claw_inputs if claw_reader is None else claw_reader
     from pyolfsysm.mb_model import get_sim_var
     t = E90.step_times(mp, rv)
     w = E90._windows(t, R.MODEL_WINDOW)
@@ -929,7 +933,7 @@ def read_model_stages(mp, rv, W: Optional[pd.DataFrame], order: np.ndarray, odor
                 if 'bouton' in stages:
                     out[f'bouton_{x}'][o] = b.mean(axis=1)
                 if 'claw' in stages:
-                    out[f'claw_{x}'][o] = E90.claw_inputs(Wm, b, np.asarray(inh[i]).ravel()[idx - 1], wk).mean(axis=1)
+                    out[f'claw_{x}'][o] = claw_reader(Wm, b, np.asarray(inh[i]).ravel()[idx - 1], wk).mean(axis=1)
         if inh is not None and len(inh):
             a = np.asarray(inh[i]).ravel()
             apl[o] = {x: float(a[idx].mean()) for x, idx in win.items()}
@@ -943,9 +947,11 @@ def read_model_stages(mp, rv, W: Optional[pd.DataFrame], order: np.ndarray, odor
     return res
 
 
-def run_stages(pt: Point, built: Built, params: Mapping[str, float], params_off: Mapping[str, float]) -> Dict[str, dict]:
-    """Both conditions of a point at the given parameters, each read by `read_model_stages` (the stages its model has),
-    with the responses and spike counts: {'on', 'off'}: the stage dict."""
+def run_stages(pt: Point, built: Built, params: Mapping[str, float], params_off: Mapping[str, float],
+               claw_reader: Optional[Callable] = None) -> Dict[str, dict]:
+    """Both conditions of a point at the given parameters, each read by `read_model_stages` (the stages its model has;
+    the claws by `claw_reader`, default E90's subtractive `claw_inputs`), with the responses and spike counts:
+    {'on', 'off'}: the stage dict."""
     from pyolfsysm.mb_model import get_sim_var
     out = {}
     for c, p in (('on', params), ('off', params_off)):
@@ -953,7 +959,7 @@ def run_stages(pt: Point, built: Built, params: Mapping[str, float], params_off:
         mp, rv, order = built.vars()
         odors = list(R._abbrev(r.iloc[:0]).columns)
         gl = pn_glomeruli(built, int(np.asarray(get_sim_var(rv.pn, 'pn_sims')[0]).shape[0]))
-        st = read_model_stages(mp, rv, built.W, order, odors, gl, built.stages)
+        st = read_model_stages(mp, rv, built.W, order, odors, gl, built.stages, claw_reader=claw_reader)
         st.update(responses=r, spike_counts=s)
         out[c] = st
     return out
