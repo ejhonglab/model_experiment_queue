@@ -2,9 +2,9 @@
  "experiment": "E134_population_baseline",
  "step": "0, the lock",
  "host": "viki",
- "time": "2026-11-24 10:29",
+ "time": "2026-11-24 11:48",
  "commits": {
-  "queue_commit": "afc9ef7c8a89c9e47b5f39454e47483155e9b0a1",
+  "queue_commit": "993952566f07444394ccd07503871695912cec1e",
   "queue_dirty": true,
   "pyolfsysm_commit": "b1e89d7d119bbbb4888f31de4d94938dbc4bd60a",
   "pyolfsysm_dirty": false,
@@ -12,6 +12,18 @@
   "al_analysis_dirty": false,
   "hong2p_commit": "484da09afe90ce4dd37e8b9039b1881136b78b68",
   "hong2p_dirty": false
+ },
+ "revision": {
+  "previous": {
+   "time": "2026-11-24 10:29",
+   "host": "viki",
+   "queue_commit": "afc9ef7c8a89c9e47b5f39454e47483155e9b0a1",
+   "lock_commit": "607da67027875cbd02b5522a507802d55fc6dbf9",
+   "kc_soma_criteria": null,
+   "mixture_z_criterion": 0.7057
+  },
+  "changes": "the KC somata's criterion per set of recordings (reading 14: soma_criteria, the populations' criterion, criterion_rule and footing; validation2's and the same fly's files on megamat's footing; the mixtures' z bridge at megamat's level), and the readings in rules (3, 4 with the curve note, 6, the gate's A and B)",
+  "planned_by": "a Fable subagent, claude-fable-5-2, spawned from viki 2026-11-24 11:11"
  },
  "populations": {
   "orn__megamat__wild_type": {
@@ -23,7 +35,7 @@
    "file": {
     "path": "<shared>/data/stage_populations/populations/orn__megamat__wild_type.parquet",
     "bytes": 162591,
-    "mtime": "2026-11-24 10:26:03",
+    "mtime": "2026-11-24 11:46:28",
     "sha256": "de37c9b215515030bec3ff6c108a27ba13b7a546abae82586e4b327f78d144d6"
    },
    "sources": [
@@ -123,6 +135,8 @@
    },
    "exclusions": [],
    "criterion": 2.0,
+   "criterion_rule": "the stage's criterion, 2 trial-noise SDs",
+   "footing": null,
    "units": "trial-noise SD",
    "window": {},
    "unit_kind": "glomerulus",
@@ -187,7 +201,7 @@
    "file": {
     "path": "<shared>/data/stage_populations/populations/pn_dendrite__megamat__wild_type.parquet",
     "bytes": 100700,
-    "mtime": "2026-11-24 10:26:03",
+    "mtime": "2026-11-24 11:46:28",
     "sha256": "8a0c368d467db0a002a55e942f2e02f7097797a68dcd544aaa952d3959dd624b"
    },
    "sources": [
@@ -279,6 +293,8 @@
    },
    "exclusions": [],
    "criterion": 2.0,
+   "criterion_rule": "the stage's criterion, 2 trial-noise SDs",
+   "footing": null,
    "units": "trial-noise SD",
    "window": {},
    "unit_kind": "glomerulus",
@@ -321,7 +337,7 @@
    "file": {
     "path": "<shared>/data/stage_populations/populations/pn_bouton__megamat__wild_type.parquet",
     "bytes": 2184535,
-    "mtime": "2026-11-24 10:26:03",
+    "mtime": "2026-11-24 11:46:28",
     "sha256": "7440f96b6eb2e00386f5828259784e4b2e92cacd30403ea6ced1854fe9f611f6"
    },
    "sources": [
@@ -424,6 +440,8 @@
     }
    ],
    "criterion": 2.0,
+   "criterion_rule": "the stage's criterion, 2 baseline-noise SDs",
+   "footing": null,
    "units": "baseline-noise SD",
    "window": {
     "response": [
@@ -473,7 +491,7 @@
    "file": {
     "path": "<shared>/data/stage_populations/populations/kc_claw__megamat__wild_type.parquet",
     "bytes": 1269264,
-    "mtime": "2026-11-24 10:26:03",
+    "mtime": "2026-11-24 11:46:28",
     "sha256": "e379d5d261affaf8e2dc54e4a5f9dbf1329181b11a904fcf19c1aab6473df784"
    },
    "sources": [
@@ -565,6 +583,8 @@
    },
    "exclusions": [],
    "criterion": 2.0,
+   "criterion_rule": "the stage's criterion, 2 baseline-noise SDs",
+   "footing": null,
    "units": "baseline-noise SD",
    "window": {
     "response": [
@@ -614,7 +634,7 @@
    "file": {
     "path": "<shared>/data/stage_populations/populations/kc_soma__megamat__wild_type.parquet",
     "bytes": 4131703,
-    "mtime": "2026-11-24 10:26:04",
+    "mtime": "2026-11-24 11:46:29",
     "sha256": "b7abd9ef92731a52bf8fec0bf001909f47e617dc337ae22281c2eedad5833fd6"
    },
    "sources": [
@@ -627,31 +647,31 @@
    ],
    "has_trials": true,
    "response_rate": {
-    "mean_over_flies": 0.2284516313832311,
+    "mean_over_flies": 0.09150047755884608,
     "per_fly": {
-     "2022-10-10/1": 0.17887407701075375,
-     "2022-10-10/2": 0.15571095571095572,
-     "2022-10-11/1": 0.3172566477015735,
-     "2022-11-10/1": 0.26196484510964146
+     "2022-10-10/1": 0.06197036523118093,
+     "2022-10-10/2": 0.05416152474976004,
+     "2022-10-11/1": 0.12421739233937201,
+     "2022-11-10/1": 0.12565262791507134
     },
     "per_odor": {
-     "2h": 0.27493002992759813,
-     "IaA": 0.2520487186958308,
-     "pa": 0.28286547169369436,
-     "2-but": 0.2615841077148913,
-     "eb": 0.2837061311850619,
-     "ep": 0.3091233255873107,
-     "6al": 0.22599849647501738,
-     "t2h": 0.23688259501271364,
-     "1-8ol": 0.2047245154744157,
-     "1-5ol": 0.23004064819005351,
-     "1-6ol": 0.2790655603093896,
-     "ms": 0.16104872225195413,
-     "B-cit": 0.13822772229231473,
-     "Lin": 0.14432803161292918,
-     "aa": 0.24786903331156596,
-     "benz": 0.1972534327935304,
-     "va": 0.15398119098665763
+     "2h": 0.10167423910169304,
+     "IaA": 0.10736803268846327,
+     "pa": 0.13473136117844892,
+     "2-but": 0.09767945758624266,
+     "eb": 0.11852716753081838,
+     "ep": 0.12790626638461183,
+     "6al": 0.09446719474818838,
+     "t2h": 0.09001503992688475,
+     "1-8ol": 0.08369005353056787,
+     "1-5ol": 0.09396313571599703,
+     "1-6ol": 0.1327405713682577,
+     "ms": 0.05249110587507133,
+     "B-cit": 0.03300610921387079,
+     "Lin": 0.04349383646639451,
+     "aa": 0.11554847225040182,
+     "benz": 0.07579638291593853,
+     "va": 0.05240969201853261
     }
    },
    "flies": [
@@ -698,7 +718,9 @@
      "reason": "Remy's 14 older megamat flies (2018-2019): partial panels and another pipeline (peak_amp of 2024-11-12); not read"
     }
    ],
-   "criterion": 1.9684,
+   "criterion": 5.9486,
+   "criterion_rule": "Remy's megamat somata: the level, in their baseline-noise units, at which the mean over her four flies of each fly's response rate over the 17 odors equals 0.0915, the megamat operating point (the model's held rate, two or more spikes); the geometric bisection of kcq.data_targets.criterion_threshold, rounded to 4 decimals",
+   "footing": null,
    "units": "baseline-noise SD",
    "window": {
     "response": [
@@ -714,6 +736,7 @@
    "named_units": false,
    "recording_site": "somata (nuclear GCaMP6s, per cell)",
    "notes": [
+    "criterion: the level at which the mean over the four flies of each fly's response rate over the 17 odors is 0.0915, the megamat operating point (the lock's soma_criteria)",
     "Remy's four 2022 flies with the whole panel; her 14 older flies (2018-2019, partial panels, another pipeline) are not used"
    ],
    "breadth_bins": {
@@ -750,7 +773,7 @@
    "file": {
     "path": "<shared>/data/stage_populations/populations/kc_claw__megamat__same_fly.parquet",
     "bytes": 361542,
-    "mtime": "2026-11-24 10:26:04",
+    "mtime": "2026-11-24 11:46:29",
     "sha256": "339cb793db257b5eded65b972a72fe6956138650a9e1f86311e02358bd93b0bc"
    },
    "sources": [
@@ -818,6 +841,8 @@
    },
    "exclusions": [],
    "criterion": 2.0,
+   "criterion_rule": "the stage's criterion, 2 baseline-noise SDs",
+   "footing": null,
    "units": "baseline-noise SD",
    "window": {
     "response": [
@@ -869,8 +894,8 @@
    "file": {
     "path": "<shared>/data/stage_populations/populations/kc_soma__megamat__same_fly.parquet",
     "bytes": 1077415,
-    "mtime": "2026-11-24 10:26:04",
-    "sha256": "5479dbf097e30a395e4abad041766a72bf41f1ac18d92fe61c3e56731ce5e4cb"
+    "mtime": "2026-11-24 11:46:29",
+    "sha256": "c187eda48988590133ed9d2951442ba9af22a392fcc3373518dc9ecdb003ed14"
    },
    "sources": [
     {
@@ -882,28 +907,28 @@
    ],
    "has_trials": true,
    "response_rate": {
-    "mean_over_flies": 0.24659632894927014,
+    "mean_over_flies": 0.06868044515103339,
     "per_fly": {
-     "2023-04-11/3/megamat1_redo": 0.24659632894927014
+     "2023-04-11/3/megamat1_redo": 0.06868044515103339
     },
     "per_odor": {
-     "2h": 0.34791154791154794,
-     "IaA": 0.2648648648648649,
-     "pa": 0.2909090909090909,
-     "2-but": 0.29434889434889433,
-     "eb": 0.3208845208845209,
-     "ep": 0.35036855036855036,
-     "6al": 0.22457002457002456,
-     "t2h": 0.1832923832923833,
-     "1-8ol": 0.2004914004914005,
-     "1-5ol": 0.2968058968058968,
-     "1-6ol": 0.28157248157248155,
-     "ms": 0.18968058968058968,
-     "B-cit": 0.16904176904176904,
-     "Lin": 0.21572481572481572,
-     "aa": 0.21916461916461916,
-     "benz": 0.2122850122850123,
-     "va": 0.13022113022113022
+     "2h": 0.11744471744471745,
+     "IaA": 0.0855036855036855,
+     "pa": 0.11203931203931204,
+     "2-but": 0.08796068796068796,
+     "eb": 0.11056511056511056,
+     "ep": 0.14791154791154792,
+     "6al": 0.039803439803439804,
+     "t2h": 0.040294840294840296,
+     "1-8ol": 0.040294840294840296,
+     "1-5ol": 0.0742014742014742,
+     "1-6ol": 0.0683046683046683,
+     "ms": 0.02702702702702703,
+     "B-cit": 0.029484029484029485,
+     "Lin": 0.03587223587223587,
+     "aa": 0.08796068796068796,
+     "benz": 0.03783783783783784,
+     "va": 0.02506142506142506
     }
    },
    "flies": [
@@ -936,7 +961,18 @@
     "2023-04-11/3/megamat1_redo": 2035
    },
    "exclusions": [],
-   "criterion": 1.9684,
+   "criterion": 5.9486,
+   "criterion_rule": "the same-fly megamat fly: its values multiplied by megamat's median noise bridge over its own, then megamat's level",
+   "footing": {
+    "rule": "values times megamat's median noise bridge over the group's (the fly's, for the same fly)",
+    "reference": {
+     "population": "kc_soma__megamat__wild_type",
+     "median": 0.9107421057808396
+    },
+    "factor_per_fly": {
+     "2023-04-11/3/megamat1_redo": 1.0840539532481979
+    }
+   },
    "units": "baseline-noise SD",
    "window": {
     "response": [
@@ -952,6 +988,7 @@
    "named_units": false,
    "recording_site": "somata (nuclear GCaMP6s, per cell)",
    "notes": [
+    "on megamat's footing: the fly's values multiplied by megamat's median noise bridge over its own, then megamat's soma level (the lock's soma_criteria)",
     "one fly (2023-04-11 fly 3, megamat1_redo), claws and somata on the same trials (E119 part 0b)"
    ],
    "breadth_bins": {
@@ -988,7 +1025,7 @@
    "file": {
     "path": "<shared>/data/stage_populations/populations/orn__validation2__wild_type.parquet",
     "bytes": 148618,
-    "mtime": "2026-11-24 10:26:04",
+    "mtime": "2026-11-24 11:46:29",
     "sha256": "222e7e437e524a8867d491228658a01b556a4def1c03baeaf8f540a924f9b696"
    },
    "sources": [
@@ -1086,6 +1123,8 @@
    },
    "exclusions": [],
    "criterion": 2.0,
+   "criterion_rule": "the stage's criterion, 2 trial-noise SDs",
+   "footing": null,
    "units": "trial-noise SD",
    "window": {},
    "unit_kind": "glomerulus",
@@ -1129,8 +1168,8 @@
    "file": {
     "path": "<shared>/data/stage_populations/populations/kc_soma__validation2__wild_type.parquet",
     "bytes": 8363788,
-    "mtime": "2026-11-24 10:26:05",
-    "sha256": "2f0f467f314c40b8caab2037b2f26abc34976a8bee10f0508c51050a790e47ca"
+    "mtime": "2026-11-24 11:46:29",
+    "sha256": "63a8652c6ed49581b124b8a15bf1a6934e69c1cb865fb1d6a9008c80ee299ec9"
    },
    "sources": [
     {
@@ -1388,52 +1427,52 @@
    ],
    "has_trials": true,
    "response_rate": {
-    "mean_over_flies": 0.12723625568074243,
+    "mean_over_flies": 0.05041100523466731,
     "per_fly": {
-     "2023-10-16/2": 0.20968660968660968,
-     "2023-10-16/3": 0.21201814058956917,
-     "2023-10-17/1": 0.11899038461538461,
-     "2023-10-17/2": 0.10470779220779221,
-     "2023-10-19/1": 0.08524590163934426,
-     "2023-10-25/1": 0.08751633986928105,
-     "2023-10-25/2": 0.11598566308243728,
-     "2023-11-02/1": 0.08270010131712259,
-     "2023-11-02/2": 0.12990855298547607,
-     "2023-11-03/1": 0.09212239583333333,
-     "2023-11-03/3": 0.07829861111111111,
-     "2023-11-07/2": 0.17965367965367965,
-     "2023-11-21/1": 0.1193483709273183,
-     "2023-11-29/3": 0.11878031878031878,
-     "2023-11-29/4": 0.11165501165501165,
-     "2023-12-06/1": 0.17089133089133088,
-     "2023-12-06/2": 0.10875955320399765,
-     "2023-12-13/1": 0.04986979166666667,
-     "2023-12-19/1": 0.1656332671957672,
-     "2023-12-19/2": 0.2029532967032967
+     "2023-10-16/2": 0.0707977207977208,
+     "2023-10-16/3": 0.05963718820861678,
+     "2023-10-17/1": 0.03474130036630037,
+     "2023-10-17/2": 0.027867965367965368,
+     "2023-10-19/1": 0.024112021857923497,
+     "2023-10-25/1": 0.05326797385620915,
+     "2023-10-25/2": 0.06845878136200717,
+     "2023-11-02/1": 0.04660587639311044,
+     "2023-11-02/2": 0.08100233100233101,
+     "2023-11-03/1": 0.05164930555555555,
+     "2023-11-03/3": 0.044270833333333336,
+     "2023-11-07/2": 0.05553067622033139,
+     "2023-11-21/1": 0.03864661654135338,
+     "2023-11-29/3": 0.03873873873873874,
+     "2023-11-29/4": 0.04731934731934732,
+     "2023-12-06/1": 0.06295482295482295,
+     "2023-12-06/2": 0.0366451107191848,
+     "2023-12-13/1": 0.026041666666666668,
+     "2023-12-19/1": 0.0582010582010582,
+     "2023-12-19/2": 0.08173076923076923
     },
     "per_odor": {
-     "paa": 0.11919144031595245,
-     "-aPine": 0.12384947417018337,
-     "euc": 0.15269407016862596,
-     "B-myr": 0.08716160336221701,
-     "+pul": 0.1224156939838531,
-     "-bCar": 0.10171722748535868,
-     "1-3ol": 0.11065403193551424,
-     "1o3one": 0.17765345433336963,
-     "1p3one": 0.12821712367716864,
-     "2-mba": 0.2395999075195736,
-     "2-mib": 0.1021252359877687,
-     "EtOct": 0.1580768451824468,
-     "PEA": 0.11212957230287053,
-     "Z4-7al": 0.11116842130198529,
-     "bbenz": 0.10131221259091551,
-     "geos": 0.18425012208522706,
-     "ger": 0.13932635820621306,
-     "guai": 0.11966804036895144,
-     "long": 0.16002321138849945,
-     "mchav": 0.09117378105425207,
-     "menth": 0.11227666590349973,
-     "sab": 0.12107534687729114
+     "paa": 0.05013411339285099,
+     "-aPine": 0.03369376279181657,
+     "euc": 0.05349211826606478,
+     "B-myr": 0.0226903285553217,
+     "+pul": 0.04321291173994609,
+     "-bCar": 0.04050631662348953,
+     "1-3ol": 0.03351185465743855,
+     "1o3one": 0.07938980776194039,
+     "1p3one": 0.05554947675270353,
+     "2-mba": 0.11935848360909511,
+     "2-mib": 0.02618093008260073,
+     "EtOct": 0.07306652112781277,
+     "PEA": 0.05314160041670161,
+     "Z4-7al": 0.027659887812370977,
+     "bbenz": 0.02813496027550089,
+     "geos": 0.08019808402246177,
+     "ger": 0.053898780406407346,
+     "guai": 0.05149729951557623,
+     "long": 0.07431115480285341,
+     "mchav": 0.03506245326744161,
+     "menth": 0.03835270190661202,
+     "sab": 0.03905167784062058
     }
    },
    "flies": [
@@ -1727,7 +1766,79 @@
      "reason": "Remy's quality control ({'cell_mask_coord': 'rmap_nls_cluster', 'metric': 'correlation', 'qc_thresh': 0.3})"
     }
    ],
-   "criterion": 1.9684,
+   "criterion": 5.9486,
+   "criterion_rule": "validation2 somata: each group's values (the recordings whose ThorImage name ends in _tsub03, and the others) multiplied by megamat's median noise bridge over the group's, then megamat's level",
+   "footing": {
+    "rule": "values times megamat's median noise bridge over the group's (the fly's, for the same fly)",
+    "reference": {
+     "population": "kc_soma__megamat__wild_type",
+     "median": 0.9107421057808396
+    },
+    "factor_per_fly": {
+     "2023-10-16/2": 1.031955647459679,
+     "2023-10-16/3": 1.031955647459679,
+     "2023-10-17/1": 1.031955647459679,
+     "2023-10-17/2": 1.031955647459679,
+     "2023-10-19/1": 1.031955647459679,
+     "2023-10-25/1": 1.7673588185542877,
+     "2023-10-25/2": 1.7673588185542877,
+     "2023-11-02/1": 1.7673588185542877,
+     "2023-11-02/2": 1.7673588185542877,
+     "2023-11-03/1": 1.7673588185542877,
+     "2023-11-03/3": 1.7673588185542877,
+     "2023-11-07/2": 1.031955647459679,
+     "2023-11-21/1": 1.031955647459679,
+     "2023-11-29/3": 1.031955647459679,
+     "2023-11-29/4": 1.031955647459679,
+     "2023-12-06/1": 1.031955647459679,
+     "2023-12-06/2": 1.031955647459679,
+     "2023-12-13/1": 1.7673588185542877,
+     "2023-12-19/1": 1.031955647459679,
+     "2023-12-19/2": 1.031955647459679
+    },
+    "group_per_fly": {
+     "2023-10-16/2": "tsub03",
+     "2023-10-16/3": "tsub03",
+     "2023-10-17/1": "tsub03",
+     "2023-10-17/2": "tsub03",
+     "2023-10-19/1": "tsub03",
+     "2023-10-25/1": "other",
+     "2023-10-25/2": "other",
+     "2023-11-02/1": "other",
+     "2023-11-02/2": "other",
+     "2023-11-03/1": "other",
+     "2023-11-03/3": "other",
+     "2023-11-07/2": "tsub03",
+     "2023-11-21/1": "tsub03",
+     "2023-11-29/3": "tsub03",
+     "2023-11-29/4": "tsub03",
+     "2023-12-06/1": "tsub03",
+     "2023-12-06/2": "tsub03",
+     "2023-12-13/1": "other",
+     "2023-12-19/1": "tsub03",
+     "2023-12-19/2": "tsub03"
+    },
+    "groups": {
+     "tsub03": {
+      "n_flies": 13,
+      "noise_bridge_median": 0.8825399696418876,
+      "noise_bridge_min": 0.7737322657092295,
+      "noise_bridge_max": 1.0929086099026883,
+      "factor": 1.031955647459679,
+      "rate_mean": 0.04899410280954868,
+      "rate_mean_at_apl16_criterion": 0.14679412751918622
+     },
+     "other": {
+      "n_flies": 7,
+      "noise_bridge_median": 0.5153125082578496,
+      "noise_bridge_min": 0.46493324213869414,
+      "noise_bridge_max": 0.6033315079793887,
+      "factor": 1.7673588185542877,
+      "rate_mean": 0.05304239545274476,
+      "rate_mean_at_apl16_criterion": 0.09091449369506117
+     }
+    }
+   },
    "units": "baseline-noise SD",
    "window": {
     "response": [
@@ -1743,7 +1854,8 @@
    "named_units": false,
    "recording_site": "somata (nuclear GCaMP6s, per cell)",
    "notes": [
-    "euc, -aPine and ger: each fly's one concentration pooled under one name (E107's POOLED; euc -2 / -1.75, -aPine -2 / -1.5, ger -2 / -3); geos at 10^-4 only (10^-5 left out); every fly was given part of the panel"
+    "euc, -aPine and ger: each fly's one concentration pooled under one name (E107's POOLED; euc -2 / -1.75, -aPine -2 / -1.5, ger -2 / -3); geos at 10^-4 only (10^-5 left out); every fly was given part of the panel",
+    "on megamat's footing: each group's values (ThorImage name ending in _tsub03, or not) multiplied by megamat's median noise bridge over the group's, then megamat's soma level (the lock's soma_criteria)"
    ],
    "breadth_bins": {
     "12": [
@@ -1889,7 +2001,7 @@
    "file": {
     "path": "<shared>/data/stage_populations/populations/orn__kmix__wild_type.parquet",
     "bytes": 89158,
-    "mtime": "2026-11-24 10:26:05",
+    "mtime": "2026-11-24 11:46:30",
     "sha256": "23988e150913e79ec67fef9a30717839c941de56cc212e1c4449b88977b2aace"
    },
    "sources": [
@@ -1971,6 +2083,8 @@
    },
    "exclusions": [],
    "criterion": 2.0,
+   "criterion_rule": "the stage's criterion, 2 trial-noise SDs",
+   "footing": null,
    "units": "trial-noise SD",
    "window": {},
    "unit_kind": "glomerulus",
@@ -2014,7 +2128,7 @@
    "file": {
     "path": "<shared>/data/stage_populations/populations/kc_soma__kmix__wild_type.parquet",
     "bytes": 1427350,
-    "mtime": "2026-11-24 10:26:06",
+    "mtime": "2026-11-24 11:46:30",
     "sha256": "d3040991327237cb5b70159cf77493f151ec6d4f492487ffb729ec3d2b1085e6"
    },
    "sources": [
@@ -2027,25 +2141,25 @@
    ],
    "has_trials": false,
    "response_rate": {
-    "mean_over_flies": 0.187959622824898,
+    "mean_over_flies": 0.055823212218341,
     "per_fly": {
-     "2022-07-01/1": 0.16991362763915546,
-     "2022-07-02/1": 0.1455592105263158,
-     "2022-07-02/2": 0.1967828798185941,
-     "2022-07-11/1": 0.1852165725047081,
-     "2022-07-11/2": 0.21829739298358544,
-     "2022-07-12/3": 0.18779930343926862,
-     "2022-07-12/5": 0.21214837286265859
+     "2022-07-01/1": 0.04515355086372361,
+     "2022-07-02/1": 0.03536184210526316,
+     "2022-07-02/2": 0.056405895691609975,
+     "2022-07-11/1": 0.050094161958568736,
+     "2022-07-11/2": 0.06887672996459607,
+     "2022-07-12/3": 0.06220069656073139,
+     "2022-07-12/5": 0.0726696083838941
     },
     "per_odor": {
-     "EtOH": 0.28092071650470835,
-     "IAol": 0.10810033040334188,
-     "IaA": 0.2571418691366703,
-     "ea": 0.20096460296338206,
-     "eb": 0.2146372856715199,
-     "kmix0": 0.19359737345083902,
-     "kmix-1": 0.14414740248793634,
-     "kmix-2": 0.10416740198078635
+     "EtOH": 0.09294210356316943,
+     "IAol": 0.033278167372028586,
+     "IaA": 0.1187924749094578,
+     "ea": 0.06590436931790844,
+     "eb": 0.07696754772270446,
+     "kmix0": 0.031889086374385485,
+     "kmix-1": 0.015602226440291717,
+     "kmix-2": 0.011209722046782144
     }
    },
    "flies": [
@@ -2087,14 +2201,16 @@
     "2022-07-12/5": 1813
    },
    "exclusions": [],
-   "criterion": 0.7057,
+   "criterion": 1.9086,
+   "criterion_rule": "the mixtures' somata (session z): the z bridge's rule unchanged (the z at which the pooled Fc_zscore trial means of Remy's four megamat flies respond at the pooled rate of their baseline-noise trial means above the criterion), at megamat's level",
+   "footing": null,
    "units": "session z (Fc_zscore)",
    "window": {},
    "unit_kind": "kc",
    "named_units": false,
    "recording_site": "somata (nuclear GCaMP6s, per cell)",
    "notes": [
-    "session z (Fc_zscore) trial means from olfdb dataset 8; no frames or single trials on hand, so not in baseline-noise units; the criterion is the z bridge on the 2022 megamat flies"
+    "session z (Fc_zscore) trial means from olfdb dataset 8; no frames or single trials on hand, so not in baseline-noise units; the criterion is the z bridge on the 2022 megamat flies at megamat's soma level"
    ],
    "breadth_bins": {
     "8": [
@@ -2130,7 +2246,7 @@
    "file": {
     "path": "<shared>/data/stage_populations/populations/orn__cmix__wild_type.parquet",
     "bytes": 89154,
-    "mtime": "2026-11-24 10:26:06",
+    "mtime": "2026-11-24 11:46:30",
     "sha256": "0647f1419d351cddc9fe20a73acb4e94a236afaed4a58caf1bf1deb42de3dfc9"
    },
    "sources": [
@@ -2212,6 +2328,8 @@
    },
    "exclusions": [],
    "criterion": 2.0,
+   "criterion_rule": "the stage's criterion, 2 trial-noise SDs",
+   "footing": null,
    "units": "trial-noise SD",
    "window": {},
    "unit_kind": "glomerulus",
@@ -2255,7 +2373,7 @@
    "file": {
     "path": "<shared>/data/stage_populations/populations/kc_soma__cmix__wild_type.parquet",
     "bytes": 707128,
-    "mtime": "2026-11-24 10:26:06",
+    "mtime": "2026-11-24 11:46:30",
     "sha256": "c8016a8c4e6db1c83784887b8c356b27267c45917a8928ef83ba9a2af777c064"
    },
    "sources": [
@@ -2268,22 +2386,22 @@
    ],
    "has_trials": false,
    "response_rate": {
-    "mean_over_flies": 0.18328355572111116,
+    "mean_over_flies": 0.05156611202729054,
     "per_fly": {
-     "2022-03-29/2": 0.18061380099123142,
-     "2022-04-04/1": 0.2001302567919613,
-     "2022-07-20/2": 0.19224683544303797,
-     "2022-07-25/2": 0.1601433296582139
+     "2022-03-29/2": 0.059140297369424326,
+     "2022-04-04/1": 0.06289542240416822,
+     "2022-07-20/2": 0.03695750452079566,
+     "2022-07-25/2": 0.04727122381477398
     },
     "per_odor": {
-     "ms": 0.17336034918643917,
-     "va": 0.11750215486521845,
-     "fur": 0.21082188658548565,
-     "2h": 0.1026165502707121,
-     "1o3ol": 0.29288509991690603,
-     "cmix0": 0.2563499897190166,
-     "cmix-1": 0.18260431943653666,
-     "cmix-2": 0.13012809578857454
+     "ms": 0.05268304198009484,
+     "va": 0.037673005944462046,
+     "fur": 0.07940995999756251,
+     "2h": 0.03150478470375893,
+     "1o3ol": 0.1304596022534984,
+     "cmix0": 0.04221980467659924,
+     "cmix-1": 0.020980765741087856,
+     "cmix-2": 0.01759793092126055
     }
    },
    "flies": [
@@ -2316,14 +2434,16 @@
     "2022-07-25/2": 1814
    },
    "exclusions": [],
-   "criterion": 0.7057,
+   "criterion": 1.9086,
+   "criterion_rule": "the mixtures' somata (session z): the z bridge's rule unchanged (the z at which the pooled Fc_zscore trial means of Remy's four megamat flies respond at the pooled rate of their baseline-noise trial means above the criterion), at megamat's level",
+   "footing": null,
    "units": "session z (Fc_zscore)",
    "window": {},
    "unit_kind": "kc",
    "named_units": false,
    "recording_site": "somata (nuclear GCaMP6s, per cell)",
    "notes": [
-    "session z (Fc_zscore) trial means from olfdb dataset 8; no frames or single trials on hand, so not in baseline-noise units; the criterion is the z bridge on the 2022 megamat flies"
+    "session z (Fc_zscore) trial means from olfdb dataset 8; no frames or single trials on hand, so not in baseline-noise units; the criterion is the z bridge on the 2022 megamat flies at megamat's soma level"
    ],
    "breadth_bins": {
     "8": [
@@ -2359,7 +2479,7 @@
    "file": {
     "path": "<shared>/data/stage_populations/populations/kc_soma__apl16__control.parquet",
     "bytes": 8942762,
-    "mtime": "2026-11-24 10:26:08",
+    "mtime": "2026-11-24 11:46:32",
     "sha256": "49f8f7aab40acc8a15b80f869d50d4ff507ebf60a911e0c8db5d2f27c978a405"
    },
    "sources": [
@@ -2465,6 +2585,8 @@
    },
    "exclusions": [],
    "criterion": 1.9684,
+   "criterion_rule": "APL16 somata: 1.9684 baseline-noise SDs, unchanged (the level at which the control flies keep the response rate of their recorder's own criterion, 1 z; notes/response_criterion_decision.md)",
+   "footing": null,
    "units": "baseline-noise SD",
    "window": {
     "response": [
@@ -2516,7 +2638,7 @@
    "file": {
     "path": "<shared>/data/stage_populations/populations/kc_soma__apl16__tnt.parquet",
     "bytes": 6709175,
-    "mtime": "2026-11-24 10:26:09",
+    "mtime": "2026-11-24 11:46:33",
     "sha256": "8974700e8afc5b91c5f3b3b6071238cc2a96f3e34d566b8621bc119ab55f29c0"
    },
    "sources": [
@@ -2610,6 +2732,8 @@
    },
    "exclusions": [],
    "criterion": 1.9684,
+   "criterion_rule": "APL16 somata: 1.9684 baseline-noise SDs, unchanged (the level at which the control flies keep the response rate of their recorder's own criterion, 1 z; notes/response_criterion_decision.md)",
+   "footing": null,
    "units": "baseline-noise SD",
    "window": {
     "response": [
@@ -2661,7 +2785,17 @@
    "kc_claw": 2.0,
    "kc_soma": 1.9684
   },
-  "mixture_z_criterion": 0.7057,
+  "criteria_note": "one criterion per stage, and for the KC somata one per set of recordings (kc_soma_criteria): CRITERIA's kc_soma is the APL16 somata's",
+  "kc_soma_criteria": {
+   "apl16/control": 1.9684,
+   "apl16/tnt": 1.9684,
+   "megamat/wild_type": 5.9486,
+   "megamat/same_fly": 5.9486,
+   "validation2/wild_type": 5.9486,
+   "kmix/wild_type": 1.9086,
+   "cmix/wild_type": 1.9086
+  },
+  "mixture_z_criterion": 1.9086,
   "units": {
    "baseline-noise SD": "window mean minus pre-odor mean over the SD of the pre-odor frames",
    "trial-noise SD": "trial mean over the robust SD of single trials about their odor means (1.4826 MAD, residuals scaled by sqrt(n/(n-1)))",
@@ -2965,6 +3099,13 @@
      0.5688945679229167,
      0.5190601433864802,
      0.4808057810481449
+    ],
+    "flies": [
+     "2022-10-26__fly01__megamat1_001",
+     "2022-10-26__fly02__megamat1",
+     "2022-11-13__fly01__megamat1",
+     "2022-11-13__fly02__megamat1_002",
+     "2022-11-13__fly03__megamat1"
     ]
    },
    "kc_claw__megamat__wild_type": {
@@ -2974,6 +3115,12 @@
      0.8217148924633388,
      0.7604002382265553,
      0.7077175323911495
+    ],
+    "flies": [
+     "2023-04-11__fly02__megamat1",
+     "2023-04-11__fly03__megamat1",
+     "2023-04-13__fly01__megamat1_001",
+     "2023-04-15__fly02__megamat1"
     ]
    },
    "kc_soma__megamat__wild_type": {
@@ -2983,43 +3130,129 @@
      0.7010017700793253,
      1.0034464133427146,
      1.134398488751204
+    ],
+    "flies": [
+     "2022-10-10/1",
+     "2022-10-10/2",
+     "2022-10-11/1",
+     "2022-11-10/1"
     ]
    },
    "kc_claw__megamat__same_fly": {
     "median_over_flies": 1.0307178963764947,
     "per_fly": [
      1.0307178963764947
+    ],
+    "flies": [
+     "2023-04-11/3/megamat1_redo"
     ]
    },
    "kc_soma__megamat__same_fly": {
-    "median_over_flies": 0.8401261791924134,
+    "median_over_flies": 0.9107421057808391,
     "per_fly": [
-     0.8401261791924134
+     0.9107421057808391
+    ],
+    "flies": [
+     "2023-04-11/3/megamat1_redo"
+    ],
+    "per_fly_raw": [
+     0.840126179192413
+    ],
+    "median_over_flies_raw": 0.840126179192413,
+    "factor_per_fly": [
+     1.0840539532481979
     ]
    },
    "kc_soma__validation2__wild_type": {
-    "median_over_flies": 0.804206641712873,
+    "median_over_flies": 0.9107421057808396,
     "per_fly": [
-     0.9113305751751088,
-     0.933493784951625,
-     0.8151224016426646,
-     0.7737322657092295,
-     0.7883411413651448,
+     0.9404527337546311,
+     0.9633241832493404,
+     0.8411701657460443,
+     0.7984573812204121,
+     0.8135330929565705,
+     0.9246807955161451,
+     1.0663032611390293,
+     0.8497136950701809,
+     0.9546361380063053,
+     0.9107421057808398,
+     0.891552415728127,
+     0.8862129517980846,
+     0.8187658974602385,
+     0.9107421057808395,
+     0.9686106984262364,
+     0.9706474142609152,
+     0.8410452738201253,
+     0.8217038655328569,
+     0.964051915046699,
+     1.1278332121463865
+    ],
+    "flies": [
+     "2023-10-16/2",
+     "2023-10-16/3",
+     "2023-10-17/1",
+     "2023-10-17/2",
+     "2023-10-19/1",
+     "2023-10-25/1",
+     "2023-10-25/2",
+     "2023-11-02/1",
+     "2023-11-02/2",
+     "2023-11-03/1",
+     "2023-11-03/3",
+     "2023-11-07/2",
+     "2023-11-21/1",
+     "2023-11-29/3",
+     "2023-11-29/4",
+     "2023-12-06/1",
+     "2023-12-06/2",
+     "2023-12-13/1",
+     "2023-12-19/1",
+     "2023-12-19/2"
+    ],
+    "per_fly_raw": [
+     0.911330575175109,
+     0.9334937849516249,
+     0.8151224016426645,
+     0.7737322657092294,
+     0.788341141365145,
      0.5231992427392536,
      0.6033315079793887,
      0.4807816534761475,
      0.5401484565467043,
-     0.5153125082578496,
-     0.5044546734756576,
-     0.8587703880294054,
-     0.7934119062924454,
-     0.8825399696418876,
+     0.5153125082578497,
+     0.5044546734756575,
+     0.8587703880294052,
+     0.7934119062924453,
+     0.8825399696418875,
      0.938616597341779,
-     0.9405902440190298,
+     0.9405902440190297,
      0.8150013771333007,
-     0.46493324213869414,
-     0.9341989817293641,
-     1.0929086099026883
+     0.4649332421386941,
+     0.9341989817293643,
+     1.0929086099026886
+    ],
+    "median_over_flies_raw": 0.804206641712873,
+    "factor_per_fly": [
+     1.031955647459679,
+     1.031955647459679,
+     1.031955647459679,
+     1.031955647459679,
+     1.031955647459679,
+     1.7673588185542877,
+     1.7673588185542877,
+     1.7673588185542877,
+     1.7673588185542877,
+     1.7673588185542877,
+     1.7673588185542877,
+     1.031955647459679,
+     1.031955647459679,
+     1.031955647459679,
+     1.031955647459679,
+     1.031955647459679,
+     1.031955647459679,
+     1.7673588185542877,
+     1.031955647459679,
+     1.031955647459679
     ]
    },
    "kc_soma__apl16__control": {
@@ -3036,6 +3269,19 @@
      0.621281170830281,
      0.5729383515502506,
      0.5942500575144865
+    ],
+    "flies": [
+     "2024-07-10/2/L",
+     "2024-07-10/2/R",
+     "2024-07-12/2/L",
+     "2024-07-26/4/R",
+     "2024-08-01/3/L",
+     "2024-08-01/3/R",
+     "2024-08-02/5/R",
+     "2024-08-09/3/L",
+     "2024-08-09/3/R",
+     "2024-08-14/1/L",
+     "2024-08-30/3/R"
     ]
    },
    "kc_soma__apl16__tnt": {
@@ -3049,8 +3295,33 @@
      0.7798644506715676,
      0.7258131205812096,
      0.6613706840860551
+    ],
+    "flies": [
+     "2024-07-17/2/L",
+     "2024-07-17/3/L",
+     "2024-07-25/1/L",
+     "2024-08-01/4/R",
+     "2024-08-02/5/L",
+     "2024-08-07/3/L",
+     "2024-08-14/3/L",
+     "2024-08-14/3/R"
     ]
    }
+  },
+  "soma_footing": {
+   "megamat_rate": 0.09150047755884608,
+   "target": 0.0915,
+   "megamat_rate_ok": true,
+   "bridge_max_abs_diff": {
+    "kc_soma__megamat__wild_type": 0.0,
+    "kc_soma__validation2__wild_type": 2.220446049250313e-16,
+    "kc_soma__megamat__same_fly": 4.440892098500626e-16
+   },
+   "rate_max_abs_diff": {
+    "kc_soma__validation2__wild_type": 0.0,
+    "kc_soma__megamat__same_fly": 0.0
+   },
+   "passed": true
   },
   "passed": true
  },
@@ -3369,6 +3640,572 @@
    "POOL_SEED": 0,
    "NOISE_SEED": 0
   }
+ },
+ "rules": {
+  "source": "the planner's answer on the open readings (claude-fable-5-2, spawned from viki 2026-11-24 11:11)",
+  "megamat_stage_error": {
+   "reading": "3",
+   "stages": [
+    "pn_dendrite",
+    "pn_bouton",
+    "kc_claw",
+    "kc_soma"
+   ],
+   "combine": "root mean square of the stages' population errors (the goal text)",
+   "population_error": {
+    "pn_dendrite": "error_with_matrix",
+    "pn_bouton": "error",
+    "kc_claw": "error",
+    "kc_soma": "error"
+   },
+   "views": {
+    "pn_dendrite": [
+     "strength",
+     "sharing",
+     "breadth",
+     "matrix"
+    ],
+    "pn_bouton": [
+     "strength",
+     "sharing",
+     "breadth"
+    ],
+    "kc_claw": [
+     "strength",
+     "sharing",
+     "breadth"
+    ],
+    "kc_soma": [
+     "strength",
+     "sharing",
+     "breadth"
+    ]
+   },
+   "over_wirings": "a model's value is the mean over its wirings of each wiring's megamat stage error",
+   "beside": [
+    "the three-view value (every stage's population error on strength, sharing and breadth)",
+    "the value of the wirings' mean views (the error common to the wirings)"
+   ],
+   "why": "a model right only up to a relabelling of glomeruli is wrong, and the three unit-free views cannot see it",
+   "caution": "one curve for all glomeruli cannot absorb glomerulus-specific signal strength: if the PN dendrites' class differs with and without the matrix view, the write-up says so",
+   "not_readable": "a stage that is not readable stays out until a reading holds (the goal text)"
+  },
+  "split_halves": {
+   "reading": "4 and the curve note",
+   "pairing": "each split pairs a random half of the control recordings with a random half of the TNT recordings",
+   "from_the_half": [
+    "curve",
+    "noise",
+    "reference",
+    "one-fly units"
+   ],
+   "rule": "when a half is scored, everything the reading takes from the flies comes from that half",
+   "apl_off": "the curve is set on the control half; the noise and the reference come from the TNT half",
+   "beside": [
+    "the shared curve: curve and noise from all recordings, the half's one-fly units, on the same variants and splits",
+    "all recordings' one-fly units (--units-from all), on the same variants and splits"
+   ],
+   "consistency": "Spearman's rho over the variants between the two halves' values, the mean over splits",
+   "n_splits": 200,
+   "reduced_draw": "a seeded draw of at least 500 variants and 100 splits if the full run would pass an hour, fixed beforehand and written in the provenance",
+   "min_variants": 500,
+   "min_splits": 100,
+   "why": "a second set of flies would set its own curve; with the curve from all recordings both halves score a model already read against all of them"
+  },
+  "step_class": {
+   "reading": "6",
+   "distance": "per part, the root mean square over the part's entries of the model's change minus the flies' measured change",
+   "inside_if": "the distance is no larger than the 95th percentile of the same distance for resampled flies (both stages resampled, as kcq.population_fit.step_interval draws them)",
+   "percentile": 95,
+   "view_inside_if": "every part of the view is inside",
+   "explained_if": "every view is inside on 6 of the 8 wirings",
+   "min_wirings": 6,
+   "n_wirings": 8,
+   "other_classes": "\"no better than no step\" if the model's downstream error is at or above the no-step yardstick, otherwise \"in part\" (the entry)",
+   "description": "the per-entry 90 % intervals stay as the description (the entries inside, e.g. '7 of 15')",
+   "why": "with 136 pairs and 90 % intervals even resampled flies miss about one entry in ten, so \"every entry inside\" can never hold"
+  },
+  "gate": {
+   "A_wiring_check": {
+    "rule": "passes if the mean over the eight wirings is 1.2 or less, each wiring scored against the other seven read as the flies, in the seven's own one-fly units",
+    "statistic": "mean over the wirings",
+    "max": 1.2,
+    "beside": [
+     "the range over the wirings",
+     "the number of wirings above 1.2"
+    ],
+    "replaces": "atlas's stub, every wiring at 1.2 or less: the most atypical fly is above 1.2 in 12 of 13 populations of flies_table.md"
+   },
+   "B_reading": {
+    "rule": "the gate is read on the default reading, with halves as in split_halves, on both conditions; \"usable\" needs 0.8 in each",
+    "reading": "default",
+    "conditions": [
+     "on, against the control flies",
+     "off, against APL output blocked (TNT)"
+    ],
+    "min_consistency": 0.8,
+    "beside": [
+     "the raw reading (two or more spikes, no curve, no noise)"
+    ],
+    "why": "halves of four TNT recordings are the nearest stand-in for the megamat claws and somata, which have four flies in all"
+   },
+   "otherwise": "each view is tested singly, the views at 0.8 or more form the measure, and the goal text goes back to Tom and Yang (the entry)"
+  }
+ },
+ "soma_criteria": {
+  "rule": [
+   "APL16 somata: 1.9684 baseline-noise SDs, unchanged (the level at which the control flies keep the response rate of their recorder's own criterion, 1 z; notes/response_criterion_decision.md)",
+   "Remy's megamat somata: the level, in their baseline-noise units, at which the mean over her four flies of each fly's response rate over the 17 odors equals 0.0915, the megamat operating point (the model's held rate, two or more spikes); the geometric bisection of kcq.data_targets.criterion_threshold, rounded to 4 decimals",
+   "validation2 somata: each group's values (the recordings whose ThorImage name ends in _tsub03, and the others) multiplied by megamat's median noise bridge over the group's, then megamat's level",
+   "the same-fly megamat fly: its values multiplied by megamat's median noise bridge over its own, then megamat's level",
+   "the mixtures' somata (session z): the z bridge's rule unchanged (the z at which the pooled Fc_zscore trial means of Remy's four megamat flies respond at the pooled rate of their baseline-noise trial means above the criterion), at megamat's level",
+   "the noise bridge: a fly's median over its units of the trial-noise SD (robust_trial_sd) in baseline-noise units; a group's, the median over its flies; megamat's, the median over its four flies"
+  ],
+  "source": "the planner's reading 14 (claude-fable-5-2, spawned from viki 2026-11-24 11:11)",
+  "host": "viki",
+  "time": "2026-11-24 11:46",
+  "target_rate": 0.0915,
+  "search": {
+   "lo": 0.1,
+   "hi": 100.0,
+   "steps": 60,
+   "decimals": 4
+  },
+  "apl16_criterion": 1.9684,
+  "criteria": {
+   "apl16/control": 1.9684,
+   "apl16/tnt": 1.9684,
+   "megamat/wild_type": 5.9486,
+   "megamat/same_fly": 5.9486,
+   "validation2/wild_type": 5.9486,
+   "kmix/wild_type": 1.9086,
+   "cmix/wild_type": 1.9086
+  },
+  "noise_bridge_reference": {
+   "population": "kc_soma__megamat__wild_type",
+   "median": 0.9107421057808396
+  },
+  "megamat": {
+   "flies": [
+    "2022-10-10/1",
+    "2022-10-10/2",
+    "2022-10-11/1",
+    "2022-11-10/1"
+   ],
+   "target_rate": 0.0915,
+   "criterion": 5.9486,
+   "criterion_unrounded": 5.9486141070440945,
+   "per_fly_rate": {
+    "2022-10-10/1": 0.06197036523118093,
+    "2022-10-10/2": 0.05416152474976004,
+    "2022-10-11/1": 0.12421739233937201,
+    "2022-11-10/1": 0.12565262791507134
+   },
+   "rate_mean": 0.09150047755884608,
+   "per_fly_rate_at_apl16_criterion": {
+    "2022-10-10/1": 0.17887407701075375,
+    "2022-10-10/2": 0.15571095571095572,
+    "2022-10-11/1": 0.3172566477015735,
+    "2022-11-10/1": 0.26196484510964146
+   },
+   "rate_mean_at_apl16_criterion": 0.2284516313832311,
+   "noise_bridge_per_fly": {
+    "2022-10-10/1": 0.8180377982189646,
+    "2022-10-10/2": 0.7010017700793253,
+    "2022-10-11/1": 1.0034464133427146,
+    "2022-11-10/1": 1.134398488751204
+   },
+   "noise_bridge_median": 0.9107421057808396
+  },
+  "validation2": {
+   "group_rule": "ThorImage name ends in _tsub03 ('tsub03') or not ('other')",
+   "group_per_fly": {
+    "2023-10-16/2": "tsub03",
+    "2023-10-16/3": "tsub03",
+    "2023-10-17/1": "tsub03",
+    "2023-10-17/2": "tsub03",
+    "2023-10-19/1": "tsub03",
+    "2023-10-25/1": "other",
+    "2023-10-25/2": "other",
+    "2023-11-02/1": "other",
+    "2023-11-02/2": "other",
+    "2023-11-03/1": "other",
+    "2023-11-03/3": "other",
+    "2023-11-07/2": "tsub03",
+    "2023-11-21/1": "tsub03",
+    "2023-11-29/3": "tsub03",
+    "2023-11-29/4": "tsub03",
+    "2023-12-06/1": "tsub03",
+    "2023-12-06/2": "tsub03",
+    "2023-12-13/1": "other",
+    "2023-12-19/1": "tsub03",
+    "2023-12-19/2": "tsub03"
+   },
+   "groups": {
+    "tsub03": {
+     "flies": [
+      "2023-10-16/2",
+      "2023-10-16/3",
+      "2023-10-17/1",
+      "2023-10-17/2",
+      "2023-10-19/1",
+      "2023-11-07/2",
+      "2023-11-21/1",
+      "2023-11-29/3",
+      "2023-11-29/4",
+      "2023-12-06/1",
+      "2023-12-06/2",
+      "2023-12-19/1",
+      "2023-12-19/2"
+     ],
+     "n_flies": 13,
+     "noise_bridge_median": 0.8825399696418876,
+     "noise_bridge_min": 0.7737322657092295,
+     "noise_bridge_max": 1.0929086099026883,
+     "factor": 1.031955647459679,
+     "rate_mean": 0.04899410280954868,
+     "rate_mean_at_apl16_criterion": 0.14679412751918622
+    },
+    "other": {
+     "flies": [
+      "2023-10-25/1",
+      "2023-10-25/2",
+      "2023-11-02/1",
+      "2023-11-02/2",
+      "2023-11-03/1",
+      "2023-11-03/3",
+      "2023-12-13/1"
+     ],
+     "n_flies": 7,
+     "noise_bridge_median": 0.5153125082578496,
+     "noise_bridge_min": 0.46493324213869414,
+     "noise_bridge_max": 0.6033315079793887,
+     "factor": 1.7673588185542877,
+     "rate_mean": 0.05304239545274476,
+     "rate_mean_at_apl16_criterion": 0.09091449369506117
+    }
+   },
+   "factor_per_fly": {
+    "2023-10-16/2": 1.031955647459679,
+    "2023-10-16/3": 1.031955647459679,
+    "2023-10-17/1": 1.031955647459679,
+    "2023-10-17/2": 1.031955647459679,
+    "2023-10-19/1": 1.031955647459679,
+    "2023-10-25/1": 1.7673588185542877,
+    "2023-10-25/2": 1.7673588185542877,
+    "2023-11-02/1": 1.7673588185542877,
+    "2023-11-02/2": 1.7673588185542877,
+    "2023-11-03/1": 1.7673588185542877,
+    "2023-11-03/3": 1.7673588185542877,
+    "2023-11-07/2": 1.031955647459679,
+    "2023-11-21/1": 1.031955647459679,
+    "2023-11-29/3": 1.031955647459679,
+    "2023-11-29/4": 1.031955647459679,
+    "2023-12-06/1": 1.031955647459679,
+    "2023-12-06/2": 1.031955647459679,
+    "2023-12-13/1": 1.7673588185542877,
+    "2023-12-19/1": 1.031955647459679,
+    "2023-12-19/2": 1.031955647459679
+   },
+   "noise_bridge_per_fly": {
+    "2023-10-16/2": 0.9113305751751088,
+    "2023-10-16/3": 0.933493784951625,
+    "2023-10-17/1": 0.8151224016426646,
+    "2023-10-17/2": 0.7737322657092295,
+    "2023-10-19/1": 0.7883411413651448,
+    "2023-10-25/1": 0.5231992427392536,
+    "2023-10-25/2": 0.6033315079793887,
+    "2023-11-02/1": 0.4807816534761475,
+    "2023-11-02/2": 0.5401484565467043,
+    "2023-11-03/1": 0.5153125082578496,
+    "2023-11-03/3": 0.5044546734756576,
+    "2023-11-07/2": 0.8587703880294054,
+    "2023-11-21/1": 0.7934119062924454,
+    "2023-11-29/3": 0.8825399696418876,
+    "2023-11-29/4": 0.938616597341779,
+    "2023-12-06/1": 0.9405902440190298,
+    "2023-12-06/2": 0.8150013771333007,
+    "2023-12-13/1": 0.46493324213869414,
+    "2023-12-19/1": 0.9341989817293641,
+    "2023-12-19/2": 1.0929086099026883
+   },
+   "per_fly_rate": {
+    "2023-10-16/2": 0.0707977207977208,
+    "2023-10-16/3": 0.05963718820861678,
+    "2023-10-17/1": 0.03474130036630037,
+    "2023-10-17/2": 0.027867965367965368,
+    "2023-10-19/1": 0.024112021857923497,
+    "2023-10-25/1": 0.05326797385620915,
+    "2023-10-25/2": 0.06845878136200717,
+    "2023-11-02/1": 0.04660587639311044,
+    "2023-11-02/2": 0.08100233100233101,
+    "2023-11-03/1": 0.05164930555555555,
+    "2023-11-03/3": 0.044270833333333336,
+    "2023-11-07/2": 0.05553067622033139,
+    "2023-11-21/1": 0.03864661654135338,
+    "2023-11-29/3": 0.03873873873873874,
+    "2023-11-29/4": 0.04731934731934732,
+    "2023-12-06/1": 0.06295482295482295,
+    "2023-12-06/2": 0.0366451107191848,
+    "2023-12-13/1": 0.026041666666666668,
+    "2023-12-19/1": 0.0582010582010582,
+    "2023-12-19/2": 0.08173076923076923
+   },
+   "rate_mean": 0.05041100523466731,
+   "per_fly_rate_at_apl16_criterion": {
+    "2023-10-16/2": 0.20968660968660968,
+    "2023-10-16/3": 0.21201814058956917,
+    "2023-10-17/1": 0.11899038461538461,
+    "2023-10-17/2": 0.10470779220779221,
+    "2023-10-19/1": 0.08524590163934426,
+    "2023-10-25/1": 0.08751633986928105,
+    "2023-10-25/2": 0.11598566308243728,
+    "2023-11-02/1": 0.08270010131712259,
+    "2023-11-02/2": 0.12990855298547607,
+    "2023-11-03/1": 0.09212239583333333,
+    "2023-11-03/3": 0.07829861111111111,
+    "2023-11-07/2": 0.17965367965367965,
+    "2023-11-21/1": 0.1193483709273183,
+    "2023-11-29/3": 0.11878031878031878,
+    "2023-11-29/4": 0.11165501165501165,
+    "2023-12-06/1": 0.17089133089133088,
+    "2023-12-06/2": 0.10875955320399765,
+    "2023-12-13/1": 0.04986979166666667,
+    "2023-12-19/1": 0.1656332671957672,
+    "2023-12-19/2": 0.2029532967032967
+   },
+   "rate_mean_at_apl16_criterion": 0.12723625568074243
+  },
+  "same_fly": {
+   "flies": [
+    "2023-04-11/3/megamat1_redo"
+   ],
+   "noise_bridge_per_fly": {
+    "2023-04-11/3/megamat1_redo": 0.8401261791924134
+   },
+   "factor_per_fly": {
+    "2023-04-11/3/megamat1_redo": 1.0840539532481979
+   },
+   "per_fly_rate": {
+    "2023-04-11/3/megamat1_redo": 0.06868044515103339
+   },
+   "rate_mean": 0.06868044515103339,
+   "per_fly_rate_at_apl16_criterion": {
+    "2023-04-11/3/megamat1_redo": 0.24659632894927014
+   },
+   "rate_mean_at_apl16_criterion": 0.24659632894927014
+  },
+  "mixtures": {
+   "z_bridge": {
+    "rate_noise": 0.08872184692625552,
+    "z": 1.9086433972718788,
+    "criterion": 5.9486,
+    "n": 141814,
+    "per_fly_rate": {
+     "2022-10-10/1": 0.06197036523118093,
+     "2022-10-10/2": 0.05416152474976004,
+     "2022-10-11/1": 0.12421739233937201,
+     "2022-11-10/1": 0.12565262791507134
+    }
+   },
+   "z_criterion": 1.9086,
+   "z_bridge_at_apl16_criterion": {
+    "rate_noise": 0.22737529439970666,
+    "z": 0.7057374595748036,
+    "criterion": 1.9684,
+    "n": 141814,
+    "per_fly_rate": {
+     "2022-10-10/1": 0.17887407701075375,
+     "2022-10-10/2": 0.15571095571095572,
+     "2022-10-11/1": 0.3172566477015735,
+     "2022-11-10/1": 0.26196484510964146
+    }
+   },
+   "z_criterion_at_apl16_criterion": 0.7057,
+   "panels": {
+    "kmix": {
+     "per_fly_rate": {
+      "2022-07-01/1": 0.04515355086372361,
+      "2022-07-02/1": 0.03536184210526316,
+      "2022-07-02/2": 0.056405895691609975,
+      "2022-07-11/1": 0.050094161958568736,
+      "2022-07-11/2": 0.06887672996459607,
+      "2022-07-12/3": 0.06220069656073139,
+      "2022-07-12/5": 0.0726696083838941
+     },
+     "rate_mean": 0.055823212218341,
+     "per_fly_rate_at_apl16_criterion": {
+      "2022-07-01/1": 0.16991362763915546,
+      "2022-07-02/1": 0.1455592105263158,
+      "2022-07-02/2": 0.1967828798185941,
+      "2022-07-11/1": 0.1852165725047081,
+      "2022-07-11/2": 0.21829739298358544,
+      "2022-07-12/3": 0.18779930343926862,
+      "2022-07-12/5": 0.21214837286265859
+     },
+     "rate_mean_at_apl16_criterion": 0.187959622824898
+    },
+    "cmix": {
+     "per_fly_rate": {
+      "2022-03-29/2": 0.059140297369424326,
+      "2022-04-04/1": 0.06289542240416822,
+      "2022-07-20/2": 0.03695750452079566,
+      "2022-07-25/2": 0.04727122381477398
+     },
+     "rate_mean": 0.05156611202729054,
+     "per_fly_rate_at_apl16_criterion": {
+      "2022-03-29/2": 0.18061380099123142,
+      "2022-04-04/1": 0.2001302567919613,
+      "2022-07-20/2": 0.19224683544303797,
+      "2022-07-25/2": 0.1601433296582139
+     },
+     "rate_mean_at_apl16_criterion": 0.18328355572111116
+    }
+   }
+  },
+  "apl16": {
+   "control": {
+    "criterion": 1.9684,
+    "per_fly_rate": {
+     "2024-07-10/2/L": 0.0634427374301676,
+     "2024-07-10/2/R": 0.08648181352459017,
+     "2024-07-12/2/L": 0.087442218798151,
+     "2024-07-26/4/R": 0.09943528693528693,
+     "2024-08-01/3/L": 0.06748466257668712,
+     "2024-08-01/3/R": 0.04221014492753623,
+     "2024-08-02/5/R": 0.04791491154170177,
+     "2024-08-09/3/L": 0.03965750337990086,
+     "2024-08-09/3/R": 0.06689826619071902,
+     "2024-08-14/1/L": 0.09292553191489361,
+     "2024-08-30/3/R": 0.057517159450897574
+    },
+    "rate_mean": 0.0683100215155029
+   },
+   "tnt": {
+    "criterion": 1.9684,
+    "per_fly_rate": {
+     "2024-07-17/2/L": 0.1770040304523063,
+     "2024-07-17/3/L": 0.1745278229082047,
+     "2024-07-25/1/L": 0.1355217737652682,
+     "2024-08-01/4/R": 0.14709924768518517,
+     "2024-08-02/5/L": 0.14938603752759383,
+     "2024-08-07/3/L": 0.15923213493120283,
+     "2024-08-14/3/L": 0.14760638297872342,
+     "2024-08-14/3/R": 0.15513293118856122
+    },
+    "rate_mean": 0.1556887951796307
+   }
+  },
+  "table": [
+   {
+    "cohort": "apl16, control flies",
+    "criterion": 1.9684,
+    "units": "baseline-noise SD",
+    "factor": 1.0,
+    "n_flies": 11,
+    "rate_mean": 0.0683100215155029,
+    "rate_min": 0.03965750337990086,
+    "rate_max": 0.09943528693528693,
+    "rate_mean_at_apl16_criterion": 0.0683100215155029,
+    "apl16_criterion": 1.9684
+   },
+   {
+    "cohort": "apl16, APL output blocked (TNT)",
+    "criterion": 1.9684,
+    "units": "baseline-noise SD",
+    "factor": 1.0,
+    "n_flies": 8,
+    "rate_mean": 0.1556887951796307,
+    "rate_min": 0.1355217737652682,
+    "rate_max": 0.1770040304523063,
+    "rate_mean_at_apl16_criterion": 0.1556887951796307,
+    "apl16_criterion": 1.9684
+   },
+   {
+    "cohort": "megamat, Remy's four flies",
+    "criterion": 5.9486,
+    "units": "baseline-noise SD",
+    "factor": 1.0,
+    "n_flies": 4,
+    "rate_mean": 0.09150047755884608,
+    "rate_min": 0.05416152474976004,
+    "rate_max": 0.12565262791507134,
+    "rate_mean_at_apl16_criterion": 0.2284516313832311,
+    "apl16_criterion": 1.9684
+   },
+   {
+    "cohort": "validation2, the 13 tsub03 recordings",
+    "criterion": 5.9486,
+    "units": "baseline-noise SD",
+    "factor": 1.031955647459679,
+    "n_flies": 13,
+    "rate_mean": 0.04899410280954868,
+    "rate_min": 0.024112021857923497,
+    "rate_max": 0.08173076923076923,
+    "rate_mean_at_apl16_criterion": 0.14679412751918622,
+    "apl16_criterion": 1.9684
+   },
+   {
+    "cohort": "validation2, the 7 other recordings",
+    "criterion": 5.9486,
+    "units": "baseline-noise SD",
+    "factor": 1.7673588185542877,
+    "n_flies": 7,
+    "rate_mean": 0.05304239545274476,
+    "rate_min": 0.026041666666666668,
+    "rate_max": 0.08100233100233101,
+    "rate_mean_at_apl16_criterion": 0.09091449369506117,
+    "apl16_criterion": 1.9684
+   },
+   {
+    "cohort": "validation2, all",
+    "criterion": 5.9486,
+    "units": "baseline-noise SD",
+    "factor": null,
+    "n_flies": 20,
+    "rate_mean": 0.05041100523466731,
+    "rate_min": 0.024112021857923497,
+    "rate_max": 0.08173076923076923,
+    "rate_mean_at_apl16_criterion": 0.12723625568074243,
+    "apl16_criterion": 1.9684
+   },
+   {
+    "cohort": "megamat, the same fly",
+    "criterion": 5.9486,
+    "units": "baseline-noise SD",
+    "factor": 1.0840539532481979,
+    "n_flies": 1,
+    "rate_mean": 0.06868044515103339,
+    "rate_min": 0.06868044515103339,
+    "rate_max": 0.06868044515103339,
+    "rate_mean_at_apl16_criterion": 0.24659632894927014,
+    "apl16_criterion": 1.9684
+   },
+   {
+    "cohort": "kmix (session z)",
+    "criterion": 1.9086,
+    "units": "session z (Fc_zscore)",
+    "factor": null,
+    "n_flies": 7,
+    "rate_mean": 0.055823212218341,
+    "rate_min": 0.03536184210526316,
+    "rate_max": 0.0726696083838941,
+    "rate_mean_at_apl16_criterion": 0.187959622824898,
+    "apl16_criterion": 0.7057
+   },
+   {
+    "cohort": "cmix (session z)",
+    "criterion": 1.9086,
+    "units": "session z (Fc_zscore)",
+    "factor": null,
+    "n_flies": 4,
+    "rate_mean": 0.05156611202729054,
+    "rate_min": 0.03695750452079566,
+    "rate_max": 0.06289542240416822,
+    "rate_mean_at_apl16_criterion": 0.18328355572111116,
+    "apl16_criterion": 0.7057
+   }
+  ]
  },
  "remy_megamat_criterion_rate": {
   "mean": 0.09149168289914929,
