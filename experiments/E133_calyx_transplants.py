@@ -1364,12 +1364,19 @@ def write_variants() -> pd.DataFrame:
         for r in runs_table(step).to_dict('records'):
             c = r['calyx']
             kws = J.base_kws(None, connectome=c)
+            arm = r.get('arm') if isinstance(r.get('arm'), str) else ''
+            donor = r.get('size_donor') if isinstance(r.get('size_donor'), str) else ''
+            kind = (f"C2's family on {SHORT[c]}, within-type claw permutation seed {int(r['seed'])}, fixed scales (E130's step 1)"
+                    if step == 1 else
+                    f"arm {arm} (donor {SHORT.get(donor, donor) or 'none'}) on {SHORT[c]}, wiring seed {int(r['seed'])}, "
+                    "fixed scales (E130's step 1)")
+            own_matrix = f'{E130_EXP} matrices/kckc_{c}.parquet' if c in MALE else 'hemibrain (olfsysm)'
+            kckc = (f"{own_matrix}, transplanted by arm {arm} (E133_builders.kckc_blocks; sha256 in "
+                    f"provenance_2_{r.get('host')}_{r.get('lane')}.json)" if step == 2 and arm.split('-')[0] in ('K', 'ALL')
+                    else own_matrix)
             rows.append(dict(tag=r['tag'], variant=r['tag'], part=f'step{step}', base=f'bouton_{c}', k=K, connectome=c,
                              pn2kc_connections=kws.get('pn2kc_connections', 'hemibrain'), multibouton_claws=kws['multibouton_claws'],
-                             seed=int(r['seed']), wiring=r.get('wiring'), arm=r.get('arm') if isinstance(r.get('arm'), str) else '',
-                             kind=(f"C2's family on {SHORT[c]}, within-type claw permutation seed {int(r['seed'])}, "
-                                   "fixed scales (E130's step 1)" if step == 1 else f"arm {r.get('arm')} on {SHORT[c]}"),
-                             kckc_matrix=(f'{E130_EXP} matrices/kckc_{c}.parquet' if c in MALE else 'hemibrain (olfsysm)'),
+                             seed=int(r['seed']), wiring=r.get('wiring'), arm=arm, donor=donor, kind=kind, kckc_matrix=kckc,
                              base_params=r.get('base_params'), **{k: r.get(k) for k in PARAM_KEYS}, kc_kc_inh=r.get('wKCKC_scale'),
                              rate_on=r.get('rate_on'), rate_off=r.get('rate_off'), max_count_on=r.get('max_count_on'),
                              max_count_off=r.get('max_count_off'), realism_flag=r.get('realism_flag'), subdir=f'step{step}'))
@@ -1386,7 +1393,9 @@ def write_variants() -> pd.DataFrame:
         base_params={c: e130().calyx_base(c) for c in CALYCES},
         note=("C2's family (E67) on each calyx as E130's step 1 (fixed scales, both response rates re-held), on the "
               "calyx's within-type claw permutations (seeds 1 to 7; E10_joint_fit.bouton_base's wiring "
-              "'claw_permutation_within_type'); per-point provenance in provenance_<step>_<host>_<lane>.json")))
+              "'claw_permutation_within_type'), and step 2's transplants (E133_builders: one feature of the donor calyx's "
+              "tables on each host's four wirings; step 2′'s PA and CI re-draws of the left, donor none); per-point "
+              "provenance in provenance_<step>_<host>_<lane>.json")))
     return df
 
 
