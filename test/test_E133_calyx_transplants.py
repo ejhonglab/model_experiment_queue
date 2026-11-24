@@ -162,6 +162,11 @@ def test_guard_flags():
     assert E.guard_flags(10, 161, (40, 80))['guard_max_count']
 
 
+def test_rel():
+    assert E._rel(1.0620204552640171, 1.062020455264017) <= E.REL_TOL
+    assert E._rel(0.0, 0.0) == 0.0 and E._rel(1.0, 1.1) == pytest.approx(0.1 / 1.1)
+
+
 def test_beside_right():
     b = E.beside_right([0.06] * 7, [0.05] * 7, [0.07] * 7)
     assert b['R_minus_H'] == pytest.approx(0.01) and b['R_minus_L'] == pytest.approx(-0.01)

@@ -28,7 +28,8 @@ Parts (CLI `--part`):
   (`calyx_tables`) have E130's wiring and breadth, and `breadth_run` (the path step 2 takes) reproduces that breadth;
   (ii) at E130's held parameters the runner (`build_simulator`) reproduces E130's fixed-scale run S1_<calyx> with 0
   differing spike counts and responses, APL on and off (`replay`); (iii) the step-1 hold from E130's start reaches the
-  same held factors and outputs. check_<host>.json.
+  same held factors and parameters (to a relative 1e-12: the bisection's steps can differ in the last bit between
+  CPUs) and the same outputs (0 differing counts and responses). check_<host>.json.
 - step1 (simulations, resumable, lanes `--calyces`, `--seeds`, `--reverse`; points claimed by mkdir of
   results/E133_calyx_transplants/claims/<tag>/, `--reclaim` to take over a dead process's): the 21 re-draws at fixed
   scales, seeds 1 to 7 of the within-type claw permutation (pyolfsysm's `shuffle_wPNKC` through E10_joint_fit.bouton_base's
@@ -173,6 +174,16 @@ def _write_json(path: Path, obj) -> None:
 
 def _read_json(path: Path) -> dict:
     return json.loads(path.read_text()) if path.exists() else {}
+
+
+REL_TOL = 1e-12
+
+
+def _rel(a: float, b: float) -> float:
+    """|a - b| relative to the larger magnitude (0 when both are 0)."""
+    a, b = float(a), float(b)
+    m = max(abs(a), abs(b))
+    return 0.0 if m == 0 else abs(a - b) / m
 
 
 def _nanmean(x) -> float:
@@ -835,13 +846,17 @@ def part_check(calyces: Sequence[str] = CALYCES) -> dict:
         h = hold(T, f'E133 check {c}')
         ref = e130_s1(c)
         p_on, _ = e130_held_params(c)
+        # the held factors and parameters are compared to a relative 1e-12: the bisection's geometric steps can differ
+        # in the last bit between CPUs (E130's S1 runs were held on atlas; the counts are compared exactly)
+        rel = {f'factor_{k}': _rel(h[f'{k}_factor'], float(r[f'{k}_factor'])) for k in ('thr', 'apl')}
+        rel.update({k: _rel(h['params'][k], p_on[k]) for k in PARAM_KEYS})
         rec['hold'] = dict(thr_factor=h['thr_factor'], apl_factor=h['apl_factor'], e130_thr_factor=float(r['thr_factor']),
                            e130_apl_factor=float(r['apl_factor']), n_sims=h['n_sims'], seconds=h.get('seconds'),
                            start_same=bool(all(h['start'][k] == json.loads(r['start_params'])[k] for k in PARAM_KEYS)),
-                           params_same=bool(all(float(h['params'][k]) == p_on[k] for k in PARAM_KEYS)),
+                           params_bit_identical=bool(all(float(h['params'][k]) == p_on[k] for k in PARAM_KEYS)),
+                           rel_diff=rel, max_rel_diff=float(max(rel.values())), rel_tol=REL_TOL,
                            differences={cnd: _ndiff(h[cnd], ref[cnd]) for cnd in ('on', 'off')})
-        rec['hold']['passes'] = bool(rec['hold']['start_same'] and rec['hold']['params_same']
-                                     and h['thr_factor'] == float(r['thr_factor']) and h['apl_factor'] == float(r['apl_factor'])
+        rec['hold']['passes'] = bool(rec['hold']['start_same'] and rec['hold']['max_rel_diff'] <= REL_TOL
                                      and all(_diff_ok(d) for d in rec['hold']['differences'].values()))
         print(f"E133 check {c} (iii) hold: {rec['hold']}", flush=True)
         rec.update(passes=bool(rec['replay']['passes'] and rec['breadth_run_same'] and rec['hold']['passes']),
