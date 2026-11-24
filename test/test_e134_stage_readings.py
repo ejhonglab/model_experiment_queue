@@ -314,6 +314,30 @@ def test_soma_reading():
     assert own.values.shape == off.shape
 
 
+def test_split_half_flies():
+    fl = planted_flies('kc_soma', 'apl16', 'control', n_flies=6, n_units=80)
+    h1, h2 = R.subset_flies(fl, ['f0', 'f2', 'f4']), R.subset_flies(fl, ['f5', 'f1', 'f3'])
+    assert h1.flies == ('f0', 'f2', 'f4') and h2.flies == ('f1', 'f3', 'f5') and set(h1.trials) == set(h1.flies)
+    assert fl.flies == tuple(f'f{i}' for i in range(6))                  # the full population is left as it was
+    on = planted_run().conditions['on']['spike_counts']
+    full = R.SomaReading('curve_noise', 'apl16', flies={'on': fl})
+    a, b = full.for_flies({'on': h1}), full.for_flies({'on': h2})
+    # each half's curve is set on that half's pooled values: its reading differs from the other half's and the full
+    va, vb, vf = (r(on).values.to_numpy() for r in (a, b, full))
+    assert not np.allclose(va, vb) and not np.allclose(va, vf)
+    np.testing.assert_allclose(va, a(on).values.to_numpy())            # the same half reads the same
+    # by the recordings' names: the same as the half's population
+    by_name = R.SomaReading('curve_noise', 'apl16', flies={'on': fl}, recordings={'on': ['f0', 'f2', 'f4']})
+    np.testing.assert_allclose(by_name(on).values.to_numpy(), va)
+    np.testing.assert_allclose(full.for_recordings({'on': ['f0', 'f2', 'f4']})(on).values.to_numpy(), va)
+    assert by_name.flies('on').flies == h1.flies
+    with pytest.raises(KeyError):
+        R.SomaReading('curve_noise', 'apl16', flies={'on': fl}, recordings={'on': ['f9']}).flies('on')
+    # the noise of each half is its own (cached on each population object)
+    assert R.fly_noise(h1, 'residual').sd != R._fly_noise_cached(h2, 'residual', list(ODORS)).sd
+    assert R._fly_noise_cached(h1, 'residual', list(ODORS)).sd == R.fly_noise(h1, 'residual', list(ODORS)).sd
+
+
 def test_step3_layout_roundtrip(tmp_path):
     run = planted_run()
     conds = {}
