@@ -360,3 +360,53 @@ def test_archive_best(monkeypatch, tmp_path):
     assert F.fit_dirs('A0') == [loc / 'fit_A0', arch / 'fit_A0']
     with pytest.raises(FileNotFoundError):
         F.archive_best('A0', 9)
+
+
+def test_guard_on_the_views_beside():
+    stages = ('kc_claw', 'kc_soma')
+    fam = {w: 1.0 for w in F.WIRINGS}
+    spreads = dict(stage=0.04, downstream=0.04, kc_claw=0.04, kc_soma=0.04, **{'/'.join(k): 0.05 for k in F.HOLDS_PANELS})
+    panels = {k: {w: 1.0 for w in F.WIRINGS} for k in F.HOLDS_PANELS}
+    better = {w: 0.9 for w in F.T_WIRINGS}
+
+    def run(guard_soma):
+        g_mega = {F.FAMILY: _mega(fam, stages), 'A0': _mega({w: 1.0 for w in F.T_WIRINGS}, stages)}
+        for w in F.T_WIRINGS:
+            g_mega['A0'][w]['kc_soma'] = guard_soma
+        guard = dict(mega=g_mega, panels={F.FAMILY: panels, 'A0': panels},
+                     spreads=dict(stage=0.04, kc_claw=0.04, kc_soma=0.05, **{'/'.join(k): 0.05 for k in F.HOLDS_PANELS}))
+        return F.classify('A0', stages, {F.FAMILY: _mega(fam, stages), 'A0': _mega(better, stages)},
+                          {F.FAMILY: panels, 'A0': panels}, spreads, {F.FAMILY: {}, 'A0': {}}, {}, 0.01, guard)
+    assert run(1.0)['cls'] == 'holds'
+    r = run(1.2)                                     # the somata's error over all views up by 0.2, its spread 0.05
+    assert r['cls'] == "strength at another view's cost" and r['guard_worse'] == ['kc_soma'] and not r['improves']
+    # a fit's classed point's bounds stand in for the best point's
+    c = F.classify('A0', stages, {F.FAMILY: _mega(fam, stages), 'A0': _mega(better, stages)},
+                   {F.FAMILY: panels, 'A0': panels}, spreads, {F.FAMILY: {}, 'A0': {}},
+                   dict(at_bound=['aplpn high'], at_bound_classed=[]), 0.01)
+    assert c['cls'] == 'holds'
+
+
+def test_save_eval_tags(monkeypatch, tmp_path):
+    monkeypatch.setattr(F, 'local_dir', lambda part='': (tmp_path / part).mkdir(parents=True, exist_ok=True) or tmp_path / part)
+    out, built = _out_and_built()
+    run = F.in_memory_run('x', out, built, dict(model='C2', wiring='real', panel='megamat'))
+    run.info['_out'] = out
+    F.save_eval('A0', 3, {'real': run})
+    F.save_eval('A0', 'det_aplpn0', {'real': run})
+    names = {p.name for p in (tmp_path / 'fit_A0').iterdir()}
+    assert 'A0_e3_real_run.json' in names and 'A0_det_aplpn0_real_run.json' in names
+
+
+def test_consistency(monkeypatch, tmp_path):
+    monkeypatch.setattr(F, 'out_dir', lambda: tmp_path)
+    rng = np.random.default_rng(0)
+    x = rng.random(30)
+    rows = []
+    for i, v in enumerate(x):
+        for half, e in (('fit', v), ('held', v + 0.01 * rng.standard_normal())):
+            rows.append(dict(arm='A0', eval=i, measure='strength', half=half, stage_error=e,
+                             **{f'{s}_error': e for s in F.LOSS_STAGES}))
+    pd.DataFrame(rows).to_csv(tmp_path / 'rescore_A0.csv', index=False)
+    c = F.consistency(['A0'], 'strength')
+    assert len(c) == 5 and (c.rho > 0.9).all() and (c.n_evals == 30).all()

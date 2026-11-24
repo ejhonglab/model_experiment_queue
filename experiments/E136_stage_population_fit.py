@@ -207,6 +207,9 @@ START_CHECK: Dict[str, Dict[str, float]] = {
                      kc_soma_error=0.8892),
 }
 START_CHECK_TOL = 6e-5
+# a factor whose return to the family's value raises the loss by less than this is "not determined" by the measure
+# (the re-read on the adopted measure: half the megamat stage error's spread on strength, 0.020)
+NOT_DETERMINED = 0.010
 
 ReadPoint = namedtuple('ReadPoint', 'arm panel wiring half')
 
@@ -899,15 +902,17 @@ def archive_best(arm: str, i: int) -> List[Path]:
     return out
 
 
-def save_eval(arm: str, i: int, runs: Mapping[str, 'R.SavedRun']) -> List[Path]:
+def save_eval(arm: str, i, runs: Mapping[str, 'R.SavedRun']) -> List[Path]:
     """An evaluation's runs under outputs/.../fit_<arm>/ (E134's step-3 layout, `save_step3_run`; tag
-    '<arm>_e<i>_<wiring>')."""
+    '<arm>_e<i>_<wiring>' for an evaluation's index, '<arm>_<i>_<wiring>' for a label, e.g. the single-factor
+    returns' 'det_<factor>0')."""
     d = local_dir(f'fit_{arm}')
     written = []
     for w, run in runs.items():
+        tag = f'{arm}_e{i}_{w}' if isinstance(i, (int, np.integer)) else f'{arm}_{i}_{w}'
         info = {k: v for k, v in run.info.items() if not str(k).startswith('_')}
-        info.update(tag=f'{arm}_e{i}_{w}', eval=i, host=_host(), time=_now())
-        written += R.save_step3_run(f'{arm}_e{i}_{w}', run.info['_out'], run.meta, run.orn, info, [d])
+        info.update(tag=tag, eval=i, host=_host(), time=_now())
+        written += R.save_step3_run(tag, run.info['_out'], run.meta, run.orn, info, [d])
     return written
 
 
@@ -981,7 +986,8 @@ class StageLoss:
             col = error_column(st, self.flies.views)
             tab = P.wirings_as_flies(pops, self.flies.reference(st, odors))
             out[f'{st}_error'] = float(tab.loc['common', col])
-            out.update({f'{st}_{c}': float(tab.loc['common', c]) for c in tab.columns if c.startswith('view_')})
+            out.update({f'{st}_{c}': float(tab.loc['common', c]) for c in tab.columns
+                        if c.startswith(('view_', 'part_'))})
             common.append(out[f'{st}_error'])
             for w, pop in zip(runs, pops):
                 out[f'{st}_error_{w}'] = float(tab.loc[pop.name, col])
@@ -1105,6 +1111,18 @@ def at_bound(searched: Sequence[str], zc: Sequence[float]) -> List[str]:
     return out
 
 
+def restore_memory(m: ArmModel, hist: pd.DataFrame) -> List[dict]:
+    """The holds' warm starts and slopes of an arm model restored from a fit's history (its rows, in order), as the
+    fit had them; returns the rows."""
+    rows = hist.to_dict('records')
+    for r in rows:
+        c = tuple(float(r[f'z_{k}']) for k in m.searched)
+        for w in m.wirings:
+            m.memory[w].append((c, float(r[f'x_thr_{w}']), float(r[f'x_apl_{w}'])))
+            m.slopes[w] = dict(thr=float(r[f'slope_thr_{w}']), apl=float(r[f'slope_apl_{w}']))
+    return rows
+
+
 def fit_arm(arm: str, control: bool = False, maxfev: Optional[int] = None, resume: bool = True,
             save_stages: bool = True, claw_mode: Optional[str] = None) -> dict:
     """One arm's fit on the S wirings against the fit half (the control: A0 against the permuted fit half), as the
@@ -1137,14 +1155,9 @@ def fit_arm(arm: str, control: bool = False, maxfev: Optional[int] = None, resum
     memo: Dict[Tuple[float, ...], float] = {}
     hist: List[dict] = []
     if resume and hist_path.exists():
-        h = pd.read_csv(hist_path, float_precision='round_trip')
-        for r in h.to_dict('records'):
-            c = tuple(float(r[f'z_{k}']) for k in searched)
-            memo[c] = float(r['loss_sim'])
+        for r in restore_memory(m, pd.read_csv(hist_path, float_precision='round_trip')):
+            memo[tuple(float(r[f'z_{k}']) for k in searched)] = float(r['loss_sim'])
             hist.append(r)
-            for w in m.wirings:
-                m.memory[w].append((c, float(r[f'x_thr_{w}']), float(r[f'x_apl_{w}'])))
-                m.slopes[w] = dict(thr=float(r[f'slope_thr_{w}']), apl=float(r[f'slope_apl_{w}']))
         print(f'E136 {name}: resumed from {len(hist)} evaluations', flush=True)
     calls = {'n': 0}
     t0 = time.time()
@@ -1218,6 +1231,130 @@ def fit_arm(arm: str, control: bool = False, maxfev: Optional[int] = None, resum
     return out
 
 
+def determined(arm: str, threshold: float = NOT_DETERMINED, save_stages: bool = True) -> dict:
+    """The single-factor returns of the re-read on the adopted measure: from a fit's best point, each searched factor
+    alone returned to the family's value (coordinate 0: factor 1, no per-claw threshold), both rates held again (warm
+    starts from the fit's history), one evaluation each on S against the fit's half and measure. A factor whose return
+    raises the loss by less than `threshold` is "not determined". If any is, the point with all of them returned (one
+    more evaluation where more than one) becomes the arm's classed point when its loss is within `threshold` of the
+    best's; otherwise the fit stands as found. fit_<arm>.json gains 'determined' (per factor: the loss returned, its
+    rise, determined or not), 'classed_z', 'classed_loss' and 'at_bound_classed' (`at_bound` on the determined factors
+    of the classed point); every evaluation is a row of determined_<arm>.csv and its stages are saved
+    ('<arm>_det_<label>_<wiring>')."""
+    from data_prep import stage_population_data as D
+    gate = require_gate()
+    stages = readable_stages(gate['classes'])
+    lock = R.require_lock()
+    fit = _read_json(out_dir() / f'fit_{arm}.json')
+    if not fit:
+        raise RuntimeError(f'{arm} is not fitted yet (fit_{arm}.json)')
+    control = arm == CONTROL
+    base = base_arm(arm)
+    perms = permutations(list(D.panel_odors(PANEL))) if control else None
+    loss = StageLoss(stages, Flies('fit', stages, perms=perms), lock, check_pn=base != 'A1')
+    m = ArmModel(arm, S_WIRINGS, lock=lock, claw_mode=fit.get('claw_mode') or 'in_place')
+    restore_memory(m, pd.read_csv(out_dir() / f'fit_history_{arm}.csv', float_precision='round_trip'))
+    best_z = {k: float(v) for k, v in fit['best_z'].items()}
+    best_loss = float(fit['best']['loss_sim'])
+    rows, det = [], {}
+
+    def evaluate(label: str, z: Dict[str, float]) -> float:
+        t1 = time.time()
+        runs = m.run(z, tag_prefix=f'{arm}_det_{label}_')
+        res = loss(runs)
+        res['hold_penalty'] = hold_penalty(runs)
+        res['loss_sim'] = res['loss_stages'] + res['hold_penalty']
+        if save_stages:
+            save_eval(arm, f'det_{label}', runs)
+        rows.append(dict(label=label, **{f'z_{k}': v for k, v in z.items()}, **res, seconds=round(time.time() - t1, 1),
+                         host=_host(), time=_now()))
+        pd.DataFrame(rows).to_csv(out_dir() / f'determined_{arm}.csv', index=False)
+        print(f"E136 {arm} {label}: loss {res['loss_sim']:.4f} (best {best_loss:.4f})", flush=True)
+        return res['loss_sim']
+
+    for k in m.searched:
+        if best_z[k] == 0.0:
+            det[k] = dict(returned_loss=best_loss, rise=0.0, determined=False, note='at the family value already')
+            continue
+        lk = evaluate(f'{k}0', dict(best_z, **{k: 0.0}))
+        det[k] = dict(returned_loss=lk, rise=lk - best_loss, determined=bool(lk - best_loss >= threshold))
+    free = [k for k in m.searched if not det[k]['determined'] and best_z[k] != 0.0]
+    classed, classed_loss = dict(best_z), best_loss
+    if free:
+        z_all = dict(best_z, **{k: 0.0 for k in free})
+        l_all = det[free[0]]['returned_loss'] if len(free) == 1 else evaluate('none', z_all)
+        if l_all - best_loss <= threshold:
+            classed, classed_loss = z_all, l_all
+    dets = [k for k in m.searched if det[k]['determined']]
+    fit.update(determined=det, classed_z=classed, classed_loss=classed_loss, not_determined_threshold=threshold,
+               at_bound_classed=at_bound(dets, [classed[k] for k in dets]), determined_time=_now(),
+               determined_commits=_commits())
+    _write_json(out_dir() / f'fit_{arm}.json', fit)
+    return fit
+
+
+def history_evals(arm: str) -> List[int]:
+    """The evaluations of a fit's history, in order."""
+    h = pd.read_csv(out_dir() / f'fit_history_{arm}.csv')
+    return [int(i) for i in h['eval']]
+
+
+def rescore(arm: str, measures: Sequence[str] = tuple(MEASURES), halves: Sequence[Optional[str]] = ('fit', 'held'),
+            evals: Optional[Sequence[int]] = None) -> pd.DataFrame:
+    """A fit's saved evaluations (this host's outputs/.../fit_<arm>/, the history's evaluations) scored again under
+    every measure of `measures` and against every half of `halves`, with no simulation (the re-read on the adopted
+    measure: every view and part, the population error over all views, the two-view error). Writes
+    rescore_<arm>.csv (one row per evaluation, measure and half) to the fit's out_dir. An evaluation not saved on this
+    host is skipped and listed."""
+    lock = R.require_lock()
+    evals = history_evals(arm) if evals is None else list(evals)
+    runs_of: Dict[int, Dict[str, 'R.SavedRun']] = {}
+    missing = []
+    for i in evals:
+        try:
+            runs_of[i] = {w: R.load_step3_run(f'{arm}_e{i}_{w}', dirs=fit_dirs(arm)) for w in S_WIRINGS}
+        except FileNotFoundError:
+            missing.append(i)
+    rows = []
+    for meas in measures:
+        for half in halves:
+            loss = StageLoss(LOSS_STAGES, Flies(half, LOSS_STAGES, views=MEASURES[meas]), lock)
+            for i, runs in runs_of.items():
+                res = loss(runs)
+                rows.append(dict(arm=arm, eval=i, measure=meas, half=half or 'all',
+                                 **{k: v for k, v in res.items() if not k.startswith('rate_')}))
+    df = pd.DataFrame(rows)
+    df.to_csv(out_dir() / f'rescore_{arm}.csv', index=False)
+    if missing:
+        print(f'E136 rescore {arm}: {len(missing)} evaluations not saved on this host: {missing}', flush=True)
+    return df
+
+
+def consistency(arms: Optional[Sequence[str]] = None, measure_name: Optional[str] = None) -> pd.DataFrame:
+    """The measure's consistency at the megamat stages, a description (the re-read on the adopted measure): over all
+    the rescored evaluations of all arms (rescore_<arm>.csv), the Spearman ρ between the megamat stage error against the
+    fit half and against the held-out half, with 0.8 as the yardstick, for the stage error and each stage."""
+    from scipy import stats
+    meas = measure_name or MEASURE
+    fs = [out_dir() / f'rescore_{a}.csv' for a in (arms or [*ARMS, CONTROL])]
+    df = pd.concat([pd.read_csv(f) for f in fs if f.exists()], ignore_index=True) if any(f.exists() for f in fs) \
+        else pd.DataFrame()
+    rows = []
+    if not len(df):
+        return pd.DataFrame(rows)
+    d = df[df.measure == meas]
+    a = d[d.half == 'fit'].set_index(['arm', 'eval'])
+    b = d[d.half == 'held'].set_index(['arm', 'eval'])
+    idx = a.index.intersection(b.index)
+    for col in ['stage_error', *(f'{s}_error' for s in LOSS_STAGES)]:
+        if col in a and col in b and len(idx) > 2:
+            rho = float(stats.spearmanr(a.loc[idx, col], b.loc[idx, col])[0])
+            rows.append(dict(measure=meas, statistic=col, n_evals=len(idx), rho=rho, yardstick=0.8))
+    out = pd.DataFrame(rows)
+    out.to_csv(out_dir() / f'consistency_{meas}.csv', index=False)
+    return out
+
+
 # ---------------------------------------------------------------------------
 # the reads
 
@@ -1250,14 +1387,15 @@ def planned_reads(arms: Optional[Sequence[str]] = None) -> List[ReadPoint]:
 
 
 def fitted_z(arm: str) -> Dict[str, float]:
-    """An arm's fitted coordinates (fit_<arm>.json 'best_z'); {} for the unrefitted family. RuntimeError if the fit is
-    not written."""
+    """An arm's fitted coordinates: its classed point after the single-factor returns (fit_<arm>.json 'classed_z',
+    `determined`), else its best point ('best_z'); {} for the unrefitted family. RuntimeError if the fit is not
+    written."""
     if arm == FAMILY:
         return {}
     f = _read_json(out_dir() / f'fit_{arm}.json')
     if not f:
         raise RuntimeError(f'{arm} is not fitted yet (fit_{arm}.json)')
-    return {k: float(v) for k, v in f['best_z'].items()}
+    return {k: float(v) for k, v in (f.get('classed_z') or f['best_z']).items()}
 
 
 def read_targets(wiring: str, panel: str, n_odors: int, lock: Optional[Mapping] = None
@@ -1435,7 +1573,7 @@ def load_read(pt: ReadPoint, claw_after: bool = False) -> Optional['R.SavedRun']
 
 def score_megamat(arm: str, stages: Sequence[str], half: Optional[str] = 'held',
                   wirings: Sequence[str] = T_WIRINGS, perms: bool = False,
-                  claw_after: bool = False) -> Optional[Dict[str, float]]:
+                  claw_after: bool = False, views='measure') -> Optional[Dict[str, float]]:
     """An arm's (or the unrefitted family's) megamat stages on `wirings` against a half of the flies (all of them for
     None; under the control's permutations with `perms`): `StageLoss`'s dict. A fitted arm's S wirings are its fit's
     best evaluation (saved under outputs/.../fit_<arm>/). None while a run is missing."""
@@ -1454,11 +1592,11 @@ def score_megamat(arm: str, stages: Sequence[str], half: Optional[str] = 'held',
             return None
         runs[w] = r
     lock = R.require_lock()
-    flies = Flies(half, stages, perms=permutations(list(D.panel_odors(PANEL))) if perms else None)
+    flies = Flies(half, stages, perms=permutations(list(D.panel_odors(PANEL))) if perms else None, views=views)
     return StageLoss(stages, flies, lock)(runs)
 
 
-def score_panels(arm: str, flies: Optional['R.FlyCache'] = None) -> pd.DataFrame:
+def score_panels(arm: str, flies: Optional['R.FlyCache'] = None, views='measure') -> pd.DataFrame:
     """An arm's KC somata on the held-out panels (the validation2, mixture and APL16 inputs on the eight wirings, every
     panel and condition the runs are read on with flies to read them against, default readings), under the measure in
     force: per (input, panel, condition) each wiring's population error, their mean and the error of their mean views
@@ -1467,7 +1605,7 @@ def score_panels(arm: str, flies: Optional['R.FlyCache'] = None) -> pd.DataFrame
     from kcq import population_fit as P
     flies = flies if flies is not None else R.FlyCache()
     lock = R.require_lock()
-    views = MEASURES[MEASURE]
+    views = MEASURES[MEASURE] if views == 'measure' else views
     rows = []
     for panel in READ_PANELS:
         if panel == PANEL:
@@ -1490,7 +1628,7 @@ def score_panels(arm: str, flies: Optional['R.FlyCache'] = None) -> pd.DataFrame
             for name, row in tab.iterrows():
                 wiring = str(name).partition('/')[2] or str(name)
                 rows.append(dict(arm=arm, input=panel, stage=st, panel=pan, condition=cond, wiring=wiring,
-                                 measure=MEASURE, n_odors=len(od), n_flies=len(fp),
+                                 views='all' if views is None else '+'.join(views), n_odors=len(od), n_flies=len(fp),
                                  **{k: float(v) for k, v in row.items()}))
     return pd.DataFrame(rows)
 
@@ -1577,13 +1715,18 @@ def compare(arm_v: Mapping[str, float], base_v: Mapping[str, float], spread: flo
 def classify(arm: str, stages: Sequence[str], mega: Mapping[str, Mapping[str, Dict[str, float]]],
              panels: Mapping[str, Mapping[Tuple[str, str, str], Dict[str, float]]], spreads: Mapping[str, float],
              realism: Mapping[str, Mapping[str, str]], fit: Mapping, control_fall: Optional[float],
-             mega_ctl: Optional[Mapping[str, Mapping[str, Dict[str, float]]]] = None) -> dict:
+             guard: Optional[Mapping] = None) -> dict:
     """One arm's class as the entry fixes it and the rulings read it, on the T wirings and the held-out half, against
     the unrefitted family there (`mega` / `panels`: per arm, FAMILY included, the values of `megamat_values` /
     `panel_values`; `spreads`: 'stage', each stage and each HOLDS_PANELS key as 'input/panel/condition', the SD over the
     family's eight wirings; `realism`: per arm, per wiring its APL16 read's realism flag; `fit`: the arm's
     fit_<arm>.json; `control_fall`: the control fit's fall of the megamat stage error on T against the permuted
-    held-out half). "Lower" in "one stage at another's cost" is read with the same margin as "improves"."""
+    held-out half; `guard`: rule 3's guard on a measure of fewer views, the same values under every view: 'mega',
+    'panels' and 'spreads' as above). "Lower" in "one stage at another's cost" is read with the same margin as
+    "improves". With the guard, a stage whose error over all its views rises by more than that error's spread makes an
+    arm that lowers the strength error "strength at another view's cost" (it does not improve), and a held-out panel is
+    worse when either error is. A fit's 'at_bound_classed' (the determined factors of its classed point, `determined`)
+    stands in for 'at_bound' where it exists."""
     a, f = mega[arm], mega[FAMILY]
     m = compare({w: v['stage'] for w, v in a.items()}, {w: v['stage'] for w, v in f.items()}, spreads['stage'])
     st = {s: compare({w: v[s] for w, v in a.items()}, {w: v[s] for w, v in f.items()}, spreads[s]) for s in stages}
@@ -1595,8 +1738,9 @@ def classify(arm: str, stages: Sequence[str], mega: Mapping[str, Mapping[str, Di
     reasons = []
     if not m.get('complete') or not all(v.get('complete') for v in st.values()):
         reasons.append('reads missing')
-    if fit.get('at_bound'):
-        reasons.append('at a bound: ' + ', '.join(fit['at_bound']))
+    bounds = fit.get('at_bound_classed') if 'at_bound_classed' in fit else fit.get('at_bound')
+    if bounds:
+        reasons.append('at a bound: ' + ', '.join(bounds))
     left = [w for w in T_WIRINGS if realism.get(arm, {}).get(w) and not realism.get(FAMILY, {}).get(w)]
     if left:
         reasons.append('leaves a realism band on ' + ', '.join(left))
@@ -1607,8 +1751,24 @@ def classify(arm: str, stages: Sequence[str], mega: Mapping[str, Mapping[str, Di
     stage_worse = [s for s, v in st.items() if v.get('worse_than_spread')]
     panel_worse = [k for k, v in pn.items() if v.get('complete') and v.get('worse_than_spread')]
     panel_missing = [k for k, v in pn.items() if not v.get('complete')]
-    improves = bool(m.get('improves')) and not stage_worse
-    rec.update(improves=improves, stage_worse=stage_worse, panel_worse=panel_worse, panel_missing=panel_missing)
+    guard_worse, guard_rec = [], {}
+    if guard is not None:
+        ga, gf = guard['mega'].get(arm, {}), guard['mega'].get(FAMILY, {})
+        for s in stages:
+            c = compare({w: v[s] for w, v in ga.items()}, {w: v[s] for w, v in gf.items()}, guard['spreads'].get(s, np.nan))
+            guard_rec[s] = c
+            if c.get('worse_than_spread'):
+                guard_worse.append(s)
+        for key in HOLDS_PANELS:
+            k = '/'.join(key)
+            c = compare(guard['panels'].get(arm, {}).get(key, {}), guard['panels'].get(FAMILY, {}).get(key, {}),
+                        guard['spreads'].get(k, np.nan))
+            guard_rec[k] = c
+            if c.get('complete') and c.get('worse_than_spread') and k not in panel_worse:
+                panel_worse.append(k)
+    improves = bool(m.get('improves')) and not stage_worse and not guard_worse
+    rec.update(improves=improves, stage_worse=stage_worse, guard_worse=guard_worse, guard=guard_rec,
+               panel_worse=panel_worse, panel_missing=panel_missing)
     if reasons:
         cls = 'no class'
     elif improves and not panel_worse and not panel_missing:
@@ -1619,6 +1779,8 @@ def classify(arm: str, stages: Sequence[str], mega: Mapping[str, Mapping[str, Di
         cls = 'improves (held-out panels not all read)'
     elif m.get('improves') and stage_worse:
         cls = "one stage at another's cost"
+    elif m.get('improves') and guard_worse:
+        cls = "strength at another view's cost"
     else:
         cls = 'does not improve'
     if arm != 'A0' and 'A0' in mega:
@@ -1639,6 +1801,27 @@ def realism_of(rows: pd.DataFrame) -> Dict[str, str]:
     """Per wiring, the APL16 read's realism flag ('' inside every band)."""
     return {str(r.wiring): (r.realism_flag if isinstance(r.realism_flag, str) else '') for r in rows.itertuples()} \
         if len(rows) else {}
+
+
+def yardsticks(stages: Sequence[str] = LOSS_STAGES) -> Dict[str, dict]:
+    """The yardsticks beside every error on the measure in force (the re-read on the adopted measure), against the
+    held-out half in all flies' units: 'flat' (a profile with every odor at the panel's mean: each strength part 1 for
+    every odor; strength views only) and 'half_to_half' (the fit half's mean views scored against the held-out half);
+    E134's no-step yardstick is its flies_no_step.csv."""
+    from data_prep import stage_population_data as D
+    from kcq import population_fit as P
+    odors = list(D.panel_odors(PANEL))
+    fit, held = Flies('fit', stages), Flies('held', stages)
+    out = {}
+    for st in stages:
+        rh, rf = held.reference(st, odors), fit.reference(st, odors)
+        rec = dict(half_to_half=float(P.score_views(dict(rf.mean), rh).error))
+        flat = {p: pd.Series(1.0, index=m.index) for p, m in rh.mean.items() if p.startswith('strength/')}
+        if flat:
+            rec['flat'] = float(P.score_views(flat, P.subset_reference(rh, rh.flies, keep_units=True)).views.get(
+                'strength', np.nan))
+        out[st] = rec
+    return out
 
 
 def part_score(arms: Optional[Sequence[str]] = None) -> dict:
@@ -1689,15 +1872,44 @@ def part_score(arms: Optional[Sequence[str]] = None) -> dict:
         cp = score_megamat(CONTROL, stages, 'held', T_WIRINGS, perms=True)
         if fp is not None and cp is not None:
             control_fall = float(np.mean([fp[f'stage_error_perm_{w}'] - cp[f'stage_error_perm_{w}'] for w in T_WIRINGS]))
+    guard, beside = None, {}
+    if MEASURE != 'all':
+        # rule 3's guard: the same reads under every view (four at the PN dendrites), with their own spreads
+        g_mega, g_rows = {}, []
+        for a in [FAMILY, *arms]:
+            ws = WIRINGS if a == FAMILY else T_WIRINGS
+            sc = score_megamat(a, stages, 'held', ws, views=None)
+            if sc is not None:
+                g_mega[a] = megamat_values(sc, stages, ws)
+            p = score_panels(a, views=None)
+            if len(p):
+                g_rows.append(p)
+        g_panels = pd.concat(g_rows, ignore_index=True) if g_rows else pd.DataFrame()
+        g_pv = {a: panel_values(g_panels, a) for a in [FAMILY, *arms]}
+        gf = g_mega.get(FAMILY, {})
+        g_spreads = dict(stage=_sd(v['stage'] for v in gf.values()), **{s: _sd(v[s] for v in gf.values()) for s in stages})
+        for key in HOLDS_PANELS:
+            g_spreads['/'.join(key)] = _sd(g_pv[FAMILY].get(key, {}).values())
+        guard = dict(mega=g_mega, panels=g_pv, spreads=g_spreads)
+        g_panels.to_csv(out_dir() / 'score_panels_all_views.csv', index=False)
+        # beside: the two-view error (strength and sharing) and its change on T
+        tv = {}
+        for a in [FAMILY, *arms]:
+            sc = score_megamat(a, stages, 'held', T_WIRINGS, views=MEASURES['strength_sharing'])
+            if sc is not None:
+                tv[a] = {w: sc[f'stage_error_{w}'] for w in T_WIRINGS}
+        beside['two_view'] = {a: compare(tv[a], tv[FAMILY], np.nan) for a in arms if a in tv and FAMILY in tv}
+        beside['yardsticks'] = yardsticks(stages)
+        beside['spreads_all_views'] = g_spreads
     classes = {}
     for a in arms:
         fit = _read_json(out_dir() / f'fit_{a}.json')
         if a not in mega or FAMILY not in mega:
             classes[a] = dict(cls='reads missing')
             continue
-        classes[a] = classify(a, stages, mega, pv, spreads, realism, fit, control_fall)
+        classes[a] = classify(a, stages, mega, pv, spreads, realism, fit, control_fall, guard)
         if a in mega_after:
-            alt = classify(a, stages, dict(mega, **{a: mega_after[a]}), pv, spreads, realism, fit, control_fall)
+            alt = classify(a, stages, dict(mega, **{a: mega_after[a]}), pv, spreads, realism, fit, control_fall, guard)
             classes[a]['claws_after_threshold'] = dict(cls=alt['cls'], megamat=alt['megamat'])
             if alt['cls'] != classes[a]['cls']:
                 classes[a]['reasons'].append('the class differs between the claws read before and after the threshold')
@@ -1705,8 +1917,13 @@ def part_score(arms: Optional[Sequence[str]] = None) -> dict:
     pd.DataFrame(mrows).to_csv(out_dir() / 'score_megamat.csv', index=False)
     panels.to_csv(out_dir() / 'score_panels.csv', index=False)
     apl.to_csv(out_dir() / 'score_apl16.csv', index=False)
-    _write_json(out_dir() / 'classes.json', dict(stages=list(stages), spreads=spreads, control_fall=control_fall,
-                                                 classes=classes))
+    try:
+        beside['consistency'] = consistency(arms + ([CONTROL] if (out_dir() / f'fit_{CONTROL}.json').exists() else []))\
+            .to_dict('records')
+    except Exception as e:   # a description only: a missing rescore does not stop the score
+        beside['consistency'] = f'not read: {e}'
+    _write_json(out_dir() / 'classes.json', dict(stages=list(stages), measure=MEASURE, spreads=spreads,
+                                                 control_fall=control_fall, beside=beside, classes=classes))
     _write_json(out_dir() / 'provenance_score.json', dict(part='score', script=SCRIPT, lock=R.require_lock().get('sha256'),
                 seconds=round(time.time() - t0, 1), host=_host(), time=_now(), arms=arms, **_commits()))
     return classes
@@ -1718,7 +1935,8 @@ def part_score(arms: Optional[Sequence[str]] = None) -> dict:
 def main(argv: Optional[Sequence[str]] = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('--part', required=True,
-                    choices=('identity', 'claw_identity', 'claw_thr_check', 'fit', 'read', 'score'))
+                    choices=('identity', 'claw_identity', 'claw_thr_check', 'fit', 'determined', 'rescore', 'read',
+                             'score'))
     ap.add_argument('--arm', choices=tuple(ARMS) + (CONTROL, FAMILY))
     ap.add_argument('--maxfev', type=int)
     ap.add_argument('--wirings', nargs='+', choices=WIRINGS)
@@ -1748,6 +1966,14 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     elif a.part == 'read':
         require_gate()
         part_read(a.lane, None if a.arm is None else [a.arm], a.reverse, a.reclaim)
+    elif a.part == 'determined':
+        if a.arm in (None, FAMILY):
+            raise SystemExit('--part determined needs --arm')
+        print(json.dumps(determined(a.arm), indent=1, default=str))
+    elif a.part == 'rescore':
+        if a.arm in (None, FAMILY):
+            raise SystemExit('--part rescore needs --arm')
+        print(rescore(a.arm).groupby(['measure', 'half']).stage_error.describe().to_string())
     elif a.part == 'score':
         print(json.dumps(part_score(None if a.arm is None else [a.arm]), indent=1, default=str))
 
