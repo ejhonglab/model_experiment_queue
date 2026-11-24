@@ -1392,14 +1392,18 @@ def classify_stages(scores: pd.DataFrame, panel: str = 'megamat', condition: str
 
 def step_null_distance(upstream: Sequence[P.Population], downstream: Sequence[P.Population], odors: Sequence[str],
                        edges, q: float = STEP_NULL_Q) -> Dict[str, float]:
-    """Per part, the `q` quantile of the RMS distance of a resampled change (the flies of both stages resampled) from
-    the flies' measured change: the threshold a model's change of that part must be within to be inside.
-
-    Waits on hal's resampled step distance in kcq/population_fit.py (the planner's reading, chat.md 2026-11-24 11:34),
-    not pushed when this was written; it raises until then."""
-    raise NotImplementedError("the step class waits on hal's resampled step distance in kcq/population_fit.py "
-                              "(chat.md 2026-11-24 11:34: per part, the RMS distance of the resampled flies' change from "
-                              "the measured change), not pushed yet")
+    """Per part, the `q` quantile of the RMS distance of a resampled change (the flies of both stages resampled, hal's
+    `P.step_resample`, its default draw, number and seed) from the flies' measured change: the threshold a model's
+    change of that part must be within to be inside (the planner's reading, chat.md 2026-11-24 11:34). It equals hal's
+    `P.step_distance` threshold for a wiring that has every entry of the part; parts with no finite distance are left
+    out (and so are never inside)."""
+    rs = P.step_resample(upstream, downstream, odors, edges)
+    out = {}
+    for part in rs.change:
+        d = rs.distances(part)
+        if np.isfinite(d).any():
+            out[part] = float(np.nanquantile(d, q))
+    return out
 
 
 def classify_steps(step_tab: pd.DataFrame, nulls: Mapping[str, Mapping[str, float]]) -> Dict[str, dict]:

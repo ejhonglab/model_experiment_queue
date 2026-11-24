@@ -136,8 +136,12 @@ def test_scoring_on_planted_readings():
     assert np.isfinite(pop.no_step_error).all() and np.isfinite(pop.model_downstream_error).all()
     dist = st[st.level == 'part_distance']
     assert (dist.groupby(['step', 'part']).size() == len(B.WIRINGS)).all() and (dist.distance >= 0).all()
-    with pytest.raises(NotImplementedError, match="hal's resampled step distance"):
-        B.step_nulls(inputs)
+    nulls = B.step_nulls(inputs)
+    assert set(nulls) == steps
+    assert all(np.isfinite(v) and v > 0 for thr in nulls.values() for v in thr.values())
+    assert all(set(thr) <= set(dist.part) for thr in nulls.values())
+    classes = B.classify_steps(st, nulls)
+    assert {c['cls'] for c in classes.values()} <= {'explained', 'in part', 'no better than no step'}
     # the class from planted thresholds: everything inside, or nothing
     big = {s_: {p: np.inf for p in dist.part.unique()} for s_ in steps}
     zero = {s_: {p: -1.0 for p in dist.part.unique()} for s_ in steps}
@@ -401,3 +405,20 @@ def test_claw_reader_hook(monkeypatch):
     assert seen and seen[0][0] == (3, 2) and (st['claw_win'].to_numpy() == 7.0).all()
     plain = B.read_model_stages(None, rv, W, np.array([0]), ['2h'], glom, ('pn', 'bouton', 'claw'))
     assert not (plain['claw_win'].to_numpy() == 7.0).any()
+
+
+def test_step_null_distance(monkeypatch):
+    """The step's threshold per part is the 95th percentile of the resampled changes' RMS distances from the flies'
+    change (hal's StepResample), the same as hal's step_distance threshold for a wiring with every entry."""
+    change = {'strength/rate': pd.Series([0.0, 1.0, 2.0], index=list('abc')),
+              'breadth/bins': pd.Series([np.nan, np.nan], index=list('xy'))}
+    rng = np.random.default_rng(0)
+    res = {'strength/rate': change['strength/rate'].to_numpy()[None, :] + rng.normal(0, 0.1, (500, 3)),
+           'breadth/bins': np.full((500, 2), np.nan)}
+    fake = P.StepResample(change=change, resampled=res, n_up=4, n_down=5)
+    monkeypatch.setattr(P, 'step_resample', lambda *a, **k: fake)
+    thr = B.step_null_distance([], [], [], None)
+    assert set(thr) == {'strength/rate'}
+    model = {'w': {'strength/rate': change['strength/rate'] + 0.05}}
+    ref = P.step_distance(model, fake)
+    assert thr['strength/rate'] == pytest.approx(float(ref.threshold.iloc[0]), rel=1e-12)
