@@ -1346,6 +1346,13 @@ def kckc_matrix_of(kind: str, tag: str) -> str:
     return f'on: {OFF_MATRIX["HB"]}; off: {off}'
 
 
+def distances_tag(tag: str, variant: str) -> str:
+    """The tag of a run in model_pair_distances_long.csv: its run tag (S1_G_real, S3_MB_real), the name its responses
+    have in the model-output archive (`save_run`), so that kcq/apl_effect.py finds them for the realism bands. A pairing
+    of two runs (`<on tag>|<off tag>`) has no archived files of its own and keeps its variant name."""
+    return variant if '|' in tag else tag
+
+
 def write_variants() -> pd.DataFrame:
     """variants.csv (every E129 run and pairing, absolute parameters) and model_pair_distances_long.csv (raw spike
     counts) for the archive."""
@@ -1367,8 +1374,9 @@ def write_variants() -> pd.DataFrame:
                          max_count_off=r.max_count_off, realism_flag=r.realism_flag, corner=bool(r.corner),
                          subdir=STEP_OF.get(arm), kckc_matrix=kckc_matrix_of(r.kind, r.tag),
                          off_kckc_scale=getattr(r, 'kckc_scale_off', np.nan)))
-        parts.append(pd.concat({(rows[-1]['variant'], 'on'): H.model_rdms(*o['on'])[H.PRIMARY_MODEL_RDM],
-                                (rows[-1]['variant'], 'acute_off'): H.model_rdms(*o['off'])[H.PRIMARY_MODEL_RDM]},
+        key = distances_tag(rows[-1]['tag'], rows[-1]['variant'])
+        parts.append(pd.concat({(key, 'on'): H.model_rdms(*o['on'])[H.PRIMARY_MODEL_RDM],
+                                (key, 'acute_off'): H.model_rdms(*o['off'])[H.PRIMARY_MODEL_RDM]},
                                names=['tag', 'condition', 'odor_a', 'odor_b']).rename('distance').reset_index())
     df = pd.DataFrame(rows)
     df.to_csv(out / 'variants.csv', index=False)

@@ -403,6 +403,25 @@ def test_save_run_extras(tmp_path, monkeypatch):
     assert back['off'][1].equals(s) and back['on'][1].equals(s)
 
 
+def test_distances_tag_finds_the_archived_responses(tmp_path, monkeypatch):
+    """model_pair_distances_long.csv's tag is the archive's file name, so the realism bands are scored from it."""
+    A = pytest.importorskip('kcq.apl_effect')
+    monkeypatch.setattr(X, 'local_dir', lambda part='': tmp_path / 'local' / part)
+    monkeypatch.setattr(X, 'archive_dir', lambda: tmp_path / 'archive' / 'E129_block_survivor_static')
+    idx = pd.MultiIndex.from_arrays([[1, 2], ['g', 'ab']], names=[H.KC_ID_LEVEL, H.KC_TYPE_LEVEL])
+    s = pd.DataFrame([[0.0, 3.0], [2.0, 1.0]], index=idx, columns=['a', 'b'])
+    X.save_run('step3', 'S3_MB_real', {'on': ((s >= 2).astype(float), s), 'off': ((s >= 2).astype(float), s)})
+    tag = X.distances_tag('S3_MB_real', 'MB_real')
+    assert tag == 'S3_MB_real'
+    assert X.distances_tag('S1_G_real|S1_T_real', 'G|T_real') == 'G|T_real'
+    monkeypatch.setattr(A, 'ARCHIVE', tmp_path / 'archive')
+    results = tmp_path / 'results' / 'E129_block_survivor_static'
+    for name in ('on', 'acute_off'):
+        p = A.archive_responses(results, tag, name)
+        assert p is not None and p.name == f'S3_MB_real_{name}_responses.parquet'
+    assert A.archive_responses(results, 'MB_real', 'on') is None
+
+
 def test_kckc_matrix_of():
     assert X.kckc_matrix_of('G', 'S1_G_real').endswith('off: none (KC-KC 0)')
     assert X.kckc_matrix_of('C50|G', 'S2_C50_real').endswith('off: none (KC-KC 0)')
