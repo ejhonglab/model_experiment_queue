@@ -32,9 +32,10 @@ column; the population distances recomputed here give readings.csv's mean distan
 minus the family's and minus the dose 0's equal verdict.json's step-2 values; the score's own comparisons, recomputed by
 the same rule, equal verdict.json's.
 
-Writes writeup_run_ranges.csv, writeup_mean_effects.csv, writeup_differ_extra.csv, writeup_group_errors.csv,
-writeup_group_compare.csv, writeup_expectations.csv, E132_dose_curve.png and provenance_writeup_tables.json to the
-results folder.
+Writes writeup_run_ranges.csv, writeup_mean_effects.csv, writeup_differ_extra.csv, writeup_differ_entry.csv (the
+score's own comparisons from verdict.json, in writeup_differ_extra.csv's columns, so that the summary reads their counts
+from a table cell), writeup_group_errors.csv, writeup_group_compare.csv, writeup_expectations.csv, E132_dose_curve.png
+and provenance_writeup_tables.json to the results folder.
 
 Usage (from the repository root): ./venv/bin/python analyses/E132_writeup_tables.py [--out DIR]
 """
@@ -197,6 +198,26 @@ def differ_extra(rd: pd.DataFrame, runs: pd.DataFrame, verdict: dict, E132) -> p
         for t in TARGETS:
             for u in ('S4', 'T4'):
                 row[f'a_minus_b_{t}_{u}'] = d.get('d_per_target', {}).get(t, {}).get(u, np.nan)
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def differ_entry(rd: pd.DataFrame, verdict: dict) -> pd.DataFrame:
+    """The score's own "differ" comparisons (verdict.json's `comparisons`, which `differ_extra` has checked), one row
+    each, in writeup_differ_extra.csv's columns."""
+    rows = []
+    for key, c in verdict['comparisons'].items():
+        a, b = key.split('|')
+        row = dict(a=a, b=b, verdict=c['verdict'], n_wirings_a_lower=c.get('n_wirings_a_lower'),
+                   n_wirings_b_lower=c.get('n_wirings_b_lower'), a_lower_on_all_targets=c.get('a_lower_on_all_targets'),
+                   b_lower_on_all_targets=c.get('b_lower_on_all_targets'),
+                   corner_arms=' '.join(c.get('corner_arms', [])),
+                   wirings_a_lower=' '.join(w for w, v in c.get('d_per_wiring', {}).items() if v < 0))
+        for u in ('S4', 'T4', 'all8'):
+            row[f'a_minus_b_{u}'] = _v(rd, a, u, 'all_pattern') - _v(rd, b, u, 'all_pattern')
+        for t in TARGETS:
+            for u in ('S4', 'T4'):
+                row[f'a_minus_b_{t}_{u}'] = c.get('d_per_target', {}).get(t, {}).get(u, np.nan)
         rows.append(row)
     return pd.DataFrame(rows)
 
@@ -407,11 +428,12 @@ def main(argv=None) -> None:
     R = run_ranges(runs, rd, late_family)
     M = mean_effects(rd, verdict)
     D = differ_extra(rd, runs, verdict, E132)
+    DE = differ_entry(rd, verdict)
     X = expectations(rd, slopes)
     G = group_errors(E132, rd)
     C = group_compare(G, line)
-    tables = dict(writeup_run_ranges=R, writeup_mean_effects=M, writeup_differ_extra=D, writeup_group_errors=G,
-                  writeup_group_compare=C, writeup_expectations=X)
+    tables = dict(writeup_run_ranges=R, writeup_mean_effects=M, writeup_differ_extra=D, writeup_differ_entry=DE,
+                  writeup_group_errors=G, writeup_group_compare=C, writeup_expectations=X)
     for name, t in tables.items():
         t.to_csv(out / f'{name}.csv', index=False)
     fig = out / 'E132_dose_curve.png'
