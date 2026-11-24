@@ -46,6 +46,14 @@ table (results/apl_effect/by_variant.csv), and the values the planner's reasons 
 Writes reads_*.csv, reads_summary.json (with the planner's check values against the code's) and provenance_reads.json.
 The saved spike times are checked against the archives' spike counts and step 0's hashes first.
 
+Two reads added after the placement (2026-11-23; the placement's Fable planner, claude-fable-5-2, spawned from viki
+2026-11-23 22:23, made them inline from the model-output archive), in reads_additions.csv (one row per wiring) and
+reads_summary.json's 'additions': (1) the APL-on responders that do not respond with APL off, in the family's rebuild
+archives and in E110's arm A (KC-KC at 0 at fixed scales, both response counts held; data/model_outputs/E110_no_kckc/A/,
+variant A_real for S); (2) among the APL-off responders, a KC's summed APL->KC weight (wAPLKC.parquet of the rebuild
+archive, summed over the KC's claws) and the archive's breadth value (breadth.parquet) as tellers of survival under
+APL, lower favouring survival, by their AUC, with the survivors' and the removed's median weight over the mean KC's.
+
 Usage (from the repository root):
     OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 nice -n 10 ./venv/bin/python -u experiments/E121_onset_race.py step0
     ./venv/bin/python experiments/E121_onset_race.py reads
@@ -580,6 +588,78 @@ def survival_reads(comp_on: pd.DataFrame, comp_off: pd.DataFrame) -> Dict[str, f
                 share_on_not_off=float(n_on_not_off / len(on)) if on else float('nan'))
 
 
+E110_ARM_A = ('E110_no_kckc', 'A')
+
+
+def e110_arm_a_variant(label: str) -> str:
+    """E110's arm-A variant of a wiring of the family ('A_real' for S, 'A_<label>' otherwise)."""
+    return 'A_real' if label == 'S' else f'A_{label}'
+
+
+def on_not_off_counts(resp_on: pd.DataFrame, resp_off: pd.DataFrame) -> Dict[str, float]:
+    """Returns the APL-on responders that do not respond with APL off, from two KCs x odors response tables.
+
+    Args:
+        resp_on, resp_off: KCs x odors, 1 (or True) where the KC responds to the odor, same index and columns.
+
+    Returns dict with 'n_on_responders', 'n_off_responders', 'n_on_not_off' and 'share_on_not_off' (of the APL-on
+    responders).
+    """
+    if not (resp_on.index.equals(resp_off.index) and list(resp_on.columns) == list(resp_off.columns)):
+        raise ValueError('the two response tables differ in their KCs or odors')
+    on, off = resp_on.to_numpy() > 0, resp_off.to_numpy() > 0
+    n_on, n = int(on.sum()), int((on & ~off).sum())
+    return dict(n_on_responders=n_on, n_off_responders=int(off.sum()), n_on_not_off=n,
+                share_on_not_off=float(n / n_on) if n_on else float('nan'))
+
+
+def kc_apl_weight(w_apl_kc: pd.DataFrame, kc_ids: Sequence) -> np.ndarray:
+    """Returns each KC's summed APL->KC weight, in the order of `kc_ids`.
+
+    Args:
+        w_apl_kc: the rebuild archive's wAPLKC (one row per claw, index levels including 'kc_id', one column).
+        kc_ids: the KCs' IDs in the order of the spike counts' rows (a KC's position is its 'kc' in the spike times).
+    """
+    s = w_apl_kc.iloc[:, 0].groupby(level='kc_id').sum()
+    out = s.reindex(pd.Index(kc_ids))
+    if out.isna().any():
+        raise ValueError(f'{int(out.isna().sum())} KCs without an APL->KC weight')
+    return out.to_numpy(dtype=float)
+
+
+def survival_by_weight(comp_on: pd.DataFrame, comp_off: pd.DataFrame, weight: np.ndarray,
+                       breadth: np.ndarray) -> Dict[str, float]:
+    """Returns how well a KC's APL->KC weight and its breadth value tell survival under APL (one wiring).
+
+    As `survival_reads`: among the APL-off responders (`second_spike_times` rows), a survivor responds with APL on too.
+    Each entry carries its KC's value (`weight`, `breadth`: per KC position); lower favours survival in both AUCs
+    ('auc_apl_weight', 'auc_breadth'; 0.5 is chance). Beside them the survivors' and the removed's median weight over
+    the mean KC's (all KCs of the wiring): 'weight_survivors_over_mean', 'weight_removed_over_mean'.
+    """
+    weight, breadth = np.asarray(weight, dtype=float), np.asarray(breadth, dtype=float)
+    on = set(zip(comp_on['kc'].to_numpy(), comp_on['odor'].to_numpy()))
+    kc = comp_off['kc'].to_numpy()
+    surv = np.array([k in on for k in zip(kc, comp_off['odor'].to_numpy())], dtype=bool)
+    w, b = weight[kc], breadth[kc]
+    mean_w = float(weight.mean())
+    return dict(auc_apl_weight=auc(-w[surv], -w[~surv]), auc_breadth=auc(-b[surv], -b[~surv]),
+                weight_survivors_over_mean=float(np.median(w[surv]) / mean_w),
+                weight_removed_over_mean=float(np.median(w[~surv]) / mean_w), mean_kc_weight=mean_w)
+
+
+# The placement planner's values (claude-fable-5-2, spawned from viki 2026-11-23 22:23; read inline from the archive),
+# checked as PLANNER_CHECKS are. The family's counts are per wiring in WIRINGS order.
+PLACEMENT_CHECKS: Dict[str, Tuple[Tuple[float, ...], float, int]] = {
+    'family_n_on_not_off_archive': ((373, 559, 357, 621, 510, 365, 312, 345), 1, 0),
+    'kckc0_n_on_not_off_range': ((0, 0), 1, 0),
+    'kckc0_n_on_responders_range': ((1852, 1931), 1, 0),
+    'auc_apl_weight_range': ((0.71, 0.76), 1, 2),
+    'auc_breadth_range': ((0.67, 0.71), 1, 2),
+    'weight_survivors_over_mean_range': ((0.05, 0.22), 1, 2),
+    'weight_removed_over_mean_range': ((0.86, 1.80), 1, 2),
+}
+
+
 # The planner's check values (2026-11-23 21:52; e121g_notebrief.txt), in the units given: name -> (values, scale,
 # decimals). The code's values (times in s, shares as fractions) are multiplied by `scale` and agree when within half
 # a unit of the last decimal.
@@ -717,7 +797,9 @@ def reads(out_dir: Optional[Path] = None, res_dir: Optional[Path] = None) -> dic
     Writes to `res_dir` (results/E121_onset_race/): reads_apl_levels.csv (per wiring and odor), reads_levels.csv (the
     level at completion, per wiring and pooled, overall and by group, breadth and odor), reads_survival.csv,
     reads_windows.csv (per wiring and condition), reads_relative_rates.csv, reads_realism_family.csv, reads_reasons.csv,
-    reads_summary.json (the headline values and the planner's checks) and provenance_reads.json. Returns the summary.
+    reads_additions.csv (the two reads added after the placement, per wiring), reads_summary.json (the headline values
+    and the planner's checks; the additions and their checks under 'additions') and provenance_reads.json. Returns the
+    summary.
     """
     from kcq import harness as H
     out_dir = out_dir or (H.outputs_dir(EXPERIMENT) / 'step0')
@@ -726,7 +808,7 @@ def reads(out_dir: Optional[Path] = None, res_dir: Optional[Path] = None) -> dic
     step0_prov = json.loads((res_dir / 'provenance.json').read_text())
     hashes = step0_prov['spike_times_sha256']
     inputs: Dict[str, str] = {}
-    lev_rows, comp_rows, surv_rows, win_rows, checks = [], [], [], [], {}
+    lev_rows, comp_rows, surv_rows, win_rows, add_rows, checks = [], [], [], [], [], {}
     pooled_spikes: Dict[str, List[pd.DataFrame]] = {}
     n_kcs = None
     for lab in WIRINGS:
@@ -770,12 +852,62 @@ def reads(out_dir: Optional[Path] = None, res_dir: Optional[Path] = None) -> dic
         comp['wiring'] = lab
         comp_rows.append(comp)
         surv_rows.append(dict(wiring=lab, **survival_reads(cmp_['on'], cmp_['off'])))
+
+        # (the additions after placement: the archives' on-not-off counts, the family's and E110 arm A's, and the
+        # KC's APL->KC weight and breadth value as tellers of survival)
+        resp = {}
+        for c, f in (('on', 'expected_responses_on.parquet'), ('off', 'expected_responses_acute_off.parquet')):
+            inputs[str(arch / f)] = _file_sha(arch / f)
+            resp[c] = pd.read_parquet(arch / f)
+        fam = on_not_off_counts(resp['on'], resp['off'])
+        a_dir = shared / 'data' / 'model_outputs' / E110_ARM_A[0] / E110_ARM_A[1]
+        var = e110_arm_a_variant(lab)
+        a_resp = {}
+        for c, cond in (('on', 'on'), ('off', 'acute_off')):
+            fr, fc = a_dir / f'{var}_{cond}_responses.parquet', a_dir / f'{var}_{cond}_spike_counts.parquet'
+            inputs[str(fr)], inputs[str(fc)] = _file_sha(fr), _file_sha(fc)
+            a_resp[c] = pd.read_parquet(fr)
+            if not np.array_equal(a_resp[c].to_numpy() > 0, pd.read_parquet(fc).to_numpy() >= 2):
+                raise RuntimeError(f'{fr}: responses are not two or more spikes of {fc.name}')
+            if not a_resp[c].index.equals(resp[c].index):
+                raise RuntimeError(f'{fr}: KCs differ from the rebuild archive\'s')
+        kc0 = on_not_off_counts(a_resp['on'], a_resp['off'])
+        kc_ids = resp['on'].index.get_level_values('kc_id')
+        if kc_ids.has_duplicates:
+            raise RuntimeError(f'{lab}: duplicate KC IDs in the rebuild archive')
+        for f in ('wAPLKC.parquet', 'breadth.parquet'):
+            inputs[str(arch / f)] = _file_sha(arch / f)
+        wt = kc_apl_weight(pd.read_parquet(arch / 'wAPLKC.parquet'), kc_ids)
+        br = pd.read_parquet(arch / 'breadth.parquet').iloc[:, 0].reindex(kc_ids).to_numpy(dtype=float)
+        if np.isnan(br).any():
+            raise RuntimeError(f'{lab}: KCs without a breadth value')
+        add_rows.append(dict(wiring=lab, family_n_on_responders=fam['n_on_responders'],
+                             family_n_on_not_off=fam['n_on_not_off'], family_share_on_not_off=fam['share_on_not_off'],
+                             e110_variant=var, kckc0_n_on_responders=kc0['n_on_responders'],
+                             kckc0_n_off_responders=kc0['n_off_responders'], kckc0_n_on_not_off=kc0['n_on_not_off'],
+                             kckc0_share_on_not_off=kc0['share_on_not_off'],
+                             **survival_by_weight(cmp_['on'], cmp_['off'], wt, br)))
         for c in CONDITIONS:
             done = pooled_spikes.setdefault(c, [])
             done.append(sp[c].assign(kc=sp[c]['kc'] + len(done) * n_kcs))
     L = pd.concat(lev_rows, ignore_index=True)
     C = pd.concat(comp_rows, ignore_index=True)
     SV = pd.DataFrame(surv_rows)
+    AD = pd.DataFrame(add_rows)
+    # (the family's counts from the archives' responses must be the spike times' own)
+    if not (AD['family_n_on_not_off'].to_numpy() == SV['n_on_not_off'].to_numpy()).all():
+        raise RuntimeError('the rebuild archives\' on-not-off counts differ from the saved spike times\'')
+    AD.insert(AD.columns.get_loc('auc_apl_weight'), 'auc_count', SV['auc_count'].to_numpy())
+    add_code = {
+        'family_n_on_not_off_archive': tuple(AD['family_n_on_not_off']),
+        'kckc0_n_on_not_off_range': _range(AD['kckc0_n_on_not_off']),
+        'kckc0_n_on_responders_range': _range(AD['kckc0_n_on_responders']),
+        'auc_apl_weight_range': _range(AD['auc_apl_weight']),
+        'auc_breadth_range': _range(AD['auc_breadth']),
+        'weight_survivors_over_mean_range': _range(AD['weight_survivors_over_mean']),
+        'weight_removed_over_mean_range': _range(AD['weight_removed_over_mean']),
+    }
+    add_pc = check_planner(add_code, PLACEMENT_CHECKS)
     # (pooled over the wirings: each wiring's KCs counted apart)
     for c in CONDITIONS:
         win_rows.append(dict(wiring='pooled', condition=c,
@@ -895,6 +1027,20 @@ def reads(out_dir: Optional[Path] = None, res_dir: Optional[Path] = None) -> dic
         code_values={k: [float(x) for x in v] for k, v in code.items()},
         planner_checks=pc, planner_checks_disagree=[r['name'] for r in pc if not r['agrees']],
         kc_data=kc_data, input_checks=checks,
+        additions=dict(
+            added='2026-11-23, after the placement (the placement planner claude-fable-5-2, spawned from viki '
+                  '2026-11-23 22:23, read these inline from the model-output archive)',
+            table='reads_additions.csv', code_values={k: [float(x) for x in v] for k, v in add_code.items()},
+            placement_checks=add_pc, placement_checks_disagree=[r['name'] for r in add_pc if not r['agrees']],
+            definitions=dict(
+                on_not_off=('KC x odor entries responding with APL on and not with APL off (responses: two or more '
+                            'spikes), from the rebuild archives\' expected responses (the family) and from E110\'s '
+                            'arm A, KC-KC at 0 at fixed scales with both response counts held '
+                            '(data/model_outputs/E110_no_kckc/A/, A_real for S)'),
+                apl_weight=('among the APL-off responders, survivors respond with APL on too; each entry carries its '
+                            'KC\'s summed APL->KC weight (wAPLKC.parquet of the rebuild archive, summed over the KC\'s '
+                            'claws, unscaled) and its breadth value (breadth.parquet); AUC with lower favouring '
+                            'survival; the survivors\' and the removed\'s median weight over the mean of all KCs\''))),
         definitions=dict(
             levels=("APL on's trace (inh_sims), each level including APL's activity before the odor: rest the trace at "
                     "the last step at or before 0 s, peak its maximum over 0 < t <= 0.5 s and its time, sustained its "
@@ -920,13 +1066,16 @@ def reads(out_dir: Optional[Path] = None, res_dir: Optional[Path] = None) -> dic
     RR.to_csv(res_dir / 'reads_relative_rates.csv')
     RF.to_csv(res_dir / 'reads_realism_family.csv', index=False)
     RS.to_csv(res_dir / 'reads_reasons.csv', index=False)
+    AD.to_csv(res_dir / 'reads_additions.csv', index=False)
     (res_dir / 'reads_summary.json').write_text(json.dumps(summary, indent=1, default=str) + '\n')
     prov = dict(script='experiments/E121_onset_race.py', part='reads', time=now, code_commits=H.code_commits(),
                 inputs_sha256=inputs, step0_provenance=str(res_dir / 'provenance.json'),
                 reasons_sources=sorted(set(RS['file'])), registry=str(H.data_targets_path()),
                 how='no simulation: reads of step 0\'s saved spike times and APL traces (checked against step 0\'s '
                     'hashes and the archives\' spike counts), results/apl_effect/by_variant.csv, Yang\'s response '
-                    'fractions, the data-target registry and the other experiments\' tables in reads_reasons.csv')
+                    'fractions, the data-target registry and the other experiments\' tables in reads_reasons.csv; '
+                    'since the placement (2026-11-23) also the rebuild archives\' responses, wAPLKC and breadth and '
+                    'E110\'s arm-A responses and spike counts (reads_additions.csv)')
     (res_dir / 'provenance_reads.json').write_text(json.dumps(prov, indent=1, default=str) + '\n')
     return summary
 
@@ -939,7 +1088,8 @@ def main() -> None:
     if args.part == 'reads':
         s = reads()
         print(json.dumps(dict(planner_checks_disagree=s['planner_checks_disagree'],
-                              checks=[r for r in s['planner_checks'] if not r['agrees']]), indent=1))
+                              checks=[r for r in s['planner_checks'] if not r['agrees']],
+                              placement_checks=s['additions']['placement_checks']), indent=1))
         return
     gate = step0(wirings=args.wirings)
     print(json.dumps({k: gate[k] for k in ('verdict', 'share_on_pooled', 'share_on_pooled_plateau_max',

@@ -167,3 +167,42 @@ def test_check_planner_within_rounding():
         E.check_planner({'a': (0.8, 0.9), 'b': (0.7, 0.7), 'c': (0.04,)}, checks)
     # every check the reads part fills has a value per planner's value
     assert all(len(v[0]) >= 1 for v in E.PLANNER_CHECKS.values())
+    assert len(E.PLACEMENT_CHECKS['family_n_on_not_off_archive'][0]) == len(E.WIRINGS)
+
+
+def test_on_not_off_counts():
+    idx = pd.Index([10, 11, 12], name='kc_id')
+    on = pd.DataFrame([[1, 0], [1, 1], [0, 0]], index=idx, columns=['a', 'b'])
+    off = pd.DataFrame([[1, 1], [0, 1], [0, 1]], index=idx, columns=['a', 'b'])
+    r = E.on_not_off_counts(on, off)
+    # (on: (10,a), (11,a), (11,b); of these only (11,a) is not a response with APL off)
+    assert (r['n_on_responders'], r['n_off_responders'], r['n_on_not_off']) == (3, 4, 1)
+    assert r['share_on_not_off'] == pytest.approx(1 / 3)
+    with pytest.raises(ValueError):
+        E.on_not_off_counts(on, off[['b', 'a']])
+    assert E.e110_arm_a_variant('S') == 'A_real' and E.e110_arm_a_variant('M2') == 'A_M2'
+
+
+def test_kc_apl_weight_sums_claws_in_kc_order():
+    mi = pd.MultiIndex.from_tuples([(7, 0), (7, 1), (5, 0), (9, 0)], names=['kc_id', 'claw_id'])
+    w = pd.DataFrame({'wAPLKC': [1.0, 2.0, 0.5, 4.0]}, index=mi)
+    assert E.kc_apl_weight(w, [5, 7, 9]).tolist() == [0.5, 3.0, 4.0]
+    with pytest.raises(ValueError):
+        E.kc_apl_weight(w, [5, 8])
+
+
+def test_survival_by_weight():
+    # APL off: four responders; KCs 0 and 1 survive (respond with APL on too), KCs 2 and 3 are removed
+    off = pd.DataFrame({'kc': [0, 1, 2, 3], 'odor': [0, 0, 0, 1], 't_complete': [0.03, 0.04, 0.044, 0.05],
+                        'n_spikes': [6, 3, 4, 2]})
+    on = pd.DataFrame({'kc': [0, 1, 5], 'odor': [0, 0, 0], 't_complete': [0.035, 0.045, 0.04], 'n_spikes': [2, 2, 3]})
+    weight = np.array([0.1, 0.3, 0.2, 0.9, 1.0, 1.5])
+    breadth = np.array([1.0, 3.0, 3.0, 2.0, 0.0, 0.0])
+    r = E.survival_by_weight(on, off, weight, breadth)
+    # (survivors' weights 0.1, 0.3 against 0.2, 0.9, lower favouring survival: 0.1<0.2, 0.1<0.9, 0.3>0.2, 0.3<0.9)
+    assert r['auc_apl_weight'] == pytest.approx(0.75)
+    # (breadth 1, 3 against 3, 2: 1<3, 1<2, 3=3 half, 3>2)
+    assert r['auc_breadth'] == pytest.approx(0.625)
+    assert r['mean_kc_weight'] == pytest.approx(4.0 / 6)
+    assert r['weight_survivors_over_mean'] == pytest.approx(0.2 / (4.0 / 6))
+    assert r['weight_removed_over_mean'] == pytest.approx(0.55 / (4.0 / 6))
