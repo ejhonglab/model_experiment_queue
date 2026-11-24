@@ -95,6 +95,33 @@ def test_constants_without_the_source(tmp_path):
         assert all(r['line'] is None for r in out[:3])
 
 
+# sim_PN_layer's lines, and the scalar copy of the PN dynamics olfsysm 7528f6d added (sim_PN_glom_shifted), which repeats
+# its literals
+PN_CPP = """\
+void sim_PN_layer() {
+        dPNdt +=
+            200.0*((orn_delta.array()+p.pn.offset)*p.pn.tanhsc/200.0*inh_PN).matrix(
+                ).unaryExpr<double(*)(double)>(&tanh);
+        inh_PN = p.pn.inhsc/(p.pn.inhadd+0.25*inhA(t)+0.75*inhB(t));
+        pn_t.col(t) = pn_t.col(t-1) + dPNdt*p.time.dt/p.pn.taum;
+}
+void sim_PN_glom_shifted() {
+        dPNdt += 200.0*std::tanh((orn_delta+p.pn.offset)*p.pn.tanhsc/200.0*inh_PN);
+        inh_PN = p.pn.inhsc/(p.pn.inhadd+0.25*inhA(t)+0.75*inhB(t));
+        double v = out(t-1) + dPNdt*p.time.dt/p.pn.taum;
+}
+"""
+
+
+def test_pn_literals_are_sim_pn_layers(tmp_path):
+    """The PN literals are matched once each, in sim_PN_layer's lines, not in the scalar copy."""
+    pn = [c for c in S.CONSTANTS if c.name.startswith('PN ')]
+    assert len(pn) == 4
+    out = S.check_constants(pn, snippet_roots(tmp_path, PN_CPP))
+    assert [r['status'] for r in out] == ['checked'] * 4
+    assert [r['line'] for r in out] == [3, 3, 5, 5]
+
+
 def test_table_matches_the_installed_simulator():
     """CONSTANTS against the olfsysm checkout and this repository's experiment scripts (skipped without olfsysm)."""
     olf = S.olfsysm_source_dir()
