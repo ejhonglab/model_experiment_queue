@@ -1,0 +1,695 @@
+{
+ "experiment": "E138_strength_by_odor_entries",
+ "script": "experiments/E138_strength_by_odor_entries.py",
+ "written": "2026-11-25 02:33",
+ "host": "atlas",
+ "commits": {
+  "queue_commit": "ced37782b8bf5de29756a77e93e6fb0739c077df",
+  "queue_dirty": false,
+  "pyolfsysm_commit": "b1e89d7d119bbbb4888f31de4d94938dbc4bd60a",
+  "pyolfsysm_dirty": false,
+  "al_analysis_commit": "d891fe786ac5a103ef1ccb40bf108b3b5e16078e",
+  "al_analysis_dirty": false,
+  "hong2p_commit": "484da09afe90ce4dd37e8b9039b1881136b78b68",
+  "hong2p_dirty": false
+ },
+ "universe": {
+  "glomeruli": [
+   "D",
+   "DA2",
+   "DC1",
+   "DC2",
+   "DC3",
+   "DC4",
+   "DL1",
+   "DL2d",
+   "DL2v",
+   "DL5",
+   "DM1",
+   "DM2",
+   "DM3",
+   "DM4",
+   "DM5",
+   "DM6",
+   "DP1l",
+   "DP1m",
+   "VA2",
+   "VA3",
+   "VA5",
+   "VA6",
+   "VA7l",
+   "VA7m",
+   "VC1",
+   "VC2",
+   "VC3",
+   "VC4",
+   "VL2a",
+   "VL2p",
+   "VM2",
+   "VM3",
+   "VM5d",
+   "VM5v",
+   "VM7d",
+   "VM7v"
+  ],
+  "rule": "the model's 36 input glomeruli (H.apl16_orn_deltas' rows)"
+ },
+ "classes": {
+  "ir": {
+   "glomeruli": [
+    "DC4",
+    "DL2d",
+    "DL2v",
+    "DP1l",
+    "DP1m",
+    "VL2a",
+    "VL2p"
+   ],
+   "all_ir": [
+    "DC4",
+    "DL2d",
+    "DL2v",
+    "DP1l",
+    "DP1m",
+    "VC5",
+    "VL1",
+    "VL2a",
+    "VL2p",
+    "VM1",
+    "VM4",
+    "VP1d",
+    "VP1l",
+    "VP1m",
+    "VP2",
+    "VP3",
+    "VP4",
+    "VP5"
+   ],
+   "receptors": {
+    "DC4": [
+     "Ir64a"
+    ],
+    "DL2d": [
+     "Ir75b"
+    ],
+    "DL2v": [
+     "Ir75c"
+    ],
+    "DP1l": [
+     "Ir75a"
+    ],
+    "DP1m": [
+     "Ir64a"
+    ],
+    "VC5": [
+     "Ir41a"
+    ],
+    "VL1": [
+     "Ir75d"
+    ],
+    "VL2a": [
+     "Ir84a"
+    ],
+    "VL2p": [
+     "Ir31a"
+    ],
+    "VM1": [
+     "Ir92a"
+    ],
+    "VM4": [
+     "Ir76a"
+    ],
+    "VP1d": [
+     "Ir40a",
+     "Ir93a"
+    ],
+    "VP1l": [
+     "Ir21a",
+     "Ir93a"
+    ],
+    "VP1m": [
+     "Ir68a",
+     "Ir93a"
+    ],
+    "VP2": [
+     "Gr28b.d",
+     "Ir93a"
+    ],
+    "VP3": [
+     "Ir21a",
+     "Ir93a"
+    ],
+    "VP4": [
+     "Ir40a",
+     "Ir93a"
+    ],
+    "VP5": [
+     "Ir68a",
+     "Ir93a"
+    ]
+   },
+   "source": {
+    "file": "/home/tom/src/model_experiment_queue/venv/lib/python3.14/site-packages/drosolf/data/task22_table3.csv",
+    "sha256": "094b22a02ccd391c85d279be6217e3860ea833b804863062580f27745e4302b2",
+    "citation": "Task D, Lin C-C, Vulpe A, Afify A, Ballou S, Brbi\u0107 M, Schlegel P, Raji J, Jefferis GSXE, Li H, Menuz K, Potter CJ (2022) Chemoreceptor co-expression in Drosophila melanogaster olfactory neurons. eLife 11:e72599",
+    "also": "Silbering AF, Rytz R, Grosjean Y, Abuin L, Ramdya P, Jefferis GSXE, Benton R (2011) Complementary function and integrated wiring of the evolutionarily distinct Drosophila olfactory subsystems. J Neurosci 31:13357-13375"
+   },
+   "rule": "a glomerulus is IR-fed when a receptor in Task et al. 2022's 'receptors' column starts 'Ir' (its ORNs' ligand-specific receptor is an IR); the co-receptor columns are beside, not a class",
+   "unresolved": []
+  },
+  "not_dendrite28": {
+   "glomeruli": [
+    "DC4",
+    "DL2d",
+    "DL2v",
+    "DP1l",
+    "VC3",
+    "VC4",
+    "VM5d",
+    "VM5v"
+   ],
+   "dendrite28": [
+    "D",
+    "DA2",
+    "DC1",
+    "DC2",
+    "DC3",
+    "DL1",
+    "DL5",
+    "DM1",
+    "DM2",
+    "DM3",
+    "DM4",
+    "DM5",
+    "DM6",
+    "DP1m",
+    "VA2",
+    "VA3",
+    "VA5",
+    "VA6",
+    "VA7l",
+    "VA7m",
+    "VC1",
+    "VC2",
+    "VL2a",
+    "VL2p",
+    "VM2",
+    "VM3",
+    "VM7d",
+    "VM7v"
+   ],
+   "source": {
+    "file": "/mnt/tensor/Tom/claude_kc_remapping/results/E135_antennal_lobe_dendrites/lock.json",
+    "sha256": "e0fae145cf5f28cbe9fc400c5c5ae0126f382d968d72dda16a1505df05aaf43f"
+   },
+   "rule": "E135's lock 'glomeruli' (the 28 that GH146, the pebbled ORN recordings and the model's input share; E90's shared_glomeruli)"
+  },
+  "few_hemibrain": {
+   "glomeruli": [
+    "D",
+    "DA2",
+    "DC4",
+    "DL2d",
+    "DL2v",
+    "DL5",
+    "DM3",
+    "DM5",
+    "VA2",
+    "VA5",
+    "VA7l",
+    "VA7m",
+    "VC1",
+    "VC2",
+    "VL2a",
+    "VM2",
+    "VM3",
+    "VM5v",
+    "VM7d",
+    "VM7v"
+   ],
+   "few_boutons": [
+    "D",
+    "DC4",
+    "DL2v",
+    "DM3",
+    "VA2",
+    "VA7l",
+    "VC1",
+    "VC2",
+    "VL2a",
+    "VM2",
+    "VM7d"
+   ],
+   "few_claws": [
+    "D",
+    "DA2",
+    "DC4",
+    "DL2d",
+    "DL2v",
+    "DL5",
+    "DM5",
+    "VA5",
+    "VA7l",
+    "VA7m",
+    "VC1",
+    "VC2",
+    "VL2a",
+    "VM2",
+    "VM3",
+    "VM5v",
+    "VM7d",
+    "VM7v"
+   ],
+   "few_both": [
+    "D",
+    "DC4",
+    "DL2v",
+    "VA7l",
+    "VC1",
+    "VC2",
+    "VL2a",
+    "VM2",
+    "VM7d"
+   ],
+   "median_boutons": 7.0,
+   "median_claws": 208.0,
+   "counts": {
+    "D": {
+     "n_boutons": 6,
+     "n_claws": 168
+    },
+    "DA2": {
+     "n_boutons": 13,
+     "n_claws": 111
+    },
+    "DC1": {
+     "n_boutons": 11,
+     "n_claws": 361
+    },
+    "DC2": {
+     "n_boutons": 12,
+     "n_claws": 230
+    },
+    "DC3": {
+     "n_boutons": 8,
+     "n_claws": 242
+    },
+    "DC4": {
+     "n_boutons": 2,
+     "n_claws": 64
+    },
+    "DL1": {
+     "n_boutons": 14,
+     "n_claws": 312
+    },
+    "DL2d": {
+     "n_boutons": 8,
+     "n_claws": 193
+    },
+    "DL2v": {
+     "n_boutons": 4,
+     "n_claws": 141
+    },
+    "DL5": {
+     "n_boutons": 7,
+     "n_claws": 119
+    },
+    "DM1": {
+     "n_boutons": 14,
+     "n_claws": 416
+    },
+    "DM2": {
+     "n_boutons": 13,
+     "n_claws": 307
+    },
+    "DM3": {
+     "n_boutons": 5,
+     "n_claws": 211
+    },
+    "DM4": {
+     "n_boutons": 10,
+     "n_claws": 301
+    },
+    "DM5": {
+     "n_boutons": 9,
+     "n_claws": 178
+    },
+    "DM6": {
+     "n_boutons": 8,
+     "n_claws": 295
+    },
+    "DP1l": {
+     "n_boutons": 7,
+     "n_claws": 322
+    },
+    "DP1m": {
+     "n_boutons": 16,
+     "n_claws": 504
+    },
+    "VA2": {
+     "n_boutons": 6,
+     "n_claws": 283
+    },
+    "VA3": {
+     "n_boutons": 7,
+     "n_claws": 226
+    },
+    "VA5": {
+     "n_boutons": 8,
+     "n_claws": 177
+    },
+    "VA6": {
+     "n_boutons": 8,
+     "n_claws": 228
+    },
+    "VA7l": {
+     "n_boutons": 4,
+     "n_claws": 137
+    },
+    "VA7m": {
+     "n_boutons": 7,
+     "n_claws": 207
+    },
+    "VC1": {
+     "n_boutons": 5,
+     "n_claws": 130
+    },
+    "VC2": {
+     "n_boutons": 6,
+     "n_claws": 167
+    },
+    "VC3": {
+     "n_boutons": 23,
+     "n_claws": 533
+    },
+    "VC4": {
+     "n_boutons": 9,
+     "n_claws": 209
+    },
+    "VL2a": {
+     "n_boutons": 4,
+     "n_claws": 202
+    },
+    "VL2p": {
+     "n_boutons": 7,
+     "n_claws": 289
+    },
+    "VM2": {
+     "n_boutons": 6,
+     "n_claws": 145
+    },
+    "VM3": {
+     "n_boutons": 7,
+     "n_claws": 163
+    },
+    "VM5d": {
+     "n_boutons": 13,
+     "n_claws": 299
+    },
+    "VM5v": {
+     "n_boutons": 7,
+     "n_claws": 124
+    },
+    "VM7d": {
+     "n_boutons": 6,
+     "n_claws": 104
+    },
+    "VM7v": {
+     "n_boutons": 7,
+     "n_claws": 90
+    }
+   },
+   "rule": "fewer boutons than the median of the 36 input glomeruli, or fewer claws than their median, in the family's hemibrain wiring (E130 step0_wiring_only('hemibrain-first'), E83's 'real'); the union is the class, each sub-list and their intersection (few_both) beside"
+  }
+ },
+ "coreceptors": {
+  "D": {
+   "orco": "Yes",
+   "ir8a": "Variable",
+   "ir76b": "No",
+   "ir25a": "No"
+  },
+  "DA2": {
+   "orco": "Yes",
+   "ir8a": "No",
+   "ir76b": "No",
+   "ir25a": "Yes"
+  },
+  "DC1": {
+   "orco": "Yes",
+   "ir8a": "No",
+   "ir76b": "No",
+   "ir25a": "Yes"
+  },
+  "DC2": {
+   "orco": "Yes",
+   "ir8a": "No",
+   "ir76b": "No",
+   "ir25a": "Yes"
+  },
+  "DC3": {
+   "orco": "Yes",
+   "ir8a": "No",
+   "ir76b": "Yes",
+   "ir25a": "Variable"
+  },
+  "DC4": {
+   "orco": "Variable",
+   "ir8a": "Yes",
+   "ir76b": "No",
+   "ir25a": "Yes"
+  },
+  "DL1": {
+   "orco": "Yes",
+   "ir8a": "Yes",
+   "ir76b": "Yes",
+   "ir25a": "Yes"
+  },
+  "DL2d": {
+   "orco": "Yes",
+   "ir8a": "Yes",
+   "ir76b": "No",
+   "ir25a": "Yes"
+  },
+  "DL2v": {
+   "orco": "Yes",
+   "ir8a": "Yes",
+   "ir76b": "No",
+   "ir25a": "Yes"
+  },
+  "DL5": {
+   "orco": "Yes",
+   "ir8a": "No",
+   "ir76b": "No",
+   "ir25a": "Variable"
+  },
+  "DM1": {
+   "orco": "Yes",
+   "ir8a": "No",
+   "ir76b": "No",
+   "ir25a": "Yes"
+  },
+  "DM2": {
+   "orco": "Yes",
+   "ir8a": "No",
+   "ir76b": "No",
+   "ir25a": "Yes"
+  },
+  "DM3": {
+   "orco": "Yes",
+   "ir8a": "No",
+   "ir76b": "No",
+   "ir25a": "No"
+  },
+  "DM4": {
+   "orco": "Yes",
+   "ir8a": "No",
+   "ir76b": "No",
+   "ir25a": "Yes"
+  },
+  "DM5": {
+   "orco": "Yes",
+   "ir8a": "No",
+   "ir76b": "No",
+   "ir25a": "No"
+  },
+  "DM6": {
+   "orco": "Yes",
+   "ir8a": "No",
+   "ir76b": "No",
+   "ir25a": "Yes"
+  },
+  "DP1l": {
+   "orco": "Yes",
+   "ir8a": "Yes",
+   "ir76b": "Yes",
+   "ir25a": "Yes"
+  },
+  "DP1m": {
+   "orco": "No",
+   "ir8a": "Yes",
+   "ir76b": "Yes",
+   "ir25a": "Yes"
+  },
+  "VA2": {
+   "orco": "Yes",
+   "ir8a": "No",
+   "ir76b": "No",
+   "ir25a": "Yes"
+  },
+  "VA3": {
+   "orco": "Yes",
+   "ir8a": "Yes",
+   "ir76b": "Yes",
+   "ir25a": "Yes"
+  },
+  "VA5": {
+   "orco": "Yes",
+   "ir8a": "Yes",
+   "ir76b": "Yes",
+   "ir25a": "Yes"
+  },
+  "VA6": {
+   "orco": "Yes",
+   "ir8a": "Yes",
+   "ir76b": "Yes",
+   "ir25a": "Yes"
+  },
+  "VA7l": {
+   "orco": "Yes",
+   "ir8a": "No",
+   "ir76b": "No",
+   "ir25a": "Yes"
+  },
+  "VA7m": {
+   "orco": "Yes",
+   "ir8a": "No",
+   "ir76b": "Variable",
+   "ir25a": "Yes"
+  },
+  "VC1": {
+   "orco": "Yes",
+   "ir8a": "No",
+   "ir76b": "No",
+   "ir25a": "Yes"
+  },
+  "VC2": {
+   "orco": "Yes",
+   "ir8a": "No",
+   "ir76b": "No",
+   "ir25a": "Yes"
+  },
+  "VC3": {
+   "orco": "Yes",
+   "ir8a": "Yes",
+   "ir76b": "Yes",
+   "ir25a": "Yes"
+  },
+  "VC4": {
+   "orco": "Yes",
+   "ir8a": "No",
+   "ir76b": "Yes",
+   "ir25a": "Yes"
+  },
+  "VL2a": {
+   "orco": "Yes",
+   "ir8a": "Yes",
+   "ir76b": "Yes",
+   "ir25a": "Yes"
+  },
+  "VL2p": {
+   "orco": "No",
+   "ir8a": "Yes",
+   "ir76b": "Yes",
+   "ir25a": "Yes"
+  },
+  "VM2": {
+   "orco": "Yes",
+   "ir8a": "No",
+   "ir76b": "No",
+   "ir25a": "No"
+  },
+  "VM3": {
+   "orco": "Yes",
+   "ir8a": "No",
+   "ir76b": "No",
+   "ir25a": "No"
+  },
+  "VM5d": {
+   "orco": "Yes",
+   "ir8a": "Variable",
+   "ir76b": "No",
+   "ir25a": "Yes"
+  },
+  "VM5v": {
+   "orco": "Yes",
+   "ir8a": "Yes",
+   "ir76b": "No",
+   "ir25a": "Yes"
+  },
+  "VM7d": {
+   "orco": "Yes",
+   "ir8a": "No",
+   "ir76b": "No",
+   "ir25a": "Yes"
+  },
+  "VM7v": {
+   "orco": "Yes",
+   "ir8a": "No",
+   "ir76b": "No",
+   "ir25a": "Yes"
+  }
+ },
+ "bouton_line": {
+  "line": "GH146-Gal4",
+  "source": "the thesis's methods (oconnell_thomas_2026.tex: 'PN boutons were imaged in GH146-Gal4/20xUAS-IVS-jGCaMP8m (II)'; '~70% of PNs (labeled by the GH146-Gal4 driver)')",
+  "labels": null,
+  "status": "unresolved: no published per-glomerulus expression table of GH146-Gal4 on hand that can be named with certainty; the flag is left empty (never inferred from the recordings)",
+  "leads": [
+   "FlyBase FBti0016783: GH146 in ~90 PNs innervating ~40 of ~50 glomeruli (no list)",
+   "eLife 2014 (PMC4270039), Figure 1 figure supplement: a per-glomerulus table of GH146-GAL4 and MZ699-GAL4 innervation (an image; not read)"
+  ]
+ },
+ "rules": {
+  "strength": "the strength view of kcq/population_fit.py: parts rate and mean (multiples of the panel mean); a part's error is the RMS over odors of (model entry - flies' mean entry) / the part's one-fly unit; the view's error the RMS of its two parts' errors",
+  "odor_share": "an odor's share of a part's squared error is its squared residual over the part's sum; its share of the view's squared error is (e_rate^2 / n_rate + e_mean^2 / n_mean) / 2 over the view's error^2; the error without an odor's entry removes that odor's term and keeps the number of odors (the planner's lead)",
+  "rows": "the family's rows are each wiring and the wirings' mean views ('common', whose squared error splits exactly into odor shares); the shares that decide are those of 'common', the mean over wirings of each wiring's share beside",
+  "reading": "each stage in its default reading (stage_readings.DEFAULT_READINGS); the flies as E134's step 1 reads them (E134 fly_side_read: validation2's KC somata on the largest odor set at least 6 flies share)",
+  "halves": "E136's seeded split (population_fit.split_halves(n, 1, 0)[0]; the first part 'fit', the rest 'held') of the flies of the all-flies reading, on its odors; the APL16 control half paired with the TNT half of the same name; each half read as the E134 lock's split_halves rule says (curve, noise, reference and one-fly units from the half)",
+  "concentrated": {
+   "rule": "a panel's two largest odors carry more than half of the squared strength error on both halves of the flies",
+   "largest": "the two odors with the largest share of the squared view error on all flies, the family as fitted, row 'common'",
+   "on_halves": "their summed share of the view's squared error on each half (each half's own reading, row 'common') above 0.5",
+   "top": 2,
+   "share": 0.5,
+   "beside": [
+    "each half's own two largest and their share",
+    "the family as held, read the same way",
+    "each part's shares"
+   ],
+   "per": "panel and condition (APL16 with APL on and with APL off)"
+  },
+  "carrying": {
+   "rule": "a panel's odors that carry its error: the family's (as fitted, and as held where read) 2 largest on all flies and any other with at least 0.1 of the squared view error, at most 5 per reading"
+  },
+  "feeders": {
+   "rule": "an odor's feeders: the smallest set of glomeruli, by descending positive input, carrying 0.6667 of its summed positive input",
+   "sources": [
+    "the model's input on its 36 glomeruli (the panel's input; the class reading)",
+    "the panel's ORN recordings, every recorded glomerulus (beside)"
+   ]
+  },
+  "d": {
+   "rule": "the male CNS gives those glomeruli more boutons or claws",
+   "glomeruli": "the union of the model-input feeders of the panel's two largest odors (the class 'concentrated' names)",
+   "reading": "on both male calyces the glomeruli's summed share of the calyx's boutons, or of its claws, is above the hemibrain's (shares, since the calyces differ in size)",
+   "read_on": "megamat, as the entry says; every panel beside"
+  },
+  "not_read": [
+   "(a) and (b): they need design item 6, held"
+  ],
+  "item6": "held for Tom's or Yang's word (the regression fits to a held-out panel); refused by the command line"
+ },
+ "e134_lock_sha256": "30015d97ea916ae42ad5c8e85535604fc9ee431b04ad27e260c71fca8636f92c",
+ "note": "written before any residual (model minus flies) was computed; every part but classes refuses until this file is committed (require_classes_lock)"
+}
