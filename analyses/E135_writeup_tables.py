@@ -49,7 +49,7 @@ def _mr(x: pd.Series, fmt: str = '.2f') -> str:
     x = pd.Series(x).dropna()
     if not len(x):
         return '–'
-    if len(x) == 1:
+    if len(x) == 1 or x.min() == x.max():
         return f'{x.iloc[0]:{fmt}}'
     return f'{x.mean():{fmt}} ({x.min():{fmt}} to {x.max():{fmt}})'
 
@@ -60,24 +60,23 @@ def _arms(rows: pd.DataFrame) -> List[str]:
 
 
 def stage_table(rows: pd.DataFrame, stage_error: pd.DataFrame) -> List[str]:
-    """Strength by odor per stage and arm (mean and range over the wirings, excluded wirings left out) beside E134's
-    held runs, and the megamat stage error on strength (four stages) and on three views."""
+    """Strength by odor per arm (rows) and megamat stage (columns), mean and range over the wirings (excluded wirings
+    left out), E134's held runs first, with the megamat stage error on strength (four stages) and on three views."""
     arms = _arms(rows)
     k = rows[~rows.excluded.astype(bool)]
-    head = '| stage | E134\'s held runs (the family) | ' + ' | '.join(ARM_NAMES[a] for a in arms) + ' |'
-    L = ['Strength by odor in one-fly units (lower is better), the default reading, mean over the wirings (range).',
-         '', head, '|---|' + '---:|' * (len(arms) + 1)]
-    for st in STAGES:
-        x = k[k.stage == st]
-        base = x[x.arm == 'imposed'].strength_base if (x.arm == 'imposed').any() else x.strength_base
-        cells = [_mr(x[x.arm == a].strength) for a in arms]
-        L.append(f'| megamat {STAGE_NAMES[st]} | {_mr(base)} | ' + ' | '.join(cells) + ' |')
     se = stage_error[stage_error.input_panel == 'megamat']
-    for col, name in (('stage_error_strength', 'the megamat stage error, strength (four stages)'),
-                      ('stage_error_three_view', 'the megamat stage error, three views (beside)')):
-        base = se[se.arm == 'imposed'][f'{col}_base'] if (se.arm == 'imposed').any() else se[f'{col}_base']
-        cells = [_mr(se[se.arm == a][col], '.3f') for a in arms]
-        L.append(f'| {name} | {_mr(base, ".3f")} | ' + ' | '.join(cells) + ' |')
+    L = ['Strength by odor in one-fly units (lower is better), the default reading, mean over the wirings (range).',
+         '', '| arm | ' + ' | '.join(STAGE_NAMES[st] for st in STAGES) +
+         ' | the megamat stage error, strength (four stages) | three views (beside) |',
+         '|---|' + '---:|' * (len(STAGES) + 2)]
+    ref = 'imposed' if (k.arm == 'imposed').any() else k.arm.iloc[0]
+    b, sb = k[k.arm == ref], se[se.arm == ref]
+    L.append("| E134's held runs (the family) | " + ' | '.join(_mr(b[b.stage == st].strength_base) for st in STAGES) +
+             f" | {_mr(sb.stage_error_strength_base, '.3f')} | {_mr(sb.stage_error_three_view_base, '.3f')} |")
+    for a in arms:
+        x, y = k[k.arm == a], se[se.arm == a]
+        L.append(f'| {ARM_NAMES[a]} | ' + ' | '.join(_mr(x[x.stage == st].strength) for st in STAGES) +
+                 f" | {_mr(y.stage_error_strength, '.3f')} | {_mr(y.stage_error_three_view, '.3f')} |")
     return L + ['']
 
 
@@ -96,7 +95,7 @@ def views_table(rows: pd.DataFrame, arms: Sequence[str] = ('imposed', 'imposed_d
         for a in arms:
             y = x[x.arm == a]
             cells.append(f'{y.view_sharing.mean():.2f} / {y.view_breadth.mean():.2f} / {y.error.mean():.2f}')
-        L.append(f'| megamat {STAGE_NAMES[st]} | ' + ' | '.join(cells) + ' |')
+        L.append(f'| {STAGE_NAMES[st]} | ' + ' | '.join(cells) + ' |')
     return L + ['']
 
 
