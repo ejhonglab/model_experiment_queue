@@ -8,7 +8,8 @@ Writes results/E135_antennal_lobe_dendrites/writeup_tables.md:
 - the APL16 somata, APL on and off, against the family's own runs (E134's step 2, E90:B);
 - step 1's rungs on the held-out flies and odors, both directions, and the controls;
 - ruling 5's scale factors, and R1's and the kept rung's as-ruled tables against their fits on all 17 odors;
-- the imposed checks (ruling 8), the routes (ruling 9) and the realism of the APL16 runs.
+- the imposed checks (ruling 8), the routes (ruling 9), the realism of the APL16 runs with the family's own beside, and
+  their APL effect (held out).
 
 Usage (from the repository root): ./venv/bin/python -m analyses.E135_writeup_tables
 """
@@ -27,6 +28,7 @@ STAGES = ('pn_dendrite', 'pn_bouton', 'kc_claw', 'kc_soma')
 STAGE_NAMES = {'pn_dendrite': 'PN dendrites', 'pn_bouton': 'PN boutons', 'kc_claw': 'KC claws',
                'kc_soma': 'KC somata'}
 ARM_NAMES = {
+    'family': 'the family (its own fits)',
     'imposed': 'the recorded dendrites imposed',
     'imposed_glom_perm': 'the same, glomeruli permuted',
     'imposed_odor_perm': 'the same, odors permuted',
@@ -230,6 +232,39 @@ def realism_table(realism: pd.DataFrame) -> List[str]:
     return L + ['']
 
 
+def family_realism(wirings: Sequence[str] = E.WIRINGS) -> pd.DataFrame:
+    """The family's own APL16 runs (its saved fit on each wiring, `family_saved`) through the same bands
+    (`run_bands`), as rows of realism_table's columns (arm 'family')."""
+    rows = []
+    for w in wirings:
+        b = E.run_bands(E.family_saved(w))
+        rows.append(dict(input_panel='apl16', arm='family', wiring=w, rate_on=b.get('rate_on'),
+                         rate_off=b.get('rate_off'), rate_ratio=b.get('ratio', b.get('rate_ratio')),
+                         rate_rho_on=b.get('rate_rho_on'), rate_rho_off=b.get('rate_rho_off'),
+                         opk_on_tv=b.get('opk_on_tv'), opk_off_tv=b.get('opk_off_tv'),
+                         realism_flag=b.get('realism_flag') or ''))
+    return pd.DataFrame(rows)
+
+
+def apl_effect_table(effect: pd.DataFrame) -> List[str]:
+    """The APL effect on odor-odor distances of the APL16 runs (a held-out test, reported, not gated), through the
+    calibrated readout: the loss, the mean APL effect (the flies' +0.18), the pattern part with its amplitude and shape
+    parts, ρ and Pearson r on the per-pair APL effect; means over the wirings, the family's own fits beside."""
+    cols = [('cal_apl_effect_rmse', 'the APL-effect loss'), ('cal_apl_effect_mean', 'the mean APL effect'),
+            ('cal_apl_effect_rmse_centered', 'the pattern part'), ('cal_apl_effect_amplitude', 'amplitude part'),
+            ('cal_apl_effect_shape', 'shape part'), ('cal_apl_effect_spearman', 'ρ on the per-pair APL effect'),
+            ('cal_apl_effect_pearson', 'Pearson r on the per-pair APL effect')]
+    cols = [(c, n) for c, n in cols if c in effect.columns]
+    L = ['The APL effect on the APL16 panel, calibrated readout, mean over the eight wirings.', '',
+         '| arm | ' + ' | '.join(n for _, n in cols) + ' |', '|---|' + '---:|' * len(cols)]
+    for arm in ('family', 'R1', 'rung', 'imposed'):
+        x = effect[effect.arm == arm]
+        if len(x):
+            L.append(f'| {ARM_NAMES.get(arm, "the family (its own fits)")} | ' +
+                     ' | '.join(f'{x[c].mean():+.3f}' if 'mean' in c else f'{x[c].mean():.3f}' for c, _ in cols) + ' |')
+    return L + ['']
+
+
 def main(root: Optional[Path] = None, with_tables: bool = True) -> Path:
     """Writes writeup_tables.md; `with_tables` False skips the as-ruled comparison (which builds the family's PN stage)."""
     d = E.out_dir() if root is None else Path(root)
@@ -260,7 +295,11 @@ def main(root: Optional[Path] = None, with_tables: bool = True) -> Path:
     if with_tables:
         L += as_ruled_table(fits_rec)
     L += ['## Checks', ''] + checks_table(checks, v)
+    if with_tables:
+        realism = pd.concat([family_realism(), realism], ignore_index=True)
     L += ['## Realism', ''] + realism_table(realism)
+    if (d / 'score_apl_effect.csv').exists():
+        L += ['## The APL effect (held out)', ''] + apl_effect_table(pd.read_csv(d / 'score_apl_effect.csv'))
     out = d / 'writeup_tables.md'
     out.write_text('\n'.join(L) + '\n')
     print(out)
