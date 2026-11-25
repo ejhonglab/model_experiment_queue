@@ -482,8 +482,8 @@ def test_planned_points():
 
 
 def _scores(soma_drop, bouton_ratio, perm_drop=0.0, r1_share=0.0, rung_share=0.0, perm_bouton=1.0):
-    """Planted step-2 scores: the imposed arm lowers the somata's error by `soma_drop` and brings the boutons'
-    strength-by-odor error to `bouton_ratio` of E134's; R1 and the rung give their shares of both gains."""
+    """Planted step-2 scores: the imposed arm lowers the somata's strength-by-odor error by `soma_drop` and brings the
+    boutons' to `bouton_ratio` of E134's; R1 and the rung give their shares of both gains."""
     rows = []
     for w in E.WIRINGS:
         for arm, sd, br in (('imposed', soma_drop, bouton_ratio), ('imposed_glom_perm', perm_drop, perm_bouton),
@@ -491,7 +491,8 @@ def _scores(soma_drop, bouton_ratio, perm_drop=0.0, r1_share=0.0, rung_share=0.0
                             ('R1', r1_share * soma_drop, 1.0 - r1_share * (1.0 - bouton_ratio)),
                             ('rung', rung_share * soma_drop, 1.0 - rung_share * (1.0 - bouton_ratio)),
                             ('rung_glom_perm', 0.0, 1.0)):
-            rows.append(dict(arm=arm, wiring=w, stage='kc_soma', error=1.0 - sd, error_base=1.0, strength=1.0,
+            # the somata read on strength by odor (the rulings of 15:41); their population error follows here
+            rows.append(dict(arm=arm, wiring=w, stage='kc_soma', error=1.0 - sd, error_base=1.0, strength=1.0 - sd,
                              strength_base=1.0))
             # the boutons' population error barely moves: the carry classes read their strength by odor
             rows.append(dict(arm=arm, wiring=w, stage='pn_bouton', error=0.99, error_base=1.0,
@@ -778,3 +779,508 @@ def test_kept_stage_table_on_another_input(fit_case):
     with pytest.raises(ValueError):
         E.kept_stage_table(fits, 'R0', st)
     assert E.odor_labels(['2h @ -3', 'pa @ -3']) == ['2h', 'pa']
+
+
+# ---------------------------------------------------------------------------
+# step 2's runner on a planted model path (the PN stage through olfsysm's own layers, the KC model faked), and the
+# score on planted runs
+
+def _planted_orn(st):
+    """The planted stage's input in a panel input's layout: its glomeruli with input, (panel, 'odor @ -3') columns."""
+    gl = [g for g in st.glomeruli if np.any(st.delta.loc[g].to_numpy() != 0)]
+    cols = pd.MultiIndex.from_tuples([('megamat', f'{o} @ -3') for o in st.odors], names=['panel', 'odor'])
+    return pd.DataFrame(st.delta.loc[gl].to_numpy(), index=pd.Index(gl, name='glomerulus'), columns=cols)
+
+
+def _planted_wiring(st, n_kc=3):
+    """A claw x bouton wiring with one bouton per glomerulus (in the stage's order) and two claws per KC, and its units'
+    metadata."""
+    cols = pd.MultiIndex.from_tuples([(g, i) for i, g in enumerate(st.glomeruli)], names=['glomerulus', 'bouton_id'])
+    idx = pd.MultiIndex.from_tuples([(100 + k, c) for k in range(n_kc) for c in range(2)], names=['kc_id', 'claw_id'])
+    W = pd.DataFrame(0.0, index=idx, columns=cols)
+    bout = [(2 * k + c) % len(cols) for k in range(n_kc) for c in range(2)]
+    for i, b in enumerate(bout):
+        W.iloc[i, b] = 1.0
+    meta = dict(bouton_glomerulus=np.asarray(st.glomeruli), claw_glomerulus=np.asarray([st.glomeruli[b] for b in bout]),
+                kc_of_claw=np.asarray([100 + k for k in range(n_kc) for _ in range(2)]), claw_bouton=np.asarray(bout))
+    return W, meta
+
+
+def _kc_outputs(rng, odors, n_kc=6):
+    idx = pd.MultiIndex.from_tuples([(100 + i, 'ab') for i in range(n_kc)], names=['kc_id', 'kc_type'])
+    s = pd.DataFrame(rng.integers(0, 4, (n_kc, len(odors))).astype(float), index=idx, columns=list(odors))
+    return (s >= 2).astype(float), s
+
+
+class _FakeBuilt:
+    """A built point whose PN stage is olfsysm's own (a fresh copy of the planted layers: route 1's pn_rates set as
+    rv.pn.preset_rates, or route 2's solved input as the delta), the KC model faked."""
+
+    def __init__(self, st, orn, extra, W, meta):
+        mp, rv = _mp()
+        if extra:
+            t = extra['pn_rates']
+            assert list(t.columns) == list(orn.columns)
+            rv.pn.preset_rates = t.reindex(index=st.glomeruli).to_numpy(dtype=float)
+        else:
+            mp.orn.data.delta = orn.reindex(index=st.glomeruli).fillna(0.0).to_numpy(dtype=float)
+        osm.run_ORN_LN_sims(mp, rv)
+        osm.run_PN_sims(mp, rv)
+        self.mp, self.rv, self.orn, self.W, self.meta = mp, rv, orn, W, meta
+        self.stages, self.glomeruli, self.info = ('pn', 'bouton', 'claw'), list(st.glomeruli), dict(planted=True)
+
+    def vars(self):
+        return self.mp, self.rv, np.arange(np.asarray(self.mp.orn.data.delta).shape[1])
+
+
+def _fake_out(st, W, hold, bouton_scale=1.0):
+    rng = np.random.default_rng(3)
+    out = {}
+    for c in ('on', 'off'):
+        d = {}
+        for k, idx in (('pn', pd.Index(st.glomeruli, name='glomerulus')), ('bouton', W.columns), ('claw', W.index)):
+            for x in ('win', 'pre', 'pre_settled'):
+                v = rng.uniform(0, 50, (len(idx), len(st.odors))) * (bouton_scale if k == 'bouton' else 1.0)
+                d[f'{k}_{x}'] = pd.DataFrame(v, index=idx, columns=st.odors)
+        d['apl'] = pd.DataFrame({x: rng.uniform(size=len(st.odors)) for x in ('win', 'pre', 'pre_settled')},
+                                index=st.odors)
+        d['responses'], d['spike_counts'] = hold[c]
+        out[c] = d
+    return out
+
+
+@pytest.fixture
+def step2_env(tmp_path, monkeypatch, planted):
+    import types
+    from experiments import E134_population_baseline as B
+    mp, rv, st = planted
+    orn = _planted_orn(st)
+    res = tmp_path / 'results'
+    res.mkdir()
+    dirs = [tmp_path / 'local', tmp_path / 'archive']
+    monkeypatch.setattr(E, 'out_dir', lambda: res)
+    monkeypatch.setattr(E, 'step2_dirs', lambda: dirs)
+    gl = st.glomeruli[:6]
+    den = pd.DataFrame(np.random.default_rng(11).normal(size=(6, len(st.odors))), index=gl, columns=st.odors)
+    monkeypatch.setattr(E, 'dendrite_means', lambda units='noise', glomeruli=None: den * (3.0 if units == 'dff' else 1))
+    calls = dict(family=0, identity=0, hold=[], build=[])
+
+    def family_stage(panel, wiring='real'):
+        calls['family'] += 1
+        return st, dict(sim=None, identity=dict(ok=True))
+
+    def family_identity(panel, wiring, sim):
+        calls['identity'] += 1
+        return dict(exact=True, checks=[], panel=panel, wiring=wiring)
+
+    p = dict(fixed_thr=100.0, wAPLKC_scale=1.0, wKCAPL_scale=1.0, wAPLPN_scale=1.0, wPNAPL_scale=1.0, wKCKC_scale=0.5)
+    fam = dict(p=p, breadth=None, saved=None, n_kc=6, target_on=3, target_off=6, size=6 * len(st.odors), folder='f',
+               tag='t')
+    W, meta = _planted_wiring(st)
+    state = {}
+    kc_odors = list(orn.columns.get_level_values('odor'))
+
+    def hold(wiring, orn_, fam_, extra, tg, label):
+        rng = np.random.default_rng(len(calls['hold']))
+        h = dict(params=dict(p, fixed_thr=110.0), params_off=dict(p, fixed_thr=110.0, wAPLKC_scale=0.0, wAPLPN_scale=0.0),
+                 on=_kc_outputs(rng, kc_odors), off=_kc_outputs(rng, kc_odors), thr_factor=1.1, apl_factor=0.9,
+                 at_bound_thr=False, at_bound_apl=False, n_sims=4)
+        calls['hold'].append(dict(wiring=wiring, orn=orn_, extra=extra, targets=tg))
+        state['hold'] = h
+        return h
+
+    def build(panel, wiring, params, orn_in, extra):
+        calls['build'].append(dict(orn=orn_in, extra=extra))
+        return _FakeBuilt(st, orn if orn_in is None else orn_in, extra, W, meta)
+
+    monkeypatch.setattr(E, 'family_stage', family_stage)
+    monkeypatch.setattr(E, 'family_identity', family_identity)
+    monkeypatch.setattr(E, 'panel_orn', lambda panel: orn)
+    monkeypatch.setattr(E, 'family_parts', lambda w: dict(fam))
+    monkeypatch.setattr(B, 'held_targets', lambda pt, size, lock=None: (8, 4, 8 / size, 4 / size))
+    monkeypatch.setattr(E, '_hold', hold)
+    monkeypatch.setattr(E, '_build', build)
+    monkeypatch.setattr(E, '_run', lambda panel, wiring, built, params, params_off: _fake_out(st, W, state['hold']))
+    monkeypatch.setattr(E, '_provenance', lambda orn_: dict(planted=True))
+    fits = {'0': dict(held_out=st.odors[:2], R1={}, R2=E.Terms(gains={'g0': 1.5}).as_dict(), scale={'R1': 1.0, 'R2': 1.0}),
+            'all': dict(held_out=[], R1={'pn_inhadd': 60.0}, R2=E.Terms(gains={'g1': 0.7}).as_dict(),
+                        scale={'R1': 1.2, 'R2': 0.9})}
+    fits_rec = json.loads(json.dumps(dict(all_flies=fits, highest_kept='R2m', step2_rung='R2')))
+    lock = dict(glomeruli=list(gl))
+    ctx = E.Step2(lock, fits_rec, 'lane-t', dict(sha256='x'))
+    return types.SimpleNamespace(st=st, orn=orn, ctx=ctx, calls=calls, dirs=dirs, res=res, den=den, lock=lock,
+                                 fits_rec=fits_rec, W=W)
+
+
+def test_step2_point_route1_runs_checks_and_saves(step2_env):
+    """A planted imposed point by route 1: the table enters as pn_rates on the input's own columns, set on the shared
+    glomeruli only; olfsysm's PN rates are the table's there and the model's elsewhere; the run reproduces the hold;
+    the run, its table, row, identity and provenance are saved; the lane's identity is checked once per wiring."""
+    from kcq import stage_readings as R
+    v = step2_env
+    tab_path, prov_path = v.res / 'runs_2_h_lane-t.csv', v.res / 'provenance_2_h_lane-t.json'
+    arm = E.Arm('megamat', 'imposed')
+    row = E.run_point2(arm, 'real', v.ctx, tab_path, prov_path)
+    assert row['route'] == 1 and row['identity_exact'] and row['lane_identity_exact']
+    assert row['pn_check_max_set_hz'] <= E.ROUTE1_TOL_HZ and row['pn_check_max_unset_hz'] <= E.ROUTE1_TOL_HZ
+    assert row['n_set_glomeruli'] == 6 and row['n_set_odors'] == len(v.st.odors) and row['imposed_check_max_hz'] >= 0
+    pr = v.calls['hold'][0]['extra']['pn_rates']
+    assert list(pr.columns) == list(v.orn.columns)
+    assert pr.loc[v.st.glomeruli[:6]].notna().all().all() and pr.loc[v.st.glomeruli[6:]].isna().all().all()
+    assert v.calls['hold'][0]['targets']['target_on'] == 4 and v.calls['build'][0]['orn'] is None
+    run = R.load_step3_run(E.tag_of(arm, 'real'), dirs=v.dirs)
+    assert run.info['arm'] == 'imposed' and run.info['route'] == 1 and run.input_panel == 'megamat'
+    assert set(run.stages()) >= {'pn_dendrite', 'pn_bouton', 'kc_claw', 'kc_soma'}
+    for d in v.dirs:
+        t = pd.read_parquet(d / 'megamat_imposed_real_pn_table.parquet')
+        assert t.shape == (len(v.st.glomeruli), len(v.st.odors))
+    assert E.runs2_table(v.res).tag.tolist() == ['megamat_imposed_real']
+    prov = json.loads(prov_path.read_text())['points']['megamat_imposed_real']
+    assert prov['model'] == dict(planted=True) and prov['table_sha256'] == row['table_sha256']
+    ids = json.loads(E.identity_path('lane-t').read_text())
+    assert ids['family:real']['exact'] and ids['megamat_imposed_real']['exact']
+    # the next point on the same wiring reuses the stage and the lane's identity; a new process re-reads the identity
+    row2 = E.run_point2(E.Arm('megamat', 'R1'), 'real', v.ctx, tab_path, prov_path)
+    assert row2['n_set_glomeruli'] == len(v.st.glomeruli) and row2['scale_min'] == 1.0 and row2['scale_max'] == 1.2
+    assert v.calls['family'] == 1 and v.calls['identity'] == 1
+    ctx2 = E.Step2(v.lock, v.fits_rec, 'lane-t', {})
+    E.run_point2(E.Arm('megamat', 'rung'), 'real', ctx2, tab_path, prov_path)
+    assert v.calls['family'] == 2 and v.calls['identity'] == 1
+    assert set(E.runs2_table(v.res).tag) == {'megamat_imposed_real', 'megamat_R1_real', 'megamat_rung_real'}
+
+
+def test_step2_point_route2_repeat(step2_env):
+    """The repeat by route 2: the solved input in the input's layout and no pn_rates; olfsysm's PN rates on the solved
+    input are the solve's (the port's) on the set glomeruli; the solve's record, converged or not, is in the row."""
+    v = step2_env
+    row = E.run_point2(E.REPEAT_ARM, 'real', v.ctx, v.res / 'runs_2_h_l.csv', v.res / 'prov.json')
+    h, b = v.calls['hold'][0], v.calls['build'][0]
+    assert h['extra'] is None and b['extra'] is None
+    assert b['orn'].index.equals(v.orn.index) and b['orn'].columns.equals(v.orn.columns)
+    assert row['route'] == 2 and 'solve_converged' in row and row['imposed_check_max_hz'] >= 0
+    # olfsysm on the solved input gives the port's solve exactly; here the planted dendrites are out of the solve's
+    # reach, which is reported (ruling 9), not forced
+    assert row['pn_check_max_set_hz'] == pytest.approx(row['solve_max_abs_diff_hz'], abs=1e-6)
+    assert row['solve_converged'] == (row['solve_max_abs_diff_hz'] <= E.SOLVE_TOL_HZ)
+    assert row['ln_inhA_max_abs'] > 0 and row['solve_no_input_max_drift_hz'] >= 0
+
+
+def test_step2_claims_and_release(step2_env, monkeypatch):
+    v = step2_env
+    arm = E.Arm('megamat', 'imposed_odor_perm')
+    tag = E.tag_of(arm, 'P1')
+    assert E.claim(tag, 'other')
+    assert E.run_point2(arm, 'P1', v.ctx, v.res / 'r.csv', v.res / 'p.json') is None and not v.calls['hold']
+    assert E.run_point2(arm, 'P1', v.ctx, v.res / 'r.csv', v.res / 'p.json', done={tag}) is None
+    E.release(tag)
+
+    def boom(*a, **k):
+        raise RuntimeError('planted failure')
+
+    monkeypatch.setattr(E, '_hold', boom)
+    with pytest.raises(RuntimeError, match='planted failure'):
+        E.run_point2(arm, 'P1', v.ctx, v.res / 'r.csv', v.res / 'p.json')
+    assert not (v.res / 'claims' / tag).exists()
+    assert E.claim(tag, 'again')
+
+
+def test_step2_and_score_refuse_before_the_gate_lock_and_step1(tmp_path, monkeypatch):
+    e134 = tmp_path / 'e134'
+    e134.mkdir()
+    monkeypatch.setattr(E, 'e134_results_dir', lambda: e134)
+    monkeypatch.setattr(E, 'out_dir', lambda: tmp_path)
+    for part in (E.part_step2, E.part_score):
+        with pytest.raises(PermissionError, match='measure_gate.json'):
+            part()
+    (e134 / E.E134_GATE_FILE).write_text(json.dumps(dict(verdict='usable')))
+    (e134 / E.E134_SCORED_FILE).write_text('{}')
+
+    def no_lock(path=None):
+        raise PermissionError('no lock yet (planted)')
+
+    monkeypatch.setattr(E, 'read_lock', no_lock)
+    for part in (E.part_step2, E.part_score):
+        with pytest.raises(PermissionError, match='no lock yet'):
+            part()
+    monkeypatch.setattr(E, 'read_lock', lambda path=None: dict(glomeruli=['g0']))
+    for part in (E.part_step2, E.part_score):
+        with pytest.raises(PermissionError, match="step 1's results"):
+            part()
+
+
+def test_step2_points_rung_and_dff_repeat(tmp_path, monkeypatch):
+    monkeypatch.setattr(E, 'out_dir', lambda: tmp_path)
+    kept = dict(all_flies={'all': {}}, highest_kept='R3', step2_rung='R3')
+    none = dict(all_flies={'all': {}}, highest_kept='R1', step2_rung=None)
+    assert len(E.step2_points(kept)) == 73 and len(E.step2_points(none)) == 49
+    assert not E.dff_repeat_asked()
+    (tmp_path / E.SCORE_VERDICT_FILE).write_text(json.dumps(dict(outcome=dict(outcome='needs the dF/F repeat'))))
+    assert E.dff_repeat_asked() and len(E.step2_points(kept)) == 97 and len(E.step2_points(none)) == 73
+    assert E.step2_points(kept, reverse=True)[0] == E.step2_points(kept)[-1]
+    with pytest.raises(PermissionError, match="step 1's results"):
+        E.read_step1_fits(tmp_path)
+
+
+def test_input_columns_and_layout():
+    orn = pd.DataFrame(np.arange(6.0).reshape(2, 3), index=pd.Index(['a', 'b'], name='glomerulus'),
+                       columns=pd.MultiIndex.from_tuples([('megamat', f'{o} @ -3') for o in ('2h', 'IaA', 'pa')],
+                                                         names=['panel', 'odor']))
+    t = pd.DataFrame([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], index=['a', 'b', 'c'], columns=['pa', '2h'])
+    x = E.input_columns(t, orn)
+    assert x.columns.equals(orn.columns) and np.isnan(x[('megamat', 'IaA @ -3')]).all()
+    assert x.loc['c', ('megamat', 'pa @ -3')] == 5.0
+    d = pd.DataFrame(np.ones((3, 3)), index=['a', 'b', 'c'], columns=['2h', 'IaA', 'pa'])
+    with pytest.raises(RuntimeError, match='outside the input'):
+        E.input_layout(d, orn)
+    d.loc['c'] = 0.0
+    y = E.input_layout(d, orn)
+    assert y.index.equals(orn.index) and y.columns.equals(orn.columns) and (y.to_numpy() == 1.0).all()
+
+
+def _score_runs(drops, bouton_hot=()):
+    """Planted saved runs of every planned point (in memory): the KC outputs, the PN and bouton stages on four megamat
+    odors, the arm in the info; `bouton_hot` (arm, wiring) of the megamat input get boutons above 300 Hz."""
+    from kcq import stage_readings as R
+    groups = {}
+    rng = np.random.default_rng(0)
+    od = list(E.MEGAMAT_ODORS[:4])
+    gl = ['g0', 'g1', 'g2']
+    for arm, w in E.planned_step2(with_rung=True, with_dff_repeat=True):
+        conds = {}
+        for c in ('on', 'off'):
+            r, s = _kc_outputs(rng, od, n_kc=20)
+            hot = 400.0 if (arm.panel == 'megamat' and (arm.arm, w) in bouton_hot) else 50.0
+            conds[c] = dict(responses=r, spike_counts=s,
+                            pn_win=pd.DataFrame(rng.uniform(10, 50, (3, 4)), index=gl, columns=od),
+                            pn_pre=pd.DataFrame(rng.uniform(0, 5, (3, 4)), index=gl, columns=od),
+                            bouton_win=pd.DataFrame(rng.uniform(10, 20, (3, 4)) + hot, columns=od),
+                            bouton_pre=pd.DataFrame(rng.uniform(0, 5, (3, 4)), columns=od))
+        run = R.SavedRun(source='E134:step3', tag=E.tag_of(arm, w), model='C2', wiring=w, input_panel=arm.panel,
+                         conditions=conds, meta=dict(bouton_glomerulus=np.asarray(gl)),
+                         info=dict(arm=arm.arm, route=2 if arm == E.REPEAT_ARM else 1, params=dict(fixed_thr=100.0)))
+        groups.setdefault((arm.panel, arm.arm), []).append(run)
+    return groups
+
+
+def _score_rows(groups, drops, second=None, rise=None):
+    """Planted score rows (what `score_group` gives): for each run the four megamat stages, APL on, in their default
+    readings and the somata and boutons in their second readings (SECOND_READINGS); the somata's errors and the
+    boutons' strength by odor fall by the arm's planted (soma drop, bouton ratio) (`second` for the second reading,
+    default the same); `rise` (arm -> (stage, rise)) adds to a stage's strength by odor; an APL16 run's somata on the
+    APL16 panel with APL on and off besides."""
+    from kcq import stage_readings as R
+    rows = []
+    second = drops if second is None else second
+    for (panel, arm), runs in groups.items():
+        for run in runs:
+            for st in ('pn_dendrite', 'pn_bouton', 'kc_claw', 'kc_soma'):
+                for rd_set, dr in (('default', drops), ('second', second)):
+                    if rd_set == 'second' and st not in E.SECOND_READINGS:
+                        continue
+                    rd = R.DEFAULT_READINGS[st].name if rd_set == 'default' else E.SECOND_READINGS[st]
+                    sd, br = dr.get(arm, (0.0, 1.0))
+                    err = 1.0 - sd if st == 'kc_soma' else 0.99
+                    strength = br * 2.0 if st == 'pn_bouton' else err
+                    if rise and arm in rise and rise[arm][0] == st:
+                        strength += rise[arm][1]
+                    rows.append(dict(input_panel=panel, arm=arm, group=f'{panel}_{arm}', model='C2',
+                                     wiring=run.wiring, stage=st, panel='megamat', condition='on', reading=rd,
+                                     error=err, error_with_matrix=err, view_strength=strength, view_sharing=err,
+                                     view_breadth=0.5, view_matrix=0.4))
+            if panel == 'apl16':
+                for cond in ('on', 'off'):
+                    rows.append(dict(input_panel=panel, arm=arm, group=f'{panel}_{arm}', model='C2', wiring=run.wiring,
+                                     stage='kc_soma', panel='apl16', condition=cond, reading='curve_noise', error=0.95,
+                                     error_with_matrix=0.95, view_strength=0.95, view_sharing=0.95))
+    return pd.DataFrame(rows)
+
+
+def _e134_tables(path):
+    from kcq import stage_readings as R
+    rng = np.random.default_rng(1)
+    rows = []
+    for st in ('pn_dendrite',) + E.CLASS_STAGES:
+        for rd in (R.DEFAULT_READINGS[st].name,) + ((E.SECOND_READINGS[st],) if st in E.SECOND_READINGS else ()):
+            for w in E.WIRINGS:
+                e = 1.0 + 0.01 * rng.normal()
+                rows.append(dict(group='megamat_held', stage=st, panel='megamat', condition='on', reading=rd, wiring=w,
+                                 error=e, error_with_matrix=e, view_strength=2.0 * e if st == 'pn_bouton' else e,
+                                 view_sharing=e, view_breadth=0.5, view_matrix=0.4))
+    pd.DataFrame(rows).to_csv(path / E.E134_STAGE_TABLE, index=False)
+    pd.DataFrame([dict(source='E90:B', group='B', wiring=w, stage='kc_soma', panel='apl16', condition=c,
+                       reading='curve_noise', error=1.0 + 0.01 * rng.normal(), view_strength=1.0 + 0.01 * rng.normal())
+                  for c in ('on', 'off') for w in list(E.WIRINGS) + ['mean']]).to_csv(path / E.E134_STEP2_SCORES,
+                                                                                   index=False)
+
+
+@pytest.fixture
+def score_env(tmp_path, monkeypatch):
+    e134, res = tmp_path / 'e134', tmp_path / 'res'
+    e134.mkdir()
+    res.mkdir()
+    _e134_tables(e134)
+    monkeypatch.setattr(E, 'e134_results_dir', lambda: e134)
+    monkeypatch.setattr(E, 'out_dir', lambda: res)
+    fits_rec = dict(all_flies={'all': {}}, highest_kept='R2f', step2_rung='R2')
+    monkeypatch.setattr(E, 'require_step2', lambda: (dict(glomeruli=['g0', 'g1']), fits_rec))
+    monkeypatch.setattr(E, 'require_e134_lock', lambda: dict(remy_megamat_criterion_rate=dict(mean=0.0915)))
+    monkeypatch.setattr(E, '_flies', lambda: None)
+    monkeypatch.setattr(E, 'apl16_effect', lambda o: dict(raw_apl_effect_rmse=0.1))
+    monkeypatch.setattr(E, 'family_saved', lambda w: {c: _kc_outputs(np.random.default_rng(2), ['2h']) for c in
+                                                       ('on', 'off')})
+    flag = {('R1', 'P1')}
+
+    def bands(o):
+        return dict(rate_rho_on=0.5, realism_flag=bands.next)
+
+    bands.next = ''
+    real_realism = E.run_realism
+
+    def realism(run, gl, lock134=None):
+        bands.next = 'planted band' if (run.input_panel == 'apl16' and (run.info['arm'], run.wiring) in flag) else ''
+        return real_realism(run, gl, lock134)
+
+    monkeypatch.setattr(E, 'run_bands', bands)
+    monkeypatch.setattr(E, 'run_realism', realism)
+    E.freeze_thresholds()
+    return res, monkeypatch
+
+
+def _set_scores(mp, drops, second=None, rise=None, groups=None):
+    mp.setattr(E, 'score_group', lambda runs, flies, lock134=None, readings=None, n_floor=None: _score_rows(
+        {(runs[0].input_panel, runs[0].info['arm']): runs}, drops, second, rise).drop(
+        columns=['input_panel', 'arm', 'group']))
+    if groups is not None:
+        mp.setattr(E, 'step2_groups', lambda dirs=None: groups)
+
+
+UPSTREAM_A = {'imposed': (0.3, 0.4), 'imposed_route2_repeat': (0.3, 0.4), 'R1': (0.18, 0.64), 'imposed_dff': (0.3, 0.4)}
+
+
+def test_score_on_planted_runs_gives_the_classes(score_env):
+    """Planted runs scored on strength by odor: the imposed dendrites lower the somata's strength-by-odor error well
+    beyond the frozen threshold and halve the boutons', the permuted controls do not, R1 carries more than half:
+    "upstream" and (a), with no guard raised and the same class in the second reading. One APL16 run outside a band
+    and one megamat run with hot boutons lose their class (excluded, named), and the classes still hold on the
+    remaining wirings."""
+    res, mp = score_env
+    _set_scores(mp, UPSTREAM_A, groups=_score_runs(UPSTREAM_A, bouton_hot={('imposed', 'M3')}))
+    v = E.part_score()
+    oc = v['outcome']
+    assert v['complete'] and v['cls'] == 'upstream' and oc['outcome'] == 'a' and oc['improvement']
+    assert not oc['reading_dependent'] and oc['outcome_second'] == 'a' and oc['guard_raised'] == dict(R1=False,
+                                                                                                      rung=False)
+    assert v['classes']['global_carry'] and not v['classes']['terms_carry']
+    assert v['classes']['thresholds']['soma_col'] == 'strength' and v['measure']['column'] == 'view_strength'
+    # R1 carries on the six wirings where neither R1 (P1, its APL16 run outside a band) nor the imposed arm (M3) is
+    # excluded
+    assert v['classes']['counts']['soma_upstream'] == 7 and v['classes']['counts']['r1_carry'] == 6
+    assert set(v['excluded']) == {'R1|P1', 'imposed|M3'}
+    thr = json.loads((res / E.THRESHOLDS_FILE).read_text())
+    assert v['thresholds']['kc_soma']['threshold'] == thr['classes']['kc_soma']['threshold'] < 0.1
+    assert v['routes']['available'] and v['routes']['agree'] and v['routes']['column'] == 'view_strength'
+    assert v['routes']['population_error']['kc_soma']['diff'] == 0
+    se = v['megamat_stage_error']['megamat_imposed']
+    assert se['stage_error_strength_change'] < 0 and se['stage_error_strength_3_change'] < 0
+    assert se['stage_error_three_view_change'] < 0 and se['stage_error_strength_sharing'] is not None
+    assert v['megamat_stage_error']['megamat_R1']['stage_error_strength_3'] is None
+    for f in ('score_scores.csv', 'score_class_rows.csv', 'score_class_rows_second.csv', 'score_guard.csv',
+              'score_drops.csv', 'score_stage_error.csv', 'score_realism.csv', 'score_apl_effect.csv',
+              'score_table.md', 'provenance_score.json'):
+        assert (res / f).exists(), f
+    rows = pd.read_csv(res / 'score_class_rows.csv')
+    assert rows[(rows.arm == 'imposed') & (rows.wiring == 'M3')].excluded.all()
+    assert {'view_sharing_change', 'view_breadth_change', 'error_strength_sharing_change'} <= set(rows.columns)
+    g = pd.read_csv(res / 'score_guard.csv')
+    assert set(g.panel) == {'megamat', 'apl16'} and len(g) == 2 * (3 * 2 + 2 * 2) and not g.raised.any()
+    eff = pd.read_csv(res / 'score_apl_effect.csv')
+    assert set(eff.arm) == {'R1', 'rung', 'imposed', 'family'} and len(eff) == 4 * 8
+    assert not E.dff_repeat_asked()
+
+
+def test_score_guard_second_reading_and_step1_on_strength(score_env):
+    """Rule 3's guard: R1's claws rise on strength by odor on every wiring, and step 1's R1 is above R0 on held-out
+    strength in both directions: R1's guard is raised at both, (a) is named at a cost beside and not an improvement.
+    The second reading disagrees on the somata: the outcome is reading-dependent and the default decides. Step 1's
+    kept R2f above R1 on strength in both directions is named."""
+    res, mp = score_env
+    d = {'half_a->half_b': 0, 'half_b->half_a': 0}
+    s1 = pd.DataFrame([dict(rung='R0', kept=True, **{f'{k}_view_strength': 1.0 for k in d}),
+                       dict(rung='R1', kept=True, below='R0', **{f'{k}_view_strength': 1.1 for k in d}),
+                       dict(rung='R2m', kept=False, below='R1', **{f'{k}_view_strength': 0.9 for k in d}),
+                       dict(rung='R2f', kept=True, below='R1', **{f'{k}_view_strength': 1.2 for k in d})])
+    s1.to_csv(res / 'step1_rungs.csv', index=False)
+    second = dict(UPSTREAM_A, imposed=(0.0, 0.4))
+    _set_scores(mp, UPSTREAM_A, second=second, rise={'R1': ('kc_claw', 0.2)}, groups=_score_runs(UPSTREAM_A))
+    v = E.part_score()
+    oc = v['outcome']
+    assert oc['outcome'] == 'a' and oc['reading_dependent'] and oc['outcome_second'] != 'a'
+    assert oc['guard_raised']['R1'] and not oc['improvement']
+    assert 'view_strength at kc_claw (megamat, APL on)' in oc['at_a_cost_beside']
+    assert any('pn_dendrite' in x for x in oc['at_a_cost_beside'])
+    assert v['guard']['R1']['dendrites']['raised'] and v['guard']['rung']['dendrites']['rung'] == 'R2f'
+    assert [x['rung'] for x in v['step1_strength']] == ['R1', 'R2f']
+    assert v['step1_strength'][0]['name'] == 'kept on the matrix, higher on strength'
+
+
+def test_score_asks_for_the_dff_repeat_and_waits_for_every_run(score_env):
+    """Not upstream: the outcome waits on the dF/F repeat, which the runner then plans; with the repeat's runs
+    present and the same class the outcome is (e), unless the second reading differs ('reading-dependent'); with a
+    run missing it is 'incomplete'."""
+    res, mp = score_env
+    drops = {'imposed': (0.0, 0.9)}
+    groups = _score_runs(drops)
+    dff = {k: v for k, v in groups.items() if k[1] in E.DFF_REPEAT_ARMS}
+    first = {k: v for k, v in groups.items() if k[1] not in E.DFF_REPEAT_ARMS}
+    _set_scores(mp, drops, groups=first)
+    v = E.part_score()
+    assert v['complete'] and v['outcome']['outcome'] == 'needs the dF/F repeat' and v['outcome']['pending'] == 'e'
+    assert E.dff_repeat_asked()
+    mp.setattr(E, 'step2_groups', lambda dirs=None: {**first, **dff})
+    v = E.part_score()
+    assert {k: v['outcome'][k] for k in ('outcome', 'cls', 'cls_dff', 'reading_dependent')} == dict(
+        outcome='e', cls='not_upstream', cls_dff='not_upstream', reading_dependent=False)
+    _set_scores(mp, drops, second={'imposed': (0.3, 0.4)})
+    v = E.part_score()
+    assert v['outcome']['outcome'] == 'reading-dependent' and v['outcome']['pending'] == 'e'
+    _set_scores(mp, drops)
+    short = dict(first)
+    short[('megamat', 'imposed')] = short[('megamat', 'imposed')][:-1]
+    mp.setattr(E, 'step2_groups', lambda dirs=None: short)
+    v = E.part_score()
+    assert not v['complete'] and v['outcome']['outcome'] == 'incomplete' and v['missing'] == ['megamat_imposed_M3']
+
+
+def test_thresholds_frozen_once_on_strength(score_env):
+    """The thresholds are 3 SE (ddof 1) over the eight wirings of view_strength in E134's held runs, written with the
+    tables' sha256 before the first arm, and never recomputed once written; the score refuses without them."""
+    from kcq import stage_readings as R
+    res, mp = score_env
+    thr = json.loads((res / E.THRESHOLDS_FILE).read_text())
+    t = pd.read_csv(E.e134_results_dir() / E.E134_STAGE_TABLE)
+    x = t[(t.stage == 'kc_soma') & (t.reading == R.DEFAULT_READINGS['kc_soma'].name)].view_strength
+    assert thr['classes']['kc_soma']['threshold'] == pytest.approx(3 * x.std(ddof=1) / np.sqrt(8))
+    assert thr['classes']['kc_soma']['column'] == 'view_strength' and thr['error']['kc_soma']['column'] == 'error'
+    assert set(thr['classes']) == {'pn_dendrite', 'pn_bouton', 'kc_claw', 'kc_soma'}
+    assert thr['second_reading']['kc_soma']['reading'] == 'raw'
+    assert set(thr['apl16_somata']) == {'on', 'off'} and thr['apl16_somata']['on']['view_strength']['n_wirings'] == 8
+    assert thr['e134_stage_table_sha256'] == E._sha256(E.e134_results_dir() / E.E134_STAGE_TABLE)
+    t.assign(view_strength=t.view_strength * 5).to_csv(E.e134_results_dir() / E.E134_STAGE_TABLE, index=False)
+    assert E.freeze_thresholds() == thr
+    (res / E.THRESHOLDS_FILE).unlink()
+    with pytest.raises(PermissionError, match='no thresholds frozen'):
+        E.read_thresholds()
+    with pytest.raises(PermissionError, match='no thresholds frozen'):
+        E.part_score()
+
+
+def test_commands_are_module_lanes(capsys, monkeypatch):
+    monkeypatch.setattr(E, 'read_lock', lambda path=None: dict(permutations=dict(control=3)))
+    E.print_commands()
+    out = capsys.readouterr().out
+    step2 = [l for l in out.splitlines() if '--part step2' in l]
+    assert [l.split(':')[0] for l in step2] == ['viki', 'hal', 'hal', 'atlas', 'disco']
+    assert all('-m experiments.E135_antennal_lobe_dendrites' in l for l in step2)
+    assert sum('--reverse' in l for l in step2) == 2 and 'OMP_THREAD_LIMIT=8' in step2[3]
+    ctl = [l for l in out.splitlines() if '--part step1_control' in l]
+    assert [l.split(':')[0] for l in ctl] == ['hal', 'disco', 'hal'] and '--part step1 --lane hal-1' in out

@@ -74,10 +74,12 @@ entry by hal 13:16) are coded as follows; the lock (`--part lock`) records each.
    them by less than that stage's reset threshold (`routes_agree`). No class rests on route 2; a non-converged solve is
    reported, not forced.
 10. The thresholds in one-fly units, the somata's 0.15 and +-0.05, are reset to THRESHOLD_SE_MULT standard errors over
-   the eight wirings of the megamat somata's population error in E134's runs held at the megamat flies' response rate
-   (`class_thresholds`). The halving, the half shares, six of eight wirings and the 300 Hz exclusion stay. The carry
-   classes are read only when "upstream" holds, and read the boutons on the fall of their strength-by-odor error, as
-   "upstream" does (the planner's note beside the rulings).
+   the eight wirings (SD with ddof 1 over sqrt(8)) of the megamat somata's strength-by-odor error (view_strength) in
+   E134's runs held at the megamat flies' response rate, each stage's default reading (`class_thresholds` with its
+   column; 0.034 in E134's stage table of 15:02). They are frozen with the table's sha256 before step 2's first arm
+   (`freeze_thresholds`, THRESHOLDS_FILE) and never re-read. The halving, the half shares, six of eight wirings and the
+   300 Hz exclusion stay. The carry classes are read only when "upstream" holds (the rulings of 15:41 below; until
+   then this ruling read the somata's population error).
 Budget (the rulings'): step 1 up to BUDGET_LANE_HOURS lane-hours. Before the lock is written, one R1 fold fit (and one
 of each other fit) is timed on planted data of the real size (`time_step1`, `--part timing`), and if step 1 projects
 above the budget the controls drop from 5 to 3, then the folds from 17 to 6 (seeded) (`choose_budget`); the lock
@@ -124,7 +126,21 @@ input R1, the highest kept rung (each odor predicted by the fit that left it out
 labels permuted, the dendrites imposed, imposed with glomerulus labels permuted, imposed with odor labels permuted; on
 the APL16 input R1, the highest kept rung, and the dendrites imposed for its 12 megamat odors; one run repeats an
 imposed run by the second route. R1 runs whether kept or not; the rung's 24 runs only if R2 or R3 is the highest kept.
-The dF/F repeat's 24 runs only before a closure. Nothing of the family is refitted.
+The dF/F repeat's 24 runs only before a closure (when the score's verdict asks for them). Nothing of the family is
+refitted. Each point (`run_point2`): the family's PN stage on its input and wiring (`family_stage`; a lane's first point
+on a wiring first checks that the unchanged family reproduces its saved run exactly, `lane_identity`), the arm's table
+(`arm_table`, clipped), entered by route 1 or 2 (`arm_input`), both response rates re-held (E77's `hold_rates`; on
+megamat at E134's held targets, on APL16 at the wiring's own fit's, HOLD_RULES), the held point built again and run with
+every stage (E134's `build_point` and `run_stages`), reproducing the hold exactly, its PN rates checked against its table
+(`run_pn_check`), an imposed run's check in E134's reading (ruling 8), and the run saved in stage_readings' layout
+(`save_point`, locally and in the archive) with its row and provenance.
+
+The score (`part_score`): every lane's runs read and scored as E134 scores its own (atlas's `read_run`, hal's measures
+through E134's `score_family`), the class rows against E134's runs of the same wiring held at the megamat flies'
+response rate (`class_rows`, `e134_base`), the exclusions (`exclusions`), the classes at the frozen thresholds, the
+dF/F repeat's and the second reading's classes, rule 3's guard, the outcome, step 1 read on strength, the routes'
+agreement, the megamat stage error per arm, the imposed checks, realism and the APL16 runs' APL effect beside the
+family's own fits (`score_tables`).
 
 The two routes into the model's PN stage: route 1, olfsysm's option for the PN stage's rates given directly (viki's
 Work claim, Yang's OK of 09:43; olfsysm b1e89d7's fit_mb_model `pn_rates`, `route1_pn_rates`; the odor's LN stays the
@@ -133,32 +149,55 @@ glomerulus so that the unchanged PN stage returns the target rates to within SOL
 glomeruli and the model's own rates on the other input glomeruli; Tom, 09:38: an inversion fixed by the recordings, not
 a search; `solve_input`, with its identity check `solve_identity`).
 
-The classes (on the eight wirings, against E134's own runs): "upstream", "upstream to the boutons only", "not
-upstream", "the permuted controls gain as much", "the global parameters carry", "the glomerulus terms carry"; no class
-for a run outside a band on the APL16 input or with more than 1 % of bouton responses above 300 Hz (`classify`); the
-outcomes (a) to (f) and "unit-dependent" (`outcome`).
+The classes (on the eight wirings, against E134's own runs held at the megamat flies' response rate), on strength by
+odor, the measure adopted after E134's gate (the rulings of 15:41, from a Fable planner, claude-fable-5-2, spawned from
+hal 2026-11-24 15:32): every class reads that view's error in one-fly units in each stage's default reading
+(`classify`). "Upstream": the imposed dendrites lower the somata's strength-by-odor error by the threshold or more on
+six of eight wirings, by more than both permuted controls, and halve the boutons' strength-by-odor error. "Upstream to
+the boutons only": the bouton condition holds and the somata's stays within ± the threshold. "Not upstream" otherwise,
+and (f) where the permuted controls gain as much on the somata's strength-by-odor error. "The global parameters carry"
+/ "the glomerulus terms carry": R1 / the kept rung give at least half of the imposed fall of the strength-by-odor error
+at the boutons and at the somata (read only when "upstream" holds). No class for a run outside a band on the APL16
+input or with more than 1 % of bouton responses above 300 Hz (`exclusions`). Beside every arm, wiring and megamat
+stage, entering no class: sharing, breadth, the matrix view at the dendrites, the three-view population error and the
+two-view error (`class_rows`); the megamat stage error on strength over the four stages with the three-view error
+beside, and for the imposed arms both over boutons, claws and somata (`stage_error_table`). Rule 3's guard
+(`guard`), for R1 and the kept rung against the family's run of the same wiring: raised where, on six of eight wirings,
+the strength-by-odor error or the population error rises by more than 3 standard errors (over the eight wirings of the
+same quantity in E134's runs) at the megamat boutons, claws or somata or at the APL16 somata with APL on or off (E134's
+step 2, E90:B), or where step 1's held-out strength-by-odor error at the dendrites is above R0's in both directions; a
+raised guard is named in the outcome ("at a cost beside") and that stage is not called an improvement. A second reading
+(SECOND_READINGS: the somata on raw counts, the boutons on 'curve_noise_g3'): an outcome that differs is
+"reading-dependent", the default decides, and (e) or (f) is not declared on it. The routes' check reads strength by odor
+with the population error beside. Step 1 is read on strength too: a kept rung above the highest kept rung below it on
+held-out strength in both directions is named "kept on the matrix, higher on strength" (`step1_strength_names`; no
+refit). The outcomes (a) to (f), "unit-dependent" and "reading-dependent" (`outcome`).
 
 Concentrations: megamat throughout, at 10^-3 on both sides. The APL16 input's paa, euc and -aPine are the ORN data
 within 1 log10 unit of the flies' concentrations; the imposed arm does not touch them, a kept rung's terms are applied
 to them, and every APL16 number involves them.
 
 Outputs: <shared>/results/E135_antennal_lobe_dendrites/ (compact: step0_*.csv, step0_summary.json, timing_step1.json,
-lock.json, step1_*.csv, step1_control_<i>.json, runs_2_*.csv, claims/, score_*.csv, provenance_*.json);
-outputs/E135_antennal_lobe_dendrites/ (local, large: step 2's runs).
+lock.json, step1_*.csv, step1_control_<i>.json, runs_2_<host>_<lane>.csv, provenance_2_<host>_<lane>.json,
+identity_2_<host>_<lane>.json, claims/, score_scores.csv, score_class_rows.csv, score_drops.csv, score_stage_error.csv,
+score_imposed_checks.csv, score_realism.csv, score_apl_effect.csv, score_verdict.json, score_table.md,
+provenance_*.json); outputs/E135_antennal_lobe_dendrites/step2/ (local, large: step 2's runs, also in the archive's
+data/model_outputs/E135_antennal_lobe_dendrites/step2/).
 
-Usage (from the repository root):
-    ./venv/bin/python -u experiments/E135_antennal_lobe_dendrites.py --part step0
-    nice -n 10 ./venv/bin/python -u experiments/E135_antennal_lobe_dendrites.py --part timing
-    ./venv/bin/python -u experiments/E135_antennal_lobe_dendrites.py --part lock
+Usage (from the repository root, as modules, so that the checkout's kcq is the one imported):
+    ./venv/bin/python -u -m experiments.E135_antennal_lobe_dendrites --part step0
+    nice -n 10 ./venv/bin/python -u -m experiments.E135_antennal_lobe_dendrites --part timing
+    ./venv/bin/python -u -m experiments.E135_antennal_lobe_dendrites --part lock
     OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 PYTHONUNBUFFERED=1 nice -n 10 ./venv/bin/python -u \\
-        experiments/E135_antennal_lobe_dendrites.py --part step1 | --part step1_control --perm i | --part step2 \\
+        -m experiments.E135_antennal_lobe_dendrites --part step1 | --part step1_control --perm i | --part step2 \\
         [--lane <host>[-<n>]] [--reverse]
-    ./venv/bin/python -u experiments/E135_antennal_lobe_dendrites.py --part score|commands
+    ./venv/bin/python -u -m experiments.E135_antennal_lobe_dendrites --part score|commands
 """
 from __future__ import annotations
 
 import argparse
 import dataclasses
+import gc
 import hashlib
 import itertools
 import json
@@ -292,13 +331,47 @@ SOMA_WITHIN_BOUTONS_ONLY = 0.05
 BOUTON_STRENGTH_HALVED = 0.5
 CARRY_SHARE = 0.5
 THRESHOLD_SE_MULT = 3.0
+# the forms of a stage's error the megamat stage error is given in (E134's gate of 2026-11-24 15:19 read the three-view
+# population error not usable; Tom, about 15:21, and Yang, 15:28, adopted strength by odor alone, with sharing, breadth
+# and the matrix view beside and the two-view error tested beside; measure_gate.json 'measure'), as E136's MEASURES:
+# 'all' the population error (three views; the PN dendrites on four), else the root mean square of the named views'
+# errors
+MEASURES: Dict[str, Optional[Tuple[str, ...]]] = {
+    'all': None,
+    'strength': ('strength',),
+    'strength_sharing': ('strength', 'sharing'),
+}
+# the classes' column (the rulings of 15:41, from a Fable planner, claude-fable-5-2, spawned from hal 2026-11-24 15:32):
+# strength by odor, the adopted measure, at the somata as at the boutons, in each stage's default reading; the
+# thresholds are frozen before step 2's first arm (THRESHOLDS_FILE, `freeze_thresholds`) from E134's stage table and its
+# step-2 scores, and never re-read
+CLASS_COLUMN = 'view_strength'
+THRESHOLDS_FILE = 'step2_thresholds.json'
+E134_STEP2_SCORES = 'step2_scores.csv'
+E134_APL16_SOURCE = 'E90:B'
+THRESHOLD_STAGES: Tuple[str, ...] = ('pn_dendrite',) + CLASS_STAGES
+# the classes' second reading (the rulings): the somata on raw counts, the boutons in their first alternative; a class
+# that differs is "reading-dependent"
+SECOND_READINGS: Dict[str, str] = {'kc_soma': 'raw', 'pn_bouton': 'curve_noise_g3'}
+# rule 3's guard (the rulings): for R1 and the kept rung against the family's run of the same wiring, a rise of the
+# strength-by-odor error or of the population error by more than 3 standard errors on six of eight wirings
+GUARD_ARMS: Tuple[str, ...] = ('R1', 'rung')
+GUARD_STAGES: Tuple[str, ...] = CLASS_STAGES
+GUARD_COLUMNS: Tuple[str, ...] = ('view_strength', 'error')
 BOUTON_RATE_CAP_HZ = 300.0
 BOUTON_RATE_CAP_SHARE = 0.01
+# the lanes: threads per lane by host, and the lanes of each host (a lane's name, reversed or not); disco (a lab
+# member's machine, 16 cores) and atlas take half their cores
 LANES: Dict[str, Tuple[int, Tuple[Tuple[str, bool], ...]]] = {
     'viki': (16, (('viki', False),)),
     'hal': (16, (('hal-1', False), ('hal-2', True))),
     'atlas': (8, (('atlas', True),)),
+    'disco': (8, (('disco', False),)),
 }
+MODULE = 'experiments.E135_antennal_lobe_dendrites'
+# step 1's lanes (Tom, 2026-11-24 about 15:21: "fit the PN stage to the dendrites now on hal's and disco's lanes"): the
+# real rungs on the first, the controls on the others in turn
+STEP1_LANES: Tuple[str, ...] = ('hal-1', 'hal-2', 'disco')
 
 
 # ---------------------------------------------------------------------------
@@ -2483,8 +2556,10 @@ def kept_stage_table(fits: Mapping[str, dict], rung: str, stage: PNStage, orn: O
 
     The table is in `pn_evoked_rates`' reading ('preset'), each fit's rates times its scale factor (ruling 5: set once
     per fit on the megamat input), and clipped to the stage's `pn_rate_bounds` on that input, BOUNDS_MARGIN_HZ inside
-    (ruling 7). Pass it as `extra_kws=dict(pn_rates=route1_pn_rates(table, list(table.index)))` to E83's
-    `build_simulator` (or E134's `build_point`) on the same input; the odor's LN stays the model's.
+    (ruling 7). Its columns are the stage's odor labels (`odor_labels`: abbreviations where unique), which
+    fit_mb_model's `pn_rates` does not take: pass it as `extra_kws=dict(pn_rates=input_columns(route1_pn_rates(table,
+    list(table.index)), orn))` (the input's own columns) to E83's `build_simulator` (or E134's `build_point`) on the
+    same input `orn`; the odor's LN stays the model's.
 
     Args:
         fits: step 1's fits on all seven PN flies (step1_fits.json's 'all_flies', `rung_fits_all_flies`).
@@ -3081,8 +3156,10 @@ def arm_table(arm: Arm, stage: PNStage, dendrites: Optional[pd.DataFrame], glome
     on the shared glomeruli, glomerulus or odor labels permuted for the controls, rank for rank on the stage's own rates
     (`imposed_rates`). `seed` is the permutation's (`arm_seed` of the wiring). Every table is then held inside the
     stage's reachable rates (`clip_table` with `out_of_bounds`, ruling 7; `bounds` default `stage.rate_bounds()`), and
-    the record carries the clip's counts, the share clipped and whether the arm is named, and for the rungs the scale
-    factors (`scale_record`)."""
+    the record carries the clip's counts, the share clipped and whether the arm is named, for the rungs the scale
+    factors (`scale_record`), and the odors the table sets ('set_odors': every odor for R1 and the rungs, the
+    dendrites' odors the stage has for the imposed arms; on the APL16 input paa, euc, -aPine and B-myr keep the
+    model's PNs there)."""
     rng = np.random.default_rng(seed)
     gl = [g for g in glomeruli if g in stage.glomeruli]
     rec: dict = dict(arm=arm.arm, panel=arm.panel, seed=int(seed), units=arm_units(arm))
@@ -3098,6 +3175,7 @@ def arm_table(arm: Arm, stage: PNStage, dendrites: Optional[pd.DataFrame], glome
         rec['scale'] = scale_record(fits, (r,))
         tab, crec = clip_table(tab, bounds, list(stage.glomeruli), None, out_of_bounds)
         rec['clip'] = crec
+        rec['set_odors'] = list(tab.columns)
         return tab, list(stage.glomeruli), rec
     own = stage.run(reading='preset')
     den = dendrites.loc[gl, [o for o in dendrites.columns if o in stage.odors]].astype(float)
@@ -3112,25 +3190,30 @@ def arm_table(arm: Arm, stage: PNStage, dendrites: Optional[pd.DataFrame], glome
     tab, r = imposed_rates(own, den, gl, bounds=bounds, out_of_bounds=out_of_bounds)
     rec['n_mapped'] = r['n_mapped']
     rec['clip'] = {k: v for k, v in r.items() if k != 'n_mapped'}
+    rec['set_odors'] = list(den.columns)
     return tab, gl, rec
 
 
-def arm_input(stage: PNStage, table: pd.DataFrame, set_glomeruli: Sequence[str], route: int) -> Tuple[dict, dict]:
+def arm_input(stage: PNStage, table: pd.DataFrame, set_glomeruli: Sequence[str], route: int,
+              set_odors: Optional[Sequence[str]] = None) -> Tuple[dict, dict]:
     """How an arm's (clipped) table enters the family's simulator: route 1, extra_kws=dict(pn_rates=<the set entries>)
-    on the panel's input (`route1_pn_rates`); route 2, the check of the option (ruling 9), the input solved on the stage
+    on the panel's input (`route1_pn_rates`; the table's columns are the stage's odor labels, `input_columns` names
+    them as the input does); route 2, the check of the option (ruling 9), the input solved on the stage
     (`solve_input`) for the glomeruli with input only: the set glomeruli at the table's rates, the other input glomeruli
     at their own rates there, the LN on the solved input. The glomeruli without input are not solved; their largest
     drift and the LN's change are in the record. A solve that does not converge is reported in the record
-    ('converged' False), not forced. Returns (build_simulator's keyword arguments, the record)."""
+    ('converged' False), not forced. `set_odors` (default every column) are the odors the table sets (`arm_table`'s
+    record); the others keep the model's PNs. Returns (build_simulator's keyword arguments, the record)."""
     if route == 1:
-        return dict(extra_kws=dict(pn_rates=route1_pn_rates(table, set_glomeruli))), dict(route=1)
+        return dict(extra_kws=dict(pn_rates=route1_pn_rates(table, set_glomeruli, set_odors))), dict(route=1)
     if route != 2:
         raise ValueError(f'{route=}')
     own = stage.run(reading='preset')
     has_input = [g for g in stage.glomeruli if np.any(stage.delta.loc[g].to_numpy() != 0)]
     setg = [g for g in set_glomeruli if g in set(has_input)]
+    od = [o for o in (own.columns if set_odors is None else set_odors) if o in set(own.columns)]
     target = own.loc[has_input].copy()
-    target.loc[setg] = table.loc[setg, own.columns].to_numpy()
+    target.loc[setg, od] = table.loc[setg, od].to_numpy()
     solved, rec = solve_input(stage, target, has_input)
     rec = dict(rec, route=2, n_solved=len(has_input), n_without_input=len(stage.glomeruli) - len(has_input),
                no_input_max_drift_hz=rec['others_max_change'],
@@ -3190,34 +3273,521 @@ def routes_agree(errors_route1: Mapping[str, float], errors_route2: Mapping[str,
     return dict(stages=rows, agree=bool(all(r['agree'] for r in rows.values())))
 
 
-def part_step2(lane: Optional[str] = None, reverse: bool = False, reclaim: bool = False) -> pd.DataFrame:
-    """Step 2, resumable, one point claimed at a time; refuses before E134's gate. A point: its arm's table of PN rates
-    (`arm_table`: step 1's kept rung or R1 from `rung_fits_all_flies`, at their scale factors; the imposed dendrites and
-    their permutations, `arm_seed` of the wiring; every table clipped, `clip_table`), entered by route 1 (fit_mb_model's
-    pn_rates) or, for the repeat, route 2 (the solved input) (`arm_input`), the family's simulator on it (E134's
-    `build_point` with its orn / extra_kws overrides, d2c7c9d), both response rates re-held, every stage saved and read
-    as E134's step 3; an imposed run is checked against E134's reading (`imposed_run_check`) and the repeat against its
-    route-1 run (`routes_agree`)."""
-    require_e134_gate()
-    raise NotImplementedError("step 2's runner waits on E134's gate; its points, claims, arm tables (clipped, scaled, "
-                              "seeded per wiring), both routes and the runs' checks are implemented, and E134's "
-                              'build_point takes the overrides (d2c7c9d)')
+STEP2_PART = 'step2'
+STEP1_FITS_FILE = 'step1_fits.json'
+SCORE_VERDICT_FILE = 'score_verdict.json'
+FAMILY = 'C2'
+# the response rates a step-2 point is re-held at (the entry's "both response rates re-held", E77's `hold_rates`: the
+# threshold with APL off, then the tied APL scales with APL on; the APL->bouton and KC-KC scales stay the fit's)
+HOLD_RULES: Dict[str, str] = {
+    'megamat': "E134's megamat held runs' targets (`held_targets`: the megamat flies' rate by Remy's criterion, APL off "
+               "at the wiring's own fit's APL-off / APL-on ratio), so that the classes compare like with like",
+    'apl16': "the wiring's own fit's response counts (E83 saved_fit target_on / target_off), the operating point its "
+             "bands and APL effect are read at",
+}
+# a route-1 run's PN rates against its table (olfsysm sets them to within 1e-9 Hz) and its unset entries against the
+# unchanged stage (the port, identical to olfsysm to about 1e-11 Hz)
+ROUTE1_TOL_HZ = 1e-6
 
 
-def class_thresholds(stage_table: Optional[pd.DataFrame] = None, group: str = E134_HELD_GROUP,
-                     stages: Sequence[str] = CLASS_STAGES) -> dict:
-    """The thresholds in one-fly units reset (ruling 10): per megamat stage, THRESHOLD_SE_MULT standard errors over the
-    eight wirings (the SD of the wirings' population errors over sqrt(8)) in E134's runs held at the megamat flies'
-    response rate (its stage table's group 'megamat_held', the megamat panel, APL on, each stage's default reading).
-    The somata's replace the entry's 0.15 (the fall) and ±0.05 (within) in `classify`; each stage's is also the routes'
-    agreement threshold (`routes_agree`). Reads <shared>/results/E134_population_baseline/score_stage_table.csv by
-    default."""
+def step2_dirs() -> List[Path]:
+    """Where step 2's runs are written and read: outputs/E135_antennal_lobe_dendrites/step2/ (local), then the
+    model-output archive's data/model_outputs/E135_antennal_lobe_dendrites/step2/ (stage_readings' step-3 layout,
+    `save_step3_run`, so that the score on any host reads every lane's runs)."""
     from kcq import stage_readings as R
-    if stage_table is None:
-        p = H.shared_dir() / 'results' / E134 / E134_STAGE_TABLE
-        if not p.exists():
-            raise FileNotFoundError(f'{p}: E134\'s stage table is not written yet')
-        stage_table = pd.read_csv(p)
+    return R._archive_dirs(EXPERIMENT, STEP2_PART)
+
+
+def read_step1_fits(root: Optional[Path] = None) -> dict:
+    """Step 1's fits as step 2 takes them (results/.../step1_fits.json: 'all_flies', `rung_fits_all_flies`' fits on all
+    seven PN flies with their scale factors; 'highest_kept'; 'step2_rung'). PermissionError until step 1 has written
+    them."""
+    p = (out_dir() if root is None else Path(root)) / STEP1_FITS_FILE
+    d = _read_json(p)
+    if not d.get('all_flies') or 'highest_kept' not in d:
+        raise PermissionError(f"{p}: step 1's results are not written yet (--part step1); step 2 runs R1 and the kept "
+                              'rung from its fits on all seven PN flies')
+    return d
+
+
+def require_step2() -> Tuple[dict, dict]:
+    """Step 2's guards, in order: E134's measure gate reads "usable" and its megamat runs are scored
+    (`require_e134_gate`), this experiment's committed lock (`read_lock`), step 1's fits (`read_step1_fits`). Each
+    refuses with PermissionError. Returns (the lock, step 1's fits record)."""
+    require_e134_gate()
+    lock = read_lock()
+    return lock, read_step1_fits()
+
+
+def dff_repeat_asked(root: Optional[Path] = None) -> bool:
+    """Whether the score has asked for the dF/F repeat (ruling 1's guard): its verdict's outcome is 'needs the dF/F
+    repeat' (outcome (e) or (f) pending, results/.../score_verdict.json)."""
+    v = _read_json((out_dir() if root is None else Path(root)) / SCORE_VERDICT_FILE)
+    return (v.get('outcome') or {}).get('outcome') == 'needs the dF/F repeat'
+
+
+def step2_rung_of(fits_rec: Mapping) -> Optional[str]:
+    """The rung step 2 runs ('R2', 'R3' or None), as step 1 recorded it."""
+    return fits_rec.get('step2_rung', step2_rung(fits_rec.get('highest_kept')))
+
+
+def step2_points(fits_rec: Mapping, reverse: bool = False, dff: Optional[bool] = None) -> List[Tuple[Arm, str]]:
+    """Step 2's points for this lane: `planned_step2` with the rung's 24 only if step 1 kept a rung above R1, and the
+    dF/F repeat's 24 only when the score asks for them (`dff_repeat_asked`, unless `dff` is given)."""
+    return planned_step2(reverse, with_rung=step2_rung_of(fits_rec) is not None,
+                         with_dff_repeat=dff_repeat_asked() if dff is None else bool(dff))
+
+
+def input_columns(table: pd.DataFrame, orn: pd.DataFrame) -> pd.DataFrame:
+    """A table on the stage's odor labels (`odor_labels`) with the input's own columns, as fit_mb_model's `pn_rates`
+    takes them (the odors of orn_deltas, with or without its 'panel' level, not their abbreviations); the input's odors
+    the table lacks are NaN (the model's PNs), the table's odors the input lacks are dropped."""
+    t = table.reindex(columns=odor_labels(orn.columns))
+    return pd.DataFrame(t.to_numpy(dtype=float), index=t.index, columns=orn.columns)
+
+
+def input_layout(delta: pd.DataFrame, orn: pd.DataFrame) -> pd.DataFrame:
+    """A solved input on the stage's rows and odor labels (route 2, `arm_input`) in the panel input's layout (its
+    glomeruli and columns), for build_simulator's `orn`. RuntimeError if a glomerulus outside the input was given a
+    nonzero delta (the glomeruli without input are not solved)."""
+    labels = odor_labels(orn.columns)
+    rows = [str(g) for g in orn.index]
+    extra = [g for g in delta.index if g not in set(rows)]
+    if extra and np.any(delta.loc[extra, labels].to_numpy(dtype=float) != 0):
+        raise RuntimeError(f'the solved input gives the glomeruli outside the input a delta: {extra}')
+    x = delta.reindex(index=rows, columns=labels)
+    if x.isna().any().any():
+        raise RuntimeError("the solved input lacks some of the input's glomeruli or odors")
+    return pd.DataFrame(x.to_numpy(dtype=float), index=orn.index, columns=orn.columns)
+
+
+def family_parts(wiring: str) -> dict:
+    """A wiring's fit as step 2 holds it (E83's `wiring_parts`, one simulation of the bouton base per process): the
+    fit's parameters 'p', the lab input's 'breadth', the saved outputs, the number of KCs, the fit's response counts
+    ('target_on', 'target_off', on 'size' KCs x odors of the APL16 input), its folder and tag."""
+    from experiments import E83_cross_wiring_fit as E83
+    Pp = E83.wiring_parts(wiring)
+    return dict(p=dict(Pp['p']), breadth=Pp['breadth'], saved=Pp['saved'], n_kc=int(Pp['saved']['on'][0].shape[0]),
+                target_on=int(Pp['target_on']), target_off=int(Pp['target_off']), size=int(Pp['size']),
+                folder=Pp['folder'], tag=Pp['tag'])
+
+
+def family_saved(wiring: str) -> Dict[str, tuple]:
+    """A wiring's saved fit on the APL16 input ({'on', 'off'}: (responses, spike counts); E83's `saved_fit`, no
+    simulation)."""
+    from experiments import E83_cross_wiring_fit as E83
+    return E83.saved_fit(wiring)['saved']
+
+
+def step2_targets(panel: str, wiring: str, n_odors: int, fam: Mapping, lock134: Optional[Mapping] = None) -> dict:
+    """A point's response counts to re-hold (HOLD_RULES): on the megamat input E134's `held_targets` of the same
+    wiring's held point, on its KCs x `n_odors`; on the APL16 input the wiring's own fit's counts."""
+    size = int(fam['n_kc']) * int(n_odors)
+    if panel == 'megamat':
+        from experiments import E134_population_baseline as E134R
+        t_off, t_on, f_off, f_on = E134R.held_targets(E134R.Point('megamat', 'held', wiring), size, lock134)
+    elif panel == 'apl16':
+        if size != int(fam['size']):
+            raise RuntimeError(f'{wiring}: {size} KCs x odors on the APL16 input, the fit has {fam["size"]}')
+        t_off, t_on = int(fam['target_off']), int(fam['target_on'])
+        f_off, f_on = t_off / size, t_on / size
+    else:
+        raise ValueError(f'{panel=}')
+    return dict(target_off=int(t_off), target_on=int(t_on), frac_off_target=float(f_off), frac_on_target=float(f_on),
+                size=size, hold_rule=HOLD_RULES[panel])
+
+
+def family_identity(panel: str, wiring: str, sim: Callable) -> dict:
+    """The unchanged family on a panel's input at its fit's parameters, APL on and acutely off (APL->KC and
+    APL->bouton scales 0), on `family_stage`'s simulator, reproduced exactly: on megamat E134's check of an as-fitted
+    point (E107's saved run and the saved fit on the odors the panels share, `E134_population_baseline.check_identity`),
+    on APL16 the saved fit itself (every count and response). The record's 'exact' says whether it holds."""
+    from experiments import E134_population_baseline as E134R
+    from kcq import stage_readings as R
+    fam = family_parts(wiring)
+    p = dict(fam['p'])
+    out = {}
+    for c, q in (('on', p), ('off', dict(p, wAPLKC_scale=0.0, wAPLPN_scale=0.0))):
+        r, s = sim(dict(q))
+        out[c] = dict(responses=r, spike_counts=s)
+    if panel == 'megamat':
+        rec = E134R.check_identity(E134R.Point('megamat', 'fitted', wiring), out)
+    elif panel == 'apl16':
+        saved = fam['saved']
+        rec = dict(tag=f'apl16_fitted_{wiring}', checks=[])
+        for c in ('on', 'off'):
+            rec['checks'].append(dict(name=f'saved fit {c} counts', differ=E134R._differ(
+                R._abbrev(out[c]['spike_counts']), R._abbrev(saved[c][1]))))
+            rec['checks'].append(dict(name=f'saved fit {c} responses', differ=E134R._differ(
+                R._abbrev(out[c]['responses']), R._abbrev(saved[c][0]))))
+        rec['exact'] = all(x['differ'] == 0 for x in rec['checks'])
+    else:
+        raise ValueError(f'{panel=}')
+    rec.update(panel=panel, wiring=wiring)
+    return rec
+
+
+def identity_path(lane: str) -> Path:
+    """results/.../identity_2_<host>_<lane>.json: the lane's identity of the unchanged family per wiring ('family:
+    <wiring>') and each point's hold identity (by tag)."""
+    return out_dir() / f'identity_2_{_host()}_{lane}.json'
+
+
+def _identity_put(lane: str, key: str, rec: Mapping) -> None:
+    path = identity_path(lane)
+    ids = _read_json(path)
+    ids[key] = dict(rec)
+    _write_json(path, ids)
+
+
+def lane_identity(panel: str, wiring: str, lane: str, finfo: Mapping) -> dict:
+    """The identity check of a lane's first point on each wiring: the unchanged family reproduced exactly
+    (`family_identity` on `family_stage`'s simulator), once per host, lane and wiring (cached in `identity_path`; the
+    panel is that of the lane's first point on the wiring). RuntimeError if it does not hold."""
+    key = f'family:{wiring}'
+    old = _read_json(identity_path(lane)).get(key)
+    if old and old.get('exact'):
+        return dict(old, cached=True)
+    rec = family_identity(panel, wiring, finfo['sim'])
+    rec.update(host=_host(), lane=lane, time=_now(),
+               **{k: v for k, v in H.code_commits().items() if not isinstance(v, (dict, list))})
+    _identity_put(lane, key, rec)
+    if not rec.get('exact'):
+        raise RuntimeError(f'{wiring} on {panel}: the unchanged family does not reproduce its saved run on lane {lane}: '
+                           f'{rec}')
+    return rec
+
+
+class Step2:
+    """What step 2's points share in one process: the lock, step 1's fits on all seven PN flies and its rung, E134's
+    lock, the family's PN stage per (panel, wiring) (`family_stage`, built once each; the lane's identity on the
+    wiring is checked on that build, `lane_identity`, and the build is then freed), and the dendrite means per units
+    (`dendrite_means`, on the lock's glomeruli)."""
+
+    def __init__(self, lock: Mapping, fits_rec: Mapping, lane: str, lock134: Optional[Mapping] = None):
+        self.lock = lock
+        self.fits_rec = fits_rec
+        self.fits = fits_rec['all_flies']
+        self.rung = step2_rung_of(fits_rec)
+        self.glomeruli = [str(g) for g in lock['glomeruli']]
+        self.lane = lane
+        self.lock134 = lock134
+        self._stages: Dict[Tuple[str, str], Tuple[PNStage, dict]] = {}
+        self._den: Dict[str, pd.DataFrame] = {}
+
+    def stage(self, panel: str, wiring: str) -> Tuple[PNStage, dict]:
+        key = (panel, wiring)
+        if key not in self._stages:
+            stage, finfo = family_stage(panel, wiring)
+            ident = lane_identity(panel, wiring, self.lane, finfo)
+            port = finfo.get('identity')
+            finfo = None
+            gc.collect()
+            self._stages[key] = (stage, dict(port=port, lane_identity=ident))
+        return self._stages[key]
+
+    def dendrites(self, units: str) -> pd.DataFrame:
+        if units not in self._den:
+            self._den[units] = dendrite_means(units, self.glomeruli)
+        return self._den[units]
+
+
+def _hold(wiring: str, orn: pd.DataFrame, fam: Mapping, extra: Optional[Mapping], targets: Mapping,
+          label: str) -> dict:
+    """Both response rates re-held (E77's `hold_rates`) on the family's simulator of `wiring` on `orn` with `extra`
+    (route 1's pn_rates), the breadth held at the lab input's, from the fit's parameters."""
+    from experiments import E83_cross_wiring_fit as E83
+    from experiments.E77_input_screen import hold_rates
+    p = dict(fam['p'])
+    return hold_rates(lambda: E83.build_simulator(wiring, orn=orn, breadth=fam['breadth'], params=dict(p),
+                                                  extra_kws=None if not extra else dict(extra)),
+                      target_off=targets['target_off'], target_on=targets['target_on'], params=p, label=label)
+
+
+def _build(panel: str, wiring: str, params: Mapping[str, float], orn: Optional[pd.DataFrame],
+           extra: Optional[Mapping]):
+    """The held point built again at the held parameters (E134's `build_point` with its overrides, d2c7c9d)."""
+    from experiments import E134_population_baseline as E134R
+    return E134R.build_point(E134R.Point(panel, 'held', wiring), dict(params), orn=orn, extra_kws=extra)
+
+
+def _run(panel: str, wiring: str, built, params: Mapping[str, float], params_off: Mapping[str, float]) -> dict:
+    """Both conditions with every stage saved (E134's `run_stages`)."""
+    from experiments import E134_population_baseline as E134R
+    return E134R.run_stages(E134R.Point(panel, 'held', wiring), built, params, params_off)
+
+
+def _hold_identity(panel: str, wiring: str, out: Mapping, hold: Mapping) -> dict:
+    """The run at the held parameters reproduces the hold's final outputs exactly (E134's `check_identity`)."""
+    from experiments import E134_population_baseline as E134R
+    return E134R.check_identity(E134R.Point(panel, 'held', wiring), out, {c: hold[c] for c in ('on', 'off')})
+
+
+def _provenance(orn: pd.DataFrame) -> dict:
+    return H.model_provenance(orn_deltas=orn)
+
+
+def olfsysm_odor_names(built) -> List[str]:
+    """A built point's odor labels (`odor_labels` of its input) in olfsysm's column order (its simulator's 'odor_order':
+    output column j is olfsysm's odor order[j])."""
+    _, _, order = built.vars()
+    labels = odor_labels(built.orn.columns)
+    names: List[Optional[str]] = [None] * len(order)
+    for j, i in enumerate(order):
+        names[int(i)] = labels[j]
+    return [str(x) for x in names]
+
+
+def run_pn_check(built, stage: PNStage, table: pd.DataFrame, set_glomeruli: Sequence[str],
+                 set_odors: Optional[Sequence[str]] = None, tol: float = ROUTE1_TOL_HZ, strict: bool = True) -> dict:
+    """A run's PN rates as olfsysm's option reads them (pyolfsysm's `pn_evoked_rates` of the run's variables, 'preset')
+    against its table on the set entries, and against the unchanged stage's own rates (the port, `PNStage.run`) on the
+    others. Route 1: both to `tol`, RuntimeError beyond it with `strict`; route 2 (the solved input): reported only
+    (the set entries to the solve's tolerance, the others as the LN on the solved input leaves them)."""
+    from pyolfsysm.mb_model import pn_evoked_rates
+    mp, rv, _ = built.vars()
+    got = pn_evoked_rates(mp, rv, wPNKC=built.W, odors=olfsysm_odor_names(built))
+    got.index = [str(g) for g in got.index]
+    gl = [g for g in set_glomeruli if g in set(got.index)]
+    od = [o for o in (table.columns if set_odors is None else set_odors) if o in set(got.columns)]
+    d_set = np.abs(got.loc[gl, od].to_numpy(dtype=float) - table.loc[gl, od].to_numpy(dtype=float))
+    own = stage.run(reading='preset').reindex(index=got.index, columns=got.columns)
+    unset = np.ones(got.shape, dtype=bool)
+    unset[np.ix_([list(got.index).index(g) for g in gl], [list(got.columns).index(o) for o in od])] = False
+    d_un = np.abs(got.to_numpy(dtype=float) - own.to_numpy(dtype=float))[unset]
+    rec = dict(n_set=int(np.isfinite(d_set).sum()), max_abs_diff_set=float(np.nanmax(d_set)) if d_set.size else 0.0,
+               n_unset=int(unset.sum()), max_abs_diff_unset=float(np.nanmax(d_un)) if d_un.size else 0.0, tol=float(tol),
+               strict=bool(strict))
+    rec['ok'] = bool(rec['max_abs_diff_set'] <= tol and rec['max_abs_diff_unset'] <= tol)
+    if strict and not rec['ok']:
+        raise RuntimeError(f"the run's PN rates are not its table's (set) or the model's own (unset): {rec}")
+    return rec
+
+
+def e134_pn_rates(cond: Mapping[str, pd.DataFrame]) -> pd.DataFrame:
+    """A condition's PN rates in E134's reading (stage_readings': the MODEL_WINDOW mean minus the settled pre-odor
+    mean), from `run_stages`' output ('pn_pre_settled') or a loaded run (whose 'pn_pre' is the settled level)."""
+    pre = cond['pn_pre_settled'] if 'pn_pre_settled' in cond else cond['pn_pre']
+    x = cond['pn_win'] - pre
+    x.index = [str(g) for g in x.index]
+    return x
+
+
+def stage_rates(conds: Mapping[str, Mapping[str, pd.DataFrame]]) -> dict:
+    """A run's largest PN and bouton rates (window means, Hz) per condition and the share of bouton x odor window
+    means above BOUTON_RATE_CAP_HZ (E127's measure), the larger of the two conditions' beside; 'bouton_cap_excluded'
+    where it is above BOUTON_RATE_CAP_SHARE (no class)."""
+    rec = {}
+    for c in ('on', 'off'):
+        st = conds.get(c, {})
+        if 'pn_win' in st:
+            rec[f'max_pn_rate_{c}'] = float(np.nanmax(st['pn_win'].to_numpy(dtype=float)))
+        if 'bouton_win' in st:
+            b = st['bouton_win'].to_numpy(dtype=float)
+            rec[f'max_bouton_rate_{c}'] = float(np.nanmax(b))
+            rec[f'bouton_share_above_300_{c}'] = float(np.mean(b > BOUTON_RATE_CAP_HZ))
+    sh = [v for k, v in rec.items() if k.startswith('bouton_share_above_300_')]
+    rec['bouton_share_above_300'] = float(max(sh)) if sh else np.nan
+    rec['bouton_cap_excluded'] = bool(sh and max(sh) > BOUTON_RATE_CAP_SHARE)
+    return rec
+
+
+def save_point(tag: str, out: Mapping[str, dict], built, info: Mapping[str, object], table: pd.DataFrame,
+               dirs: Optional[Sequence[Path]] = None) -> List[Path]:
+    """A point's table of PN rates (<tag>_pn_table.parquet, the stage's labels, 'preset' reading) and its run in
+    stage_readings' step-3 layout (`save_step3_run`: every stage matrix, responses, spike counts, APL means, the units'
+    metadata, the input, and <tag>_run.json last), locally and in the archive (`step2_dirs`)."""
+    from kcq import stage_readings as R
+    dirs = [Path(d) for d in (step2_dirs() if dirs is None else dirs)]
+    t = table.copy()
+    t.columns = [str(c) for c in t.columns]
+    t.index = [str(g) for g in t.index]
+    for d in dirs:
+        d.mkdir(parents=True, exist_ok=True)
+        tmp = d / f'.{tag}_pn_table.parquet.{os.getpid()}.tmp'
+        t.to_parquet(tmp)
+        os.replace(tmp, d / f'{tag}_pn_table.parquet')
+    return R.save_step3_run(tag, out, built.meta, built.orn, info, dirs)
+
+
+def runs2_table(root: Optional[Path] = None) -> pd.DataFrame:
+    """Every row of every host's and lane's runs_2_*.csv, the last row per tag."""
+    d = out_dir() if root is None else Path(root)
+    fs = [pd.read_csv(p) for p in sorted(d.glob('runs_2_*.csv'))]
+    if not fs:
+        return pd.DataFrame(columns=['tag'])
+    return pd.concat(fs, ignore_index=True, sort=False).drop_duplicates('tag', keep='last').reset_index(drop=True)
+
+
+def _base_arm(arm: Arm) -> str:
+    return arm.arm[:-len(DFF_SUFFIX)] if arm.arm.endswith(DFF_SUFFIX) else arm.arm
+
+
+def run_point2(arm: Arm, wiring: str, ctx: Step2, table_path: Path, prov_path: Path, reclaim: bool = False,
+               done: Optional[set] = None) -> Optional[dict]:
+    """One point of step 2, claimed (None if done or claimed elsewhere; the claim is released on failure).
+
+    1. The family's PN stage on the point's input and wiring (`Step2.stage`; the lane's first point on the wiring checks
+       that the unchanged family reproduces its saved run exactly, `lane_identity`).
+    2. The arm's table of PN rates (`arm_table`: R1 or step 1's kept rung at their scale factors, each megamat odor
+       from the fold fit that left it out; or the imposed dendrites, permuted for the controls with the wiring's
+       seed, `arm_seed`; every table clipped inside the stage's reach, ruling 7).
+    3. Route 1 (olfsysm's pn_rates on the set entries, `input_columns`) or, for the repeat, route 2 (the input solved,
+       `arm_input`, put back in the input's layout, `input_layout`; ruling 9: reported, not forced).
+    4. Both response rates re-held (`_hold`, `step2_targets`), the point built again at the held parameters and run
+       with every stage (`_build`, `_run`), which must reproduce the hold exactly (`_hold_identity`).
+    5. The run's PN rates against its table (`run_pn_check`: exact for route 1), an imposed run's check in E134's
+       reading (ruling 8, `imposed_run_check`), the largest PN and bouton rates (`stage_rates`).
+    6. Saved (`save_point`), its row appended to `table_path` and its provenance (`_provenance`, the table's, the
+       dendrites', the locks' and step 1's sha256) to `prov_path`.
+    """
+    from experiments import E134_population_baseline as E134R
+    from experiments.E77_input_screen import frame_sha256
+    tag = tag_of(arm, wiring)
+    if done is not None and tag in done:
+        return None
+    if not claim(tag, ctx.lane, reclaim):
+        print(f'E135 {tag}: claimed by another process, skipped', flush=True)
+        return None
+    t0 = time.time()
+    try:
+        base = _base_arm(arm)
+        if base in RUNG_ARMS and ctx.rung is None:
+            raise RuntimeError(f'{tag}: step 1 kept no rung above R1, so the rung\'s points are not run')
+        stage, srec = ctx.stage(arm.panel, wiring)
+        den = None if base in ('R1',) + RUNG_ARMS else ctx.dendrites(arm_units(arm))
+        table, set_gl, trec = arm_table(arm, stage, den, ctx.glomeruli, fits=ctx.fits, rung=ctx.rung,
+                                        seed=arm_seed(wiring))
+        set_od = list(trec['set_odors'])
+        route = 2 if arm == REPEAT_ARM else 1
+        kw, rrec = arm_input(stage, table, set_gl, route, set_odors=set_od)
+        orn = panel_orn(arm.panel)
+        if route == 1:
+            extra, orn_in = dict(pn_rates=input_columns(kw['extra_kws']['pn_rates'], orn)), None
+        else:
+            extra, orn_in = None, input_layout(kw['orn'], orn)
+        fam = family_parts(wiring)
+        tg = step2_targets(arm.panel, wiring, orn.shape[1], fam, ctx.lock134)
+        hold = _hold(wiring, orn if orn_in is None else orn_in, fam, extra, tg, f'E135 {tag}')
+        params, params_off = dict(hold['params']), dict(hold['params_off'])
+        built = _build(arm.panel, wiring, params, orn_in, extra)
+        out = _run(arm.panel, wiring, built, params, params_off)
+        ident = _hold_identity(arm.panel, wiring, out, hold)
+        _identity_put(ctx.lane, tag, ident)
+        if not ident['exact']:
+            raise RuntimeError(f'{tag}: the run at the held parameters is not the hold\'s: {ident}')
+        pn = run_pn_check(built, stage, table, set_gl, set_od, tol=ROUTE1_TOL_HZ if route == 1 else SOLVE_TOL_HZ,
+                          strict=route == 1)
+        imp = (imposed_run_check(table, e134_pn_rates(out['on']), set_gl, set_od)
+               if base in IMPOSED_ARMS + (REPEAT_ARM.arm,) else None)
+        sr = stage_rates(out)
+        table_sha = frame_sha256(table)
+        info = dict(model=FAMILY, wiring=wiring, panel=arm.panel, reading='held', tag=tag, experiment=EXPERIMENT,
+                    arm=arm.arm, route=route, units=arm_units(arm), rung=trec.get('rung'), seed=trec['seed'],
+                    set_glomeruli=list(set_gl), set_odors=set_od, table_sha256=table_sha, stages=list(built.stages),
+                    params=params, params_off=params_off, targets=tg, host=_host(), lane=ctx.lane, time=_now())
+        save_point(tag, out, built, info, table)
+        clip = trec.get('clip', {})
+        scale = (trec.get('scale') or {}).get('factors', {}).get(trec.get('rung'), {})
+        row = dict(tag=tag, panel=arm.panel, arm=arm.arm, wiring=wiring, route=route, units=arm_units(arm),
+                   rung=trec.get('rung'), seed=trec['seed'],
+                   **{k: float(v) for k, v in params.items() if np.isscalar(v)},
+                   **{f'off_{k}': float(v) for k, v in params_off.items() if np.isscalar(v)},
+                   n_kcs=int(out['on']['spike_counts'].shape[0]), n_odors=int(out['on']['spike_counts'].shape[1]),
+                   **E134R._counts_row(out),
+                   thr_factor=hold['thr_factor'], apl_factor=hold['apl_factor'], target_on=tg['target_on'],
+                   target_off=tg['target_off'], frac_on_target=tg['frac_on_target'],
+                   frac_off_target=tg['frac_off_target'], at_bound_thr=hold['at_bound_thr'],
+                   at_bound_apl=hold['at_bound_apl'], hold_n_sims=hold['n_sims'],
+                   fit_fixed_thr=float(fam['p']['fixed_thr']),
+                   n_set_glomeruli=len(set_gl), n_set_odors=len(set_od), n_mapped=trec.get('n_mapped'),
+                   clip_n_set=clip.get('n_set'), clip_n_clipped=clip.get('n_clipped'),
+                   clip_share=clip.get('share_clipped'), clip_largest_excursion_hz=clip.get('largest_excursion_hz'),
+                   clip_named=clip.get('named'),
+                   scale_min=min(scale.values()) if scale else np.nan, scale_max=max(scale.values()) if scale else np.nan,
+                   scale_named=','.join((trec.get('scale') or {}).get('named', {}).get(trec.get('rung'), [])) or None,
+                   pn_check_max_set_hz=pn['max_abs_diff_set'], pn_check_max_unset_hz=pn['max_abs_diff_unset'],
+                   imposed_check_max_hz=None if imp is None else imp['max_abs_diff_hz'],
+                   imposed_check_named=None if imp is None else imp['named'],
+                   **({} if route == 1 else dict(
+                       solve_converged=rrec['converged'], solve_max_abs_diff_hz=rrec['max_abs_diff'],
+                       solve_at_edge=rrec['at_edge'], solve_method=rrec['method'],
+                       solve_no_input_max_drift_hz=rrec['no_input_max_drift_hz'],
+                       ln_inhA_max_abs=rrec['ln_change']['inhA_max_abs'],
+                       ln_pn_inh_factor_max_rel=rrec['ln_change']['pn_inh_factor_max_rel'])),
+                   **sr, table_sha256=table_sha, input_sha256=frame_sha256(built.orn), stages='+'.join(built.stages),
+                   seconds=round(time.time() - t0, 1), host=_host(), lane=ctx.lane, time=_now(),
+                   threads=os.environ.get('OMP_NUM_THREADS'), identity_exact=True,
+                   lane_identity_exact=bool(srec['lane_identity'].get('exact')),
+                   **{k: v for k, v in H.code_commits().items() if not isinstance(v, (dict, list))})
+        E134R._append_csv(table_path, row)
+        prov = _read_json(prov_path) or dict(part='step2', lane=ctx.lane, script=SCRIPT, points={})
+        prov['points'][tag] = dict(
+            info=info, built_info={k: v for k, v in built.info.items() if not str(k).startswith('_')}, arm=trec,
+            route=rrec, pn_check=pn, imposed_check=imp, identity=ident, lane_identity=srec['lane_identity'],
+            port_identity=srec['port'], targets=tg, hold=dict(thr_factor=hold['thr_factor'],
+                                                              apl_factor=hold['apl_factor'], n_sims=hold['n_sims']),
+            table_sha256=table_sha, dendrites_sha256=None if den is None else frame_sha256(den),
+            lock_sha256=_sha256(LOCK_COPY) if LOCK_COPY.exists() else None,
+            e134_lock_sha256=_sha256(LOCK_E134()) if LOCK_E134().exists() else None,
+            step1_fits_sha256=_sha256(out_dir() / STEP1_FITS_FILE) if (out_dir() / STEP1_FITS_FILE).exists() else None,
+            thresholds_sha256=_sha256(out_dir() / THRESHOLDS_FILE) if (out_dir() / THRESHOLDS_FILE).exists() else None,
+            model=_provenance(built.orn))
+        _write_json(prov_path, prov)
+        print(f"E135 {tag}: {row['seconds']:.0f} s, rate on {row['rate_on']:.4f} / off {row['rate_off']:.4f}, "
+              f"clipped {clip.get('n_clipped')} of {clip.get('n_set')}", flush=True)
+        del built, out, hold
+        return row
+    except BaseException:
+        release(tag)
+        raise
+    finally:
+        gc.collect()
+
+
+def part_step2(lane: Optional[str] = None, reverse: bool = False, reclaim: bool = False) -> pd.DataFrame:
+    """Step 2, resumable, one point claimed at a time (`step2_points`, `run_point2`); every lane on any host runs the
+    whole list and skips what another has claimed or done. Refuses before E134's gate, this experiment's lock and step
+    1's fits (`require_step2`). The rung's 24 points run only if step 1 kept a rung above R1, the dF/F repeat's 24
+    only once the score asks for them. Before the first arm the classes' thresholds are frozen (`freeze_thresholds`:
+    written once; the file present at step 2's start decides). Rows in runs_2_<host>_<lane>.csv, provenance in
+    provenance_2_<host>_<lane>.json, identities in identity_2_<host>_<lane>.json, the runs in `step2_dirs`."""
+    lock, fits_rec = require_step2()
+    from experiments import E134_population_baseline as E134R
+    lock134 = require_e134_lock()
+    E134R.check_wirings()
+    if tuple(WIRINGS) != tuple(E134R.WIRINGS):
+        raise RuntimeError(f"E135's wirings {WIRINGS} are not E134's {E134R.WIRINGS}")
+    lane = lane or _host()
+    thr = freeze_thresholds()
+    ctx = Step2(lock, fits_rec, lane, lock134)
+    pts = step2_points(fits_rec, reverse)
+    table = out_dir() / f'runs_2_{_host()}_{lane}.csv'
+    prov = out_dir() / f'provenance_2_{_host()}_{lane}.json'
+    print(f'E135 step 2, lane {lane}: {len(pts)} points (rung {ctx.rung}, dF/F repeat '
+          f'{any(a.arm in DFF_REPEAT_ARMS for a, _ in pts)}; thresholds frozen {thr.get("written")}, somata '
+          f'{thr["classes"]["kc_soma"]["threshold"]:.4f} on strength by odor)', flush=True)
+    for arm, w in pts:
+        done = set(runs2_table()['tag'].astype(str))
+        run_point2(arm, w, ctx, table, prov, reclaim, done)
+    return runs2_table()
+
+
+def read_e134_table(name: str) -> pd.DataFrame:
+    """One of E134's score tables (`e134_results_dir`: score_stage_table.csv, step2_scores.csv, ...);
+    FileNotFoundError until E134 has written it."""
+    p = e134_results_dir() / name
+    if not p.exists():
+        raise FileNotFoundError(f"{p}: E134 has not written it yet")
+    return pd.read_csv(p)
+
+
+def e134_held_rows(stage_table: pd.DataFrame, group: str = E134_HELD_GROUP,
+                   readings: Optional[Mapping[str, str]] = None) -> pd.DataFrame:
+    """E134's runs held at the megamat flies' response rate, as the classes read them: the rows of its stage table of
+    group `group`, the megamat panel, APL on, each stage's default reading (or the reading `readings` names for it) and
+    the eight wirings (one row per stage and wiring)."""
+    from kcq import stage_readings as R
     t = stage_table
     need = {'stage', 'wiring', 'error'}
     if not need <= set(t.columns):
@@ -3229,40 +3799,173 @@ def class_thresholds(stage_table: Optional[pd.DataFrame] = None, group: str = E1
     if 'condition' in t.columns:
         t = t[t.condition == 'on']
     if 'reading' in t.columns:
-        t = t[np.array([st in R.DEFAULT_READINGS and rd == R.DEFAULT_READINGS[st].name
-                        for st, rd in zip(t.stage, t.reading)], dtype=bool)]
+        want = {st: dict(readings or {}).get(st, R.DEFAULT_READINGS[st].name) for st in R.DEFAULT_READINGS}
+        t = t[np.array([rd == want.get(st) for st, rd in zip(t.stage, t.reading)], dtype=bool)]
+    return t[t.wiring.isin(WIRINGS)].drop_duplicates(['stage', 'wiring'])
+
+
+def measure_values(t: pd.DataFrame, measure: str = 'all', matrix_for_dendrites: bool = False) -> np.ndarray:
+    """Each row's error under a measure (MEASURES): 'all' its population error ('error'; with `matrix_for_dendrites`
+    the PN dendrites' 'error_with_matrix', as E134's megamat stage error reads them), else the root mean square of the
+    named views' errors ('view_<view>'; 'strength' is the adopted measure's view, 'strength_sharing' E134_archive_score's
+    two-view error)."""
+    if measure not in MEASURES:
+        raise ValueError(f'measure {measure!r} not in {sorted(MEASURES)}')
+    views = MEASURES[measure]
+    if views is None:
+        e = t['error'].to_numpy(dtype=float)
+        if matrix_for_dendrites and 'error_with_matrix' in t.columns:
+            e = np.where(t['stage'].to_numpy() == 'pn_dendrite', t['error_with_matrix'].to_numpy(dtype=float), e)
+        return e
+    missing = [f'view_{v}' for v in views if f'view_{v}' not in t.columns]
+    if missing:
+        raise KeyError(f'measure {measure!r} needs the columns {missing}')
+    return np.sqrt(np.mean([t[f'view_{v}'].to_numpy(dtype=float) ** 2 for v in views], axis=0))
+
+
+def _column_values(t: pd.DataFrame, column: str) -> np.ndarray:
+    """A column of a scores table, 'error_strength_sharing' computed where absent (`measure_values`)."""
+    if column in t.columns:
+        return t[column].to_numpy(dtype=float)
+    if column == 'error_strength_sharing':
+        return measure_values(t, 'strength_sharing')
+    raise KeyError(f'no column {column!r}')
+
+
+# the columns reported beside the classes' measure for every arm, wiring and megamat stage (the rulings of 15:41): the
+# three-view population error, the PN dendrites' with the matrix view, the two-view error and the views themselves
+BESIDE_COLUMNS: Tuple[str, ...] = ('error', 'error_with_matrix', 'error_strength_sharing', 'view_strength',
+                                   'view_sharing', 'view_breadth', 'view_matrix')
+
+
+def e134_base(stage_table: Optional[pd.DataFrame] = None, group: str = E134_HELD_GROUP,
+              readings: Optional[Mapping[str, str]] = None) -> pd.DataFrame:
+    """The base of the classes, E134's own run of each wiring held at the megamat flies' response rate
+    (`e134_held_rows`, in each stage's default reading or `readings`): per (stage, wiring) its strength-by-odor view's
+    error ('strength_base', the classes' measure), its population error ('error_base', the guard's) and beside them
+    '<column>_base' of BESIDE_COLUMNS."""
+    t = e134_held_rows(read_e134_table(E134_STAGE_TABLE) if stage_table is None else stage_table, group, readings)
+    out = t[['stage', 'wiring']].copy()
+    for c in BESIDE_COLUMNS:
+        name = dict(error='error_base', view_strength='strength_base').get(c, f'{c}_base')
+        try:
+            out[name] = _column_values(t, c)
+        except KeyError:
+            out[name] = np.nan
+    return out.reset_index(drop=True)
+
+
+def class_thresholds(stage_table: Optional[pd.DataFrame] = None, group: str = E134_HELD_GROUP,
+                     stages: Sequence[str] = CLASS_STAGES, column: str = 'error',
+                     readings: Optional[Mapping[str, str]] = None) -> dict:
+    """Thresholds in one-fly units (ruling 10, and the rulings of 15:41): per megamat stage, THRESHOLD_SE_MULT
+    standard errors over the eight wirings (the SD, ddof 1, of the wirings' values over sqrt(8)) of `column` in E134's
+    runs held at the megamat flies' response rate (its stage table's group 'megamat_held', the megamat panel, APL on,
+    each stage's default reading or `readings`). The classes read 'view_strength' (the somata's replaces the entry's
+    0.15 and ±0.05 in `classify`, each stage's is the routes' agreement threshold); the guard reads 'view_strength' and
+    'error' (`threshold_values`). Reads <shared>/results/E134_population_baseline/score_stage_table.csv by default."""
+    t = e134_held_rows(read_e134_table(E134_STAGE_TABLE) if stage_table is None else stage_table, group, readings)
     out = {}
-    for st, sub in t[t.wiring.isin(WIRINGS) & t.stage.isin(stages)].groupby('stage'):
-        e = sub.drop_duplicates('wiring').error.to_numpy(dtype=float)
+    for st, sub in t[t.stage.isin(stages)].groupby('stage'):
+        e = _column_values(sub.drop_duplicates('wiring'), column)
         n = int(np.isfinite(e).sum())
         se = float(np.nanstd(e, ddof=1) / np.sqrt(n)) if n > 1 else np.nan
-        out[st] = dict(se=se, threshold=THRESHOLD_SE_MULT * se, n_wirings=n, group=group)
+        out[st] = dict(se=se, threshold=THRESHOLD_SE_MULT * se, n_wirings=n, group=group, column=column,
+                       reading=str(sub.reading.iloc[0]) if 'reading' in sub.columns else None)
     if 'kc_soma' in stages and 'kc_soma' not in out:
         raise KeyError(f'no megamat kc_soma rows of group {group!r} in the stage table')
     return out
 
 
-def classify(scores: pd.DataFrame, thresholds: Optional[Mapping[str, Mapping[str, float]]] = None) -> dict:
-    """The entry's classes from step 2's scores against E134's runs.
+def e134_apl16_rows(step2_scores: pd.DataFrame, source: str = E134_APL16_SOURCE) -> pd.DataFrame:
+    """The family's own runs on the APL16 input in E134's step 2 (source 'E90:B'): its somata on the APL16 panel, each
+    condition, the default reading, the eight wirings (the guard's base at the APL16 somata)."""
+    from kcq import stage_readings as R
+    t = step2_scores
+    t = t[(t.source == source) & (t.stage == 'kc_soma') & (t.panel == 'apl16')
+          & (t.reading == R.DEFAULT_READINGS['kc_soma'].name) & t.wiring.isin(WIRINGS)]
+    return t.drop_duplicates(['condition', 'wiring'])
+
+
+def threshold_values(stage_table: pd.DataFrame, step2_scores: Optional[pd.DataFrame] = None) -> dict:
+    """Every threshold step 2's score reads (the rulings of 15:41), from E134's tables: 'classes' (view_strength of
+    each megamat stage in its default reading; the somata's is the classes' threshold), 'error' (the population error,
+    for the guard), 'second_reading' (view_strength in the classes' second reading, SECOND_READINGS) and
+    'apl16_somata' (per condition, view_strength and the population error of the family's APL16 somata in E134's step
+    2, for the guard)."""
+    rec = dict(rule=f'{THRESHOLD_SE_MULT:g} x SD (ddof 1) / sqrt(8) over the eight wirings in E134\'s runs', mult=THRESHOLD_SE_MULT,
+               classes=class_thresholds(stage_table, stages=THRESHOLD_STAGES, column='view_strength'),
+               error=class_thresholds(stage_table, stages=THRESHOLD_STAGES, column='error'),
+               second_reading=class_thresholds(stage_table, stages=CLASS_STAGES, column='view_strength',
+                                               readings=SECOND_READINGS),
+               second_readings=dict(SECOND_READINGS), apl16_somata={})
+    if step2_scores is not None and len(step2_scores):
+        a = e134_apl16_rows(step2_scores)
+        for cond, sub in a.groupby('condition'):
+            rec['apl16_somata'][str(cond)] = {}
+            for col in GUARD_COLUMNS:
+                e = sub[col].to_numpy(dtype=float)
+                n = int(np.isfinite(e).sum())
+                se = float(np.nanstd(e, ddof=1) / np.sqrt(n)) if n > 1 else np.nan
+                rec['apl16_somata'][str(cond)][col] = dict(se=se, threshold=THRESHOLD_SE_MULT * se, n_wirings=n,
+                                                           source=E134_APL16_SOURCE)
+    return rec
+
+
+def freeze_thresholds(root: Optional[Path] = None) -> dict:
+    """The thresholds frozen before step 2's first arm (the rulings of 15:41): `threshold_values` of E134's
+    score_stage_table.csv and step2_scores.csv, written with their sha256 to results/.../THRESHOLDS_FILE once. An
+    existing file is returned as it is and never recomputed: the file present at step 2's start decides."""
+    p = (out_dir() if root is None else Path(root)) / THRESHOLDS_FILE
+    if p.exists():
+        return _read_json(p)
+    d = e134_results_dir()
+    rec = dict(threshold_values(read_e134_table(E134_STAGE_TABLE), read_e134_table(E134_STEP2_SCORES)),
+               e134_stage_table_sha256=_sha256(d / E134_STAGE_TABLE),
+               e134_step2_scores_sha256=_sha256(d / E134_STEP2_SCORES), written=_now(), host=_host(),
+               **{k: v for k, v in H.code_commits().items() if not isinstance(v, (dict, list))})
+    _write_json(p, rec)
+    return rec
+
+
+def read_thresholds(root: Optional[Path] = None) -> dict:
+    """The thresholds step 2 froze at its start (`freeze_thresholds`); PermissionError if there are none (step 2 has
+    not started)."""
+    p = (out_dir() if root is None else Path(root)) / THRESHOLDS_FILE
+    if not p.exists():
+        raise PermissionError(f"{p}: no thresholds frozen yet; step 2 freezes them before its first arm")
+    return _read_json(p)
+
+
+def classify(scores: pd.DataFrame, thresholds: Optional[Mapping[str, Mapping[str, float]]] = None,
+             soma_col: str = 'strength') -> dict:
+    """The entry's classes from step 2's scores against E134's runs, on strength by odor (the adopted measure; the
+    rulings of 15:41).
+
+    "Upstream": the imposed dendrites lower the somata's strength-by-odor error by the threshold or more on six of
+    eight wirings, by more than both permuted controls, and halve the boutons' strength-by-odor error. "Upstream to the
+    boutons only": the bouton condition holds and the somata's strength-by-odor error stays within ± the threshold.
+    (f): the imposed arm alone would be upstream, but the permuted controls gain as much. The carry classes, read only
+    when "upstream" holds: R1 (or the kept rung, by more than its glomerulus-permuted control) gives at least half of
+    the imposed fall of the strength-by-odor error at the boutons and at the somata.
 
     Args:
         scores: one row per (arm, wiring, stage) of the megamat input with columns arm, wiring, stage
-            ('pn_bouton' / 'kc_soma'), error (the population error), error_base (E134's run of the same wiring),
-            strength (the strength-by-odor view's error) and strength_base, and excluded (no class: outside a band on
-            the APL16 input, or more than 1 % of bouton responses above 300 Hz).
-        thresholds: per stage {'threshold': ...} (`class_thresholds`, ruling 10); default the entry's fixed numbers.
+            ('pn_bouton' / 'kc_soma'), strength (the strength-by-odor view's error) and strength_base (E134's run of
+            the same wiring), error and error_base (the population error, read with `soma_col` 'error'), and excluded
+            (no class: outside a band on the APL16 input, or more than 1 % of bouton responses above 300 Hz).
+        thresholds: per stage {'threshold': ...} (`class_thresholds`); default the entry's fixed numbers.
+        soma_col: the somata's column, 'strength' (the rulings) or 'error' (the entry's first text).
 
     Returns:
-        dict with 'upstream', 'boutons_only', 'permuted_as_much' (the imposed arm alone would be upstream, but the
-        permuted controls gain as much: outcome (f)), 'not_upstream' (bools), 'global_carry' and 'terms_carry' (read
-        only when 'upstream' holds; the boutons' gain is the fall of their strength-by-odor error, as 'upstream' reads
-        them), the per-arm counts behind them and the thresholds.
+        dict with 'upstream', 'boutons_only', 'permuted_as_much', 'not_upstream' (bools), 'global_carry' and
+        'terms_carry', the per-arm counts behind them and the thresholds.
     """
     s = scores[~scores.get('excluded', pd.Series(False, index=scores.index)).astype(bool)]
     thr_soma = SOMA_DROP_UPSTREAM if thresholds is None else float(thresholds['kc_soma']['threshold'])
     thr_within = SOMA_WITHIN_BOUTONS_ONLY if thresholds is None else float(thresholds['kc_soma']['threshold'])
 
-    def drop(arm, stage, col='error'):
+    def drop(arm, stage, col):
         x = s[(s.arm == arm) & (s.stage == stage)].set_index('wiring')
         return x[f'{col}_base'] - x[col]
 
@@ -3270,9 +3973,9 @@ def classify(scores: pd.DataFrame, thresholds: Optional[Mapping[str, Mapping[str
         return int(np.sum(np.asarray(mask, dtype=bool)))
 
     out = {}
-    soma = drop('imposed', 'kc_soma')
-    soma_g = drop('imposed_glom_perm', 'kc_soma').reindex(soma.index)
-    soma_o = drop('imposed_odor_perm', 'kc_soma').reindex(soma.index)
+    soma = drop('imposed', 'kc_soma', soma_col)
+    soma_g = drop('imposed_glom_perm', 'kc_soma', soma_col).reindex(soma.index)
+    soma_o = drop('imposed_odor_perm', 'kc_soma', soma_col).reindex(soma.index)
     b = s[(s.arm == 'imposed') & (s.stage == 'pn_bouton')].set_index('wiring')
     halved = (b.strength <= BOUTON_STRENGTH_HALVED * b.strength_base) if len(b) else pd.Series(dtype=bool)
     n_soma_alone = n_ok(soma >= thr_soma)
@@ -3285,9 +3988,9 @@ def classify(scores: pd.DataFrame, thresholds: Optional[Mapping[str, Mapping[str
                                    and n_halved >= MIN_WIRINGS)
     out['not_upstream'] = bool(not out['upstream'] and not out['boutons_only'])
     gain_b = drop('imposed', 'pn_bouton', 'strength')
-    r1_b, r1_s = drop('R1', 'pn_bouton', 'strength'), drop('R1', 'kc_soma')
-    rg_b, rg_s = drop('rung', 'pn_bouton', 'strength'), drop('rung', 'kc_soma')
-    rp_b, rp_s = drop('rung_glom_perm', 'pn_bouton', 'strength'), drop('rung_glom_perm', 'kc_soma')
+    r1_b, r1_s = drop('R1', 'pn_bouton', 'strength'), drop('R1', 'kc_soma', soma_col)
+    rg_b, rg_s = drop('rung', 'pn_bouton', 'strength'), drop('rung', 'kc_soma', soma_col)
+    rp_b, rp_s = drop('rung_glom_perm', 'pn_bouton', 'strength'), drop('rung_glom_perm', 'kc_soma', soma_col)
     half = lambda x, ref: (x >= CARRY_SHARE * ref.reindex(x.index))
     n_r1 = n_ok(half(r1_b, gain_b) & half(r1_s, soma)) if len(r1_b) else 0
     out['global_carry'] = bool(out['upstream'] and n_r1 >= MIN_WIRINGS)
@@ -3297,7 +4000,7 @@ def classify(scores: pd.DataFrame, thresholds: Optional[Mapping[str, Mapping[str
     out['counts'] = dict(soma_upstream=n_soma, soma_alone=n_soma_alone, boutons_halved=n_halved, soma_within=n_within,
                          r1_carry=n_r1, rung_carry=n_rung)
     out['thresholds'] = dict(soma_drop=thr_soma, soma_within=thr_within, bouton_halved=BOUTON_STRENGTH_HALVED,
-                             reset=thresholds is not None)
+                             reset=thresholds is not None, soma_col=soma_col)
     return out
 
 
@@ -3309,6 +4012,14 @@ def class_of(c: Mapping) -> str:
     return 'not_upstream'
 
 
+def outcome_letter(classes: Mapping) -> str:
+    """The outcome's letter of `classify`'s classes, before the guards: (a) to (f)."""
+    c = class_of(classes)
+    if c == 'upstream':
+        return 'a' if classes['global_carry'] else 'b' if classes['terms_carry'] else 'c'
+    return 'd' if c == 'boutons_only' else 'f' if c == 'permuted_as_much' else 'e'
+
+
 def dff_scores(scores: pd.DataFrame) -> pd.DataFrame:
     """Step 2's scores with the dF/F repeat's arms (DFF_REPEAT_ARMS) in place of the three imposed arms, for
     `classify` (the other arms kept)."""
@@ -3318,21 +4029,25 @@ def dff_scores(scores: pd.DataFrame) -> pd.DataFrame:
     return pd.concat([rest, dff], ignore_index=True)
 
 
-def outcome(classes: Mapping, classes_dff: Optional[Mapping] = None) -> dict:
+def outcome(classes: Mapping, classes_dff: Optional[Mapping] = None, classes_second: Optional[Mapping] = None,
+            guard_rec: Optional[Mapping] = None) -> dict:
     """The entry's outcome from `classify`'s classes: (a) upstream and the global parameters carry, (b) upstream and the
     glomerulus terms carry, (c) upstream and no fitted stage carries, (d) upstream to the boutons only, (e) not upstream,
-    (f) the permuted controls gain as much as the imposed dendrites. Before (e) or (f) is declared, the class read with
-    the dF/F repeat (`classes_dff`, `classify` of `dff_scores`) is compared (ruling 1's guard): if it differs the
-    outcome is 'unit-dependent' (nothing is closed; it goes to Tom and Yang), and without it the outcome waits on the
-    repeat ('needs the dF/F repeat')."""
+    (f) the permuted controls gain as much as the imposed dendrites.
+
+    Before (e) or (f) is declared, the class read with the dF/F repeat (`classes_dff`, `classify` of `dff_scores`) is
+    compared (ruling 1's guard): without it the outcome waits on the repeat ('needs the dF/F repeat'), and if it
+    differs the outcome is 'unit-dependent' (nothing is closed; it goes to Tom and Yang). The classes read in the second
+    reading (`classes_second`, SECOND_READINGS) are compared too: an outcome that differs is 'reading_dependent', the
+    default reading decides, and (e) or (f) is not declared on it ('reading-dependent'). Rule 3's guard
+    (`guard_rec`, `guard`) is carried: a raised guard of the arm the outcome hands on (R1 for (a), the rung for (b)) is
+    named ('at_a_cost_beside', with the views and stages) and that stage is not called an improvement."""
     c = class_of(classes)
-    if c == 'upstream':
-        o = 'a' if classes['global_carry'] else 'b' if classes['terms_carry'] else 'c'
-    elif c == 'boutons_only':
-        o = 'd'
-    else:
-        o = 'f' if c == 'permuted_as_much' else 'e'
+    o = outcome_letter(classes)
     res = dict(outcome=o, cls=c)
+    if classes_second is not None:
+        o2 = outcome_letter(classes_second)
+        res.update(cls_second=class_of(classes_second), outcome_second=o2, reading_dependent=bool(o2 != o))
     if o in ('e', 'f'):
         if classes_dff is None:
             res.update(outcome='needs the dF/F repeat', pending=o)
@@ -3341,34 +4056,657 @@ def outcome(classes: Mapping, classes_dff: Optional[Mapping] = None) -> dict:
             res['cls_dff'] = cd
             if cd != c:
                 res.update(outcome='unit-dependent', pending=o)
+            elif res.get('reading_dependent'):
+                res.update(outcome='reading-dependent', pending=o)
+    if guard_rec is not None:
+        res['guard_raised'] = {a: bool(g.get('raised')) for a, g in guard_rec.items()}
+        arm = {'a': 'R1', 'b': 'rung'}.get(o)
+        if arm is not None:
+            g = guard_rec.get(arm, {})
+            res['improvement'] = not bool(g.get('raised'))
+            if g.get('raised'):
+                res['at_a_cost_beside'] = list(g.get('raised_items', []))
     return res
 
 
-def part_score() -> dict:
-    """Step 2's runs scored and classified; refuses before E134's gate."""
-    require_e134_gate()
-    raise NotImplementedError("the score reads step 2's runs (atlas's stage readings on them) once they exist")
+# ---------------------------------------------------------------------------
+# step 2's score
+
+def step2_groups(dirs: Optional[Sequence[Path]] = None) -> Dict[Tuple[str, str], list]:
+    """Step 2's saved runs (`step2_dirs`, stage_readings' `load_step3_run`) by (input panel, arm), each group's runs in
+    WIRINGS order; points not run yet are left out."""
+    from kcq import stage_readings as R
+    groups: Dict[Tuple[str, str], list] = {}
+    for arm, w in planned_step2(with_rung=True, with_dff_repeat=True):
+        try:
+            run = R.load_step3_run(tag_of(arm, w), dirs=step2_dirs() if dirs is None else dirs)
+        except FileNotFoundError:
+            continue
+        groups.setdefault((arm.panel, arm.arm), []).append(run)
+    return groups
+
+
+def _flies():
+    from kcq import stage_readings as R
+    return R.FlyCache()
+
+
+def score_group(runs: Sequence, flies, lock134: Optional[Mapping] = None, readings: Optional[Sequence[str]] = None,
+                n_floor: Optional[int] = None) -> pd.DataFrame:
+    """One group's runs read as E134's score reads its runs (atlas's `read_run`, each wiring as one fly with its seed
+    index, E83's wiring order) in each stage's default reading and its alternatives (or those named), and scored with
+    hal's measures as E134 scores them (`score_family`: each wiring's population error and views, their mean and the
+    common error, beside the flies' floor and one fly against the others)."""
+    from experiments import E134_population_baseline as E134R
+    from kcq import stage_readings as R
+    stages = [s for s in R.STAGES if s in runs[0].stages()]
+    out = []
+    for stage, rd in E134R._reading_sets(stages, readings):
+        if rd.curve_scope == 'family':
+            fam = R.read_family(list(runs), stages=[stage], readings={stage: rd}, lock=lock134, flies=flies)
+        else:
+            fam = {r.wiring: R.read_run(r, stages=[stage], readings={stage: rd}, seed_index=WIRINGS.index(r.wiring),
+                                        lock=lock134, flies=flies) for r in runs}
+        sc = E134R.score_family(fam, rd.name, flies, E134R.N_FLOOR if n_floor is None else int(n_floor))
+        if len(sc):
+            out.append(sc)
+        gc.collect()
+    return pd.concat(out, ignore_index=True) if out else pd.DataFrame()
+
+
+def run_bands(o: Mapping[str, tuple]) -> dict:
+    """An APL16 run's realism (E83's `realism`, E77's `realism_of`): the response rates and their ratio, the response
+    rate ρ, the odors-per-KC distances and 'realism_flag' (empty inside the four bands)."""
+    from experiments import E83_cross_wiring_fit as E83
+    return E83.realism(dict(o))
+
+
+def apl16_effect(o: Mapping[str, tuple]) -> dict:
+    """The APL-effect statistics of an APL16 run (a held-out test, reported and not gated): `apl_effect_stats_readout`
+    on raw counts ('raw_') and through the calibrated readout, K set on the run's APL-on counts ('cal_', E83's
+    `readout_K`): the loss, its mean and pattern parts, the amplitude and shape parts, ρ and Pearson r."""
+    from experiments import E83_cross_wiring_fit as E83
+    on, off = o['on'][1], o['off'][1]
+    row = {f'raw_{k}': v for k, v in H.apl_effect_stats_readout(on, off, 'raw').items()}
+    K = E83.readout_K(dict(o))
+    row.update({f'cal_{k}': v for k, v in H.apl_effect_stats_readout(on, off, 'saturating', K).items()}, cal_K=K)
+    return row
+
+
+def _outputs(run) -> Dict[str, tuple]:
+    return {c: (run.conditions[c]['responses'], run.conditions[c]['spike_counts']) for c in ('on', 'off')}
+
+
+def totals_cv(run, glomeruli: Sequence[str], odors: Sequence[str] = tuple(H.MEGAMAT12)) -> dict:
+    """A description beside (E119's and E120's statistic, here on the model's own units, neither sampled nor pooled):
+    the coefficient of variation over `odors` (default the 12 megamat odors both inputs have) of each odor's mean
+    change (window minus settled pre-odor level, signed), APL on, at the PN dendrites of `glomeruli` (the shared 28)
+    and at the PN boutons of those glomeruli. The entry's expectations are given in it (the family 0.074 against the
+    flies' 0.312 at the dendrites, 0.103 against 0.375 at the boutons)."""
+    c = run.conditions['on']
+    rec = {}
+    gl = set(str(g) for g in glomeruli)
+    for st in ('pn', 'bouton'):
+        if f'{st}_win' not in c:
+            continue
+        x = c[f'{st}_win'] - c[f'{st}_pre']
+        od = [o for o in odors if o in x.columns]
+        if st == 'pn':
+            keep = np.array([str(g) in gl for g in x.index])
+        else:
+            keep = np.array([str(g) in gl for g in np.asarray(run.meta['bouton_glomerulus'])])
+        tot = x.loc[keep, od].mean(axis=0).to_numpy(dtype=float)
+        rec[f'totals_cv_{st}'] = float(np.std(tot) / np.mean(tot)) if len(tot) and np.mean(tot) != 0 else np.nan
+    return rec
+
+
+def run_realism(run, glomeruli: Sequence[str], lock134: Optional[Mapping] = None) -> dict:
+    """A step-2 run's realism, reported only: the overall response rates with APL on and off and their ratio, the
+    largest spike counts, the parameters after the re-hold (threshold and APL scales) beside the fit's threshold, the
+    largest PN and bouton rates and the share of bouton responses above 300 Hz (`stage_rates`), the totals' CV
+    (`totals_cv`); on the APL16 input the four bands (`run_bands`), on megamat the flies' held rate beside."""
+    from experiments import E134_population_baseline as E134R
+    info = run.info if isinstance(run.info, Mapping) else {}
+    row = dict(tag=run.tag, input_panel=run.input_panel, arm=info.get('arm'), wiring=run.wiring,
+               route=info.get('route'))
+    row.update(E134R._counts_row(run.conditions))
+    p = info.get('params') or {}
+    row.update({k: p.get(k, np.nan) for k in E134R.PARAM_KEYS})
+    row.update(stage_rates(run.conditions))
+    row.update(totals_cv(run, glomeruli))
+    if run.input_panel == 'apl16':
+        b = run_bands(_outputs(run))
+        row.update({k: v for k, v in b.items() if k not in row})
+        row['outside_band'] = bool(b.get('realism_flag'))
+    else:
+        row['realism_flag'] = ''
+        row['outside_band'] = False
+        if run.input_panel == 'megamat' and lock134 is not None:
+            row['rate_on_flies'] = E134R.held_rate('megamat', lock134)
+    return row
+
+
+def exclusions(realism: pd.DataFrame) -> Dict[Tuple[str, str], List[str]]:
+    """(arm, wiring) of the megamat input -> why it gets no class (the entry's): its APL16 run (the arms run on both
+    inputs: R1, the rung and the imposed dendrites) is outside a band, or its own megamat run has more than 1 % of its
+    bouton responses above 300 Hz (`stage_rates`)."""
+    out: Dict[Tuple[str, str], List[str]] = {}
+    for r in realism.to_dict('records'):
+        key = (str(r['arm']), str(r['wiring']))
+        if r['input_panel'] == 'apl16' and bool(r.get('outside_band')):
+            out.setdefault(key, []).append(f"its APL16 run is outside a band ({r.get('realism_flag')})")
+        if r['input_panel'] == 'megamat' and bool(r.get('bouton_cap_excluded')):
+            out.setdefault(key, []).append(f"{r['bouton_share_above_300']:.4f} of its bouton responses above "
+                                           f'{BOUTON_RATE_CAP_HZ:.0f} Hz')
+    return out
+
+
+def class_rows(scores: pd.DataFrame, base: pd.DataFrame,
+               excluded: Optional[Mapping[Tuple[str, str], Sequence[str]]] = None,
+               readings: Optional[Mapping[str, str]] = None) -> pd.DataFrame:
+    """The rows `classify` and `guard` read, one per (arm, wiring, stage) of the megamat input (the classes' stages and
+    the PN dendrites), the megamat panel, APL on, each stage's default reading (or `readings`, the second reading):
+    'strength' (the strength-by-odor view's error, the classes' measure), 'error' (the population error, three
+    views), the columns reported beside (BESIDE_COLUMNS: the two-view error, sharing, breadth, the matrix view), E134's
+    same wiring beside (`e134_base` in the same readings) with the changes ('<column>_change'), the falls ('drop' of
+    the population error, 'strength_drop'), 'strength_ratio', and 'excluded' with its reasons (`exclusions`)."""
+    from kcq import stage_readings as R
+    excluded = excluded or {}
+    want = {st: dict(readings or {}).get(st, R.DEFAULT_READINGS[st].name) for st in R.DEFAULT_READINGS}
+    s = scores[(scores.input_panel == 'megamat') & (scores.panel == 'megamat') & (scores.condition == 'on')
+               & scores.wiring.isin(WIRINGS) & scores.stage.isin(CLASS_STAGES + ('pn_dendrite',))]
+    s = s[np.array([rd == want.get(st) for st, rd in zip(s.stage, s.reading)], dtype=bool)]
+    keep = [c for c in ('error', 'error_with_matrix') if c in s.columns] + [c for c in s.columns if c.startswith('view_')]
+    out = s[['arm', 'wiring', 'stage', 'reading'] + keep].copy()
+    out['strength'] = out['view_strength'] if 'view_strength' in out.columns else np.nan
+    try:
+        out['error_strength_sharing'] = _column_values(out, 'error_strength_sharing')
+    except KeyError:
+        out['error_strength_sharing'] = np.nan
+    out = out.merge(base, on=['stage', 'wiring'], how='left')
+    out['drop'] = out.error_base - out.error
+    out['strength_drop'] = out.strength_base - out.strength
+    out['strength_ratio'] = out.strength / out.strength_base
+    for c in BESIDE_COLUMNS:
+        b = dict(error='error_base', view_strength='strength_base').get(c, f'{c}_base')
+        if c in out.columns and b in out.columns:
+            out[f'{c}_change'] = out[c] - out[b]
+    why = [list(excluded.get((str(a), str(w)), ())) for a, w in zip(out.arm, out.wiring)]
+    out['excluded'] = [bool(x) for x in why]
+    out['excluded_why'] = ['; '.join(x) for x in why]
+    return out.reset_index(drop=True)
+
+
+def stage_error_measure(t: pd.DataFrame, measure: str, stages: Optional[Sequence[str]] = None) -> pd.DataFrame:
+    """The megamat stage error under `measure` (`measure_values`; 'all' with the PN dendrites on four views, E134's
+    definition) per (group, wiring) of a scores table or E134's stage table: the root mean square over `stages` (default
+    E134's four megamat stages, MEGAMAT_ERROR_STAGES; NaN where one is missing), each in its default reading, APL on,
+    the eight wirings; and per group the mean over its wirings (wiring 'model')."""
+    from experiments import E134_population_baseline as E134R
+    from kcq import stage_readings as R
+    st = tuple(E134R.MEGAMAT_ERROR_STAGES if stages is None else stages)
+    s = t[(t.panel == 'megamat') & (t.condition == 'on') & t.wiring.isin(WIRINGS) & t.stage.isin(st)]
+    s = s[np.array([rd == R.DEFAULT_READINGS[x].name for x, rd in zip(s.stage, s.reading)], dtype=bool)]
+    if not len(s):
+        return pd.DataFrame(columns=['group', 'wiring', 'value'])
+    s = s.drop_duplicates(['group', 'wiring', 'stage'])
+    s = s.assign(_v=measure_values(s, measure, matrix_for_dendrites=True))
+    rows = []
+    for (g, w), x in s.groupby(['group', 'wiring'], sort=False):
+        v = x._v.to_numpy(dtype=float)
+        rows.append(dict(group=g, wiring=w, value=float(np.sqrt(np.mean(v ** 2))) if len(v) == len(st) else np.nan))
+    out = pd.DataFrame(rows)
+    model = out.groupby('group', sort=False).value.mean().reset_index().assign(wiring='model')
+    return pd.concat([out, model[['group', 'wiring', 'value']]], ignore_index=True)
+
+
+# the megamat stage error's forms (the rulings of 15:41): on strength over the four stages (the adopted measure), the
+# three-view error beside (E134's definition), the two-view error beside; for the imposed arms both also over the
+# boutons, claws and somata, since their dendrites are the flies' by construction
+STAGE_ERROR_FORMS: Dict[str, Tuple[str, Optional[Tuple[str, ...]]]] = {
+    'stage_error_strength': ('strength', None),
+    'stage_error_three_view': ('all', None),
+    'stage_error_strength_sharing': ('strength_sharing', None),
+    'stage_error_strength_3': ('strength', CLASS_STAGES),
+    'stage_error_three_view_3': ('all', CLASS_STAGES),
+}
+
+
+def stage_error_table(scores: pd.DataFrame, stage_table: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+    """The megamat stage error of every group of step 2 in each form of STAGE_ERROR_FORMS (`stage_error_measure`), per
+    wiring and their mean ('model'), beside E134's held runs of the same wiring ('<form>_base', from `stage_table`,
+    its score_stage_table.csv, group 'megamat_held') and the change (lower is better). The three-stage forms are given
+    for the imposed arms only. On the APL16 input the megamat stages are read on the 12 megamat odors it has."""
+    if not len(scores):
+        return pd.DataFrame()
+    keys = scores[['input_panel', 'arm', 'group']].drop_duplicates()
+    out = None
+    for form, (m, stages) in STAGE_ERROR_FORMS.items():
+        try:
+            v = stage_error_measure(scores, m, stages)
+        except KeyError:
+            continue
+        v = v.rename(columns={'value': form})
+        if stage_table is not None and len(stage_table):
+            try:
+                b = stage_error_measure(stage_table[stage_table.group == E134_HELD_GROUP], m, stages)
+                v[f'{form}_base'] = v.wiring.map(b.set_index('wiring').value)
+                v[f'{form}_change'] = v[form] - v[f'{form}_base']
+            except KeyError:
+                pass
+        out = v if out is None else out.merge(v, on=['group', 'wiring'], how='outer')
+    if out is None:
+        return pd.DataFrame()
+    out = keys.merge(out, on='group', how='right')
+    imposed = out.arm.map(lambda a: _base_arm(Arm('megamat', str(a))) in IMPOSED_ARMS + (REPEAT_ARM.arm,))
+    for c in [c for c in out.columns if c.startswith(('stage_error_strength_3', 'stage_error_three_view_3'))]:
+        out.loc[~imposed, c] = np.nan
+    order = {w: i for i, w in enumerate(list(WIRINGS) + ['model'])}
+    return out.sort_values(['input_panel', 'arm', 'wiring'], key=lambda x: x.map(order) if x.name == 'wiring' else x,
+                           kind='mergesort').reset_index(drop=True)
+
+
+def routes_check(rows: pd.DataFrame, thresholds: Mapping, runs: Optional[pd.DataFrame] = None) -> dict:
+    """Ruling 9 on the adopted measure: the route-2 repeat against its route-1 run ('imposed' on the first wiring),
+    each megamat stage's strength-by-odor error (`routes_agree`, at the frozen view_strength thresholds), with the
+    population error's difference beside, and the solve's record from the runs table. No class rests on it."""
+    w = WIRINGS[0]
+    a = rows[(rows.arm == 'imposed') & (rows.wiring == w)].set_index('stage')
+    b = rows[(rows.arm == REPEAT_ARM.arm) & (rows.wiring == w)].set_index('stage')
+    if not len(a) or not len(b):
+        return dict(available=False)
+    res = routes_agree({k: float(v) for k, v in a.strength.items()}, {k: float(v) for k, v in b.strength.items()},
+                       thresholds)
+    res['available'] = True
+    res['column'] = 'view_strength'
+    res['population_error'] = {st: dict(route1=float(a.error.get(st, np.nan)), route2=float(b.error.get(st, np.nan)),
+                                        diff=float(abs(a.error.get(st, np.nan) - b.error.get(st, np.nan))))
+                               for st in CLASS_STAGES}
+    if runs is not None and len(runs) and 'tag' in runs.columns:
+        r = runs[runs.tag == tag_of(REPEAT_ARM, w)]
+        if len(r):
+            res['solve'] = {k: r.iloc[0][k] for k in r.columns if str(k).startswith(('solve_', 'ln_'))}
+    return res
+
+
+def apl16_guard_rows(scores: pd.DataFrame, step2_scores: Optional[pd.DataFrame]) -> pd.DataFrame:
+    """The guard's rows at the APL16 somata: for R1 and the kept rung on the APL16 input, per wiring and condition, the
+    somata's strength-by-odor error and population error (the APL16 panel, the default reading) beside the family's own
+    run of the same wiring in E134's step 2 (`e134_apl16_rows`)."""
+    from kcq import stage_readings as R
+    if not len(scores) or step2_scores is None or not len(step2_scores):
+        return pd.DataFrame()
+    s = scores[(scores.input_panel == 'apl16') & scores.arm.isin(GUARD_ARMS) & (scores.stage == 'kc_soma')
+               & (scores.panel == 'apl16') & (scores.reading == R.DEFAULT_READINGS['kc_soma'].name)
+               & scores.wiring.isin(WIRINGS)]
+    b = e134_apl16_rows(step2_scores)[['condition', 'wiring'] + list(GUARD_COLUMNS)]
+    b = b.rename(columns={c: f'{c}_base' for c in GUARD_COLUMNS})
+    return s[['arm', 'wiring', 'condition'] + list(GUARD_COLUMNS)].merge(b, on=['condition', 'wiring'], how='left')
+
+
+def step1_rung_of_arm(arm: str, highest_kept: Optional[str]) -> Optional[str]:
+    """The step-1 rung behind a step-2 arm: R1's is 'R1', the rung's is step 1's highest kept rung ('R2m', 'R2f' or
+    'R3')."""
+    return 'R1' if arm == 'R1' else highest_kept if arm == 'rung' else None
+
+
+def _strength_by_direction(step1_rungs: pd.DataFrame, rung: str) -> Dict[str, float]:
+    r = step1_rungs[step1_rungs.rung == rung]
+    if not len(r):
+        return {}
+    return {c[:-len('_view_strength')]: float(r.iloc[0][c]) for c in step1_rungs.columns
+            if c.endswith('_view_strength') and '->' in c}
+
+
+def step1_dendrite_guard(step1_rungs: Optional[pd.DataFrame], rung: Optional[str]) -> dict:
+    """The guard at the dendrites (the rulings): raised where the rung's held-out strength-by-odor error in step 1
+    (step1_rungs.csv, '<direction>_view_strength') is above R0's in both directions."""
+    if step1_rungs is None or not len(step1_rungs) or rung is None:
+        return dict(available=False, stage='pn_dendrite', column='view_strength')
+    x, r0 = _strength_by_direction(step1_rungs, rung), _strength_by_direction(step1_rungs, 'R0')
+    if not x or not r0:
+        return dict(available=False, stage='pn_dendrite', column='view_strength', rung=rung)
+    above = {d: bool(x[d] > r0[d]) for d in x if d in r0}
+    return dict(available=True, stage='pn_dendrite', column='view_strength', rung=rung, values=x, r0=r0, above=above,
+                raised=bool(above and all(above.values())))
+
+
+def step1_strength_names(step1_rungs: Optional[pd.DataFrame]) -> List[dict]:
+    """Step 1 read on the adopted measure (the rulings): each kept rung above R0 whose held-out strength-by-odor error
+    is above that of the highest kept rung below it ('below') in both directions, named "kept on the matrix, higher on
+    strength". No refit: it is still step 2's rung."""
+    out = []
+    if step1_rungs is None or not len(step1_rungs) or 'kept' not in step1_rungs.columns:
+        return out
+    for r in step1_rungs.to_dict('records'):
+        kept = r.get('kept') is True or str(r.get('kept')) == 'True'
+        below = r.get('below')
+        if r['rung'] == 'R0' or not kept or not isinstance(below, str):
+            continue
+        x, b = _strength_by_direction(step1_rungs, r['rung']), _strength_by_direction(step1_rungs, below)
+        if x and b and all(x[d] > b[d] for d in x if d in b):
+            out.append(dict(rung=r['rung'], below=below, values=x, below_values=b,
+                            name='kept on the matrix, higher on strength'))
+    return out
+
+
+def guard(rows: pd.DataFrame, thresholds: Mapping, apl16: Optional[pd.DataFrame] = None,
+          step1_rungs: Optional[pd.DataFrame] = None, highest_kept: Optional[str] = None,
+          arms: Sequence[str] = GUARD_ARMS) -> dict:
+    """Rule 3's guard beside the classes (the rulings of 15:41), for R1 and the kept rung against the family's run of
+    the same wiring: raised where, on six of eight wirings, the strength-by-odor error or the population error rises
+    by more than three standard errors over the eight wirings of the same quantity in E134's runs (the frozen
+    thresholds: 'classes' and 'error' at the megamat boutons, claws and somata, from `rows`, `class_rows` in the
+    default readings; 'apl16_somata' at the APL16 somata with APL on and off, from `apl16`, `apl16_guard_rows`); at the
+    dendrites where step 1's held-out strength-by-odor error is above R0's in both directions (`step1_dendrite_guard`).
+    Every wiring with a run counts (the classes' exclusions do not apply to a cost).
+
+    Returns:
+        {arm: dict(raised, items (one per stage, panel, condition and column: the number of wirings risen beyond the
+        threshold, the mean rise), dendrites, raised_items (names of the raised ones))}.
+    """
+    thr = {'view_strength': thresholds.get('classes', {}), 'error': thresholds.get('error', {})}
+    out = {}
+    for arm in arms:
+        items = []
+        x = rows[rows.arm == arm]
+        for st in GUARD_STAGES:
+            y = x[x.stage == st]
+            for col, c in (('view_strength', 'strength'), ('error', 'error')):
+                t = thr[col].get(st, {}).get('threshold', np.nan)
+                rise = (y[c] - y[f'{c}_base']).to_numpy(dtype=float) if len(y) else np.array([])
+                n = int(np.sum(rise > t)) if np.isfinite(t) else 0
+                items.append(dict(stage=st, panel='megamat', condition='on', column=col, threshold=float(t), n_risen=n,
+                                  n_wirings=int(np.isfinite(rise).sum()),
+                                  mean_rise=float(np.nanmean(rise)) if np.isfinite(rise).any() else np.nan,
+                                  raised=bool(n >= MIN_WIRINGS)))
+        if apl16 is not None and len(apl16):
+            z = apl16[apl16.arm == arm]
+            for cond in ('on', 'off'):
+                zz = z[z.condition == cond]
+                for col in GUARD_COLUMNS:
+                    t = thresholds.get('apl16_somata', {}).get(cond, {}).get(col, {}).get('threshold', np.nan)
+                    rise = (zz[col] - zz[f'{col}_base']).to_numpy(dtype=float) if len(zz) else np.array([])
+                    n = int(np.sum(rise > t)) if np.isfinite(t) else 0
+                    items.append(dict(stage='kc_soma', panel='apl16', condition=cond, column=col, threshold=float(t),
+                                      n_risen=n, n_wirings=int(np.isfinite(rise).sum()),
+                                      mean_rise=float(np.nanmean(rise)) if np.isfinite(rise).any() else np.nan,
+                                      raised=bool(n >= MIN_WIRINGS)))
+        dend = step1_dendrite_guard(step1_rungs, step1_rung_of_arm(arm, highest_kept))
+        names = [f"{i['column']} at {i['stage']} ({i['panel']}, APL {i['condition']})" for i in items if i['raised']]
+        if dend.get('raised'):
+            names.append('view_strength at pn_dendrite (step 1, held out, above R0 in both directions)')
+        out[arm] = dict(raised=bool(names), items=items, dendrites=dend, raised_items=names)
+    return out
+
+
+def imposed_check_table(runs: pd.DataFrame, scores: pd.DataFrame) -> pd.DataFrame:
+    """Ruling 8 per imposed run: the largest difference between its table and its PN rates in E134's reading
+    (recorded by the runner), named above IMPOSED_CHECK_HZ, beside its PN-dendrite matrix error (the matrix view in
+    one-fly units, the default reading, APL on, megamat panel) and the flies' floor note."""
+    from kcq import stage_readings as R
+    if not len(runs) or 'imposed_check_max_hz' not in runs.columns:
+        return pd.DataFrame()
+    r = runs[runs.imposed_check_max_hz.notna()].copy()
+    if not len(scores):
+        return r
+    s = scores[(scores.stage == 'pn_dendrite') & (scores.panel == 'megamat') & (scores.condition == 'on')
+               & (scores.reading == R.DEFAULT_READINGS['pn_dendrite'].name) & scores.wiring.isin(WIRINGS)]
+    vm = s['view_matrix'] if 'view_matrix' in s.columns else pd.Series(np.nan, index=s.index)
+    m = {(p, a, w): v for p, a, w, v in zip(s.input_panel, s.arm, s.wiring, vm)}
+    r['pn_matrix_error'] = [m.get((p, a, w), np.nan) for p, a, w in zip(r.panel, r.arm, r.wiring)]
+    r['flies_floor_note'] = PN_MATRIX_FLOOR_NOTE
+    keep = ['tag', 'panel', 'arm', 'wiring', 'route', 'imposed_check_max_hz', 'imposed_check_named', 'pn_matrix_error',
+            'flies_floor_note', 'pn_check_max_set_hz', 'clip_n_clipped', 'clip_share', 'clip_named']
+    return r[[c for c in keep if c in r.columns]].reset_index(drop=True)
+
+
+def apl16_effect_table(groups: Mapping[Tuple[str, str], Sequence], with_family: bool = True) -> pd.DataFrame:
+    """The APL-effect statistics (`apl16_effect`) of every APL16 run of step 2, and beside them the family's own fit
+    on each wiring (arm 'family', the saved fit, `family_saved`): a held-out test, reported and not gated."""
+    rows = []
+    for (panel, arm), runs in groups.items():
+        if panel != 'apl16':
+            continue
+        for r in runs:
+            rows.append(dict(arm=arm, wiring=r.wiring, tag=r.tag, **apl16_effect(_outputs(r))))
+    if with_family and rows:
+        for w in WIRINGS:
+            rows.append(dict(arm='family', wiring=w, tag=f'fit_{w}', **apl16_effect(family_saved(w))))
+    return pd.DataFrame(rows)
+
+
+def drops_summary(rows: pd.DataFrame) -> pd.DataFrame:
+    """Per arm and stage: the mean over wirings (not excluded) of the falls of the population error and of the
+    strength-by-odor view's error from E134's held runs, the number of wirings and of excluded wirings."""
+    if not len(rows):
+        return pd.DataFrame()
+    out = []
+    for (arm, st), x in rows.groupby(['arm', 'stage'], sort=False):
+        k = x[~x.excluded]
+        out.append(dict(arm=arm, stage=st, n_wirings=int(len(k)), n_excluded=int(x.excluded.sum()),
+                        drop_mean=float(k['drop'].mean()) if len(k) else np.nan,
+                        strength_drop_mean=float(k.strength_drop.mean()) if len(k) else np.nan,
+                        strength_ratio_mean=float(k.strength_ratio.mean()) if len(k) else np.nan))
+    return pd.DataFrame(out)
+
+
+def score_tables(scores: pd.DataFrame, stage_table: pd.DataFrame, realism: pd.DataFrame,
+                 runs: Optional[pd.DataFrame] = None, with_rung: bool = True, thresholds: Optional[Mapping] = None,
+                 step2_scores: Optional[pd.DataFrame] = None, step1_rungs: Optional[pd.DataFrame] = None,
+                 highest_kept: Optional[str] = None) -> dict:
+    """Step 2's classes from its scores (`score_group` per group, with columns input_panel and arm) against E134's held
+    runs (`stage_table`, E134's score_stage_table.csv), on strength by odor (the rulings of 15:41):
+    - the frozen thresholds (`thresholds`, `freeze_thresholds`; computed from the tables, `threshold_values`, when not
+      given), the exclusions (`exclusions` of `realism`, `run_realism` per run), the class rows (`class_rows`, every
+      view and the population and two-view errors beside), the classes (`classify` on view_strength), the dF/F
+      repeat's classes once its 24 runs exist, the classes in the second reading (SECOND_READINGS);
+    - rule 3's guard for R1 and the kept rung (`guard`: the megamat boutons, claws and somata, the APL16 somata from
+      E134's step 2 `step2_scores`, and the dendrites from step 1's `step1_rungs`);
+    - the outcome (`outcome`, carrying the dF/F and second-reading checks and the guard; 'incomplete' until every
+      planned point has a run), step 1 read on strength (`step1_strength_names`), the routes (`routes_check`), the
+      megamat stage error in its forms (`stage_error_table`) and the imposed checks (`imposed_check_table`).
+
+    Returns:
+        dict of 'verdict' (JSON-able), 'class_rows', 'class_rows_second', 'drops', 'stage_error', 'imposed_checks',
+        'guard_items'.
+    """
+    thr = dict(thresholds) if thresholds is not None else threshold_values(stage_table, step2_scores)
+    cls_thr = thr['classes']
+    excl = exclusions(realism) if len(realism) else {}
+    have = set(realism.tag) if len(realism) else set()
+    planned = planned_step2(with_rung=with_rung)
+    missing = [tag_of(a, w) for a, w in planned if tag_of(a, w) not in have]
+    dff_missing = [tag_of(Arm('megamat', a), w) for a in DFF_REPEAT_ARMS for w in WIRINGS
+                   if tag_of(Arm('megamat', a), w) not in have]
+    empty = pd.DataFrame(columns=['arm', 'wiring', 'stage', 'error', 'error_base', 'strength', 'strength_base',
+                                  'excluded'])
+    rows = class_rows(scores, e134_base(stage_table), excl) if len(scores) else empty
+    classes = classify(rows[rows.arm.isin(MEGAMAT_ARMS)], cls_thr)
+    classes_dff = None
+    if not dff_missing:
+        classes_dff = classify(dff_scores(rows[rows.arm.isin(MEGAMAT_ARMS + DFF_REPEAT_ARMS)]), cls_thr)
+    rows2 = (class_rows(scores, e134_base(stage_table, readings=SECOND_READINGS), excl, SECOND_READINGS)
+             if len(scores) else empty)
+    second = rows2[rows2.arm.isin(MEGAMAT_ARMS)]
+    classes_second = None
+    if len(second) and set(SECOND_READINGS) <= set(second.stage) and 'kc_soma' in thr.get('second_reading', {}):
+        classes_second = classify(second, thr['second_reading'])
+    g = guard(rows, thr, apl16_guard_rows(scores, step2_scores), step1_rungs, highest_kept)
+    oc = outcome(classes, classes_dff, classes_second, g)
+    if missing:
+        oc = dict(outcome='incomplete', n_missing=len(missing), provisional=oc)
+    stage_err = stage_error_table(scores, stage_table)
+    imposed = imposed_check_table(runs if runs is not None else pd.DataFrame(), scores)
+    drops = drops_summary(rows)
+    se_mean = {}
+    if len(stage_err):
+        m = stage_err[stage_err.wiring == 'model']
+        cols = [c for c in m.columns if c.startswith('stage_error_')]
+        se_mean = {f'{p}_{a}': {c: (None if not np.isfinite(v) else float(v)) for c, v in zip(cols, r)}
+                   for p, a, r in zip(m.input_panel, m.arm, m[cols].to_numpy(dtype=float))}
+    named = {}
+    if runs is not None and len(runs):
+        for col in ('clip_named', 'imposed_check_named'):
+            if col in runs.columns:
+                named[col] = sorted(str(t) for t, v in zip(runs.tag, runs[col]) if v is True or str(v) == 'True')
+        if 'scale_named' in runs.columns:
+            named['scale_named'] = {str(t): str(v) for t, v in zip(runs.tag, runs.scale_named)
+                                    if isinstance(v, str) and v}
+    items = pd.DataFrame([dict(arm=a, **i) for a, x in g.items() for i in x['items']])
+    verdict = dict(complete=not missing, n_runs=len(have), n_planned=len(planned), missing=missing,
+                   dff_repeat=dict(complete=not dff_missing, n_missing=len(dff_missing)),
+                   measure=dict(column=CLASS_COLUMN, reading="each stage's default",
+                                rule='strength by odor, adopted after E134\'s gate (the rulings of 15:41)'),
+                   with_rung=bool(with_rung), thresholds=cls_thr,
+                   thresholds_frozen={k: thr.get(k) for k in ('e134_stage_table_sha256', 'e134_step2_scores_sha256',
+                                                               'written', 'host')},
+                   classes=classes, cls=class_of(classes), classes_dff=classes_dff, classes_second=classes_second,
+                   second_readings=dict(SECOND_READINGS), outcome=oc,
+                   guard={a: dict(raised=x['raised'], raised_items=x['raised_items'], dendrites=x['dendrites'])
+                          for a, x in g.items()},
+                   step1_strength=step1_strength_names(step1_rungs), routes=routes_check(rows, cls_thr, runs),
+                   excluded={f'{a}|{w}': v for (a, w), v in excl.items()},
+                   megamat_stage_error=se_mean, named=named,
+                   realism_flags={str(t): str(f) for t, f in zip(realism.get('tag', []), realism.get('realism_flag', []))
+                                  if isinstance(f, str) and f})
+    return dict(verdict=verdict, class_rows=rows, class_rows_second=rows2, drops=drops, stage_error=stage_err,
+                imposed_checks=imposed, guard_items=items)
+
+
+def write_score_table(res: Mapping, path: Path) -> None:
+    """score_table.md: the outcome and classes (strength by odor), the thresholds, the guard, the second reading, the
+    falls per arm and stage with the population error beside, the megamat stage error per arm against E134's held runs,
+    the routes' agreement and the exclusions."""
+    v = res['verdict']
+    oc = v['outcome']
+    L = ['# E135 step 2: the classes on strength by odor (against E134\'s runs held at the megamat flies\' response '
+         'rate)', '',
+         f"- outcome: {oc}", f"- class: {v['cls']}; complete: {v['complete']} ({v['n_runs']} runs of "
+                             f"{v['n_planned']} planned, dF/F repeat complete: {v['dff_repeat']['complete']})",
+         "- thresholds (strength by odor, one-fly units, frozen): " + ', '.join(
+             f"{k} {d['threshold']:.4f}" for k, d in v['thresholds'].items()),
+         f"- counts: {v['classes']['counts']}",
+         f"- second reading ({v['second_readings']}): "
+         f"{class_of(v['classes_second']) if v['classes_second'] else 'not read'}",
+         '- guard: ' + '; '.join(f"{a}: {'raised (' + ', '.join(g['raised_items']) + ')' if g['raised'] else 'not raised'}"
+                                 for a, g in v['guard'].items()),
+         f"- step 1 on strength: {v['step1_strength'] or 'none named'}", '']
+    d = res['drops']
+    if len(d):
+        L += ['| arm | stage | wirings | excluded | fall of strength by odor | strength by odor / E134\'s | '
+              'fall of the population error (beside) |', '|---|---|---:|---:|---:|---:|---:|']
+        for r in d.itertuples():
+            L.append(f'| {r.arm} | {r.stage} | {r.n_wirings} | {r.n_excluded} | {r.strength_drop_mean:+.3f} | '
+                     f'{r.strength_ratio_mean:.3f} | {r.drop_mean:+.3f} |')
+        L.append('')
+    if v['megamat_stage_error']:
+        L += ['| group | stage error, strength (four stages) | change | three-view (beside) | change |',
+              '|---|---:|---:|---:|---:|']
+        f = lambda x: '—' if x is None else f'{x:+.3f}'
+        g = lambda x: '—' if x is None else f'{x:.3f}'
+        for k, x in v['megamat_stage_error'].items():
+            L.append(f"| {k} | {g(x.get('stage_error_strength'))} | {f(x.get('stage_error_strength_change'))} | "
+                     f"{g(x.get('stage_error_three_view'))} | {f(x.get('stage_error_three_view_change'))} |")
+        L.append('')
+    L += ['## Routes, exclusions, named', '', '```', json.dumps(dict(routes=v['routes'], excluded=v['excluded'],
+                                                                     named=v['named']), indent=1, default=str), '```', '']
+    path.write_text('\n'.join(L) + '\n')
+
+
+def part_score(readings: Optional[Sequence[str]] = None, n_floor: Optional[int] = None) -> dict:
+    """Step 2's runs (every lane's, `step2_groups`) read and scored as E134 scores its runs (`score_group`), their
+    realism (`run_realism`), the APL16 runs' APL effect (`apl16_effect_table`), and the classes, the guard and the
+    outcome on strength by odor (`score_tables`, at the thresholds frozen at step 2's start, `read_thresholds`; E134's
+    step 2 for the APL16 somata's guard; step 1's step1_rungs.csv for the dendrites' guard). Refuses before E134's
+    gate, the lock, step 1's fits and the frozen thresholds. Writes to results/.../: score_scores.csv,
+    score_class_rows.csv, score_class_rows_second.csv, score_guard.csv, score_drops.csv, score_stage_error.csv,
+    score_imposed_checks.csv, score_realism.csv, score_apl_effect.csv, score_verdict.json (which `dff_repeat_asked`
+    reads), score_table.md, provenance_score.json."""
+    lock, fits_rec = require_step2()
+    thresholds = read_thresholds()
+    lock134 = require_e134_lock()
+    t0 = time.time()
+    groups = step2_groups()
+    flies = _flies()
+    scores = []
+    for (panel, arm), runs in groups.items():
+        sc = score_group(runs, flies, lock134, readings, n_floor)
+        if len(sc):
+            sc.insert(0, 'input_panel', panel)
+            sc.insert(1, 'arm', arm)
+            sc.insert(2, 'group', f'{panel}_{arm}')
+            scores.append(sc)
+        print(f'E135 score {panel} {arm}: {len(runs)} runs, {time.time() - t0:.0f} s', flush=True)
+    sc = pd.concat(scores, ignore_index=True) if scores else pd.DataFrame()
+    gl = [str(g) for g in lock['glomeruli']]
+    realism = pd.DataFrame([run_realism(r, gl, lock134) for runs in groups.values() for r in runs])
+    effect = apl16_effect_table(groups)
+    stage_table = read_e134_table(E134_STAGE_TABLE)
+    try:
+        step2_scores = read_e134_table(E134_STEP2_SCORES)
+    except FileNotFoundError:
+        step2_scores = None
+    d = out_dir()
+    s1 = pd.read_csv(d / 'step1_rungs.csv') if (d / 'step1_rungs.csv').exists() else None
+    res = score_tables(sc, stage_table, realism, runs2_table(), with_rung=step2_rung_of(fits_rec) is not None,
+                       thresholds=thresholds, step2_scores=step2_scores, step1_rungs=s1,
+                       highest_kept=fits_rec.get('highest_kept'))
+    sc.to_csv(d / 'score_scores.csv', index=False)
+    res['class_rows'].to_csv(d / 'score_class_rows.csv', index=False)
+    res['class_rows_second'].to_csv(d / 'score_class_rows_second.csv', index=False)
+    res['guard_items'].to_csv(d / 'score_guard.csv', index=False)
+    res['drops'].to_csv(d / 'score_drops.csv', index=False)
+    res['stage_error'].to_csv(d / 'score_stage_error.csv', index=False)
+    res['imposed_checks'].to_csv(d / 'score_imposed_checks.csv', index=False)
+    realism.to_csv(d / 'score_realism.csv', index=False)
+    effect.to_csv(d / 'score_apl_effect.csv', index=False)
+    v = dict(res['verdict'], time=_now(), host=_host())
+    _write_json(d / SCORE_VERDICT_FILE, v)
+    write_score_table(res, d / 'score_table.md')
+    from kcq import stage_readings as R
+    _write_json(d / 'provenance_score.json', dict(
+        part='score', script=SCRIPT, host=_host(), time=_now(), seconds=round(time.time() - t0, 1),
+        **H.code_commits(), lock_sha256=_sha256(LOCK_COPY) if LOCK_COPY.exists() else None,
+        e134_lock_sha256=_sha256(LOCK_E134()) if LOCK_E134().exists() else None,
+        e134_stage_table_sha256=_sha256(e134_results_dir() / E134_STAGE_TABLE),
+        thresholds_sha256=_sha256(d / THRESHOLDS_FILE),
+        step1_fits_sha256=_sha256(d / STEP1_FITS_FILE) if (d / STEP1_FITS_FILE).exists() else None,
+        step1_rungs_sha256=_sha256(d / 'step1_rungs.csv') if s1 is not None else None,
+        readings=R.reading_definitions(), readings_scored=list(readings) if readings else 'default and alternatives',
+        runs={r.tag: [f for f in r.files if str(f.get('path', '')).endswith('_run.json')]
+              for rs in groups.values() for r in rs}))
+    print(f"E135 score: outcome {v['outcome']}, class {v['cls']} ({time.time() - t0:.0f} s)", flush=True)
+    return v
 
 
 def print_commands(n_controls: Optional[int] = None) -> None:
-    """The lanes' command lines: step 1's real rungs on the first lane, its controls (`n_controls`, default the lock's
-    count) one process each on the other lanes in turn (step 2 does not wait for them), and step 2 on every lane (each
-    runs the whole list and skips what another has claimed)."""
-    pre = 'OMP_NUM_THREADS={t} OMP_THREAD_LIMIT={t} PYTHONUNBUFFERED=1 nice -n 10 ./venv/bin/python -u ' + SCRIPT
+    """The lanes' command lines (LANES), as module invocations from the repository's root: step 1's real rungs on the
+    first of STEP1_LANES (hal's and disco's, Tom's words), its controls (`n_controls`, default the lock's count) one
+    process each on the others in turn (step 2 does not wait for them), and step 2 on every lane: hal's two 16-thread
+    lanes, viki's, atlas's and disco's at 8.
+    Each step-2 lane runs the whole list and skips what another has claimed or done; any lane may take `--reverse` (or
+    drop it) to start from the other end."""
+    pre = ('OMP_NUM_THREADS={t} OMP_THREAD_LIMIT={t} PYTHONUNBUFFERED=1 nice -n 10 ./venv/bin/python -u -m ' + MODULE)
     lanes = [(host, t, name, rev) for host, (t, ls) in LANES.items() for name, rev in ls]
     if n_controls is None:
         try:
             n_controls = int(read_lock().get('permutations', {}).get('control', N_PERM_CONTROL))
         except PermissionError:
             n_controls = N_PERM_CONTROL
-    first = next(x for x in lanes if x[2] == 'hal-1')
-    others = [x for x in lanes if x is not first]
+    first = next(x for x in lanes if x[2] == STEP1_LANES[0])
+    others = [x for x in lanes if x[2] in STEP1_LANES[1:]]
+    print("# step 1 (on hal's and disco's lanes: the real rungs on one, the controls one process each)")
     print(f'{first[0]}: {pre.format(t=first[1])} --part step1 --lane {first[2]}')
     for i in range(int(n_controls)):
         host, t, name, _ = others[i % len(others)]
         print(f'{host}: {pre.format(t=t)} --part step1_control --perm {i} --lane {name}')
+    print("# step 2 (after step 1's fits; every lane runs the whole list, skipping what is claimed or done; "
+          '--reverse takes it from the other end)')
     for host, t, name, rev in lanes:
         print(f"{host}: {pre.format(t=t)} --part step2 --lane {name}{' --reverse' if rev else ''}")
+    print('# the score (no simulation; after the lanes)')
+    print(f'{first[0]}: ./venv/bin/python -u -m {MODULE} --part score')
 
 
 def main(argv: Optional[Sequence[str]] = None) -> None:
@@ -3388,6 +4726,9 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     ap.add_argument('--lane', default=None)
     ap.add_argument('--reverse', action='store_true')
     ap.add_argument('--reclaim', action='store_true')
+    ap.add_argument('--readings', nargs='+', default=None,
+                    help="score: the stage readings by name (default each stage's default and its alternatives)")
+    ap.add_argument('--n-floor', type=int, default=None, help="score: the flies' floor's draws (default E134's)")
     a = ap.parse_args(argv)
     if a.part == 'step0':
         part_step0(n_boot=a.n_boot, seed=a.seed)
@@ -3411,7 +4752,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     elif a.part == 'step2':
         part_step2(a.lane, a.reverse, a.reclaim)
     elif a.part == 'score':
-        part_score()
+        part_score(a.readings, a.n_floor)
     elif a.part == 'commands':
         print_commands()
     elif a.part == 'gate':
