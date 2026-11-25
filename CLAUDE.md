@@ -1399,6 +1399,8 @@ A stage's reading is fixed before any model is read on it. A stage whose verdict
 
 Nothing is fitted to a held-out panel without Tom's or Yang's word.
 
+Validation2's odors have already served once as a test set. The strength-error experiment's item 6 (E138) regressed the family's strength residuals over megamat's and the APL16 panel's odors on a class of glomeruli, and read the result on validation2's odors. Tom allowed it on 2026-11-25 at about 10:19, in hal's terminal: "go ahead, but note the problem this causes in summary and wherever else appropriate". No class passed (outcome (b)). Validation2 is therefore no longer a clean held-out panel for anything chosen from that regression's classes or readings. Such a choice is tested on other held-out odors or flies, and every write-up that reads validation2 for one says so.
+
 **Choosing and gating** (the rules of 2026-11-13, carried over):
 1. Variants are compared, chosen and gated on the megamat stage error, with every stage's population error and its views beside. No variant is chosen by a correlation; ρ on odor-odor distances and response rate ρ are still reported.
 2. The measure decides only once it is shown to be consistent: the order of the saved variants against one half of the flies and against the other must agree at 0.8 or more (the pattern part's 0.82 is the yardstick). Until the baseline shows this, no choice rests on it.
