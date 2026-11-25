@@ -1,7 +1,8 @@
 """The tables of E135's write-up (the antennal lobe held to the recorded PN dendrites), from the files its parts wrote to
 results/E135_antennal_lobe_dendrites/ and from E134's tables; no simulation and no scoring.
 
-Writes results/E135_antennal_lobe_dendrites/writeup_tables.md:
+Writes results/E135_antennal_lobe_dendrites/writeup_tables.md, and writeup_values.csv (the same numbers, long, for the
+summary's placeholders):
 - the stage table: strength by odor at each megamat stage (one-fly units, the default reading, the mean over the
   eight wirings with their range) for E134's held runs and every step-2 arm, and the megamat stage error;
 - the views beside (sharing, breadth, the three-view population error) for the same arms;
@@ -281,6 +282,83 @@ def apl_effect_table(effect: pd.DataFrame) -> List[str]:
     return L + ['']
 
 
+def values_table(rows: pd.DataFrame, stage_error: pd.DataFrame, scores: pd.DataFrame,
+                 e134_step2: Optional[pd.DataFrame], realism: pd.DataFrame, effect: Optional[pd.DataFrame],
+                 rungs: pd.DataFrame) -> pd.DataFrame:
+    """The numbers of the tables above as one long table, for the summary's placeholders
+    (`E135_antennal_lobe_dendrites/writeup_values.csv:arm=...;stage=...;statistic=...:value`): columns arm, stage,
+    panel, condition, statistic, value. Arms are the step-2 arms, 'family_held' (E134's held runs), 'family' (the
+    family's own APL16 runs) and step 1's rungs (stage pn_dendrite, statistics per direction)."""
+    out = []
+
+    def add(arm, stage, statistic, value, panel='megamat', condition='on'):
+        if value is not None and not (isinstance(value, float) and np.isnan(value)):
+            out.append(dict(arm=arm, stage=stage, panel=panel, condition=condition, statistic=statistic,
+                            value=float(value)))
+
+    k = rows[~rows.excluded.astype(bool)]
+    ref = k[k.arm == 'imposed'] if (k.arm == 'imposed').any() else k
+    for st in STAGES:
+        b = ref[ref.stage == st]
+        for col, name in (('strength_base', 'strength'), ('view_sharing_base', 'sharing'),
+                          ('view_breadth_base', 'breadth'), ('error_base', 'error')):
+            add('family_held', st, f'{name}_mean', b[col].mean())
+        add('family_held', st, 'strength_min', b.strength_base.min())
+        add('family_held', st, 'strength_max', b.strength_base.max())
+    for (arm, st), x in k.groupby(['arm', 'stage']):
+        add(arm, st, 'strength_mean', x.strength.mean())
+        add(arm, st, 'strength_min', x.strength.min())
+        add(arm, st, 'strength_max', x.strength.max())
+        add(arm, st, 'strength_ratio_mean', x.strength_ratio.mean())
+        add(arm, st, 'strength_ratio_min', x.strength_ratio.min())
+        add(arm, st, 'strength_ratio_max', x.strength_ratio.max())
+        for col in ('view_sharing', 'view_breadth', 'error'):
+            add(arm, st, f'{col.replace("view_", "")}_mean', x[col].mean())
+    se = stage_error[stage_error.input_panel == 'megamat']
+    rs = se[se.arm == 'imposed'] if (se.arm == 'imposed').any() else se
+    add('family_held', 'four_stages', 'stage_error_strength_mean', rs.stage_error_strength_base.mean())
+    add('family_held', 'four_stages', 'stage_error_three_view_mean', rs.stage_error_three_view_base.mean())
+    for arm, x in se.groupby('arm'):
+        for col in ('stage_error_strength', 'stage_error_three_view'):
+            add(arm, 'four_stages', f'{col}_mean', x[col].mean())
+            add(arm, 'four_stages', f'{col}_min', x[col].min())
+            add(arm, 'four_stages', f'{col}_max', x[col].max())
+    s = scores[(scores.input_panel == 'apl16') & (scores.stage == 'kc_soma') & (scores.panel == 'apl16')
+               & (scores.reading == 'curve_noise') & scores.wiring.isin(E.WIRINGS)]
+    for (arm, cond), x in s.groupby(['arm', 'condition']):
+        add(arm, 'kc_soma', 'strength_mean', x.view_strength.mean(), 'apl16', cond)
+        add(arm, 'kc_soma', 'error_mean', x.error.mean(), 'apl16', cond)
+    if e134_step2 is not None:
+        b = e134_step2[(e134_step2.source == 'E90:B') & (e134_step2.stage == 'kc_soma') &
+                       (e134_step2.panel == 'apl16') & (e134_step2.reading == 'curve_noise') &
+                       e134_step2.wiring.isin(E.WIRINGS)]
+        for cond, x in b.groupby('condition'):
+            add('family', 'kc_soma', 'strength_mean', x.view_strength.mean(), 'apl16', cond)
+            add('family', 'kc_soma', 'error_mean', x.error.mean(), 'apl16', cond)
+    m = realism[realism.input_panel == 'megamat'] if 'input_panel' in realism else realism.iloc[:0]
+    for arm, x in m.groupby('arm'):
+        add(arm, 'pn_dendrite', 'totals_cv_mean', x.totals_cv_pn.mean())
+        add(arm, 'pn_bouton', 'totals_cv_mean', x.totals_cv_bouton.mean())
+    a = realism[realism.input_panel == 'apl16'] if 'input_panel' in realism else realism.iloc[:0]
+    for arm, x in a.groupby('arm'):
+        for col in ('rate_on', 'rate_off', 'rate_ratio', 'rate_rho_on', 'rate_rho_off', 'opk_on_tv', 'opk_off_tv'):
+            if col in x:
+                add(arm, 'kc_soma', f'{col}_min', x[col].min(), 'apl16', 'realism')
+                add(arm, 'kc_soma', f'{col}_max', x[col].max(), 'apl16', 'realism')
+    if effect is not None:
+        for arm, x in effect.groupby('arm'):
+            for col in ('cal_apl_effect_rmse', 'cal_apl_effect_mean', 'cal_apl_effect_rmse_centered',
+                        'cal_apl_effect_amplitude', 'cal_apl_effect_shape', 'cal_apl_effect_spearman',
+                        'cal_apl_effect_pearson'):
+                if col in x:
+                    add(arm, 'kc_soma', f'{col}_mean', x[col].mean(), 'apl16', 'apl_effect')
+    for _, g in rungs.iterrows():
+        for dname, dkey in (('ab', 'half_a->half_b'), ('ba', 'half_b->half_a')):
+            for v in ('matrix', 'strength', 'sharing', 'breadth'):
+                add(str(g['rung']), 'pn_dendrite', f'{v}_{dname}', g[f'{dkey}_view_{v}'], 'megamat', 'step1')
+    return pd.DataFrame(out)
+
+
 def main(root: Optional[Path] = None, with_tables: bool = True) -> Path:
     """Writes writeup_tables.md; `with_tables` False skips the as-ruled comparison (which builds the family's PN stage)."""
     d = E.out_dir() if root is None else Path(root)
@@ -316,6 +394,8 @@ def main(root: Optional[Path] = None, with_tables: bool = True) -> Path:
     L += ['## Realism', ''] + realism_table(realism)
     if (d / 'score_apl_effect.csv').exists():
         L += ['## The APL effect (held out)', ''] + apl_effect_table(pd.read_csv(d / 'score_apl_effect.csv'))
+    eff = pd.read_csv(d / 'score_apl_effect.csv') if (d / 'score_apl_effect.csv').exists() else None
+    values_table(rows, se, scores, e134, realism, eff, rungs).to_csv(d / 'writeup_values.csv', index=False)
     out = d / 'writeup_tables.md'
     out.write_text('\n'.join(L) + '\n')
     print(out)
