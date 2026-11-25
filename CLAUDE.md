@@ -1238,6 +1238,8 @@ Canonical experiment names for summary reports:
 | E134 | the models as populations at every recorded stage |
 | E135 | the antennal lobe held to the recorded PN dendrites |
 | E136 | the best family fitted to all megamat stages at once |
+| E137 | the held-out panels read like for like |
+| E138 | the odors that carry the strength error and the glomeruli that feed them |
 
 ## Model-output archive (data/model_outputs/ in the shared directory)
 
