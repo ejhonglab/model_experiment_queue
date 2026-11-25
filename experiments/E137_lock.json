@@ -2,9 +2,9 @@
  "experiment": "E137_heldout_readings",
  "part": "lock",
  "host": "viki",
- "time": "2026-11-25 02:25",
+ "time": "2026-11-25 02:32",
  "commits": {
-  "queue_commit": "338684e8208001ee511840b4918b093a36f297ec",
+  "queue_commit": "ffa62e1c71e424f3aa8b72c61e4dba2ba06c2caf",
   "queue_dirty": true,
   "pyolfsysm_commit": "b1e89d7d119bbbb4888f31de4d94938dbc4bd60a",
   "pyolfsysm_dirty": false,
@@ -60,7 +60,7 @@
     "reduced": {
      "path": "<shared>/data/remy_mixture_kc_trials/2022-03-29__fly02__control1.parquet",
      "bytes": 2202248,
-     "mtime": "2026-11-25 02:25:33",
+     "mtime": "2026-11-25 02:32:02",
      "sha256": "4113a5db55b928537aca286f3cf42c9117c6dbf671c0aadf16783b468010d3dd"
     }
    },
@@ -233,7 +233,7 @@
     "reduced": {
      "path": "<shared>/data/remy_mixture_kc_trials/2022-04-04__fly01__control1_001.parquet",
      "bytes": 2251502,
-     "mtime": "2026-11-25 02:25:34",
+     "mtime": "2026-11-25 02:32:03",
      "sha256": "18e6497e2f26cf2a457207610ea9676358a946c6c28dc8dc967b81df9882487f"
     }
    },
@@ -400,7 +400,7 @@
     "reduced": {
      "path": "<shared>/data/remy_mixture_kc_trials/2022-07-20__fly02__control1_components_again_with_partial_and_probes.parquet",
      "bytes": 2179511,
-     "mtime": "2026-11-25 02:25:35",
+     "mtime": "2026-11-25 02:32:04",
      "sha256": "31951d92c4f29ae1173bec2e5409929b723631c9d48da090a070771a76812c1e"
     }
    },
@@ -678,7 +678,7 @@
     "reduced": {
      "path": "<shared>/data/remy_mixture_kc_trials/2022-07-25__fly02__control1_components_again_with_partial_and_probes_001.parquet",
      "bytes": 3588524,
-     "mtime": "2026-11-25 02:25:35",
+     "mtime": "2026-11-25 02:32:05",
      "sha256": "7f5b395222a2ce9fec45a4b9b2aa494797081e3b4568ea1d7853ec1731f600f3"
     }
    },
@@ -956,7 +956,7 @@
     "reduced": {
      "path": "<shared>/data/remy_mixture_kc_trials/2022-07-01__fly01__kiwi_components_again.parquet",
      "bytes": 3389976,
-     "mtime": "2026-11-25 02:25:36",
+     "mtime": "2026-11-25 02:32:06",
      "sha256": "9274a43d47a976d7a90eb7e706c949b1011611cf495983deeaf29e74e69c5d62"
     }
    },
@@ -1174,7 +1174,7 @@
     "reduced": {
      "path": "<shared>/data/remy_mixture_kc_trials/2022-07-02__fly01__kiwi_components_again.parquet",
      "bytes": 3330751,
-     "mtime": "2026-11-25 02:25:37",
+     "mtime": "2026-11-25 02:32:07",
      "sha256": "3121b603828f8013b135a0cde0b5b0efe2524c5313b19a481ba6f626d4e73106"
     }
    },
@@ -1392,7 +1392,7 @@
     "reduced": {
      "path": "<shared>/data/remy_mixture_kc_trials/2022-07-02__fly02__kiwi_components_again.parquet",
      "bytes": 2317134,
-     "mtime": "2026-11-25 02:25:38",
+     "mtime": "2026-11-25 02:32:08",
      "sha256": "703db3df1f1b35f9b8221f6c9a61478fa05672a72f5a8e3a8e8af9e8d31cb826"
     }
    },
@@ -1610,7 +1610,7 @@
     "reduced": {
      "path": "<shared>/data/remy_mixture_kc_trials/2022-07-11__fly01__kiwi_components_again_with_partial.parquet",
      "bytes": 4229688,
-     "mtime": "2026-11-25 02:25:39",
+     "mtime": "2026-11-25 02:32:08",
      "sha256": "5358b3a55ce646d7495bd371009e74140fccb35e40f96ee7001cd4f23f179977"
     }
    },
@@ -1861,7 +1861,7 @@
     "reduced": {
      "path": "<shared>/data/remy_mixture_kc_trials/2022-07-11__fly02__kiwi_components_again_with_partial.parquet",
      "bytes": 4776537,
-     "mtime": "2026-11-25 02:25:40",
+     "mtime": "2026-11-25 02:32:10",
      "sha256": "e402715ad0f6a8f22aff3cb91751ed0699e8f5511e919b13b61c465b00be17ec"
     }
    },
@@ -2112,7 +2112,7 @@
     "reduced": {
      "path": "<shared>/data/remy_mixture_kc_trials/2022-07-12__fly03__kiwi_components_again_with_partial_and_probes.parquet",
      "bytes": 4414907,
-     "mtime": "2026-11-25 02:25:41",
+     "mtime": "2026-11-25 02:32:11",
      "sha256": "9b8370f432aa2712d4fa99a423e17b8a679c05c1ffb5983134fbb11592a051da"
     }
    },
@@ -2399,7 +2399,7 @@
     "reduced": {
      "path": "<shared>/data/remy_mixture_kc_trials/2022-07-12__fly05__kiwi_components_again_with_partial_and_probes.parquet",
      "bytes": 3617308,
-     "mtime": "2026-11-25 02:25:42",
+     "mtime": "2026-11-25 02:32:12",
      "sha256": "8d494c12701102fb954b3b824f86ff1c58c3705a2e069fcfae5c510641c4d3b5"
     }
    },
