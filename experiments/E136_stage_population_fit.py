@@ -173,11 +173,19 @@ BOUNDS: Dict[str, Tuple[float, float]] = {
     'aplpn': (float(np.log(1.0 / 30.0)), float(np.log(1.07))),
     'kckc': (float(np.log(0.1)), float(np.log(7.3))),
     'claw_thr': (0.0, 100.0 / CLAW_THR_UNIT),
+    # A1's fallback (PN_COORDS): pn_inhadd from a tenth of olfsysm's default to about E102's top rung (10^4), and the
+    # gain on pn_inhsc within a factor of three
+    'inhadd': (float(np.log(0.1)), float(np.log(320.0))),
+    'inhsc': (float(np.log(1.0 / 3.0)), float(np.log(3.0))),
 }
-FIRST_STEP: Dict[str, float] = {'aplpn': -0.7, 'kckc': -0.7, 'claw_thr': 0.6}
+# inhadd's first step is E102's first rung (pn_inhadd 100 over olfsysm's default 31.4088, E3's PN_INHADD_DEFAULT)
+FIRST_STEP: Dict[str, float] = {'aplpn': -0.7, 'kckc': -0.7, 'claw_thr': 0.6, 'inhadd': float(np.log(100.0 / 31.4088)),
+                                'inhsc': 0.4}
 BOUND_PENALTY_PER = 0.1
 XATOL, FATOL = 0.02, 0.005
 MAXFEV: Dict[str, int] = {'A0': 80, 'A1': 80, 'A2': 80, 'A3': 110, 'A4': 40, CONTROL: 80}
+# A1 with the fallback's two more coordinates (four searched, as A3's three take 110)
+MAXFEV_A1_SEARCH = 140
 RESTART_MIN_LEFT = 15
 # "at a bound": within 2 % of a factor's bound, or 2 Hz of the threshold's
 AT_BOUND_REL, AT_BOUND_HZ = 0.02, 2.0
@@ -211,6 +219,13 @@ START_CHECK_TOL = 6e-5
 # a factor whose return to the family's value raises the loss by less than this is "not determined" by the measure
 # (the re-read on the adopted measure: half the megamat stage error's spread on strength, 0.020)
 NOT_DETERMINED = 0.010
+# A1's PN stage (`require_e135`): E135's outcome (a) hands on R1's table, (b) the kept rung's (its step 1's
+# 'step2_rung'), fixed and entering by E135's route 1 (olfsysm's `pn_rates`); (c) to (f) hand on none, and A1 searches
+# the normalization instead (PN_COORDS: ln of pn_inhadd over olfsysm's default, pn_inhsc following as in E102's ladder,
+# `E77_input_screen.inhsc_for`, and ln of a gain on that pn_inhsc), the simulator rebuilt at every evaluation
+E135_TABLE_OUTCOMES: Dict[str, str] = {'a': 'R1', 'b': 'rung'}
+E135_NONE_OUTCOMES: Tuple[str, ...] = ('c', 'd', 'e', 'f')
+PN_COORDS: Tuple[str, ...] = ('inhadd', 'inhsc')
 
 ReadPoint = namedtuple('ReadPoint', 'arm panel wiring half')
 
@@ -340,10 +355,103 @@ def require_gate() -> dict:
     return dict(gate=g, classes=c)
 
 
+def e135_verdict_path() -> Path:
+    """E135's score verdict (results/E135_antennal_lobe_dendrites/score_verdict.json, E135's `outcome` under 'outcome')."""
+    from experiments import E135_antennal_lobe_dendrites as AL
+    return AL.out_dir() / AL.SCORE_VERDICT_FILE
+
+
 def require_e135() -> dict:
-    """E135's class and what it hands on to A1 (its table of PN rates by its route, as 'extra_kws'); RuntimeError while
-    E135 has no class (A1 waits on it)."""
-    raise RuntimeError('A1 waits on E135: what it hands on is not defined yet')
+    """What E135 hands on to A1, from its score's verdict (`e135_verdict_path`): outcome (a) R1's table, (b) the kept
+    rung's (step1_fits.json's 'step2_rung'), mode 'table' (A1's PN stage fixed as that table, `a1_stage`); (c) to (f)
+    none, mode 'search' (the normalization searched, PN_COORDS). An outcome that hands on a stage is taken whatever its
+    guard says; a raised guard ('improvement' False, 'at_a_cost_beside') is carried into the record. RuntimeError while
+    the verdict is not written, is incomplete, or waits (the dF/F repeat; a unit- or reading-dependent outcome, which
+    goes to Tom and Yang).
+
+    Returns dict(outcome, mode, rung (None in 'search'), improvement, at_a_cost_beside, reading_dependent, cls,
+    verdict_sha256, verdict_path)."""
+    import hashlib
+    from experiments import E135_antennal_lobe_dendrites as AL
+    path = e135_verdict_path()
+    v = _read_json(path)
+    if not v:
+        raise RuntimeError(f'A1 waits on E135: its score verdict is not written ({path})')
+    oc = v.get('outcome') or {}
+    o = oc.get('outcome')
+    rec = dict(outcome=o, cls=v.get('cls'), improvement=oc.get('improvement'),
+               at_a_cost_beside=list(oc.get('at_a_cost_beside') or []),
+               reading_dependent=bool(oc.get('reading_dependent', False)),
+               verdict_sha256=hashlib.sha256(path.read_bytes()).hexdigest(), verdict_path=str(path))
+    if o in E135_TABLE_OUTCOMES:
+        rung = 'R1' if E135_TABLE_OUTCOMES[o] == 'R1' else AL.step2_rung_of(AL.read_step1_fits())
+        if rung is None:
+            raise RuntimeError(f"E135's outcome ({o}) hands on the kept rung, but step 1 kept none above R1")
+        return dict(rec, mode='table', rung=str(rung))
+    if o in E135_NONE_OUTCOMES:
+        return dict(rec, mode='search', rung=None)
+    raise RuntimeError(f'A1 waits on E135: its outcome is {o!r} ({path})')
+
+
+_A1_STAGES: Dict[Tuple[str, str, str, str], Tuple[pd.DataFrame, object, dict]] = {}
+
+
+def a1_stage(wiring: str, panel: str = PANEL, orn: Optional[pd.DataFrame] = None) -> Tuple[pd.DataFrame, object, dict]:
+    """A1's PN stage on a wiring and a panel's input when E135 hands one on (`require_e135` mode 'table'): E135's
+    `kept_stage_table` of its step-1 fits on all seven PN flies at the handed-on rung, on the wiring's PN stage
+    (`family_stage` on megamat, then the input put on it, as the table's docstring allows) with the panel's input
+    (`orn`, default E134's `panel_input(panel)`, the input this module builds on). Cached per wiring, panel, rung and
+    verdict. Returns (the table: the stage's glomeruli x the input's odor labels, Hz; the stage on the input, for
+    `run_pn_check`; the record: E135's table record and the verdict's)."""
+    from experiments import E134_population_baseline as B
+    from experiments import E135_antennal_lobe_dendrites as AL
+    h = require_e135()
+    if h['mode'] != 'table':
+        raise RuntimeError(f"E135's outcome ({h['outcome']}) hands on no stage: A1 searches the normalization")
+    key = (wiring, panel, h['rung'], h['verdict_sha256'])
+    if key not in _A1_STAGES:
+        orn = B.panel_input(panel) if orn is None else orn
+        stage, _ = AL.family_stage('megamat', wiring)
+        fits = AL.read_step1_fits()['all_flies']
+        table, rec = AL.kept_stage_table(fits, h['rung'], stage, orn=orn, panel=panel)
+        _A1_STAGES[key] = (table, AL.stage_on_input(stage, orn), dict(rec, e135=h, wiring=wiring))
+    return _A1_STAGES[key]
+
+
+def pn_norm_kws(z: Mapping[str, float]) -> Dict[str, float]:
+    """A1's fallback normalization at coordinates `z` (PN_COORDS): pn_inhadd = olfsysm's default x exp(z['inhadd']),
+    pn_inhsc = E77's `inhsc_for(pn_inhadd)` x exp(z['inhsc']); {} (olfsysm's defaults) where both are 0."""
+    a, g = float(z.get('inhadd', 0.0)), float(z.get('inhsc', 0.0))
+    if a == 0.0 and g == 0.0:
+        return {}
+    from experiments.E3_drive_dependent_gain import PN_INHADD_DEFAULT
+    from experiments.E77_input_screen import inhsc_for
+    inhadd = float(PN_INHADD_DEFAULT * np.exp(a))
+    return dict(pn_inhadd=inhadd, pn_inhsc=float(inhsc_for(inhadd) * np.exp(g)))
+
+
+def a1_kws(wiring: str, panel: str = PANEL, orn: Optional[pd.DataFrame] = None,
+           z: Optional[Mapping[str, float]] = None) -> dict:
+    """A1's kwargs for one wiring on a panel's input at coordinates `z`: mode 'table', dict(pn_rates=<the kept table on
+    the input's own columns>) (E135's `input_columns` of `route1_pn_rates`, every entry set); mode 'search',
+    `pn_norm_kws(z)`."""
+    from experiments import E134_population_baseline as B
+    from experiments import E135_antennal_lobe_dendrites as AL
+    if require_e135()['mode'] == 'search':
+        return pn_norm_kws(z or {})
+    orn = B.panel_input(panel) if orn is None else orn
+    table, _, _ = a1_stage(wiring, panel, orn)
+    return dict(pn_rates=AL.input_columns(AL.route1_pn_rates(table, list(table.index)), orn))
+
+
+def a1_pn_check(built, wiring: str, panel: str = PANEL) -> Optional[dict]:
+    """A1 in mode 'table': the built wiring's PN rates after its last simulation against the kept table (E135's
+    `run_pn_check`, route 1, strict: RuntimeError beyond ROUTE1_TOL_HZ); None in mode 'search'."""
+    from experiments import E135_antennal_lobe_dendrites as AL
+    if require_e135()['mode'] != 'table':
+        return None
+    table, stage, _ = a1_stage(wiring, panel, built.orn)
+    return AL.run_pn_check(built, stage, table, list(table.index))
 
 
 def stage_classes_on_measure(views: Sequence[str], scores: Optional[pd.DataFrame] = None,
@@ -627,12 +735,24 @@ def base_arm(arm: str) -> str:
 
 
 def arm_kws(arm: str) -> dict:
-    """The arm's fixed model kwargs beside the family's (make_fixed_param_kc_simulator kwargs; A1's table from E135
-    and A4's KC-KC scale are not kwargs and are left out)."""
-    kws = {k: v for k, v in ARMS[base_arm(arm)].kws.items() if k not in ('pn_rates', 'kckc_fixed')}
-    if base_arm(arm) == 'A1':
-        kws.update(require_e135()['extra_kws'])
-    return kws
+    """The arm's fixed model kwargs beside the family's (make_fixed_param_kc_simulator kwargs; A4's KC-KC scale is not
+    a kwarg and is left out, and A1's PN stage depends on the wiring, the panel and E135: `a1_kws`)."""
+    return {k: v for k, v in ARMS[base_arm(arm)].kws.items() if k not in ('pn_rates', 'kckc_fixed')}
+
+
+def arm_searched(arm: str) -> Tuple[str, ...]:
+    """An arm's searched coordinates: ARMS', and for A1 PN_COORDS beside them when E135 hands on no stage
+    (`require_e135` mode 'search'; RuntimeError while A1 waits on E135)."""
+    a = ARMS[base_arm(arm)]
+    if a.name == 'A1' and require_e135()['mode'] == 'search':
+        return tuple(a.searched) + PN_COORDS
+    return tuple(a.searched)
+
+
+def coord_value(k: str, v: float) -> float:
+    """A coordinate's value as reported: the factor exp(v) for the log factors and PN_COORDS, the per-claw threshold in
+    Hz."""
+    return CLAW_THR_UNIT * float(v) if k == 'claw_thr' else float(np.exp(v))
 
 
 def start_params(wiring: str, panel: str = PANEL) -> Tuple[Dict[str, float], Dict[str, float]]:
@@ -728,11 +848,17 @@ class ArmModel:
         from experiments import E134_population_baseline as B
         self.arm, self.panel, self.wirings = arm, PANEL, tuple(wirings)
         a = ARMS[base_arm(arm)]
-        self.searched = tuple(a.searched)
+        self.searched = arm_searched(arm)
         if len(self.searched) + len(HELD) > MAX_FREE:
             raise ValueError(f'{arm}: more than {MAX_FREE} parameters')
         self.fixed = {'wKCKC_scale': float(a.kws['kckc_fixed'])} if 'kckc_fixed' in a.kws else {}
         self.kws = arm_kws(arm)
+        self.pn_mode = require_e135()['mode'] if a.name == 'A1' else None
+        self.pn_search = self.pn_mode == 'search'
+        # per wiring, the kwargs every build of it has (A1's table in mode 'table'), and those its current build has
+        self.wkws = {w: dict(self.kws, **(a1_kws(w, PANEL) if self.pn_mode == 'table' else {})) for w in self.wirings}
+        self._built_kws: Dict[str, dict] = {}
+        self.pn_checks: Dict[str, dict] = {}
         self.claw_reader = claw_reader_of(arm)
         self.claw_mode = claw_mode if 'claw_thr' in self.searched else None
         if self.claw_mode not in (None, 'in_place', 'rebuild'):
@@ -746,8 +872,9 @@ class ArmModel:
             p.update(self.fixed)
             poff.update(self.fixed)
             self.base[w], self.base_off[w] = p, poff
-            self.built[w] = B.build_family(w, PANEL, dict(p), extra_kws=self.kws or None)
+            self.built[w] = B.build_family(w, PANEL, dict(p), extra_kws=self.wkws[w] or None)
             self.built[w].info.update(arm=arm)
+            self._built_kws[w] = dict(self.wkws[w])
             self._claw_thr[w] = 0.0
             n_kc = E83.saved_fit(w)['saved']['on'][0].shape[0]
             t_off, t_on, _, _ = B.held_targets(B.Point(PANEL, 'held', w), n_kc * self.built[w].orn.shape[1], lock)
@@ -790,9 +917,23 @@ class ArmModel:
         if self.claw_mode == 'in_place':
             self.built[wiring].vars()[0].kc.claw_thr = float(value)
         else:
-            kws = dict(self.kws, **({'claw_thr': float(value)} if value > 0 else {}))
+            kws = dict(self.wkws[wiring], **({'claw_thr': float(value)} if value > 0 else {}))
             self.built[wiring] = B.build_family(wiring, PANEL, dict(self.base[wiring]), extra_kws=kws or None)
+            self._built_kws[wiring] = kws
         self._claw_thr[wiring] = float(value)
+
+    def set_pn(self, wiring: str, z: Mapping[str, float]) -> None:
+        """A1 when E135 hands on no stage: the wiring's simulator rebuilt with the normalization at `z`
+        (`pn_norm_kws`) where its current build has other kwargs."""
+        from experiments import E134_population_baseline as B
+        if not self.pn_search:
+            return
+        kws = dict(self.wkws[wiring], **pn_norm_kws(z))
+        if kws == self._built_kws[wiring]:
+            return
+        self.built[wiring] = B.build_family(wiring, PANEL, dict(self.base[wiring]), extra_kws=kws or None)
+        self.built[wiring].info.update(arm=self.arm)
+        self._built_kws[wiring] = kws
 
     def hold(self, wiring: str, z: Mapping[str, float]) -> Tuple[Dict[str, float], Dict[str, float], dict]:
         """Both response counts of a wiring held at `z` (`secant_hold`, warm-started from the evaluated point nearest
@@ -826,6 +967,7 @@ class ArmModel:
         from experiments import E134_population_baseline as B
         runs = {}
         for w in self.wirings:
+            self.set_pn(w, z)
             self.set_claw_thr(w, self.params_for(w, z)[2])
             p, poff, hd = self.hold(w, z)
             ct = self.params_for(w, z)[2]
@@ -836,6 +978,11 @@ class ArmModel:
                     raise RuntimeError(f"{self.arm} {w} {c}: the saved run differs from the hold's outputs")
             info = dict(model=B.FAMILY, wiring=w, panel=PANEL, reading='fit', arm=self.arm, z=dict(z), params=p,
                         params_off=poff, claw_thr=ct, tag=f'{tag_prefix}{w}')
+            if self.pn_mode == 'table' and w not in self.pn_checks:
+                self.pn_checks[w] = a1_pn_check(self.built[w], w)
+            if self.pn_mode is not None:
+                info.update(pn_mode=self.pn_mode, pn_kws={k: v for k, v in self._built_kws[w].items() if k != 'pn_rates'
+                                                          and k.startswith('pn_')}, pn_check=self.pn_checks.get(w))
             runs[w] = in_memory_run(f'{tag_prefix}{w}', out, self.built[w], info)
             runs[w].info['_out'] = out
             runs[w].info['hold'] = {k: v for k, v in hd.items() if k != 'outputs'}
@@ -1222,7 +1369,7 @@ def fit_arm(arm: str, control: bool = False, maxfev: Optional[int] = None, resum
     loss = StageLoss(stages, flies, lock, check_pn=base != 'A1')
     m = ArmModel(name, S_WIRINGS, lock=lock, claw_mode=claw_mode or 'in_place')
     searched = m.searched
-    budget = int(maxfev or MAXFEV[name])
+    budget = int(maxfev or (MAXFEV_A1_SEARCH if m.pn_search else MAXFEV[name]))
     hist_path = out_dir() / f'fit_history_{name}.csv'
     memo: Dict[Tuple[float, ...], float] = {}
     hist: List[dict] = []
@@ -1259,7 +1406,8 @@ def fit_arm(arm: str, control: bool = False, maxfev: Optional[int] = None, resum
                 row.update({f'{k}_{w}': v for k, v in run.info['params'].items()})
                 if run.info.get('claw_thr') is not None:
                     row[f'claw_thr_{w}'] = run.info['claw_thr']
-            if i == 0 and name == 'A0' and not any(zc) and MEASURE in START_CHECK:
+                row.update({f'{k}_{w}': v for k, v in (run.info.get('pn_kws') or {}).items()})
+            if i == 0 and (name == 'A0' or m.pn_search) and not any(zc) and MEASURE in START_CHECK:
                 bad = {k: (res[k], v) for k, v in START_CHECK[MEASURE].items() if abs(res[k] - v) > START_CHECK_TOL}
                 if bad:
                     raise RuntimeError(f'the start check fails (got, expected): {bad}')
@@ -1296,7 +1444,11 @@ def fit_arm(arm: str, control: bool = False, maxfev: Optional[int] = None, resum
                n_evals=len(hist), n_calls=calls['n'], budget=budget, restarted=restarted, best_eval=int(best['eval']),
                best_z=bz, at_bound=flags, best=dict(best), messages=messages, claw_mode=m.claw_mode,
                seconds=round(time.time() - t0, 1), host=_host(), time=_now(), **_commits())
-    out['factors'] = {k: (float(np.exp(v)) if k in FACTORS else CLAW_THR_UNIT * v) for k, v in bz.items()}
+    out['factors'] = {k: coord_value(k, v) for k, v in bz.items()}
+    if base == 'A1':
+        out['e135'] = require_e135()
+        out['pn_kws'] = pn_norm_kws(bz) if m.pn_search else None
+        out['pn_checks'] = m.pn_checks or None
     if save_stages:
         out['archived'] = [str(p) for p in archive_best(name, int(best['eval']))]
     _write_json(out_dir() / f'fit_{name}.json', out)
@@ -1558,8 +1710,10 @@ def read_arm(pt: ReadPoint, lane: str, reclaim: bool = False, done: Optional[set
                 for kk in FACTORS[k]:
                     p0[kk] = p0[kk] * float(np.exp(v))
         ct = CLAW_THR_UNIT * float(z['claw_thr']) if 'claw_thr' in z else None
-        kws = dict(arm_kws(arm), **({'claw_thr': ct} if ct else {}))
         orn = B.panel_input(pt.panel)
+        kws = dict(arm_kws(arm), **({'claw_thr': ct} if ct else {}))
+        if arm == 'A1':
+            kws.update(a1_kws(pt.wiring, pt.panel, orn, z))
         Pp = E83.wiring_parts(pt.wiring)
         t_off, t_on, f_off, f_on = read_targets(pt.wiring, pt.panel, orn.shape[1], lock)
         rng = HOLD_RANGE_DIVISIVE_APL if kws.get('apl_inh_divisive') else HOLD_RANGE
@@ -1575,6 +1729,15 @@ def read_arm(pt: ReadPoint, lane: str, reclaim: bool = False, done: Optional[set
                 raise RuntimeError(f"{tag} {c}: the saved run differs from the hold's outputs")
         info = dict(model=B.FAMILY, wiring=pt.wiring, panel=pt.panel, reading='read', arm=pt.arm, z=z, params=p,
                     params_off=poff, claw_thr=ct, tag=tag, host=_host(), lane=lane, time=_now())
+        pn_rec = {}
+        if arm == 'A1':
+            h = require_e135()
+            pn_rec = dict(pn_mode=h['mode'], pn_rung=h['rung'], e135_outcome=h['outcome'],
+                          **{k: float(v) for k, v in kws.items() if k in ('pn_inhadd', 'pn_inhsc')})
+            chk = a1_pn_check(built, pt.wiring, pt.panel)
+            info.update(pn_rec, pn_check=chk)
+            if chk is not None:
+                pn_rec['pn_check_max_abs_diff'] = max(chk['max_abs_diff_set'], chk['max_abs_diff_unset'])
         dirs = read_dirs() if archive else read_dirs()[:1]
         R.save_step3_run(tag, out, built.meta, built.orn, info, dirs)
         if ct:
@@ -1587,7 +1750,7 @@ def read_arm(pt: ReadPoint, lane: str, reclaim: bool = False, done: Optional[set
             rr.update({f'rate_{c}': float((out[c]['responses'].to_numpy(dtype=float) > 0.5).mean()),
                        f'max_count_{c}': float(out[c]['spike_counts'].to_numpy(dtype=float).max())})
         row = dict(tag=tag, arm=pt.arm, panel=pt.panel, wiring=pt.wiring, half=pt.half,
-                   **{f'z_{k}': v for k, v in z.items()}, claw_thr=ct,
+                   **{f'z_{k}': v for k, v in z.items()}, claw_thr=ct, **pn_rec,
                    **{k: float(v) for k, v in p.items()}, **{f'off_{k}': float(v) for k, v in poff.items()}, **rr,
                    target_on=t_on, target_off=t_off, frac_on_target=f_on, frac_off_target=f_off,
                    thr_factor=hold['thr_factor'], apl_factor=hold['apl_factor'], at_bound_thr=hold['at_bound_thr'],

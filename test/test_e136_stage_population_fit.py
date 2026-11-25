@@ -39,8 +39,7 @@ def test_arms_and_wirings():
     assert F.arm_kws('A2') == {'apl_inh_divisive': True} and F.arm_kws('A4') == {} and F.arm_kws('A0') == {}
     assert F.claw_reader_of('A2') is F.claw_inputs_divisive and F.claw_reader_of('A0') is None
     assert [F.seed_index(w) for w in F.WIRINGS] == list(range(8))
-    with pytest.raises(RuntimeError, match='E135'):
-        F.arm_kws('A1')
+    assert F.arm_kws('A1') == {}
 
 
 def _model(arm='A0'):
@@ -481,3 +480,82 @@ def test_consistency(monkeypatch, tmp_path):
     pd.DataFrame(rows).to_csv(tmp_path / 'rescore_A0.csv', index=False)
     c = F.consistency(['A0'], 'strength')
     assert len(c) == 5 and (c.rho > 0.9).all() and (c.n_evals == 30).all()
+
+
+def _verdict(monkeypatch, tmp_path, outcome, **kw):
+    import json
+    from experiments import E135_antennal_lobe_dendrites as AL
+    monkeypatch.setattr(AL, 'out_dir', lambda: tmp_path)
+    monkeypatch.setattr(AL, 'read_step1_fits', lambda root=None: {'step2_rung': 'R3', 'highest_kept': 'R3',
+                                                                   'all_flies': {}})
+    if outcome is not None:
+        (tmp_path / AL.SCORE_VERDICT_FILE).write_text(json.dumps({'cls': 'x', 'outcome': dict(outcome=outcome, **kw)}))
+
+
+def test_require_e135(monkeypatch, tmp_path):
+    _verdict(monkeypatch, tmp_path, None)
+    with pytest.raises(RuntimeError, match='waits on E135'):
+        F.require_e135()
+    with pytest.raises(RuntimeError, match='waits on E135'):
+        F.arm_searched('A1')
+    assert F.arm_searched('A0') == ('aplpn', 'kckc') and F.arm_searched('A3') == ('aplpn', 'kckc', 'claw_thr')
+    for o in ('incomplete', 'needs the dF/F repeat', 'unit-dependent', 'reading-dependent'):
+        _verdict(monkeypatch, tmp_path, o)
+        with pytest.raises(RuntimeError, match='waits on E135'):
+            F.require_e135()
+    _verdict(monkeypatch, tmp_path, 'a', improvement=True)
+    h = F.require_e135()
+    assert (h['mode'], h['rung'], h['outcome'], h['improvement']) == ('table', 'R1', 'a', True)
+    assert F.arm_searched('A1') == ('aplpn', 'kckc')
+    _verdict(monkeypatch, tmp_path, 'b', improvement=False, at_a_cost_beside=['kc_soma breadth'])
+    h = F.require_e135()
+    assert (h['mode'], h['rung'], h['at_a_cost_beside']) == ('table', 'R3', ['kc_soma breadth'])
+    for o in ('c', 'd', 'e', 'f'):
+        _verdict(monkeypatch, tmp_path, o)
+        h = F.require_e135()
+        assert (h['mode'], h['rung']) == ('search', None)
+        searched = F.arm_searched('A1')
+        assert searched == ('aplpn', 'kckc', 'inhadd', 'inhsc')
+        assert len(searched) + len(F.HELD) <= F.MAX_FREE and set(searched) <= set(F.BOUNDS) <= set(F.FIRST_STEP)
+
+
+def test_pn_norm_kws():
+    from experiments.E3_drive_dependent_gain import PN_INHADD_DEFAULT
+    from experiments.E77_input_screen import inhsc_for
+    assert F.pn_norm_kws({}) == {} and F.pn_norm_kws(dict(aplpn=-1.0, inhadd=0.0, inhsc=0.0)) == {}
+    k = F.pn_norm_kws(dict(inhadd=F.FIRST_STEP['inhadd']))
+    assert k['pn_inhadd'] == pytest.approx(100.0) and k['pn_inhsc'] == pytest.approx(inhsc_for(100.0))
+    k = F.pn_norm_kws(dict(inhsc=np.log(2.0)))
+    assert k['pn_inhadd'] == pytest.approx(PN_INHADD_DEFAULT) and k['pn_inhsc'] == pytest.approx(2 * inhsc_for(PN_INHADD_DEFAULT))
+    lo, hi = F.BOUNDS['inhadd']
+    assert PN_INHADD_DEFAULT * np.exp(hi) > 10000.0 and lo < 0.0 < F.FIRST_STEP['inhadd'] < hi
+    assert F.coord_value('claw_thr', 1.0) == F.CLAW_THR_UNIT and F.coord_value('inhadd', np.log(3.0)) == pytest.approx(3.0)
+    assert F.coord_value('aplpn', np.log(0.5)) == pytest.approx(0.5)
+
+
+@pytest.mark.skipif(os.environ.get('E136_REAL') != '1', reason='builds the family on the real wiring (E136_REAL=1)')
+@pytest.mark.parametrize('outcome,panel', [('a', 'megamat'), ('b', 'validation2')])
+def test_a1_table_real(monkeypatch, tmp_path, outcome, panel):
+    """A1's kept table on the real wiring (E135's step-1 fits from the shared directory) entering by route 1: the built
+    model's PN rates equal the table on every glomerulus and odor of the input."""
+    import json
+    from experiments import E134_population_baseline as B
+    from experiments import E135_antennal_lobe_dendrites as AL
+    fits = AL.read_step1_fits()
+    monkeypatch.setattr(AL, 'read_step1_fits', lambda root=None: fits)
+    real_out = AL.out_dir()
+    monkeypatch.setattr(F, 'e135_verdict_path', lambda: tmp_path / 'v.json')
+    (tmp_path / 'v.json').write_text(json.dumps({'outcome': dict(outcome=outcome)}))
+    assert real_out.exists()
+    F._A1_STAGES.clear()
+    orn = B.panel_input(panel)
+    kws = F.a1_kws('real', panel, orn)
+    table, stage, rec = F.a1_stage('real', panel, orn)
+    assert rec['rung'] == ('R1' if outcome == 'a' else AL.step2_rung_of(fits).replace('m', '').replace('f', ''))
+    assert list(kws['pn_rates'].columns) == list(orn.columns) and np.isfinite(kws['pn_rates'].to_numpy()).all()
+    p, _ = F.start_params('real')
+    built = B.build_family('real', panel, dict(p), orn=orn, extra_kws=kws)
+    built.sim(dict(p))
+    chk = F.a1_pn_check(built, 'real', panel)
+    assert chk['ok'] and chk['n_set'] == table.size
+
