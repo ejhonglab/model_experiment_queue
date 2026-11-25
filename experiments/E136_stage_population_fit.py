@@ -73,8 +73,9 @@ wiring's error (the error of the T wirings' mean views beside); a change is the 
 unrefitted family on the same wiring; a spread is the SD over the family's eight wirings of the unrefitted family's
 value; the standard error over wirings is the larger of half the megamat stage error's spread and the SD of the
 per-wiring changes over T divided by 2. "improves": the change is below -IMPROVE_SE standard errors and no stage's
-change is above that stage's spread; "holds": it improves and no held-out panel (validation2, kmix, cmix, APL16 with
-APL on, APL16 with APL off) is worse by more than its spread; "megamat only"; "one stage at another's cost"; "adds" on
+change is above that stage's spread; "holds": it improves and no held-out panel (validation2, cmix, APL16 with APL
+on, APL16 with APL off) is worse by more than its spread (kmix is scored beside, with E137's two readings of its
+components as bounds: Tom, 2026-11-25 10:42); "megamat only"; "one stage at another's cost"; "adds" on
 the per-wiring changes from A0; no class outside a band, at a bound, or no better than the control.
 
 Realism (reported, not optimized): the APL16 reads' bands (kcq.apl_effect's, the KC data in baseline-noise units), the
@@ -1871,6 +1872,54 @@ def score_panels(arm: str, flies: Optional['R.FlyCache'] = None, views='measure'
     return pd.DataFrame(rows)
 
 
+def score_e137_beside(arm: str) -> pd.DataFrame:
+    """An arm's mixture reads on the eight wirings scored beside the class under E137's readings of the mixture flies
+    (E137_BESIDE; E137's committed lock, each reading's own units and flies, the flies' trial noise added to the model
+    after the curve, as E137's re-score reads E134's runs: `read_model_panel`, seeds by the wirings' order, which is
+    E137's), under the measure in force and under every view: per panel, reading, views and wiring (and the 'mean' and
+    'common' rows) the KC somata's population error and its views. Empty if a mixture read is missing."""
+    from data_prep import stage_population_data as D
+    from experiments import E137_heldout_readings as E137
+    from kcq import population_fit as P
+    runs = [load_read(ReadPoint(arm, 'mixtures', w, None)) for w in WIRINGS]
+    if any(r is None for r in runs):
+        return pd.DataFrame()
+    lock = E137.load_lock()
+    rows = []
+    for panel, readings in E137_BESIDE.items():
+        od = list(D.panel_odors(panel))
+        for reading in readings:
+            units = E137.PRIMARY_UNITS[reading]
+            pop, noise = E137.reading_population(panel, reading, units, lock)
+            fps = P.fly_populations(pop)
+            pops = E137.read_model_panel(runs, panel, pop, noise)
+            for views in dict.fromkeys((MEASURES[MEASURE], None)):
+                ref = P.fly_reference(fps, od, D.breadth_bins(len(od)), parts=measure_parts(views))
+                for name, r in P.wirings_as_flies(pops, ref).iterrows():
+                    rows.append(dict(arm=arm, input='mixtures', stage='kc_soma', panel=panel, condition='on',
+                                     reading=reading, units=units, views='all' if views is None else '+'.join(views),
+                                     wiring=str(name).partition('/')[2] or str(name), n_odors=len(od),
+                                     n_flies=len(fps), **{k: float(v) for k, v in r.items()}))
+    return pd.DataFrame(rows)
+
+
+def e137_beside(rows: pd.DataFrame, arms: Sequence[str]) -> Dict[str, dict]:
+    """`score_e137_beside`'s rows compared as the classes compare a held-out panel (`compare` on T against the unrefitted
+    family, the spread over its eight wirings), per arm and '<panel>/<reading>/<views>'; gates nothing."""
+    out: Dict[str, dict] = {}
+    if not len(rows):
+        return out
+    fam = rows[rows.arm == FAMILY]
+    for key, g in fam.groupby(['panel', 'reading', 'views']):
+        k = '/'.join(key)
+        base = {str(r.wiring): float(r.error) for r in g.itertuples() if r.wiring in WIRINGS}
+        spread = _sd(base.values())
+        for a in arms:
+            x = rows[(rows.arm == a) & (rows.panel == key[0]) & (rows.reading == key[1]) & (rows.views == key[2])]
+            out.setdefault(a, {})[k] = compare({str(r.wiring): float(r.error) for r in x.itertuples()}, base, spread)
+    return out
+
+
 def apl16_realism(on: pd.DataFrame, off: pd.DataFrame) -> dict:
     """The realism bands of one APL16 run (kcq.apl_effect's, as its by_variant scores the archive: the model's two-spike
     responses against the KC data in baseline-noise units): the rates, their ratio, the response rate ρ with APL on and
@@ -1907,9 +1956,17 @@ def apl16_rows(arm: str) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-HOLDS_PANELS: Tuple[Tuple[str, str, str], ...] = (('validation2', 'validation2', 'on'), ('mixtures', 'kmix', 'on'),
-                                                   ('mixtures', 'cmix', 'on'), ('apl16', 'apl16', 'on'),
-                                                   ('apl16', 'apl16', 'off'))
+# the held-out panels the class reads ("holds"); the kiwi mixtures left the class on Tom's word (2026-11-25 10:42, in
+# hal's terminal, relayed by hal: "go with your read on the mixture panels") and are scored beside it (BESIDE_PANELS),
+# with E137's two readings of the components as bounds; the control mixtures stay in, read as uploaded
+HOLDS_PANELS: Tuple[Tuple[str, str, str], ...] = (('validation2', 'validation2', 'on'), ('mixtures', 'cmix', 'on'),
+                                                   ('apl16', 'apl16', 'on'), ('apl16', 'apl16', 'off'))
+BESIDE_PANELS: Tuple[Tuple[str, str, str], ...] = (('mixtures', 'kmix', 'on'),)
+SCORED_PANELS: Tuple[Tuple[str, str, str], ...] = HOLDS_PANELS + BESIDE_PANELS
+# E137's readings of the mixture flies scored beside (its lock, each reading's own units and flies' trial noise): the
+# kiwi mixtures' two bounds and the control mixtures' second block
+E137_BESIDE: Dict[str, Tuple[str, ...]] = {'kmix': ('components_first_block', 'components_second_block'),
+                                           'cmix': ('components_second_block',)}
 
 
 def _sd(x) -> float:
@@ -1927,9 +1984,9 @@ def megamat_values(sc: Mapping[str, float], stages: Sequence[str], wirings: Sequ
 
 
 def panel_values(panels: pd.DataFrame, arm: str) -> Dict[Tuple[str, str, str], Dict[str, float]]:
-    """From `score_panels`' rows, per (input, panel, condition) of HOLDS_PANELS each wiring's KC population error."""
+    """From `score_panels`' rows, per (input, panel, condition) of SCORED_PANELS each wiring's KC population error."""
     out = {}
-    for inp, pan, cond in HOLDS_PANELS:
+    for inp, pan, cond in SCORED_PANELS:
         x = panels[(panels.arm == arm) & (panels.input == inp) & (panels.panel == pan) & (panels.condition == cond)
                    & panels.wiring.isin(WIRINGS)] if len(panels) else panels
         out[(inp, pan, cond)] = {str(r.wiring): float(r.error) for r in x.itertuples()} if len(x) else {}
@@ -1958,7 +2015,7 @@ def classify(arm: str, stages: Sequence[str], mega: Mapping[str, Mapping[str, Di
              guard: Optional[Mapping] = None) -> dict:
     """One arm's class as the entry fixes it and the rulings read it, on the T wirings and the held-out half, against
     the unrefitted family there (`mega` / `panels`: per arm, FAMILY included, the values of `megamat_values` /
-    `panel_values`; `spreads`: 'stage', each stage and each HOLDS_PANELS key as 'input/panel/condition', the SD over the
+    `panel_values`; `spreads`: 'stage', each stage and each SCORED_PANELS key as 'input/panel/condition', the SD over the
     family's eight wirings; `realism`: per arm, per wiring its APL16 read's realism flag; `fit`: the arm's
     fit_<arm>.json; `control_fall`: the control fit's fall of the megamat stage error on T against the permuted
     held-out half; `guard`: rule 3's guard on a measure of fewer views, the same values under every view: 'mega',
@@ -1966,15 +2023,17 @@ def classify(arm: str, stages: Sequence[str], mega: Mapping[str, Mapping[str, Di
     "improves". With the guard, a stage whose error over all its views rises by more than that error's spread makes an
     arm that lowers the strength error "strength at another view's cost" (it does not improve), and a held-out panel is
     worse when either error is. A fit's 'at_bound_classed' (the determined factors of its classed point, `determined`)
-    stands in for 'at_bound' where it exists."""
+    stands in for 'at_bound' where it exists. BESIDE_PANELS are compared the same way, into 'panels_beside' (their guard
+    into 'guard'), and gate nothing."""
     a, f = mega[arm], mega[FAMILY]
     m = compare({w: v['stage'] for w, v in a.items()}, {w: v['stage'] for w, v in f.items()}, spreads['stage'])
     st = {s: compare({w: v[s] for w, v in a.items()}, {w: v[s] for w, v in f.items()}, spreads[s]) for s in stages}
-    pn = {}
-    for key in HOLDS_PANELS:
-        k = '/'.join(key)
-        pn[k] = compare(panels[arm].get(key, {}), panels[FAMILY].get(key, {}), spreads.get(k, np.nan))
-    rec = dict(arm=arm, megamat=m, stages=st, panels=pn)
+    pn, pb = {}, {}
+    for keys, out in ((HOLDS_PANELS, pn), (BESIDE_PANELS, pb)):
+        for key in keys:
+            k = '/'.join(key)
+            out[k] = compare(panels[arm].get(key, {}), panels[FAMILY].get(key, {}), spreads.get(k, np.nan))
+    rec = dict(arm=arm, megamat=m, stages=st, panels=pn, panels_beside=pb)
     reasons = []
     if not m.get('complete') or not all(v.get('complete') for v in st.values()):
         reasons.append('reads missing')
@@ -1999,12 +2058,12 @@ def classify(arm: str, stages: Sequence[str], mega: Mapping[str, Mapping[str, Di
             guard_rec[s] = c
             if c.get('worse_than_spread'):
                 guard_worse.append(s)
-        for key in HOLDS_PANELS:
+        for key in SCORED_PANELS:
             k = '/'.join(key)
             c = compare(guard['panels'].get(arm, {}).get(key, {}), guard['panels'].get(FAMILY, {}).get(key, {}),
                         guard['spreads'].get(k, np.nan))
             guard_rec[k] = c
-            if c.get('complete') and c.get('worse_than_spread') and k not in panel_worse:
+            if key in HOLDS_PANELS and c.get('complete') and c.get('worse_than_spread') and k not in panel_worse:
                 panel_worse.append(k)
     improves = bool(m.get('improves')) and not stage_worse and not guard_worse
     rec.update(improves=improves, stage_worse=stage_worse, guard_worse=guard_worse, guard=guard_rec,
@@ -2068,8 +2127,9 @@ def part_score(arms: Optional[Sequence[str]] = None) -> dict:
     """The reads scored and classed: per arm (and the unrefitted family) the megamat stages on T against the held-out
     half (and, beside, against all flies and the fit half, and on S from the fit), A3's under both claw readings, the
     control's against the permuted held-out half, the held-out panels' KC population errors, the APL16 rows with the
-    realism bands; the spreads over the family's eight wirings; the classes (`classify`). Writes score_megamat.csv,
-    score_panels.csv, score_apl16.csv, classes.json and provenance_score.json."""
+    realism bands; the spreads over the family's eight wirings; the classes (`classify`); beside, the mixture panels
+    under E137's readings (`score_e137_beside`). Writes score_megamat.csv, score_panels.csv, score_panels_e137.csv,
+    score_apl16.csv, classes.json and provenance_score.json."""
     gate = require_gate()
     stages = readable_stages(gate['classes'])
     t0 = time.time()
@@ -2102,7 +2162,7 @@ def part_score(arms: Optional[Sequence[str]] = None) -> dict:
     fam = mega.get(FAMILY, {})
     spreads = dict(stage=_sd(v['stage'] for v in fam.values()), downstream=_sd(v['downstream'] for v in fam.values()),
                    **{s: _sd(v[s] for v in fam.values()) for s in stages})
-    for key in HOLDS_PANELS:
+    for key in SCORED_PANELS:
         spreads['/'.join(key)] = _sd(pv[FAMILY].get(key, {}).values())
     apl_rows = [apl16_rows(a) for a in [FAMILY, *arms]]
     apl = pd.concat([r for r in apl_rows if len(r)], ignore_index=True) if any(len(r) for r in apl_rows) else \
@@ -2130,7 +2190,7 @@ def part_score(arms: Optional[Sequence[str]] = None) -> dict:
         g_pv = {a: panel_values(g_panels, a) for a in [FAMILY, *arms]}
         gf = g_mega.get(FAMILY, {})
         g_spreads = dict(stage=_sd(v['stage'] for v in gf.values()), **{s: _sd(v[s] for v in gf.values()) for s in stages})
-        for key in HOLDS_PANELS:
+        for key in SCORED_PANELS:
             g_spreads['/'.join(key)] = _sd(g_pv[FAMILY].get(key, {}).values())
         guard = dict(mega=g_mega, panels=g_pv, spreads=g_spreads)
         g_panels.to_csv(out_dir() / 'score_panels_all_views.csv', index=False)
@@ -2143,6 +2203,11 @@ def part_score(arms: Optional[Sequence[str]] = None) -> dict:
         beside['two_view'] = {a: compare(tv[a], tv[FAMILY], np.nan) for a in arms if a in tv and FAMILY in tv}
         beside['yardsticks'] = yardsticks(stages)
         beside['spreads_all_views'] = g_spreads
+    # beside: the mixture panels under E137's readings (the kiwi mixtures' two bounds, the control mixtures' second block)
+    e_rows = [score_e137_beside(a) for a in [FAMILY, *arms]]
+    e137 = pd.concat([r for r in e_rows if len(r)], ignore_index=True) if any(len(r) for r in e_rows) else pd.DataFrame()
+    beside['e137_readings'] = e137_beside(e137, arms)
+    beside['panels_beside'] = ['/'.join(k) for k in BESIDE_PANELS]
     classes = {}
     for a in arms:
         fit = _read_json(out_dir() / f'fit_{a}.json')
@@ -2158,6 +2223,7 @@ def part_score(arms: Optional[Sequence[str]] = None) -> dict:
                 classes[a]['cls'] = 'no class'
     pd.DataFrame(mrows).to_csv(out_dir() / 'score_megamat.csv', index=False)
     panels.to_csv(out_dir() / 'score_panels.csv', index=False)
+    e137.to_csv(out_dir() / 'score_panels_e137.csv', index=False)
     apl.to_csv(out_dir() / 'score_apl16.csv', index=False)
     try:
         beside['consistency'] = consistency(arms + ([CONTROL] if (out_dir() / f'fit_{CONTROL}.json').exists() else []))\

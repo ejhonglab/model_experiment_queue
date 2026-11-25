@@ -457,6 +457,52 @@ def test_guard_on_the_views_beside():
     assert c['cls'] == 'holds'
 
 
+def test_class_ignores_kmix():
+    # the kiwi mixtures are scored beside the class (Tom, 2026-11-25 10:42), the control mixtures stay in it
+    assert ('mixtures', 'kmix', 'on') not in F.HOLDS_PANELS and ('mixtures', 'kmix', 'on') in F.BESIDE_PANELS
+    assert ('mixtures', 'cmix', 'on') in F.HOLDS_PANELS
+    stages = ('kc_claw', 'kc_soma')
+    fam = {w: 1.0 for w in F.WIRINGS}
+    spreads = dict(stage=0.04, downstream=0.04, kc_claw=0.04, kc_soma=0.04,
+                   **{'/'.join(k): 0.05 for k in F.SCORED_PANELS})
+    flat = {k: {w: 1.0 for w in F.WIRINGS} for k in F.SCORED_PANELS}
+    better = {w: 0.9 for w in F.T_WIRINGS}
+
+    def run(worse_key, in_guard=False):
+        arm_p = {k: {w: 1.0 + (0.2 if k == worse_key else 0.0) for w in F.WIRINGS} for k in F.SCORED_PANELS}
+        guard = None
+        if in_guard:
+            g_mega = {F.FAMILY: _mega(fam, stages), 'A0': _mega({w: 1.0 for w in F.T_WIRINGS}, stages)}
+            guard = dict(mega=g_mega, panels={F.FAMILY: flat, 'A0': arm_p}, spreads=spreads)
+        p = {F.FAMILY: flat, 'A0': flat if in_guard else arm_p}
+        return F.classify('A0', stages, {F.FAMILY: _mega(fam, stages), 'A0': _mega(better, stages)}, p, spreads,
+                          {F.FAMILY: {}, 'A0': {}}, {}, 0.01, guard)
+    for in_guard in (False, True):
+        r = run(('mixtures', 'kmix', 'on'), in_guard)
+        assert r['cls'] == 'holds' and r['panel_worse'] == [] and 'mixtures/kmix/on' not in r['panels']
+        if in_guard:
+            assert r['guard']['mixtures/kmix/on']['worse_than_spread']
+        else:
+            assert r['panels_beside']['mixtures/kmix/on']['worse_than_spread']
+        r = run(('mixtures', 'cmix', 'on'), in_guard)
+        assert r['cls'] == 'megamat only' and r['panel_worse'] == ['mixtures/cmix/on']
+
+
+def test_e137_beside_compare():
+    rows = []
+    for arm, v in ((F.FAMILY, 1.0), ('A0', 0.9)):
+        for i, w in enumerate(F.WIRINGS):
+            rows.append(dict(arm=arm, panel='kmix', reading='components_first_block', views='strength', wiring=w,
+                             error=v + 0.01 * (i % 2)))
+        rows.append(dict(arm=arm, panel='kmix', reading='components_first_block', views='strength', wiring='mean',
+                         error=v))
+    out = F.e137_beside(pd.DataFrame(rows), ['A0'])
+    c = out['A0']['kmix/components_first_block/strength']
+    assert c['complete'] and c['change'] == pytest.approx(-0.1)
+    assert c['spread'] == pytest.approx(np.std([0.01 * (i % 2) for i in range(8)], ddof=1))
+    assert F.e137_beside(pd.DataFrame(), ['A0']) == {}
+
+
 def test_save_eval_tags(monkeypatch, tmp_path):
     monkeypatch.setattr(F, 'local_dir', lambda part='': (tmp_path / part).mkdir(parents=True, exist_ok=True) or tmp_path / part)
     out, built = _out_and_built()
