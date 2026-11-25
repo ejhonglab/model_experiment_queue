@@ -6,8 +6,9 @@ the summary organized around the APL effect until then is the APL16 Summary (rep
 built by build_apl16_summary.py on request).
 
 1. scores every saved model variant's per-pair APL effect and draws the matrix figures of both summaries'
-   buttons (kcq/apl_effect.py), regenerates the APL16 Summary's progress plot (summary_progress_plot.py), and
-   draws the Summary's stage figures (summary_stage_figures.py);
+   buttons (kcq/apl_effect.py), regenerates the APL16 Summary's progress plot (summary_progress_plot.py),
+   draws the Summary's stage figures (summary_stage_figures.py) and regenerates its stage-target progress plot
+   (summary_stage_progress_plot.py; the template inserts it once the fit of all megamat stages is scored);
 2. fills the template from the data-target registry and the experiments' results tables
    (fill_report.py; fails on any unresolved placeholder, prints lint for bare numbers in KC-data
    rows and the best-models table);
@@ -21,7 +22,8 @@ built by build_apl16_summary.py on request).
 save_report_copy.py stays manual; the page is not published as an artifact (CLAUDE.md, "Report copies").
 Steps 2-4 are fill_and_build(), which the digest pages (build_since_priority_changes.py,
 build_since_yang_new_data.py) use for their own templates, through page_main().
-Usage: ./venv/bin/python reports/build_summary.py [--skip-progress-plot] [--skip-stage-figures] [--data-targets]
+Usage: ./venv/bin/python reports/build_summary.py [--skip-progress-plot] [--skip-stage-figures]
+       [--skip-stage-progress-plot] [--data-targets]
        (--data-targets first rebuilds the registry, kcq/data_targets.py)
 """
 from __future__ import annotations
@@ -128,6 +130,8 @@ def main() -> None:
     ap.add_argument('--data-targets', action='store_true')
     ap.add_argument('--skip-stage-figures', action='store_true',
         help="don't redraw the Summary's stage figures (summary_stage_figures.py)")
+    ap.add_argument('--skip-stage-progress-plot', action='store_true',
+        help="don't regenerate the Summary's stage-target progress plot (summary_stage_progress_plot.py)")
     args = ap.parse_args()
     py = sys.executable
     if args.data_targets:
@@ -137,6 +141,8 @@ def main() -> None:
         subprocess.run([py, str(H.HERE / 'reports' / 'summary_progress_plot.py')], check=True)
     if not args.skip_stage_figures:
         subprocess.run([py, str(H.HERE / 'reports' / 'summary_stage_figures.py')], check=True)
+    if not args.skip_stage_progress_plot:
+        subprocess.run([py, str(H.HERE / 'reports' / 'summary_stage_progress_plot.py')], check=True)
     if not fill_and_build(TEMPLATE, OUT_MD, OUT_HTML, 'summary_filled.md'):
         sys.exit(1)
 
