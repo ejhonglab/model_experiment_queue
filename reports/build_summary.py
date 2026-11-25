@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
-"""Build the all-experiments summary report from its template (reports/summary_template.md).
+"""Build the all-experiments summary report, "Summary", from its template (reports/summary_template.md).
 
-1. scores every saved model variant's per-pair APL effect and draws the best-models table's matrix
-   figures (kcq/apl_effect.py), then regenerates the progress plot (summary_progress_plot.py);
+Since 2026-11-25 the Summary is organized along the stage target (CLAUDE.md, "The main goal for new experiments");
+the summary organized around the APL effect until then is the APL16 Summary (reports/apl16_summary_template.md,
+built by build_apl16_summary.py on request).
+
+1. scores every saved model variant's per-pair APL effect and draws the matrix figures of both summaries'
+   buttons (kcq/apl_effect.py), regenerates the APL16 Summary's progress plot (summary_progress_plot.py), and
+   draws the Summary's stage figures (summary_stage_figures.py);
 2. fills the template from the data-target registry and the experiments' results tables
    (fill_report.py; fails on any unresolved placeholder, prints lint for bare numbers in KC-data
    rows and the best-models table);
@@ -16,7 +21,7 @@
 save_report_copy.py stays manual; the page is not published as an artifact (CLAUDE.md, "Report copies").
 Steps 2-4 are fill_and_build(), which the digest pages (build_since_priority_changes.py,
 build_since_yang_new_data.py) use for their own templates, through page_main().
-Usage: ./venv/bin/python reports/build_summary.py [--skip-progress-plot] [--data-targets]
+Usage: ./venv/bin/python reports/build_summary.py [--skip-progress-plot] [--skip-stage-figures] [--data-targets]
        (--data-targets first rebuilds the registry, kcq/data_targets.py)
 """
 from __future__ import annotations
@@ -121,6 +126,8 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('--skip-progress-plot', action='store_true')
     ap.add_argument('--data-targets', action='store_true')
+    ap.add_argument('--skip-stage-figures', action='store_true',
+        help="don't redraw the Summary's stage figures (summary_stage_figures.py)")
     args = ap.parse_args()
     py = sys.executable
     if args.data_targets:
@@ -128,6 +135,8 @@ def main() -> None:
     if not args.skip_progress_plot:
         subprocess.run([py, str(H.HERE / 'kcq' / 'apl_effect.py')], check=True)
         subprocess.run([py, str(H.HERE / 'reports' / 'summary_progress_plot.py')], check=True)
+    if not args.skip_stage_figures:
+        subprocess.run([py, str(H.HERE / 'reports' / 'summary_stage_figures.py')], check=True)
     if not fill_and_build(TEMPLATE, OUT_MD, OUT_HTML, 'summary_filled.md'):
         sys.exit(1)
 

@@ -21,7 +21,7 @@ response matrices), flags variants outside the realism bands (CLAUDE.md), and wr
                                                          among variants with no realism flag and the
                                                          lowest overall
     <shared>/results/apl_effect/matrices/<name>.png      for every `!button[...](results/apl_effect/
-                                                         matrices/<name>.png)` in the summary template:
+                                                         matrices/<name>.png)` in the summary templates (TEMPLATES):
                                                          `data` (the KC data's APL-on, APL-off and
                                                          difference matrices) or `<folder>__<tag>`
                                                          (the data's row above the model's)
@@ -64,7 +64,8 @@ from kcq import harness as H
 RESULTS = H.shared_dir() / 'results'
 OUT = RESULTS / 'apl_effect'
 ARCHIVE = H.shared_dir() / 'data' / 'model_outputs'
-TEMPLATE = H.HERE / 'reports' / 'summary_template.md'
+# the templates whose matrix buttons make_figures draws: the Summary's and the APL16 Summary's
+TEMPLATES = (H.HERE / 'reports' / 'summary_template.md', H.HERE / 'reports' / 'apl16_summary_template.md')
 V = 'spike_counts_cosine'
 STAT_KEYS = ('apl_effect_rmse', 'apl_effect_rmse_centered', 'apl_effect_mean', 'apl_effect_mean_error',
     'apl_effect_spearman', 'apl_effect_pearson', 'apl_effect_n_pairs',
@@ -483,7 +484,10 @@ def draw(name: str, label: str, data_on: pd.Series, data_off: pd.Series, model: 
 
 
 def make_figures(df: pd.DataFrame, data_on: pd.Series, data_off: pd.Series) -> List[str]:
-    labels = button_targets(TEMPLATE.read_text())
+    labels = {}
+    for t in TEMPLATES:
+        if t.exists():
+            labels.update(button_targets(t.read_text()))
     made = []
     for name, label in labels.items():
         out = OUT / 'matrices' / f'{name}.png'
@@ -537,7 +541,8 @@ def main() -> None:
                 '(realism_flag_zcrit)', noise_threshold=H.data_target('noise_threshold'),
             data_rate_ratio=dict(zip(('value', 'ci90'), data_rate_ratio('noise'))),
             zcrit_odors_per_kc_tv_max=dict(on=opk_band('on', 'z'), off=opk_band('off', 'z'))),
-        figures=made, template=str(TEMPLATE.relative_to(H.HERE)), template_sha256=_sha(TEMPLATE)), indent=1, ensure_ascii=False) + '\n')
+        figures=made, templates={str(t.relative_to(H.HERE)): _sha(t) for t in TEMPLATES if t.exists()}), indent=1,
+        ensure_ascii=False) + '\n')
     print(f'-> {OUT} ({len(made)} figures)', flush=True)
 
 

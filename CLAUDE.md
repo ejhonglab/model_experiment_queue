@@ -916,14 +916,27 @@ bare ID ("the per-glomerulus drive normalization sweep (E20)", not "E20").
   collapsed "Experiment key" right under the title (a `??? Experiment key ...` / `???`
   block in the markdown, which md_to_artifact.py renders as a details element, collapsed by
   default): one bullet per experiment, `E<n>: <canonical name> (completed / running / not
-  started)`, so a reader can match the page to the per-experiment notes. Per-experiment
+  started)`, so a reader can match the page to the per-experiment notes. The Summary's key lists the
+  experiments the page names; the APL16 Summary's lists all of them as it stood. Per-experiment
   notes and chat keep "plain-English name (E<n>)".
-- **Background first.** Before any model number, a section with a figure and a table that
-  shows what the data are: the ORN input matrix, the control KC matrix and the APL-blocked
-  KC matrix for the 16 odors; what the ORN->KC remapping looks like in control flies (which
-  pairs move, how much, ρ with the ORN input); and what blocking APL output
-  changes (mean distance, response fractions, the monotone on-vs-off relation and its one
-  pair-specific exception). Only then the model baseline and the mechanisms.
+- **Two summaries, and which one is kept current** (Tom, 2026-11-25: "have a fable xhigh write a new summary for results along this line of goals. rename the current summary APL16 Summary, and have the new one just be 'Summary'"; the text of these rules planned by a Fable subagent, claude-fable-5-2, spawned from hal 2026-11-25 10:25). The Summary (`reports/summary_template.md`,
+  built by `reports/build_summary.py`, saved as `summary_all_experiments`, the monitor's "Summary" view) is organized
+  along the stage target ("The main goal for new experiments"). The APL16 Summary (`reports/apl16_summary_template.md`,
+  built by `reports/build_apl16_summary.py`, saved as `apl16_summary` with `reports/current-apl16-summary.html`, the
+  monitor's "APL16 Summary" view) is the summary as it was organized around the APL effect until then. **The APL16
+  Summary is kept as it stood** when the Summary was rewritten for the stage target (2026-11-25). It is rebuilt only on
+  request, from its own template, and nothing is folded into it. Every experiment completed from then on is folded into
+  the Summary (its key, its section, the tables it bears on, the pending list), also where it bears on the APL effect:
+  its APL-effect statistics go in as a held-out test. The rules below hold for both pages unless they name one.
+- **Background first.** Before any model number, the Summary shows what is recorded: the stage-recordings figure
+  (`results/summary_stages/stage_recordings.png`: the flies' three views at each megamat stage), a table of the
+  megamat panel's five stages (what is imaged, the unit, flies, odors read, response criterion), a table of the panels
+  and their roles, and how the flies' views change from stage to stage. Then how a model is compared with the flies:
+  one-fly units, the floor and one fly against the others per stage and view, like for like, the numbers that are
+  compared, why strength by odor alone chooses and gates (the split-half table) and the gating rules. Only then the
+  stage table and the models. (The APL16 Summary's background is the APL16 data: the ORN input matrix, the control KC
+  matrix and the APL-blocked KC matrix for the 16 odors; what the ORN->KC remapping looks like in control flies; and
+  what blocking APL output changes.)
 - **Table of contents.** Every summary report starts with a two-level table of contents (its
   `##` and `###` headings, linked): a `[TOC]` line right after the title, which
   `md_to_artifact.py` expands.
@@ -978,24 +991,25 @@ bare ID ("the per-glomerulus drive normalization sweep (E20)", not "E20").
 - **No provenance chatter.** Summary reports never mention which host or which model / agent
   ran, wrote or requested anything, do not open with a status list of what is completed,
   running or started, and have no byline or "Artifact: ..." line. The page starts with the
-  title, "Model experiments to improve fit to KC remapping, with APL on/off" (no timestamp in
-  it), then one de-emphasized line, "last model experiment: {{meta:last_experiment}}, edited:
-  {{meta:generated}}" (both filled at build time as YYYY-MM-DD HH:MM, no comma inside a
-  timestamp; the converter renders the first paragraph under the title muted), then the first
-  content section.
-- **The progress plot follows the best-models section.** The section right after "Where the
-  best models stand" and before the pending-experiments section is the interactive plot of
-  how far the best model so far has closed the gap to the KC data on each
-  statistic, against experiment completion time (points = each experiment's best variant per
-  statistic, hover for experiment and variant; a staircase per statistic; the KC target as a
-  dotted line at 100 %, in the legend and not hideable; legend entries toggle lines). It is
-  generated, not drawn by hand: run `./venv/bin/python reports/summary_progress_plot.py` (reads every
-  `results/E*/` table and the experiment index; writes `results/summary_progress/progress_plot.html`
-  and two CSVs) before every rebuild of the summary page, and keep the `%%% html
-  results/summary_progress/progress_plot.html` line in the markdown (md_to_artifact.py inserts the
-  file verbatim). New experiments appear automatically once their result table (stats_variants.csv,
-  fits.csv or E<n>_summary.csv with the harness scoring columns) and their completion time in the
-  index exist; oracle constructions and random / shuffled wirings are excluded in the script.
+  title, "Summary" (the earlier page's is "APL16 Summary"; no timestamp in either), then one de-emphasized line,
+  "last model experiment: {{meta:last_experiment}}, edited: {{meta:generated}}" (both filled at build time as
+  YYYY-MM-DD HH:MM, no comma inside a timestamp; the converter renders the first paragraph under the title muted; the
+  APL16 Summary's first value is a `lit:`, its last experiment, and a second sentence in the same paragraph says that
+  the page is kept as it stood), then the first content section.
+- **The stage-target progress plot waits for the first fit to a stage.** The Summary carries no progress plot until
+  the best family fitted to all megamat stages at once is scored. From then on the section right after "Where the best
+  models stand on the stage target" holds `%%% html results/summary_progress/stage_progress_plot.html`, generated
+  (never drawn by hand) before every rebuild: against experiment completion time, points = each experiment's best
+  variant, a staircase per series, each series the running best of its own statistic. Series: the megamat stage error
+  on strength by odor and each megamat stage's strength error (one-fly units, lower is better; for a fitted variant the
+  value on the wirings and flies it was not fitted to, otherwise the mean over its wirings), with lines at 1 ("one
+  fly") and at the flies' floor in the legend and not hideable; the KC somata's strength error on validation2, on the
+  control mixtures as uploaded and on the APL16 panel with APL on and off; and, as descriptions, the APL-effect loss and
+  its pattern part under the calibrated readout. Only variants inside the realism bands count. The APL16 Summary keeps
+  its own plot: the section right after its "Where the best models stand" is the interactive plot of how far the best
+  model so far has closed the gap to the KC data on each statistic (`./venv/bin/python
+  reports/summary_progress_plot.py` writes `results/summary_progress/progress_plot.html`, which build_summary.py
+  regenerates; oracle constructions and random / shuffled wirings are excluded in the script).
 - **Pending work goes at the bottom, with context.** Experiments still running or not yet run
   are described near the end, each with what it tests, the possible outcomes and what each
   outcome would mean for the picture, not as a bare list.
@@ -1034,19 +1048,21 @@ bare ID ("the per-glomerulus drive normalization sweep (E20)", not "E20").
   applies to a header listing what a column's "a / b / c" values are (`APL→bouton /<br>APL→KC<br>(×
   baseline)`) and to a first-column header listing the table's fixed settings. Headers that
   name statistics stay on one line for now.
-- **The APL effect in the best-models table and the progress plot (Tom, 2026-11-09; rows added 2026-11-13 16:22).** The
-  best-models table carries seven rows for the APL effect on odor-odor distances (the APL-effect loss, the mean
-  APL effect, the pattern part, its amplitude part / shape part, the model's spread as a multiple of the flies',
-  ρ on the per-pair APL effect and Pearson r on the per-pair APL effect, all placeholders on
-  results/apl_effect/by_variant.csv; "The main goal for new experiments", how the main target is read) and the
-  response rates with APL on and off, and ends with a row of buttons, one under every column, written
+- **The best-models table (the Summary).** Columns: the flies, the best family as fitted and held at the megamat
+  flies' response rate, then each variant read at every megamat stage. Rows, all placeholders: the megamat stage error
+  on strength by odor; each megamat stage's strength error, with the flies' floor and most atypical fly; beside, the
+  megamat stage error over all three views and the somata's sharing and breadth; the held-out panels' KC-somata strength
+  errors (validation2, the control mixtures as uploaded, the kiwi mixtures as two bounds and never a verdict, the APL16
+  panel with APL on and off); the realism rows with the KC data's values (response rates on megamat and on the APL16
+  panel, their ratio, response rate ρ, odors per KC, wirings outside a band); and the seven APL-effect rows as a
+  held-out test (loss, mean, pattern part, amplitude / shape, the model's spread as a multiple of the flies', ρ and
+  Pearson r on the per-pair APL effect), read through the calibrated readout. A second table gives the models that are
+  not variants of the family. There are no matrix buttons; those stay in the APL16 Summary, whose best-models table
+  (Tom, 2026-11-09; rows added 2026-11-13 16:22) carries the seven APL-effect rows on results/apl_effect/by_variant.csv
+  and the response rates with APL on and off, and ends with a row of buttons, one under every column, written
   `!button[matrices](results/apl_effect/matrices/<results folder>__<tag>.png)` (the KC data column:
-  `.../matrices/data.png`). A button opens, full screen like a figure, the column's distance matrices:
-  the KC data's APL on (control flies), APL off (APL output blocked (TNT)) and their difference in the
-  top row, the model's same three in the bottom row. `kcq/apl_effect.py` draws every figure a button in
-  the template names, so a new column needs only its button cell. The progress plot has the APL-effect
-  loss and ρ on the per-pair APL effect as series, each the running best of its own statistic; the ρ series is
-  a description, and no model is chosen by it.
+  `.../matrices/data.png`), each opening the column's distance matrices full screen; `kcq/apl_effect.py` draws every
+  figure a button in either template names.
 - **Natural-source alignment is three numbers (Tom, 2026-11-08).** Every table, comparison
   script and summary analysis that gives the natural-source alignment gives it with APL on,
   with APL off and as the difference (APL on minus APL off), never APL off alone: three rows
@@ -1072,18 +1088,16 @@ bare ID ("the per-glomerulus drive normalization sweep (E20)", not "E20").
   responses": no "(1 - cosine similarity)" gloss, never a bare "similarity"); scatter axes say
   "...: cosine distance". The definition in words belongs in the text, once.
   Long subplot titles are split over two lines, the statistic in parentheses on the second.
-- **The background figure has a Pearson twin.** Every report that shows the six-panel
-  background figure (the three matrices and the three pair-by-pair comparisons; made by
-  `reports/summary_background_figure.py`) puts right under it a collapsed `??? ` block holding the same
-  six panels with Pearson correlation instead of cosine distance (`summary_background_pearson.png`,
-  written by the same script). Matrices of correlations (signed values centered on 0) use olfdb's
-  blue-white-red Oklab colormap, lightness linear in |value|, white at 0
-  (`kcq.harness.oklab_diverging_cmap()`, a port of hong-data's default), on a symmetric
-  scale. Note the ORN matrix the program uses everywhere is one minus the Pearson correlation
-  across the 36 glomeruli of the model's ORN input, between fly-mean vectors for all 120 pairs
-  (`orn16_consensus_pairs()`; since 2026-11-13, before which the pairs within a panel were per-fly
-  correlations averaged over flies), so in the cosine figure the ORN panel is labelled "Pearson
-  correlation distance".
+- **The background figures.** The Summary's is the stage-recordings figure (`reports/summary_stage_figures.py`, run by
+  build_summary.py, which also draws the Summary's other stage figures in `results/summary_stages/`), with no Pearson
+  twin: its sharing row is a cosine distance on which units respond, by the view's definition. The six-panel
+  distance-matrix figure and its Pearson twin belong to the APL16 Summary: right under it a collapsed `??? ` block holds
+  the same six panels with Pearson correlation instead of cosine distance (`reports/summary_background_figure.py`
+  writes both). Matrices of correlations (signed values centered on 0) use olfdb's blue-white-red Oklab colormap,
+  lightness linear in |value|, white at 0 (`kcq.harness.oklab_diverging_cmap()`), on a symmetric scale; the ORN matrix
+  there is one minus the Pearson correlation across the 36 glomeruli of the model's ORN input, between fly-mean vectors
+  for all 120 pairs (`orn16_consensus_pairs()`), so in the cosine figure the ORN panel is labelled "Pearson correlation
+  distance".
 - **Opaque terms and methods.** A technical term the main text needs but should not stop to
   explain (isotonic, ...) gets a hover definition: put a `%%% hover` block (lines
   `term: definition`, closed by `%%%`) anywhere in the markdown and `md_to_artifact.py` wraps
@@ -1093,10 +1107,11 @@ bare ID ("the per-glomerulus drive normalization sweep (E20)", not "E20").
   end of the page (`## Footnotes {#footnotes}`, one `### ... {#fn-<id>}` per note) and the
   phrase in the text that uses it is linked there with `[phrase](#fn-<id>)`. Headings take an
   explicit `{#id}`; without one they get a slug of their text.
-  Standing footnotes every summary report carries: the monotone (isotonic) fit (how, why,
-  alternatives) and the odor concentrations per dataset (a table of Yang's APL16 KC
-  concentrations against the ORN data used, with the substitution rule), linked from the
-  concentration caveat in the data section.
+  Standing footnotes: the Summary carries one-fly units and the floor, the monotone curve per stage, the response
+  criteria, the realism bands, the APL-effect statistics and the odor concentrations per dataset (with the
+  substitution rule); the APL16 Summary carries the monotone (isotonic) fit (how, why, alternatives) and the odor
+  concentrations per dataset (a table of Yang's APL16 KC concentrations against the ORN data used, with the
+  substitution rule), linked from the concentration caveat in the data section.
 
 Canonical experiment names for summary reports:
 
@@ -1287,7 +1302,8 @@ files, not in the report.
 Pages that several hosts rewrite, the all-experiments summary and the report page, are not published
 as artifacts (Tom, 2026-11-10): the same HTML is built as before and saved to reports/ only, with
 `reports/save_report_copy.py <index.html> <name>` and no URL (the README row says "local"); the queue monitor
-(http://hal:17486, Report tab) serves them from `current-summary.html` and `current-report.html`. Before
+(http://hal:17486, Report tab) serves them from `current-summary.html` and `current-report.html` (and the APL16
+Summary, kept as it stood on 2026-11-25, from `current-apl16-summary.html`). Before
 saving, pull, and build from a template (or report markdown) at origin/main or ahead of it with your own
 change only, so that no other host's content is dropped; `reports/publish_check.py <old copy> <new build>` lists
 what the previous copy has that a new build lacks. Per-experiment pages and add_to_reports pages are

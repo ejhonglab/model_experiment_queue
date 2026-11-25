@@ -789,6 +789,7 @@ LIVE_SCRIPT = (
 # pointing at the latest copy). A new view needs only an entry here.
 REPORTS = {
     'summary': ('Summary', 'current-summary.html'),
+    'apl16-summary': ('APL16 Summary', 'current-apl16-summary.html'),
     'experiments': ('Experiments and mechanisms', 'current-report.html'),
     'since-priority-changes': ('Since the priority changes', 'current-since-priority-changes.html'),
     'since-yang-new-data': ("Since Yang's new data", 'current-since-yang-new-data.html'),

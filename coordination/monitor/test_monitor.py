@@ -466,7 +466,7 @@ def test_http(tmp_path):
         # changes, Since Yang's new data, Questions for Yang) and Monitor
         page = urllib.request.urlopen(base + '/').read().decode()
         assert '<title>Model experiments</title>' in page
-        for label in ('>Report<', '>Monitor<', '>Summary<', '>Experiments and mechanisms<',
+        for label in ('>Report<', '>Monitor<', '>Summary<', '>APL16 Summary<', '>Experiments and mechanisms<',
                 '>Since the priority changes<', '>Since Yang&#x27;s new data<', '>Questions for Yang<'):
             assert label in page
         monitor = urllib.request.urlopen(base + '/monitor').read().decode()
@@ -498,6 +498,7 @@ def test_http(tmp_path):
 
 
 @pytest.mark.parametrize('view,label,name,prev,nxt', [
+    ('apl16-summary', 'APL16 Summary', 'apl16_summary', 'summary', 'experiments'),
     ('since-priority-changes', 'Since the priority changes', 'since_priority_changes', 'experiments',
         'since-yang-new-data'),
     ('since-yang-new-data', "Since Yang's new data", 'since_yang_new_data', 'since-priority-changes',
@@ -505,7 +506,7 @@ def test_http(tmp_path):
     ('recent-weeks', 'The last 1.5 weeks', 'recent_weeks', 'since-yang-new-data', 'questions-for-yang'),
 ])
 def test_digest_views(tmp_path, view, label, name, prev, nxt):
-    """The third to fifth Report views, the digest pages: their sub-tabs (in REPORTS' order) and frame
+    """The APL16 Summary and the digest pages: their sub-tabs (in REPORTS' order) and frame
     sources come from REPORTS, their files are served and listed once a copy is saved, and the missing-file
     page shows until then."""
     make_shared(tmp_path, time.time())
@@ -520,11 +521,12 @@ def test_digest_views(tmp_path, view, label, name, prev, nxt):
         # the page's map of views is generated from REPORTS
         views = json.loads(page.split('var V=', 1)[1].split(',F={}', 1)[0])
         assert views == dict(summary=dict(src='/report/summary', rep=1),
+            **{'apl16-summary': dict(src='/report/apl16-summary', rep=1)},
             experiments=dict(src='/report/experiments', rep=1),
             monitor=dict(src='/monitor'),
             **{v: dict(src='/report/' + v, rep=1) for v in ('since-priority-changes', 'since-yang-new-data',
                 'recent-weeks', 'questions-for-yang')})
-        assert list(views) == ['summary', 'experiments', 'since-priority-changes', 'since-yang-new-data',
+        assert list(views) == ['summary', 'apl16-summary', 'experiments', 'since-priority-changes', 'since-yang-new-data',
             'recent-weeks', 'questions-for-yang', 'monitor']
         # no copy saved yet: the missing-file page, and nothing listed
         with pytest.raises(urllib.error.HTTPError) as e:

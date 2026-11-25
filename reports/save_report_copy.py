@@ -20,7 +20,8 @@ Republishing overwrites the same file: reports/ holds the latest version of each
 
 Summary pages (names starting with `summary_`) also update the symlink
 reports/current-summary.html -> <name>.html, so one bookmark always opens the latest summary
-as the date in the name changes; `--current <link name>` does the same for any page (e.g.
+as the date in the name changes (and the APL16 Summary, `apl16_summary`, reports/current-apl16-summary.html);
+`--current <link name>` does the same for any page (e.g.
 `--current current-report.html` for the report page). A copy is written instead if the
 filesystem refuses the symlink.
 """
@@ -64,7 +65,7 @@ def main() -> None:
         help="the artifact URL; omit it for a page kept only here (the summary, the report page): 'local'")
     ap.add_argument('--current', default=None, metavar='LINK',
         help='also point reports/<LINK> at this copy (default: current-summary.html for '
-        'names starting with summary_)')
+        'names starting with summary_, current-apl16-summary.html for apl16_summary)')
     args = ap.parse_args()
     if not re.fullmatch(r'[A-Za-z0-9_.-]+', args.name):
         raise SystemExit(f'name must be a plain file stem: {args.name!r}')
@@ -91,7 +92,8 @@ def main() -> None:
         stale = reports / f'{args.name}.zip'
         if stale.exists():
             stale.unlink()
-    link_name = args.current or ('current-summary.html' if args.name.startswith('summary_') else None)
+    link_name = args.current or ('current-summary.html' if args.name.startswith('summary_') else
+                                 'current-apl16-summary.html' if args.name == 'apl16_summary' else None)
     if link_name is not None:
         if not re.fullmatch(r'[A-Za-z0-9_.-]+', link_name) or link_name == dest.name:
             raise SystemExit(f'bad --current link name: {link_name!r}')

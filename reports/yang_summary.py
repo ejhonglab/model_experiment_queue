@@ -3,7 +3,8 @@
 (correlation = 1 - distance), and every sentence Yang has asked about underlined, opening her question and its
 answer in a floating window when clicked.
 
-The page is built from the summary's template (reports/summary_template.md) and a translation memory of
+The page is built from the APL16 Summary's template (reports/apl16_summary_template.md; the summary's until
+2026-11-25, when the Summary was rewritten for the stage target) and a translation memory of
 converted template lines, reports/yang_summary/correlation_lines.jsonl (one JSON object per line: `sha`, the sha1
 of the source template line and the lookup key; `line`; `src`, the source line; `out`, the converted template line;
 `keep`; `by`; `when`). The rewording is done line by line by language-model agents and by hand, following
@@ -67,7 +68,7 @@ from reports import fill_report as F
 from reports import md_to_artifact as M
 from reports import report_values as R
 
-TEMPLATE = H.HERE / 'reports' / 'summary_template.md'
+TEMPLATE = H.HERE / 'reports' / 'apl16_summary_template.md'
 DATA_DIR = H.HERE / 'reports' / 'yang_summary'
 OUT_DIR = H.HERE / 'outputs' / '_artifacts' / 'summary_yang'
 MEMORY_NAME = 'correlation_lines.jsonl'

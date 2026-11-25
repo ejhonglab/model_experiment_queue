@@ -7,7 +7,7 @@ Yang asked (2026-11-16, in viki's terminal) for her own version of the summary p
 2. every sentence she has asked a question about underlined, the question and its answer opening in a floating
    window when the sentence is clicked.
 
-It is built from the same template as the main page (`reports/summary_template.md`), which is never edited for it.
+It is built from the same template as the APL16 Summary (`reports/apl16_summary_template.md`, the main page's until 2026-11-25), which is never edited for it.
 
 ## Files here
 

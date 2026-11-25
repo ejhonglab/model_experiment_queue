@@ -160,7 +160,7 @@ def test_report_experiment_list():
     assert 'href="E' not in B.convert(REPORT_MD)
 
 
-@pytest.mark.parametrize('name', ['summary_template.md', 'since_priority_changes_template.md',
+@pytest.mark.parametrize('name', ['summary_template.md', 'apl16_summary_template.md', 'since_priority_changes_template.md',
     'since_yang_new_data_template.md'])
 def test_templates_keys_all_linkable(tmp_path, name):
     """Every item of the real templates' experiment keys has the `E<n>: ` form the links need, so each gets its
