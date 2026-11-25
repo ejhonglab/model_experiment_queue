@@ -1198,6 +1198,34 @@ def test_score_on_planted_runs_gives_the_classes(score_env):
     assert not E.dff_repeat_asked()
 
 
+def test_score_in_parallel_is_the_serial_score(score_env):
+    """`part_score(jobs=3)` (`score_groups` with a pool; a thread pool here, so that the planted `score_group` is the
+    one the workers call, and `_score_tags` finding the planted runs by tag) writes the serial score: the same
+    score_scores.csv, row for row and in the groups' order, and the same verdict; `jobs` is in the provenance."""
+    import concurrent.futures as cf
+    res, mp = score_env
+    groups = _score_runs(UPSTREAM_A)
+    _set_scores(mp, UPSTREAM_A, groups=groups)
+    serial = E.part_score()
+    s_scores = pd.read_csv(res / 'score_scores.csv')
+    by_tag = {r.tag: r for runs in groups.values() for r in runs}
+    calls = []
+
+    def tags(ts, lock134, readings, n_floor):
+        calls.append(list(ts))
+        return E.score_group([by_tag[t] for t in ts], None, lock134, readings, n_floor)
+
+    mp.setattr(E, '_score_tags', tags)
+    mp.setattr(E, '_score_pool', lambda jobs: cf.ThreadPoolExecutor(max_workers=jobs))
+    par = E.part_score(jobs=3)
+    pd.testing.assert_frame_equal(pd.read_csv(res / 'score_scores.csv'), s_scores)
+    assert len(calls) == len(groups) and sorted(map(tuple, calls)) == sorted(
+        tuple(r.tag for r in runs) for runs in groups.values())
+    for k in ('outcome', 'cls', 'classes', 'classes_second', 'guard', 'megamat_stage_error', 'excluded'):
+        assert par[k] == serial[k], k
+    assert json.loads((res / 'provenance_score.json').read_text())['jobs'] == 3
+
+
 def test_score_guard_second_reading_and_step1_on_strength(score_env):
     """Rule 3's guard: R1's claws rise on strength by odor on every wiring, and step 1's R1 is above R0 on held-out
     strength in both directions: R1's guard is raised at both, (a) is named at a cost beside and not an improvement.

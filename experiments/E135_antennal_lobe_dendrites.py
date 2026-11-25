@@ -191,7 +191,9 @@ Usage (from the repository root, as modules, so that the checkout's kcq is the o
     OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 PYTHONUNBUFFERED=1 nice -n 10 ./venv/bin/python -u \\
         -m experiments.E135_antennal_lobe_dendrites --part step1 | --part step1_control --perm i | --part step2 \\
         [--lane <host>[-<n>]] [--reverse]
-    ./venv/bin/python -u -m experiments.E135_antennal_lobe_dendrites --part score|commands
+    OMP_NUM_THREADS=1 OMP_THREAD_LIMIT=1 OPENBLAS_NUM_THREADS=1 nice -n 10 ./venv/bin/python -u \\
+        -m experiments.E135_antennal_lobe_dendrites --part score [--jobs <n>]
+    ./venv/bin/python -u -m experiments.E135_antennal_lobe_dendrites --part commands
 """
 from __future__ import annotations
 
@@ -4614,7 +4616,56 @@ def write_score_table(res: Mapping, path: Path) -> None:
     path.write_text('\n'.join(L) + '\n')
 
 
-def part_score(readings: Optional[Sequence[str]] = None, n_floor: Optional[int] = None) -> dict:
+def _score_tags(tags: Sequence[str], lock134: Optional[Mapping], readings: Optional[Sequence[str]],
+                n_floor: Optional[int]) -> pd.DataFrame:
+    """One group's `score_group` in a worker process of `score_groups`: the group's runs loaded again by tag from
+    `step2_dirs` (so that no run is pickled), with the worker's own fly cache."""
+    from kcq import stage_readings as R
+    runs = [R.load_step3_run(t, dirs=step2_dirs()) for t in tags]
+    return score_group(runs, _flies(), lock134, readings, n_floor)
+
+
+def _score_pool(jobs: int):
+    """The process pool of `score_groups` (forkserver: the parent has loaded olfsysm's OpenMP runtime, which a forked
+    child must not inherit)."""
+    import concurrent.futures as cf
+    import multiprocessing as mp
+    return cf.ProcessPoolExecutor(max_workers=jobs, mp_context=mp.get_context('forkserver'))
+
+
+def score_groups(groups: Mapping[Tuple[str, str], list], lock134: Optional[Mapping],
+                 readings: Optional[Sequence[str]] = None, n_floor: Optional[int] = None,
+                 jobs: int = 1) -> List[pd.DataFrame]:
+    """`score_group` of every group of `step2_groups`, with columns input_panel, arm and group put first, in the
+    groups' order. With `jobs` > 1 the groups are scored in that many worker processes (`_score_tags`); the results are
+    the serial ones, since every draw inside (the flies' floor, the halves) is seeded per call. Prints each group's
+    end with the seconds since the start."""
+    t0 = time.time()
+    keys = list(groups)
+    out: Dict[Tuple[str, str], pd.DataFrame] = {}
+
+    def done(k, sc):
+        if len(sc):
+            sc.insert(0, 'input_panel', k[0])
+            sc.insert(1, 'arm', k[1])
+            sc.insert(2, 'group', f'{k[0]}_{k[1]}')
+        out[k] = sc
+        print(f'E135 score {k[0]} {k[1]}: {len(groups[k])} runs, {time.time() - t0:.0f} s', flush=True)
+
+    if jobs <= 1 or len(keys) <= 1:
+        flies = _flies()
+        for k in keys:
+            done(k, score_group(groups[k], flies, lock134, readings, n_floor))
+    else:
+        import concurrent.futures as cf
+        with _score_pool(min(int(jobs), len(keys))) as ex:
+            futs = {ex.submit(_score_tags, [r.tag for r in groups[k]], lock134, readings, n_floor): k for k in keys}
+            for f in cf.as_completed(futs):
+                done(futs[f], f.result())
+    return [out[k] for k in keys if len(out[k])]
+
+
+def part_score(readings: Optional[Sequence[str]] = None, n_floor: Optional[int] = None, jobs: int = 1) -> dict:
     """Step 2's runs (every lane's, `step2_groups`) read and scored as E134 scores its runs (`score_group`), their
     realism (`run_realism`), the APL16 runs' APL effect (`apl16_effect_table`), and the classes, the guard and the
     outcome on strength by odor (`score_tables`, at the thresholds frozen at step 2's start, `read_thresholds`; E134's
@@ -4622,22 +4673,14 @@ def part_score(readings: Optional[Sequence[str]] = None, n_floor: Optional[int] 
     gate, the lock, step 1's fits and the frozen thresholds. Writes to results/.../: score_scores.csv,
     score_class_rows.csv, score_class_rows_second.csv, score_guard.csv, score_drops.csv, score_stage_error.csv,
     score_imposed_checks.csv, score_realism.csv, score_apl_effect.csv, score_verdict.json (which `dff_repeat_asked`
-    reads), score_table.md, provenance_score.json."""
+    reads), score_table.md, provenance_score.json. `jobs` > 1 scores the groups in that many processes
+    (`score_groups`; the same results, about one group's time instead of the sum: 6 h for the 73 runs on one core)."""
     lock, fits_rec = require_step2()
     thresholds = read_thresholds()
     lock134 = require_e134_lock()
     t0 = time.time()
     groups = step2_groups()
-    flies = _flies()
-    scores = []
-    for (panel, arm), runs in groups.items():
-        sc = score_group(runs, flies, lock134, readings, n_floor)
-        if len(sc):
-            sc.insert(0, 'input_panel', panel)
-            sc.insert(1, 'arm', arm)
-            sc.insert(2, 'group', f'{panel}_{arm}')
-            scores.append(sc)
-        print(f'E135 score {panel} {arm}: {len(runs)} runs, {time.time() - t0:.0f} s', flush=True)
+    scores = score_groups(groups, lock134, readings, n_floor, jobs)
     sc = pd.concat(scores, ignore_index=True) if scores else pd.DataFrame()
     gl = [str(g) for g in lock['glomeruli']]
     realism = pd.DataFrame([run_realism(r, gl, lock134) for runs in groups.values() for r in runs])
@@ -4666,7 +4709,7 @@ def part_score(readings: Optional[Sequence[str]] = None, n_floor: Optional[int] 
     write_score_table(res, d / 'score_table.md')
     from kcq import stage_readings as R
     _write_json(d / 'provenance_score.json', dict(
-        part='score', script=SCRIPT, host=_host(), time=_now(), seconds=round(time.time() - t0, 1),
+        part='score', script=SCRIPT, host=_host(), time=_now(), seconds=round(time.time() - t0, 1), jobs=int(jobs),
         **H.code_commits(), lock_sha256=_sha256(LOCK_COPY) if LOCK_COPY.exists() else None,
         e134_lock_sha256=_sha256(LOCK_E134()) if LOCK_E134().exists() else None,
         e134_stage_table_sha256=_sha256(e134_results_dir() / E134_STAGE_TABLE),
@@ -4729,6 +4772,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     ap.add_argument('--readings', nargs='+', default=None,
                     help="score: the stage readings by name (default each stage's default and its alternatives)")
     ap.add_argument('--n-floor', type=int, default=None, help="score: the flies' floor's draws (default E134's)")
+    ap.add_argument('--jobs', type=int, default=1,
+                    help='score: the groups scored in this many processes at once (default 1; the same results)')
     a = ap.parse_args(argv)
     if a.part == 'step0':
         part_step0(n_boot=a.n_boot, seed=a.seed)
@@ -4752,7 +4797,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     elif a.part == 'step2':
         part_step2(a.lane, a.reverse, a.reclaim)
     elif a.part == 'score':
-        part_score(a.readings, a.n_floor)
+        part_score(a.readings, a.n_floor, a.jobs)
     elif a.part == 'commands':
         print_commands()
     elif a.part == 'gate':
