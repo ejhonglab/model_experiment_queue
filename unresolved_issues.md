@@ -20,6 +20,20 @@ directory's notes/ and are linked from here.
   (their order is drawn anew per block and fly).
 - **What remains.** The proposal "the held-out panels read like for like" (proposed_experiments.md, 2026-11-24 22:54) reads
   the mixtures by position, with the flies' noise on the model's side. Until then the mixture rows are descriptions.
+- **Found by the held-out panels read like for like (E137, 2026-11-25; note E137_heldout_readings.md, results/
+  E137_heldout_readings/).** All 11 flies' per-trial files were found; the uploaded table is each stimulus's first block
+  (the mean of Remy's session z over its first three presentations, on her good cells), reproduced within 4.7e-7. 9 flies
+  have a second component block, given after the mixtures. On strength by odor, with the flies' trial noise on the model:
+  the kiwi panel is not readable (the family far against the components' first block, 2.25, inside against their second,
+  0.67, between against both; bounds 0.67 to 2.40), so outcome (c); the control panel is readable and inside under every
+  reading (0.32 to 0.62). E134's sharing errors on the mixtures were mostly the session-z units (1.06 and 1.74 in
+  baseline-noise units, against 2.81 and 3.15 in session z).
+- **Done.** E134's note carries a dated line under its stage table (2026-11-25), and its page was rebuilt and saved
+  (local, reports/E134_population_baseline.html).
+- **Remains.** (1) The summary's E134 passage on the mixture panels ("the kiwi mixtures are far ..." and their sharing),
+  to be annotated or rewritten when E137 is folded into the summary (viki). (2) Whether the mixture panels stay in E136's
+  "holds", the kiwi panel as a description with its bounds and the control panel under which reading: Tom's and Yang's
+  call (E137's outcome (c)). Move this entry to Resolved once both are done.
 
 ### The progress plot's ρ line ends on two points of kinds the plot is meant to leave out (found 2026-11-16, hal, the report pages' revision)
 - **What.** `reports/summary_progress_plot.py` leaves out oracle inputs and random, shuffled or re-drawn wirings by tag
