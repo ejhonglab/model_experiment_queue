@@ -438,11 +438,14 @@ def dendrites_on_orn_odors(I: dict, ck: Checks) -> Optional[pd.DataFrame]:
     """The family's PN dendrites scored on the odors they share with the ORN flies (the step's odors), from the saved
     populations of the score (outputs/E134_population_baseline/populations/score/, local to the host that scored),
     after checking that the same code gives the score's own numbers on all 17 odors and the step table's population
-    row on the step's odors. None where those files are missing."""
+    row on the step's odors, and that the eight wirings' PN stages (step 3's saved PN windows,
+    outputs/E134_population_baseline/step3/) are identical. None where those files are missing."""
     d = Path('outputs') / EXPERIMENT / 'populations' / 'score'
     files = {(g, w): d / f'{g}__C2__{w}__pn_dendrite__megamat__on.parquet' for g in ('megamat_fitted', 'megamat_held')
              for w in W8}
-    if not all(p.exists() for p in files.values()):
+    s3 = [Path('outputs') / EXPERIMENT / 'step3' / f'{g}_{w}_on_pn_win.parquet' for g in ('megamat_fitted', 'megamat_held')
+          for w in W8]
+    if not all(p.exists() for p in list(files.values()) + s3):
         return None
     from kcq import population_fit as P
     from kcq import stage_readings as R
@@ -471,6 +474,14 @@ def dendrites_on_orn_odors(I: dict, ck: Checks) -> Optional[pd.DataFrame]:
             rows.append(dict(group=g, wiring=w, n_odors=len(od15), odors=' '.join(od15),
                              **{c: float(t15.loc[w, c]) for c in ('error', 'error_with_matrix', 'view_strength',
                                                                    'view_sharing', 'view_breadth', 'view_matrix')}))
+    # the eight wirings share one PN stage (the PN layer does not depend on the KC wiring), so their spread at the PN
+    # dendrites is the reading's (the sampling and noise drawn per wiring); checked on step 3's saved PN windows
+    s3 = Path('outputs') / EXPERIMENT / 'step3'
+    ref = pd.read_parquet(s3 / 'megamat_fitted_real_on_pn_win.parquet')
+    for g in ('megamat_fitted', 'megamat_held'):
+        for w in W8:
+            x = pd.read_parquet(s3 / f'{g}_{w}_on_pn_win.parquet')
+            ck.eq(f'{g} {w} PN stage = the real wiring\'s', float(np.nanmax(np.abs(x.to_numpy() - ref.to_numpy()))), 0.0, 0.0)
     return pd.DataFrame(rows)
 
 
