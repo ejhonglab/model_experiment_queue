@@ -44,3 +44,58 @@ def test_table_skips_leading_caveat_lines(tmp_path):
     g = tmp_path / 'u.csv'
     g.write_text('a,b\n1,2\n')
     assert _table(str(g)).shape == (1, 2)
+
+
+def _shared(monkeypatch, tmp_path):
+    from kcq import harness as H
+    from reports import report_values as R
+    monkeypatch.setattr(H, 'shared_dir', lambda: tmp_path)
+    monkeypatch.setattr(R, 'RESULTS', tmp_path / 'results')
+    return R
+
+
+def test_json_key(monkeypatch, tmp_path):
+    """`json:<file>:<path>` reads a value, `len(<path>)` a length; a dict or list without len() is refused."""
+    import json
+    R = _shared(monkeypatch, tmp_path)
+    d = tmp_path / 'results' / 'E1_x'
+    d.mkdir(parents=True)
+    (d / 'lock.json').write_text(json.dumps(dict(a=dict(b=[3, 4], c='inside', **{'six/e134': 'far'}))))
+    assert R.resolve('json:results/E1_x/lock.json:a.b.1').value == 4
+    assert R.resolve('json:results/E1_x/lock.json:len(a.b)').value == 2
+    r = R.resolve('json:results/E1_x/lock.json:a.six/e134')
+    assert r.value == 'far' and r.source['kind'] == 'json' and 'lock.json, a.six/e134' in R.tooltip(r)
+    with pytest.raises(KeyError):
+        R.resolve('json:results/E1_x/lock.json:a.b')
+    with pytest.raises(KeyError):
+        R.resolve('json:results/E1_x/lock.json:a.missing')
+
+
+def test_const_key(monkeypatch, tmp_path):
+    """`const:<file>:<NAME>[.<index>]` reads a module-level constant without importing the file."""
+    from kcq import harness as H
+    from reports import report_values as R
+    monkeypatch.setattr(H, 'HERE', tmp_path)
+    (tmp_path / 'm.py').write_text("import os\nA = (0.045, 0.085)\nB = 0.47 - 0.10\nC: int = 1000\nD = os.sep\n")
+    assert R.resolve('const:m.py:A.1').value == 0.085
+    assert abs(R.resolve('const:m.py:B').value - 0.37) < 1e-12
+    r = R.resolve('const:m.py:C')
+    assert r.value == 1000 and r.source['line'] == 4 and format_value(r.value, ',d') == '1,000'
+    for bad in ('const:m.py:D', 'const:m.py:E', 'const:missing.py:A'):
+        with pytest.raises(KeyError):
+            R.resolve(bad)
+
+
+def test_min_max_keys(monkeypatch, tmp_path):
+    """`min:` / `max:` take the extreme over the rows a table key selects; `col!=value` excludes and `*` selects all."""
+    R = _shared(monkeypatch, tmp_path)
+    d = tmp_path / 'results' / 'E2_y'
+    d.mkdir(parents=True)
+    (d / 't.csv').write_text('wiring,g,v\nreal,a,0.5\nP1,a,0.2\nP2,b,0.9\nmean,a,0.4\n')
+    lo = R.resolve('min:E2/t.csv:g=a;wiring!=mean:v')
+    assert lo.value == 0.2 and lo.source['picked'] == dict(wiring='P1')
+    assert R.resolve('max:E2/t.csv:g=a;wiring!=mean:v').value == 0.5
+    assert R.resolve('max:E2/t.csv:*:v').value == 0.9
+    assert 'the lowest of 2 rows' in R.tooltip(lo)
+    with pytest.raises(KeyError):
+        R.resolve('min:E2:g=a:v')

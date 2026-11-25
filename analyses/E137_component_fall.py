@@ -14,7 +14,8 @@ Parts, written to results/E137_heldout_readings/component_fall/:
   first presentation's;
 - megamat_repeats.csv: per megamat fly, each odor's repeats over its first, and a fit of each trial's log response rate
   (and log mean response) on odor effects plus a factor per repeat of the odor plus a factor per place in the block, so
-  that a fall with the odor's own repetition and a fall with time are told apart;
+  that a fall with the odor's own repetition and a fall with time are told apart ('fall_with': 'repeats' where a
+  repeat costs more response rate than the 17 places between repeats, else 'time');
 - mixture_ratio.csv: per mixture fly, the mixture at 0 over the components' mean response rate under each of E137's
   readings (from E137's rise.csv), beside the family's raw counts;
 - fall_by_component.png, fall_presentations.png; provenance.json.
@@ -146,6 +147,9 @@ def part_megamat():
             b = np.linalg.lstsq(X, y, rcond=None)[0]
             rec[f'{q}_factor_per_repeat'] = float(np.exp(b[-2]))
             rec[f'{q}_factor_per_block_of_places'] = float(np.exp(b[-1] * rec['trials_per_block']))
+        # what the fall follows: the odor's repeats if a repeat costs more than as many trials of other odors
+        rec['fall_with'] = ('repeats' if rec['rate_factor_per_repeat'] < rec['rate_factor_per_block_of_places']
+                            else 'time')
         rows.append(rec)
     M = pd.DataFrame(rows)
     M.to_csv(out_dir() / 'megamat_repeats.csv', index=False)

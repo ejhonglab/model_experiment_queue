@@ -352,6 +352,9 @@ def values_table(rows: pd.DataFrame, stage_error: pd.DataFrame, scores: pd.DataF
                         'cal_apl_effect_pearson'):
                 if col in x:
                     add(arm, 'kc_soma', f'{col}_mean', x[col].mean(), 'apl16', 'apl_effect')
+            if 'cal_apl_effect_sd_ratio' in x:
+                add(arm, 'kc_soma', 'cal_apl_effect_sd_ratio_min', x.cal_apl_effect_sd_ratio.min(), 'apl16', 'apl_effect')
+                add(arm, 'kc_soma', 'cal_apl_effect_sd_ratio_max', x.cal_apl_effect_sd_ratio.max(), 'apl16', 'apl_effect')
     for _, g in rungs.iterrows():
         for dname, dkey in (('ab', 'half_a->half_b'), ('ba', 'half_b->half_a')):
             for v in ('matrix', 'strength', 'sharing', 'breadth'):

@@ -12,14 +12,25 @@ minus; `|` is not used because it separates table cells). Keys:
   (results/<EXP>_*/<table>.csv, or results/<EXP>/ when <EXP> names a folder; without a table
   name every csv with a `tag` or `variant` column is searched, and a key matching more than one
   table is an error). `<row>` is a tag (matched against `tag`, else `variant`), or
-  `col=value[;col=value]` to select by other columns. `<column>` may list alternatives
-  separated by commas; the first one the table has is used.
+  `col=value[;col=value]` to select by other columns (`col!=value` excludes rows; `*` selects every row, for
+  `min:` / `max:`). `<column>` may list
+  alternatives separated by commas; the first one the table has is used.
+- `min:<table key>` / `max:<table key>`: the smallest / largest value of the column over every row the
+  table key selects (one table), e.g. the lowest wiring's value without naming the wiring; the source
+  records the row it came from.
 - `lit:<text> # <source>`: a hand-entered value, allowed only with its source after `#`.
 - `diff:<key> -- <key>`: the first key's value minus the second's (each any key above, e.g. a
   model's APL-on minus its APL-off statistic), computed from the unrounded values; both sources
   are recorded.
 - `meta:generated` (the time the page is built) and `meta:last_experiment` (the latest
   completion time in the experiment index of experiment_priorities.md), as YYYY-MM-DD HH:MM.
+- `json:<file>:<path>`: a value in a JSON file of the shared directory (`<file>` relative to it, e.g.
+  results/E134_population_baseline/lock.json), `<path>` its keys joined by `.` (a list index is a number), or
+  `len(<path>)` for the length of a list or dict there.
+- `const:<file>:<NAME>[.<index>]`: a module-level constant of this repository's code (`<file>` relative to the
+  repository, e.g. kcq/apl_effect.py), read from the file without importing it: the right-hand side of the
+  file's one `NAME = ...` assignment, a literal or arithmetic on literals; `.<index>` picks an item of a tuple or
+  list. The source records the file's sha256, its last commit and whether it has uncommitted changes.
 
 Every resolution returns the value and a source record (file, row, column, sha256 of the
 file, the commit of the experiment's scripts recorded in the folder's provenance if any), which
@@ -104,14 +115,17 @@ def _commit(folder: str) -> Optional[str]:
 
 
 def _select(df: pd.DataFrame, row: str) -> pd.DataFrame:
+    if row == '*':
+        return df
     if '=' in row:
         m = pd.Series(True, index=df.index)
         for cond in row.split(';'):
             col, val = cond.split('=', 1)
-            col, val = col.strip(), val.strip()
+            neg = col.endswith('!')
+            col, val = col.rstrip('!').strip(), val.strip()
             if col not in df.columns:
                 return df.iloc[0:0]
-            m &= df[col].astype(str) == val
+            m &= (df[col].astype(str) != val) if neg else (df[col].astype(str) == val)
         return df[m]
     for col in ('tag', 'variant'):
         if col in df.columns:
@@ -155,6 +169,30 @@ def _resolve_table(key: str) -> Resolved:
         sha256=_sha256(str(p)), commit=_commit(str(p.parent))))
 
 
+def _resolve_extreme(key: str) -> Resolved:
+    """`min:<table key>` / `max:<table key>` (module docstring)."""
+    how, inner = key[:3], key[4:]
+    head, row, cols = inner.split(':', 2)
+    exp, _, table = head.partition('/')
+    if not table:
+        raise KeyError(f'{key}: name the table (<EXP>/<table.csv>)')
+    paths = [f / table for f in _folders(exp) if (f / table).exists()]
+    if len(paths) != 1:
+        raise KeyError(f'{key}: {len(paths)} tables {table} for {exp!r}')
+    df = _table(str(paths[0]))
+    col = next((c.strip() for c in cols.split(',') if c.strip() in df.columns), None)
+    sel = _select(df, row) if col else df.iloc[0:0]
+    vals = pd.to_numeric(sel[col], errors='coerce').dropna() if col else pd.Series(dtype=float)
+    if vals.empty:
+        raise KeyError(f'{key}: no numeric value selected')
+    i = vals.idxmin() if how == 'min' else vals.idxmax()
+    v = vals[i]
+    v = v.item() if hasattr(v, 'item') else v
+    picked = {c: str(sel.loc[i, c]) for c in sel.columns if c in ('tag', 'variant', 'wiring', 'arm', 'group', 'fly')}
+    return Resolved(key, v, dict(kind='table', file=str(paths[0].relative_to(H.shared_dir())), row=row, column=col,
+        extreme=how, n_rows=int(len(vals)), picked=picked, sha256=_sha256(str(paths[0])), commit=_commit(str(paths[0].parent))))
+
+
 def _last_experiment() -> Resolved:
     """Latest completion time in the experiment index (rows `| E<n> | ... | MM-DD HH:MM (#k) |`,
     or `(staged)` in place of `(#k)` before a Fable agent places the entry in the Completed list)."""
@@ -174,6 +212,78 @@ def _last_experiment() -> Resolved:
     return Resolved('meta:last_experiment', best[0].strftime('%Y-%m-%d %H:%M'), dict(kind='meta',
         description=f'completion time of the latest completed experiment ({best[1]}) in experiment_priorities.md\'s index',
         file='experiment_priorities.md', sha256=_sha256(str(path))))
+
+
+def _json_path(obj: Any, path: str) -> Any:
+    for part in path.split('.') if path else []:
+        if isinstance(obj, list):
+            obj = obj[int(part)]
+        elif isinstance(obj, dict) and part in obj:
+            obj = obj[part]
+        else:
+            raise KeyError(part)
+    return obj
+
+
+def _resolve_json(key: str) -> Resolved:
+    """`json:<file>:<path>` or `json:<file>:len(<path>)` (module docstring)."""
+    _, file, path = key.split(':', 2)
+    f = H.shared_dir() / file
+    if not f.is_file():
+        raise KeyError(f'{key}: no file {file} in the shared directory')
+    length = path.startswith('len(') and path.endswith(')')
+    inner = path[4:-1] if length else path
+    try:
+        v = _json_path(json.loads(f.read_text()), inner)
+    except (KeyError, IndexError, ValueError) as e:
+        raise KeyError(f'{key}: {inner!r} not in {file} ({e})') from None
+    if length:
+        v = len(v)
+    elif isinstance(v, (dict, list)):
+        raise KeyError(f'{key}: {inner!r} is a {type(v).__name__}, not a value (len(...) gives its length)')
+    return Resolved(key, v, dict(kind='json', file=file, path=path, sha256=_sha256(str(f)), commit=_commit(str(f.parent))))
+
+
+def _literal_expr(node) -> Any:
+    """The value of a constant expression: literals, tuples and lists of them, and + - * / on them."""
+    import ast
+    import operator
+    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float, str, bool)):
+        return node.value
+    if isinstance(node, (ast.Tuple, ast.List)):
+        return tuple(_literal_expr(e) for e in node.elts)
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.USub, ast.UAdd)):
+        v = _literal_expr(node.operand)
+        return -v if isinstance(node.op, ast.USub) else v
+    ops = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv}
+    if isinstance(node, ast.BinOp) and type(node.op) in ops:
+        return ops[type(node.op)](_literal_expr(node.left), _literal_expr(node.right))
+    raise ValueError(f'not a constant expression: {ast.dump(node)[:80]}')
+
+
+def _resolve_const(key: str) -> Resolved:
+    """`const:<file>:<NAME>[.<index>]` (module docstring)."""
+    import ast
+    import subprocess
+    _, file, name = key.split(':', 2)
+    name, _, index = name.partition('.')
+    f = H.HERE / file
+    if not f.is_file() or f.suffix != '.py':
+        raise KeyError(f'{key}: no Python file {file} in the repository')
+    nodes = [n for n in ast.parse(f.read_text()).body if isinstance(n, (ast.Assign, ast.AnnAssign))
+             and any(isinstance(tg, ast.Name) and tg.id == name for tg in (n.targets if isinstance(n, ast.Assign) else [n.target]))]
+    if len(nodes) != 1:
+        raise KeyError(f'{key}: {len(nodes)} module-level assignments of {name} in {file}')
+    try:
+        v = _literal_expr(nodes[0].value)
+        if index:
+            v = v[int(index)]
+    except (ValueError, IndexError, TypeError) as e:
+        raise KeyError(f'{key}: {e}') from None
+    git = lambda *a: subprocess.run(['git', *a], cwd=H.HERE, capture_output=True, text=True).stdout.strip()
+    return Resolved(key, v, dict(kind='const', file=file, name=name + (f'[{index}]' if index else ''),
+        line=nodes[0].lineno, sha256=_sha256(str(f)), commit=git('log', '-1', '--format=%H', '--', file) or None,
+        dirty=bool(git('status', '--porcelain', '--', file))))
 
 
 def resolve(key: str) -> Resolved:
@@ -197,6 +307,12 @@ def resolve(key: str) -> Resolved:
         if not sep or not src.strip():
             raise KeyError(f'{key}: a literal needs its source after #')
         return Resolved(key, text.strip(), dict(kind='literal', source=src.strip()))
+    if key.startswith(('min:', 'max:')):
+        return _resolve_extreme(key)
+    if key.startswith('json:'):
+        return _resolve_json(key)
+    if key.startswith('const:'):
+        return _resolve_const(key)
     if key.startswith('data:'):
         name = key[5:]
         part = None
@@ -250,7 +366,14 @@ def tooltip(res: Resolved) -> str:
         return s['description']
     if s.get('kind') == 'difference':
         return f"difference: ({s['a']['tooltip']}) minus ({s['b']['tooltip']})"
+    if s.get('kind') == 'json':
+        return f"{s['file']}, {s['path']}" + (f" [commit {s['commit'][:7]}]" if s.get('commit') else '')
+    if s.get('kind') == 'const':
+        return (f"{s['file']}, {s['name']} (line {s['line']})" + (f" [commit {s['commit'][:7]}]" if s.get('commit') else '')
+                + (' (uncommitted changes)' if s.get('dirty') else ''))
     if s.get('kind') == 'data':
         part = f" ({'lower' if s['part'] == 'lo' else 'upper'} end of the 90 % interval)" if s.get('part') else ''
         return f"KC / ORN data: {s['name']}{part}: {s.get('definition') or ''} [kcq/data_targets.py {str(s.get('commit') or '')[:7]}]"
-    return f"{s['file']}, row {s['row']}, column {s['column']}" + (f" [commit {s['commit'][:7]}]" if s.get('commit') else '')
+    ext = (f", the {'lowest' if s['extreme'] == 'min' else 'highest'} of {s['n_rows']} rows"
+           + (f" ({', '.join(f'{k} {v}' for k, v in s['picked'].items())})" if s.get('picked') else '')) if s.get('extreme') else ''
+    return f"{s['file']}, row {s['row']}, column {s['column']}{ext}" + (f" [commit {s['commit'][:7]}]" if s.get('commit') else '')

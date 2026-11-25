@@ -959,7 +959,12 @@ bare ID ("the per-glomerulus drive normalization sweep (E20)", not "E20").
   interval) for KC / ORN data values, computed in `kcq/data_targets.py` (add new data values there,
   with a definition, never as literals); `<EXP>[/<table.csv>]:<tag or col=value;...>:<column>`
   for one cell of an experiment's results table (comma-separated column alternatives allowed);
-  `lit:<text> # <source>` only for values with no computed source, with the source stated.
+  `json:<file>:<path>` for a value in a JSON file of the shared directory (a lock, a verdict; `len(<path>)` for a
+  count); `const:<file>:<NAME>[.<index>]` for a constant of this repository's code (a band edge, a threshold, a count
+  of draws), read from the file; `min:` / `max:` before a table key for the extreme over the rows it selects (never a
+  row picked by hand because it is the lowest; `col!=value` excludes rows, `*` selects all);
+  `lit:<text> # <source>` only for values with no computed source, with the source stated (Tom, 2026-11-25: hand-typed
+  values are fed through these keys wherever a file holds them).
   Never round a printed value by hand (the hand-typed summary had ±0.01 errors from rounding
   3-decimal printouts again). "KC data" rows and the best-models table must be all placeholders
   (the build lints them); new tables should be too. Build with `./venv/bin/python
