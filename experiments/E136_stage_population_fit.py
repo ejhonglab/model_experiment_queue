@@ -966,6 +966,47 @@ def hold_penalty(runs: Mapping[str, 'R.SavedRun']) -> float:
     return float(pen)
 
 
+SPLIT_PARTS = ('strength/rate', 'strength/mean')
+SPLIT_TERMS = ('level', 'spread', 'order', 'sd_ratio', 'r')
+
+
+def strength_split(pops: Sequence['P.Population'], ref: 'P.FlyReference') -> pd.DataFrame:
+    """The strength parts' errors split into level, spread and order (the amplitude and shape split of 2026-11-13, on
+    strength by odor; viki's request of 2026-11-24 22:54): for each part of SPLIT_PARTS the reference has, with d the
+    model's entries minus the flies' mean over the entries both define, sd the standard deviation over them (ddof 0)
+    and r the Pearson correlation of the model's entries with the flies' mean, 'level' is |mean d|, 'spread' |sd_model -
+    sd_flies| and 'order' sqrt(2 sd_model sd_flies (1 - r)), each in the part's one-fly unit, so that level^2 +
+    spread^2 + order^2 is the part's error^2 (`P.score_arrays`); 'sd_ratio' is sd_model / sd_flies and 'r' the
+    correlation. The strength parts are multiples of the panel's mean, so the level is near 0. Rows as hal's
+    `wirings_as_flies`: one per wiring, 'mean' (their mean) and 'common' (the wirings' mean views); columns
+    '<view>_<part>_<term>'."""
+    from kcq import population_fit as P
+    parts = [q for q in SPLIT_PARTS if q in ref.parts]
+    views = [P.population_views(w, ref.odors, ref.breadth_edges, list(ref.parts)) for w in pops]
+    names = [w.name or str(i) for i, w in enumerate(pops)]
+    arrays = P.stack_views(views + [P.mean_views(views)], ref)
+    rows = {name: {} for name in names + ['common']}
+    for q in parts:
+        m_all = ref.mean[q].to_numpy(dtype=float)
+        unit = float(ref.one_fly[q])
+        for name, a_all in zip(names + ['common'], arrays[q]):
+            ok = np.isfinite(a_all) & np.isfinite(m_all)
+            a, m = a_all[ok], m_all[ok]
+            key = q.replace('/', '_')
+            if len(a) < 2:
+                rows[name].update({f'{key}_{k}': np.nan for k in SPLIT_TERMS})
+                continue
+            sa, sm = float(a.std()), float(m.std())
+            r = float(np.corrcoef(a, m)[0, 1]) if sa > 0 and sm > 0 else np.nan
+            cross = 2.0 * sa * sm - 2.0 * float(np.mean((a - a.mean()) * (m - m.mean())))
+            rows[name].update({f'{key}_level': abs(float(np.mean(a - m))) / unit, f'{key}_spread': abs(sa - sm) / unit,
+                               f'{key}_order': float(np.sqrt(max(cross, 0.0))) / unit,
+                               f'{key}_sd_ratio': sa / sm if sm > 0 else np.nan, f'{key}_r': r})
+    df = pd.DataFrame.from_dict(rows, orient='index')
+    mean = df.loc[names].mean().to_frame('mean').T
+    return pd.concat([df.loc[names], mean, df.loc[['common']]])
+
+
 class StageLoss:
     """The megamat stage error of a set of runs: per stage of `stages` (default readings, the flies of `flies` for
     reading), the population errors of the wirings' mean views (hal's `wirings_as_flies`, row 'common') and of each
@@ -975,10 +1016,11 @@ class StageLoss:
     '<stage>_error_<wiring>' and 'stage_error_<wiring>', the error over the stages after the PN dendrites
     ('stage_error_downstream', and each wiring's), 'stage_error_perm', '<stage>_error_perm' and each wiring's
     'stage_error_perm_<wiring>' (the permutations' means, for the control), 'loss_stages' (the permutations' mean for the control, else 'stage_error') and the rates. With
-    `check_pn`, the PN-dendrite error must be the same at every call."""
+    `check_pn`, the PN-dendrite error must be the same at every call. With `split` (the score's), each stage's strength
+    split (`strength_split`) as '<stage>_split_<column>' (the wirings' mean views) and '<stage>_split_<column>_<wiring>'."""
 
     def __init__(self, stages: Sequence[str], flies: Flies, lock: Optional[Mapping] = None,
-                 subset_glomeruli: Optional[Sequence[str]] = None, check_pn: bool = False):
+                 subset_glomeruli: Optional[Sequence[str]] = None, check_pn: bool = False, split: bool = False):
         self.stages = tuple(stages)
         bad = [s for s in self.stages if s not in LOSS_STAGES]
         if bad or not self.stages:
@@ -987,6 +1029,7 @@ class StageLoss:
         self.lock = lock if lock is not None else R.require_lock()
         self.subset_glomeruli = subset_glomeruli
         self.check_pn = check_pn
+        self.split = split
         self._pn: Optional[float] = None
 
     def read(self, runs: Mapping[str, 'R.SavedRun']) -> Dict[str, 'R.ModelReading']:
@@ -1016,6 +1059,11 @@ class StageLoss:
             for w, pop in zip(runs, pops):
                 out[f'{st}_error_{w}'] = float(tab.loc[pop.name, col])
                 each[w].append(out[f'{st}_error_{w}'])
+            if self.split:
+                sp = strength_split(pops, self.flies.reference(st, odors))
+                out.update({f'{st}_split_{c}': float(sp.loc['common', c]) for c in sp.columns})
+                for w, pop in zip(runs, pops):
+                    out.update({f'{st}_split_{c}_{w}': float(sp.loc[pop.name, c]) for c in sp.columns})
             for k in range(len(self.flies.perms)):
                 tk = P.wirings_as_flies(pops, self.flies.reference(st, odors, k))
                 perm_common[k].append(float(tk.loc['common', col]))
@@ -1617,14 +1665,15 @@ def score_megamat(arm: str, stages: Sequence[str], half: Optional[str] = 'held',
         runs[w] = r
     lock = R.require_lock()
     flies = Flies(half, stages, perms=permutations(list(D.panel_odors(PANEL))) if perms else None, views=views)
-    return StageLoss(stages, flies, lock)(runs)
+    return StageLoss(stages, flies, lock, split=True)(runs)
 
 
 def score_panels(arm: str, flies: Optional['R.FlyCache'] = None, views='measure') -> pd.DataFrame:
     """An arm's KC somata on the held-out panels (the validation2, mixture and APL16 inputs on the eight wirings, every
     panel and condition the runs are read on with flies to read them against, default readings), under the measure in
     force: per (input, panel, condition) each wiring's population error, their mean and the error of their mean views
-    (hal's `wirings_as_flies` against all the panel's flies, E134's `fly_side_read`), with the views."""
+    (hal's `wirings_as_flies` against all the panel's flies, E134's `fly_side_read`), with the views and the strength
+    split ('split_...', `strength_split`)."""
     from experiments import E134_population_baseline as B
     from kcq import population_fit as P
     flies = flies if flies is not None else R.FlyCache()
@@ -1649,11 +1698,13 @@ def score_panels(arm: str, flies: Optional['R.FlyCache'] = None, views='measure'
             od = [o for o in pops[0].values.columns if o in set(have)]
             ref = P.fly_reference(fp, od, B.breadth_edges(len(od)), parts=measure_parts(views))
             tab = P.wirings_as_flies(pops, ref)
+            sp = strength_split(pops, ref).add_prefix('split_')
             for name, row in tab.iterrows():
                 wiring = str(name).partition('/')[2] or str(name)
                 rows.append(dict(arm=arm, input=panel, stage=st, panel=pan, condition=cond, wiring=wiring,
                                  views='all' if views is None else '+'.join(views), n_odors=len(od), n_flies=len(fp),
-                                 **{k: float(v) for k, v in row.items()}))
+                                 **{k: float(v) for k, v in row.items()},
+                                 **({k: float(v) for k, v in sp.loc[name].items()} if name in sp.index else {})))
     return pd.DataFrame(rows)
 
 
@@ -1705,9 +1756,11 @@ def _sd(x) -> float:
 
 def megamat_values(sc: Mapping[str, float], stages: Sequence[str], wirings: Sequence[str]) -> Dict[str, Dict[str, float]]:
     """From `StageLoss`'s dict, per wiring its stage error ('stage'), its error over the stages after the PN dendrites
-    ('downstream') and each stage's population error."""
+    ('downstream') and each stage's population error, with the strength split ('<stage>_split_...') where scored."""
     return {w: dict(stage=sc[f'stage_error_{w}'], downstream=sc.get(f'stage_error_downstream_{w}', np.nan),
-                    **{st: sc[f'{st}_error_{w}'] for st in stages}) for w in wirings}
+                    **{st: sc[f'{st}_error_{w}'] for st in stages},
+                    **{k[:-len(w) - 1]: v for k, v in sc.items() if '_split_' in k and k.endswith(f'_{w}')})
+            for w in wirings}
 
 
 def panel_values(panels: pd.DataFrame, arm: str) -> Dict[Tuple[str, str, str], Dict[str, float]]:
@@ -1871,7 +1924,9 @@ def part_score(arms: Optional[Sequence[str]] = None) -> dict:
             for w, v in vals.items():
                 mrows.append(dict(arm=a, half=half or 'all', wiring=w, **v))
             mrows.append(dict(arm=a, half=half or 'all', wiring='common', stage=sc['stage_error'],
-                              downstream=sc['stage_error_downstream'], **{s: sc[f'{s}_error'] for s in stages}))
+                              downstream=sc['stage_error_downstream'], **{s: sc[f'{s}_error'] for s in stages},
+                              **{k: v for k, v in sc.items() if '_split_' in k
+                                 and not any(k.endswith(f'_{w}') for w in WIRINGS)}))
         if a in ARMS and 'claw_thr' in ARMS[a].searched:
             sc = score_megamat(a, stages, 'held', T_WIRINGS, claw_after=True)
             if sc is not None:

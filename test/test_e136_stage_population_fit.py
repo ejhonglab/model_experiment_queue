@@ -223,6 +223,44 @@ def test_stage_loss_on_planted_runs():
     assert F.hold_penalty(runs) == pytest.approx(0.5)
 
 
+def test_strength_split():
+    """The strength split adds back to each strength part's error (level^2 + spread^2 + order^2 = error^2), for the
+    wirings' mean views and for each wiring, and changes nothing else of the loss."""
+    full = planted_full()
+    runs = _planted_runs()
+    flies = F.Flies('fit', F.LOSS_STAGES, full=full)
+    plain = F.StageLoss(F.LOSS_STAGES, flies, LOCK, subset_glomeruli=GL)(runs)
+    res = F.StageLoss(F.LOSS_STAGES, flies, LOCK, subset_glomeruli=GL, split=True)(runs)
+    assert {k: v for k, v in res.items() if '_split_' not in k} == plain
+    n = 0
+    for st in F.LOSS_STAGES:
+        for part in ('strength_rate', 'strength_mean'):
+            if f'{st}_part_{part}' not in res:
+                continue
+            for suffix, err in [('', res[f'{st}_part_{part}'])] + \
+                    [(f'_{w}', None) for w in runs]:
+                lv, sp, od = (res[f'{st}_split_{part}_{x}{suffix}'] for x in ('level', 'spread', 'order'))
+                if err is not None:
+                    assert lv ** 2 + sp ** 2 + od ** 2 == pytest.approx(err ** 2, rel=1e-9)
+                assert min(lv, sp, od) >= 0 and res[f'{st}_split_{part}_sd_ratio{suffix}'] > 0
+                n += 1
+    assert n >= len(F.LOSS_STAGES) * (1 + len(runs))
+    # each wiring's split against its own error, from hal's wirings_as_flies
+    from kcq import population_fit as P
+    reads = F.StageLoss(F.LOSS_STAGES, flies, LOCK, subset_glomeruli=GL).read(runs)
+    st = 'kc_soma'
+    pops = [reads[w].populations[(st, 'megamat', 'on')] for w in runs]
+    ref = flies.reference(st, list(pops[0].values.columns))
+    tab = P.wirings_as_flies(pops, ref)
+    sp = F.strength_split(pops, ref)
+    for name in [*[p.name for p in pops], 'common']:
+        e = tab.loc[name, 'part_strength_rate']
+        s = sp.loc[name]
+        assert s.strength_rate_level ** 2 + s.strength_rate_spread ** 2 + s.strength_rate_order ** 2 == \
+            pytest.approx(e ** 2, rel=1e-9)
+    assert sp.loc['mean', 'strength_rate_order'] == pytest.approx(sp.loc[[p.name for p in pops], 'strength_rate_order'].mean())
+
+
 def test_readable_stages():
     c = {'stages': {'megamat_held': {'pn_dendrite': {'cls': 'between'}, 'pn_bouton': {'cls': 'not readable'},
                                      'kc_claw': {'cls': 'far'}, 'kc_soma': {'cls': 'inside'}}}}
