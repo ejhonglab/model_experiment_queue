@@ -34,6 +34,9 @@ directory's notes/ and are linked from here.
   to be annotated or rewritten when E137 is folded into the summary (viki). (2) Whether the mixture panels stay in E136's
   "holds", the kiwi panel as a description with its bounds and the control panel under which reading: Tom's and Yang's
   call (E137's outcome (c)). Move this entry to Resolved once both are done.
+- **Done, 2026-11-25 03:20 (viki).** Item (1): the summary's E134 passage now says the kiwi verdict is the reading's and
+  that the mixtures' sharing errors were mostly the units, its stage-table rows read "as uploaded", and E137 has its own
+  passage ({#heldout-readings}; summary_template.md, the planner's fold spawned from viki 02:51). Item (2) remains.
 
 ### The progress plot's ρ line ends on two points of kinds the plot is meant to leave out (found 2026-11-16, hal, the report pages' revision)
 - **What.** `reports/summary_progress_plot.py` leaves out oracle inputs and random, shuffled or re-drawn wirings by tag
