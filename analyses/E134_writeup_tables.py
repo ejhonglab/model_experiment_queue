@@ -35,6 +35,9 @@ raises):
   (archive_consistency_<reading>.csv), the gate's numbers checked against measure_gate.json and score_classes.json;
 - `breadth`: the spread of the archived variants' view errors inside the bands at the APL16 somata beside the flies'
   floor, both readings (why breadth's order does not hold between halves of the recordings);
+- `tradeoff`: design step 7, the best variant and family by the population error with APL on and off and by the
+  pattern part, with each measure's ρ over the variants with the calibrated pattern part (checked against
+  archive_tradeoff_best_<reading>.csv), and the same for strength by odor as a description;
 - `soma_criteria`: the KC somata's response criterion per set of recordings, the footing factors, the noise bridges and
   the response rates, from the lock (checked against its stages block and the per-fly rates);
 - `apl16_models`: the planner's probe of 2026-11-24 09:11 (raw counts, strength by its rate part only) reproduced from
@@ -257,7 +260,7 @@ def stage_table(I: dict, ck: Checks):
     for group, stage, panel, cond in STAGE_GROUPS:
         fl = fly_lines(I, ck, stage, panel, cond)
         rec = dict(group=group, stage=stage, panel=panel, condition=cond, **fl)
-        by3, bys = {}, {}
+        by3, bys, by4 = {}, {}, {}
         for k, rd in enumerate(READINGS[stage]):
             x = family_rows(I, stage, panel, cond, group, rd)
             if not len(x):
@@ -286,7 +289,16 @@ def stage_table(I: dict, ck: Checks):
             by3[rd] = classify(w['error'], fl['error_loo_max'])
             bys[rd] = classify(w['view_strength'], fl['strength_loo_max'])
             rec[f'{tag}_class_three'], rec[f'{tag}_class_strength'] = by3[rd], bys[rd]
+            # named glomeruli: the class on four views too (the lock's caution: the write-up says whether the PN
+            # dendrites' class differs with and without the matrix view)
+            if 'error_with_matrix_loo_max' in fl and w['error_with_matrix'].notna().all():
+                rec[f'{tag}_n_inside_four'] = int((w['error_with_matrix'].astype(float)
+                                                   <= fl['error_with_matrix_loo_max']).sum())
+                by4[rd] = classify(w['error_with_matrix'], fl['error_with_matrix_loo_max'])
+                rec[f'{tag}_class_four'] = by4[rd]
         rec['class_three'], rec['class_strength'] = combine(by3), combine(bys)
+        if by4:
+            rec['class_four'] = combine(by4)
         # the score's classes (the megamat stages)
         sc = I['cls']['stages'].get(group, {}).get(stage)
         if sc is not None:
@@ -609,6 +621,40 @@ def breadth_spread(I: dict) -> pd.DataFrame:
                                  q75=float(v.quantile(0.75)), q95=float(v.quantile(0.95)),
                                  iqr=float(v.quantile(0.75) - v.quantile(0.25)),
                                  flies_floor=float(fl.loc[nm, 'floor']), flies_loo_max=float(fl.loc[nm, 'loo_max'])))
+    return pd.DataFrame(rows)
+
+
+def tradeoff(I: dict, ck: Checks) -> pd.DataFrame:
+    """Design step 7, over the archived variants inside the bands (archive_tradeoff_<reading>.csv): the best variant
+    and family by the population error with APL on and with APL off and by the pattern part (calibrated and raw), as
+    the archive scoring wrote them (archive_tradeoff_best_<reading>.csv), each measure's Spearman ρ over the variants
+    with the calibrated pattern part re-computed here and checked; and beside them, as a description, the same for
+    strength by odor at the APL16 somata (from archive_scores_<reading>.csv). No variant is chosen by any of these."""
+    rows = []
+    for rd in ('curve_noise', 'raw'):
+        t = pd.read_csv(H.results_dir(EXPERIMENT) / f'archive_tradeoff_{rd}.csv', low_memory=False)
+        best = I[f'best_{rd}'].set_index('measure')
+        for m in ('error_on', 'error_off', 'cal_pattern_part', 'raw_pattern_part'):
+            rho = float(t[m].rank().corr(t['cal_pattern_part'].rank()))
+            ck.eq(f'tradeoff {rd} {m} rho with the calibrated pattern part', rho,
+                  float(best.loc[m, 'rho_with_cal_pattern_part']), 1e-9)
+            i = t[m].idxmin()
+            ck.eq(f'tradeoff {rd} {m} best value', float(t.loc[i, m]), float(best.loc[m, 'best_value']), 1e-12)
+            rows.append(dict(reading=rd, measure=m, best=f"{t.loc[i, 'folder']}/{t.loc[i, 'tag']}",
+                             best_value=float(t.loc[i, m]), best_family=best.loc[m, 'best_family'],
+                             second_family=best.loc[m, 'second_family'], rho_with_cal_pattern_part=rho,
+                             n_variants=int(best.loc[m, 'n_variants'])))
+        a = I[f'arch_{rd}']
+        a = a[(a['inside_bands'].astype(str).str.lower() == 'true') & (a['duplicate'].astype(str).str.lower() == 'false')]
+        for cond in ('on', 'off'):
+            x = a[a['condition'] == cond][['folder', 'tag', 'view_strength']].merge(t[['folder', 'tag', 'cal_pattern_part']],
+                                                                                    on=['folder', 'tag'])
+            ck.eq(f'tradeoff {rd} strength {cond} variants', len(x), len(t))
+            i = x['view_strength'].idxmin()
+            rows.append(dict(reading=rd, measure=f'strength_{cond}', best=f"{x.loc[i, 'folder']}/{x.loc[i, 'tag']}",
+                             best_value=float(x.loc[i, 'view_strength']), best_family=x.loc[i, 'folder'],
+                             rho_with_cal_pattern_part=float(x['view_strength'].rank().corr(x['cal_pattern_part'].rank())),
+                             n_variants=len(x)))
     return pd.DataFrame(rows)
 
 
@@ -955,7 +1001,7 @@ ROW_LABEL = {
 }
 
 
-def markdown(st, se, wse, bes, stp, dend15, pan, con, br, soma, a16, r16, ops, pc) -> str:
+def markdown(st, se, wse, bes, stp, dend15, pan, con, br, tro, soma, a16, r16, ops, pc) -> str:
     L = ['# E134 write-up tables (generated by analyses/E134_writeup_tables.py; no simulation)', '']
     L += ['## The stage table (default readings; the family\'s eight wirings: mean, range, common)', '',
           '| row | stage | condition | flies | floor | most atypical fly: error / strength | population error | range | common | '
@@ -971,7 +1017,8 @@ def markdown(st, se, wse, bes, stp, dend15, pan, con, br, soma, a16, r16, ops, p
                  f"{_fmt(r.get('default_energy_ratio_mean', np.nan), '.2f')} | "
                  f"{int(r['default_n_inside_three'])} / {int(r['default_n_inside_strength'])} ; "
                  f"{int(r['second_n_inside_three'])} / {int(r['second_n_inside_strength'])} ({r['second_reading']}) | "
-                 f"{r['class_three']} / {r['class_strength']} |")
+                 f"{r['class_three']} / {r['class_strength']}"
+                 + (f" (four views: {r['class_four']})" if isinstance(r.get('class_four'), str) else '') + ' |')
     L += ['', '### The second readings', '', '| row | stage | condition | reading | population error | range | strength | range | sharing | breadth |',
           '|---|---|---|---|---:|---:|---:|---:|---:|---:|']
     for _, r in st.iterrows():
@@ -1062,6 +1109,13 @@ def markdown(st, se, wse, bes, stp, dend15, pan, con, br, soma, a16, r16, ops, p
     for _, r in br.iterrows():
         L.append(f"| {r['reading']} | {r['condition']} | {r['measure']} | {int(r['n_variants'])} | {_fmt(r['q05'])} | {_fmt(r['q25'])} | "
                  f"{_fmt(r['median'])} | {_fmt(r['q75'])} | {_fmt(r['q95'])} | {_fmt(r['flies_floor'])} | {_fmt(r['flies_loo_max'])} |")
+    L += ['', '## The trade-off over the archived variants inside the bands (a description; no variant is chosen by it)', '',
+          '| reading | measure | best variant | its value | best family | second family | ρ over the variants with the '
+          'calibrated pattern part | variants |', '|---|---|---|---:|---|---|---:|---:|']
+    for _, r in tro.iterrows():
+        L.append(f"| {r['reading']} | {r['measure']} | {r['best']} | {_fmt(r['best_value'])} | {r['best_family']} | "
+                 f"{r.get('second_family') if isinstance(r.get('second_family'), str) else '–'} | "
+                 f"{_fmt(r['rho_with_cal_pattern_part'], '.2f')} | {int(r['n_variants'])} |")
     L += ['', '## The KC somata\'s criteria per set of recordings (the lock)', '',
           '| cohort | flies | criterion | values times | response rate (range) | at 1.9684 / before | noise bridge (range) |',
           '|---|---:|---:|---:|---:|---:|---:|']
@@ -1132,19 +1186,21 @@ def main(argv=None) -> None:
     pan = panels(I, ck, st)
     con = consistency(I, ck)
     br = breadth_spread(I)
+    tro = tradeoff(I, ck)
     soma = soma_criteria(I, ck)
     a16 = apl16_models(I, ck)
     r16 = realism_apl16(I, ck)
     ops = operating_points(I, ck)
     pc = planner_check(I, st, se, wse, stp, pan, con, br, soma, a16, ops)
     tables = dict(stage_table=st, stage_error=se, wiring_se=wse, beside=bes, steps=stp, panels=pan, consistency=con,
-                  breadth=br, soma_criteria=soma, apl16_models=a16, realism_apl16=r16, operating_points=ops,
+                  breadth=br, tradeoff=tro, soma_criteria=soma, apl16_models=a16, realism_apl16=r16, operating_points=ops,
                   planner_check=pc)
     if dend15 is not None:
         tables['dendrites_15_odors'] = dend15
     for k, df in tables.items():
         df.to_csv(out / f'writeup_{k}.csv', index=False)
-    (out / 'writeup_tables.md').write_text(markdown(st, se, wse, bes, stp, dend15, pan, con, br, soma, a16, r16, ops, pc))
+    (out / 'writeup_tables.md').write_text(markdown(st, se, wse, bes, stp, dend15, pan, con, br, tro, soma, a16, r16, ops,
+                                                    pc))
     two_view_half = con[(con['reading'] == 'curve_noise') & (con['version'] == 'half')
                         & (con['measure'] == 'error_strength_sharing') & (con['variant_set'] == 'inside_bands')]
     inputs = ['score_scores.csv', 'score_classes.json', 'score_step_table.csv', 'score_stage_error.csv',
@@ -1152,7 +1208,8 @@ def main(argv=None) -> None:
               'measure_gate.json', 'flies_views.csv', 'flies_loo.csv', 'flies_no_step.csv',
               'flies_megamat_vs_control.csv', 'flies_steps_summary.csv', 'lock.json', 'variants.csv',
               'archive_consistency_curve_noise.csv', 'archive_consistency_raw.csv', 'archive_scores_curve_noise.csv',
-              'archive_scores_raw.csv', 'archive_tradeoff_best_curve_noise.csv', 'archive_tradeoff_best_raw.csv']
+              'archive_scores_raw.csv', 'archive_tradeoff_best_curve_noise.csv', 'archive_tradeoff_best_raw.csv',
+              'archive_tradeoff_curve_noise.csv', 'archive_tradeoff_raw.csv']
     prov = dict(script=SCRIPT, generated=time.strftime('%Y-%m-%d %H:%M'), seconds=round(time.time() - t0, 1),
                 checks_passed=ck.n, planner_numbers=int(len(pc)), planner_reproduced=int(pc['reproduced'].sum()),
                 not_reproduced=pc[~pc['reproduced']][['reading', 'what', 'written', 'script',
