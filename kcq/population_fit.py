@@ -47,6 +47,12 @@ and the error of the wirings' mean parts (the error common to the wirings); one 
 as the flies (`leave_one_out` on the wirings) is the measure gate's check (1.2 or less). `subset_reference` reads the
 flies of a half (split-half consistency) in that half's own units or in all flies'.
 
+Flies given part of a panel (validation2's KC flies; E137, design item 7): `partial_reference` reads each fly on the
+odors it was given, its breadth in bins scaled to their number, and its strength parts by one of two rules, as
+multiples of their mean over anchor odors that every fly was given ('anchor'), or with one scale per fly fitted to the
+other flies' mean ('fly_scale'). `reference_views` reads a model as such a reference reads its flies, and the scorers
+read every reference through it.
+
 The steps between stages: the change of each part from the upstream to the downstream stage (entry by entry, on the
 odors both stages have), with an interval from resampling the flies of both stages (the description); the step's
 resampled distance, by which a step is classed (the planner's ruling of 2026-11-24 11:34): per part, the RMS distance
@@ -415,7 +421,111 @@ def partial_reference(flies: Sequence[Population], rule: str = 'anchor', odors: 
             that returns its bins (data_prep/stage_population_data.py's `breadth_bins`).
         parts: the parts to read (default every part all flies allow).
     """
-    raise NotImplementedError
+    if rule not in PARTIAL_RULES:
+        raise ValueError(f'unknown partial-panel rule {rule!r}; one of {PARTIAL_RULES}')
+    if len(flies) < 2:
+        raise ValueError('a reference needs at least two flies')
+    given = [set(f.odors) for f in flies]
+    if odors is None:
+        cols = dict.fromkeys(itertools.chain.from_iterable(f.values.columns for f in flies))
+        odors = [o for o in cols if any(o in g for g in given)]
+    odors = list(odors)
+    names = [f.name or str(i) for i, f in enumerate(flies)]
+    fly_odors = {n: [o for o in odors if o in g] for n, g in zip(names, given)}
+    anchor = tuple(o for o in odors if all(o in g for g in given)) if anchor is None else tuple(anchor)
+    if rule == 'anchor':
+        if not anchor:
+            raise ValueError('the anchor rule needs at least one odor every fly was given')
+        lack = {n: [o for o in anchor if o not in fly_odors[n]] for n in names}
+        lack = {n: a for n, a in lack.items() if a}
+        if lack:
+            raise ValueError(f'flies without an anchor odor: {lack}')
+    edges = {n: _edges_for(breadth_edges, len(fly_odors[n])) for n in names}
+    n_bins = {len(breadth_bins(e)) for e in edges.values()}
+    if len(n_bins) > 1:
+        raise ValueError(f'the flies\' breadth bins differ in number: {edges}')
+    views = []
+    for f, n in zip(flies, names):
+        own = fly_odors[n]
+        v = population_views(f, own, edges[n], parts)
+        if 'breadth/bins' in v:
+            v['breadth/bins'] = _by_position(v['breadth/bins'])
+        for sp in STRENGTH_PARTS:
+            if sp in v:
+                v[sp] = _strength_raw(f, odors, sp)
+        views.append(v)
+    keep = [q for q in ALL_PARTS if all(q in v for v in views)]
+    table = {}
+    for q in keep:
+        if q.startswith('sharing/'):
+            cols = odor_pairs(odors)
+        else:
+            cols = list(dict.fromkeys(itertools.chain.from_iterable(v[q].index for v in views)))
+        table[q] = pd.DataFrame([v[q].reindex(cols).to_numpy(dtype=float) for v in views], index=names, columns=cols)
+    scales: Dict[str, pd.Series] = {}
+    for q in [q for q in STRENGTH_PARTS if q in table]:
+        X = table[q].to_numpy(dtype=float)
+        if rule == 'anchor':
+            ai = [odors.index(o) for o in anchor]
+            with np.errstate(invalid='ignore', divide='ignore'):
+                m = np.nanmean(X[:, ai], axis=1)
+            s = np.where(np.isfinite(m) & (m > 0), 1.0 / m, np.nan)
+        else:
+            s = _fit_scales(X, q)
+            scales[q] = pd.Series(s, index=names, name=q)
+        table[q] = pd.DataFrame(X * s[:, None], index=names, columns=table[q].columns)
+    ref = _reference_from_parts(table, names, odors, _edges_for(breadth_edges, len(odors)))
+    return dataclasses.replace(ref, partial=rule, fly_odors=fly_odors, fly_breadth_edges=edges,
+        anchor=anchor if rule == 'anchor' else (), scales=scales)
+
+
+STRENGTH_PARTS: Tuple[str, ...] = tuple(f'strength/{p}' for p in PARTS['strength'])
+
+
+def _edges_for(breadth_edges, n_odors: int) -> Tuple:
+    return tuple(breadth_edges(int(n_odors))) if callable(breadth_edges) else tuple(breadth_edges)
+
+
+def _by_position(bins: pd.Series) -> pd.Series:
+    return pd.Series(bins.to_numpy(dtype=float), index=[f'{PARTIAL_BIN_PREFIX}{k}' for k in range(len(bins))])
+
+
+def _strength_raw(pop: Population, odors: Sequence[str], part: str) -> pd.Series:
+    """A strength part before it is made relative: each odor's response rate or mean response (NaN where the
+    population was not given the odor)."""
+    T = pop.responds if part == 'strength/rate' else pop.values
+    return T.reindex(columns=list(odors)).mean(axis=0)
+
+
+def _fit_scales(X: np.ndarray, part: str = '') -> np.ndarray:
+    """The 'fly_scale' rule's scales of a flies x odors table of a raw strength part (NaN where a fly was not given an
+    odor): each fly's least-squares scale onto the other flies' mean of the scaled parts, iterated (half steps, so
+    that two flies do not oscillate) to the fixed point, which holds up to one factor common to the flies (the
+    leading eigenvector of the map); that factor is set so that the flies' mean part averages 1 over the odors."""
+    finite = np.isfinite(X)
+    X0 = np.where(finite, X, 0.0)
+    with np.errstate(invalid='ignore', divide='ignore'):
+        own = np.where(finite.any(axis=1), X0.sum(axis=1) / finite.sum(axis=1), np.nan)
+    s = np.where(np.isfinite(own) & (own > 0), 1.0 / own, 1.0)
+
+    def gauge(s):
+        m = float(np.nanmean(_nanmean_rows(X * s[:, None])))
+        return s / m if np.isfinite(m) and m > 0 else s
+
+    s = gauge(s)
+    for _ in range(SCALE_MAX_ITER):
+        Y = X * s[:, None]
+        others = Y - _loo_diffs(Y)
+        ok = finite & np.isfinite(others)
+        num = np.where(ok, X0 * np.where(ok, others, 0.0), 0.0).sum(axis=1)
+        den = np.where(ok, X0 ** 2, 0.0).sum(axis=1)
+        if np.any(den <= 0):
+            raise ValueError(f'{part}: a fly shares no defined odor with the others, so its scale is not fitted')
+        new = gauge(0.5 * (s + num / den))
+        if np.nanmax(np.abs(new / s - 1.0)) < SCALE_TOL:
+            return new
+        s = new
+    raise RuntimeError(f'{part}: the flies\' scales did not converge in {SCALE_MAX_ITER} iterations')
 
 
 def reference_views(pop: Population, ref: FlyReference) -> Dict[str, pd.Series]:
@@ -424,7 +534,35 @@ def reference_views(pop: Population, ref: FlyReference) -> Dict[str, pd.Series]:
     of the model's mean over the anchor odors, or with one scale fitted to the flies' mean part), sharing and the
     matrix on `ref.odors`, and breadth as the mean over `ref`'s flies of the model's breadth on each fly's odors, in
     that fly's bins."""
-    raise NotImplementedError
+    parts = list(ref.parts)
+    if ref.partial is None:
+        return population_views(pop, ref.odors, ref.breadth_edges, parts)
+    out = population_views(pop, ref.odors, ref.breadth_edges,
+        [q for q in parts if q not in STRENGTH_PARTS and q != 'breadth/bins'])
+    for q in [q for q in STRENGTH_PARTS if q in parts]:
+        if q == 'strength/mean' and not pop.graded:
+            continue
+        x = _strength_raw(pop, ref.odors, q)
+        if ref.partial == 'anchor':
+            m = float(np.mean(x.reindex(list(ref.anchor)).to_numpy(dtype=float))) if len(ref.anchor) else np.nan
+            out[q] = x / m if np.isfinite(m) and m > 0 else pd.Series(np.nan, index=x.index)
+        else:
+            mu = ref.mean[q].reindex(x.index).to_numpy(dtype=float)
+            xv = x.to_numpy(dtype=float)
+            ok = np.isfinite(xv) & np.isfinite(mu)
+            den = float(np.sum(xv[ok] ** 2))
+            out[q] = x * (float(np.sum(xv[ok] * mu[ok])) / den) if den > 0 else pd.Series(np.nan, index=x.index)
+    if 'breadth/bins' in parts:
+        rows = []
+        for f in ref.flies:
+            od = ref.fly_odors[f]
+            if pop.values.reindex(columns=od).isna().all(axis=0).any():
+                rows.append(np.full(len(ref.mean['breadth/bins']), np.nan))
+            else:
+                rows.append(breadth_counts(pop.responds.reindex(columns=od), ref.fly_breadth_edges[f]).to_numpy(
+                    dtype=float))
+        out['breadth/bins'] = pd.Series(np.mean(np.array(rows), axis=0), index=ref.mean['breadth/bins'].index)
+    return out
 
 
 def subset_reference(ref: FlyReference, flies: Sequence[Union[int, str]], keep_units: bool = False) -> FlyReference:
@@ -438,8 +576,13 @@ def subset_reference(ref: FlyReference, flies: Sequence[Union[int, str]], keep_u
     """
     idx = [ref.flies.index(f) if isinstance(f, str) else int(f) for f in flies]
     parts = {p: df.iloc[idx] for p, df in ref.parts.items()}
-    return _reference_from_parts(parts, [ref.flies[i] for i in idx], ref.odors, ref.breadth_edges,
-        ref.one_fly if keep_units else None)
+    names = [ref.flies[i] for i in idx]
+    out = _reference_from_parts(parts, names, ref.odors, ref.breadth_edges, ref.one_fly if keep_units else None)
+    if ref.partial is None:
+        return out
+    return dataclasses.replace(out, partial=ref.partial, fly_odors={n: ref.fly_odors[n] for n in names},
+        fly_breadth_edges={n: ref.fly_breadth_edges[n] for n in names}, anchor=ref.anchor,
+        scales={p: s.iloc[idx] for p, s in ref.scales.items()})
 
 
 @dataclass
@@ -557,12 +700,12 @@ def score_views(views: Mapping[str, pd.Series], ref: FlyReference) -> Score:
 
 def score(pop: Population, ref: FlyReference) -> Score:
     """Scores one population (one model wiring) against the flies, in their one-fly units."""
-    return score_views(population_views(pop, ref.odors, ref.breadth_edges, list(ref.parts)), ref)
+    return score_views(reference_views(pop, ref), ref)
 
 
 def score_many(pops: Sequence[Population], ref: FlyReference) -> pd.DataFrame:
     """`score` of every population, one row each (index the populations' names)."""
-    views = [population_views(p, ref.odors, ref.breadth_edges, list(ref.parts)) for p in pops]
+    views = [reference_views(p, ref) for p in pops]
     return score_arrays(stack_views(views, ref), ref, index=[p.name or str(i) for i, p in enumerate(pops)])
 
 
@@ -625,7 +768,7 @@ def wirings_as_flies(wirings: Sequence[Population], ref: FlyReference) -> pd.Dat
         One row per wiring (index the wirings' names), then a row 'mean' (the mean of the wirings' rows) and a row
         'common' (the wirings' mean views scored: the error common to the wirings), with `Score.as_series` columns.
     """
-    views = [population_views(w, ref.odors, ref.breadth_edges, list(ref.parts)) for w in wirings]
+    views = [reference_views(w, ref) for w in wirings]
     names = [w.name or str(i) for i, w in enumerate(wirings)]
     each = score_arrays(stack_views(views, ref), ref, index=names)
     common = score_arrays(stack_views([mean_views(views)], ref), ref, index=['common'])
@@ -876,7 +1019,7 @@ def no_step_score(upstream: Sequence[Population], downstream: FlyReference) -> S
     lack = [o for o in downstream.odors if o not in set(common_odors(upstream))]
     if lack:
         raise ValueError(f'the upstream flies lack odors of the downstream reference: {lack}')
-    views = [population_views(u, downstream.odors, downstream.breadth_edges, list(downstream.parts)) for u in upstream]
+    views = [reference_views(u, downstream) for u in upstream]
     m = mean_views(views)
     ref = dataclasses.replace(downstream, parts={p: d for p, d in downstream.parts.items() if p in m},
         mean={p: s for p, s in downstream.mean.items() if p in m},

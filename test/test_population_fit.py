@@ -408,3 +408,135 @@ def test_step_null_distance_is_the_step_distance_threshold(step_flies):
         st = P.step_interval(up, down, odors)[p]
         assert np.allclose(st['change'], rs.change[p])
     assert P.step_null_distance(up, down, odors, q=0.5)['sharing/who'] < nulls['sharing/who']
+
+
+# flies given part of a panel (E137, design item 7)
+
+ANCHOR = ('o0', 'o1', 'o2')
+
+
+def _partial_flies(gen, n=8, n_drop=4, seed=1):
+    """Planted flies each given all but `n_drop` odors (never the anchor odors), as validation2's KC flies were."""
+    rng = np.random.default_rng(seed)
+    out = []
+    for i in range(n):
+        f = gen.fly(f'p{i}')
+        v = f.values.copy()
+        drop = rng.choice([o for o in gen.odors if o not in ANCHOR], size=n_drop, replace=False)
+        v[list(drop)] = np.nan
+        out.append(P.Population.from_criterion(v, CRIT, name=f.name))
+    return out
+
+
+def _scaled_edges(n):
+    return ((0, 0), (1, 1), (2, max(2, n // 8)), (max(3, n // 8 + 1), max(3, n // 2 - 1)), (max(4, n // 2), n))
+
+
+def test_partial_reference_on_full_panels_is_fly_reference(gen, flies, ref):
+    r = P.partial_reference(flies, rule='anchor', anchor=ODORS)
+    assert r.partial == 'anchor' and r.anchor == tuple(ODORS)
+    for q in ('strength/rate', 'strength/mean', 'sharing/who', 'sharing/how_strongly'):
+        np.testing.assert_allclose(r.parts[q].to_numpy(), ref.parts[q].to_numpy(), atol=1e-12)
+        assert r.one_fly[q] == pytest.approx(ref.one_fly[q])
+    np.testing.assert_allclose(r.parts['breadth/bins'].to_numpy(), ref.parts['breadth/bins'].to_numpy())
+    assert list(r.parts['breadth/bins'].columns) == ['bin0', 'bin1', 'bin2', 'bin3', 'bin4']
+    m = gen.fly('model')
+    a, b = P.score(m, r), P.score(m, ref)
+    assert a.error == pytest.approx(b.error) and a.parts == pytest.approx(b.parts)
+
+
+def test_partial_reference_reads_each_fly_on_its_odors(gen):
+    fl = _partial_flies(gen)
+    r = P.partial_reference(fl, rule='anchor', breadth_edges=_scaled_edges)
+    assert r.odors == ODORS and r.anchor == ANCHOR
+    for f in fl:
+        own = r.fly_odors[f.name]
+        assert own == f.odors and len(own) == 12
+        rate = r.parts['strength/rate'].loc[f.name]
+        assert rate[[o for o in ODORS if o not in own]].isna().all() and rate[own].notna().all()
+        assert rate[list(ANCHOR)].mean() == pytest.approx(1.0)
+        raw = f.responds[own].mean(axis=0)
+        np.testing.assert_allclose(rate[own].to_numpy(), (raw / raw[list(ANCHOR)].mean()).to_numpy())
+        assert r.fly_breadth_edges[f.name] == _scaled_edges(12)
+        bins = r.parts['breadth/bins'].loc[f.name].to_numpy()
+        np.testing.assert_allclose(bins, P.breadth_counts(f.responds[own], _scaled_edges(12)).to_numpy())
+        who = r.parts['sharing/who'].loc[f.name]
+        given = {f'{a}|{b}' for a in own for b in own}
+        assert all(np.isnan(x) for k, x in who.items() if k not in given)
+    assert len(r.parts['sharing/who'].columns) == 120
+    assert all(np.isfinite(r.mean['strength/rate'])) and np.isfinite(r.one_fly['strength/rate'])
+
+
+def test_partial_fly_scale_is_a_fixed_point(gen):
+    fl = _partial_flies(gen, seed=2)
+    r = P.partial_reference(fl, rule='fly_scale', breadth_edges=_scaled_edges)
+    assert r.anchor == () and set(r.scales) == {'strength/rate', 'strength/mean'}
+    for q in ('strength/rate', 'strength/mean'):
+        Y = r.parts[q].to_numpy()
+        assert np.nanmean(np.nanmean(Y, axis=0)) == pytest.approx(1.0)
+        # each fly's scaled part, refitted to the other flies' mean, gives one slope common to every fly
+        slopes = []
+        for i in range(len(Y)):
+            others = np.nanmean(np.delete(Y, i, axis=0), axis=0)
+            ok = np.isfinite(Y[i]) & np.isfinite(others)
+            slopes.append(np.sum(Y[i, ok] * others[ok]) / np.sum(Y[i, ok] ** 2))
+        np.testing.assert_allclose(slopes, slopes[0], rtol=1e-7)
+        assert 0.8 < slopes[0] <= 1.0 + 1e-9
+    # a fly whose responses are all twice as strong gets half the scale on the mean part
+    f = fl[0]
+    big = P.Population(f.values * 2, f.responds, name='big')
+    r2 = P.partial_reference([*fl[1:], big], rule='fly_scale', breadth_edges=_scaled_edges)
+    assert r2.scales['strength/mean']['big'] == pytest.approx(r.scales['strength/mean'][f.name] / 2, rel=1e-6)
+    np.testing.assert_allclose(r2.parts['strength/mean'].loc['big'].to_numpy(),
+        r.parts['strength/mean'].loc[f.name].to_numpy(), rtol=1e-6)
+
+
+def test_partial_fly_scale_with_two_flies_converges(gen):
+    fl = _partial_flies(gen, n=2, seed=3)
+    r = P.partial_reference(fl, rule='fly_scale', breadth_edges=_scaled_edges)
+    assert np.isfinite(r.scales['strength/rate']).all()
+
+
+def test_partial_model_reading(gen):
+    fl = _partial_flies(gen, seed=4)
+    m = gen.fly('model')
+    for rule in P.PARTIAL_RULES:
+        r = P.partial_reference(fl, rule=rule, breadth_edges=_scaled_edges)
+        v = P.reference_views(m, r)
+        want = np.mean([P.breadth_counts(m.responds[r.fly_odors[f]], r.fly_breadth_edges[f]).to_numpy()
+            for f in r.flies], axis=0)
+        np.testing.assert_allclose(v['breadth/bins'].to_numpy(), want)
+        raw = m.responds.mean(axis=0)
+        if rule == 'anchor':
+            np.testing.assert_allclose(v['strength/rate'].to_numpy(), (raw / raw[list(ANCHOR)].mean()).to_numpy())
+        else:
+            mu = r.mean['strength/rate'].to_numpy()
+            k = np.sum(raw.to_numpy() * mu) / np.sum(raw.to_numpy() ** 2)
+            np.testing.assert_allclose(v['strength/rate'].to_numpy(), raw.to_numpy() * k)
+        s = P.score(m, r)
+        assert np.isfinite(s.error) and s.error < 2.5 and sum(s.missing.values()) == 0
+        tab = P.wirings_as_flies([m, gen.fly('model2')], r)
+        assert tab.loc['common', 'error'] <= tab.loc['mean', 'error'] + 1e-9
+        assert P.score_many([m], r).iloc[0]['error'] == pytest.approx(s.error)
+        loo = P.leave_one_out(fl, ref=r)
+        assert np.sqrt((loo['part_strength_rate'] ** 2).mean()) == pytest.approx(1.0)
+        fl_floor = P.floor_summary(P.floor(r, n_boot=200))
+        assert fl_floor['error'] < 1
+        half = P.subset_reference(r, r.flies[:4])
+        assert half.partial == rule and list(half.fly_odors) == r.flies[:4]
+        assert np.isfinite(P.score(m, half).error)
+
+
+def test_partial_reference_refuses(gen):
+    fl = _partial_flies(gen, seed=5)
+    with pytest.raises(ValueError, match='unknown'):
+        P.partial_reference(fl, rule='own_mean')
+    with pytest.raises(ValueError, match='anchor odor'):
+        P.partial_reference(fl, rule='anchor', anchor=('o0', 'o5', 'o9', 'o12'))
+    with pytest.raises(ValueError, match='at least two'):
+        P.partial_reference(fl[:1])
+    short = fl[0].values.copy()
+    short[[o for o in ODORS if o not in ANCHOR][:9]] = np.nan
+    odd = P.Population.from_criterion(short, CRIT, name='short')
+    with pytest.raises(ValueError, match='bins differ'):
+        P.partial_reference([*fl, odd], breadth_edges=lambda n: P.APL16_BREADTH_EDGES if n > 8 else (0, 1, 2, 4))
