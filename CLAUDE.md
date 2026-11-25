@@ -267,6 +267,12 @@ Each of these cost real time to diagnose; check them before blaming a script.
     stop` it when the test is over (do not rely on `--rm` plus a timeout inside).
   - Anything else that can grow without bound (a buffered pipe, a log held in memory) runs in a
     shell with `ulimit -v` set, and never in the background without a `timeout`.
+  - Tom's bouldermesh worker runs meshing jobs on hal and atlas whose COLMAP step (InterfaceCOLMAP) takes up to
+    ~150 GB on hal and ~22 GB on atlas. On 2026-11-24 earlyoom killed two of them on hal (18:31, 19:12) and two on
+    atlas (19:01, 19:09), and killed hal's E136 fit (18:29). Run queue lanes with a high OOM score, so that earlyoom
+    takes them first: `systemd-run --user -p OOMScoreAdjust=1000 ...` (or write 1000 to `/proc/<pid>/oom_score_adj`
+    of a running lane). Beside each lane, keep a guard that stops the host's own lanes when available memory falls
+    under about 30 GB on hal.
 - Thread count: importing `pyolfsysm.mb_model` (`al_analysis.mb_model` before 2026-11-12) imports rastermap, which resets OpenMP to all of the machine's cores, so
   olfsysm runs on 48 threads on hal however OMP_NUM_THREADS is set (found by E69's code subagent, 2026-11-10). Set
   OMP_THREAD_LIMIT as well (e.g. `OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16`); the limit holds.
