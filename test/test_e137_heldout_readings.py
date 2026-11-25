@@ -125,3 +125,44 @@ def test_rise():
     assert out['rate_0_over_m2'] == pytest.approx(2.0)
     assert out['mean_0_over_m2'] == pytest.approx(4.0)
     assert out['rate_mix0_over_components'] == pytest.approx(1.0)
+
+
+def _scores(kmix_strength):
+    """A made-up rescore table: the family's eight wirings, their mean and common rows, per panel and reading in its
+    primary units, with the flies' most atypical fly at 1.5."""
+    rows = []
+    for panel in E.MIXTURE_PANELS:
+        for reading in E.READINGS:
+            v = kmix_strength[reading] if panel == 'kmix' else 0.5
+            for g in E.FAMILY_GROUPS:
+                for w in list(E.FAMILY_WIRINGS) + ['mean', 'common']:
+                    rows.append(dict(panel=panel, reading=reading, units=E.PRIMARY_UNITS[reading], noise=True,
+                                     primary=True, group=g, wiring=w, view_strength=v, view_sharing=1.0,
+                                     view_breadth=1.0, error=1.0, loo_max_view_strength=1.5,
+                                     floor_view_strength=0.3))
+    return pd.DataFrame(rows)
+
+
+def _lock():
+    fl = {'a/1': dict(panel='kmix', found=True, reproduction=dict(passed=True)),
+          'b/1': dict(panel='cmix', found=True, reproduction=dict(passed=True))}
+    return dict(flies=fl)
+
+
+def test_classify_and_outcome():
+    far = {r: 2.5 for r in E.READINGS}
+    c = E.classify(_scores(far), _lock())
+    assert c['kmix/fitted']['primary']['readable'] and c['cmix/fitted']['primary']['readable']
+    assert E.outcome(c)['outcomes'] == ['b']
+    mixed = dict(far, components_second_block=0.7)
+    c = E.classify(_scores(mixed), _lock())
+    assert not c['kmix/fitted']['primary']['readable']
+    assert c['kmix/fitted']['primary']['bounds'] == [0.7, 2.5]
+    assert E.outcome(c)['outcomes'] == ['c']
+    near = {r: 1.0 for r in E.READINGS}
+    c = E.classify(_scores(near), _lock())
+    assert E.outcome(c, {'fitted': {'readable': False}})['outcomes'] == ['a', 'd']
+    bad = _lock()
+    bad['flies']['a/1']['reproduction']['passed'] = False
+    c = E.classify(_scores(near), bad)
+    assert 'e' in E.outcome(c)['outcomes'] and not c['kmix/fitted']['primary']['replaces']['first_presentations']

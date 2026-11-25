@@ -37,7 +37,8 @@ Parts (CLI `--part`, one per design item):
   and the two noise groups beside.
 - order (design item 8): for megamat and validation2, the share of the strength unit an odor's place in its block
   carries; for the APL16 recordings, whether Yang's processed tables hold the order (otherwise a question for Yang).
-- classes: the classes the entry fixes beforehand (`classify`), the outcome they point to, provenance.json.
+- classes: the classes the entry fixes beforehand (`classify`), the outcome they point to, summary_strength.csv.
+- figures: position_rates.png and strength_by_reading.png.
 
 The public interface other experiments read (E138's mixture rows; signatures stable from 13bfca9 on):
 - `load_lock()`: the committed lock, per fly its files with their sha256, its stimulus order, its reproduction and
@@ -84,6 +85,7 @@ Usage (from the repository root):
     nice -n 10 ./venv/bin/python -u experiments/E137_heldout_readings.py --part validation2
     nice -n 10 ./venv/bin/python -u experiments/E137_heldout_readings.py --part order
     nice -n 10 ./venv/bin/python -u experiments/E137_heldout_readings.py --part classes
+    nice -n 10 ./venv/bin/python -u experiments/E137_heldout_readings.py --part figures
 """
 from __future__ import annotations
 
@@ -1275,6 +1277,7 @@ def v2_order_trials() -> Tuple[pd.DataFrame, float]:
     from data_prep import stage_population_data as D
     d = D.v2_copy_dir()
     fac = D.soma_factors(('kc_soma', 'validation2', 'wild_type'))
+    drops = D.v2_qc_drops()
     rows = []
     for acq in D.v2_acqs():
         p = xr.open_dataset(d / acq / 'respvec' / 'xrds_peak_amp.nc')
@@ -1283,17 +1286,19 @@ def v2_order_trials() -> Tuple[pd.DataFrame, float]:
         mask = D.v2_mask(p[D.V2_CELL_MASK].values)
         amp = p['Fc'].values[:, mask]
         sd = np.sqrt(np.nanmean(b['Fc'].values[:, mask] ** 2, axis=0))
-        names, _ = D._v2_stims(p['stim'].values)
+        names, stims = D._v2_stims(p['stim'].values)
+        dropped = set(drops[drops.fly == lab].stim)
         occ = p['stim_occ'].values
         ok = np.isfinite(sd) & (sd > 0)
         pos_by = {}
-        for k, nm in enumerate(names):
-            if nm is None:
-                continue
-            pos = pos_by.get(int(occ[k]), 0)
+        for k, (nm, st) in enumerate(zip(names, stims)):
+            pos = pos_by.get(int(occ[k]), 0)          # the place among the acquisition's trials of this repeat
             pos_by[int(occ[k])] = pos + 1
+            if nm is None or st in dropped:
+                continue
             v = amp[k, ok] / sd[ok] * float(fac.get(lab, 1.0))
-            rows.append(pd.DataFrame(dict(fly=lab, cell=np.arange(int(ok.sum())), odor=nm, trial=k, pos=pos, value=v)))
+            rows.append(pd.DataFrame(dict(fly=lab, cell=np.arange(int(ok.sum())), odor=nm, trial=f'{acq}/{k}', pos=pos,
+                                          value=v)))
         p.close()
         b.close()
     return pd.concat(rows, ignore_index=True), float(D.megamat_soma_criterion())
@@ -1312,8 +1317,7 @@ def part_order() -> dict:
         t, crit = fn()
         sh = order_share(t, crit)
         sh.to_csv(out_dir() / f'order_{panel}.csv', index=False)
-        fl = D.load_population('kc_soma', panel)
-        fps, od = F.reading(('kc_soma', panel, 'wild_type'))
+        fps, od = F.reading(('kc_soma', panel, 'wild_type'))     # E134's lock reading (validation2: six flies)
         ref = P.fly_reference(fps, od, D.breadth_bins(len(od)))
         units = {q: float(ref.one_fly[q]) for q in ('strength/rate', 'strength/mean')}
         out[panel] = dict(one_fly_units=units, rms_shift={q: float(sh[sh.part == q].rms_shift.mean())
@@ -1394,10 +1398,42 @@ def outcome(cls: Mapping, v2: Optional[Mapping] = None) -> dict:
     return dict(outcomes=out)
 
 
+def summary_strength(sc: pd.DataFrame, beside: pd.DataFrame, cls: Mapping) -> pd.DataFrame:
+    """One row per mixture panel and reading (its primary units, with the flies' trial noise): the family's strength
+    error as fitted (the wirings' mean, least and largest, and the common error) and held, its sharing, breadth and
+    population error, the flies' floor and most atypical fly on strength, the flat profile, the ORN recordings as the
+    prediction, each beside model's strength error, and the class."""
+    rows = []
+    s = sc[sc.noise & sc.primary]
+    for panel in MIXTURE_PANELS:
+        for reading in READINGS:
+            x = s[(s.panel == panel) & (s.reading == reading)]
+            f = x[x.group == 'fitted']
+            fw = f[f.wiring.isin(FAMILY_WIRINGS)].view_strength
+            m = f[f.wiring == 'mean'].iloc[0]
+            b = beside[(beside.panel == panel) & (beside.reading == reading) & beside.primary]
+            rec = dict(panel=panel, reading=reading, units=PRIMARY_UNITS[reading],
+                       family_strength=float(m.view_strength), family_strength_min=float(fw.min()),
+                       family_strength_max=float(fw.max()),
+                       family_strength_common=float(f[f.wiring == 'common'].view_strength.iloc[0]),
+                       held_strength=float(x[(x.group == 'held') & (x.wiring == 'mean')].view_strength.iloc[0]),
+                       family_sharing=float(m.view_sharing), family_breadth=float(m.view_breadth),
+                       family_error=float(m.error), flies_floor_strength=float(m.floor_view_strength),
+                       flies_atypical_strength=float(m.loo_max_view_strength),
+                       flat_strength=float(b[b.kind == 'flat'].view_strength.iloc[0]),
+                       orn_strength=float(b[b.kind == 'orn_recordings'].view_strength.iloc[0]))
+            for mdl in BESIDE_MODELS:
+                y = x[x.group == mdl]
+                rec[f'{mdl}_strength'] = float(y.view_strength.iloc[0]) if len(y) else np.nan
+            rec['class_fitted'] = cls[f'{panel}/fitted']['primary']['classes'].get(reading)
+            rec['class_held'] = cls[f'{panel}/held']['primary']['classes'].get(reading)
+            rows.append(rec)
+    return pd.DataFrame(rows)
+
+
 def part_classes() -> dict:
-    """classes.json (the mixture panels' classes, validation2's where its scores exist, the outcome) and
-    provenance.json (`H.code_commits()`, the lock's sha256, the E134 lock's)."""
-    from kcq import harness as H
+    """classes.json (the mixture panels' classes, validation2's where its scores exist, the outcome),
+    summary_strength.csv and provenance.json (`H.code_commits()`, the lock's sha256)."""
     lock = load_lock()
     sc = pd.read_csv(out_dir() / 'rescore_scores.csv')
     cls = classify(sc, lock)
@@ -1405,8 +1441,94 @@ def part_classes() -> dict:
     v2 = json.loads(v2p.read_text()) if v2p.exists() else None
     res = dict(mixtures=cls, validation2=v2, outcome=outcome(cls, v2), time=_now(), host=_host())
     _write_json(out_dir() / 'classes.json', res)
+    summary_strength(sc, pd.read_csv(out_dir() / 'rescore_beside.csv'), cls).to_csv(
+        out_dir() / 'summary_strength.csv', index=False)
     provenance('classes', lock=lock)
     return res
+
+
+# the figures' colors (the dataviz skill's reference categorical slots, in fixed order) and ink
+KIND_COLORS = {'component': '#2a78d6', 'mixture': '#eb6834', 'probe': '#1baf7a', 'other': '#6250d6',
+               'solvent': '#8a8984'}
+INK, INK_2, GRID = '#0b0b0b', '#52514e', '#e4e3df'
+
+
+def part_figures() -> None:
+    """position_rates.png (each fly's single-trial response rate along its session, by kind of stimulus, in the noise
+    units) and strength_by_reading.png (the family's strength error at the KC somata of each mixture panel under each
+    reading, its wirings, the flat profile, the ORN recordings, the flies' floor and most atypical fly)."""
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    plt.rcParams.update({'font.size': 9, 'axes.edgecolor': INK_2, 'axes.labelcolor': INK, 'xtick.color': INK_2,
+                         'ytick.color': INK_2, 'axes.spines.top': False, 'axes.spines.right': False})
+    T = pd.read_csv(out_dir() / 'position_trials.csv')
+    T = T[T.units == 'noise'].assign(kind=lambda d: [stim_kind(x) for x in d.label])
+    flies = list(dict.fromkeys(T.sort_values(['panel', 'fly'], ascending=[False, True]).fly))
+    nc = 4
+    nr = int(np.ceil(len(flies) / nc))
+    fig, axs = plt.subplots(nr, nc, figsize=(3.1 * nc, 2.3 * nr), sharey=True, squeeze=False)
+    for ax, fly in zip(axs.flat, flies):
+        t = T[T.fly == fly]
+        for kind, col in KIND_COLORS.items():
+            k = t[t.kind == kind]
+            if len(k):
+                ax.plot(k.trial, k.rate, 'o', ms=4, color=col, label=kind, mec='white', mew=0.6)
+        ax.set_title(f"{fly} ({'kiwi' if t.panel.iloc[0] == 'kmix' else 'control'} mixtures)", fontsize=8.5,
+                     color=INK)
+        ax.grid(axis='y', color=GRID, lw=0.6)
+        ax.set_xlabel('trial in the session', color=INK_2)
+    for ax in axs.flat[len(flies):]:
+        ax.axis('off')
+    for ax in axs[:, 0]:
+        ax.set_ylabel('response rate,\nsingle trial')
+    h, lab = axs.flat[0].get_legend_handles_labels()
+    for ax in axs.flat[1:len(flies)]:
+        for hh, ll in zip(*ax.get_legend_handles_labels()):
+            if ll not in lab:
+                h.append(hh)
+                lab.append(ll)
+    fig.legend(h, lab, loc='lower right', ncol=1, frameon=False, bbox_to_anchor=(0.98, 0.04))
+    fig.suptitle("The mixture flies' KC somata along the session (each cell's single-trial response above megamat's "
+                 'soma level, baseline-noise units)', fontsize=10, color=INK)
+    fig.tight_layout(rect=(0, 0, 1, 0.96))
+    fig.savefig(out_dir() / 'position_rates.png', dpi=150)
+    plt.close(fig)
+
+    S = pd.read_csv(out_dir() / 'summary_strength.csv')
+    sc = pd.read_csv(out_dir() / 'rescore_scores.csv')
+    sc = sc[sc.noise & sc.primary & (sc.group == 'fitted') & sc.wiring.isin(FAMILY_WIRINGS)]
+    names = {'as_uploaded': 'as uploaded\n(session z)', 'first_presentations': 'first\npresentations',
+             'components_first_block': 'components,\nfirst block', 'components_second_block': 'components,\nsecond block',
+             'components_both_blocks': 'components,\nboth blocks'}
+    fig, axs = plt.subplots(1, 2, figsize=(10.5, 3.8), sharey=True)
+    for ax, panel in zip(axs, MIXTURE_PANELS):
+        s = S[S.panel == panel].set_index('reading').reindex(list(READINGS))
+        x = np.arange(len(READINGS))
+        for i, r in enumerate(READINGS):
+            w = sc[(sc.panel == panel) & (sc.reading == r)].view_strength
+            ax.plot(np.full(len(w), i) - 0.12, w, 'o', ms=3.5, color='#9fc3ee', mec='white', mew=0.4,
+                    label='the family, each wiring' if i == 0 else None)
+        ax.plot(x - 0.12, s.family_strength, 'o', ms=8, color='#2a78d6', mec='white', mew=1.2,
+                label="the family, wirings' mean")
+        ax.plot(x + 0.12, s.flat_strength, 'D', ms=6, color='#8a8984', mec='white', mew=1, label='flat profile')
+        ax.plot(x + 0.24, s.orn_strength, 's', ms=6, color='#1baf7a', mec='white', mew=1,
+                label='ORN recordings as the prediction')
+        ax.plot(x, s.flies_atypical_strength, '_', ms=22, mew=2, color='#eb6834', label='most atypical fly')
+        ax.plot(x, s.flies_floor_strength, '_', ms=22, mew=2, color=INK_2, label="the flies' floor")
+        ax.axhline(FAR_ERROR, color=INK_2, lw=0.8, ls=':')
+        ax.text(-0.45, FAR_ERROR + 0.04, 'far', ha='left', va='bottom', color=INK_2, fontsize=8)
+        ax.set_xticks(x, [names[r] for r in READINGS], fontsize=8)
+        ax.set_title(f"KC somata, {'kiwi' if panel == 'kmix' else 'control'} mixtures", color=INK)
+        ax.grid(axis='y', color=GRID, lw=0.6)
+        ax.set_ylim(0, max(3.0, float(np.nanmax(S.family_strength_max)) + 0.2))
+    axs[0].set_ylabel('strength by odor,\none-fly units')
+    axs[1].legend(loc='upper right', frameon=False, fontsize=7.5)
+    fig.suptitle("The family's error on strength by odor under each reading of the flies (with the flies' trial "
+                 'noise on the model)', fontsize=10, color=INK)
+    fig.tight_layout(rect=(0, 0, 1, 0.94))
+    fig.savefig(out_dir() / 'strength_by_reading.png', dpi=150)
+    plt.close(fig)
 
 
 def provenance(part: str, lock: Optional[Mapping] = None, **extra) -> None:
@@ -1423,10 +1545,10 @@ def provenance(part: str, lock: Optional[Mapping] = None, **extra) -> None:
 def main(argv: Optional[Sequence[str]] = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     ap.add_argument('--part', required=True, choices=('lock', 'position', 'readings', 'rescore', 'rise',
-                                                      'validation2', 'order', 'classes'))
+                                                      'validation2', 'order', 'classes', 'figures'))
     a = ap.parse_args(argv)
     fn = dict(lock=part_lock, position=part_position, readings=part_readings, rescore=part_rescore, rise=part_rise,
-              validation2=part_validation2, order=part_order, classes=part_classes)[a.part]
+              validation2=part_validation2, order=part_order, classes=part_classes, figures=part_figures)[a.part]
     fn()
     if a.part != 'classes':
         provenance(a.part)
