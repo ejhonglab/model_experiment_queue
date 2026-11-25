@@ -76,7 +76,9 @@ The classes read here (fixed beforehand, in the lock's 'rules'):
   fitted, the wirings' mean views) carry more than half of the squared strength error on both halves of the flies;
 - (d): the male CNS gives those glomeruli (the feeders of the panel's two largest odors) more boutons or claws: on both
   male calyces their summed share of the calyx's boutons, or of its claws, is above the hemibrain's. Read on megamat as
-  the entry says, and given for every panel beside.
+  the entry says, and given for every panel beside. The locked feeders' rule gives 8 to 15 glomeruli per odor (the
+  ORN input is broad), so a reading on each odor's D_TOP_BESIDE largest inputs (the model's and the ORN recordings')
+  goes beside it in classes.json ('d_beside'), added after the locked sets were seen and deciding nothing.
 (a) and (b) need item 6 and are not read.
 
 Concentrations: megamat at 10^-3 on both sides; the APL16 entries involve paa, euc and -aPine, whose model input is the
@@ -155,6 +157,8 @@ FEEDER_SHARE = 2.0 / 3.0
 # squared view error, at most CARRY_MAX per reading of the family
 CARRY_MIN_SHARE = 0.10
 CARRY_MAX = 5
+# beside (d), not in the lock (added after the locked feeders were seen; decides nothing): each odor's largest inputs
+D_TOP_BESIDE = 3
 # item 6 (held): random classes of the same size
 N_RANDOM_CLASSES = 1000
 REGRESSION_SEED = 0
@@ -967,7 +971,7 @@ def read_panel(spec: 'PanelSpec', lock: Mapping, halves: bool = False,
     sides = sides_of(spec, halves)
     ents, splits = [], []
     info = dict(panel=spec.panel, input_panel=spec.input_panel,
-                sides=[dict(reading=s.reading, flies=s.flies, **s.info) for s in sides], groups={})
+                sides=[dict(reading=s.reading, set=s.flies, **s.info) for s in sides], groups={})
     for g in (groups or spec.groups):
         if g not in spec.groups:
             continue
@@ -1267,7 +1271,7 @@ def part_score() -> dict:
     hv = pd.read_csv(out_dir() / 'halves.csv')
     fd = pd.read_csv(out_dir() / 'feeders.csv')
     counts = all_counts()
-    out = dict(concentrated={}, d={}, mixtures=active_specs()[1], not_read=lock['rules']['not_read'],
+    out = dict(concentrated={}, d={}, d_beside={}, mixtures=active_specs()[1], not_read=lock['rules']['not_read'],
                classes_lock_sha256=lock['sha256'], main_reading=MAIN_READING)
     a_all = ent[(ent.flies == 'all') & ent.group.isin(FAMILY_GROUPS)]
     for (panel, cond, g, rd), a in a_all.groupby(['panel', 'condition', 'group', 'reading'], sort=False):
@@ -1283,6 +1287,15 @@ def part_score() -> dict:
         out['d'][key] = dict(d_reading(list(dict.fromkeys(gl)), counts), odors=c['odors'],
                              main=c['main'], feeders_complete=bool(set(c['odors']) <= set(fd[(fd.panel == panel)
                              & (fd.condition == cond)].odor)))
+        # beside, added after the locked rule's sets were seen (they hold 8 to 15 glomeruli per odor, the input being
+        # broad), deciding nothing: each odor's D_TOP_BESIDE largest inputs, from the model's input and from the ORN
+        # recordings
+        for src in ('model_input', 'orn_flies'):
+            x = fd[(fd.panel == panel) & (fd.condition == cond) & (fd.source == src) & fd.odor.isin(c['odors'])
+                   & (fd['rank'] <= D_TOP_BESIDE)]
+            out['d_beside'][f'{key}|{src}|top{D_TOP_BESIDE}'] = dict(
+                d_reading(list(dict.fromkeys(x.glomerulus)), counts), odors=c['odors'], main=c['main'],
+                added_after_seeing_the_locked_sets=True, decides=False)
     out['d_megamat'] = out['d'].get('megamat|on|family_fitted|e134', {}).get('cls')
     _write_json(out_dir() / 'classes.json', out)
     write_tables(out)
@@ -1290,18 +1303,81 @@ def part_score() -> dict:
     return out
 
 
-def write_tables(classes: Mapping) -> None:
-    """tables.md: the summary per panel (the family's 'common' and 'mean' rows, the beside models), the classes."""
+def write_tables(classes: Mapping, n_top: int = 4) -> None:
+    """tables.md: per panel (the family as fitted, the main reading) the largest odors with their shares on all flies
+    and on each half and the flies' range; the strength errors of every group with their largest odor; the strength
+    split of the family; megamat along the stages for the largest odors; the feeders of the odors that carry each
+    panel's error; the classes (classes.json)."""
     d = out_dir()
-    L = ['# E138: the odors that carry the strength error (KC somata, default reading)', '']
-    s = pd.read_csv(d / 'entries_summary.csv')
-    keep = s[(s.row.isin(['common', 'mean'])) | ((~s.group.isin(FAMILY_GROUPS)) & (s.row != 'mean'))]
-    L += ['| panel | condition | group | reading | row | strength error | first odor | share | second | top-2 share | '
-          'without the first |', '|---|---|---|---|---|---:|---|---:|---|---:|---:|']
+    ent, hv = pd.read_csv(d / 'entries.csv'), pd.read_csv(d / 'halves.csv')
+    s, sp = pd.read_csv(d / 'entries_summary.csv'), pd.read_csv(d / 'entries_split.csv')
+    st = pd.read_csv(d / 'stages.csv') if (d / 'stages.csv').exists() else pd.DataFrame()
+    fd = pd.read_csv(d / 'feeders.csv') if (d / 'feeders.csv').exists() else pd.DataFrame()
+
+    def main(df):
+        return df[np.array([MAIN_READING.get(p) == r for p, r in zip(df.panel, df.reading)], dtype=bool)]
+
+    L = ['# E138: the odors that carry the strength error (KC somata, default reading)', '',
+         "Shares are of the strength view's squared error (row 'common', the wirings' mean views); 'rate' and 'mean' "
+         "the two parts' own shares; the halves are E136's seeded split, each read on its own flies. Mixtures: "
+         f"{classes.get('mixtures')}.", '',
+         '## The largest odors per panel (the family as fitted)', '',
+         '| panel | condition | strength error (all / fit half / held half) | odor | share rate / mean / view | view share, '
+         'fit / held half | model rate entry | flies rate entry (range) |', '|---|---|---|---|---|---|---:|---|']
+    e = main(ent[(ent.row == 'common') & (ent.group == 'family_fitted') & (ent.flies == 'all')])
+    for (panel, cond), x in e.groupby(['panel', 'condition'], sort=False):
+        hh = main(hv[(hv.row == 'common') & (hv.group == 'family_fitted') & (hv.panel == panel)
+                     & (hv.condition == cond)])
+        errs = [x.view_error.iloc[0]] + [hh[hh.flies == h].view_error.iloc[0] if (hh.flies == h).any() else np.nan
+                                         for h in HALVES]
+        for i, r in enumerate(x.sort_values('view_share', ascending=False, kind='mergesort').head(n_top).itertuples()):
+            sh = [hh[(hh.flies == h) & (hh.odor == r.odor)].view_share for h in HALVES]
+            sh = [float(v.iloc[0]) if len(v) else np.nan for v in sh]
+            L.append(f"| {panel if i == 0 else ''} | {cond if i == 0 else ''} | "
+                     f"{' / '.join(f'{v:.3f}' for v in errs) if i == 0 else ''} | {r.odor} | {r.rate_share:.2f} / "
+                     f"{r.mean_share:.2f} / {r.view_share:.2f} | {sh[0]:.2f} / {sh[1]:.2f} | {r.rate_model:.2f} | "
+                     f"{r.rate_flies:.2f} ({r.rate_flies_min:.2f} to {r.rate_flies_max:.2f}) |")
+    L += ['', '## The strength errors of every group (all flies)', '',
+          '| panel | condition | group | reading | row | strength error | first odor | share | top-2 share | '
+          'without the first |', '|---|---|---|---|---|---:|---|---:|---:|---:|']
+    keep = s[(s.flies == 'all') & ((s.row.isin(['common', 'mean'])) | ((~s.group.isin(FAMILY_GROUPS)) & (s.row != 'mean')))]
     for r in keep.itertuples():
         L.append(f'| {r.panel} | {r.condition} | {r.group} | {r.reading} | {r.row} | {r.view_error:.3f} | '
-                 f'{r.first_odor} | {r.first_share:.2f} | {r.second_odor} | {r.top2_share:.2f} | '
+                 f'{r.first_odor} | {r.first_share:.2f} | {r.top2_share:.2f} | '
                  f"{getattr(r, 'view_error_without_first', np.nan):.3f} |")
+    L += ['', "## The strength split (level, spread, order in one-fly units; the family, row 'common', all flies)", '',
+          '| panel | condition | group | reading | rate: level / spread / order, sd ratio, r | '
+          'mean: level / spread / order, sd ratio, r |', '|---|---|---|---|---|---|']
+    for r in sp[(sp.row == 'common') & (sp.flies == 'all') & sp.group.isin(FAMILY_GROUPS)].itertuples():
+        L.append(f'| {r.panel} | {r.condition} | {r.group} | {r.reading} | {r.strength_rate_level:.3f} / '
+                 f'{r.strength_rate_spread:.3f} / {r.strength_rate_order:.3f}, {r.strength_rate_sd_ratio:.2f}, '
+                 f'{r.strength_rate_r:.2f} | {r.strength_mean_level:.3f} / {r.strength_mean_spread:.3f} / '
+                 f'{r.strength_mean_order:.3f}, {r.strength_mean_sd_ratio:.2f}, {r.strength_mean_r:.2f} |')
+    if len(st):
+        top = list(e[e.panel == 'megamat'].sort_values('view_share', ascending=False).odor[:n_top])
+        L += ['', '## Megamat along the stages (rate entry: flies mean (range) / the family as fitted, held; row '
+              "'common')", '', '| odor | ' + ' | '.join(STAGES_MEGAMAT) + ' |',
+              '|---|' + '---|' * len(STAGES_MEGAMAT)]
+        for o in top:
+            cells = []
+            for stg in STAGES_MEGAMAT:
+                f = st[(st.stage == stg) & (st.odor == o) & (st.row == 'common')]
+                a, b = f[f.group == 'family_fitted'], f[f.group == 'family_held']
+                cells.append('-' if not len(a) else f'{a.rate_flies.iloc[0]:.2f} ({a.rate_flies_min.iloc[0]:.2f} to '
+                             f'{a.rate_flies_max.iloc[0]:.2f}) / {a.rate_model.iloc[0]:.2f}, '
+                             f'{b.rate_model.iloc[0]:.2f}' if len(b) else '-')
+            L.append(f'| {o} | ' + ' | '.join(cells) + ' |')
+    if len(fd):
+        L += ['', "## The feeders of the odors that carry each panel's error (the model's input)", '',
+              '| panel | condition | odor | glomerulus | input | share | in 28 | IR | few (b / c) | boutons h / L / R | '
+              'claws h / L / R |', '|---|---|---|---|---:|---:|---|---|---|---|---|']
+        for r in fd[fd.source == 'model_input'].itertuples():
+            g = r._asdict()
+            L.append(f"| {r.panel} | {r.condition} | {r.odor} | {r.glomerulus} | {r.input:.1f} | {r.share:.3f} | "
+                     f"{'y' if r.in_dendrite28 else 'n'} | {'y' if r.ir else 'n'} | "
+                     f"{'y' if r.few_boutons else 'n'} / {'y' if r.few_claws else 'n'} | "
+                     + ' / '.join(str(int(fd.loc[r.Index, f'{c}__n_boutons'])) for c in CALYCES) + ' | '
+                     + ' / '.join(str(int(fd.loc[r.Index, f'{c}__n_claws'])) for c in CALYCES) + ' |')
     L += ['', '## Classes', '', '```', json.dumps(classes, indent=1, default=_json_default), '```', '']
     (d / 'tables.md').write_text('\n'.join(L) + '\n')
 
