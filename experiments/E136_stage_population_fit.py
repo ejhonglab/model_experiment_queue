@@ -59,7 +59,8 @@ Parts (CLI `--part`):
   counts and readings exactly, and each wiring's population errors reproduce E134's score_scores.csv where it exists.
 - claw_identity: A2's divided claw drive against olfsysm's claw_sims; claw_thr_check: A3's in-place threshold against a
   fresh build at CLAW_THR_CHECK_HZ.
-- fit: one arm's fit (`--arm`, CONTROL for the control), resumable from its history.
+- fit: one arm's fit (`--arm`, CONTROL for the control), resumable from its history (on any host: `archive` copies
+  the evaluations the earlier host saved, `--evals`, by default its best, so that the fit's best can be archived).
 - read: the reads at the fitted parameters, held exactly at each panel's operating point (`planned_reads`, lanes and
   claims as E134's step 3): megamat on T against the held-out half; validation2 (the lock's 0.0504) and the mixtures
   (E134's held mixture rate) with the wiring's own ratio for APL off; the APL16 input at the wiring's own fit's two
@@ -885,7 +886,9 @@ def fit_dirs(arm: str) -> List[Path]:
 
 def archive_best(arm: str, i: int) -> List[Path]:
     """Copies a fit's best evaluation (every S wiring's files, '<arm>_e<i>_<wiring>_*') from this host's
-    outputs/.../fit_<arm>/ to the archive's fit_<arm>/, so the score can read it on any host."""
+    outputs/.../fit_<arm>/ to the archive's fit_<arm>/, so the score can read it on any host. A wiring whose evaluation
+    this host did not run (a fit resumed from another host's history) is taken as it is if the archive already holds it
+    complete (its run.json), as that host's `--part archive` copies it."""
     import shutil
     src, dst = local_dir(f'fit_{arm}'), archive_dir() / f'fit_{arm}'
     dst.mkdir(parents=True, exist_ok=True)
@@ -893,13 +896,34 @@ def archive_best(arm: str, i: int) -> List[Path]:
     for w in S_WIRINGS:
         files = sorted(src.glob(f'{arm}_e{i}_{w}_*'))
         if not any(f.name.endswith('_run.json') for f in files):
-            raise FileNotFoundError(f'{arm} eval {i} {w}: not saved under {src}')
+            have = sorted(dst.glob(f'{arm}_e{i}_{w}_*'))
+            if any(f.name.endswith('_run.json') for f in have):
+                out += have
+                continue
+            raise FileNotFoundError(f'{arm} eval {i} {w}: not saved under {src} nor in the archive {dst} (run '
+                                    f'`--part archive --arm {arm} --evals {i}` on the host that ran it)')
         for f in sorted(files, key=lambda f: f.name.endswith('_run.json')):   # the run.json last, as it says complete
             tmp = dst / f'.{f.name}.{_host()}.{os.getpid()}.tmp'
             shutil.copyfile(f, tmp)
             os.replace(tmp, dst / f.name)
             out.append(dst / f.name)
     return out
+
+
+def archive_evals(arm: str, evals: Optional[Sequence[int]] = None) -> List[int]:
+    """Copies evaluations this host saved for a fit to the archive (`archive_best`), so that a fit resumed on another
+    host from the history can archive its best; `evals` by default the best of the evaluations this host ran (by the
+    history's 'host'). Returns the evaluations copied."""
+    hist = pd.read_csv(out_dir() / f'fit_history_{arm}.csv', float_precision='round_trip')
+    if evals is None:
+        mine = hist[hist['host'].astype(str) == _host()]
+        if mine.empty:
+            raise ValueError(f'{arm}: no evaluation in the history was run on {_host()}')
+        evals = [int(mine.loc[mine['loss_sim'].idxmin(), 'eval'])]
+    for i in evals:
+        archive_best(arm, int(i))
+        print(f'E136 {arm}: eval {int(i)} archived', flush=True)
+    return [int(i) for i in evals]
 
 
 def save_eval(arm: str, i, runs: Mapping[str, 'R.SavedRun']) -> List[Path]:
@@ -1936,8 +1960,9 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('--part', required=True,
                     choices=('identity', 'claw_identity', 'claw_thr_check', 'fit', 'determined', 'rescore', 'read',
-                             'score'))
+                             'score', 'archive'))
     ap.add_argument('--arm', choices=tuple(ARMS) + (CONTROL, FAMILY))
+    ap.add_argument('--evals', nargs='+', type=int, help="--part archive: the evaluations (default this host's best)")
     ap.add_argument('--maxfev', type=int)
     ap.add_argument('--wirings', nargs='+', choices=WIRINGS)
     ap.add_argument('--lane', default='1')
@@ -1976,6 +2001,10 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         print(rescore(a.arm).groupby(['measure', 'half']).stage_error.describe().to_string())
     elif a.part == 'score':
         print(json.dumps(part_score(None if a.arm is None else [a.arm]), indent=1, default=str))
+    elif a.part == 'archive':
+        if a.arm in (None, FAMILY):
+            raise SystemExit('--part archive needs --arm')
+        archive_evals(a.arm, a.evals)
 
 
 if __name__ == '__main__':

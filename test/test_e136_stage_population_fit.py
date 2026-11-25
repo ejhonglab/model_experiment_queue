@@ -362,6 +362,39 @@ def test_archive_best(monkeypatch, tmp_path):
         F.archive_best('A0', 9)
 
 
+def test_archive_across_hosts(monkeypatch, tmp_path):
+    """A fit resumed on another host: the first host archives its best (`archive_evals`), and the second's
+    `archive_best` takes the archived evaluation it never ran."""
+    loc, arch, res = tmp_path / 'local', tmp_path / 'arch', tmp_path / 'res'
+    res.mkdir()
+    monkeypatch.setattr(F, 'local_dir', lambda part='': (loc / part).mkdir(parents=True, exist_ok=True) or loc / part)
+    monkeypatch.setattr(F, 'archive_dir', lambda: arch)
+    monkeypatch.setattr(F, 'out_dir', lambda: res)
+    pd.DataFrame(dict(eval=[0, 1, 2, 3], loss_sim=[0.97, 0.95, 0.96, 0.90],
+                      host=['first', 'first', 'first', 'second'])).to_csv(res / 'fit_history_A3.csv', index=False)
+    (loc / 'fit_A3').mkdir(parents=True)
+    for i in (0, 1, 2):
+        for w in F.S_WIRINGS:
+            for suf in ('on_spike_counts.parquet', 'run.json'):
+                (loc / 'fit_A3' / f'A3_e{i}_{w}_{suf}').write_text(f'{i}{w}')
+    monkeypatch.setattr(F, '_host', lambda: 'third')
+    with pytest.raises(ValueError):
+        F.archive_evals('A3')                       # 'third' ran none
+    monkeypatch.setattr(F, '_host', lambda: 'second')
+    with pytest.raises(FileNotFoundError):
+        F.archive_evals('A3')                       # 'second' ran eval 3, whose files are not here
+    monkeypatch.setattr(F, '_host', lambda: 'first')
+    assert F.archive_evals('A3') == [1]             # the best of the first host's evaluations
+    assert sorted(p.name for p in (arch / 'fit_A3').iterdir()) == sorted(
+        f'A3_e1_{w}_{suf}' for w in F.S_WIRINGS for suf in ('on_spike_counts.parquet', 'run.json'))
+    for p in list((loc / 'fit_A3').iterdir()):      # the second host has none of the first's files
+        p.unlink()
+    out = F.archive_best('A3', 1)
+    assert len(out) == 8 and (arch / 'fit_A3' / 'A3_e1_real_run.json').read_text() == '1real'
+    with pytest.raises(FileNotFoundError, match='--part archive'):
+        F.archive_best('A3', 2)
+
+
 def test_guard_on_the_views_beside():
     stages = ('kc_claw', 'kc_soma')
     fam = {w: 1.0 for w in F.WIRINGS}
