@@ -67,7 +67,7 @@ import dataclasses
 import itertools
 import math
 from dataclasses import dataclass, field
-from typing import Dict, List, Mapping, Optional, Sequence, Tuple, Union
+from typing import Callable, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -93,6 +93,11 @@ N_SPLITS = 200
 ENERGY_MAX_UNITS = 2000
 SEED = 0
 PAIR_SEP = '|'
+# the rules for flies given part of a panel (E137, design item 7; validation2's twenty KC flies): `partial_reference`
+PARTIAL_RULES: Tuple[str, ...] = ('anchor', 'fly_scale')
+PARTIAL_BIN_PREFIX = 'bin'
+SCALE_MAX_ITER = 500
+SCALE_TOL = 1e-10
 
 BinSpec = Sequence[Union[int, Tuple[int, int]]]
 
@@ -301,6 +306,12 @@ class FlyReference:
         flies: the flies' names, in row order.
         odors: the odors read.
         breadth_edges: the breadth bins.
+        partial: None for flies read on the same odors (`fly_reference`); for flies each read on the odors it was given
+            (`partial_reference`), the rule its strength parts follow ('anchor' or 'fly_scale').
+        fly_odors: per fly (a partial reference only), the odors of `odors` it was given, in `odors`' order.
+        fly_breadth_edges: per fly (a partial reference only), its breadth bins, scaled to the odors it was given.
+        anchor: the 'anchor' rule's odors, every fly's strength parts being multiples of their mean over these.
+        scales: the 'fly_scale' rule's scales, per strength part a Series over the flies.
     """
     parts: Dict[str, pd.DataFrame]
     mean: Dict[str, pd.Series]
@@ -308,6 +319,11 @@ class FlyReference:
     flies: List[str]
     odors: List[str]
     breadth_edges: Tuple = APL16_BREADTH_EDGES
+    partial: Optional[str] = None
+    fly_odors: Dict[str, List[str]] = field(default_factory=dict)
+    fly_breadth_edges: Dict[str, Tuple] = field(default_factory=dict)
+    anchor: Tuple[str, ...] = ()
+    scales: Dict[str, pd.Series] = field(default_factory=dict)
 
 
 def _loo_diffs(A: np.ndarray) -> np.ndarray:
@@ -367,6 +383,48 @@ def fly_reference(flies: Sequence[Population], odors: Optional[Sequence[str]] = 
         cols = list(dict.fromkeys(itertools.chain.from_iterable(v[p].index for v in views)))
         table[p] = pd.DataFrame([v[p].reindex(cols).to_numpy(dtype=float) for v in views], index=names, columns=cols)
     return _reference_from_parts(table, names, odors, breadth_edges)
+
+
+def partial_reference(flies: Sequence[Population], rule: str = 'anchor', odors: Optional[Sequence[str]] = None,
+        anchor: Optional[Sequence[str]] = None,
+        breadth_edges: Union[BinSpec, Callable[[int], BinSpec]] = APL16_BREADTH_EDGES,
+        parts: Optional[Sequence[str]] = None) -> FlyReference:
+    """Builds the flies' reference where each fly was given part of the panel (validation2's KC flies; E137, design
+    item 7): each fly's parts are read on the odors it was given, and entries it was not given are NaN, so the flies'
+    mean part and one-fly unit at an entry are over the flies that have it.
+
+    By part:
+    - strength (`rule`): 'anchor' reads each fly's per-odor response rate and mean response as multiples of their mean
+      over the `anchor` odors (which every fly was given), not over the fly's own odors; 'fly_scale' gives each fly
+      one scale per strength part, fitted by least squares to the other flies' mean part over the odors it was given
+      (iterated to a fixed point, the scales then set so that the flies' mean part averages 1 over the odors read);
+    - sharing and the matrix: each fly's pairs (or glomerulus-odor entries) among the odors it was given;
+    - breadth: each fly binned on the odors it was given, in bins scaled to their number (`breadth_edges` called with
+      it), the bins labelled by position ('bin0', 'bin1', ...), so every fly must have as many bins.
+    A model is read as these flies are by `reference_views` (strength by the same rule; breadth as the mean over the
+    flies of its breadth on each fly's odors, in that fly's bins), which `score`, `score_many` and `wirings_as_flies`
+    use. `floor` and `leave_one_out` resample or leave out the flies' parts as built, so a 'fly_scale' reference's
+    scales are not refitted per draw.
+
+    Args:
+        flies: one population per fly; NaN columns mark the odors a fly was not given.
+        rule: the strength rule, one of `PARTIAL_RULES`.
+        odors: the odors to read (default every odor at least one fly was given, in the flies' column order).
+        anchor: the 'anchor' rule's odors (default the odors of `odors` every fly was given).
+        breadth_edges: the breadth bins, one spec for every fly, or a function of the number of odors a fly was given
+            that returns its bins (data_prep/stage_population_data.py's `breadth_bins`).
+        parts: the parts to read (default every part all flies allow).
+    """
+    raise NotImplementedError
+
+
+def reference_views(pop: Population, ref: FlyReference) -> Dict[str, pd.Series]:
+    """A model population's parts read as `ref` reads its flies: `population_views` on `ref.odors` for a reference
+    of flies given the same odors; for a partial reference (`partial_reference`), strength by its rule (as multiples
+    of the model's mean over the anchor odors, or with one scale fitted to the flies' mean part), sharing and the
+    matrix on `ref.odors`, and breadth as the mean over `ref`'s flies of the model's breadth on each fly's odors, in
+    that fly's bins."""
+    raise NotImplementedError
 
 
 def subset_reference(ref: FlyReference, flies: Sequence[Union[int, str]], keep_units: bool = False) -> FlyReference:
