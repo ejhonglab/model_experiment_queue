@@ -90,6 +90,8 @@ PARAMS_TABLES = {
     'E120_bouton_stage_measured': ('variants.csv',),
     # E134: one row per saved step-3 run; its *_summary.csv tables (step 1's flies) are readings
     'E134_population_baseline': ('variants.csv',),
+    # E135: one row per saved step-2 run; its score tables are readings
+    'E135_antennal_lobe_dendrites': ('variants.csv',),
 }
 
 # experiments whose step folders repeat their files' names: per folder pattern (fnmatch on the file's folder under

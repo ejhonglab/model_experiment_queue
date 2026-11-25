@@ -193,7 +193,7 @@ Usage (from the repository root, as modules, so that the checkout's kcq is the o
         [--lane <host>[-<n>]] [--reverse]
     OMP_NUM_THREADS=1 OMP_THREAD_LIMIT=1 OPENBLAS_NUM_THREADS=1 nice -n 10 ./venv/bin/python -u \\
         -m experiments.E135_antennal_lobe_dendrites --part score [--jobs <n>]
-    ./venv/bin/python -u -m experiments.E135_antennal_lobe_dendrites --part commands
+    ./venv/bin/python -u -m experiments.E135_antennal_lobe_dendrites --part commands|variants
 """
 from __future__ import annotations
 
@@ -3621,6 +3621,68 @@ def runs2_table(root: Optional[Path] = None) -> pd.DataFrame:
     return pd.concat(fs, ignore_index=True, sort=False).drop_duplicates('tag', keep='last').reset_index(drop=True)
 
 
+# what each step-2 arm is, for the archive's params.csv (`write_variants`)
+ARM_KINDS: Dict[str, str] = {
+    'R1': "R1, the global parameters fitted to the PN dendrites (step 1), its table of PN rates set by route 1",
+    'rung': "the highest kept rung of step 1, its table of PN rates set by route 1",
+    'rung_glom_perm': "the highest kept rung with its terms' glomerulus labels permuted, set by route 1",
+    'imposed': "the recorded PN dendrites (fly mean, the lock's noise units) imposed rank for rank on the model's rates, "
+               "route 1",
+    'imposed_glom_perm': "the recorded PN dendrites imposed, glomerulus labels permuted, route 1",
+    'imposed_odor_perm': "the recorded PN dendrites imposed, odor labels permuted, route 1",
+    'imposed_route2_repeat': "the recorded PN dendrites imposed by route 2 (an ORN input solved for the table)",
+}
+VARIANT_COLUMNS: Tuple[str, ...] = (
+    'fixed_thr', 'wAPLKC_scale', 'wKCAPL_scale', 'wAPLPN_scale', 'wPNAPL_scale', 'wKCKC_scale', 'off_fixed_thr',
+    'off_wAPLKC_scale', 'off_wKCAPL_scale', 'off_wAPLPN_scale', 'off_wPNAPL_scale', 'off_wKCKC_scale', 'thr_factor',
+    'apl_factor', 'target_on', 'target_off', 'frac_on_target', 'frac_off_target', 'at_bound_thr', 'at_bound_apl',
+    'fit_fixed_thr', 'n_kcs', 'n_odors', 'rate_on', 'rate_off', 'rate_ratio', 'max_count_on', 'max_count_off',
+    'n_set_glomeruli', 'n_set_odors', 'clip_n_clipped', 'table_sha256', 'input_sha256', 'stages', 'host', 'lane', 'time',
+    'queue_commit', 'pyolfsysm_commit')
+
+
+def _point_built(tag: str, root: Optional[Path] = None) -> dict:
+    """A step-2 run's model build as its lane recorded it (provenance_2_*.json, points[tag]['built_info']: model,
+    wiring, fit_folder, fit_tag, kws, breadth); {} if no lane recorded it."""
+    d = out_dir() if root is None else Path(root)
+    for f in sorted(d.glob('provenance_2_*.json')):
+        b = _read_json(f).get('points', {}).get(tag, {}).get('built_info')
+        if b:
+            return b
+    return {}
+
+
+def write_variants(root: Optional[Path] = None) -> pd.DataFrame:
+    """variants.csv: one row per saved step-2 run (`runs2_table`; the archive's step2/<tag>_<on|acute_off>_...), for the
+    model-output archive's params.csv: the tag (the files' variant name), panel, arm, wiring, route, units, rung and
+    seed, what the arm is (ARM_KINDS; a dF/F repeat's table set from the dendrites in dF/F), the absolute parameters of
+    both conditions (VARIANT_COLUMNS), and the family's build from the lane's provenance (kws, fit_folder, fit_tag,
+    breadth)."""
+    d = out_dir() if root is None else Path(root)
+    runs = runs2_table(d)
+    rows = []
+    for r in runs.to_dict('records'):
+        tag = str(r['tag'])
+        arm = str(r.get('arm'))
+        base = arm[:-len(DFF_SUFFIX)] if arm.endswith(DFF_SUFFIX) else arm
+        kind = ARM_KINDS.get(base, base)
+        if arm != base:
+            kind += '; the table set from the dendrites in dF/F (ruling 1\'s repeat)'
+        b = _point_built(tag, d)
+        rows.append(dict(tag=tag, variant=tag, part=STEP2_PART, subdir=STEP2_PART, panel=r.get('panel'), arm=arm,
+                         model=b.get('model', 'C2'), wiring=r.get('wiring'), route=r.get('route'),
+                         units=r.get('units'), rung=r.get('rung'), seed=r.get('seed'),
+                         kind=f"C2's family on wiring {r.get('wiring')}, on the {r.get('panel')} input, both response "
+                              f"rates re-held: {kind}",
+                         **{c: r.get(c) for c in VARIANT_COLUMNS if c in r},
+                         kws=json.dumps(b.get('kws'), sort_keys=True) if b.get('kws') is not None else None,
+                         fit_folder=b.get('fit_folder'), fit_tag=b.get('fit_tag'), breadth=b.get('breadth')))
+    df = pd.DataFrame(rows)
+    df.to_csv(d / 'variants.csv', index=False)
+    print(f'variants.csv: {len(df)} runs -> {d / "variants.csv"}', flush=True)
+    return df
+
+
 def _base_arm(arm: Arm) -> str:
     return arm.arm[:-len(DFF_SUFFIX)] if arm.arm.endswith(DFF_SUFFIX) else arm.arm
 
@@ -4756,7 +4818,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     ap.add_argument('--part', required=True,
                     choices=('step0', 'step0_saved', 'timing', 'lock', 'step1', 'step1_control', 'step2', 'score',
-                             'commands', 'gate'))
+                             'commands', 'gate', 'variants'))
     ap.add_argument('--n-folds', type=int, default=None,
                     help='lock: override the budget rule\'s number of odor folds (default: 17, or 6 on cost)')
     ap.add_argument('--n-controls', type=int, default=None,
@@ -4800,6 +4862,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         part_score(a.readings, a.n_floor, a.jobs)
     elif a.part == 'commands':
         print_commands()
+    elif a.part == 'variants':
+        write_variants()
     elif a.part == 'gate':
         print(json.dumps(dict(e134_gate_status(), step1_authorization=step1_authorization()), indent=1))
 

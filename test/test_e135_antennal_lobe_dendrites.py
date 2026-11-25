@@ -1312,3 +1312,26 @@ def test_commands_are_module_lanes(capsys, monkeypatch):
     assert sum('--reverse' in l for l in step2) == 2 and 'OMP_THREAD_LIMIT=8' in step2[3]
     ctl = [l for l in out.splitlines() if '--part step1_control' in l]
     assert [l.split(':')[0] for l in ctl] == ['hal', 'disco', 'hal'] and '--part step1 --lane hal-1' in out
+
+
+def test_write_variants_one_row_per_run(tmp_path):
+    """`write_variants` writes one row per step-2 run of every lane's runs_2_*.csv (the last row per tag), with the
+    arm's kind (a dF/F repeat named), both conditions' parameters and the family's build from the lane's provenance."""
+    base = dict(panel='megamat', wiring='real', route=1, units='noise', seed=0, fixed_thr=100.0, wAPLKC_scale=0.2,
+                off_wAPLKC_scale=0.0, rate_on=0.0915, rate_off=0.2)
+    pd.DataFrame([dict(base, tag='megamat_imposed_real', arm='imposed'),
+                  dict(base, tag='megamat_imposed_dff_real', arm='imposed_dff', units='dff')]).to_csv(
+        tmp_path / 'runs_2_hal_hal-1.csv', index=False)
+    pd.DataFrame([dict(base, tag='megamat_imposed_real', arm='imposed', fixed_thr=101.0)]).to_csv(
+        tmp_path / 'runs_2_viki_viki.csv', index=False)
+    built = dict(model='C2', wiring='real', fit_folder='E67_apl_effect_fits', fit_tag='t', kws=dict(kc_kc_inh=1.0),
+                 breadth='b')
+    (tmp_path / 'provenance_2_hal_hal-1.json').write_text(json.dumps(dict(points={
+        'megamat_imposed_real': dict(built_info=built), 'megamat_imposed_dff_real': dict(built_info=built)})))
+    v = E.write_variants(tmp_path)
+    assert (tmp_path / 'variants.csv').exists() and len(v) == 2 and set(v.tag) == set(v.variant)
+    r = v.set_index('tag')
+    assert r.loc['megamat_imposed_real', 'fixed_thr'] == 101.0
+    assert 'in dF/F' in r.loc['megamat_imposed_dff_real', 'kind'] and 'in dF/F' not in r.loc['megamat_imposed_real', 'kind']
+    assert json.loads(r.loc['megamat_imposed_real', 'kws']) == dict(kc_kc_inh=1.0)
+    assert (v.subdir == 'step2').all() and r.loc['megamat_imposed_real', 'fit_folder'] == 'E67_apl_effect_fits'
