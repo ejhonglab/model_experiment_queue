@@ -8,6 +8,19 @@ directory's notes/ and are linked from here.
 
 ## Open
 
+### E134's mixture rows read the flies under a fixed stimulus order (found 2026-11-24 22:53, viki's held-out-panels planner)
+- **What.** Remy's kiwi / control mixture sessions present their stimuli in a fixed order: solvent, the five components,
+  then the mixture at -2, -1 and 0, three consecutive presentations each (her olfactometer configs,
+  `randomize_presentation_order: False`). In the four flies whose components are given again after the mixtures, a
+  component evokes 0.08 to 0.95 of its first block's response rate (a planner's read-only probe). The uploaded table
+  (olfdb dataset 8), which E134's lock reads, matches the first block. So the flies' strength by odor on the mixture panels
+  is read at the components' freshest and the mixtures' most adapted. The model's mixture somata also get no noise.
+- **What it affects.** E134's mixture rows (kmix 2.69, cmix 2.36 at the somata, the family as fitted) and the panel class
+  "panel-specific" on them; any later read of the mixture panels (E136's "holds"). Megamat and validation2 are not affected
+  (their order is drawn anew per block and fly).
+- **What remains.** The proposal "the held-out panels read like for like" (proposed_experiments.md, 2026-11-24 22:54) reads
+  the mixtures by position, with the flies' noise on the model's side. Until then the mixture rows are descriptions.
+
 ### The progress plot's ρ line ends on two points of kinds the plot is meant to leave out (found 2026-11-16, hal, the report pages' revision)
 - **What.** `reports/summary_progress_plot.py` leaves out oracle inputs and random, shuffled or re-drawn wirings by tag
   (`EXCLUDE_VARIANT`: `^input-searched_`, `^oracle_half`, `wiring-`, `^popfit_[PM]\d`, ...). From E83 on, variants carry
