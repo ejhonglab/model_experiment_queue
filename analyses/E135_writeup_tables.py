@@ -214,6 +214,17 @@ def as_ruled_table(fits_rec: dict, wiring: str = 'real') -> List[str]:
     return L + ['']
 
 
+def data_targets() -> Dict[str, float]:
+    """The data-target registry's values (results/data_targets/data_targets.json, `kcq.data_targets`), by key; empty if
+    it is not built."""
+    p = E.out_dir().parent / 'data_targets' / 'data_targets.json'
+    if not p.exists():
+        return {}
+    d = json.loads(p.read_text())
+    d = d.get('values', d)
+    return {k: v['value'] for k, v in d.items() if isinstance(v, dict) and isinstance(v.get('value'), (int, float))}
+
+
 def realism_table(realism: pd.DataFrame) -> List[str]:
     """The APL16 runs' realism per arm (range over the wirings): response rates with APL on and off, their ratio,
     the response rate ρ with APL on and off, odors per KC (total variation distance), and flags."""
@@ -223,6 +234,12 @@ def realism_table(realism: pd.DataFrame) -> List[str]:
          '| arm | response rate, APL on | APL off | ratio | response rate ρ, APL on | APL off | odors per KC, APL on '
          '| APL off | flagged |', '|---|---:|---:|---:|---:|---:|---:|---:|---|']
     rng = lambda x, f='.3f': f'{x.min():{f}} to {x.max():{f}}'
+    t = data_targets()
+    if t:
+        g = lambda k, f='.3f': f'{t[k]:{f}}' if k in t else '–'
+        L.append(f"| the KC data (control flies / APL output blocked (TNT), noise criterion) | {g('noise_ctrl_frac')} | "
+                 f"{g('noise_tnt_frac')} | {g('noise_rate_ratio_fraction', '.2f')} | – | – | band "
+                 f"{g('noise_ctrl_odors_per_kc_tv_max')} | band {g('noise_tnt_odors_per_kc_tv_max')} | – |")
     for arm, x in a.groupby('arm', sort=False):
         flag = x.realism_flag.fillna('').astype(str)
         L.append(f'| {ARM_NAMES.get(arm, arm)} | {rng(x.rate_on)} | {rng(x.rate_off)} | {rng(x.rate_ratio, ".2f")} | '
@@ -283,7 +300,7 @@ def main(root: Optional[Path] = None, with_tables: bool = True) -> Path:
     L = ['# E135 write-up tables', '',
          f"From score_verdict.json of {v.get('time')} ({v.get('host')}): outcome {oc.get('outcome')!r}, class "
          f"{v.get('cls')!r}, second reading {oc.get('cls_second')!r}, dF/F repeat {oc.get('cls_dff', '–')!r}; "
-         f"{v.get('n_runs')} of {v.get('n_planned')} runs; dF/F repeat complete "
+         f"{v.get('n_runs')} runs ({v.get('n_planned')} planned, and the dF/F repeat's 24 when asked); dF/F repeat complete "
          f"{(v.get('dff_repeat') or {}).get('complete')}.", '',
          '## The stage table', ''] + stage_table(rows, se)
     L += ['## The views beside', ''] + views_table(rows)
