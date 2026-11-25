@@ -320,16 +320,20 @@ def fly_summaries(flies: Sequence[P.Population]) -> Tuple[np.ndarray, np.ndarray
     return rates, dists
 
 
+def _add_two_view(out: pd.DataFrame) -> pd.DataFrame:
+    """Adds the two-view error (strength and sharing), tested beside the strength-only measure at Tom's request
+    (2026-11-24, after E134's gate read the three-view error not usable): the RMS of the two views' errors, as `error`
+    is the RMS over all views."""
+    if 'view_strength' in out and 'view_sharing' in out:
+        out['error_strength_sharing'] = np.sqrt((out['view_strength'] ** 2 + out['view_sharing'] ** 2) / 2)
+    return out
+
+
 def _measures(arrays: Dict[str, np.ndarray], ref: P.FlyReference, rates: np.ndarray, dists: np.ndarray,
         fly_rates: np.ndarray, fly_dists: np.ndarray, energy: Optional[np.ndarray], fly_energy: Optional[np.ndarray],
         idx: np.ndarray) -> pd.DataFrame:
     """Every measure of every variant against the recordings `idx` (their reference `ref`)."""
-    out = P.score_arrays(arrays, ref)
-    if 'view_strength' in out and 'view_sharing' in out:
-        # the two-view error (strength and sharing), tested beside the strength-only measure at Tom's request
-        # (2026-11-24, after E134's gate read the three-view error not usable): the RMS of the two views' errors,
-        # as `error` is the RMS over all views
-        out['error_strength_sharing'] = np.sqrt((out['view_strength'] ** 2 + out['view_sharing'] ** 2) / 2)
+    out = _add_two_view(P.score_arrays(arrays, ref))
     out['dist_rho'] = _rowwise_spearman(dists, np.nanmean(fly_dists[idx], axis=0))
     out['rate_rho'] = _rowwise_spearman(rates, np.nanmean(fly_rates[idx], axis=0))
     if energy is not None:
@@ -599,7 +603,7 @@ def _half_job(job: Tuple[str, str, str]) -> dict:
         arrays = P.stack_views(views, ref)
         rates, dists = np.array(rates), np.array(dists)
         for version, units in (('half', sd['units']), ('all_units', {p: ref.one_fly[p] for p in arrays})):
-            t = P.score_rows(arrays, {p: sd['means'][p] for p in arrays}, units)
+            t = _add_two_view(P.score_rows(arrays, {p: sd['means'][p] for p in arrays}, units))
             t['dist_rho'] = _paired_rowwise_spearman(dists, sd['dists'])
             t['rate_rho'] = _paired_rowwise_spearman(rates, sd['rates'])
             out['columns'][cond] = _measure_candidates(t)
