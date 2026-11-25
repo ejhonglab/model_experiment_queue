@@ -2351,7 +2351,7 @@ def part_step1() -> dict:
                                             scale=scale_record(fits)))
     _write_json(d / 'provenance_step1.json', dict(script=H.script_path(__file__), part='step1', host=_host(),
                 time=_now(), seconds=time.time() - t0, lock_sha256=_sha256(LOCK_COPY), identity=info['identity'],
-                allowed=allowed, **H.model_provenance(orn_deltas=stage.delta)))
+                allowed=allowed, model_provenance=H.model_provenance(orn_deltas=stage.delta), **H.code_commits()))
     return out
 
 
