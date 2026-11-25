@@ -7,6 +7,7 @@ Writes results/E135_antennal_lobe_dendrites/writeup_tables.md:
 - the views beside (sharing, breadth, the three-view population error) for the same arms;
 - the APL16 somata, APL on and off, against the family's own runs (E134's step 2, E90:B);
 - step 1's rungs on the held-out flies and odors, both directions, and the controls;
+- ruling 5's scale factors, and R1's and the kept rung's as-ruled tables against their fits on all 17 odors;
 - the imposed checks (ruling 8), the routes (ruling 9) and the realism of the APL16 runs.
 
 Usage (from the repository root): ./venv/bin/python -m analyses.E135_writeup_tables
@@ -169,6 +170,49 @@ def checks_table(checks: pd.DataFrame, verdict: dict) -> List[str]:
     return L
 
 
+def scale_table(fits_rec: dict) -> List[str]:
+    """Ruling 5's scale factors per fit (the fold that held out the named odors, and the fit on all odors) and rung,
+    those outside 0.5 to 2 named."""
+    sc = fits_rec.get('scale') or {}
+    fac = sc.get('factors') or {}
+    if not fac:
+        return []
+    af = fits_rec.get('all_flies') or {}
+    keys = list(next(iter(fac.values())))
+    L = ['Ruling 5, the rate-scale factor of each fit on all seven PN flies (outside 0.5 to 2 named).', '',
+         '| fit (odors held out) | ' + ' | '.join(fac) + ' |', '|---|' + '---:|' * len(fac)]
+    for k in keys:
+        held = ', '.join(af.get(k, {}).get('held_out', [])) or 'none (all 17 odors)'
+        L.append(f'| {k} ({held}) | ' + ' | '.join(f'{fac[r][k]:.3g}' for r in fac) + ' |')
+    named = sc.get('named') or {}
+    return L + ['', f"Named: {', '.join(f'{r}: folds {list(v)}' for r, v in named.items())}.", '']
+
+
+def as_ruled_table(fits_rec: dict, wiring: str = 'real') -> List[str]:
+    """The as-ruled tables of R1 and the kept rung on the megamat input (each megamat odor from the fold fit that left
+    it out, at its scale factor; what step 2 ran) against the same rung's fit on all 17 odors: per odor, the as-ruled
+    total over glomeruli as a multiple of the all-odor fit's, and Pearson r over all entries. Builds the family's PN
+    stage on `wiring` (a model build, no simulation of the KCs)."""
+    st, _ = E.family_stage('megamat', wiring)
+    fits = fits_rec['all_flies']
+    held = {o: k for k, f in fits.items() if k != 'all' for o in f['held_out']}
+    L = ['As ruled (each odor from the fold that left it out, rescaled) against the fit on all 17 odors, megamat '
+         f'input, {wiring} wiring, before clipping.', '',
+         '| rung | r over entries | odor totals, as ruled / all-odor fit (range) | the held-out odors of folds 0, 2, 3 |',
+         '|---|---:|---:|---|']
+    for rung in ('R1', E.step2_rung_of(fits_rec) or 'R3'):
+        r = {'R2m': 'R2', 'R2f': 'R2'}.get(rung, rung)
+        a = E.rung_table(st, fits, r)
+        b = E.rung_table(st, fits, r, fold_odors=())
+        a, b = a.loc[:, b.columns], b
+        rr = float(np.corrcoef(a.to_numpy().ravel(), b.to_numpy().ravel())[0, 1])
+        tot = a.sum() / b.sum()
+        sel = [o for o in tot.index if held.get(o) in ('0', '2', '3')]
+        L.append(f"| {rung} | {rr:.3f} | {tot.min():.2f} to {tot.max():.2f} | "
+                 f"{', '.join(f'{o} {tot[o]:.2f}' for o in sel)} |")
+    return L + ['']
+
+
 def realism_table(realism: pd.DataFrame) -> List[str]:
     """The APL16 runs' realism per arm (range over the wirings): response rates with APL on and off, their ratio,
     the response rate ρ with APL on and off, odors per KC (total variation distance), and flags."""
@@ -186,7 +230,8 @@ def realism_table(realism: pd.DataFrame) -> List[str]:
     return L + ['']
 
 
-def main(root: Optional[Path] = None) -> Path:
+def main(root: Optional[Path] = None, with_tables: bool = True) -> Path:
+    """Writes writeup_tables.md; `with_tables` False skips the as-ruled comparison (which builds the family's PN stage)."""
     d = E.out_dir() if root is None else Path(root)
     v = json.loads((d / E.SCORE_VERDICT_FILE).read_text())
     rows = pd.read_csv(d / 'score_class_rows.csv')
@@ -210,6 +255,10 @@ def main(root: Optional[Path] = None) -> Path:
     L += ['## The views beside', ''] + views_table(rows)
     L += ['## The APL16 somata', ''] + apl16_table(scores, e134)
     L += ['## Step 1', ''] + step1_table(rungs, controls)
+    fits_rec = E.read_step1_fits(d)
+    L += ['## The scale factors and the as-ruled tables', ''] + scale_table(fits_rec)
+    if with_tables:
+        L += as_ruled_table(fits_rec)
     L += ['## Checks', ''] + checks_table(checks, v)
     L += ['## Realism', ''] + realism_table(realism)
     out = d / 'writeup_tables.md'
@@ -219,4 +268,5 @@ def main(root: Optional[Path] = None) -> Path:
 
 
 if __name__ == '__main__':
-    main()
+    import sys
+    main(with_tables='--no-tables' not in sys.argv)
