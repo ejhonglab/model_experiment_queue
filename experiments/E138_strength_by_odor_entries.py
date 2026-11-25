@@ -66,10 +66,11 @@ Parts (CLI `--part`):
   'malecns-left' / 'malecns-right' loaders, E130's `step0_wiring_only`).
 - score: the classes read beforehand: "concentrated" per panel (`concentrated`) and (d) (`d_reading`); classes.json,
   tables.md, provenance_score.json.
-- regression (design item 6): HELD. The regression of the family's residuals on the share of each odor's input on a
-  class, read on validation2's odors against random classes, fits a quantity to a held-out panel, which waits for Tom's
-  or Yang's word (CLAUDE.md, the entry's Status). The command line refuses it unless `--authorized-by` names that word
-  (who, when, where); `class_regression` is the function, never run on the real residuals here.
+- regression (design item 6): the regression of the family's residuals on the share of each odor's input on a class,
+  read on validation2's odors against random classes, fits a quantity to a held-out panel, so it waited for Tom's or
+  Yang's word (CLAUDE.md, the entry's Status). The command line refuses it unless `--authorized-by` names that word
+  (who, when, where). Tom gave it on 2026-11-25 10:19 (in hal's terminal), noting that validation2 is then no longer a
+  clean held-out panel for anything built on the result; regression.json, provenance_regression.json.
 
 The classes read here (fixed beforehand, in the lock's 'rules'):
 - "concentrated": a panel's two largest odors (by their share of the squared strength error on all flies, the family as
@@ -716,7 +717,7 @@ def d_reading(glomeruli: Sequence[str], counts: Mapping[str, pd.DataFrame], hemi
 
 def class_regression(residuals: pd.Series, class_share: pd.Series, read_residuals: pd.Series, read_share: pd.Series,
                      random_shares: Optional[Sequence[Tuple[np.ndarray, np.ndarray]]] = None) -> dict:
-    """Design item 6 (held; never run on the real residuals without Tom's or Yang's word): the residuals (flies minus
+    """Design item 6 (run only with Tom's or Yang's word, `part_regression`): the residuals (flies minus
     model, per odor) regressed by least squares on the share of each odor's input on a class (`class_share`, with an
     intercept), the fit's prediction on the read panel's odors (`read_share`) correlated with their residuals
     (`read_residuals`, Pearson r); with `random_shares` (one pair per random class: its shares on the fit odors and on
@@ -1387,7 +1388,7 @@ def part_regression(authorized_by: Optional[str]) -> dict:
     family's residuals (flies minus model, the strength view's rate part, as fitted, row 'common', the main reading)
     over the odors of megamat and the APL16 panel (APL on) regressed on the share of each odor's positive model input on
     each class of the lock (`class_regression`), read on validation2's odors, against N_RANDOM_CLASSES random classes
-    of the same size among the 36 input glomeruli; regression.json. Never run here."""
+    of the same size among the 36 input glomeruli; regression.json and provenance_regression.json (with the word)."""
     if not authorized_by:
         raise SystemExit("E138 design item 6 (the regression on a class, read on validation2) is held for Tom's or "
                          "Yang's word; pass --authorized-by \"<who, when, where>\" only once it is given")
@@ -1421,6 +1422,8 @@ def part_regression(authorized_by: Optional[str]) -> dict:
                                       share_on(cls, inputs['validation2']).reindex(rd.index), rshares)
         out['classes'][c] = dict(glomeruli=cls, halves=res, passes=all(r.get('passes') for r in res.values()))
     _write_json(out_dir() / 'regression.json', out)
+    provenance('regression', classes_lock_sha256=lock['sha256'], authorized_by=authorized_by,
+               n_random_classes=N_RANDOM_CLASSES, seed=REGRESSION_SEED)
     return out
 
 
