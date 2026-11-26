@@ -177,8 +177,8 @@ def test_counts_class():
 
 def test_lock_constants_and_step1_names():
     from experiments import E142_imposed_calyx_runs as S1
-    assert E142.N_STEP1_RUNS == len(S1.STEP1_ARMS) * 8 == 56
-    tags = {S1.tag_of(a, w) for a, w in S1.planned_step1()}
+    assert E142.N_STEP1_RUNS == len(S1.LOCK_ARMS) * 8 == 56
+    tags = {S1.tag_of(a, w) for a, w in S1.planned_step1(arms=S1.LOCK_ARMS)}
     for name in (*E142.STEP1_APL_ARMS, E142.STEP1_CARRY_ARM, *E142.STEP1_CONTROLS):
         assert all(f'{name}_{w}' in tags for w in E142.WIRINGS), name
     assert set(E142.CLASSES) >= {'counts_make_step', 'apl_hides_step', 'dendrites_carry', 'readings', 'no_class'}
@@ -194,6 +194,13 @@ def test_committed_lock_copy_is_consistent():
     assert lock['glomeruli']['carried'] and 'VA4' in lock['glomeruli']['dendrites']
     assert lock['narrow_readings'] == list(E142.NARROW_READINGS)
     assert lock['amendments'] == list(E142.AMENDMENTS)
+    # the second amendment (step 1 amended, before any score): the lock's arms kept as written, the new arms named
+    from experiments import E142_imposed_calyx_runs as S1
+    assert lock['amendments'][1].startswith('2026-11-26 14:22, hal (after the first holds were read and before any '
+                                            'step-1 run was scored')
+    assert all(S1.tag_of(a, 'P3').rsplit('_', 1)[0] in lock['amendments'][1] for a in S1.AMENDED_ARMS)
+    assert lock['step1']['arms'] == [{k: v for k, v in a._asdict().items() if k != 'pn_stage'} for a in S1.LOCK_ARMS]
+    assert lock['step1']['tags'] == [S1.tag_of(a, w) for a, w in S1.planned_step1(arms=S1.LOCK_ARMS)]
 
 
 def test_cli_parts(monkeypatch):

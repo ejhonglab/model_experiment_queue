@@ -38,7 +38,9 @@ touch the same lines):
 
 Step 1 (56 runs at fixed scales on E135's step-2 runner and table) is hal's module, experiments/E142_imposed_calyx_runs.py
 (`--part step1` calls its `part_step1`); its arms, A1's factors and its classes are fixed in the lock (the module's
-STEP1_ARMS, `CLASSES`); its score (`--part score`) is reserved for hal.
+LOCK_ARMS, `CLASSES`); its score (`--part score`) is reserved for hal. The lock's second amendment (2026-11-26 14:22,
+after the first holds and before any score; AMENDMENTS) adds the main arm on A1's own PN stage and the arm with
+APL->bouton at none and KC-KC at the family's (40 runs, the module's AMENDED_ARMS) and the classes' amended reading.
 
 Judgments the entry leaves open (the narrowest reading; each is in the lock's 'narrow_readings'):
 see NARROW_READINGS.
@@ -206,6 +208,33 @@ AMENDMENTS: Tuple[str, ...] = (
     "(E142_imposed_calyx_runs.py, d6b58ff) in place of the first lock's (059753e), which had named the arm with "
     "APL->bouton at none 'imposed_kckc_aplpn0' and the APL16 arm 'imposed_a1_apl16' and read the factors as the entry's "
     "rounded x0.155 and x3.24; step 0's definitions unchanged",
+    "2026-11-26 14:22, hal (after the first holds were read and before any step-1 run was scored; the entry's *Step 1 "
+    "amended* of 13:59, planned by a Fable subagent, claude-fable-5-2, spawned from hal 2026-11-26 13:48): on the "
+    "lock's table (the dendrites ranked onto the family's own PN rates, pn_inhadd 31.4) KC-KC x3.24 cannot be held at "
+    "megamat's operating point (megamat_imposed_a1's threshold at the hold's bound, x0.1 of the wiring's fit, on 8 of "
+    "8 wirings; every megamat arm with KC-KC x3.24 on that table has the same APL-off run), so the lock's arms on the "
+    "family's PN stage are kept as the record: megamat_imposed_a1 'no class: a hold fails'; megamat_imposed_kckc and "
+    "megamat_imposed_kckc_aplpn_none not run (placeholder claims, lane 'stopped'), 'no class: a hold fails'; the two "
+    "permuted tables read once (M3), then stopped; megamat_imposed_aplpn and apl16_imposed_a1 run as they are. Added, "
+    "40 runs (step 1 is 66: 26 of the lock's 56 and 40 new): the main arm on A1's own PN stage, A1's classed point "
+    "whole (E136's pn_norm_kws(fitted_z('A1')): pn_inhadd 1017.3 and pn_inhsc 598.85; APL->bouton x0.155 and KC-KC "
+    "x3.24), its table E135's imposed table built on A1's own PN stage (the dendrites' arrangement ranked onto A1's "
+    "PN rates on the 28 glomeruli, every other entry A1's), as megamat_a1stage_imposed, its two permuted controls "
+    "megamat_a1stage_imposed_glom_perm and megamat_a1stage_imposed_odor_perm (E135's seeds) and apl16_a1stage_imposed "
+    "(its 12 megamat odors set), eight wirings each, by pn_rates, each held as A1's own reads were (E136's hold_at "
+    "from the wiring's held megamat point, read_targets' counts, the same brackets); and 'APL->bouton at none' "
+    "replaced by megamat_imposed_aplpn_none (the family's PN stage, KC-KC at the family's, APL->bouton 0, the lock's "
+    "hold), eight runs. Not run: each factor alone on A1's stage. Refused: a wider threshold bracket, and the APL-off "
+    "condition at KC-KC x1. The classes as amended (thresholds, spreads and the bar as locked): 'the dendrites carry "
+    "under the calyx that holds' is read on megamat_a1stage_imposed against A1's own megamat reads on T, with the "
+    "A1-stage permuted controls and the A1-stage APL16 arm's bands; 'APL at the boutons hides the step' on the "
+    "family's PN stage, in megamat_imposed_aplpn or megamat_imposed_aplpn_none against E135's imposed arm, an arm "
+    "whose hold fails left out and named; beside, classing nothing: the amended main arm's boutons against the "
+    "no-step yardstick, and E143's interval over resampled flies on its change from A1 with the share of resamples on "
+    "which the class returns. Outcomes (d) and (e) are read on the amended main arm; (g), new, 'not readable': the "
+    "amended main arm's hold fails or it leaves a realism band, and nothing further is tried in this entry. Code: "
+    "experiments/E142_imposed_calyx_runs.py (the arms' pn_stage, LOCK_ARMS and AMENDED_ARMS, classify_step1, "
+    "step1_outcome)",
 )
 
 # the classes, fixed before any statistic (the entry's, made exact; NARROW_READINGS say where a reading was chosen)
@@ -488,8 +517,11 @@ def lock_contents() -> dict:
                               'WIRINGS', fly_sets=list(FLY_SETS), entry_stages=list(ENTRY_STAGES))
     from experiments import E142_imposed_calyx_runs as S1
     a1 = S1.a1_factors()
-    step1 = dict(module=STEP1_MODULE, arms=[a._asdict() for a in S1.STEP1_ARMS],
-                 tags=[S1.tag_of(a, w) for a, w in S1.planned_step1()], n_runs=N_STEP1_RUNS, a1_factors=a1,
+    # the lock's seven arms as written (the amendment of 2026-11-26 14:22 added S1.AMENDED_ARMS, in AMENDMENTS)
+    step1 = dict(module=STEP1_MODULE, arms=[{k: v for k, v in a._asdict().items() if k != 'pn_stage'}
+                                            for a in S1.LOCK_ARMS],
+                 tags=[S1.tag_of(a, w) for a, w in S1.planned_step1(arms=S1.LOCK_ARMS)], n_runs=N_STEP1_RUNS,
+                 a1_factors=a1,
                  runner="E135's step-2 runner and table (pn_rates, olfsysm b1e89d7) with the two calyx scales changed "
                         "before the hold, both response rates re-held at E134's held megamat targets (the APL16 arm at "
                         "the wiring's own fit's counts)",

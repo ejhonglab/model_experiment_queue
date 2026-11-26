@@ -1836,7 +1836,7 @@ def reads_table() -> pd.DataFrame:
 
 
 def hold_at(arm: str, z: Mapping[str, float], wiring: str, panel: str, label: str = 'E136',
-            lock: Optional[Mapping] = None) -> dict:
+            lock: Optional[Mapping] = None, extra_kws: Optional[Mapping] = None) -> dict:
     """Both response rates of `arm`'s model (built as `base_arm(arm)`) on `wiring` and `panel` at coordinates `z`
     (applied as log factors to the wiring's held megamat point, `start_params`) held exactly at the panel's operating
     point, as a read holds them (`read_at`): E77's `hold_rates` on E83's simulator with the lab input's breadth, the
@@ -1846,7 +1846,8 @@ def hold_at(arm: str, z: Mapping[str, float], wiring: str, panel: str, label: st
     (target_off, target_on, fraction_off, fraction_on), p0: the parameters the hold started from, off_extra: the APL-off
     condition's own parameters or None). An arm whose kwargs carry 'kckc_off_factor' (OFF_ONLY_KWS; E141's inhibition
     among KCs present with APL on only) runs its APL-off condition with the KC-KC scale at that factor of its APL-on
-    scale (E77's `hold_rates` `off_extra`), the threshold held there."""
+    scale (E77's `hold_rates` `off_extra`), the threshold held there. `extra_kws` (default none) are further model
+    kwargs beside the arm's, added last (e.g. E142's route-1 pn_rates on A1's model; they are in the returned 'kws')."""
     from experiments import E83_cross_wiring_fit as E83
     from experiments import E134_population_baseline as B
     from experiments.E77_input_screen import hold_rates
@@ -1865,6 +1866,8 @@ def hold_at(arm: str, z: Mapping[str, float], wiring: str, panel: str, label: st
     kws = dict(arm_kws(base), **({'claw_thr': ct} if ct else {}))
     if base == 'A1':
         kws.update(a1_kws(wiring, panel, orn, z))
+    if extra_kws:
+        kws.update(extra_kws)
     Pp = E83.wiring_parts(wiring)
     targets = read_targets(wiring, panel, orn.shape[1], lock)
     t_off, t_on = targets[0], targets[1]

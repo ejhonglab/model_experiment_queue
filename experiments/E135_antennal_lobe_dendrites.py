@@ -2400,20 +2400,24 @@ def collect_controls(root: Optional[Path] = None) -> pd.DataFrame:
     return t
 
 
-def family_stage(panel: str = 'megamat', wiring: str = 'real', purpose: str = 'step2') -> Tuple[PNStage, dict]:
+def family_stage(panel: str = 'megamat', wiring: str = 'real', purpose: str = 'step2',
+                 extra_kws: Optional[Mapping] = None) -> Tuple[PNStage, dict]:
     """The family's PN stage on a panel's input (`panel_orn`: megamat, apl16, validation2, mixtures): E83's
     `build_simulator(wiring, orn=..., breadth=<the lab input's>)`, its olfsysm variables read into a `PNStage` (rows
     the wiring's glomeruli, columns the input's odors by `odor_labels`, in olfsysm's order through the simulator's
     'odor_order'), checked against olfsysm's own layers (`check_identity`) on a copy of the build's variables. A model
     build: for `purpose` 'step1' after E134's gate or Tom's authorization of step 1 (`require_step1_allowed`), for any
-    other purpose (step 2, E136) after E134's gate only (`require_e134_gate`)."""
+    other purpose (step 2, E136) after E134's gate only (`require_e134_gate`). `extra_kws` (default none) are further
+    model kwargs of the build (e.g. E136's A1 normalization, dict(pn_inhadd=..., pn_inhsc=...), for E142's A1-stage
+    arms); the stage's layer parameters are then read from that build, the breadth stays the lab input's."""
     if purpose == 'step1':
         require_step1_allowed()
     else:
         require_e134_gate()
     from experiments import E83_cross_wiring_fit as X
     orn = panel_orn(panel)
-    sim, info = X.build_simulator(wiring, orn=orn, breadth=X.wiring_parts(wiring)['breadth'])
+    sim, info = X.build_simulator(wiring, orn=orn, breadth=X.wiring_parts(wiring)['breadth'],
+                                  extra_kws=dict(extra_kws) if extra_kws else None)
     cells = info['cells']
     mp, rv = cells['mp'].cell_contents, cells['rv'].cell_contents
     order = np.asarray(cells['odor_order'].cell_contents, dtype=int)
