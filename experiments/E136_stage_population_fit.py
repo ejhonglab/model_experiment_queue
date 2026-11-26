@@ -1554,8 +1554,10 @@ def rescore(arm: str, measures: Sequence[str] = tuple(MEASURES), halves: Sequenc
     """A fit's saved evaluations (this host's outputs/.../fit_<arm>/, the history's evaluations) scored again under
     every measure of `measures` and against every half of `halves`, with no simulation (the re-read on the adopted
     measure: every view and part, the population error over all views, the two-view error). Writes
-    rescore_<arm>.csv (one row per evaluation, measure and half) to the fit's out_dir. An evaluation not saved on this
-    host is skipped and listed."""
+    rescore_<arm>.csv (one row per evaluation, measure and half) to the fit's out_dir, merged with the rows already
+    there: a row this call scores replaces the one with the same evaluation, measure and half, and the others are kept
+    (so a fit whose evaluations are saved on two hosts is rescored on each). An evaluation not saved on this host is
+    skipped and listed. Returns the merged table."""
     lock = R.require_lock()
     evals = history_evals(arm) if evals is None else list(evals)
     runs_of: Dict[int, Dict[str, 'R.SavedRun']] = {}
@@ -1574,7 +1576,19 @@ def rescore(arm: str, measures: Sequence[str] = tuple(MEASURES), halves: Sequenc
                 rows.append(dict(arm=arm, eval=i, measure=meas, half=half or 'all',
                                  **{k: v for k, v in res.items() if not k.startswith('rate_')}))
     df = pd.DataFrame(rows)
-    df.to_csv(out_dir() / f'rescore_{arm}.csv', index=False)
+    path = out_dir() / f'rescore_{arm}.csv'
+    if path.exists() and len(df):
+        old = pd.read_csv(path)
+        key = ['eval', 'measure', 'half']
+        done = pd.MultiIndex.from_frame(df[key])
+        old = old[~pd.MultiIndex.from_frame(old[key]).isin(done)]
+        df = pd.concat([old, df], ignore_index=True).sort_values(['measure', 'half', 'eval'], kind='stable',
+                                                                 ignore_index=True)
+    elif path.exists():
+        df = pd.read_csv(path)
+    tmp = path.with_suffix('.csv.tmp')
+    df.to_csv(tmp, index=False)
+    tmp.replace(path)
     if missing:
         print(f'E136 rescore {arm}: {len(missing)} evaluations not saved on this host: {missing}', flush=True)
     return df
@@ -2271,7 +2285,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
                     choices=('identity', 'claw_identity', 'claw_thr_check', 'fit', 'determined', 'rescore', 'read',
                              'score', 'archive'))
     ap.add_argument('--arm', choices=tuple(ARMS) + (CONTROL, FAMILY))
-    ap.add_argument('--evals', nargs='+', type=int, help="--part archive: the evaluations (default this host's best)")
+    ap.add_argument('--evals', nargs='+', type=int, help="--part archive: the evaluations (default this host's best); --part rescore: the evaluations "
+                         "(default the history's)")
     ap.add_argument('--maxfev', type=int)
     ap.add_argument('--wirings', nargs='+', choices=WIRINGS)
     ap.add_argument('--lane', default='1')
@@ -2307,7 +2322,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     elif a.part == 'rescore':
         if a.arm in (None, FAMILY):
             raise SystemExit('--part rescore needs --arm')
-        print(rescore(a.arm).groupby(['measure', 'half']).stage_error.describe().to_string())
+        print(rescore(a.arm, evals=a.evals).groupby(['measure', 'half']).stage_error.describe().to_string())
     elif a.part == 'score':
         print(json.dumps(part_score(None if a.arm is None else [a.arm]), indent=1, default=str))
     elif a.part == 'archive':

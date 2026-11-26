@@ -528,6 +528,33 @@ def test_consistency(monkeypatch, tmp_path):
     assert len(c) == 5 and (c.rho > 0.9).all() and (c.n_evals == 30).all()
 
 
+def test_rescore_merges_hosts(monkeypatch, tmp_path):
+    monkeypatch.setattr(F, 'out_dir', lambda: tmp_path)
+    monkeypatch.setattr(R, 'require_lock', lambda: {})
+    monkeypatch.setattr(F, 'Flies', lambda half, stages, views=None: half)
+    monkeypatch.setattr(F, 'StageLoss', lambda stages, flies, lock: (lambda runs: dict(stage_error=next(iter(runs.values())) + (
+        0.5 if flies == 'held' else 0.0))))
+    saved = {}
+
+    def load(tag, dirs=None):
+        i = int(tag.split('_e')[1].split('_')[0])
+        if i not in saved:
+            raise FileNotFoundError(tag)
+        return saved[i]
+    monkeypatch.setattr(R, 'load_step3_run', load)
+    saved.update({i: float(i) for i in (1, 2, 3)})                 # host 1 has evaluations 1 to 3
+    F.rescore('A0', measures=['strength'], evals=range(6))
+    saved.clear()
+    saved.update({i: 10.0 + i for i in (3, 4, 5)})                 # host 2 has 3 (again) to 5
+    df = F.rescore('A0', measures=['strength'], evals=range(6))
+    on_disk = pd.read_csv(tmp_path / 'rescore_A0.csv')
+    assert len(df) == len(on_disk) == 10
+    fit = on_disk[on_disk.half == 'fit'].set_index('eval').stage_error
+    assert fit.to_dict() == {1: 1.0, 2: 2.0, 3: 13.0, 4: 14.0, 5: 15.0}
+    held = on_disk[on_disk.half == 'held'].set_index('eval').stage_error
+    assert held[2] == 2.5 and held[5] == 15.5
+
+
 def _verdict(monkeypatch, tmp_path, outcome, **kw):
     import json
     from experiments import E135_antennal_lobe_dendrites as AL
