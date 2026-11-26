@@ -200,6 +200,8 @@ MODEL_GROUPS: Tuple[ModelGroup, ...] = (
                "E135's recorded dendrites imposed (step 2, the table in noise units)"),
 )
 E139_EXPERIMENT = 'E139_normalization_ladder'
+# E136's measure whose reads are read (the adopted measure's, measure_strength/ in its results and archive)
+E136_MEASURE = 'strength'
 # the KC-soma readings read beside the default on the family held (E134's alternatives)
 MODEL_SOMA_BESIDE: Tuple[str, ...] = ('raw', 'affine_noise')
 MODEL_CLAW_BESIDE: Tuple[str, ...] = ('curve_noise_b14', 'curve_noise_share25')
@@ -1107,7 +1109,10 @@ def group_runs(g: ModelGroup) -> Tuple[Dict[str, object], List[str]]:
     if exp == 'E134':
         dirs = R.step3_dirs()
     elif exp == 'E136':
+        # the arms' reads under the adopted measure (strength by odor), those E136's note reports: the archive's
+        # measure_strength/read/ (E136's default measure 'all' points at a folder with no reads)
         from experiments import E136_stage_population_fit as E136
+        E136.set_measure(E136_MEASURE)
         dirs = E136.read_dirs()
     elif exp == 'E135':
         from experiments import E135_antennal_lobe_dendrites as E135
