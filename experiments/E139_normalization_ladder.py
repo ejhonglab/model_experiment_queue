@@ -541,8 +541,8 @@ def e102_ladder() -> pd.DataFrame:
         df[f'd_{col}'] = df[col] - df.wiring.map(fam[col])
     df = df.merge(_e102_readings_by_step(), on='step', how='left').merge(_e102_low_conc_by_wiring(),
                                                                         on=['step', 'wiring'], how='left')
-    num = [c for c in df.columns if c not in ('variant', 'step', 'wiring') and pd.api.types.is_numeric_dtype(df[c])
-           and not pd.api.types.is_bool_dtype(df[c])]
+    num = [c for c in df.columns if c not in ('variant', 'step', 'wiring') and not c.startswith('e102_')
+           and pd.api.types.is_numeric_dtype(df[c]) and not pd.api.types.is_bool_dtype(df[c])]
     means = []
     with e136() as F:
         for (name, step), g in df.groupby(['variant', 'step'], sort=False):
