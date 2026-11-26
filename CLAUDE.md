@@ -1019,7 +1019,8 @@ bare ID ("the per-glomerulus drive normalization sweep (E20)", not "E20").
   - **A fitted variant's change is read where it was not fitted:** on the four wirings it was not fitted on and, at a
     fitted stage, against the held-out half of the flies, with the family read there too. It is the change that rule
     3 gates on. The readings themselves are not plotted: against half of the flies every model reads higher (the
-    family about 1.05 in place of 0.92, on the same wirings), off the scale of the lines and of the stage table.
+    family 1.049 in place of 0.919 on the four held-out wirings, E136's score), off the scale of the lines and of the
+    stage table.
   - **Popups.** A fitted point's popup gives the two readings behind it (the variant's and the family's on the
     held-out wirings and flies), the change with its standard error over wirings and its bar, the class, and the
     control fit's fall. A note under the plot says in one sentence how fitted points are drawn.
