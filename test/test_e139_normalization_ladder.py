@@ -15,6 +15,21 @@ from experiments import E139_normalization_ladder as L
 from kcq import stage_readings as R
 
 
+@pytest.fixture(autouse=True)
+def no_simulation(monkeypatch):
+    """No test here runs the model: E83's simulator, E77's hold, E102's extended block and E136's fit raise unless a
+    test plants its own."""
+    from experiments import E77_input_screen as S
+    from experiments import E83_cross_wiring_fit as E83
+    from experiments import E102_antennal_lobe_normalization as E
+
+    def refuse(*a, **k):
+        raise RuntimeError('a test reached a model simulation')
+    for mod, name in ((E83, 'build_simulator'), (S, 'hold_rates'), (E, 'extended_block'), (E, 'run_extended'),
+                      (F, 'fit_arm'), (F, 'determined'), (F, 'rescore')):
+        monkeypatch.setattr(mod, name, refuse)
+
+
 def test_point_z():
     from experiments.E3_drive_dependent_gain import PN_INHADD_DEFAULT
     z = L.point_z('B', 1000.0)
@@ -80,14 +95,13 @@ def test_read_point_calls_read_at(monkeypatch, tmp_path):
 def test_part_read_order(monkeypatch):
     got = []
     monkeypatch.setattr(L, 'read_point', lambda pt, lane, reclaim, done: got.append(pt))
+    monkeypatch.setattr(L, 'read_beside', lambda *a, **k: pytest.fail('no beside read without --step beside'))
     monkeypatch.setattr(L, 'reads_table', lambda: pd.DataFrame(columns=['tag']))
     L.part_read('x', ['1', '2'])
     assert got == L.planned_points(['1', '2'])
     got.clear()
     L.part_read('x', ['2'], reverse=True)
     assert got == L.planned_points(['2'])[::-1]
-    with pytest.raises(NotImplementedError, match='beside'):
-        L.part_read('x', ['1', 'beside'])
 
 
 def _write_e102(base: Path, step: str, wiring: str, prefix: str, n: int = 6, odors=('2h @ -3', 'paa @ -4')):
@@ -261,3 +275,226 @@ def test_write_variants(monkeypatch, tmp_path):
     assert df.z_aplpn.iloc[0] == pytest.approx(np.log(0.155)) and (res / 'variants.csv').exists()
     assert L._truthy(True) and L._truthy('True') and not L._truthy(False) and not L._truthy('False')
     assert not L._truthy(np.nan)
+
+
+# ---------------------------------------------------------------------------
+# the beside step and step 3
+
+def test_beside_points_and_names():
+    bp = L.beside_points()
+    assert len(bp) == 16 and bp[0] == ('B_inhadd1000', F.WIRINGS[0]) and bp[-1] == ('A1', F.WIRINGS[-1])
+    assert L.beside_tag('A1', 'P3') == 'A1_extended_P3'
+    assert L.fit_name(314.0) == 'A0_inhadd314' and L.fit_rung('A0_inhadd314') == 314.0
+    assert L.fit_rung('B_inhadd314') is None and L.fit_rung('A0') is None and L.fit_rung('A1') is None
+    assert (L._setting_of('A0_inhadd314'), L._rung_of('A0_inhadd314')) == ('A0', 314.0)
+    assert L._setting_of('A1') == 'A1' and np.isnan(L._rung_of('A1'))
+    arm = L.fit_arm_def(314.0)
+    from experiments.E77_input_screen import inhsc_for
+    assert arm.name == 'A0_inhadd314' and arm.searched == ('aplpn', 'kckc')
+    assert arm.kws['pn_inhadd'] == pytest.approx(314.0) and arm.kws['pn_inhsc'] == pytest.approx(inhsc_for(314.0))
+    assert L.beside_model('B_inhadd1000') == ('A1', L.point_z('B', 1000.0))
+
+
+def _beside_fakes(monkeypatch, tmp_path, ok=True):
+    from experiments import E98_apl_response_strength as E98
+    from experiments import E102_antennal_lobe_normalization as E
+    from kcq import harness as H
+    got = {}
+    monkeypatch.setattr(L, 'out_dir', lambda: (tmp_path / 'res').mkdir(parents=True, exist_ok=True) or tmp_path / 'res')
+    monkeypatch.setattr(L, 'local_dir', lambda part='': (tmp_path / 'loc' / part).mkdir(parents=True, exist_ok=True)
+                        or tmp_path / 'loc' / part)
+    monkeypatch.setattr(L, 'archive_dir', lambda: tmp_path / 'arch')
+    monkeypatch.setattr(F, 'require_e135', lambda: dict(mode='search', rung=None, outcome='e'))
+    monkeypatch.setattr(R, 'require_lock', lambda: {})
+    monkeypatch.setattr(F, '_commits', lambda: {'queue_commit': 'x'})
+    monkeypatch.setattr(L, '_same_as_read', lambda name, wiring, hold: dict(tag='t', params_equal=True,
+                                                                             counts_equal=True))
+    monkeypatch.setattr(H, 'model_provenance', lambda orn_deltas=None: {})
+    monkeypatch.setattr(E98, 'b1_input', lambda: (pd.DataFrame({'x': [1.0]}), pd.DataFrame()))
+    r = pd.DataFrame(np.r_[np.ones(3), np.zeros(17)].reshape(10, 2), columns=['2h @ -3', 'paa @ -4'])
+    p = dict(fixed_thr=30.0, wAPLKC_scale=1.0, wKCAPL_scale=6e-4, wAPLPN_scale=0.06, wPNAPL_scale=3e-3,
+             wKCKC_scale=40.0)
+
+    def hold_at(arm, z, wiring, panel, label='', lock=None):
+        got['hold_at'] = dict(arm=arm, z=dict(z), wiring=wiring, panel=panel)
+        kws = F.pn_norm_kws(z)
+        hold = dict(params=dict(p), params_off=dict(p, wAPLKC_scale=0.0), on=(r, r), off=(r, r), thr_factor=1.1,
+                    apl_factor=0.9, n_on=3, n_off=3, at_bound_thr=False, at_bound_apl=False, n_sims=9)
+        return dict(hold=hold, kws=kws, orn=None, breadth='B', claw_thr=None, targets=(3, 3, 0.15, 0.15), p0=dict(p))
+    monkeypatch.setattr(F, 'hold_at', hold_at)
+
+    def extended_block(rec, d, wiring, step, held, breadth, commits, prefix=None, **ext):
+        got['ext'] = dict(step=step, breadth=breadth, build=ext.get('build'), label=ext.get('label'))
+        (d / 'b1_stimuli.csv').write_text('label\n')
+        for c in ('on', 'acute_off'):
+            (d / f'{wiring}_{c}_apl.csv').write_text('stimulus,win\n')
+            (d / f'{wiring}_{c}_spike_counts.parquet').write_text('x')
+        pd.DataFrame([dict(wiring=wiring, cond=c, pn_inhadd=step, pn_inhsc=1.0) for c in ('on', 'acute_off')]).to_csv(
+            d / f'{wiring}_runs.csv', index=False)
+        rec.update(extended_matches_held=ok, a0_identity_passes=True)
+        return ok
+    monkeypatch.setattr(E, 'extended_block', extended_block)
+    return got
+
+
+def test_read_beside(monkeypatch, tmp_path):
+    """A beside read on planted model calls: held as E136 holds a point (hold_at on the APL16 input at the variant's
+    coordinates), the extended block run at the held parameters with E136's breadth into E102's layout, the PN terms
+    of runs.csv the variant's, the files copied to the archive with the point record last, the row in E139's reads;
+    a failed check raises and releases the claim."""
+    import json as _json
+    got = _beside_fakes(monkeypatch, tmp_path)
+    row = L.read_beside('A1', 'P3', 'lane', arm='A1', z=dict(aplpn=np.log(0.155), kckc=np.log(3.24),
+                                                             inhadd=np.log(1017.3 / 31.4088), inhsc=np.log(1.0936)))
+    assert got['hold_at']['panel'] == 'apl16' and got['hold_at']['arm'] == 'A1' and got['ext']['breadth'] == 'B'
+    assert got['ext']['step'] == pytest.approx(1017.3) and callable(got['ext']['build'])
+    d = tmp_path / 'loc' / 'extended' / 'A1' / 'B' / 'inhadd1017.3'
+    a = tmp_path / 'arch' / 'extended' / 'A1' / 'B' / 'inhadd1017.3'
+    rc = pd.read_csv(d / 'P3_runs.csv')
+    assert np.allclose(rc.pn_inhsc, F.pn_norm_kws(got['hold_at']['z'])['pn_inhsc'])
+    assert (rc.variant == 'A1').all()
+    assert {p.name for p in a.iterdir()} == {p.name for p in d.iterdir()} and (a / 'P3_point.json').exists()
+    rec = _json.loads((a / 'P3_point.json').read_text())
+    assert rec['complete'] and rec['operating_point'].startswith("the wiring's own fit's APL16 counts")
+    assert row['step'] == 'beside' and row['panel'] == 'extended' and row['same_as_apl16_read'] is True
+    tab = pd.read_csv(tmp_path / 'res' / f'reads_{L._host()}_lane.csv')
+    assert list(tab.tag) == ['A1_extended_P3'] and tab.frac_on_target.iloc[0] == 0.15
+    assert L.read_beside('A1', 'P3', 'lane', done={'A1_extended_P3'}) is None
+    assert L.read_beside('A1', 'P3', 'lane', arm='A1', z={}) is None          # claimed
+    _beside_fakes(monkeypatch, tmp_path, ok=False)
+    with pytest.raises(RuntimeError, match='check'):
+        L.read_beside('B_inhadd1000', 'M2', 'lane')
+    assert not (tmp_path / 'res' / 'claims' / 'B_inhadd1000_extended_M2').exists()
+    assert not (tmp_path / 'arch' / 'extended' / 'B_inhadd1000').exists()
+
+
+def test_part_read_with_beside(monkeypatch):
+    got = []
+    monkeypatch.setattr(L, 'read_point', lambda pt, lane, reclaim, done: got.append(('point', pt)))
+    monkeypatch.setattr(L, 'read_beside', lambda name, w, lane, reclaim, done: got.append(('beside', (name, w))))
+    monkeypatch.setattr(L, 'reads_table', lambda: pd.DataFrame(columns=['tag']))
+    L.part_read('x', ['beside'])
+    assert got == [('beside', bp) for bp in L.beside_points()]
+    got.clear()
+    L.part_read('x', ['2', 'beside'], reverse=True)
+    assert got == ([('point', p) for p in L.planned_points(['2'])] + [('beside', bp) for bp in L.beside_points()])[::-1]
+
+
+def test_beside_readings(monkeypatch, tmp_path):
+    """The beside readings: E102's step readings of each variant's folder (the archive's), summarized as E102's
+    b_steps rows, the low-concentration class against E102's identity point, E102's own rows beside."""
+    from experiments import E102_antennal_lobe_normalization as E
+    from kcq import harness as H
+    monkeypatch.setattr(L, 'archive_dir', lambda: tmp_path / 'arch')
+    monkeypatch.setattr(L, 'local_dir', lambda part='': tmp_path / 'loc' / part)
+    rd = tmp_path / 'e102'
+    rd.mkdir()
+    monkeypatch.setattr(H, 'results_dir', lambda exp: rd)
+    pd.DataFrame([dict(step='identity', n_wirings=8, v2='flatter', v2_held='flatter', low_on=0.0136, low_off=0.04,
+                       low_flies_on=0.05, low_flies_off=0.11, low_class_on='about the same'),
+                  dict(step='inhadd1000', n_wirings=8, v2='inside', v2_held='inside', low_on=0.0048, low_off=0.02,
+                       low_flies_on=0.05, low_flies_off=0.11, low_class_on='further')]).to_csv(rd / 'b_steps.csv',
+                                                                                              index=False)
+    d = tmp_path / 'arch' / 'extended' / 'B_inhadd1000' / 'B' / 'inhadd1000'
+    d.mkdir(parents=True)
+    for w in ('P3', 'P4'):
+        (d / f'{w}_point.json').write_text('{}')
+    seen = {}
+
+    def step_readings(tag, root=None, wirings=E.ALL_WIRINGS):
+        seen.update(tag=tag, root=root, wirings=list(wirings))
+        comps = pd.DataFrame([dict(comparison='V2, paa', reading_set='carrying', category_linear='flatter',
+                                   model_linear_min=0.7, model_linear_max=0.8)])
+        low = pd.DataFrame([dict(stimulus=E.LOW_CARRYING, wiring=w, rate_on=v, rate_off=2 * v, off_over_on=2.0,
+                                 flies_on=0.05, flies_off=0.11) for w, v in (('P3', 0.004), ('P4', 0.006))])
+        return dict(step=tag, wirings=list(wirings), e98=dict(V2='inside', V2_held='inside', V1='inside'),
+                    e98_comparisons=comps, e98_wirings=pd.DataFrame([dict(wiring='P3', v=1)]),
+                    e100=dict(W1='inside'), low=low, e101=pd.DataFrame([dict(ratio_id='r1', quantity='APL', held='x')]),
+                    pn=dict(cv_totals=0.1, dist_rms_diff=0.2))
+    monkeypatch.setattr(E, 'step_readings', step_readings)
+    s, w = L.beside_readings(['B_inhadd1000', 'A1'])
+    assert seen == dict(tag='inhadd1000', root=tmp_path / 'arch' / 'extended' / 'B_inhadd1000', wirings=['P3', 'P4'])
+    b = s.set_index('variant')
+    assert b.loc['B_inhadd1000', 'n_wirings'] == 2 and b.loc['B_inhadd1000', 'v2_held'] == 'inside'
+    assert b.loc['B_inhadd1000', 'low_on'] == pytest.approx(0.005) and b.loc['B_inhadd1000', 'x2_r1_APL'] == 'x'
+    assert b.loc['B_inhadd1000', 'low_class_on'] == E.low_conc_class(0.005, 0.05, 0.0136)
+    assert b.loc['A1', 'n_wirings'] == 0 and {'family', 'F_inhadd1000 (E102)'} <= set(b.index)
+    assert set(w.table) == {'e98', 'low'}
+
+
+def test_part_fit(monkeypatch, tmp_path):
+    """Step 3 refuses a rung the score has not named unless forced; it runs E136's fit, single-factor returns and
+    rescore of the arm with the normalization fixed, in E139's folders, then the 28 reads through read_at at the
+    classed point and the 8 beside reads; E136's arms, paths and measure are as before after it."""
+    import json as _json
+    res = tmp_path / 'res'
+    res.mkdir()
+    monkeypatch.setattr(L, 'out_dir', lambda: res)
+    monkeypatch.setattr(L, 'local_dir', lambda part='': tmp_path / 'loc' / part)
+    monkeypatch.setattr(L, 'archive_dir', lambda: tmp_path / 'arch')
+    monkeypatch.setattr(L, 'read_dirs', lambda: [tmp_path / 'loc' / 'read', tmp_path / 'arch' / 'read'])
+    with pytest.raises(RuntimeError, match='not a step-3 candidate'):
+        L.part_fit(314.0)
+    (res / 'classes.json').write_text(_json.dumps(dict(step3_candidates=[dict(variant='F_inhadd314', rung=314.0)])))
+    assert L.candidate_rungs() == [314.0]
+    calls, reads, besides = [], [], []
+    z = dict(aplpn=-0.5, kckc=0.2)
+
+    def fit_arm(name, maxfev=None, **kw):
+        assert F.out_dir() == res and F.local_dir('fit_x') == tmp_path / 'loc' / 'fit_x'
+        assert F.archive_dir() == tmp_path / 'arch' and F.MEASURE == L.MEASURE
+        assert F.arm_kws(name)['pn_inhadd'] == pytest.approx(L.fit_rung(name)) and maxfev == F.MAXFEV['A0']
+        calls.append(('fit', name))
+        (res / f'fit_{name}.json').write_text(_json.dumps(dict(best_eval=3, best_z=z, n_evals=40)))
+        return {}
+
+    def determined(name):
+        calls.append(('determined', name))
+        fit = _json.loads((res / f'fit_{name}.json').read_text())
+        fit.update(determined={}, classed_z=z)
+        (res / f'fit_{name}.json').write_text(_json.dumps(fit))
+        return fit
+    monkeypatch.setattr(F, 'fit_arm', fit_arm)
+    monkeypatch.setattr(F, 'determined', determined)
+    monkeypatch.setattr(F, 'history_evals', lambda name: [0, 1, 2, 3])
+    monkeypatch.setattr(F, 'rescore', lambda name: calls.append(('rescore', name)))
+
+    def read_at(tag, arm, zz, wiring, panel, half, lane, root, dirs, reclaim=False, done=None, extra=None, **kw):
+        reads.append(dict(tag=tag, arm=arm, z=zz(), root=root, dirs=dirs, extra=extra, half=half))
+    monkeypatch.setattr(F, 'read_at', read_at)
+    monkeypatch.setattr(L, 'read_beside', lambda name, w, lane, reclaim, done, arm=None, z=None:
+                        besides.append((name, w, arm, dict(z))))
+    monkeypatch.setattr(L, 'reads_table', lambda: pd.DataFrame(columns=['tag']))
+    out = L.part_fit(314.0, lane='hal-fit')
+    assert calls == [('fit', 'A0_inhadd314'), ('determined', 'A0_inhadd314'), ('rescore', 'A0_inhadd314')]
+    assert len(reads) == 28 and all(r['arm'] == 'A0_inhadd314' and r['z'] == z and r['root'] == res for r in reads)
+    assert reads[0]['tag'] == 'A0_inhadd314_megamat_P3' and reads[0]['half'] == 'held'
+    assert reads[0]['extra'] == dict(variant='A0_inhadd314', setting='A0', rung=314.0, step='3')
+    assert len(besides) == 8 and besides[0] == ('A0_inhadd314', F.WIRINGS[0], 'A0_inhadd314', z)
+    assert out['classed_z'] == z and out['candidate'] and not out['forced']
+    assert 'A0_inhadd314' not in F.ARMS and F.PATHS == {} and F.MEASURE == 'all'
+    # a second call skips the done parts; a forced rung that is not a candidate runs
+    calls.clear()
+    pd.DataFrame(dict(eval=[0, 1, 2, 3])).to_csv(res / 'rescore_A0_inhadd314.csv', index=False)
+    L.part_fit(314.0, parts=('fit', 'determined', 'rescore'))
+    assert calls == []
+    L.part_fit(100.0, force=True, parts=('fit',))
+    assert calls == [('fit', 'A0_inhadd100')] and L.fitted_names() == ['A0_inhadd100', 'A0_inhadd314']
+
+
+def test_load_fit_run(monkeypatch, tmp_path):
+    import json as _json
+    res = tmp_path / 'res'
+    res.mkdir()
+    monkeypatch.setattr(L, 'out_dir', lambda: res)
+    monkeypatch.setattr(L, 'local_dir', lambda part='': tmp_path / 'loc' / part)
+    monkeypatch.setattr(L, 'archive_dir', lambda: tmp_path / 'arch')
+    monkeypatch.setattr(L, 'read_dirs', lambda: ['reads'])
+    (res / 'fit_A0_inhadd314.json').write_text(_json.dumps(dict(best_eval=7)))
+    seen = []
+    monkeypatch.setattr(R, 'load_step3_run', lambda tag, dirs=None: seen.append((tag, dirs)) or tag)
+    assert L.load_fit_run(F.ReadPoint('A0_inhadd314', 'megamat', 'P1', None)) == 'A0_inhadd314_e7_P1'
+    assert seen[-1][1] == [tmp_path / 'loc' / 'fit_A0_inhadd314', tmp_path / 'arch' / 'fit_A0_inhadd314']
+    assert L.load_fit_run(F.ReadPoint('A0_inhadd314', 'megamat', 'P3', 'held')) == 'A0_inhadd314_megamat_P3'
+    assert L.load_fit_run(F.ReadPoint('A0_inhadd314', 'apl16', 'real', None)) == 'A0_inhadd314_apl16_real'
+    assert seen[-1][1] == ['reads']

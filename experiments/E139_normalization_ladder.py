@@ -36,7 +36,15 @@ Judgments the entry leaves open (the narrowest reading; each is also in the docs
 - "whose holds fail": a read whose hold ended at a bracket's bound or whose rate is more than E136's HOLD_TOL from its
   target, or an E102 run at a bound or off its counts, on any wiring of the variant;
 - step 3's candidate: a rung below CANDIDATE_BELOW at F or B whose class improves and whose price (the largest of the
-  three targets' mean changes on T) is under CANDIDATE_PRICE_SHARE of A1's, read the same way.
+  three targets' mean changes on T) is under CANDIDATE_PRICE_SHARE of A1's, read the same way;
+- the beside step's operating point: E102 held each extended run at its point's 16-odor APL16 counts (the wiring's own
+  fit's, E102's `hold_point`), which are E136's APL16 targets (`read_targets`), so a beside read is held there, as E136
+  holds a point (`hold_at`), and run at those parameters on E98's extended input with E136's breadth (the lab input's,
+  where E102 recomputed it at each rung); a beside read on B at 1000 or A1 is so the same hold as that variant's APL16
+  read, which each beside read checks where the read is saved;
+- step 3's reads: E136's reads of an arm (28: megamat on T against the held-out half, the three other inputs on the
+  eight wirings; its S wirings on megamat are the fit's best evaluation, as E136 reads a fitted arm) and the beside
+  step's eight on the extended input, 36 in all (the entry's count; its design names E136's reads after the fit).
 
 Design:
 - step 0 (no simulation, `--part step0`): A1's saved evaluations and their rescore binned by rung (`a1_by_rung`); E102's
@@ -47,23 +55,29 @@ Design:
   each (96 reads); F's APL16 rows are E102's saved runs;
 - step 2 (`--part read --step 2`): B at 314 and 1000 and K at 1000 on the megamat, validation2, mixture and APL16
   inputs, eight wirings each (96 reads);
-- beside (`--step beside`): B at 1000 and A1 on E98's extended input, read by E102's rules for the flies' APL along
-  concentration and the KCs at low concentration (16 reads): not written yet (`part_read` refuses it);
+- beside (`--part read --step beside`): B at 1000 and A1 on E98's extended input, eight wirings each (16 reads,
+  `read_beside`), read by E102's rules for the flies' APL along concentration and the KCs at low concentration
+  (`beside_readings`, E102's `step_readings`); the score puts them beside (score_beside_extended*.csv, classes.json's
+  beside.extended), gating nothing;
 - the score (`--part score`): E136's, with the unrefitted family as the reference, E136's A1 beside, the kiwi mixtures
-  and both mixture panels' second-block readings (E137) beside every setting (`part_score`);
-- step 3 (`--part fit`, only on a candidate): if a rung below 1000 "improves" at F or B with a price under half of
-  A1's, A0's two-factor fit with the normalization fixed at that rung, on S against the fit half, then E136's reads
-  (`part_fit`: not written yet).
+  and both mixture panels' second-block readings (E137) beside every setting (`part_score`), step 3's arms too once
+  fitted;
+- step 3 (`--part fit --rung <r> [--force]`, only on a candidate of classes.json's step3_candidates): A0's two-factor
+  fit with the normalization fixed at that rung, on S against the fit half, by E136's `fit_arm` in this experiment's
+  folders (`fit_context`), then E136's single-factor returns and rescore and the 36 reads (`part_fit`).
 
 Outputs: results/E139_normalization_ladder/ (reads_<host>_<lane>.csv, provenance_read_<host>_<lane>.json, claims/,
 step0_*.csv and step0_*.json, stage_classes.json, score_*.csv, classes.json, provenance_score.json, variants.csv from
-`--part variants` for the archive's params.csv); runs in
-outputs/E139_normalization_ladder/read/ and data/model_outputs/E139_normalization_ladder/read/ (E134's step-3 layout,
-written in place, as E136's).
+`--part variants` for the archive's params.csv; step 3's fit_history_<arm>.csv, fit_<arm>.json, fit_restart_<arm>.json,
+determined_<arm>.csv, rescore_<arm>.csv); runs in outputs/E139_normalization_ladder/read/ and
+data/model_outputs/E139_normalization_ladder/read/ (E134's step-3 layout, written in place, as E136's); the beside
+step's in .../extended/<variant>/B/<E102's step tag>/ of both (E102's part-B layout); step 3's evaluations in
+outputs/.../fit_<arm>/ and the best in the archive's fit_<arm>/.
 
 Usage (from the repository root):
     OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 PYTHONUNBUFFERED=1 nice -n 10 ./venv/bin/python -u \\
         -m experiments.E139_normalization_ladder --part read --step 1 --lane <host>[-<n>] [--reverse]
+    (the same for --step 2, --step beside, and --part fit --rung <r> --lane <host>-fit)
     ./venv/bin/python -u -m experiments.E139_normalization_ladder --part step0 | --part score
 """
 from __future__ import annotations
@@ -262,16 +276,277 @@ def read_point(pt: Point, lane: str, reclaim: bool = False, done: Optional[set] 
 
 
 def part_read(lane: str, steps: Sequence[str], reverse: bool = False, reclaim: bool = False) -> None:
-    """A lane of reads: every planned point of `steps` (`planned_points`, reversed with `reverse`), skipping what is
-    done or claimed elsewhere. The beside step (E98's extended input) is not written yet: NotImplementedError."""
+    """A lane of reads: every planned point of the numbered steps of `steps` (`planned_points`), then with 'beside' the
+    beside step's reads (`beside_points`, `read_beside`), the whole list reversed with `reverse`, skipping what is done
+    or claimed elsewhere."""
+    jobs = [('point', pt) for pt in planned_points([s for s in steps if s in STEPS])]
     if 'beside' in steps:
-        raise NotImplementedError(
-            "E139's beside step (B at 1000 and A1 on E98's extended input, 16 reads, read by E102's rules for the flies' "
-            "APL along concentration and the KCs at low concentration) is not written: it needs E102's `run_extended` "
-            "at a read's held parameters with E136's breadth, and E102's step readings on those runs")
-    pts = planned_points(list(steps))
-    for pt in (pts[::-1] if reverse else pts):
-        read_point(pt, lane, reclaim, set(reads_table().tag))
+        jobs += [('beside', bp) for bp in beside_points()]
+    for kind, x in (jobs[::-1] if reverse else jobs):
+        done = set(reads_table().tag)
+        if kind == 'point':
+            read_point(x, lane, reclaim, done)
+        else:
+            read_beside(x[0], x[1], lane, reclaim, done)
+
+
+# ---------------------------------------------------------------------------
+# the beside step: B at 1000 and A1 on E98's extended input, read by E102's rules
+
+# the beside variants (design item 4): B at 1000 and E136's A1 (step 3's fitted point is read the same way, `part_fit`)
+BESIDE: Tuple[str, ...] = ('B_inhadd1000', A1)
+EXTENDED = 'extended'
+
+
+def beside_points(names: Sequence[str] = BESIDE) -> List[Tuple[str, str]]:
+    """The beside step's reads in a forward lane's order: (variant, wiring), each variant on the eight wirings."""
+    from experiments import E136_stage_population_fit as F
+    return [(v, w) for v in names for w in F.WIRINGS]
+
+
+def beside_tag(name: str, wiring: str) -> str:
+    """'<variant>_extended_<wiring>', e.g. 'B_inhadd1000_extended_P3', 'A1_extended_P3'."""
+    return f'{name}_{EXTENDED}_{wiring}'
+
+
+def beside_model(name: str) -> Tuple[str, Dict[str, float]]:
+    """(E136's arm whose model a beside variant is, its coordinates): E136's A1 at its classed point (`fitted_z`, on the
+    adopted measure); step 3's fitted arm ('A0_inhadd<rung>') at its classed point in this experiment's folder; any
+    other variant A1's model at `point_z`."""
+    with e136() as F:
+        if name == A1:
+            return A1, F.fitted_z(A1)
+    if fit_rung(name) is not None:
+        rec = json.loads((out_dir() / f'fit_{name}.json').read_text())
+        return name, {k: float(v) for k, v in (rec.get('classed_z') or rec['best_z']).items()}
+    s, r = parse_variant(name)
+    return A1, point_z(s, r)
+
+
+def extended_root(name: str, where: str = 'local') -> Path:
+    """The root of a beside variant's extended runs in E102's layout (`extended_dir`): outputs/E139_normalization_ladder/
+    extended/<variant>/ ('local') or the archive's extended/<variant>/ ('archive')."""
+    if where not in ('local', 'archive'):
+        raise ValueError(f'{where=}')
+    return (local_dir(EXTENDED) if where == 'local' else archive_dir() / EXTENDED) / name
+
+
+def extended_dir(name: str, pn_inhadd: float, where: str = 'local') -> Path:
+    """A beside variant's folder of runs: <root>/B/<E102's step tag of its pn_inhadd>/ (E102's part-B layout, so that
+    E102's `step_readings` reads it: <wiring>_<on|acute_off>_<apl.csv|responses|spike_counts|pn_win|pn_pre|claw_*>,
+    <wiring>_family.csv, <wiring>_units.json, <wiring>_runs.csv, b1_stimuli.csv, and <wiring>_point.json, written last)."""
+    from experiments import E102_antennal_lobe_normalization as E
+    return extended_root(name, where) / 'B' / E.step_tag(float(pn_inhadd))
+
+
+def _same_as_read(name: str, wiring: str, hold: Mapping) -> Optional[dict]:
+    """The beside hold against the variant's saved APL16 read (the same hold on the same input: B's step-2 read, E136's
+    A1 read, step 3's read), if saved: whether the held parameters and the 16-odor counts are the same; None if no read
+    is saved."""
+    from kcq import stage_readings as R
+    run = None
+    try:
+        if name == A1:
+            with e136() as FF:
+                run = FF.load_read(FF.ReadPoint(A1, 'apl16', wiring, None))
+        else:
+            tag = (f'{name}_apl16_{wiring}' if fit_rung(name) is not None
+                   else point_tag(Point(*parse_variant(name), 'apl16', wiring)))
+            run = R.load_step3_run(tag, dirs=read_dirs())
+    except FileNotFoundError:
+        run = None
+    if run is None:
+        return None
+    pa = {k: float(v) for k, v in (run.info.get('params') or {}).items()}
+    pb = {k: float(v) for k, v in hold['params'].items()}
+    same_counts = all(np.array_equal(H.abbrev_columns(run.conditions[c]['spike_counts']).to_numpy(dtype=float),
+                                     H.abbrev_columns(hold[c][1]).to_numpy(dtype=float)) for c in ('on', 'off'))
+    return dict(tag=run.tag, params_equal=pa == pb, counts_equal=bool(same_counts))
+
+
+def _copy_extended(src: Path, dst: Path, wiring: str) -> List[Path]:
+    """A beside read's files (<wiring>_* and b1_stimuli.csv) copied from `src` to `dst` atomically file by file, the
+    APL tables after the matrices and <wiring>_point.json last (its presence says the run is complete)."""
+    import shutil
+    dst.mkdir(parents=True, exist_ok=True)
+    files = sorted([p for p in src.glob(f'{wiring}_*') if p.is_file()] + [src / 'b1_stimuli.csv'],
+                   key=lambda p: (p.name.endswith('_point.json'), p.name.endswith('_apl.csv'), p.name))
+    out = []
+    for p in files:
+        tmp = dst / f'.{p.name}.{_host()}.{os.getpid()}.tmp'
+        shutil.copyfile(p, tmp)
+        os.replace(tmp, dst / p.name)
+        out.append(dst / p.name)
+    return out
+
+
+def read_beside(name: str, wiring: str, lane: str, reclaim: bool = False, done: Optional[set] = None,
+                arm: Optional[str] = None, z: Optional[Mapping[str, float]] = None) -> Optional[dict]:
+    """One read of the beside step (design item 4), claimed under out_dir()/claims/ as the other reads are (None if
+    done or claimed elsewhere): the variant's model (`beside_model`, or `arm` at `z`) held on the lab's APL16 input
+    exactly as E136's reads hold a point (E136's `hold_at`: E77's `hold_rates` with the lab input's breadth, to the
+    wiring's own fit's two counts), then run at those held parameters (APL on) and at the hold's APL-off parameters on
+    E98's extended input (52 stimuli and the blank), with E136's breadth (the lab input's), by E102's `extended_block`
+    (E102's `run_extended` with the variant's simulator: E98's outputs, APL's means with the settled level, E90's claw
+    stage, E101's family table; its checks: the extended run's 16 panel columns equal the hold's counts, E98's amended
+    blank identity). The operating point is E102's: its extended runs are held at the same APL16 counts (E102's
+    `hold_point`, the wiring's fit's targets), which are E136's APL16 targets (`read_targets`). The runs are written in
+    E102's part-B layout (`extended_dir`) locally and copied to the archive; <wiring>_runs.csv's PN terms are the
+    variant's (E102's `step_kws` would give pn_inhsc by `inhsc_for`, which A1's gain on it departs from); the hold is
+    checked against the variant's saved APL16 read where one is saved (`_same_as_read`, recorded). Its row in
+    reads_<host>_<lane>.csv (panel 'extended', step 'beside'). RuntimeError, the claim released, if a check fails."""
+    from experiments import E83_cross_wiring_fit as E83
+    from experiments import E98_apl_response_strength as E98
+    from experiments import E102_antennal_lobe_normalization as E
+    from experiments import E134_population_baseline as B
+    from experiments.E3_drive_dependent_gain import PN_INHADD_DEFAULT
+    from kcq import stage_readings as R
+    tag = beside_tag(name, wiring)
+    if done is not None and tag in done:
+        return None
+    if not B.claim(tag, lane, reclaim, root=out_dir()):
+        print(f'E139 {tag}: claimed by another process, skipped', flush=True)
+        return None
+    t0 = time.time()
+    try:
+        if arm is None or z is None:
+            arm, z = beside_model(name)
+        if arm == A1:
+            with e136() as F:
+                mode = F.require_e135()['mode']
+            if mode != 'search':
+                raise RuntimeError(f"E135's verdict puts A1 in mode {mode!r}: its normalization is not the searched one")
+        with e136() as F:
+            commits = F._commits()
+            lock = R.require_lock()
+            h = F.hold_at(arm, dict(z), wiring, 'apl16', label=f'E139 {tag}', lock=lock)
+        hold, kws, breadth = h['hold'], dict(h['kws']), h['breadth']
+        pn = {k: float(kws.get(k, d)) for k, d in (('pn_inhadd', PN_INHADD_DEFAULT), ('pn_inhsc', np.nan))}
+        d = extended_dir(name, pn['pn_inhadd'], 'local')
+        d.mkdir(parents=True, exist_ok=True)
+        setting, rung = _setting_of(name), _rung_of(name)
+        rec = dict(tag=tag, variant=name, setting=setting, rung=rung, arm=arm, wiring=wiring, z=dict(z), pn_kws=pn,
+                   params=hold['params'], params_off=hold['params_off'], thr_factor=float(hold['thr_factor']),
+                   apl_factor=float(hold['apl_factor']), n_on=int(hold['n_on']), n_off=int(hold['n_off']),
+                   target_on=int(h['targets'][1]), target_off=int(h['targets'][0]),
+                   at_bound_thr=bool(hold['at_bound_thr']), at_bound_apl=bool(hold['at_bound_apl']),
+                   n_sims=int(hold['n_sims']), breadth="held at the lab input's (E136's reads; E83 wiring_parts)",
+                   operating_point="the wiring's own fit's APL16 counts (E102's extended runs' and E136's APL16 reads')",
+                   host=_host(), lane=lane, time=_now(), threads=os.environ.get('OMP_NUM_THREADS'), commits=commits,
+                   complete=False, extended_done=False)
+        rec['same_as_apl16_read'] = _same_as_read(name, wiring, hold)
+        held = dict(params=dict(hold['params']), params_off=dict(hold['params_off']), on=hold['on'], off=hold['off'])
+
+        def build(orn):
+            return E83.build_simulator(wiring, orn=orn, breadth=breadth, params=dict(held['params']),
+                                       extra_kws=kws or None)
+        ok = E.extended_block(rec, d, wiring, pn['pn_inhadd'], held, breadth, commits, build=build,
+                              label=f'E139 {tag}')
+        runs_csv = d / f'{wiring}_runs.csv'
+        rc = pd.read_csv(runs_csv)
+        rc = rc.assign(pn_inhadd=pn['pn_inhadd'], pn_inhsc=pn['pn_inhsc'], variant=name)
+        rc.to_csv(runs_csv, index=False)
+        rec.update(extended_done=True, complete=bool(ok), seconds=round(time.time() - t0, 1))
+        _write_json(d / f'{wiring}_point.json', rec)
+        if not ok:
+            raise RuntimeError(f'{tag}: a check of the extended run failed (see {d / f"{wiring}_point.json"})')
+        _copy_extended(d, extended_dir(name, pn['pn_inhadd'], 'archive'), wiring)
+        on_r, off_r = hold['on'][0], hold['off'][0]
+        row = dict(tag=tag, arm=arm, panel=EXTENDED, wiring=wiring, half=None, variant=name, setting=setting,
+                   rung=rung, step='beside', **{f'z_{k}': v for k, v in z.items()}, **pn,
+                   **{k: float(v) for k, v in hold['params'].items()},
+                   **{f'off_{k}': float(v) for k, v in hold['params_off'].items()},
+                   rate_on=float((on_r.to_numpy(dtype=float) > 0.5).mean()),
+                   rate_off=float((off_r.to_numpy(dtype=float) > 0.5).mean()),
+                   target_on=rec['target_on'], target_off=rec['target_off'], frac_on_target=float(h['targets'][3]),
+                   frac_off_target=float(h['targets'][2]), thr_factor=rec['thr_factor'], apl_factor=rec['apl_factor'],
+                   at_bound_thr=rec['at_bound_thr'], at_bound_apl=rec['at_bound_apl'], hold_n_sims=rec['n_sims'],
+                   extended_matches_held=rec.get('extended_matches_held'),
+                   a0_identity_passes=rec.get('a0_identity_passes'),
+                   same_as_apl16_read=None if rec['same_as_apl16_read'] is None else bool(
+                       rec['same_as_apl16_read']['params_equal'] and rec['same_as_apl16_read']['counts_equal']),
+                   seconds=rec['seconds'], host=_host(), lane=lane, time=_now(),
+                   threads=os.environ.get('OMP_NUM_THREADS'), **commits)
+        with e136() as F:
+            F._append_row(out_dir() / f'reads_{_host()}_{lane}.csv', row)
+            prov_path = out_dir() / f'provenance_read_{_host()}_{lane}.json'
+            prov = F._read_json(prov_path) or dict(part='read', lane=lane, script=SCRIPT, points={})
+            prov['points'][tag] = dict(params=hold['params'], params_off=hold['params_off'], pn_kws=pn,
+                                       model=H.model_provenance(orn_deltas=E98.b1_input()[0]))
+            _write_json(prov_path, prov)
+        print(f'E139 {tag}: {rec["seconds"]:.0f} s, extended run saved ({d})', flush=True)
+        return row
+    except BaseException:
+        B.release(tag, root=out_dir())
+        raise
+
+
+def beside_readings(names: Optional[Sequence[str]] = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """The beside step's extended runs read by E102's rules (E102's `step_readings` on each variant's folder: E98's
+    verdict on the flies' APL along concentration, E100's W1, E101's X2, the KCs at low concentration, the PN stage),
+    one row per variant as E102's b_steps.csv gives a step (`_step_table`'s columns: V2 held and its linear reading, V1,
+    W1, the KCs' response rates at E102's carrying low-concentration stimulus, medians over the wirings read, with the
+    flies' and the class against C2's, E102's identity point, by E102's `low_conc_class`; E101's X2 classes), read from
+    the archive (every lane's runs; the local folder where the archive has none), with E102's own rows of its identity
+    point and of F at 1000 (E102's breadth, recomputed at the rung) beside; and the per-wiring rows (E98's comparisons
+    per wiring and the KCs at low concentration). They gate nothing. Returns (summary, per wiring)."""
+    from experiments import E102_antennal_lobe_normalization as E
+    names = list(names) if names is not None else list(BESIDE) + fitted_names()
+    steps = pd.read_csv(H.results_dir(E102) / 'b_steps.csv', comment='#').set_index('step')
+    c2 = {c: float(steps.loc['identity', f'low_{c}']) for c in ('on', 'off')} if 'identity' in steps.index else {}
+    rows, per = [], []
+    for name in names:
+        best = None
+        for where in ('archive', 'local'):
+            base = extended_root(name, where) / 'B'
+            if not base.is_dir():
+                continue
+            for d in sorted(p for p in base.iterdir() if p.is_dir()):
+                have = [w for w in E.ALL_WIRINGS if (d / f'{w}_point.json').exists()]
+                if have and (best is None or len(have) > len(best[2])):
+                    best = (base.parent, d.name, have)
+        if best is None:
+            rows.append(dict(variant=name, source='E139:beside', n_wirings=0))
+            continue
+        root, tag, have = best
+        a = E.step_readings(tag, root, wirings=have)
+        row = dict(variant=name, source='E139:beside', step=tag, n_wirings=len(have), wirings=';'.join(have),
+                   breadth="the lab input's (E136's)", root=str(root))
+        if 'e98' in a:
+            comps = a['e98_comparisons']
+            v2c = comps[comps['comparison'].str.startswith('V2, ') & (comps['reading_set'] == 'carrying')]
+            row.update(v2=a['e98']['V2'], v2_held=a['e98']['V2_held'], v1=a['e98']['V1'], w1=a['e100']['W1'],
+                       v2_linear=str(v2c['category_linear'].iloc[0]) if len(v2c) else 'not read',
+                       v2_linear_min=float(v2c['model_linear_min'].iloc[0]) if len(v2c) else np.nan,
+                       v2_linear_max=float(v2c['model_linear_max'].iloc[0]) if len(v2c) else np.nan)
+            per.append(a['e98_wirings'].assign(variant=name, table='e98'))
+        low = a.get('low')
+        car = low[low['stimulus'] == E.LOW_CARRYING] if low is not None and len(low) else pd.DataFrame()
+        if len(car):
+            row.update(low_on=float(car['rate_on'].median()), low_off=float(car['rate_off'].median()),
+                       low_off_over_on=float(car['off_over_on'].median()), low_flies_on=float(car['flies_on'].iloc[0]),
+                       low_flies_off=float(car['flies_off'].iloc[0]))
+            for c in ('on', 'off'):
+                if c in c2 and row[f'low_flies_{c}'] > 0:
+                    row[f'low_class_{c}'] = E.low_conc_class(row[f'low_{c}'], row[f'low_flies_{c}'], c2[c])
+            per.append(low.assign(variant=name, table='low'))
+        x2 = a.get('e101')
+        if x2 is not None and len(x2):
+            row.update({f'x2_{r.ratio_id}_{r.quantity}': r.held for r in x2.itertuples()})
+        if 'pn' in a:
+            row.update({f'pn_{k}': v for k, v in a['pn'].items() if k in ('cv_totals', 'cv_totals_flies',
+                                                                         'dist_rms_diff', 'r_totals_pn_dend')})
+        rows.append(row)
+    for st in ('identity', 'inhadd1000'):
+        if st in steps.index:
+            r = steps.loc[st]
+            rows.append(dict(variant='family' if st == 'identity' else 'F_inhadd1000 (E102)', source='E102:B', step=st,
+                             n_wirings=int(r.get('n_wirings', 8)),
+                             breadth="the lab input's" if st == 'identity' else "recomputed at the rung (E102)",
+                             **{k: r[k] for k in ('v2', 'v2_held', 'v2_linear', 'v2_linear_min', 'v2_linear_max', 'v1',
+                                                  'w1', 'low_on', 'low_off', 'low_off_over_on', 'low_flies_on',
+                                                  'low_flies_off', 'low_class_on', 'low_class_off') if k in r.index}))
+    return pd.DataFrame(rows), (pd.concat(per, ignore_index=True, sort=False) if per else pd.DataFrame())
 
 
 # ---------------------------------------------------------------------------
@@ -801,7 +1076,10 @@ def part_score(names: Optional[Sequence[str]] = None) -> dict:
         stages = stages_read(F)
         names = list(names) if names is not None else variants()
         register_variants(F, names)
-        allv = [F.FAMILY, *names, A1]
+        fitted = fitted_names()
+        for fn in fitted:
+            F.register_variant(fn, load_fit_run)
+        allv = [F.FAMILY, *names, *fitted, A1]
         mrows, mega, mega_fit = [], {}, {}
         for v in allv:
             for half in ('held', None, 'fit'):
@@ -903,6 +1181,8 @@ def part_score(names: Optional[Sequence[str]] = None) -> dict:
             if v == A1:
                 fit = json.loads((F.out_dir() / f'fit_{A1}.json').read_text())
                 control_fall = e136_classes.get('control_fall')
+            elif v in fitted:
+                fit, control_fall = json.loads((out_dir() / f'fit_{v}.json').read_text()), None
             else:
                 fit, control_fall = {}, None
             rec = F.classify(v, stages, mega, pv, spreads, realism, fit, control_fall, guard)
@@ -936,7 +1216,13 @@ def part_score(names: Optional[Sequence[str]] = None) -> dict:
         g_panels.to_csv(out_dir() / 'score_panels_all_views.csv', index=False)
         e137.to_csv(out_dir() / 'score_panels_e137.csv', index=False)
         apl.to_csv(out_dir() / 'score_apl16.csv', index=False)
-        out = dict(stages=list(stages), measure=F.MEASURE, variants=names, reference=F.FAMILY, beside_arm=A1,
+        # beside: the beside step's extended runs read by E102's rules (they gate nothing)
+        ext, ext_w = beside_readings(list(BESIDE) + fitted)
+        ext.to_csv(out_dir() / 'score_beside_extended.csv', index=False)
+        ext_w.to_csv(out_dir() / 'score_beside_extended_wirings.csv', index=False)
+        beside['extended'] = json.loads(ext.to_json(orient='records'))
+        out = dict(stages=list(stages), measure=F.MEASURE, variants=names, fitted=fitted, reference=F.FAMILY,
+                   beside_arm=A1,
                    spreads=spreads, spreads_max_abs_diff_from_e136=max(sp_diff.values()) if sp_diff else None,
                    price_rule=dict(threshold=PRICE, targets=list(PRICE_TARGETS), decided_on='T'),
                    named_rungs=named, step3_candidates=cands, beside=beside, classes=classes)
@@ -948,6 +1234,9 @@ def part_score(names: Optional[Sequence[str]] = None) -> dict:
 
 
 def _setting_of(v: str) -> str:
+    """A variant's setting ('A0' for step 3's arms; the name itself for the family and A1)."""
+    if fit_rung(v) is not None:
+        return FIT_PREFIX
     try:
         return parse_variant(v)[0]
     except ValueError:
@@ -955,6 +1244,9 @@ def _setting_of(v: str) -> str:
 
 
 def _rung_of(v: str) -> float:
+    """A variant's rung (step 3's arms' too; NaN for the family and A1)."""
+    if fit_rung(v) is not None:
+        return float(fit_rung(v))
     try:
         return parse_variant(v)[1]
     except ValueError:
@@ -1005,14 +1297,130 @@ def write_variants(arch: Optional[Path] = None) -> pd.DataFrame:
     return df
 
 
-def part_fit(rung: float) -> dict:
-    """Step 3, only on a candidate: A0's two-factor fit (E136's `fit_arm`) with the normalization fixed at `rung`, on S
-    against the fit half. Not written yet: NotImplementedError."""
-    raise NotImplementedError(
-        f"E139's step 3 (A0's two-factor fit with pn_inhadd fixed at {rung:g} and pn_inhsc by inhsc_for) is not written: "
-        "it needs an arm of E136 that is A0 with the normalization's kwargs fixed (ArmModel takes the arm's kwargs from "
-        "E136's ARMS), its fit's records in this experiment's folder rather than E136's (fit_arm writes under E136's "
-        "out_dir), and E136's reads after it; it runs only on a candidate (classes.json 'step3_candidates')")
+# ---------------------------------------------------------------------------
+# step 3: A0's two-factor fit with the normalization fixed at a candidate rung
+
+FIT_PREFIX = 'A0'
+
+
+def fit_name(rung: float) -> str:
+    """Step 3's arm at a rung, 'A0_inhadd<rung>' (e.g. 'A0_inhadd314')."""
+    return f'{FIT_PREFIX}_inhadd{float(rung):g}'
+
+
+def fit_rung(name: str) -> Optional[float]:
+    """The rung of a step-3 arm's name (`fit_name`), or None for any other name."""
+    pre, sep, r = str(name).partition('_inhadd')
+    if pre != FIT_PREFIX or not sep:
+        return None
+    try:
+        return float(r)
+    except ValueError:
+        return None
+
+
+def fit_arm_def(rung: float):
+    """Step 3's arm as an E136 `Arm`: A0 (the APL->bouton and KC-KC factors searched, the threshold and the APL->KC
+    scale set by the operating point) with the PN normalization fixed at the rung (E136's `pn_norm_kws` at
+    inhadd = ln(rung / olfsysm's default), inhsc 0: pn_inhsc by `inhsc_for`, as the rungs read it)."""
+    from experiments import E136_stage_population_fit as F
+    from experiments.E3_drive_dependent_gain import PN_INHADD_DEFAULT
+    kws = F.pn_norm_kws(dict(inhadd=float(np.log(float(rung) / PN_INHADD_DEFAULT)), inhsc=0.0))
+    return F.Arm(fit_name(rung), f"A0 with the antennal lobe's normalization fixed at pn_inhadd {float(rung):g} "
+                                 f"(pn_inhsc {kws['pn_inhsc']:.4g} by inhsc_for)", tuple(F.ARMS['A0'].searched), kws)
+
+
+@contextlib.contextmanager
+def fit_context(rung: float) -> Iterator[object]:
+    """E136 on the adopted measure with step 3's arm among its arms (`extra_arms`) and its fit's records, evaluations
+    and archived best evaluation in this experiment's folders (`paths`: out_dir(), local_dir(), archive_dir()), so that
+    E136's `fit_arm`, `determined`, `rescore`, `hold_at` and `read_at` run it as one of their own."""
+    with e136() as F, F.paths(out=out_dir(), local=local_dir(), archive=archive_dir()), F.extra_arms(fit_arm_def(rung)):
+        yield F
+
+
+def fitted_names() -> List[str]:
+    """The step-3 arms fitted so far (fit_<name>.json in out_dir())."""
+    return sorted(p.name[len('fit_'):-len('.json')] for p in out_dir().glob(f'fit_{FIT_PREFIX}_inhadd*.json')
+                  if fit_rung(p.name[len('fit_'):-len('.json')]) is not None)
+
+
+def candidate_rungs() -> List[float]:
+    """The rungs classes.json's step3_candidates names (empty before the score)."""
+    p = out_dir() / 'classes.json'
+    if not p.exists():
+        return []
+    return sorted({float(c['rung']) for c in json.loads(p.read_text()).get('step3_candidates') or []})
+
+
+def fit_reads(name: str) -> list:
+    """Step 3's reads after its fit (E136's `planned_reads` of the arm: megamat on the T wirings against the held-out
+    half, the validation2, mixture and APL16 inputs on the eight wirings; 28), inside `fit_context`."""
+    from experiments import E136_stage_population_fit as F
+    return F.planned_reads([name])
+
+
+def part_fit(rung: float, force: bool = False, lane: str = 'fit', reclaim: bool = False,
+             parts: Sequence[str] = ('fit', 'determined', 'rescore', 'reads', 'beside')) -> dict:
+    """Step 3 (design item 6), only on a candidate (`candidate_rungs`, unless `force`): A0's two-factor fit with the
+    normalization fixed at `rung` (`fit_arm_def`), on S against the fit half, by E136's own machinery in this
+    experiment's folders (`fit_context`): `fit_arm` (fit_history_<name>.csv, fit_<name>.json, fit_restart_<name>.json
+    in out_dir(); every evaluation's stages under outputs/.../fit_<name>/, the best in the archive's fit_<name>/;
+    resumable from its history; budget E136's A0's), then `determined` (the single-factor returns, determined_<name>.csv),
+    `rescore` (every measure against both halves, rescore_<name>.csv; the evaluations saved on this host), then the reads
+    at the classed point through E136's `read_at` (`fit_reads`: 28, tags '<name>_<panel>_<wiring>', E139's claims, rows
+    and runs) and the beside step's eight on E98's extended input (`read_beside`): 36 reads. Each part is skipped where
+    its record is complete (the fit's json, its 'determined', a rescore of every evaluation, the reads done). Returns a
+    summary."""
+    rung = float(rung)
+    cands = candidate_rungs()
+    if not force and rung not in cands:
+        raise RuntimeError(f'pn_inhadd {rung:g} is not a step-3 candidate (classes.json step3_candidates: '
+                           f'{[f"{r:g}" for r in cands]}); pass --force to fit it anyway')
+    name = fit_name(rung)
+    out: Dict[str, object] = dict(name=name, rung=rung, candidate=rung in cands, forced=bool(force and rung not in cands))
+    with fit_context(rung) as F:
+        fit_path = out_dir() / f'fit_{name}.json'
+        if 'fit' in parts and not fit_path.exists():
+            F.fit_arm(name, maxfev=F.MAXFEV[FIT_PREFIX])
+        fit = json.loads(fit_path.read_text()) if fit_path.exists() else {}
+        out['fit'] = {k: fit.get(k) for k in ('best_eval', 'best_z', 'factors', 'at_bound', 'n_evals')} if fit else None
+        if 'determined' in parts and fit and 'determined' not in fit:
+            fit = F.determined(name)
+        out['classed_z'] = fit.get('classed_z') if fit else None
+        if 'rescore' in parts and fit:
+            rp = out_dir() / f'rescore_{name}.csv'
+            have = set(pd.read_csv(rp)['eval']) if rp.exists() else set()
+            if set(F.history_evals(name)) - have:
+                F.rescore(name)
+        if 'reads' in parts and fit:
+            for pt in fit_reads(name):
+                F.read_at(F.read_tag(pt), name, lambda: F.fitted_z(name), pt.wiring, pt.panel, pt.half, lane,
+                          out_dir(), read_dirs(), reclaim=reclaim, done=set(reads_table().tag),
+                          extra=dict(variant=name, setting=FIT_PREFIX, rung=rung, step='3'), label='E139',
+                          script=SCRIPT)
+        if 'beside' in parts and fit:
+            z = F.fitted_z(name)
+            for _, w in beside_points([name]):
+                read_beside(name, w, lane, reclaim, set(reads_table().tag), arm=name, z=z)
+    return out
+
+
+def load_fit_run(pt, claw_after: bool = False):
+    """The run of a step-3 arm's point for E136's score functions (registered as a variant, outside `fit_context`): on
+    the megamat input on the S wirings its fit's best evaluation (as E136 reads a fitted arm), every other point E139's
+    read of it; None if absent."""
+    from experiments import E136_stage_population_fit as F
+    from kcq import stage_readings as R
+    name = pt.arm
+    try:
+        if pt.panel == F.PANEL and pt.wiring in F.S_WIRINGS:
+            fit = json.loads((out_dir() / f'fit_{name}.json').read_text())
+            return R.load_step3_run(f"{name}_e{fit['best_eval']}_{pt.wiring}",
+                                    dirs=[local_dir(f'fit_{name}'), archive_dir() / f'fit_{name}'])
+        return R.load_step3_run(f'{name}_{pt.panel}_{pt.wiring}', dirs=read_dirs())
+    except FileNotFoundError:
+        return None
 
 
 def main(argv: Optional[Sequence[str]] = None) -> None:
@@ -1022,7 +1430,11 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     ap.add_argument('--lane', default='1')
     ap.add_argument('--reverse', action='store_true')
     ap.add_argument('--reclaim', action='store_true')
-    ap.add_argument('--rung', type=float)
+    ap.add_argument('--rung', type=float, help='--part fit: the rung (a step-3 candidate of classes.json)')
+    ap.add_argument('--force', action='store_true', help='--part fit: fit a rung that is not a step-3 candidate')
+    ap.add_argument('--fit-parts', nargs='+', default=['fit', 'determined', 'rescore', 'reads', 'beside'],
+                    choices=('fit', 'determined', 'rescore', 'reads', 'beside'),
+                    help="--part fit: the parts to run (each skipped where its record is complete)")
     ap.add_argument('--tables', nargs='+', choices=('a1_by_rung', 'e102_ladder', 'pn_stage_ladder',
                                                     'recorded_step_signature'),
                     help='--part step0: the tables to write (default all)')
@@ -1044,7 +1456,9 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     elif a.part == 'fit':
         if a.rung is None:
             raise SystemExit('--part fit needs --rung')
-        print(json.dumps(part_fit(a.rung), indent=1, default=str))
+        lane = a.lane if a.lane != '1' else 'fit'
+        print(json.dumps(part_fit(a.rung, force=a.force, lane=lane, reclaim=a.reclaim, parts=a.fit_parts), indent=1,
+                         default=str))
     elif a.part == 'variants':
         print(f'variants.csv: {len(write_variants())} runs', flush=True)
 
