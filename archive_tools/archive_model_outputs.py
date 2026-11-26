@@ -69,6 +69,10 @@ PARAM_COLS = ['tag', 'variant', 'base', 'config', 'kind', 'point', 'part', 'seed
     'change', 'search', 'size', 'panel', 'connectome', 'pn2kc_connections', 'kckc_matrix', 'kckc_matrix_tag', 'off_kckc_scale',
     'mbc1_inh', 'mbc1_tau', 'mbc1_thr', 'mbc1_pooled', 'mbc1_claws_only', 'wMBC1_scale',
     'init_from', 'init_thr', 'loss_variant', 'method', 'maxfev', 'kckc0', 'thr0_factor',
+    # E135's and E136's variants.csv: both conditions' absolute parameters ('off_': APL off), E136's runs' folder,
+    # reading, fit evaluation and searched coordinates
+    'off_fixed_thr', 'off_wKCAPL_scale', 'off_wPNAPL_scale', 'off_wKCKC_scale', 'model', 'subdir', 'reading', 'eval',
+    'z_aplpn', 'z_kckc', 'z_claw_thr', 'z_inhadd', 'z_inhsc',
     'n_kcs', 'n_glomeruli', 'rate_on', 'rate_off', 'rate_acute_off', 'rate_homeo_full_off',
     'rate_homeo_data_off', 'error']
 STATS_NAMES = ['stats_variants.csv', 'models.csv', 'wkckc_controls.csv', 'sweep.csv']
@@ -92,6 +96,8 @@ PARAMS_TABLES = {
     'E134_population_baseline': ('variants.csv',),
     # E135: one row per saved step-2 run; its score tables are readings
     'E135_antennal_lobe_dendrites': ('variants.csv',),
+    # E136: one row per run its script wrote into the archive (`--part variants`, from each run's <tag>_run.json)
+    'E136_stage_population_fit': ('measure_strength/variants.csv',),
 }
 
 # experiments whose step folders repeat their files' names: per folder pattern (fnmatch on the file's folder under
@@ -109,6 +115,13 @@ DEFAULT_EXCLUDE = {
                                          'E/B/*/refit_D_*', 'E/B/*/E95_f1_*'),
     # E97: part B's per-point claims (lane bookkeeping) and the scoring caches
     'E97_glomerulus_claw_shares': ('claims', 'distances_cache.pkl', 'coresponse_cache.pkl'),
+}
+# experiments whose script writes its runs into the archive folder itself, from every host that ran them, so that no
+# host's outputs/<name>/ holds them all: nothing is copied; params.csv, the provenance files (at their paths under
+# results/<name>/), the folder's README and the index row are written from what the archive holds
+IN_PLACE = {
+    'E136_stage_population_fit': ('each fit\'s archived evaluations in measure_<name>/fit_<arm>/ (tag '
+                                  '<arm>_e<eval>_<wiring>), every read in measure_<name>/read/ (tag <arm>_<panel>_<wiring>)'),
 }
 # folders of outputs withheld from queue work (e.g. E97's withheld_2026-11-15/, built from connectome tables that queue
 # work does not use; CLAUDE.md, "Connectome data"): never copied, at any depth
@@ -162,8 +175,9 @@ def archive_experiment(name: str, host: str, params_only: bool = False, force_ha
 
     With `params_only`, only params.csv and the provenance files are refreshed (from the shared
     results/ tables and the tables already in the archive folder), so it works for experiments
-    whose local outputs are on another host; the README row is left as it is. `exclude`: paths relative to
-    outputs/<name>/ (folders or files) that are not copied.
+    whose local outputs are on another host; the README row is left as it is. An experiment in IN_PLACE has its
+    runs written into the archive by its script, so nothing is copied and the rest is written from the archive.
+    `exclude`: paths relative to outputs/<name>/ (folders or files) that are not copied.
     """
     src = H.HERE / 'outputs' / name
     res = H.results_dir(name) if (H.shared_dir() / 'results' / name).exists() else None
@@ -173,16 +187,18 @@ def archive_experiment(name: str, host: str, params_only: bool = False, force_ha
             'Update it by hand (and its params_migration_log.csv), or pass --force-hand-built and redo the hand edits.', file=sys.stderr)
         return dict(name=name, host=host, n_files=0, n_variants=0, conditions='', skipped=True)
     dst = ARCHIVE / name
-    if params_only:
+    in_place = name in IN_PLACE
+    if params_only or in_place:
         if not dst.exists():
-            raise FileNotFoundError(f'{dst} (nothing archived yet; run without --params-only on the host that ran it)')
+            raise FileNotFoundError(f'{dst} (nothing archived yet; run without --params-only on the host that ran it)'
+                                    if params_only else f'{dst} (its script writes the runs there; nothing written yet)')
         src = dst
     elif not src.exists():
         raise FileNotFoundError(src)
     dst.mkdir(parents=True, exist_ok=True)
     n_files = 0
     exclude = tuple(DEFAULT_EXCLUDE.get(name, ())) + tuple(exclude)
-    for p in ([] if params_only else sorted(src.rglob('*'))):
+    for p in ([] if params_only or in_place else sorted(src.rglob('*'))):
         if not p.is_file() or p.suffix in ('.pyc', '.html'):
             continue   # .html: artifact pages live in reports/, not here
         rel = p.relative_to(src)
@@ -234,8 +250,12 @@ def archive_experiment(name: str, host: str, params_only: bool = False, force_ha
             'variant) or save the run\'s table under one of those names, then re-run.', file=sys.stderr)
     if res:
         # provenance.json, plus the per-fit provenance_<tag>.json the joint-fit scripts write
-        for pf in sorted(res.glob('provenance*.json')):
-            shutil.copy2(pf, dst / pf.name)
+        for pf in sorted(res.rglob('provenance*.json') if in_place else res.glob('provenance*.json')):
+            (dst / pf.relative_to(res)).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(pf, dst / pf.relative_to(res))
+    if in_place:
+        n_files = sum(1 for f in dst.rglob('*') if f.is_file() and f.name not in ('README.md', 'params.csv')
+                      and not f.name.startswith('provenance'))
     if params_only:
         return dict(name=name, host=host, n_files=len(list(dst.rglob('*'))), n_variants=params['tag'].nunique() if 'tag' in params.columns else len(params), conditions='', params_only=True,
             missing_params=missing_params)
@@ -243,8 +263,12 @@ def archive_experiment(name: str, host: str, params_only: bool = False, force_ha
         + list(dst.rglob('*_responses.parquet'))]
     variants = sorted({v for v, _ in parsed})
     conds = sorted({c for _, c in parsed if c})
+    copied = (f'Written in place by the experiment\'s script from every host that ran it: {IN_PLACE[name]}. This README, '
+              f'params.csv and the provenance files written {datetime.now():%Y-%m-%d %H:%M} on host {host}. '
+              if in_place else f'Copied {datetime.now():%Y-%m-%d %H:%M} from host {host} (`outputs/{name}/` of the '
+              'model_experiment_queue checkout). ')
     lines = [f'# {name}: model outputs', '',
-        f'Copied {datetime.now():%Y-%m-%d %H:%M} from host {host} (`outputs/{name}/` of the model_experiment_queue checkout). '
+        copied +
         f'{n_files} files; {len(variants)} variants; conditions: {", ".join(conds) if conds else "(see file names)"}.', '',
         'Files: `<variant>_<condition>_spike_counts.parquet` (KCs x odors, total spikes per KC per odor), '
         '`<variant>_<condition>_responses.parquet` (same shape, 1 = at least 2 spikes); rows indexed by hemibrain '

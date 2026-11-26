@@ -68,6 +68,8 @@ Parts (CLI `--part`):
   counts. The unrefitted family's reads are E134's megamat_held and mixtures_held runs and E90's part B (the APL16
   fit) where they exist; only its validation2 reads are run here.
 - score: the reads scored and classed (`score_megamat`, `score_panels`, `apl16_rows`, `classify`, `part_score`).
+- variants: variants.csv, one row per run in the model-output archive with its parameters, for the archive's
+  params.csv (`write_variants`; archive_tools/archive_model_outputs.py reads it).
 
 The classes (the entry's, read as ruled): each wiring is one fly; a value is the mean over the four T wirings of each
 wiring's error (the error of the T wirings' mean views beside); a change is the mean over T of the arm minus the
@@ -1073,6 +1075,51 @@ def archive_evals(arm: str, evals: Optional[Sequence[int]] = None) -> List[int]:
         archive_best(arm, int(i))
         print(f'E136 {arm}: eval {int(i)} archived', flush=True)
     return [int(i) for i in evals]
+
+
+# the absolute parameters of a run, both conditions (APL off: 'off_<name>'), as E135's variants.csv names them
+VARIANT_PARAMS = ('fixed_thr', 'wAPLKC_scale', 'wKCAPL_scale', 'wAPLPN_scale', 'wPNAPL_scale', 'wKCKC_scale')
+
+
+def write_variants(arch: Optional[Path] = None) -> pd.DataFrame:
+    """variants.csv in the measure's out_dir, for the model-output archive's params.csv: one row per run the archive
+    holds (`arch`, default archive_dir(): each fit's archived evaluations in fit_<arm>/, every read in read/), from its
+    <tag>_run.json. A row has the tag (the files' variant name), the folder, arm, panel, wiring, the reading ('fit' or
+    'read'), the evaluation (a fit's), a description, the searched coordinates (z_<name>), both conditions' absolute
+    parameters (VARIANT_PARAMS; 'off_<name>' with APL off), A3's per-claw threshold (Hz), A1's PN normalization terms
+    (pn_inhadd, pn_inhsc), and where and when it ran. The runs were written into the archive from every host that ran
+    them, so the archive, not this host's outputs, is the list."""
+    arch = archive_dir() if arch is None else Path(arch)
+    rows = []
+    for p in sorted(arch.glob('*/*_run.json')):
+        d = json.loads(p.read_text())
+        arm = str(d.get('arm'))
+        what = 'the unrefitted family' if arm == FAMILY else f'arm {arm}' + (' (the control, A0 on odor-permuted flies)'
+                                                                             if arm == CONTROL else '')
+        reading = d.get('reading')
+        kind = (f"{what}, fitted to the megamat stages: evaluation {d.get('eval')} on searched wiring {d.get('wiring')}"
+                if reading == 'fit' else f"{what} at its classed point, read on the {d.get('panel')} input, wiring "
+                                          f"{d.get('wiring')}, both response rates held")
+        r = dict(tag=d['tag'], variant=d['tag'], part=p.parent.name, subdir=p.parent.name, arm=arm, panel=d.get('panel'),
+                 wiring=d.get('wiring'), reading=reading, eval=d.get('eval'), model=d.get('model'), kind=kind)
+        r.update({f'z_{k}': v for k, v in (d.get('z') or {}).items()})
+        r.update({k: (d.get('params') or {}).get(k) for k in VARIANT_PARAMS})
+        r.update({f'off_{k}': (d.get('params_off') or {}).get(k) for k in VARIANT_PARAMS})
+        r['claw_thr'] = d.get('claw_thr')
+        pn = d.get('pn_kws') if isinstance(d.get('pn_kws'), dict) else {}
+        r['pn_inhadd'] = d.get('pn_inhadd', pn.get('pn_inhadd'))
+        r['pn_inhsc'] = d.get('pn_inhsc', pn.get('pn_inhsc'))
+        r.update(host=d.get('host'), lane=d.get('lane'), time=d.get('time'))
+        rows.append(r)
+    df = pd.DataFrame(rows)
+    if df.empty:
+        raise FileNotFoundError(f'no <tag>_run.json under {arch}')
+    if df.tag.duplicated().any():
+        raise ValueError(f'tags in two folders: {sorted(df.tag[df.tag.duplicated()])}')
+    out = out_dir() / 'variants.csv'
+    df.to_csv(out, index=False)
+    print(f'variants.csv: {len(df)} runs -> {out}', flush=True)
+    return df
 
 
 def save_eval(arm: str, i, runs: Mapping[str, 'R.SavedRun']) -> List[Path]:
@@ -2283,7 +2330,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('--part', required=True,
                     choices=('identity', 'claw_identity', 'claw_thr_check', 'fit', 'determined', 'rescore', 'read',
-                             'score', 'archive'))
+                             'score', 'archive', 'variants'))
     ap.add_argument('--arm', choices=tuple(ARMS) + (CONTROL, FAMILY))
     ap.add_argument('--evals', nargs='+', type=int, help="--part archive: the evaluations (default this host's best); --part rescore: the evaluations "
                          "(default the history's)")
@@ -2329,6 +2376,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         if a.arm in (None, FAMILY):
             raise SystemExit('--part archive needs --arm')
         archive_evals(a.arm, a.evals)
+    elif a.part == 'variants':
+        write_variants()
 
 
 if __name__ == '__main__':

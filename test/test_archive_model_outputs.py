@@ -153,3 +153,37 @@ def test_params_tables_override(tmp_path, monkeypatch):
     q = pd.read_csv(arch / name / 'params.csv')
     assert list(q['tag']) == ['real'] and list(q['source_table']) == ['variants.csv']
     assert list(q['pn_inhadd']) == [1e4] and 'form' not in q.columns
+
+
+def test_in_place(tmp_path, monkeypatch):
+    """E136's script writes its runs into the archive from every host: nothing of this host's outputs/ is copied, and
+    params.csv (from results/<name>/measure_strength/variants.csv), the provenance files at their paths, the folder's
+    README and the file count come from the archive."""
+    name = 'E136_stage_population_fit'
+    here, shared = tmp_path / 'repo', tmp_path / 'shared'
+    src, res = here / 'outputs' / name, shared / 'results' / name
+    arch = shared / 'data' / 'model_outputs'
+    monkeypatch.setattr(H, 'HERE', here)
+    monkeypatch.setattr(H, 'shared_dir', lambda: shared)
+    monkeypatch.setattr(H, 'results_dir', lambda e: shared / 'results' / e)
+    monkeypatch.setattr(A, 'ARCHIVE', arch)
+    local = src / 'measure_strength' / 'fit_A0' / 'A0_e5_real_on_spike_counts.parquet'
+    local.parent.mkdir(parents=True)
+    pd.DataFrame(np.ones((3, 2)), columns=['a', 'b']).to_parquet(local)
+    for tag, sub in (('A1_megamat_P3', 'read'), ('A1_e122_real', 'fit_A1')):
+        for cond in ('on', 'acute_off'):
+            p = arch / name / 'measure_strength' / sub / f'{tag}_{cond}_spike_counts.parquet'
+            p.parent.mkdir(parents=True, exist_ok=True)
+            pd.DataFrame(np.ones((3, 2)), columns=['a', 'b']).to_parquet(p)
+    (res / 'measure_strength').mkdir(parents=True)
+    pd.DataFrame(dict(tag=['A1_megamat_P3', 'A1_e122_real'], subdir=['read', 'fit_A1'], pn_inhadd=[1017.3, 1017.3],
+                      off_wKCKC_scale=[138.3, 40.1], reading=['read', 'fit'])).to_csv(
+        res / 'measure_strength' / 'variants.csv', index=False)
+    (res / 'measure_strength' / 'provenance_score.json').write_text('{}')
+    r = A.archive_experiment(name, 'host')
+    assert not (arch / name / 'measure_strength' / 'fit_A0').exists()
+    assert (r['n_files'], r['n_variants']) == (4, 2) and r['conditions'] == 'acute_off, on'
+    q = pd.read_csv(arch / name / 'params.csv')
+    assert list(q['tag']) == ['A1_megamat_P3', 'A1_e122_real'] and list(q['off_wKCKC_scale']) == [138.3, 40.1]
+    assert (arch / name / 'measure_strength' / 'provenance_score.json').exists()
+    assert 'Written in place' in (arch / name / 'README.md').read_text()

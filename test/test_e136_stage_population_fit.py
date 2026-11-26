@@ -649,3 +649,31 @@ def test_a1_table_real(monkeypatch, tmp_path, outcome, panel):
     chk = F.a1_pn_check(built, 'real', panel)
     assert chk['ok'] and chk['n_set'] == table.size
 
+
+
+def test_write_variants(monkeypatch, tmp_path):
+    """variants.csv: one row per run the archive holds, from its run.json, both conditions' parameters and A1's PN
+    terms (a read's at the top level, a fit's in pn_kws)."""
+    import json
+    arch, res = tmp_path / 'arch', tmp_path / 'res'
+    res.mkdir()
+    monkeypatch.setattr(F, 'out_dir', lambda: res)
+    on = dict(fixed_thr=49.8, wAPLKC_scale=1.08, wKCAPL_scale=6e-4, wAPLPN_scale=0.056, wPNAPL_scale=3e-3,
+              wKCKC_scale=138.3)
+    off = dict(on, wAPLKC_scale=0.0, wAPLPN_scale=0.0)
+    runs = {'read/A1_megamat_P3_run.json': dict(model='C2', wiring='P3', panel='megamat', reading='read', arm='A1',
+                                                z=dict(aplpn=-1.86, inhadd=3.48), params=on, params_off=off,
+                                                claw_thr=None, tag='A1_megamat_P3', host='viki', lane='viki',
+                                                pn_inhadd=1017.3, pn_inhsc=598.9),
+            'fit_A1/A1_e122_real_run.json': dict(model='C2', wiring='real', panel='megamat', reading='fit', arm='A1',
+                                                 z=dict(aplpn=-1.86, inhadd=3.48), params=on, params_off=off,
+                                                 claw_thr=None, tag='A1_e122_real', eval=122, host='viki',
+                                                 pn_kws=dict(pn_inhadd=1017.3, pn_inhsc=598.9))}
+    for rel, d in runs.items():
+        (arch / rel).parent.mkdir(parents=True, exist_ok=True)
+        (arch / rel).write_text(json.dumps(d))
+    df = F.write_variants(arch).set_index('tag')
+    assert list(df.index) == ['A1_e122_real', 'A1_megamat_P3']
+    assert df.loc['A1_e122_real', 'subdir'] == 'fit_A1' and df.loc['A1_e122_real', 'eval'] == 122
+    assert (df.pn_inhadd == 1017.3).all() and (df.off_wAPLKC_scale == 0).all() and (df.wKCKC_scale == 138.3).all()
+    assert df.loc['A1_megamat_P3', 'z_inhadd'] == 3.48 and (res / 'variants.csv').exists()
