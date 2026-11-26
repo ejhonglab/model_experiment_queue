@@ -71,6 +71,24 @@ def test_json_key(monkeypatch, tmp_path):
         R.resolve('json:results/E1_x/lock.json:a.missing')
 
 
+def test_json_key_with_dots_in_a_key(monkeypatch, tmp_path):
+    """A dict key that contains dots (E141's variant 'D1.8_inhadd1000') is found by joining the path's parts; a plain
+    key still wins, and a path that matches nothing is refused."""
+    import json
+    R = _shared(monkeypatch, tmp_path)
+    d = tmp_path / 'results' / 'E1_x'
+    d.mkdir(parents=True)
+    (d / 'classes.json').write_text(json.dumps(dict(classes={'D1.8_inhadd1000': dict(cls='holds'),
+                                                             'D1': {'8_inhadd1000': dict(cls='plain')},
+                                                             'D5.8.x': dict(cls='three parts')})))
+    assert R.resolve('json:results/E1_x/classes.json:classes.D1.8_inhadd1000.cls').value == 'plain'
+    assert R.resolve('json:results/E1_x/classes.json:classes.D5.8.x.cls').value == 'three parts'
+    (d / 'classes.json').write_text(json.dumps(dict(classes={'D1.8_inhadd1000': dict(cls='holds')})))
+    assert R.resolve('json:results/E1_x/classes.json:classes.D1.8_inhadd1000.cls').value == 'holds'
+    with pytest.raises(KeyError):
+        R.resolve('json:results/E1_x/classes.json:classes.D1.9_inhadd1000.cls')
+
+
 def test_const_key(monkeypatch, tmp_path):
     """`const:<file>:<NAME>[.<index>]` reads a module-level constant without importing the file."""
     from kcq import harness as H

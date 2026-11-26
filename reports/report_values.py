@@ -215,13 +215,25 @@ def _last_experiment() -> Resolved:
 
 
 def _json_path(obj: Any, path: str) -> Any:
-    for part in path.split('.') if path else []:
+    """The value at a dotted `path` in `obj`. A dict key may itself contain dots (a variant named 'D1.8_inhadd1000'):
+    where a part is not a key, it is joined with the parts after it, shortest first, until one is."""
+    parts = path.split('.') if path else []
+    i = 0
+    while i < len(parts):
+        part = parts[i]
         if isinstance(obj, list):
             obj = obj[int(part)]
         elif isinstance(obj, dict) and part in obj:
             obj = obj[part]
         else:
-            raise KeyError(part)
+            j = next((j for j in range(i + 2, len(parts) + 1)
+                      if isinstance(obj, dict) and '.'.join(parts[i:j]) in obj), None)
+            if j is None:
+                raise KeyError(part)
+            obj = obj['.'.join(parts[i:j])]
+            i = j
+            continue
+        i += 1
     return obj
 
 
