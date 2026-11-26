@@ -100,6 +100,8 @@ PARAMS_TABLES = {
     'E136_stage_population_fit': ('measure_strength/variants.csv',),
     # E139: one row per run its script wrote into the archive (`--part variants`: read/, fit_<arm>/, extended/)
     'E139_normalization_ladder': ('variants.csv',),
+    # E141: one row per run its script wrote into the archive (`--part variants`: read/, extended/)
+    'E141_kckc_rise_forms': ('variants.csv',),
 }
 
 # experiments whose step folders repeat their files' names: per folder pattern (fnmatch on the file's folder under
@@ -127,6 +129,8 @@ IN_PLACE = {
     'E139_normalization_ladder': ('every read in read/ (tag <variant>_<panel>_<wiring>), step 3\'s best evaluation in '
                                   'fit_<arm>/ (tag <arm>_e<eval>_<wiring>) and the beside step\'s runs in '
                                   'extended/<variant>/B/<step>/ (E102\'s part-B layout: tag <wiring>, unique with its subdir)'),
+    'E141_kckc_rise_forms': ('every read in read/ (tag <variant>_<panel>_<wiring>) and the beside step\'s runs in '
+                             'extended/<variant>/B/<step>/ (E102\'s part-B layout: tag <wiring>, unique with its subdir)'),
 }
 # folders of outputs withheld from queue work (e.g. E97's withheld_2026-11-15/, built from connectome tables that queue
 # work does not use; CLAUDE.md, "Connectome data"): never copied, at any depth

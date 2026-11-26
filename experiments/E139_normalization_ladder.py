@@ -92,7 +92,7 @@ import socket
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterator, List, Mapping, Optional, Sequence, Tuple
+from typing import Callable, Dict, Iterator, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -382,8 +382,31 @@ def _copy_extended(src: Path, dst: Path, wiring: str) -> List[Path]:
     return out
 
 
+@dataclass(frozen=True)
+class BesideContext:
+    """Where and how a beside read (`read_beside`) is recorded: `root` (its claims, reads_<host>_<lane>.csv and
+    provenance), `ext_dir(name, pn_inhadd, where)` (its run folder, 'local' or 'archive', in E102's part-B layout),
+    `label_of(name)` ((setting, rung) of its row), `same_as_read(name, wiring, hold)` (its hold against the variant's
+    saved APL16 read), the script named in its provenance and the label of its printed lines."""
+    root: Path
+    ext_dir: Callable[[str, float, str], Path]
+    label_of: Callable[[str], Tuple[str, float]]
+    same_as_read: Callable[[str, str, Mapping], Optional[dict]]
+    script: str
+    label: str
+
+
+def beside_context() -> BesideContext:
+    """E139's own `BesideContext` (its out_dir(), `extended_dir`, setting and rung, `_same_as_read`), looked up when
+    called."""
+    return BesideContext(root=out_dir(), ext_dir=lambda n, a, where: extended_dir(n, a, where),
+                         label_of=lambda n: (_setting_of(n), _rung_of(n)),
+                         same_as_read=lambda n, w, h: _same_as_read(n, w, h), script=SCRIPT, label='E139')
+
+
 def read_beside(name: str, wiring: str, lane: str, reclaim: bool = False, done: Optional[set] = None,
-                arm: Optional[str] = None, z: Optional[Mapping[str, float]] = None) -> Optional[dict]:
+                arm: Optional[str] = None, z: Optional[Mapping[str, float]] = None,
+                ctx: Optional[BesideContext] = None) -> Optional[dict]:
     """One read of the beside step (design item 4), claimed under out_dir()/claims/ as the other reads are (None if
     done or claimed elsewhere): the variant's model (`beside_model`, or `arm` at `z`) held on the lab's APL16 input
     exactly as E136's reads hold a point (E136's `hold_at`: E77's `hold_rates` with the lab input's breadth, to the
@@ -396,18 +419,21 @@ def read_beside(name: str, wiring: str, lane: str, reclaim: bool = False, done: 
     E102's part-B layout (`extended_dir`) locally and copied to the archive; <wiring>_runs.csv's PN terms are the
     variant's (E102's `step_kws` would give pn_inhsc by `inhsc_for`, which A1's gain on it departs from); the hold is
     checked against the variant's saved APL16 read where one is saved (`_same_as_read`, recorded). Its row in
-    reads_<host>_<lane>.csv (panel 'extended', step 'beside'). RuntimeError, the claim released, if a check fails."""
+    reads_<host>_<lane>.csv (panel 'extended', step 'beside'). RuntimeError, the claim released, if a check fails.
+    `ctx` records it in another experiment's folders, with that experiment's labels and saved reads (default
+    `beside_context()`, E139's own)."""
     from experiments import E83_cross_wiring_fit as E83
     from experiments import E98_apl_response_strength as E98
     from experiments import E102_antennal_lobe_normalization as E
     from experiments import E134_population_baseline as B
     from experiments.E3_drive_dependent_gain import PN_INHADD_DEFAULT
     from kcq import stage_readings as R
+    ctx = ctx if ctx is not None else beside_context()
     tag = beside_tag(name, wiring)
     if done is not None and tag in done:
         return None
-    if not B.claim(tag, lane, reclaim, root=out_dir()):
-        print(f'E139 {tag}: claimed by another process, skipped', flush=True)
+    if not B.claim(tag, lane, reclaim, root=ctx.root):
+        print(f'{ctx.label} {tag}: claimed by another process, skipped', flush=True)
         return None
     t0 = time.time()
     try:
@@ -421,12 +447,12 @@ def read_beside(name: str, wiring: str, lane: str, reclaim: bool = False, done: 
         with e136() as F:
             commits = F._commits()
             lock = R.require_lock()
-            h = F.hold_at(arm, dict(z), wiring, 'apl16', label=f'E139 {tag}', lock=lock)
+            h = F.hold_at(arm, dict(z), wiring, 'apl16', label=f'{ctx.label} {tag}', lock=lock)
         hold, kws, breadth = h['hold'], dict(h['kws']), h['breadth']
         pn = {k: float(kws.get(k, d)) for k, d in (('pn_inhadd', PN_INHADD_DEFAULT), ('pn_inhsc', np.nan))}
-        d = extended_dir(name, pn['pn_inhadd'], 'local')
+        d = ctx.ext_dir(name, pn['pn_inhadd'], 'local')
         d.mkdir(parents=True, exist_ok=True)
-        setting, rung = _setting_of(name), _rung_of(name)
+        setting, rung = ctx.label_of(name)
         rec = dict(tag=tag, variant=name, setting=setting, rung=rung, arm=arm, wiring=wiring, z=dict(z), pn_kws=pn,
                    params=hold['params'], params_off=hold['params_off'], thr_factor=float(hold['thr_factor']),
                    apl_factor=float(hold['apl_factor']), n_on=int(hold['n_on']), n_off=int(hold['n_off']),
@@ -436,14 +462,14 @@ def read_beside(name: str, wiring: str, lane: str, reclaim: bool = False, done: 
                    operating_point="the wiring's own fit's APL16 counts (E102's extended runs' and E136's APL16 reads')",
                    host=_host(), lane=lane, time=_now(), threads=os.environ.get('OMP_NUM_THREADS'), commits=commits,
                    complete=False, extended_done=False)
-        rec['same_as_apl16_read'] = _same_as_read(name, wiring, hold)
+        rec['same_as_apl16_read'] = ctx.same_as_read(name, wiring, hold)
         held = dict(params=dict(hold['params']), params_off=dict(hold['params_off']), on=hold['on'], off=hold['off'])
 
         def build(orn):
             return E83.build_simulator(wiring, orn=orn, breadth=breadth, params=dict(held['params']),
                                        extra_kws=kws or None)
         ok = E.extended_block(rec, d, wiring, pn['pn_inhadd'], held, breadth, commits, build=build,
-                              label=f'E139 {tag}')
+                              label=f'{ctx.label} {tag}')
         runs_csv = d / f'{wiring}_runs.csv'
         rc = pd.read_csv(runs_csv)
         rc = rc.assign(pn_inhadd=pn['pn_inhadd'], pn_inhsc=pn['pn_inhsc'], variant=name)
@@ -452,7 +478,7 @@ def read_beside(name: str, wiring: str, lane: str, reclaim: bool = False, done: 
         _write_json(d / f'{wiring}_point.json', rec)
         if not ok:
             raise RuntimeError(f'{tag}: a check of the extended run failed (see {d / f"{wiring}_point.json"})')
-        _copy_extended(d, extended_dir(name, pn['pn_inhadd'], 'archive'), wiring)
+        _copy_extended(d, ctx.ext_dir(name, pn['pn_inhadd'], 'archive'), wiring)
         on_r, off_r = hold['on'][0], hold['off'][0]
         row = dict(tag=tag, arm=arm, panel=EXTENDED, wiring=wiring, half=None, variant=name, setting=setting,
                    rung=rung, step='beside', **{f'z_{k}': v for k, v in z.items()}, **pn,
@@ -470,20 +496,21 @@ def read_beside(name: str, wiring: str, lane: str, reclaim: bool = False, done: 
                    seconds=rec['seconds'], host=_host(), lane=lane, time=_now(),
                    threads=os.environ.get('OMP_NUM_THREADS'), **commits)
         with e136() as F:
-            F._append_row(out_dir() / f'reads_{_host()}_{lane}.csv', row)
-            prov_path = out_dir() / f'provenance_read_{_host()}_{lane}.json'
-            prov = F._read_json(prov_path) or dict(part='read', lane=lane, script=SCRIPT, points={})
+            F._append_row(ctx.root / f'reads_{_host()}_{lane}.csv', row)
+            prov_path = ctx.root / f'provenance_read_{_host()}_{lane}.json'
+            prov = F._read_json(prov_path) or dict(part='read', lane=lane, script=ctx.script, points={})
             prov['points'][tag] = dict(params=hold['params'], params_off=hold['params_off'], pn_kws=pn,
                                        model=H.model_provenance(orn_deltas=E98.b1_input()[0]))
             _write_json(prov_path, prov)
-        print(f'E139 {tag}: {rec["seconds"]:.0f} s, extended run saved ({d})', flush=True)
+        print(f'{ctx.label} {tag}: {rec["seconds"]:.0f} s, extended run saved ({d})', flush=True)
         return row
     except BaseException:
-        B.release(tag, root=out_dir())
+        B.release(tag, root=ctx.root)
         raise
 
 
-def beside_readings(names: Optional[Sequence[str]] = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def beside_readings(names: Optional[Sequence[str]] = None, root_of: Optional[Callable[[str, str], Path]] = None,
+                    source: str = 'E139:beside', e102_rows: bool = True) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """The beside step's extended runs read by E102's rules (E102's `step_readings` on each variant's folder: E98's
     verdict on the flies' APL along concentration, E100's W1, E101's X2, the KCs at low concentration, the PN stage),
     one row per variant as E102's b_steps.csv gives a step (`_step_table`'s columns: V2 held and its linear reading, V1,
@@ -491,8 +518,11 @@ def beside_readings(names: Optional[Sequence[str]] = None) -> Tuple[pd.DataFrame
     flies' and the class against C2's, E102's identity point, by E102's `low_conc_class`; E101's X2 classes), read from
     the archive (every lane's runs; the local folder where the archive has none), with E102's own rows of its identity
     point and of F at 1000 (E102's breadth, recomputed at the rung) beside; and the per-wiring rows (E98's comparisons
-    per wiring and the KCs at low concentration). They gate nothing. Returns (summary, per wiring)."""
+    per wiring and the KCs at low concentration). They gate nothing. Returns (summary, per wiring). Another
+    experiment's extended runs are read with `root_of(name, where)` in place of `extended_root`, its rows labelled
+    `source`, and E102's two rows left out with `e102_rows` False."""
     from experiments import E102_antennal_lobe_normalization as E
+    root_of = extended_root if root_of is None else root_of
     names = list(names) if names is not None else list(BESIDE) + fitted_names()
     steps = pd.read_csv(H.results_dir(E102) / 'b_steps.csv', comment='#').set_index('step')
     c2 = {c: float(steps.loc['identity', f'low_{c}']) for c in ('on', 'off')} if 'identity' in steps.index else {}
@@ -500,7 +530,7 @@ def beside_readings(names: Optional[Sequence[str]] = None) -> Tuple[pd.DataFrame
     for name in names:
         best = None
         for where in ('archive', 'local'):
-            base = extended_root(name, where) / 'B'
+            base = root_of(name, where) / 'B'
             if not base.is_dir():
                 continue
             for d in sorted(p for p in base.iterdir() if p.is_dir()):
@@ -508,11 +538,11 @@ def beside_readings(names: Optional[Sequence[str]] = None) -> Tuple[pd.DataFrame
                 if have and (best is None or len(have) > len(best[2])):
                     best = (base.parent, d.name, have)
         if best is None:
-            rows.append(dict(variant=name, source='E139:beside', n_wirings=0))
+            rows.append(dict(variant=name, source=source, n_wirings=0))
             continue
         root, tag, have = best
         a = E.step_readings(tag, root, wirings=have)
-        row = dict(variant=name, source='E139:beside', step=tag, n_wirings=len(have), wirings=';'.join(have),
+        row = dict(variant=name, source=source, step=tag, n_wirings=len(have), wirings=';'.join(have),
                    breadth="the lab input's (E136's)", root=str(root))
         if 'e98' in a:
             comps = a['e98_comparisons']
@@ -539,7 +569,7 @@ def beside_readings(names: Optional[Sequence[str]] = None) -> Tuple[pd.DataFrame
             row.update({f'pn_{k}': v for k, v in a['pn'].items() if k in ('cv_totals', 'cv_totals_flies',
                                                                          'dist_rms_diff', 'r_totals_pn_dend')})
         rows.append(row)
-    for st in ('identity', 'inhadd1000'):
+    for st in (('identity', 'inhadd1000') if e102_rows else ()):
         if st in steps.index:
             r = steps.loc[st]
             rows.append(dict(variant='family' if st == 'identity' else 'F_inhadd1000 (E102)', source='E102:B', step=st,
@@ -1064,6 +1094,110 @@ def holds_failed(name: str, reads: pd.DataFrame, apl16_runs: Mapping[str, object
     return bad
 
 
+def score_sets(F, allv: Sequence[str], stages: Sequence[str], label_of=None) -> dict:
+    """The values every score of variants read as E136 reads an arm is made of (E139's `part_score`, and E141's
+    on its own arms beside E139's): for each name of `allv` (the unrefitted family first, every name registered with
+    E136 or one of its arms), the megamat stages on all eight wirings against the held-out half, all flies and the
+    fit half (`mega`, `mega_fit`, the rows `mrows`); the held-out panels on the measure (`panels`, `pv`) and on every
+    view (rule 3's `guard`, `g_panels`); the spreads over the family's eight wirings; the APL16 rows with the
+    price's statistics (`apl`, `parts`, `apl16_runs`) and the realism flags; beside, the two-view error, the
+    mixture panels under E137's readings (`e137`), E136's yardsticks and the megamat somata with and without aa's
+    entry (`wo`, its summary in `beside`). `label_of(v)` gives the label columns of a name's rows (default E139's
+    setting and rung). Writes nothing."""
+    if label_of is None:
+        def label_of(v):
+            return dict(setting=_setting_of(v), rung=_rung_of(v))
+    mrows, mega, mega_fit = [], {}, {}
+    for v in allv:
+        for half in ('held', None, 'fit'):
+            sc = F.score_megamat(v, stages, half, F.WIRINGS)
+            if sc is None:
+                continue
+            vals = F.megamat_values(sc, stages, F.WIRINGS)
+            if half == 'held':
+                mega[v] = vals
+            if half == 'fit':
+                mega_fit[v] = vals
+            base = dict(variant=v, **label_of(v), half=half or 'all')
+            for w, x in vals.items():
+                mrows.append(dict(base, wiring=w, **x))
+            for lab, ws in (('mean_S', F.S_WIRINGS), ('mean_T', F.T_WIRINGS)):
+                mrows.append(dict(base, wiring=lab, **pd.DataFrame([vals[w] for w in ws]).mean().to_dict()))
+            mrows.append(dict(base, wiring='common', stage=sc['stage_error'], downstream=sc['stage_error_downstream'],
+                              **{s: sc[f'{s}_error'] for s in stages},
+                              **{k: x for k, x in sc.items() if '_split_' in k
+                                 and not any(k.endswith(f'_{w}') for w in F.WIRINGS)}))
+    prow = [F.score_panels(v) for v in allv]
+    panels = pd.concat([p for p in prow if len(p)], ignore_index=True) if any(len(p) for p in prow) else pd.DataFrame()
+    pv = {v: F.panel_values(panels, v) for v in allv}
+    fam = mega.get(F.FAMILY, {})
+    spreads = dict(stage=F._sd(x['stage'] for x in fam.values()), downstream=F._sd(x['downstream'] for x in fam.values()),
+                   **{s: F._sd(x[s] for x in fam.values()) for s in stages})
+    for key in F.SCORED_PANELS:
+        spreads['/'.join(key)] = F._sd(pv[F.FAMILY].get(key, {}).values())
+    # rule 3's guard: the same reads under every view, with their own spreads
+    g_mega, g_rows = {}, []
+    for v in allv:
+        sc = F.score_megamat(v, stages, 'held', F.WIRINGS, views=None)
+        if sc is not None:
+            g_mega[v] = F.megamat_values(sc, stages, F.WIRINGS)
+        p = F.score_panels(v, views=None)
+        if len(p):
+            g_rows.append(p)
+    g_panels = pd.concat(g_rows, ignore_index=True) if g_rows else pd.DataFrame()
+    g_pv = {v: F.panel_values(g_panels, v) for v in allv}
+    gf = g_mega.get(F.FAMILY, {})
+    g_spreads = dict(stage=F._sd(x['stage'] for x in gf.values()), **{s: F._sd(x[s] for x in gf.values())
+                                                                      for s in stages})
+    for key in F.SCORED_PANELS:
+        g_spreads['/'.join(key)] = F._sd(g_pv[F.FAMILY].get(key, {}).values())
+    guard = dict(mega=g_mega, panels=g_pv, spreads=g_spreads)
+    # the APL16 rows and the price
+    apl_rows, parts, apl16_runs = [], {}, {}
+    for v in allv:
+        r = F.apl16_rows(v)
+        runs = {w: F.load_read(F.ReadPoint(v, 'apl16', w, None)) for w in F.WIRINGS}
+        apl16_runs[v] = {w: x for w, x in runs.items() if x is not None}
+        parts[v] = {w: apl_effect_parts(run_outputs(x)) for w, x in apl16_runs[v].items()}
+        if len(r):
+            r = r.assign(variant=v, **label_of(v))
+            for k in sorted({k for d in parts[v].values() for k in d}):
+                r[f'price_{k}'] = r.wiring.map({w: d.get(k, np.nan) for w, d in parts[v].items()})
+            apl_rows.append(r)
+    apl = pd.concat(apl_rows, ignore_index=True) if apl_rows else pd.DataFrame()
+    realism = {v: F.realism_of(apl[apl.variant == v]) if len(apl) else {} for v in allv}
+    # beside: the two-view error, the mixture panels under E137's readings, E136's yardsticks
+    tv = {}
+    for v in allv:
+        sc = F.score_megamat(v, stages, 'held', F.T_WIRINGS, views=F.MEASURES['strength_sharing'])
+        if sc is not None:
+            tv[v] = {w: sc[f'stage_error_{w}'] for w in F.T_WIRINGS}
+    e_rows = [F.score_e137_beside(v) for v in allv]
+    e137 = pd.concat([r for r in e_rows if len(r)], ignore_index=True) if any(len(r) for r in e_rows) \
+        else pd.DataFrame()
+    beside = dict(two_view={v: F.compare(tv[v], tv[F.FAMILY], np.nan) for v in allv[1:] if v in tv and F.FAMILY in tv},
+                  e137_readings=F.e137_beside(e137, allv[1:]), panels_beside=['/'.join(k) for k in F.BESIDE_PANELS],
+                  spreads_all_views=g_spreads, yardsticks=F.yardsticks(stages))
+    # beside: the megamat somata with and without aa's entry (E140's outcome (d); E136's `stage_without_odor`, E138's
+    # definition), on T against the held-out half, with the change from the family on the same wirings
+    wo_rows = [F.stage_without_odor(v, odor=WITHOUT_ODOR) for v in allv]
+    wo = pd.concat([r for r in wo_rows if r is not None], ignore_index=True) if any(r is not None for r in wo_rows) \
+        else pd.DataFrame()
+    if len(wo):
+        ft = wo[(wo.arm == F.FAMILY) & wo.row.isin(F.T_WIRINGS)].set_index('row')
+        rec_wo = {}
+        for v, g in wo.groupby('arm', sort=False):
+            tw = g[g.row.isin(F.T_WIRINGS)].set_index('row')
+            rec_wo[v] = dict(with_mean=float(tw.view_error.mean()), without_mean=float(tw.view_error_without.mean()),
+                             share_mean=float(tw.view_share.mean()))
+            if v != F.FAMILY and len(ft):
+                rec_wo[v].update(change_with=float((tw.view_error - ft.view_error.reindex(tw.index)).mean()),
+                                 change_without=float((tw.view_error_without
+                                                       - ft.view_error_without.reindex(tw.index)).mean()))
+        beside[f'kc_soma_without_{WITHOUT_ODOR}'] = rec_wo
+    return dict(mrows=mrows, mega=mega, mega_fit=mega_fit, panels=panels, pv=pv, spreads=spreads, guard=guard, g_panels=g_panels, apl=apl, parts=parts, apl16_runs=apl16_runs, realism=realism, beside=beside, e137=e137, wo=wo)
+
+
 def part_score(names: Optional[Sequence[str]] = None) -> dict:
     """The score: every variant (default those of steps 1 and 2) through E136's score functions as a registered variant
     (`register_variants`), the unrefitted family as the reference and E136's A1 beside (its S wirings its fit's best
@@ -1089,95 +1223,10 @@ def part_score(names: Optional[Sequence[str]] = None) -> dict:
         for fn in fitted:
             F.register_variant(fn, load_fit_run)
         allv = [F.FAMILY, *names, *fitted, A1]
-        mrows, mega, mega_fit = [], {}, {}
-        for v in allv:
-            for half in ('held', None, 'fit'):
-                sc = F.score_megamat(v, stages, half, F.WIRINGS)
-                if sc is None:
-                    continue
-                vals = F.megamat_values(sc, stages, F.WIRINGS)
-                if half == 'held':
-                    mega[v] = vals
-                if half == 'fit':
-                    mega_fit[v] = vals
-                base = dict(variant=v, setting=_setting_of(v), rung=_rung_of(v), half=half or 'all')
-                for w, x in vals.items():
-                    mrows.append(dict(base, wiring=w, **x))
-                for lab, ws in (('mean_S', F.S_WIRINGS), ('mean_T', F.T_WIRINGS)):
-                    mrows.append(dict(base, wiring=lab, **pd.DataFrame([vals[w] for w in ws]).mean().to_dict()))
-                mrows.append(dict(base, wiring='common', stage=sc['stage_error'], downstream=sc['stage_error_downstream'],
-                                  **{s: sc[f'{s}_error'] for s in stages},
-                                  **{k: x for k, x in sc.items() if '_split_' in k
-                                     and not any(k.endswith(f'_{w}') for w in F.WIRINGS)}))
-        prow = [F.score_panels(v) for v in allv]
-        panels = pd.concat([p for p in prow if len(p)], ignore_index=True) if any(len(p) for p in prow) else pd.DataFrame()
-        pv = {v: F.panel_values(panels, v) for v in allv}
-        fam = mega.get(F.FAMILY, {})
-        spreads = dict(stage=F._sd(x['stage'] for x in fam.values()), downstream=F._sd(x['downstream'] for x in fam.values()),
-                       **{s: F._sd(x[s] for x in fam.values()) for s in stages})
-        for key in F.SCORED_PANELS:
-            spreads['/'.join(key)] = F._sd(pv[F.FAMILY].get(key, {}).values())
-        # rule 3's guard: the same reads under every view, with their own spreads
-        g_mega, g_rows = {}, []
-        for v in allv:
-            sc = F.score_megamat(v, stages, 'held', F.WIRINGS, views=None)
-            if sc is not None:
-                g_mega[v] = F.megamat_values(sc, stages, F.WIRINGS)
-            p = F.score_panels(v, views=None)
-            if len(p):
-                g_rows.append(p)
-        g_panels = pd.concat(g_rows, ignore_index=True) if g_rows else pd.DataFrame()
-        g_pv = {v: F.panel_values(g_panels, v) for v in allv}
-        gf = g_mega.get(F.FAMILY, {})
-        g_spreads = dict(stage=F._sd(x['stage'] for x in gf.values()), **{s: F._sd(x[s] for x in gf.values())
-                                                                          for s in stages})
-        for key in F.SCORED_PANELS:
-            g_spreads['/'.join(key)] = F._sd(g_pv[F.FAMILY].get(key, {}).values())
-        guard = dict(mega=g_mega, panels=g_pv, spreads=g_spreads)
-        # the APL16 rows and the price
-        apl_rows, parts, apl16_runs = [], {}, {}
-        for v in allv:
-            r = F.apl16_rows(v)
-            runs = {w: F.load_read(F.ReadPoint(v, 'apl16', w, None)) for w in F.WIRINGS}
-            apl16_runs[v] = {w: x for w, x in runs.items() if x is not None}
-            parts[v] = {w: apl_effect_parts(run_outputs(x)) for w, x in apl16_runs[v].items()}
-            if len(r):
-                r = r.assign(variant=v, setting=_setting_of(v), rung=_rung_of(v))
-                for k in sorted({k for d in parts[v].values() for k in d}):
-                    r[f'price_{k}'] = r.wiring.map({w: d.get(k, np.nan) for w, d in parts[v].items()})
-                apl_rows.append(r)
-        apl = pd.concat(apl_rows, ignore_index=True) if apl_rows else pd.DataFrame()
-        realism = {v: F.realism_of(apl[apl.variant == v]) if len(apl) else {} for v in allv}
-        # beside: the two-view error, the mixture panels under E137's readings, E136's yardsticks
-        tv = {}
-        for v in allv:
-            sc = F.score_megamat(v, stages, 'held', F.T_WIRINGS, views=F.MEASURES['strength_sharing'])
-            if sc is not None:
-                tv[v] = {w: sc[f'stage_error_{w}'] for w in F.T_WIRINGS}
-        e_rows = [F.score_e137_beside(v) for v in allv]
-        e137 = pd.concat([r for r in e_rows if len(r)], ignore_index=True) if any(len(r) for r in e_rows) \
-            else pd.DataFrame()
-        beside = dict(two_view={v: F.compare(tv[v], tv[F.FAMILY], np.nan) for v in allv[1:] if v in tv and F.FAMILY in tv},
-                      e137_readings=F.e137_beside(e137, allv[1:]), panels_beside=['/'.join(k) for k in F.BESIDE_PANELS],
-                      spreads_all_views=g_spreads, yardsticks=F.yardsticks(stages))
-        # beside: the megamat somata with and without aa's entry (E140's outcome (d); E136's `stage_without_odor`, E138's
-        # definition), on T against the held-out half, with the change from the family on the same wirings
-        wo_rows = [F.stage_without_odor(v, odor=WITHOUT_ODOR) for v in allv]
-        wo = pd.concat([r for r in wo_rows if r is not None], ignore_index=True) if any(r is not None for r in wo_rows) \
-            else pd.DataFrame()
+        S = score_sets(F, allv, stages)
+        mrows, mega, mega_fit, panels, pv, spreads, guard, g_panels, apl, parts, apl16_runs, realism, beside, e137, wo = (S[k] for k in ('mrows', 'mega', 'mega_fit', 'panels', 'pv', 'spreads', 'guard', 'g_panels', 'apl', 'parts', 'apl16_runs', 'realism', 'beside', 'e137', 'wo'))
         if len(wo):
             wo.to_csv(out_dir() / f'score_without_{WITHOUT_ODOR}.csv', index=False)
-            ft = wo[(wo.arm == F.FAMILY) & wo.row.isin(F.T_WIRINGS)].set_index('row')
-            rec_wo = {}
-            for v, g in wo.groupby('arm', sort=False):
-                tw = g[g.row.isin(F.T_WIRINGS)].set_index('row')
-                rec_wo[v] = dict(with_mean=float(tw.view_error.mean()), without_mean=float(tw.view_error_without.mean()),
-                                 share_mean=float(tw.view_share.mean()))
-                if v != F.FAMILY and len(ft):
-                    rec_wo[v].update(change_with=float((tw.view_error - ft.view_error.reindex(tw.index)).mean()),
-                                     change_without=float((tw.view_error_without
-                                                           - ft.view_error_without.reindex(tw.index)).mean()))
-            beside[f'kc_soma_without_{WITHOUT_ODOR}'] = rec_wo
         # the classes
         reads = reads_table()
         e136_classes = json.loads((F.out_dir() / 'classes.json').read_text()) if (F.out_dir() / 'classes.json').exists() \
