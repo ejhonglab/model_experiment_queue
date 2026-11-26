@@ -129,7 +129,15 @@ class Values:
                                   statistic=statistic, value=v))
 
     def frame(self) -> pd.DataFrame:
-        return pd.DataFrame(self.rows, columns=['arm', 'stage', 'panel', 'condition', 'half', 'statistic', 'value'])
+        """One row per key (arm, stage, panel, condition, half, statistic): a number two tables both give is written
+        once, so that a placeholder selects one row (reports/report_values.py refuses two). Raises ValueError if two
+        tables give one key different values."""
+        keys = ['arm', 'stage', 'panel', 'condition', 'half', 'statistic']
+        df = pd.DataFrame(self.rows, columns=keys + ['value'])
+        n = df.groupby(keys, sort=False).value.agg(lambda s: s.round(12).nunique())
+        if (n > 1).any():
+            raise ValueError(f'values that differ under one key: {n[n > 1].index.tolist()}')
+        return df.drop_duplicates(keys).reset_index(drop=True)
 
 
 # ---------------------------------------------------------------------------

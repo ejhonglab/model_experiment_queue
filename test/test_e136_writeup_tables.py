@@ -79,6 +79,18 @@ def _plant(d):
     pd.DataFrame(h).to_csv(d / 'fit_history_A0.csv', index=False)
 
 
+def test_values_one_row_per_key():
+    v = W.Values()
+    v.add('A1', 'four_stages', 'stage_error_mean', 0.93)
+    v.add('A1', 'four_stages', 'stage_error_mean', 0.93)      # the same number from a second table
+    v.add('A1', 'four_stages', 'stage_error_mean', 0.82, half='all')
+    df = v.frame()
+    assert len(df) == 2 and set(df.half) == {'held', 'all'}
+    v.add('A1', 'four_stages', 'stage_error_mean', 0.94)
+    with pytest.raises(ValueError, match='differ'):
+        v.frame()
+
+
 def test_sites_row():
     from kcq import harness as H
     kc = H.KC_ID_LEVEL
