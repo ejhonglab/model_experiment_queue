@@ -1,8 +1,9 @@
 """The tables of E139's write-up (the weaker antennal-lobe normalization without the calyx refit, along its strength),
 from the files its parts wrote to results/E139_normalization_ladder/ (step 0's step0_*.csv and .json; the score's
 score_*.csv, classes.json and provenance_score.json; the reads' reads_<host>_<lane>.csv), from E134's flies tables (the
-floors and the no-step yardstick) and, for the normalization's share of the PN gain's denominator, from E135's port of
-the family's PN stage (seconds; `--no-port` skips it). No simulation of the mushroom body and no fit.
+floors and the no-step yardstick), for the normalization's share of the PN gain's denominator from E135's port of the
+family's PN stage (seconds; `--no-port` skips it), and for where APL's inhibition is made from the saved runs of the
+reads (`--no-sites` skips it). No simulation of the mushroom body and no fit.
 
 The megamat, held-out-panel, without-aa and realism tables are E136's write-up tables (analyses/E136_writeup_tables.py)
 on E139's files, with E139's variants in place of E136's arms (`as_e136`); the step-0 tables, the classes with the price
@@ -143,11 +144,12 @@ def pn_ladder_table(d: dict, V: W.Values) -> List[str]:
     if not len(p):
         return []
     x = p[(p.half == 'held') & (p.row == 'mean') & (p.views == 'all')]
-    L_ = ["The PN stage alone along the ladder (E135's port of the family's PN stage, the calyx not run), against the "
-          "held-out half of the PN-dendrite flies, mean over the eight wirings: each view's error in one-fly units "
-          "(lower is better) and the spread of the odors' totals (the coefficient of variation over the 12 megamat odors "
-          "of each odor's mean evoked rate; the flies' "
-          f"{_f(L.FLIES_TOTALS_CV)}).", '',
+    L_ = ["The PN stage alone along the ladder (E135's port of the family's PN stage on the megamat input; the calyx is "
+          "not run), read as E136 reads the PN dendrites against the held-out half of the dendrite flies: the mean over "
+          "the eight wirings' readings (each its own sampling seed) of each view's error in one-fly units (lower is "
+          "better), the three views' population error and the same with the matrix view, and the spread of the odors' "
+          "totals (the coefficient of variation over the 12 odors both megamat panels hold of each odor's mean evoked "
+          f"rate on the 28 glomeruli both stages record; the flies' {_f(L.FLIES_TOTALS_CV)}).", '',
           '| point | pn_inhadd | pn_inhsc | strength by odor | sharing | breadth | the matrix itself | all three views '
           '| with the matrix | spread of the odors\' totals |', '|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|']
     for r in x.itertuples():
@@ -169,23 +171,46 @@ def signature_table(d: dict, V: W.Values) -> List[str]:
     if not len(s):
         return []
     pts = [c for c in s.columns if c not in ('odor', 'total_orn', 'flies', 'flies_lo', 'flies_hi')]
-    L_ = ["The step from the ORNs to the PN dendrites, odor by odor: each odor's residual off a proportional step (the "
-          "log of its summed PN response over its summed ORN input, the panel's mean removed), the flies' with their "
-          f"{L.SIGNATURE_CI:.0%} bootstrap interval over flies, and each point's on E135's port.", '',
-          '| odor | summed ORN input | the flies (interval) | ' + ' | '.join(pts) + ' |',
+    L_ = ["The step from the ORNs to the PN dendrites, odor by odor, on the 28 glomeruli both stages record: each "
+          "glomerulus's proportional step (its dendrites' response on its terminals' through the origin, over the "
+          "odors), and each odor's mean residual off it over the glomeruli, as a fraction of the step's mean "
+          f"prediction. The flies' (fly means) have their {L.SIGNATURE_CI:.0%} interval from resampling the flies of "
+          "both stages; each point's is the step from the model's megamat input to its PN rates on E135's port. The "
+          "summed ORN input is the odor's summed terminal response over the model input's glomeruli.", '',
+          '| odor | summed ORN terminal response | the flies (interval) | ' + ' | '.join(pts) + ' |',
           '|---|---:|---:|' + '---:|' * len(pts)]
     for r in s.itertuples():
         L_.append(f'| {r.odor} | {_f(r.total_orn, ".1f")} | {_f(r.flies, "+.3f")} ({_f(r.flies_lo, "+.3f")} to '
                   f'{_f(r.flies_hi, "+.3f")}) | ' + ' | '.join(_f(getattr(r, p), '+.3f') for p in pts) + ' |')
-    rho = {p: float(pd.Series(s[p]).corr(s.total_orn, method='spearman')) for p in ['flies'] + pts}
-    L_ += ['', 'ρ over the odors between the residual and the summed ORN input (the normalization\'s signature: '
-           'negative where an odor with more input is turned down more): ' +
-           ', '.join(f'{p} {rho[p]:+.2f}' for p in ['flies'] + pts) + '.']
-    for p, v in rho.items():
-        V.add(f'signature_{p}', 'orn_to_pn_dendrite', 'rho_residual_vs_total', v, half='all')
-    sep = {k: v for k, v in (j or {}).items() if isinstance(v, (int, float, str, bool)) and k not in ('identity_against',)}
-    if sep:
-        L_ += ['', 'From step0_recorded_step_signature.json: ' + '; '.join(f'{k} {v}' for k, v in sep.items()) + '.']
+    j = j or {}
+    fl = j.get('flies') or {}
+    L_ += ['', "Per point (step0_recorded_step_signature.json): ρ over the 17 odors between the residual and the summed ORN "
+           "input (negative where an odor with more input is turned down more, the normalization's signature), the root "
+           "mean squared distance of the point's residuals from the flies', and the number of odors whose residual is "
+           "inside the flies' interval.", '', '| point | ρ with the summed input | distance from the flies | odors inside '
+           'the flies\' interval |', '|---|---:|---:|---:|']
+    if fl:
+        L_.append(f"| the flies | {_f(fl.get('rho_with_total'), '+.2f')} ({_f(fl.get('rho_lo'), '+.2f')} to "
+                  f"{_f(fl.get('rho_hi'), '+.2f')}) | – | – |")
+        for k in ('rho_with_total', 'rho_lo', 'rho_hi'):
+            V.add('flies', 'orn_to_pn_dendrite', f'signature_{k}', fl.get(k), half='all')
+    for p in pts:
+        x = j.get(p) or {}
+        if not x:
+            continue
+        L_.append(f"| {p} | {_f(x.get('rho_with_total'), '+.2f')} | {_f(x.get('rms_from_flies'))} | "
+                  f"{x.get('n_odors_inside', '–')} of {len(s)} |")
+        for k in ('rho_with_total', 'rms_from_flies', 'n_odors_inside'):
+            V.add(f'pn_port_{p}', 'orn_to_pn_dendrite', f'signature_{k}', x.get(k), half='all')
+    ck = j.get('check') or {}
+    if ck:
+        L_ += ['', f"Whether the family's and A1's steps can be told apart through the flies' noise: their residuals "
+               f"differ by an RMS of {_f(ck.get('rms_difference_family_A1'))}, against a half-width of the flies' "
+               f"interval of {_f(ck.get('rms_flies_half_width'))} (RMS over odors); odors apart: "
+               f"{', '.join(ck.get('odors_apart') or []) or 'none'}; told apart: {_yn(ck.get('told_apart'))} (reading "
+               f"{ck.get('reading')}, {ck.get('n_boot')} resamplings of the flies)."]
+        V.add('check', 'orn_to_pn_dendrite', 'rms_difference_family_A1', ck.get('rms_difference_family_A1'), half='all')
+        V.add('check', 'orn_to_pn_dendrite', 'rms_flies_half_width', ck.get('rms_flies_half_width'), half='all')
     return L_ + ['']
 
 
@@ -469,7 +494,32 @@ def operating_table(d: dict, V: W.Values) -> List[str]:
     return L_ + ['']
 
 
-def main(score_dir: Optional[Path] = None, with_port: bool = True) -> Path:
+def apl_sites(names: Sequence[str]) -> pd.DataFrame:
+    """Where APL's inhibition is made (E136's write-up's `sites_row`, E94's shares) in each variant's reads: megamat on
+    T against the held-out half, APL16 on the eight wirings; the variants registered with E136's score functions as the
+    score registers them (`register_variants`). F's APL16 rows are E102's saved somata-only runs, which keep no stage
+    windows, so they are left out (as is any run without them). The divisive claw form is in no variant."""
+    from kcq import stage_readings as R
+    for v in names:
+        if L.fit_rung(v) is not None:
+            F.register_variant(v, L.load_fit_run)
+        elif L._setting_of(v) in L.SETTINGS:
+            L.register_variants(F, [v])
+    rows = []
+    for v in names:
+        for panel, ws, half in ((F.PANEL, F.T_WIRINGS, 'held'), ('apl16', F.WIRINGS, None)):
+            for w in ws:
+                r = F.load_read(F.ReadPoint(v, panel, w, half))
+                if r is None:
+                    continue
+                on, off = (r.conditions[c] for c in R.CONDITIONS)
+                if not all(k in on and k in off for k in ('bouton_win', 'claw_win')):
+                    continue
+                rows.append(dict(arm=v, panel=panel, wiring=w, **W.sites_row(W.wiring_W(w), on, off, False)))
+    return pd.DataFrame(rows)
+
+
+def main(score_dir: Optional[Path] = None, with_port: bool = True, with_sites: bool = True) -> Path:
     """Writes writeup_tables.md and writeup_values.csv into `score_dir` (default E139's out_dir)."""
     score_dir = L.out_dir() if score_dir is None else Path(score_dir)
     d = load(score_dir)
@@ -478,6 +528,7 @@ def main(score_dir: Optional[Path] = None, with_port: bool = True) -> Path:
     order = present(d)
     with L.e136() as _:
         share = normalization_share(L.pn_stage_points()) if with_port else None
+        sites = apl_sites(order) if with_sites else None
         with as_e136(order):
             Lines = ['# E139 write-up tables', '',
                      f"From the score of {pv.get('time')} ({pv.get('host')}, queue {str(pv.get('queue_commit'))[:7]}): "
@@ -493,6 +544,7 @@ def main(score_dir: Optional[Path] = None, with_port: bool = True) -> Path:
             Lines += ['## Beside: the flies\' APL along concentration and the KCs at low concentration', ''] \
                 + extended_table(d, V)
             Lines += ['## Realism', ''] + W.realism_table(d, V) + operating_table(d, V) + share_table(share, V)
+            Lines += W.apl_sites_table(d, sites, V)
             Lines += ['## The reads', ''] + lanes_table(d, V)
     V.frame().to_csv(score_dir / 'writeup_values.csv', index=False)
     out = score_dir / 'writeup_tables.md'
@@ -506,5 +558,7 @@ if __name__ == '__main__':
     ap.add_argument('--score-dir', type=Path, help="where the score's files are (default E139's out_dir)")
     ap.add_argument('--no-port', action='store_true', help="skip the normalization's share of the PN gain's "
                     "denominator (E135's port)")
+    ap.add_argument('--no-sites', action='store_true', help="skip where APL's inhibition is made (reads the saved "
+                    "runs)")
     a = ap.parse_args()
-    main(a.score_dir, with_port=not a.no_port)
+    main(a.score_dir, with_port=not a.no_port, with_sites=not a.no_sites)
