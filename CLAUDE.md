@@ -1284,6 +1284,8 @@ Canonical experiment names for summary reports:
 | E140 | aa at the step from the claws to the somata |
 | E141 | the rise of the inhibition among KCs beside the weaker antennal-lobe normalization, along its dose and in other forms |
 | E142 | the step from the PN dendrites to the PN boutons by itself, with the recorded dendrites under the stage fit's calyx |
+| E143 | the megamat stage error through the flies' sampling |
+| E144 | the weaker antennal-lobe normalization and the rise of the inhibition among KCs on the male CNS's two calyces |
 
 ## Model-output archive (data/model_outputs/ in the shared directory)
 
