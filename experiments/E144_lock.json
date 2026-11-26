@@ -1,0 +1,279 @@
+{
+ "experiment": "E144_a1_malecns_calyces",
+ "script": "experiments/E144_a1_malecns_calyces.py",
+ "part": "lock",
+ "planner": "a Fable subagent, claude-fable-5-2, spawned from viki 2026-11-26 10:31",
+ "entry": "experiment_priorities.md item E144 (proposed and moved by viki 2026-11-26 10:53)",
+ "definitions": {
+  "calyces": {
+   "H": {
+    "connectome": "hemibrain-argmax",
+    "wirings": {
+     "real": 0
+    },
+    "wiring_rule": "the real wiring"
+   },
+   "L": {
+    "connectome": "malecns-left",
+    "wirings": {
+     "real": 0,
+     "P1": 1,
+     "P2": 2,
+     "P3": 3
+    },
+    "wiring_rule": "the real wiring and E133's within-type claw permutations of seeds 1 to 3"
+   },
+   "R": {
+    "connectome": "malecns-right",
+    "wirings": {
+     "real": 0,
+     "P1": 1,
+     "P2": 2,
+     "P3": 3
+    },
+    "wiring_rule": "the real wiring and E133's within-type claw permutations of seeds 1 to 3"
+   }
+  },
+  "settings": {
+   "family": {
+    "label": "the calyx's family (E130's fit; olfsysm's pn_inhadd 31.4)",
+    "rung": null,
+    "aplpn": 1.0,
+    "kckc": 1.0,
+    "kckc_abs": null,
+    "calyces": [
+     "H",
+     "L",
+     "R"
+    ]
+   },
+   "F": {
+    "label": "pn_inhadd 1000 with pn_inhsc by E77's rule",
+    "rung": 1000.0,
+    "aplpn": 1.0,
+    "kckc": 1.0,
+    "kckc_abs": null,
+    "calyces": [
+     "H",
+     "L",
+     "R"
+    ]
+   },
+   "B": {
+    "label": "F with APL->bouton at x0.155",
+    "rung": 1000.0,
+    "aplpn": 0.155,
+    "kckc": 1.0,
+    "kckc_abs": null,
+    "calyces": [
+     "H",
+     "L",
+     "R"
+    ]
+   },
+   "D1.8": {
+    "label": "B with the calyx's matrix at x1.8 of its fitted scale",
+    "rung": 1000.0,
+    "aplpn": 0.155,
+    "kckc": 1.8,
+    "kckc_abs": null,
+    "calyces": [
+     "H",
+     "L",
+     "R"
+    ]
+   },
+   "A1": {
+    "label": "B with the calyx's matrix at x3.24 of its fitted scale",
+    "rung": 1000.0,
+    "aplpn": 0.155,
+    "kckc": 3.24,
+    "kckc_abs": null,
+    "calyces": [
+     "H",
+     "L",
+     "R"
+    ]
+   },
+   "D5.8": {
+    "label": "B with the calyx's matrix at x5.83 of its fitted scale",
+    "rung": 1000.0,
+    "aplpn": 0.155,
+    "kckc": 5.832000000000001,
+    "kckc_abs": null,
+    "calyces": [
+     "H",
+     "L",
+     "R"
+    ]
+   },
+   "Dabs": {
+    "label": "B with L's matrix at the absolute scale A1 reaches on the hemibrain's real wiring",
+    "rung": 1000.0,
+    "aplpn": 0.155,
+    "kckc": null,
+    "kckc_abs": "dabs",
+    "calyces": [
+     "L"
+    ]
+   }
+  },
+  "rise": 3.24,
+  "aplpn": 0.155,
+  "rung": 1000.0,
+  "pn_terms": {
+   "pn_inhadd": 1000.0000000000001,
+   "pn_inhsc": 544.44447616846
+  },
+  "dabs_scale": 85.63434431798409,
+  "hemibrain_real_kckc": 26.43035318456299,
+  "operating_points": {
+   "megamat": 0.09149168289914929,
+   "validation2": 0.05041100523466731,
+   "mixtures": 0.053694662122815776,
+   "apl16": "the calyx's fit's two response counts",
+   "apl_off": "APL on times the calyx's fit's APL-off / APL-on response counts"
+  },
+  "panels": [
+   "megamat",
+   "validation2",
+   "mixtures",
+   "apl16"
+  ],
+  "bar": "A calyx's bar is twice the standard error of a change over its four wirings.",
+  "spreads": "The hemibrain family's over its eight wirings (E136's), the yardstick of every class so far; the calyx's own SD over four wirings beside.",
+  "reads": {
+   "step1": 148,
+   "step2_per_calyx": 24
+  }
+ },
+ "fits": {
+  "H": {
+   "connectome": "hemibrain-argmax",
+   "fit": "hemibrain-argmax",
+   "tag": "cx-hemibrain-argmax_rate0.068_aplboth_k2_cap3",
+   "folder": "results/E130_malecns_family/fits/hemibrain-argmax",
+   "params": {
+    "fixed_thr": 86.39553201479619,
+    "wAPLKC_scale": 0.1941509652841828,
+    "wKCAPL_scale": 0.0001120964002795,
+    "wAPLPN_scale": 0.3273142647026009,
+    "wPNAPL_scale": 0.0005305012436876,
+    "wKCKC_scale": 30.2487959536932
+   },
+   "target_on": 1934,
+   "target_off": 4249,
+   "size": 27712,
+   "n_kcs": 1732,
+   "off_on_ratio": 2.1970010341261634,
+   "outputs_sha256": {
+    "on": "359c0bdd676c1518d78245d84892fff2a9149426108cfe4ed66cd359bc953ae0",
+    "off": "50a866605bc51d44cd2a1db2221f6922403ba46ef8ae8446b1d4a75b25e4b0dc"
+   }
+  },
+  "L": {
+   "connectome": "malecns-left",
+   "fit": "malecns-left",
+   "tag": "cx-malecns-left_rate0.068_aplboth_kcm-malecns-left_k2_cap3",
+   "folder": "results/E130_malecns_family/fits/malecns-left",
+   "params": {
+    "fixed_thr": 157.21125279569935,
+    "wAPLKC_scale": 0.0971005441805128,
+    "wKCAPL_scale": 5.2092566620446765e-05,
+    "wAPLPN_scale": 0.2837131126132225,
+    "wPNAPL_scale": 0.0002180010442756,
+    "wKCKC_scale": 7.718367577065198
+   },
+   "target_on": 2072,
+   "target_off": 4780,
+   "size": 29824,
+   "n_kcs": 1864,
+   "off_on_ratio": 2.306949806949807,
+   "outputs_sha256": {
+    "on": "6b587427df354c12f167c94b7013544446f6833ca5d9b0f67eda6d53f2f9bee9",
+    "off": "27e98f330ff7d2ff0f089fab00dc6b5a203c86d5ac9903204e0606fdf3115d45"
+   }
+  },
+  "R": {
+   "connectome": "malecns-right",
+   "fit": "malecns-right_s2",
+   "tag": "cx-malecns-right_rate0.068_aplboth_kcm-malecns-right_k2_cap3_s2",
+   "folder": "results/E130_malecns_family/fits/malecns-right_s2",
+   "params": {
+    "fixed_thr": 111.3978612630546,
+    "wAPLKC_scale": 0.1118072594717893,
+    "wKCAPL_scale": 5.934567912515395e-05,
+    "wAPLPN_scale": 0.4078675617957331,
+    "wPNAPL_scale": 0.0007156122598039,
+    "wKCKC_scale": 25.83986541880706
+   },
+   "target_on": 2102,
+   "target_off": 4413,
+   "size": 30144,
+   "n_kcs": 1884,
+   "off_on_ratio": 2.099429115128449,
+   "outputs_sha256": {
+    "on": "95826d5fc37a52d96ce71ff4fc58b5cfd4d6c80bdccb8773895dd9f6f05363b4",
+    "off": "9b6f730fedd816fa869a9b00824802aa5dea9eb8e4112a465af32ec59234e697"
+   }
+  }
+ },
+ "classes": {
+  "e136": "E136's classes with E139's price, on L's and R's four wirings (each setting against the calyx's own family on the same wiring; megamat against the held-out half, all flies beside).",
+  "a1_replicates": "A1 replicates on a calyx: A1 holds there.",
+  "rise_needed": "The rise is needed there: B does not hold, and D1.8, A1 or D5.8 does.",
+  "family_inside": "The calyx's family is inside the hemibrain's wirings: the family's strength error on the calyx's real wiring is inside the range of the hemibrain family's eight wirings, at the boutons, the claws and the somata.",
+  "claw_default": "The claw default changes it: on H, a megamat stage or a held-out panel of a setting differs from the 'first' real wiring's by more than its spread; the classes are then read against H.",
+  "dose_ladder": "A description: validation2's change along B, D1.8, A1 and D5.8 on the real wiring, beside the hemibrain's (+0.080, +0.021, -0.016, -0.036).",
+  "no_class": "No class for a wiring outside a realism band or whose holds fail. The number of calyces and settings tried is reported with any that holds. No calyx, dose or setting becomes a base without Tom's or Yang's word."
+ },
+ "outcomes": {
+  "a": "A1 replicates on both male calyces (about 1 in 5): the hold is not one fly's; A1, with E141's doses, goes to Tom and Yang as a candidate base read on three calyces.",
+  "b": "Megamat falls on both and A1 holds on neither (about 1 in 4): the rise keeps the held-out panels only with the hemibrain's matrix; step 0's table says what that matrix has that the male ones lack, and a planner weighs moving it between calyces (E133's arms) under the stage target.",
+  "c": "It replicates on one calyx (about 1 in 3): the two male calyces differ in APL's synapses at the boutons and in their fitted KC-KC scale (7.7 and 25.8); step 2 reads the doses on the other's permutations.",
+  "d": "B holds on a male calyx without the rise (about 1 in 8): the need for the rise is the hemibrain's, and so is E141's question of what carries it.",
+  "e": "A male calyx's family is outside the hemibrain's wirings at a megamat stage (about 1 in 2 at the boutons; beside any of the above): the stage table on the male CNS goes to Tom, whose shared models are built on it.",
+  "f": "The claw default changes a class on the hemibrain (about 1 in 5): the male calyces are then read against H, not against the eight wirings, and the note says so."
+ },
+ "prediction": {
+  "H": {
+   "megamat_falls": "9 in 10",
+   "a1_holds": "3 in 4",
+   "would_fail_it": "the claw default"
+  },
+  "L": {
+   "megamat_falls": "9 in 10",
+   "a1_holds": "1 in 3",
+   "would_fail_it": "the APL16 somata with APL on; its low KC-KC scale (7.7 against 26.4)"
+  },
+  "R": {
+   "megamat_falls": "9 in 10",
+   "a1_holds": "1 in 2",
+   "would_fail_it": "validation2"
+  }
+ },
+ "judgments": [
+  "The start of every hold is the calyx's fit's absolute parameters (E130's counted fit, its fits.csv row) with the setting's factors; the threshold (APL off) and the APL->KC scale with KC->APL and bouton->APL tied (APL on) are then held exactly (E77's hold_rates, E136's APL bracket 0.1 to 10). E136's reads start from the family's held megamat point, which the male calyces do not have.",
+  "A permutation (E133's within-type claw permutation of seed 1, 2 or 3) runs at its calyx's fit's scales and operating points (the same KCs, so the same counts on the APL16 input).",
+  "The breadth behind the APL->KC weights is the calyx wiring's APL-off breadth on the lab's APL16 input (E133's calyx_tables; recomputed on a permutation), on every panel and setting, as E136's and E139's reads hold it.",
+  "RISE and APLPN are E141's rounded x3.24 and x0.155 (E139's K and B). Dabs is RISE times the family's KC-KC scale on the hemibrain's real wiring (E83's saved_fit('real'), 26.43): 85.6.",
+  "F's and B's normalization is E141's pn_terms (pn_inhadd 1000, pn_inhsc by E77's inhsc_for), E139's rung 1000.",
+  "A read's tag is '<calyx>_<setting>_<panel>_<wiring>'; a megamat read's row has half 'held' (the score reads it against the held-out half, all flies beside), the others none.",
+  "The stage readings' seed index of a wiring is its position in (real, P1, P2, P3), so that H's real wiring is pooled and noised as the family's real wiring (E136's seed_index 0).",
+  "The KC-KC matrix of a male calyx is E130's (Pratyush's KCclaw-to-KCclaw table, matrices.json's sha256); H's is olfsysm's hemibrain matrix among H's KCs ('argmax' claws), as E130's refit has it."
+ ],
+ "e134_lock_sha256": null,
+ "amendments": [],
+ "written": "2026-11-26 11:03",
+ "host": "viki",
+ "commits": {
+  "queue_commit": "6b7b1b8746cdcb80608a912f0c6e33cc382aee9a",
+  "queue_dirty": false,
+  "pyolfsysm_commit": "b1e89d7d119bbbb4888f31de4d94938dbc4bd60a",
+  "pyolfsysm_dirty": false,
+  "al_analysis_commit": "d891fe786ac5a103ef1ccb40bf108b3b5e16078e",
+  "al_analysis_dirty": false,
+  "hong2p_commit": "484da09afe90ce4dd37e8b9039b1881136b78b68",
+  "hong2p_dirty": false
+ }
+}
