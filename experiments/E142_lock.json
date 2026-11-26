@@ -1,0 +1,1613 @@
+{
+ "experiment": "E142_dendrite_bouton_step",
+ "script": "experiments/E142_dendrite_bouton_step.py",
+ "part": "lock",
+ "written": "2026-11-26 05:21",
+ "host": "viki",
+ "commits": {
+  "queue_commit": "f5bdba9cae30f9924fb6344f87e13b6d331e2553",
+  "queue_dirty": true,
+  "pyolfsysm_commit": "b1e89d7d119bbbb4888f31de4d94938dbc4bd60a",
+  "pyolfsysm_dirty": false,
+  "al_analysis_commit": "d891fe786ac5a103ef1ccb40bf108b3b5e16078e",
+  "al_analysis_dirty": false,
+  "hong2p_commit": "484da09afe90ce4dd37e8b9039b1881136b78b68",
+  "hong2p_dirty": false
+ },
+ "panel": "megamat",
+ "odors": [
+  "2h",
+  "IaA",
+  "pa",
+  "2-but",
+  "eb",
+  "ep",
+  "6al",
+  "t2h",
+  "1-8ol",
+  "1-5ol",
+  "1-6ol",
+  "ms",
+  "B-cit",
+  "Lin",
+  "aa",
+  "benz",
+  "va"
+ ],
+ "inputs": {
+  "data": {
+   "e134_lock": {
+    "path": "/home/yang/src/kc_queue/model_experiment_queue/experiments/E134_lock.json",
+    "bytes": 116395,
+    "mtime": "2026-11-24 11:48:20",
+    "sha256": "30015d97ea916ae42ad5c8e85535604fc9ee431b04ad27e260c71fca8636f92c"
+   },
+   "e138_classes_lock": {
+    "path": "/home/yang/src/kc_queue/model_experiment_queue/experiments/E138_classes_lock.json",
+    "bytes": 14551,
+    "mtime": "2026-11-25 02:51:00",
+    "sha256": "a1305ed38b3d79dcb4d5631b41c2eb349f6b4f0b6c16f2073ee3ba135c6ae47d"
+   },
+   "e135_lock": {
+    "path": "/local/tensor/Tom/claude_kc_remapping/results/E135_antennal_lobe_dendrites/lock.json",
+    "bytes": 6432,
+    "mtime": "2026-11-24 15:30:29",
+    "sha256": "e0fae145cf5f28cbe9fc400c5c5ae0126f382d968d72dda16a1505df05aaf43f"
+   },
+   "e135_measured_step": {
+    "path": "/local/tensor/Tom/claude_kc_remapping/results/E135_antennal_lobe_dendrites/step0_measured_step.csv",
+    "bytes": 90265,
+    "mtime": "2026-11-24 14:53:35",
+    "sha256": "e624a3b56a56994fedc19371eb5252f72cb476aace0d66dc9c26f73adcafd8bf"
+   }
+  },
+  "results": {
+   "e138_feeders": {
+    "path": "/local/tensor/Tom/claude_kc_remapping/results/E138_strength_by_odor_entries/feeders.csv",
+    "bytes": 139403,
+    "mtime": "2026-11-25 02:45:38",
+    "sha256": "b3c0a9d8919e9a0987e0711d8793f068db7e35537dc216c3bb0254f849c0a643"
+   },
+   "e138_stages": {
+    "path": "/local/tensor/Tom/claude_kc_remapping/results/E138_strength_by_odor_entries/stages.csv",
+    "bytes": 858851,
+    "mtime": "2026-11-25 02:43:12",
+    "sha256": "2c6a3fdc0ab21e7c5e16542558ba1f2efe05f0935d5db511c3a1ec6fca051419"
+   },
+   "e140_models_entries": {
+    "path": "/local/tensor/Tom/claude_kc_remapping/results/E140_aa_claw_soma_step/models_entries.csv",
+    "bytes": 2682643,
+    "mtime": "2026-11-25 19:26:45",
+    "sha256": "f48a4728dfce00959da3fdce2d1101b215019f2566f86d552b2f81156fcd19d6"
+   },
+   "e140_flies_entries": {
+    "path": "/local/tensor/Tom/claude_kc_remapping/results/E140_aa_claw_soma_step/flies_entries.csv",
+    "bytes": 170440,
+    "mtime": "2026-11-25 19:26:27",
+    "sha256": "5844cc245d6d4b586220b1ec82219de35cff0de59b5a0e39f58cfa2a80770308"
+   },
+   "e119_a4_groups": {
+    "path": "/local/tensor/Tom/claude_kc_remapping/results/E119_stages_per_roi/a4_groups.csv",
+    "bytes": 13741,
+    "mtime": "2026-11-20 13:59:42",
+    "sha256": "df6682e035432e8b0b86006bed165ac5120b2837a15632bdf28a2da301f0260c"
+   },
+   "e119_a4_summary": {
+    "path": "/local/tensor/Tom/claude_kc_remapping/results/E119_stages_per_roi/a4_summary.csv",
+    "bytes": 418,
+    "mtime": "2026-11-20 13:59:42",
+    "sha256": "de54fd15acaeadaeabaa5c4b88cf1b0144cb8833f55f45c49566ba7101728009"
+   },
+   "e128_a_repeat": {
+    "path": "/local/tensor/Tom/claude_kc_remapping/results/E128_bouton_groups/a_repeat.csv",
+    "bytes": 3958,
+    "mtime": "2026-11-22 13:02:56",
+    "sha256": "08e418a2e20dc76a607166a123f524c1792917b4bbe8d99b273096acde727482"
+   },
+   "e134_flies_no_step": {
+    "path": "/local/tensor/Tom/claude_kc_remapping/results/E134_population_baseline/flies_no_step.csv",
+    "bytes": 11431,
+    "mtime": "2026-11-24 11:49:26",
+    "sha256": "b45f431e3b6cb2fe30904d6556f6a6d05bb9453aae70153e22b85b04adeda88e"
+   },
+   "e134_score_scores": {
+    "path": "/local/tensor/Tom/claude_kc_remapping/results/E134_population_baseline/score_scores.csv",
+    "bytes": 477133,
+    "mtime": "2026-11-24 16:15:00",
+    "sha256": "90690081dfcff164eb084821ee0fbb026de0326d8da480a34f5f20edfc012bf5"
+   },
+   "e135_score_scores": {
+    "path": "/local/tensor/Tom/claude_kc_remapping/results/E135_antennal_lobe_dendrites/score_scores.csv",
+    "bytes": 904454,
+    "mtime": "2026-11-25 06:43:50",
+    "sha256": "d56f1ca9f97c7982b3a9489eb02e594f3e5cfd1b225c0d28435c8974040cc611"
+   },
+   "e135_score_stage_error": {
+    "path": "/local/tensor/Tom/claude_kc_remapping/results/E135_antennal_lobe_dendrites/score_stage_error.csv",
+    "bytes": 31786,
+    "mtime": "2026-11-25 06:43:51",
+    "sha256": "1416a6222313e791e024982dc1fe678e34b4b832cf912cf5780179517eda18ef"
+   },
+   "e136_classes": {
+    "path": "/local/tensor/Tom/claude_kc_remapping/results/E136_stage_population_fit/measure_strength/classes.json",
+    "bytes": 61705,
+    "mtime": "2026-11-25 18:25:15",
+    "sha256": "89202b44f72263a9033b88913a50927fa3e67c03d892c80bcd0f1a2adf418b88"
+   },
+   "e136_score_megamat": {
+    "path": "/local/tensor/Tom/claude_kc_remapping/results/E136_stage_population_fit/measure_strength/score_megamat.csv",
+    "bytes": 86846,
+    "mtime": "2026-11-25 18:25:15",
+    "sha256": "ee1c5481d0ee743dc913db7e27f6a54d365060428ed907a28c3fafc05d9ea0e3"
+   },
+   "e136_score_panels": {
+    "path": "/local/tensor/Tom/claude_kc_remapping/results/E136_stage_population_fit/measure_strength/score_panels.csv",
+    "bytes": 116473,
+    "mtime": "2026-11-25 18:25:15",
+    "sha256": "a60879ac98776e0edc9714fbbf6284831a4c7d7a30c32bfd97874ed5acd0fe2b"
+   },
+   "e136_score_apl16": {
+    "path": "/local/tensor/Tom/claude_kc_remapping/results/E136_stage_population_fit/measure_strength/score_apl16.csv",
+    "bytes": 55911,
+    "mtime": "2026-11-25 18:25:15",
+    "sha256": "f74d7585870d339ce5d01247df270e7ed118b77e434c0a0800a733acd02a618d"
+   },
+   "e139_classes": {
+    "path": "/local/tensor/Tom/claude_kc_remapping/results/E139_normalization_ladder/classes.json",
+    "bytes": 131402,
+    "mtime": "2026-11-26 04:13:07",
+    "sha256": "e0eb4f9ceaefe535fe802691bbef833ec2af6036694777c2f1bfaa0f2d3d76d0"
+   },
+   "e139_score_megamat": {
+    "path": "/local/tensor/Tom/claude_kc_remapping/results/E139_normalization_ladder/score_megamat.csv",
+    "bytes": 307381,
+    "mtime": "2026-11-26 04:12:59",
+    "sha256": "a885396548c07f0c5592298114e21c27fd511b84af698c45722c534473c5238a"
+   }
+  }
+ },
+ "recordings": {
+  "orn": {
+   "stage": "orn",
+   "panel": "megamat",
+   "cohort": "wild_type",
+   "flies": [
+    "2023-04-22/2",
+    "2023-04-22/3",
+    "2023-04-26/2",
+    "2023-04-26/3",
+    "2023-05-08/1",
+    "2023-05-08/3",
+    "2023-05-09/1",
+    "2023-05-10/1",
+    "2023-06-22/1"
+   ],
+   "criterion": 2.0,
+   "units": "trial-noise SD",
+   "named_units": true,
+   "odors": [
+    "2h",
+    "IaA",
+    "pa",
+    "2-but",
+    "eb",
+    "ep",
+    "6al",
+    "t2h",
+    "1-8ol",
+    "1-5ol",
+    "1-6ol",
+    "ms",
+    "B-cit",
+    "Lin",
+    "aa",
+    "benz",
+    "va"
+   ],
+   "glomeruli": [
+    "D",
+    "DA2",
+    "DC1",
+    "DC2",
+    "DC3",
+    "DC4",
+    "DL1",
+    "DL2d",
+    "DL2v",
+    "DL5",
+    "DM1",
+    "DM2",
+    "DM3",
+    "DM4",
+    "DM5",
+    "DM6",
+    "DP1l",
+    "DP1m",
+    "VA2",
+    "VA3",
+    "VA4",
+    "VA5",
+    "VA6",
+    "VA7l",
+    "VA7m",
+    "VC1",
+    "VC2",
+    "VC3",
+    "VC4",
+    "VL1",
+    "VL2a",
+    "VL2p",
+    "VM2",
+    "VM3",
+    "VM5d",
+    "VM5v",
+    "VM7d",
+    "VM7v"
+   ],
+   "halves": null
+  },
+  "pn_dendrite": {
+   "stage": "pn_dendrite",
+   "panel": "megamat",
+   "cohort": "wild_type",
+   "flies": [
+    "2023-06-22/2",
+    "2023-06-23/1",
+    "2023-06-24/1",
+    "2023-07-19/1",
+    "2023-07-19/2",
+    "2023-07-28/1",
+    "2023-07-28/2"
+   ],
+   "criterion": 2.0,
+   "units": "trial-noise SD",
+   "named_units": true,
+   "odors": [
+    "2h",
+    "IaA",
+    "pa",
+    "2-but",
+    "eb",
+    "ep",
+    "6al",
+    "t2h",
+    "1-8ol",
+    "1-5ol",
+    "1-6ol",
+    "ms",
+    "B-cit",
+    "Lin",
+    "aa",
+    "benz",
+    "va"
+   ],
+   "glomeruli": [
+    "D",
+    "DA2",
+    "DC1",
+    "DC2",
+    "DC3",
+    "DL1",
+    "DL5",
+    "DM1",
+    "DM2",
+    "DM3",
+    "DM4",
+    "DM5",
+    "DM6",
+    "DP1m",
+    "VA2",
+    "VA3",
+    "VA4",
+    "VA5",
+    "VA6",
+    "VA7l",
+    "VA7m",
+    "VC1",
+    "VC2",
+    "VL2a",
+    "VL2p",
+    "VM2",
+    "VM3",
+    "VM7d",
+    "VM7v"
+   ],
+   "halves": {
+    "fit": [
+     "2023-06-24/1",
+     "2023-07-19/1",
+     "2023-07-19/2"
+    ],
+    "held": [
+     "2023-06-22/2",
+     "2023-06-23/1",
+     "2023-07-28/1",
+     "2023-07-28/2"
+    ]
+   }
+  },
+  "pn_bouton": {
+   "stage": "pn_bouton",
+   "panel": "megamat",
+   "cohort": "wild_type",
+   "flies": [
+    "2022-10-26__fly01__megamat1_001",
+    "2022-10-26__fly02__megamat1",
+    "2022-11-13__fly01__megamat1",
+    "2022-11-13__fly02__megamat1_002",
+    "2022-11-13__fly03__megamat1"
+   ],
+   "criterion": 2.0,
+   "units": "baseline-noise SD",
+   "named_units": false,
+   "odors": [
+    "2h",
+    "IaA",
+    "pa",
+    "2-but",
+    "eb",
+    "ep",
+    "6al",
+    "t2h",
+    "1-8ol",
+    "1-5ol",
+    "1-6ol",
+    "ms",
+    "B-cit",
+    "Lin",
+    "aa",
+    "benz",
+    "va"
+   ],
+   "glomeruli": null,
+   "halves": {
+    "fit": [
+     "2022-11-13__fly01__megamat1",
+     "2022-11-13__fly03__megamat1"
+    ],
+    "held": [
+     "2022-10-26__fly01__megamat1_001",
+     "2022-10-26__fly02__megamat1",
+     "2022-11-13__fly02__megamat1_002"
+    ]
+   }
+  },
+  "kc_claw": {
+   "stage": "kc_claw",
+   "panel": "megamat",
+   "cohort": "wild_type",
+   "flies": [
+    "2023-04-11__fly02__megamat1",
+    "2023-04-11__fly03__megamat1",
+    "2023-04-13__fly01__megamat1_001",
+    "2023-04-15__fly02__megamat1"
+   ],
+   "criterion": 2.0,
+   "units": "baseline-noise SD",
+   "named_units": false,
+   "odors": [
+    "2h",
+    "IaA",
+    "pa",
+    "2-but",
+    "eb",
+    "ep",
+    "6al",
+    "t2h",
+    "1-8ol",
+    "1-5ol",
+    "1-6ol",
+    "ms",
+    "B-cit",
+    "Lin",
+    "aa",
+    "benz",
+    "va"
+   ],
+   "glomeruli": null,
+   "halves": {
+    "fit": [
+     "2023-04-11__fly02__megamat1",
+     "2023-04-13__fly01__megamat1_001"
+    ],
+    "held": [
+     "2023-04-11__fly03__megamat1",
+     "2023-04-15__fly02__megamat1"
+    ]
+   }
+  },
+  "kc_soma": {
+   "stage": "kc_soma",
+   "panel": "megamat",
+   "cohort": "wild_type",
+   "flies": [
+    "2022-10-10/1",
+    "2022-10-10/2",
+    "2022-10-11/1",
+    "2022-11-10/1"
+   ],
+   "criterion": 5.9486,
+   "units": "baseline-noise SD",
+   "named_units": false,
+   "odors": [
+    "2h",
+    "IaA",
+    "pa",
+    "2-but",
+    "eb",
+    "ep",
+    "6al",
+    "t2h",
+    "1-8ol",
+    "1-5ol",
+    "1-6ol",
+    "ms",
+    "B-cit",
+    "Lin",
+    "aa",
+    "benz",
+    "va"
+   ],
+   "glomeruli": null,
+   "halves": {
+    "fit": [
+     "2022-10-10/1",
+     "2022-10-11/1"
+    ],
+    "held": [
+     "2022-10-10/2",
+     "2022-11-10/1"
+    ]
+   }
+  },
+  "excluded": {
+   "flies": [
+    {
+     "stage": "pn_bouton",
+     "fly": "2022-10-21__fly02__megamat1_001__dsub3",
+     "reason": "Remy's dashboards and bouton analysis leave it out (median cellprob 0.03); data/remy_per_roi/README.md"
+    }
+   ],
+   "older_megamat": "Remy's older megamat flies (pyolfsysm's data/from_remy/2024-11-12): never read",
+   "same_fly": "the same-fly claw and soma recording (2023-04-11 fly 3, megamat1_redo): not read (E136's flies)",
+   "validation2": "not read"
+  }
+ },
+ "glomeruli": {
+  "dendrite28": [
+   "D",
+   "DA2",
+   "DC1",
+   "DC2",
+   "DC3",
+   "DL1",
+   "DL5",
+   "DM1",
+   "DM2",
+   "DM3",
+   "DM4",
+   "DM5",
+   "DM6",
+   "DP1m",
+   "VA2",
+   "VA3",
+   "VA5",
+   "VA6",
+   "VA7l",
+   "VA7m",
+   "VC1",
+   "VC2",
+   "VL2a",
+   "VL2p",
+   "VM2",
+   "VM3",
+   "VM7d",
+   "VM7v"
+  ],
+  "dendrites": [
+   "D",
+   "DA2",
+   "DC1",
+   "DC2",
+   "DC3",
+   "DL1",
+   "DL5",
+   "DM1",
+   "DM2",
+   "DM3",
+   "DM4",
+   "DM5",
+   "DM6",
+   "DP1m",
+   "VA2",
+   "VA3",
+   "VA4",
+   "VA5",
+   "VA6",
+   "VA7l",
+   "VA7m",
+   "VC1",
+   "VC2",
+   "VL2a",
+   "VL2p",
+   "VM2",
+   "VM3",
+   "VM7d",
+   "VM7v"
+  ],
+  "dendrites_outside28": [
+   "VA4"
+  ],
+  "orn": [
+   "D",
+   "DA2",
+   "DC1",
+   "DC2",
+   "DC3",
+   "DC4",
+   "DL1",
+   "DL2d",
+   "DL2v",
+   "DL5",
+   "DM1",
+   "DM2",
+   "DM3",
+   "DM4",
+   "DM5",
+   "DM6",
+   "DP1l",
+   "DP1m",
+   "VA2",
+   "VA3",
+   "VA4",
+   "VA5",
+   "VA6",
+   "VA7l",
+   "VA7m",
+   "VC1",
+   "VC2",
+   "VC3",
+   "VC4",
+   "VL1",
+   "VL2a",
+   "VL2p",
+   "VM2",
+   "VM3",
+   "VM5d",
+   "VM5v",
+   "VM7d",
+   "VM7v"
+  ],
+  "carried": [
+   "DC4",
+   "DL2d",
+   "DL2v",
+   "DP1l",
+   "VC3",
+   "VC4",
+   "VL1",
+   "VM5d",
+   "VM5v"
+  ],
+  "model36": [
+   "D",
+   "DA2",
+   "DC1",
+   "DC2",
+   "DC3",
+   "DC4",
+   "DL1",
+   "DL2d",
+   "DL2v",
+   "DL5",
+   "DM1",
+   "DM2",
+   "DM3",
+   "DM4",
+   "DM5",
+   "DM6",
+   "DP1l",
+   "DP1m",
+   "VA2",
+   "VA3",
+   "VA5",
+   "VA6",
+   "VA7l",
+   "VA7m",
+   "VC1",
+   "VC2",
+   "VC3",
+   "VC4",
+   "VL2a",
+   "VL2p",
+   "VM2",
+   "VM3",
+   "VM5d",
+   "VM5v",
+   "VM7d",
+   "VM7v"
+  ],
+  "bouton_reading_subset": [
+   "D",
+   "DA2",
+   "DC1",
+   "DC2",
+   "DC3",
+   "DL1",
+   "DL5",
+   "DM1",
+   "DM2",
+   "DM3",
+   "DM4",
+   "DM5",
+   "DM6",
+   "DP1m",
+   "VA2",
+   "VA3",
+   "VA5",
+   "VA6",
+   "VA7l",
+   "VA7m",
+   "VC1",
+   "VC2",
+   "VL2a",
+   "VL2p",
+   "VM2",
+   "VM3",
+   "VM7d",
+   "VM7v"
+  ]
+ },
+ "definitions": {
+  "strength": "kcq/population_fit.py's strength view on the 17 megamat odors (population_views): part 'rate', each odor's response rate over the mean over the 17 odors; part 'mean', each odor's mean response likewise; a part's error the RMS over odors of the entry minus the flies' mean entry over the part's one-fly unit; the view's error the RMS of the two parts' errors (E136's measure 'strength')",
+  "step_by_odor": {
+   "rule": "an odor's entry in a strength part at the downstream stage minus its entry upstream (hal's step_change of the flies' mean parts); interval from hal's step_interval",
+   "n_boot": 1000,
+   "ci": 0.9,
+   "seed": 0,
+   "draw": "sets",
+   "corrected": false,
+   "steps": [
+    [
+     "pn_dendrite",
+     "pn_bouton"
+    ],
+    [
+     "pn_bouton",
+     "kc_claw"
+    ]
+   ],
+   "sets": [
+    "all",
+    "fit",
+    "held"
+   ],
+   "outside_zero": "lo > 0 or hi < 0; on both halves: on each half, with the same sign"
+  },
+  "no_step": "hal's no_step_score: the upstream flies' (all seven dendrite flies') mean views as the prediction for the downstream flies (against all of them, or a half's mean in all the stage's flies' units); its entries by odor E138's odor_entries of the upstream flies against the downstream reference (row 'common')",
+  "count_weighted": {
+   "rule": "each dendrite fly's glomeruli weighted by their counts in a calyx (COUNT_OF: boutons for the boutons, claws for the claws): rate the weighted fraction responding, mean the weighted mean response (over the glomeruli the fly recorded for the odor), each relative to its mean over the 17 odors; the flies' mean views scored as the no-step",
+   "calyces": [
+    "hemibrain-first",
+    "malecns-left",
+    "malecns-right"
+   ],
+   "counts": {
+    "pn_bouton": "n_boutons",
+    "kc_claw": "n_claws"
+   },
+   "source": "E138's all_counts (E130's step0_wiring_only, olfsysm's loaders of Pratyush's tables), checked against E138's feeders.csv",
+   "n_perm": 1000,
+   "perm_seed": 0,
+   "null_percentile": 5.0,
+   "carried": {
+    "gain_file": "E135 step0_measured_step.csv",
+    "units": "noise",
+    "flies": "all",
+    "statistic": "median slope over the 28"
+   }
+  },
+  "entries": {
+   "rule": "E138's odor_entries (per row: each wiring, and 'common' the wirings' mean views)",
+   "concentrated": {
+    "top": 2,
+    "share": 0.5,
+    "row": "common",
+    "rule": "E138's concentrated: the two largest odors by view_share on all flies carry more than half of the squared strength error on both halves"
+   }
+  },
+  "model_step": "per part, the model's 'common' entry downstream minus upstream, against the flies' mean entries' difference; Pearson r over the 17 odors, Spearman beside; on all flies",
+  "bouton_sampling": "per wiring (the family held's runs, APL on): the wiring's boutons per glomerulus (meta bouton_glomerulus), the default reading's units per glomerulus (subset 'shared', pool 1, after the silent drop), beside each calyx's counts; the share of the wiring's boutons on the glomeruli without model input, and of the read units",
+  "equal_weight": {
+   "criterion": 2.0,
+   "cut": 0.3,
+   "group_odors": "E119's ODORS (E90's 12)",
+   "flies": "E128's fly_groups on two repeats, read on the third, every group one unit and the remainder one more; the fly's parts the mean over its three held-out repeats",
+   "model": "each glomerulus's read boutons one unit (their mean), responding above 2"
+  },
+  "stage_error": "the root mean square over LOSS_STAGES of each stage's strength error (E136's 'stage'); 'downstream' over the boutons, claws and somata; 'without boutons' over the dendrites, claws and somata"
+ },
+ "model": {
+  "groups": [
+   {
+    "name": "family_held",
+    "source": "E134:megamat_held_{w}",
+    "wirings": [
+     "real",
+     "P1",
+     "P2",
+     "M1",
+     "P3",
+     "P4",
+     "M2",
+     "M3"
+    ],
+    "what": "the family held at the megamat flies' 0.0915 (E134's step 3), the unrefitted family of every class"
+   },
+   {
+    "name": "A0",
+    "source": "E136:A0_megamat_{w}",
+    "wirings": [
+     "P3",
+     "P4",
+     "M2",
+     "M3"
+    ],
+    "what": "E136's arm A0, its megamat reads on the T wirings (its S wirings are its fit's evaluations)"
+   },
+   {
+    "name": "A1",
+    "source": "E136:A1_megamat_{w}",
+    "wirings": [
+     "P3",
+     "P4",
+     "M2",
+     "M3"
+    ],
+    "what": "E136's arm A1, its megamat reads on the T wirings (its S wirings are its fit's evaluations)"
+   },
+   {
+    "name": "A4",
+    "source": "E136:A4_megamat_{w}",
+    "wirings": [
+     "P3",
+     "P4",
+     "M2",
+     "M3"
+    ],
+    "what": "E136's arm A4, its megamat reads on the T wirings (its S wirings are its fit's evaluations)"
+   },
+   {
+    "name": "F_inhadd314",
+    "source": "E139:F_inhadd314_megamat_{w}",
+    "wirings": [
+     "real",
+     "P1",
+     "P2",
+     "M1",
+     "P3",
+     "P4",
+     "M2",
+     "M3"
+    ],
+    "what": "E139's F_inhadd314 (the family's calyx factors, pn_inhadd 314)"
+   },
+   {
+    "name": "F_inhadd1000",
+    "source": "E139:F_inhadd1000_megamat_{w}",
+    "wirings": [
+     "real",
+     "P1",
+     "P2",
+     "M1",
+     "P3",
+     "P4",
+     "M2",
+     "M3"
+    ],
+    "what": "E139's F_inhadd1000 (the family's calyx factors, pn_inhadd 1000)"
+   },
+   {
+    "name": "B_inhadd314",
+    "source": "E139:B_inhadd314_megamat_{w}",
+    "wirings": [
+     "real",
+     "P1",
+     "P2",
+     "M1",
+     "P3",
+     "P4",
+     "M2",
+     "M3"
+    ],
+    "what": "E139's B_inhadd314 (APL->bouton x0.155, KC-KC x1, pn_inhadd 314)"
+   },
+   {
+    "name": "B_inhadd1000",
+    "source": "E139:B_inhadd1000_megamat_{w}",
+    "wirings": [
+     "real",
+     "P1",
+     "P2",
+     "M1",
+     "P3",
+     "P4",
+     "M2",
+     "M3"
+    ],
+    "what": "E139's B_inhadd1000 (APL->bouton x0.155, KC-KC x1, pn_inhadd 1000)"
+   },
+   {
+    "name": "K_inhadd1000",
+    "source": "E139:K_inhadd1000_megamat_{w}",
+    "wirings": [
+     "real",
+     "P1",
+     "P2",
+     "M1",
+     "P3",
+     "P4",
+     "M2",
+     "M3"
+    ],
+    "what": "E139's K_inhadd1000 (KC-KC x3.24, APL->bouton x1, pn_inhadd 1000)"
+   },
+   {
+    "name": "e135_imposed",
+    "source": "E135:megamat_imposed_{w}",
+    "wirings": [
+     "real",
+     "P1",
+     "P2",
+     "M1",
+     "P3",
+     "P4",
+     "M2",
+     "M3"
+    ],
+    "what": "E135's recorded dendrites imposed at the family's calyx (step 2, the table in noise units)"
+   },
+   {
+    "name": "e135_imposed_glom_perm",
+    "source": "E135:megamat_imposed_glom_perm_{w}",
+    "wirings": [
+     "real",
+     "P1",
+     "P2",
+     "M1",
+     "P3",
+     "P4",
+     "M2",
+     "M3"
+    ],
+    "what": "E135's control: the imposed table with its glomeruli permuted"
+   },
+   {
+    "name": "e135_imposed_odor_perm",
+    "source": "E135:megamat_imposed_odor_perm_{w}",
+    "wirings": [
+     "real",
+     "P1",
+     "P2",
+     "M1",
+     "P3",
+     "P4",
+     "M2",
+     "M3"
+    ],
+    "what": "E135's control: the imposed table with its odors permuted"
+   }
+  ],
+  "readings": {
+   "stages": {
+    "orn": {
+     "default": {
+      "name": "curve_noise",
+      "stage": "orn",
+      "curve": "quantile",
+      "curve_set_on": "on",
+      "curve_scope": "wiring",
+      "fly_weighting": "fly",
+      "noise_aware_curve": false,
+      "noise": "residual",
+      "criterion": "flies",
+      "pool": null,
+      "subset": null,
+      "claw_spike_share": 0.0,
+      "glomeruli": "every_fly",
+      "settled_pre": true
+     },
+     "alternatives": [
+      {
+       "name": "affine_noise",
+       "stage": "orn",
+       "curve": "affine",
+       "curve_set_on": "on",
+       "curve_scope": "wiring",
+       "fly_weighting": "fly",
+       "noise_aware_curve": false,
+       "noise": "residual",
+       "criterion": "flies",
+       "pool": null,
+       "subset": null,
+       "claw_spike_share": 0.0,
+       "glomeruli": "every_fly",
+       "settled_pre": true
+      },
+      {
+       "name": "curve_nonoise",
+       "stage": "orn",
+       "curve": "quantile",
+       "curve_set_on": "on",
+       "curve_scope": "wiring",
+       "fly_weighting": "fly",
+       "noise_aware_curve": false,
+       "noise": "none",
+       "criterion": "flies",
+       "pool": null,
+       "subset": null,
+       "claw_spike_share": 0.0,
+       "glomeruli": "every_fly",
+       "settled_pre": true
+      }
+     ]
+    },
+    "pn_dendrite": {
+     "default": {
+      "name": "curve_noise",
+      "stage": "pn_dendrite",
+      "curve": "quantile",
+      "curve_set_on": "on",
+      "curve_scope": "wiring",
+      "fly_weighting": "fly",
+      "noise_aware_curve": false,
+      "noise": "residual",
+      "criterion": "flies",
+      "pool": null,
+      "subset": null,
+      "claw_spike_share": 0.0,
+      "glomeruli": "every_fly",
+      "settled_pre": true
+     },
+     "alternatives": [
+      {
+       "name": "affine_noise",
+       "stage": "pn_dendrite",
+       "curve": "affine",
+       "curve_set_on": "on",
+       "curve_scope": "wiring",
+       "fly_weighting": "fly",
+       "noise_aware_curve": false,
+       "noise": "residual",
+       "criterion": "flies",
+       "pool": null,
+       "subset": null,
+       "claw_spike_share": 0.0,
+       "glomeruli": "every_fly",
+       "settled_pre": true
+      },
+      {
+       "name": "curve_noise_shared28",
+       "stage": "pn_dendrite",
+       "curve": "quantile",
+       "curve_set_on": "on",
+       "curve_scope": "wiring",
+       "fly_weighting": "fly",
+       "noise_aware_curve": false,
+       "noise": "residual",
+       "criterion": "flies",
+       "pool": null,
+       "subset": null,
+       "claw_spike_share": 0.0,
+       "glomeruli": "shared28",
+       "settled_pre": true
+      }
+     ]
+    },
+    "pn_bouton": {
+     "default": {
+      "name": "curve_noise",
+      "stage": "pn_bouton",
+      "curve": "quantile",
+      "curve_set_on": "on",
+      "curve_scope": "wiring",
+      "fly_weighting": "fly",
+      "noise_aware_curve": false,
+      "noise": "residual",
+      "criterion": "flies",
+      "pool": "1",
+      "subset": "shared",
+      "claw_spike_share": 0.0,
+      "glomeruli": null,
+      "settled_pre": true
+     },
+     "alternatives": [
+      {
+       "name": "curve_noise_g3",
+       "stage": "pn_bouton",
+       "curve": "quantile",
+       "curve_set_on": "on",
+       "curve_scope": "wiring",
+       "fly_weighting": "fly",
+       "noise_aware_curve": false,
+       "noise": "residual",
+       "criterion": "flies",
+       "pool": "g3",
+       "subset": "shared",
+       "claw_spike_share": 0.0,
+       "glomeruli": null,
+       "settled_pre": true
+      },
+      {
+       "name": "affine_noise",
+       "stage": "pn_bouton",
+       "curve": "affine",
+       "curve_set_on": "on",
+       "curve_scope": "wiring",
+       "fly_weighting": "fly",
+       "noise_aware_curve": false,
+       "noise": "residual",
+       "criterion": "flies",
+       "pool": "1",
+       "subset": "shared",
+       "claw_spike_share": 0.0,
+       "glomeruli": null,
+       "settled_pre": true
+      }
+     ]
+    },
+    "kc_claw": {
+     "default": {
+      "name": "curve_noise",
+      "stage": "kc_claw",
+      "curve": "quantile",
+      "curve_set_on": "on",
+      "curve_scope": "wiring",
+      "fly_weighting": "fly",
+      "noise_aware_curve": false,
+      "noise": "residual",
+      "criterion": "flies",
+      "pool": "g14",
+      "subset": "all",
+      "claw_spike_share": 0.0,
+      "glomeruli": null,
+      "settled_pre": true
+     },
+     "alternatives": [
+      {
+       "name": "curve_noise_b14",
+       "stage": "kc_claw",
+       "curve": "quantile",
+       "curve_set_on": "on",
+       "curve_scope": "wiring",
+       "fly_weighting": "fly",
+       "noise_aware_curve": false,
+       "noise": "residual",
+       "criterion": "flies",
+       "pool": "b14",
+       "subset": "all",
+       "claw_spike_share": 0.0,
+       "glomeruli": null,
+       "settled_pre": true
+      },
+      {
+       "name": "curve_noise_share25",
+       "stage": "kc_claw",
+       "curve": "quantile",
+       "curve_set_on": "on",
+       "curve_scope": "wiring",
+       "fly_weighting": "fly",
+       "noise_aware_curve": false,
+       "noise": "residual",
+       "criterion": "flies",
+       "pool": "g14",
+       "subset": "all",
+       "claw_spike_share": 0.25,
+       "glomeruli": null,
+       "settled_pre": true
+      },
+      {
+       "name": "affine_noise",
+       "stage": "kc_claw",
+       "curve": "affine",
+       "curve_set_on": "on",
+       "curve_scope": "wiring",
+       "fly_weighting": "fly",
+       "noise_aware_curve": false,
+       "noise": "residual",
+       "criterion": "flies",
+       "pool": "g14",
+       "subset": "all",
+       "claw_spike_share": 0.0,
+       "glomeruli": null,
+       "settled_pre": true
+      }
+     ]
+    },
+    "kc_soma": {
+     "default": {
+      "name": "curve_noise",
+      "stage": "kc_soma",
+      "curve": "quantile",
+      "curve_set_on": "on",
+      "curve_scope": "wiring",
+      "fly_weighting": "fly",
+      "noise_aware_curve": false,
+      "noise": "residual",
+      "criterion": "flies",
+      "pool": null,
+      "subset": null,
+      "claw_spike_share": 0.0,
+      "glomeruli": null,
+      "settled_pre": true
+     },
+     "alternatives": [
+      {
+       "name": "raw",
+       "stage": "kc_soma",
+       "curve": "none",
+       "curve_set_on": "on",
+       "curve_scope": "wiring",
+       "fly_weighting": "fly",
+       "noise_aware_curve": false,
+       "noise": "none",
+       "criterion": "model_spikes",
+       "pool": null,
+       "subset": null,
+       "claw_spike_share": 0.0,
+       "glomeruli": null,
+       "settled_pre": true
+      },
+      {
+       "name": "affine_noise",
+       "stage": "kc_soma",
+       "curve": "affine",
+       "curve_set_on": "on",
+       "curve_scope": "wiring",
+       "fly_weighting": "fly",
+       "noise_aware_curve": false,
+       "noise": "residual",
+       "criterion": "flies",
+       "pool": null,
+       "subset": null,
+       "claw_spike_share": 0.0,
+       "glomeruli": null,
+       "settled_pre": true
+      },
+      {
+       "name": "curve_noise_own",
+       "stage": "kc_soma",
+       "curve": "quantile",
+       "curve_set_on": "own",
+       "curve_scope": "wiring",
+       "fly_weighting": "fly",
+       "noise_aware_curve": false,
+       "noise": "residual",
+       "criterion": "flies",
+       "pool": null,
+       "subset": null,
+       "claw_spike_share": 0.0,
+       "glomeruli": null,
+       "settled_pre": true
+      }
+     ]
+    }
+   },
+   "constants": {
+    "MODEL_WINDOW": [
+     0.0,
+     0.5
+    ],
+    "PRE_WINDOW": [
+     -0.5,
+     0.0
+    ],
+    "SETTLED_PRE_WINDOW": [
+     -0.25,
+     0.0
+    ],
+    "CLAW_REGION_SIZE": 14,
+    "N_CURVE_KNOTS": 201,
+    "N_NOISE_BINS": 10,
+    "MODEL_SPIKES": 2.0,
+    "POOL_SEED": 0,
+    "NOISE_SEED": 0
+   }
+  },
+  "reading_rule": "E134's default reading of each stage (stage_readings' DEFAULT_READINGS), APL on, against each fly set as E136's Flies reads it; seed index the wiring's position in WIRINGS",
+  "fly_sets": [
+   "all",
+   "fit",
+   "held"
+  ],
+  "entry_stages": [
+   "pn_dendrite",
+   "pn_bouton",
+   "kc_claw"
+  ]
+ },
+ "classes": {
+  "counts_make_step": {
+   "name": "the counts make the step",
+   "step": 0,
+   "rule": "for a connectome, the count-weighted yardstick (the recorded dendrites, all seven flies, each glomerulus counted by its boutons in the connectome, as the prediction for the bouton flies) is below the no-step yardstick (the same with every glomerulus once) by COUNTS_MARGIN or more in the strength view's error, against each half of the bouton flies (E136's halves, each half's mean in all five flies' one-fly units), and below the NULL_PERCENTILE-th percentile of the same error with the counts permuted among the glomeruli (N_PERM permutations, PERM_SEED), against all five bouton flies",
+   "margin": 0.1,
+   "null_percentile": 5.0,
+   "n_perm": 1000,
+   "perm_seed": 0,
+   "calyces": [
+    "hemibrain-first",
+    "malecns-left",
+    "malecns-right"
+   ],
+   "connectomes": {
+    "hemibrain": [
+     "hemibrain-first"
+    ],
+    "male_cns": [
+     "malecns-left",
+     "malecns-right"
+    ]
+   },
+   "connectome_rule": "the hemibrain holds when 'hemibrain-first' does; the male CNS when both of its calyces do (each calyx given)",
+   "beside": [
+    "the claws with claw counts (against the claw flies, both no-step yardsticks)",
+    "the glomeruli outside the dendrite recordings carried by the median measured gain"
+   ]
+  },
+  "apl_hides_step": {
+   "name": "APL at the boutons hides the step",
+   "step": 1,
+   "rule": "the imposed dendrites' boutons read below the no-step yardstick on 6 of 8 wirings in an arm with APL->bouton at x0.155 or none (imposed_a1, imposed_aplpn, imposed_kckc_aplpn0: any of them), and not with it at the family's (E135's saved imposed arm, re-scored the same way)",
+   "min_wirings": 6,
+   "n_wirings": 8,
+   "arms": [
+    "imposed_a1",
+    "imposed_aplpn",
+    "imposed_kckc_aplpn0"
+   ],
+   "reference_arm": "e135_imposed"
+  },
+  "dendrites_carry": {
+   "name": "the dendrites carry under the calyx that holds",
+   "step": 1,
+   "rule": "with A1's factors (imposed_a1), the root mean square of the boutons', claws' and somata's strength errors is below A1's own by more than twice its standard error over T, no stage is worse than A1's by more than its spread, and every stage is below both permuted controls (imposed_a1_glom_perm, imposed_a1_odor_perm)",
+   "se_multiple": 2.0,
+   "arm": "imposed_a1",
+   "reference": "A1",
+   "controls": [
+    "imposed_a1_glom_perm",
+    "imposed_a1_odor_perm"
+   ]
+  },
+  "readings": {
+   "name": "the reading's",
+   "step": 0,
+   "rule": "under the equal-weight reading of the boutons, A1's change at the boutons from the family (the mean over T of A1 minus the unrefitted family on the same wiring, against the held-out half) is inside the stage's spread (the SD over the family's eight wirings of its equal-weight bouton error against the held-out half) or of the other sign (above 0): change >= -spread",
+   "arm": "A1"
+  },
+  "no_class": {
+   "name": "no class",
+   "rule": "a run outside a realism band or whose holds fail gets no class"
+  }
+ },
+ "outcomes": {
+  "a": "the counts make the step, and the model's reading does not sample them: the boutons' error is in part how the model's boutons are read; the reading is corrected like for like and the saved reads scored again",
+  "b": "the counts do not, and no arm of step 1 moves the boutons: the flies' step is not in the dendrites, the counts or APL's bouton weights; whether the boutons keep an equal weight in the megamat stage error goes to Tom and Yang",
+  "c": "APL at the boutons hides the step: APL's bouton weights by glomerulus are the lead",
+  "d": "the dendrites carry under A1's calyx: the ORN->PN route is open",
+  "e": "they do not carry: no term at the ORN->PN step held to the 28 recorded glomeruli can lower the stages after the dendrites",
+  "f": "the reading's: A1's gain at the boutons depends on how regions are counted; to Tom and Yang with the megamat stage error under both readings"
+ },
+ "step1": {
+  "arms": [
+   {
+    "name": "imposed_a1",
+    "input": "megamat",
+    "table": "imposed",
+    "factors": {
+     "aplpn": 0.155,
+     "kckc": 3.24
+    },
+    "wirings": [
+     "real",
+     "P1",
+     "P2",
+     "M1",
+     "P3",
+     "P4",
+     "M2",
+     "M3"
+    ],
+    "what": "the dendrites imposed with A1's calyx factors (APL->bouton x0.155, KC-KC x3.24)"
+   },
+   {
+    "name": "imposed_aplpn",
+    "input": "megamat",
+    "table": "imposed",
+    "factors": {
+     "aplpn": 0.155,
+     "kckc": 1.0
+    },
+    "wirings": [
+     "real",
+     "P1",
+     "P2",
+     "M1",
+     "P3",
+     "P4",
+     "M2",
+     "M3"
+    ],
+    "what": "APL->bouton x0.155 alone"
+   },
+   {
+    "name": "imposed_kckc",
+    "input": "megamat",
+    "table": "imposed",
+    "factors": {
+     "aplpn": 1.0,
+     "kckc": 3.24
+    },
+    "wirings": [
+     "real",
+     "P1",
+     "P2",
+     "M1",
+     "P3",
+     "P4",
+     "M2",
+     "M3"
+    ],
+    "what": "KC-KC x3.24 alone"
+   },
+   {
+    "name": "imposed_kckc_aplpn0",
+    "input": "megamat",
+    "table": "imposed",
+    "factors": {
+     "aplpn": 0.0,
+     "kckc": 3.24
+    },
+    "wirings": [
+     "real",
+     "P1",
+     "P2",
+     "M1",
+     "P3",
+     "P4",
+     "M2",
+     "M3"
+    ],
+    "what": "KC-KC x3.24 with APL->bouton at none"
+   },
+   {
+    "name": "imposed_a1_glom_perm",
+    "input": "megamat",
+    "table": "imposed_glom_perm",
+    "factors": {
+     "aplpn": 0.155,
+     "kckc": 3.24
+    },
+    "wirings": [
+     "real",
+     "P1",
+     "P2",
+     "M1",
+     "P3",
+     "P4",
+     "M2",
+     "M3"
+    ],
+    "what": "A1's factors with the table's glomeruli permuted (E135's permutation)"
+   },
+   {
+    "name": "imposed_a1_odor_perm",
+    "input": "megamat",
+    "table": "imposed_odor_perm",
+    "factors": {
+     "aplpn": 0.155,
+     "kckc": 3.24
+    },
+    "wirings": [
+     "real",
+     "P1",
+     "P2",
+     "M1",
+     "P3",
+     "P4",
+     "M2",
+     "M3"
+    ],
+    "what": "A1's factors with the table's odors permuted (E135's permutation)"
+   },
+   {
+    "name": "imposed_a1_apl16",
+    "input": "apl16",
+    "table": "imposed",
+    "factors": {
+     "aplpn": 0.155,
+     "kckc": 3.24
+    },
+    "wirings": [
+     "real",
+     "P1",
+     "P2",
+     "M1",
+     "P3",
+     "P4",
+     "M2",
+     "M3"
+    ],
+    "what": "A1's factors on the APL16 input, its 12 megamat odors set (E135's APL16 imposed arm), for the bands and the APL effect"
+   }
+  ],
+  "n_runs": 56,
+  "a1_factors": {
+   "aplpn": 0.155,
+   "kckc": 3.24
+  },
+  "a1_fitted_factors": {
+   "aplpn": 0.15503624494608895,
+   "kckc": 3.2377527347867603
+  },
+  "runner": "E135's step-2 runner and table (pn_rates, olfsysm b1e89d7), both response rates re-held at E136's held megamat targets (the APL16 arm at the wiring's own fit's counts)",
+  "score": "E136's reading of the boutons, claws and somata on T against the held-out half; E135's saved runs at the family's calyx re-scored the same way, with A1 beside",
+  "realism": "the megamat response rate beside the flies' 0.0915, the four bands on the APL16 arm, the largest spike counts and bouton rates, the entries clipped, and where APL's inhibition is made",
+  "status": "hal's code (claimed); not in step 0"
+ },
+ "narrow_readings": [
+  "the saved runs: 'E139's F and B at 314 and 1000 and K at 1000' read as F and B each at pn_inhadd 314 and 1000, and K at 1000 (five variants; F at 100 and 3141 and E139's step-3 fit A0_inhadd314 are not read)",
+  "E136's arms A0, A1, A4 are read on their four T wirings (their megamat reads; the S wirings are fit evaluations), the family held, E139's variants and E135's three imposed arms on all eight; \"common\" is the wirings' mean views",
+  "E135's imposed arm is its noise-unit table (megamat_imposed_<w>), not the dF/F repeat; its two permuted controls are megamat_imposed_glom_perm_<w> and megamat_imposed_odor_perm_<w>",
+  "every run is read in E134's default readings (the lock's), APL on only (no megamat flies with APL output blocked), against each fly set as E136's Flies reads a half: the curve, noise and criterion from that set's flies, the reference its mean views in all the stage's flies' one-fly units; the seed index the wiring's position in WIRINGS",
+  "the claws' flies are E136's: the four wild-type claw flies (the same-fly recording is not read), halves 2 / 2",
+  "the flies' step on halves pairs each stage's half by name (the dendrites' fit half with the boutons' fit half, and so on), each stage split alone by E136's split_names",
+  "a step is outside zero on a set when its 90 % interval (hal's step_interval, 1000 resamples, seed 0, both stages' flies resampled independently, uncorrected) excludes 0; \"outside zero on both halves\" when it is on each half with the same sign",
+  "the no-step yardstick and the count-weighted yardsticks predict from all seven dendrite flies (their mean views) against all bouton flies and against each bouton half (in all five flies' units), as E134's no_step_score does",
+  "the count-weighted yardstick weighs each glomerulus of each dendrite fly by its count (equivalent to repeating its row that many times): the rate part the count-weighted fraction of glomeruli responding, the mean part the count-weighted mean response, each relative to its mean over the 17 odors; the dendrite recordings' 29 glomeruli (E135's 28 and VA4) as recorded, every one of which each calyx has",
+  "the null permutes the count vector among the 29 dendrite glomeruli (one set of N_PERM permutations from seed 0, the same for every calyx and stage); the percentile is of the error with all bouton (or claw) flies",
+  "the male CNS's two calyces are read each as a connectome's reading; the male CNS 'makes the step' only when both calyces do",
+  "beside: the glomeruli the ORN recordings hold outside the 29 dendrite glomeruli (DC4, DL2d, DL2v, DP1l, VC3, VC4, VL1, VM5d, VM5v; VA4 keeps its recorded dendrites) are carried as the median over E135's 28 of its measured slope (units 'noise', all flies) times the ORN flies' mean response (trial-noise SD units, over the ORN flies that have it), the same rows added to every dendrite fly, responding above the dendrites' criterion 2.0, each counted by its count; the null then permutes among the 38",
+  "the claws' yardsticks: the dendrites weighted by claw counts against the claw flies, beside the dendrites unweighted (no-step from the dendrites) and the bouton flies (E134's no-step for the step to the claws); no class",
+  "entries by odor are E138's odor_entries (each odor's share of the squared strength view error, 'view_share'); E138's concentrated on the row 'common' (for a group of T wirings, their mean views)",
+  "the model's step by odor: per part, the model's entry downstream minus upstream on the row 'common', against the flies' mean entries' difference; Pearson r over the 17 odors (Spearman beside), on all flies",
+  "the equal-weight reading of the flies: per bouton fly and held-out repeat, E128's fly_groups on the mean of the other two repeats restricted to E119's 12 odors (E90's ODORS; criterion 2, cut 0.3), each group one unit valued at its ROIs' mean on the held-out repeat on the 17 odors, the remainder (ROIs responsive to no odor) one more unit, a unit responding above 2.0; the fly's strength parts the mean over its three held-out repeats' parts; the groups' sizes on the trial means checked against E119's a4_groups.csv",
+  "the equal-weight reading of the model: the default bouton reading (pool 1, the 28 shared glomeruli, silent boutons dropped, curve and noise from the fly set), then each glomerulus's read boutons averaged into one unit, responding above 2.0; the glomerulus labels are the run's own (meta bouton_glomerulus), never the flies'",
+  "the classes read again with the equal-weight reading keep from the original records what does not involve the bouton strength error (the held-out panels, the all-views guard, realism, bounds, the control fit's fall); the bouton stage's spread and the megamat stage error's are recomputed from the family's eight wirings under the reading; 'over the three other stages' drops the boutons from the stage error and the stage comparisons",
+  "the model's bouton sampling is read on each wiring's saved runs of the family held (the units per glomerulus, APL on, after the silent drop); the share of units on the 18 glomeruli without input counts every bouton of the wiring, and the default reading's share (subset 'shared': 0 by construction) is given beside",
+  "step 1's factors are the entry's rounded x0.155 and x3.24 (E139's settings; A1's fitted factors 0.15504 and 3.23775 beside); \"at none\" is APL->bouton x0; the permuted controls reuse E135's permutations of its table",
+  "step 1's 'below the no-step yardstick on 6 of 8 wirings': each wiring's bouton strength error against the held-out half of the bouton flies, below the no-step yardstick against the same half",
+  "step 1's 'twice its standard error over T': E136's compare (the larger of half the spread and the SD of the per-wiring changes over sqrt(4)), the spread the SD over the family's eight wirings of the downstream error (the boutons', claws' and somata's root mean square); 'no stage worse than A1's by more than its spread' E136's spreads per stage; 'every stage below both permuted controls' the mean over T of each stage's error"
+ ],
+ "probe": {
+  "lead_rate": {
+   "pa": [
+    1.07,
+    1.47,
+    0.84,
+    0.94,
+    1.0
+   ],
+   "IaA": [
+    1.09,
+    1.48,
+    1.07,
+    1.18,
+    0.98
+   ],
+   "ep": [
+    1.22,
+    1.55,
+    1.1,
+    1.11,
+    1.21
+   ],
+   "eb": [
+    1.19,
+    1.51,
+    1.07,
+    1.1,
+    1.28
+   ],
+   "1-6ol": [
+    1.62,
+    1.1,
+    1.12,
+    1.24,
+    1.73
+   ],
+   "benz": [
+    1.31,
+    0.9,
+    1.0,
+    1.0,
+    1.35
+   ],
+   "ms": [
+    0.67,
+    0.48,
+    1.05,
+    0.89,
+    0.58
+   ],
+   "va": [
+    0.82,
+    0.39,
+    0.82,
+    0.79,
+    0.74
+   ]
+  },
+  "lead_sd": [
+   0.33,
+   0.37,
+   0.13,
+   0.18,
+   0.38
+  ],
+  "lead_r": [
+   null,
+   null,
+   0.44,
+   0.63,
+   0.62
+  ],
+  "lead_columns": [
+   "flies_dendrites",
+   "flies_boutons",
+   "family_held",
+   "A1",
+   "e135_imposed"
+  ],
+  "stage_table": {
+   "pn_dendrite": [
+    0.798,
+    1.012,
+    0.858
+   ],
+   "pn_bouton": [
+    0.817,
+    1.194,
+    1.005
+   ],
+   "kc_claw": [
+    0.83,
+    0.972,
+    0.905
+   ],
+   "kc_soma": [
+    0.97,
+    1.003,
+    0.961
+   ],
+   "stage": [
+    0.856,
+    1.049,
+    0.934
+   ]
+  },
+  "room": {
+   "boutons_at_half": 0.887,
+   "boutons_and_claws_at_half": 0.868
+  },
+  "e134_no_step": {
+   "family_boutons": 1.06,
+   "no_step": 1.05
+  },
+  "e135_imposed": {
+   "imposed_boutons": 1.14,
+   "family_boutons": 1.07
+  }
+ },
+ "probe_tol": 0.005,
+ "holds": [
+  "no simulation, no model run, no olfsysm change, no new default, nothing fitted or searched in step 0",
+  "no bouton region given a glomerulus or an identity from position or tuning; tuning groups unnamed",
+  "only Pratyush's hemibrain and male CNS",
+  "only processed data",
+  "Remy's processed data without the bouton fly 2022-10-21 fly02 and without her older megamat flies",
+  "validation2 not read"
+ ],
+ "note": "written before any statistic of E142 was computed; every part but lock refuses until this file is committed (require_lock)"
+}
