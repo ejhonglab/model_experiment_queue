@@ -1282,6 +1282,8 @@ Canonical experiment names for summary reports:
 | E138 | the odors that carry the strength error and the glomeruli that feed them |
 | E139 | the weaker antennal-lobe normalization without the calyx refit, along its strength |
 | E140 | aa at the step from the claws to the somata |
+| E141 | the rise of the inhibition among KCs beside the weaker antennal-lobe normalization, along its dose and in other forms |
+| E142 | the step from the PN dendrites to the PN boutons by itself, with the recorded dendrites under the stage fit's calyx |
 
 ## Model-output archive (data/model_outputs/ in the shared directory)
 
