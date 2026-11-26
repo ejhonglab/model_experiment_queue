@@ -521,6 +521,20 @@ def entry_classes(v: str, rec: Mapping, vs: Mapping) -> dict:
                 lower_price=(vs.get('price') or {}).get('lower'))
 
 
+def stopped_class(v: str, failed: Sequence[str], n_reads: int) -> dict:
+    """The class of an arm whose reads stopped once its holds failed (P, 2026-11-26: its hold at both brackets' bounds
+    on its first read, the KCs near 7 % whatever the threshold): 'no class' whatever its other reads would give (the
+    entry's rule), neither standing in nor doing more than A1, with the failed holds and the number of reads."""
+    from experiments import E136_stage_population_fit as F
+    arm = parse_variant(v)
+    return dict(cls='no class', reasons=['a hold fails: ' + ', '.join(failed),
+                                         f'reads stopped after the holds failed ({n_reads} of '
+                                         f'{len(PANELS) * len(F.WIRINGS)})'],
+                holds_failed=list(failed), n_reads=int(n_reads), **label_of(v),
+                stands_in=False if arm in FORMS else None, does_more_than_a1=False if arm in DOSES else None,
+                lower_price=None)
+
+
 def part_score(names: Optional[Sequence[str]] = None) -> dict:
     """The score, as E139's (`E139.score_sets`, the same values for every name): E141's variants (default every one with
     a read) through E136's score functions as registered variants, the unrefitted family as the reference and A1 (its S
@@ -552,7 +566,12 @@ def part_score(names: Optional[Sequence[str]] = None) -> dict:
         classes = {}
         for v in allv[1:]:
             if v not in mega or F.FAMILY not in mega:
-                classes[v] = dict(cls='reads missing')
+                failed = E139.holds_failed(v, reads, apl16_runs.get(v, {}), F.HOLD_TOL)
+                n = int((reads.get('variant', pd.Series(dtype=object)) == v).sum())
+                if failed and v in names:
+                    classes[v] = stopped_class(v, failed, n)
+                else:
+                    classes[v] = dict(cls='reads missing', n_reads=n)
                 continue
             if v == A1:
                 fit = json.loads((F.out_dir() / f'fit_{A1}.json').read_text())

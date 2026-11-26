@@ -224,3 +224,10 @@ def test_read_extra_does_not_repeat_a1s_record():
     for a in ('N', 'P', 'G'):
         x = L.read_extra(a)
         assert x['pn_inhadd'] == pytest.approx(1000.0) and not set(x) & row_keys
+
+
+def test_stopped_class():
+    c = L.stopped_class('P_inhadd1000', ['P_inhadd1000_megamat_real'], 3)
+    assert c['cls'] == 'no class' and c['stands_in'] is False and c['does_more_than_a1'] is None
+    assert c['n_reads'] == 3 and '3 of 32' in c['reasons'][1] and c['setting'] == 'P'
+    assert L.stopped_class('D5.8_inhadd1000', ['x'], 1)['does_more_than_a1'] is False
