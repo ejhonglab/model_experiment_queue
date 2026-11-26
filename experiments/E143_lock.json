@@ -1,0 +1,3689 @@
+{
+ "experiment": "E143_megamat_fly_sampling",
+ "script": "experiments/E143_megamat_fly_sampling.py",
+ "part": "lock",
+ "written": "2026-11-26 11:12",
+ "host": "hal",
+ "commits": {
+  "queue_commit": "45e93c82dadd73ba13084f79363bf7aecfdad5be",
+  "queue_dirty": true,
+  "pyolfsysm_commit": "b1e89d7d119bbbb4888f31de4d94938dbc4bd60a",
+  "pyolfsysm_dirty": false,
+  "al_analysis_commit": "d891fe786ac5a103ef1ccb40bf108b3b5e16078e",
+  "al_analysis_dirty": false,
+  "hong2p_commit": "484da09afe90ce4dd37e8b9039b1881136b78b68",
+  "hong2p_dirty": false
+ },
+ "panel": "megamat",
+ "measure": "strength",
+ "stages": [
+  "pn_dendrite",
+  "pn_bouton",
+  "kc_claw",
+  "kc_soma"
+ ],
+ "t_wirings": [
+  "P3",
+  "P4",
+  "M2",
+  "M3"
+ ],
+ "e136_wirings": [
+  "real",
+  "P1",
+  "P2",
+  "M1",
+  "P3",
+  "P4",
+  "M2",
+  "M3"
+ ],
+ "readings": {
+  "stages": {
+   "orn": {
+    "default": {
+     "name": "curve_noise",
+     "stage": "orn",
+     "curve": "quantile",
+     "curve_set_on": "on",
+     "curve_scope": "wiring",
+     "fly_weighting": "fly",
+     "noise_aware_curve": false,
+     "noise": "residual",
+     "criterion": "flies",
+     "pool": null,
+     "subset": null,
+     "claw_spike_share": 0.0,
+     "glomeruli": "every_fly",
+     "settled_pre": true
+    },
+    "alternatives": [
+     {
+      "name": "affine_noise",
+      "stage": "orn",
+      "curve": "affine",
+      "curve_set_on": "on",
+      "curve_scope": "wiring",
+      "fly_weighting": "fly",
+      "noise_aware_curve": false,
+      "noise": "residual",
+      "criterion": "flies",
+      "pool": null,
+      "subset": null,
+      "claw_spike_share": 0.0,
+      "glomeruli": "every_fly",
+      "settled_pre": true
+     },
+     {
+      "name": "curve_nonoise",
+      "stage": "orn",
+      "curve": "quantile",
+      "curve_set_on": "on",
+      "curve_scope": "wiring",
+      "fly_weighting": "fly",
+      "noise_aware_curve": false,
+      "noise": "none",
+      "criterion": "flies",
+      "pool": null,
+      "subset": null,
+      "claw_spike_share": 0.0,
+      "glomeruli": "every_fly",
+      "settled_pre": true
+     }
+    ]
+   },
+   "pn_dendrite": {
+    "default": {
+     "name": "curve_noise",
+     "stage": "pn_dendrite",
+     "curve": "quantile",
+     "curve_set_on": "on",
+     "curve_scope": "wiring",
+     "fly_weighting": "fly",
+     "noise_aware_curve": false,
+     "noise": "residual",
+     "criterion": "flies",
+     "pool": null,
+     "subset": null,
+     "claw_spike_share": 0.0,
+     "glomeruli": "every_fly",
+     "settled_pre": true
+    },
+    "alternatives": [
+     {
+      "name": "affine_noise",
+      "stage": "pn_dendrite",
+      "curve": "affine",
+      "curve_set_on": "on",
+      "curve_scope": "wiring",
+      "fly_weighting": "fly",
+      "noise_aware_curve": false,
+      "noise": "residual",
+      "criterion": "flies",
+      "pool": null,
+      "subset": null,
+      "claw_spike_share": 0.0,
+      "glomeruli": "every_fly",
+      "settled_pre": true
+     },
+     {
+      "name": "curve_noise_shared28",
+      "stage": "pn_dendrite",
+      "curve": "quantile",
+      "curve_set_on": "on",
+      "curve_scope": "wiring",
+      "fly_weighting": "fly",
+      "noise_aware_curve": false,
+      "noise": "residual",
+      "criterion": "flies",
+      "pool": null,
+      "subset": null,
+      "claw_spike_share": 0.0,
+      "glomeruli": "shared28",
+      "settled_pre": true
+     }
+    ]
+   },
+   "pn_bouton": {
+    "default": {
+     "name": "curve_noise",
+     "stage": "pn_bouton",
+     "curve": "quantile",
+     "curve_set_on": "on",
+     "curve_scope": "wiring",
+     "fly_weighting": "fly",
+     "noise_aware_curve": false,
+     "noise": "residual",
+     "criterion": "flies",
+     "pool": "1",
+     "subset": "shared",
+     "claw_spike_share": 0.0,
+     "glomeruli": null,
+     "settled_pre": true
+    },
+    "alternatives": [
+     {
+      "name": "curve_noise_g3",
+      "stage": "pn_bouton",
+      "curve": "quantile",
+      "curve_set_on": "on",
+      "curve_scope": "wiring",
+      "fly_weighting": "fly",
+      "noise_aware_curve": false,
+      "noise": "residual",
+      "criterion": "flies",
+      "pool": "g3",
+      "subset": "shared",
+      "claw_spike_share": 0.0,
+      "glomeruli": null,
+      "settled_pre": true
+     },
+     {
+      "name": "affine_noise",
+      "stage": "pn_bouton",
+      "curve": "affine",
+      "curve_set_on": "on",
+      "curve_scope": "wiring",
+      "fly_weighting": "fly",
+      "noise_aware_curve": false,
+      "noise": "residual",
+      "criterion": "flies",
+      "pool": "1",
+      "subset": "shared",
+      "claw_spike_share": 0.0,
+      "glomeruli": null,
+      "settled_pre": true
+     }
+    ]
+   },
+   "kc_claw": {
+    "default": {
+     "name": "curve_noise",
+     "stage": "kc_claw",
+     "curve": "quantile",
+     "curve_set_on": "on",
+     "curve_scope": "wiring",
+     "fly_weighting": "fly",
+     "noise_aware_curve": false,
+     "noise": "residual",
+     "criterion": "flies",
+     "pool": "g14",
+     "subset": "all",
+     "claw_spike_share": 0.0,
+     "glomeruli": null,
+     "settled_pre": true
+    },
+    "alternatives": [
+     {
+      "name": "curve_noise_b14",
+      "stage": "kc_claw",
+      "curve": "quantile",
+      "curve_set_on": "on",
+      "curve_scope": "wiring",
+      "fly_weighting": "fly",
+      "noise_aware_curve": false,
+      "noise": "residual",
+      "criterion": "flies",
+      "pool": "b14",
+      "subset": "all",
+      "claw_spike_share": 0.0,
+      "glomeruli": null,
+      "settled_pre": true
+     },
+     {
+      "name": "curve_noise_share25",
+      "stage": "kc_claw",
+      "curve": "quantile",
+      "curve_set_on": "on",
+      "curve_scope": "wiring",
+      "fly_weighting": "fly",
+      "noise_aware_curve": false,
+      "noise": "residual",
+      "criterion": "flies",
+      "pool": "g14",
+      "subset": "all",
+      "claw_spike_share": 0.25,
+      "glomeruli": null,
+      "settled_pre": true
+     },
+     {
+      "name": "affine_noise",
+      "stage": "kc_claw",
+      "curve": "affine",
+      "curve_set_on": "on",
+      "curve_scope": "wiring",
+      "fly_weighting": "fly",
+      "noise_aware_curve": false,
+      "noise": "residual",
+      "criterion": "flies",
+      "pool": "g14",
+      "subset": "all",
+      "claw_spike_share": 0.0,
+      "glomeruli": null,
+      "settled_pre": true
+     }
+    ]
+   },
+   "kc_soma": {
+    "default": {
+     "name": "curve_noise",
+     "stage": "kc_soma",
+     "curve": "quantile",
+     "curve_set_on": "on",
+     "curve_scope": "wiring",
+     "fly_weighting": "fly",
+     "noise_aware_curve": false,
+     "noise": "residual",
+     "criterion": "flies",
+     "pool": null,
+     "subset": null,
+     "claw_spike_share": 0.0,
+     "glomeruli": null,
+     "settled_pre": true
+    },
+    "alternatives": [
+     {
+      "name": "raw",
+      "stage": "kc_soma",
+      "curve": "none",
+      "curve_set_on": "on",
+      "curve_scope": "wiring",
+      "fly_weighting": "fly",
+      "noise_aware_curve": false,
+      "noise": "none",
+      "criterion": "model_spikes",
+      "pool": null,
+      "subset": null,
+      "claw_spike_share": 0.0,
+      "glomeruli": null,
+      "settled_pre": true
+     },
+     {
+      "name": "affine_noise",
+      "stage": "kc_soma",
+      "curve": "affine",
+      "curve_set_on": "on",
+      "curve_scope": "wiring",
+      "fly_weighting": "fly",
+      "noise_aware_curve": false,
+      "noise": "residual",
+      "criterion": "flies",
+      "pool": null,
+      "subset": null,
+      "claw_spike_share": 0.0,
+      "glomeruli": null,
+      "settled_pre": true
+     },
+     {
+      "name": "curve_noise_own",
+      "stage": "kc_soma",
+      "curve": "quantile",
+      "curve_set_on": "own",
+      "curve_scope": "wiring",
+      "fly_weighting": "fly",
+      "noise_aware_curve": false,
+      "noise": "residual",
+      "criterion": "flies",
+      "pool": null,
+      "subset": null,
+      "claw_spike_share": 0.0,
+      "glomeruli": null,
+      "settled_pre": true
+     }
+    ]
+   }
+  },
+  "constants": {
+   "MODEL_WINDOW": [
+    0.0,
+    0.5
+   ],
+   "PRE_WINDOW": [
+    -0.5,
+    0.0
+   ],
+   "SETTLED_PRE_WINDOW": [
+    -0.25,
+    0.0
+   ],
+   "CLAW_REGION_SIZE": 14,
+   "N_CURVE_KNOTS": 201,
+   "N_NOISE_BINS": 10,
+   "MODEL_SPIKES": 2.0,
+   "POOL_SEED": 0,
+   "NOISE_SEED": 0
+  }
+ },
+ "inputs": {
+  "data": {
+   "e134_lock": {
+    "path": "/data/tom/claude-tmp/claude-1004/-home-tom-src-model-experiment-queue/48e885a4-89c7-48b0-82ee-391a2ec98933/scratchpad/mq_e143_wt/experiments/E134_lock.json",
+    "bytes": 116395,
+    "mtime": "2026-11-26 10:55:54",
+    "sha256": "30015d97ea916ae42ad5c8e85535604fc9ee431b04ad27e260c71fca8636f92c"
+   },
+   "e135_lock": {
+    "path": "/local/tensor/Tom/claude_kc_remapping/results/E135_antennal_lobe_dendrites/lock.json",
+    "bytes": 6432,
+    "mtime": "2026-11-24 15:30:29",
+    "sha256": "e0fae145cf5f28cbe9fc400c5c5ae0126f382d968d72dda16a1505df05aaf43f"
+   },
+   "same_fly_trials": {
+    "path": "/local/tensor/Tom/claude_kc_remapping/data/remy_per_roi/same_fly_trials.npz",
+    "bytes": 2149324,
+    "mtime": "2026-11-20 13:59:26",
+    "sha256": "4b363674237af950c2f556043f4668828a9fca6a44020380a6122d1480faf706"
+   },
+   "same_fly_checks": {
+    "path": "/local/tensor/Tom/claude_kc_remapping/data/remy_per_roi/same_fly_checks.json",
+    "bytes": 265,
+    "mtime": "2026-11-20 13:59:26",
+    "sha256": "5c004cbaca9a227238976e0e476cc696161b2fb68b952e1e3c458807124a6722"
+   }
+  },
+  "results": {
+   "e136_classes": {
+    "path": "/local/tensor/Tom/claude_kc_remapping/results/E136_stage_population_fit/measure_strength/classes.json",
+    "bytes": 61705,
+    "mtime": "2026-11-25 18:25:15",
+    "sha256": "89202b44f72263a9033b88913a50927fa3e67c03d892c80bcd0f1a2adf418b88"
+   },
+   "e136_score_megamat": {
+    "path": "/local/tensor/Tom/claude_kc_remapping/results/E136_stage_population_fit/measure_strength/score_megamat.csv",
+    "bytes": 86846,
+    "mtime": "2026-11-25 18:25:15",
+    "sha256": "ee1c5481d0ee743dc913db7e27f6a54d365060428ed907a28c3fafc05d9ea0e3"
+   },
+   "e136_score_panels": {
+    "path": "/local/tensor/Tom/claude_kc_remapping/results/E136_stage_population_fit/measure_strength/score_panels.csv",
+    "bytes": 116473,
+    "mtime": "2026-11-25 18:25:15",
+    "sha256": "a60879ac98776e0edc9714fbbf6284831a4c7d7a30c32bfd97874ed5acd0fe2b"
+   },
+   "e136_consistency": {
+    "path": "/local/tensor/Tom/claude_kc_remapping/results/E136_stage_population_fit/measure_strength/consistency_strength.csv",
+    "bytes": 295,
+    "mtime": "2026-11-25 18:25:15",
+    "sha256": "6d70a85aa02351859b96042ad9fd533408385998e86f4c73ca3eda0a67258a24"
+   },
+   "e139_classes": {
+    "path": "/local/tensor/Tom/claude_kc_remapping/results/E139_normalization_ladder/classes.json",
+    "bytes": 131402,
+    "mtime": "2026-11-26 04:13:07",
+    "sha256": "e0eb4f9ceaefe535fe802691bbef833ec2af6036694777c2f1bfaa0f2d3d76d0"
+   },
+   "e139_score_megamat": {
+    "path": "/local/tensor/Tom/claude_kc_remapping/results/E139_normalization_ladder/score_megamat.csv",
+    "bytes": 307381,
+    "mtime": "2026-11-26 04:12:59",
+    "sha256": "a885396548c07f0c5592298114e21c27fd511b84af698c45722c534473c5238a"
+   },
+   "e139_score_panels": {
+    "path": "/local/tensor/Tom/claude_kc_remapping/results/E139_normalization_ladder/score_panels.csv",
+    "bytes": 198866,
+    "mtime": "2026-11-26 04:12:59",
+    "sha256": "b44e749f00b4200da26f69c4ba53312651f81d7c9d266af7bdd712e855b44e14"
+   },
+   "e139_without_aa": {
+    "path": "/local/tensor/Tom/claude_kc_remapping/results/E139_normalization_ladder/score_without_aa.csv",
+    "bytes": 4459,
+    "mtime": "2026-11-26 04:12:59",
+    "sha256": "ea1bd1e7722d1de72ace32db3ece48ec7bfedee8bc388f9c44b4db36e38d3409"
+   },
+   "e141_classes": {
+    "path": "/local/tensor/Tom/claude_kc_remapping/results/E141_kckc_rise_forms/classes.json",
+    "bytes": 133505,
+    "mtime": "2026-11-26 10:45:20",
+    "sha256": "f6553de06662353af2be58bc7536060fbc2639c1ddb5d4a40d4ff0c035d4b7fa"
+   },
+   "e141_score_megamat": {
+    "path": "/local/tensor/Tom/claude_kc_remapping/results/E141_kckc_rise_forms/score_megamat.csv",
+    "bytes": 277439,
+    "mtime": "2026-11-26 10:45:10",
+    "sha256": "f0326bcbb91d64dacff5641db6ff2bc0b6a24d17485fce4f6d40597fcfa48f05"
+   },
+   "e141_score_panels": {
+    "path": "/local/tensor/Tom/claude_kc_remapping/results/E141_kckc_rise_forms/score_panels.csv",
+    "bytes": 179664,
+    "mtime": "2026-11-26 10:45:10",
+    "sha256": "56cc30a4779c14cf2bd434b8c9ce2e827aeed5f9c1abaf5478e3f27fcd347a54"
+   },
+   "e141_score_apl16": {
+    "path": "/local/tensor/Tom/claude_kc_remapping/results/E141_kckc_rise_forms/score_apl16.csv",
+    "bytes": 119445,
+    "mtime": "2026-11-26 10:45:11",
+    "sha256": "db03ca1abe25536fdb77d77f3d86e25b82e5e4e9ef2b253b5983910d1c1d75d6"
+   },
+   "e141_without_aa": {
+    "path": "/local/tensor/Tom/claude_kc_remapping/results/E141_kckc_rise_forms/score_without_aa.csv",
+    "bytes": 4062,
+    "mtime": "2026-11-26 10:45:11",
+    "sha256": "6f254d55302edffa94ac38522d56440359b72aa9d1733003de5bd927a942699b"
+   },
+   "e135_score_scores": {
+    "path": "/local/tensor/Tom/claude_kc_remapping/results/E135_antennal_lobe_dendrites/score_scores.csv",
+    "bytes": 904454,
+    "mtime": "2026-11-25 06:43:50",
+    "sha256": "d56f1ca9f97c7982b3a9489eb02e594f3e5cfd1b225c0d28435c8974040cc611"
+   },
+   "e135_verdict": {
+    "path": "/local/tensor/Tom/claude_kc_remapping/results/E135_antennal_lobe_dendrites/score_verdict.json",
+    "bytes": 18334,
+    "mtime": "2026-11-25 06:43:51",
+    "sha256": "a871979d5a261f71205f3d64b5908e9ad5df8cc58b48eb112a3b531445fffe6c"
+   },
+   "e134_score_scores": {
+    "path": "/local/tensor/Tom/claude_kc_remapping/results/E134_population_baseline/score_scores.csv",
+    "bytes": 477133,
+    "mtime": "2026-11-24 16:15:00",
+    "sha256": "90690081dfcff164eb084821ee0fbb026de0326d8da480a34f5f20edfc012bf5"
+   }
+  }
+ },
+ "recordings": {
+  "pn_dendrite/megamat/on": {
+   "stage": "pn_dendrite",
+   "panel": "megamat",
+   "cohort": "wild_type",
+   "flies": [
+    "2023-06-22/2",
+    "2023-06-23/1",
+    "2023-06-24/1",
+    "2023-07-19/1",
+    "2023-07-19/2",
+    "2023-07-28/1",
+    "2023-07-28/2"
+   ],
+   "criterion": 2.0,
+   "units": "trial-noise SD",
+   "odors": [
+    "2h",
+    "IaA",
+    "pa",
+    "2-but",
+    "eb",
+    "ep",
+    "6al",
+    "t2h",
+    "1-8ol",
+    "1-5ol",
+    "1-6ol",
+    "ms",
+    "B-cit",
+    "Lin",
+    "aa",
+    "benz",
+    "va"
+   ],
+   "e136_halves": {
+    "fit": [
+     "2023-06-24/1",
+     "2023-07-19/1",
+     "2023-07-19/2"
+    ],
+    "held": [
+     "2023-06-22/2",
+     "2023-06-23/1",
+     "2023-07-28/1",
+     "2023-07-28/2"
+    ]
+   },
+   "n_splits": 35,
+   "e136_split_index": 25
+  },
+  "pn_bouton/megamat/on": {
+   "stage": "pn_bouton",
+   "panel": "megamat",
+   "cohort": "wild_type",
+   "flies": [
+    "2022-10-26__fly01__megamat1_001",
+    "2022-10-26__fly02__megamat1",
+    "2022-11-13__fly01__megamat1",
+    "2022-11-13__fly02__megamat1_002",
+    "2022-11-13__fly03__megamat1"
+   ],
+   "criterion": 2.0,
+   "units": "baseline-noise SD",
+   "odors": [
+    "2h",
+    "IaA",
+    "pa",
+    "2-but",
+    "eb",
+    "ep",
+    "6al",
+    "t2h",
+    "1-8ol",
+    "1-5ol",
+    "1-6ol",
+    "ms",
+    "B-cit",
+    "Lin",
+    "aa",
+    "benz",
+    "va"
+   ],
+   "e136_halves": {
+    "fit": [
+     "2022-11-13__fly01__megamat1",
+     "2022-11-13__fly03__megamat1"
+    ],
+    "held": [
+     "2022-10-26__fly01__megamat1_001",
+     "2022-10-26__fly02__megamat1",
+     "2022-11-13__fly02__megamat1_002"
+    ]
+   },
+   "n_splits": 10,
+   "e136_split_index": 8
+  },
+  "kc_claw/megamat/on": {
+   "stage": "kc_claw",
+   "panel": "megamat",
+   "cohort": "wild_type",
+   "flies": [
+    "2023-04-11__fly02__megamat1",
+    "2023-04-11__fly03__megamat1",
+    "2023-04-13__fly01__megamat1_001",
+    "2023-04-15__fly02__megamat1"
+   ],
+   "criterion": 2.0,
+   "units": "baseline-noise SD",
+   "odors": [
+    "2h",
+    "IaA",
+    "pa",
+    "2-but",
+    "eb",
+    "ep",
+    "6al",
+    "t2h",
+    "1-8ol",
+    "1-5ol",
+    "1-6ol",
+    "ms",
+    "B-cit",
+    "Lin",
+    "aa",
+    "benz",
+    "va"
+   ],
+   "e136_halves": {
+    "fit": [
+     "2023-04-11__fly02__megamat1",
+     "2023-04-13__fly01__megamat1_001"
+    ],
+    "held": [
+     "2023-04-11__fly03__megamat1",
+     "2023-04-15__fly02__megamat1"
+    ]
+   },
+   "n_splits": 3,
+   "e136_split_index": 1
+  },
+  "kc_soma/megamat/on": {
+   "stage": "kc_soma",
+   "panel": "megamat",
+   "cohort": "wild_type",
+   "flies": [
+    "2022-10-10/1",
+    "2022-10-10/2",
+    "2022-10-11/1",
+    "2022-11-10/1"
+   ],
+   "criterion": 5.9486,
+   "units": "baseline-noise SD",
+   "odors": [
+    "2h",
+    "IaA",
+    "pa",
+    "2-but",
+    "eb",
+    "ep",
+    "6al",
+    "t2h",
+    "1-8ol",
+    "1-5ol",
+    "1-6ol",
+    "ms",
+    "B-cit",
+    "Lin",
+    "aa",
+    "benz",
+    "va"
+   ],
+   "e136_halves": {
+    "fit": [
+     "2022-10-10/1",
+     "2022-10-11/1"
+    ],
+    "held": [
+     "2022-10-10/2",
+     "2022-11-10/1"
+    ]
+   },
+   "n_splits": 3,
+   "e136_split_index": 1
+  },
+  "validation2/validation2/on": {
+   "stage": "kc_soma",
+   "panel": "validation2",
+   "condition": "on",
+   "cohort": "wild_type",
+   "flies": [
+    "2023-10-19/1",
+    "2023-10-25/1",
+    "2023-10-25/2",
+    "2023-12-13/1",
+    "2023-12-19/1",
+    "2023-12-19/2"
+   ],
+   "criterion": 5.9486,
+   "units": "baseline-noise SD",
+   "odors": [
+    "paa",
+    "B-myr",
+    "-bCar",
+    "1-3ol",
+    "1o3one",
+    "1p3one",
+    "2-mib",
+    "EtOct",
+    "PEA",
+    "Z4-7al",
+    "bbenz",
+    "ger",
+    "guai",
+    "long",
+    "mchav"
+   ]
+  },
+  "mixtures/cmix/on": {
+   "stage": "kc_soma",
+   "panel": "cmix",
+   "condition": "on",
+   "cohort": "wild_type",
+   "flies": [
+    "2022-03-29/2",
+    "2022-04-04/1",
+    "2022-07-20/2",
+    "2022-07-25/2"
+   ],
+   "criterion": 1.9086,
+   "units": "session z (Fc_zscore)",
+   "odors": [
+    "ms",
+    "va",
+    "fur",
+    "2h",
+    "1o3ol",
+    "cmix0",
+    "cmix-1",
+    "cmix-2"
+   ]
+  },
+  "apl16/apl16/on": {
+   "stage": "kc_soma",
+   "panel": "apl16",
+   "condition": "on",
+   "cohort": "control",
+   "flies": [
+    "2024-07-10/2/L",
+    "2024-07-10/2/R",
+    "2024-07-12/2/L",
+    "2024-07-26/4/R",
+    "2024-08-01/3/L",
+    "2024-08-01/3/R",
+    "2024-08-02/5/R",
+    "2024-08-09/3/L",
+    "2024-08-09/3/R",
+    "2024-08-14/1/L",
+    "2024-08-30/3/R"
+   ],
+   "criterion": 1.9684,
+   "units": "baseline-noise SD",
+   "odors": [
+    "2h",
+    "IaA",
+    "pa",
+    "2-but",
+    "eb",
+    "ep",
+    "6al",
+    "t2h",
+    "1-8ol",
+    "1-5ol",
+    "1-6ol",
+    "ms",
+    "paa",
+    "-aPine",
+    "euc",
+    "B-myr"
+   ]
+  },
+  "apl16/apl16/off": {
+   "stage": "kc_soma",
+   "panel": "apl16",
+   "condition": "off",
+   "cohort": "tnt",
+   "flies": [
+    "2024-07-17/2/L",
+    "2024-07-17/3/L",
+    "2024-07-25/1/L",
+    "2024-08-01/4/R",
+    "2024-08-02/5/L",
+    "2024-08-07/3/L",
+    "2024-08-14/3/L",
+    "2024-08-14/3/R"
+   ],
+   "criterion": 1.9684,
+   "units": "baseline-noise SD",
+   "odors": [
+    "2h",
+    "IaA",
+    "pa",
+    "2-but",
+    "eb",
+    "ep",
+    "6al",
+    "t2h",
+    "1-8ol",
+    "1-5ol",
+    "1-6ol",
+    "ms",
+    "paa",
+    "-aPine",
+    "euc",
+    "B-myr"
+   ]
+  },
+  "mixtures/kmix/on": {
+   "stage": "kc_soma",
+   "panel": "kmix",
+   "condition": "on",
+   "cohort": "wild_type",
+   "flies": [
+    "2022-07-01/1",
+    "2022-07-02/1",
+    "2022-07-02/2",
+    "2022-07-11/1",
+    "2022-07-11/2",
+    "2022-07-12/3",
+    "2022-07-12/5"
+   ],
+   "criterion": 1.9086,
+   "units": "session z (Fc_zscore)",
+   "odors": [
+    "EtOH",
+    "IAol",
+    "IaA",
+    "ea",
+    "eb",
+    "kmix0",
+    "kmix-1",
+    "kmix-2"
+   ]
+  },
+  "kc_claw/megamat/same_fly": {
+   "stage": "kc_claw",
+   "panel": "megamat",
+   "cohort": "same_fly",
+   "flies": [
+    "2023-04-11/3/megamat1_redo"
+   ],
+   "criterion": 2.0,
+   "units": "baseline-noise SD",
+   "n_units": {
+    "2023-04-11/3/megamat1_redo": 689
+   }
+  },
+  "kc_soma/megamat/same_fly": {
+   "stage": "kc_soma",
+   "panel": "megamat",
+   "cohort": "same_fly",
+   "flies": [
+    "2023-04-11/3/megamat1_redo"
+   ],
+   "criterion": 5.9486,
+   "units": "baseline-noise SD",
+   "n_units": {
+    "2023-04-11/3/megamat1_redo": 2035
+   }
+  },
+  "excluded": {
+   "flies": [
+    {
+     "stage": "pn_bouton",
+     "fly": "2022-10-21__fly02__megamat1_001__dsub3",
+     "reason": "Remy's dashboards and bouton analysis leave it out (median cellprob 0.03); data/remy_per_roi/README.md"
+    }
+   ],
+   "older_megamat": "Remy's older megamat flies (pyolfsysm's data/from_remy/2024-11-12): never read",
+   "same_fly": "the same-fly claw and soma recording (2023-04-11 fly 3, megamat1_redo): read only in design item 6"
+  }
+ },
+ "splits": {
+  "rule": "every way to divide a stage's flies as E136 did (stage_splits)",
+  "per_stage": {
+   "pn_dendrite": [
+    {
+     "a": [
+      0,
+      1,
+      2
+     ],
+     "b": [
+      3,
+      4,
+      5,
+      6
+     ]
+    },
+    {
+     "a": [
+      0,
+      1,
+      3
+     ],
+     "b": [
+      2,
+      4,
+      5,
+      6
+     ]
+    },
+    {
+     "a": [
+      0,
+      1,
+      4
+     ],
+     "b": [
+      2,
+      3,
+      5,
+      6
+     ]
+    },
+    {
+     "a": [
+      0,
+      1,
+      5
+     ],
+     "b": [
+      2,
+      3,
+      4,
+      6
+     ]
+    },
+    {
+     "a": [
+      0,
+      1,
+      6
+     ],
+     "b": [
+      2,
+      3,
+      4,
+      5
+     ]
+    },
+    {
+     "a": [
+      0,
+      2,
+      3
+     ],
+     "b": [
+      1,
+      4,
+      5,
+      6
+     ]
+    },
+    {
+     "a": [
+      0,
+      2,
+      4
+     ],
+     "b": [
+      1,
+      3,
+      5,
+      6
+     ]
+    },
+    {
+     "a": [
+      0,
+      2,
+      5
+     ],
+     "b": [
+      1,
+      3,
+      4,
+      6
+     ]
+    },
+    {
+     "a": [
+      0,
+      2,
+      6
+     ],
+     "b": [
+      1,
+      3,
+      4,
+      5
+     ]
+    },
+    {
+     "a": [
+      0,
+      3,
+      4
+     ],
+     "b": [
+      1,
+      2,
+      5,
+      6
+     ]
+    },
+    {
+     "a": [
+      0,
+      3,
+      5
+     ],
+     "b": [
+      1,
+      2,
+      4,
+      6
+     ]
+    },
+    {
+     "a": [
+      0,
+      3,
+      6
+     ],
+     "b": [
+      1,
+      2,
+      4,
+      5
+     ]
+    },
+    {
+     "a": [
+      0,
+      4,
+      5
+     ],
+     "b": [
+      1,
+      2,
+      3,
+      6
+     ]
+    },
+    {
+     "a": [
+      0,
+      4,
+      6
+     ],
+     "b": [
+      1,
+      2,
+      3,
+      5
+     ]
+    },
+    {
+     "a": [
+      0,
+      5,
+      6
+     ],
+     "b": [
+      1,
+      2,
+      3,
+      4
+     ]
+    },
+    {
+     "a": [
+      1,
+      2,
+      3
+     ],
+     "b": [
+      0,
+      4,
+      5,
+      6
+     ]
+    },
+    {
+     "a": [
+      1,
+      2,
+      4
+     ],
+     "b": [
+      0,
+      3,
+      5,
+      6
+     ]
+    },
+    {
+     "a": [
+      1,
+      2,
+      5
+     ],
+     "b": [
+      0,
+      3,
+      4,
+      6
+     ]
+    },
+    {
+     "a": [
+      1,
+      2,
+      6
+     ],
+     "b": [
+      0,
+      3,
+      4,
+      5
+     ]
+    },
+    {
+     "a": [
+      1,
+      3,
+      4
+     ],
+     "b": [
+      0,
+      2,
+      5,
+      6
+     ]
+    },
+    {
+     "a": [
+      1,
+      3,
+      5
+     ],
+     "b": [
+      0,
+      2,
+      4,
+      6
+     ]
+    },
+    {
+     "a": [
+      1,
+      3,
+      6
+     ],
+     "b": [
+      0,
+      2,
+      4,
+      5
+     ]
+    },
+    {
+     "a": [
+      1,
+      4,
+      5
+     ],
+     "b": [
+      0,
+      2,
+      3,
+      6
+     ]
+    },
+    {
+     "a": [
+      1,
+      4,
+      6
+     ],
+     "b": [
+      0,
+      2,
+      3,
+      5
+     ]
+    },
+    {
+     "a": [
+      1,
+      5,
+      6
+     ],
+     "b": [
+      0,
+      2,
+      3,
+      4
+     ]
+    },
+    {
+     "a": [
+      2,
+      3,
+      4
+     ],
+     "b": [
+      0,
+      1,
+      5,
+      6
+     ]
+    },
+    {
+     "a": [
+      2,
+      3,
+      5
+     ],
+     "b": [
+      0,
+      1,
+      4,
+      6
+     ]
+    },
+    {
+     "a": [
+      2,
+      3,
+      6
+     ],
+     "b": [
+      0,
+      1,
+      4,
+      5
+     ]
+    },
+    {
+     "a": [
+      2,
+      4,
+      5
+     ],
+     "b": [
+      0,
+      1,
+      3,
+      6
+     ]
+    },
+    {
+     "a": [
+      2,
+      4,
+      6
+     ],
+     "b": [
+      0,
+      1,
+      3,
+      5
+     ]
+    },
+    {
+     "a": [
+      2,
+      5,
+      6
+     ],
+     "b": [
+      0,
+      1,
+      3,
+      4
+     ]
+    },
+    {
+     "a": [
+      3,
+      4,
+      5
+     ],
+     "b": [
+      0,
+      1,
+      2,
+      6
+     ]
+    },
+    {
+     "a": [
+      3,
+      4,
+      6
+     ],
+     "b": [
+      0,
+      1,
+      2,
+      5
+     ]
+    },
+    {
+     "a": [
+      3,
+      5,
+      6
+     ],
+     "b": [
+      0,
+      1,
+      2,
+      4
+     ]
+    },
+    {
+     "a": [
+      4,
+      5,
+      6
+     ],
+     "b": [
+      0,
+      1,
+      2,
+      3
+     ]
+    }
+   ],
+   "pn_bouton": [
+    {
+     "a": [
+      0,
+      1
+     ],
+     "b": [
+      2,
+      3,
+      4
+     ]
+    },
+    {
+     "a": [
+      0,
+      2
+     ],
+     "b": [
+      1,
+      3,
+      4
+     ]
+    },
+    {
+     "a": [
+      0,
+      3
+     ],
+     "b": [
+      1,
+      2,
+      4
+     ]
+    },
+    {
+     "a": [
+      0,
+      4
+     ],
+     "b": [
+      1,
+      2,
+      3
+     ]
+    },
+    {
+     "a": [
+      1,
+      2
+     ],
+     "b": [
+      0,
+      3,
+      4
+     ]
+    },
+    {
+     "a": [
+      1,
+      3
+     ],
+     "b": [
+      0,
+      2,
+      4
+     ]
+    },
+    {
+     "a": [
+      1,
+      4
+     ],
+     "b": [
+      0,
+      2,
+      3
+     ]
+    },
+    {
+     "a": [
+      2,
+      3
+     ],
+     "b": [
+      0,
+      1,
+      4
+     ]
+    },
+    {
+     "a": [
+      2,
+      4
+     ],
+     "b": [
+      0,
+      1,
+      3
+     ]
+    },
+    {
+     "a": [
+      3,
+      4
+     ],
+     "b": [
+      0,
+      1,
+      2
+     ]
+    }
+   ],
+   "kc_claw": [
+    {
+     "a": [
+      0,
+      1
+     ],
+     "b": [
+      2,
+      3
+     ]
+    },
+    {
+     "a": [
+      0,
+      2
+     ],
+     "b": [
+      1,
+      3
+     ]
+    },
+    {
+     "a": [
+      0,
+      3
+     ],
+     "b": [
+      1,
+      2
+     ]
+    }
+   ],
+   "kc_soma": [
+    {
+     "a": [
+      0,
+      1
+     ],
+     "b": [
+      2,
+      3
+     ]
+    },
+    {
+     "a": [
+      0,
+      2
+     ],
+     "b": [
+      1,
+      3
+     ]
+    },
+    {
+     "a": [
+      0,
+      3
+     ],
+     "b": [
+      1,
+      2
+     ]
+    }
+   ]
+  },
+  "e136": {
+   "pn_dendrite": {
+    "fit": [
+     2,
+     3,
+     4
+    ],
+    "held": [
+     0,
+     1,
+     5,
+     6
+    ]
+   },
+   "pn_bouton": {
+    "fit": [
+     2,
+     4
+    ],
+    "held": [
+     0,
+     1,
+     3
+    ]
+   },
+   "kc_claw": {
+    "fit": [
+     0,
+     2
+    ],
+    "held": [
+     1,
+     3
+    ]
+   },
+   "kc_soma": {
+    "fit": [
+     0,
+     2
+    ],
+    "held": [
+     1,
+     3
+    ]
+   }
+  },
+  "joint": {
+   "n": 200,
+   "seed": 0,
+   "rows": [
+    {
+     "joint": 0,
+     "pn_dendrite": 22,
+     "pn_bouton": 8,
+     "kc_claw": 0,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 1,
+     "pn_dendrite": 28,
+     "pn_bouton": 3,
+     "kc_claw": 1,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 2,
+     "pn_dendrite": 10,
+     "pn_bouton": 7,
+     "kc_claw": 1,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 3,
+     "pn_dendrite": 14,
+     "pn_bouton": 6,
+     "kc_claw": 1,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 4,
+     "pn_dendrite": 3,
+     "pn_bouton": 6,
+     "kc_claw": 0,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 5,
+     "pn_dendrite": 0,
+     "pn_bouton": 5,
+     "kc_claw": 1,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 6,
+     "pn_dendrite": 16,
+     "pn_bouton": 3,
+     "kc_claw": 0,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 7,
+     "pn_dendrite": 3,
+     "pn_bouton": 9,
+     "kc_claw": 2,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 8,
+     "pn_dendrite": 6,
+     "pn_bouton": 4,
+     "kc_claw": 0,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 9,
+     "pn_dendrite": 34,
+     "pn_bouton": 0,
+     "kc_claw": 2,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 10,
+     "pn_dendrite": 18,
+     "pn_bouton": 3,
+     "kc_claw": 1,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 11,
+     "pn_dendrite": 2,
+     "pn_bouton": 4,
+     "kc_claw": 2,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 12,
+     "pn_dendrite": 17,
+     "pn_bouton": 5,
+     "kc_claw": 0,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 13,
+     "pn_dendrite": 25,
+     "pn_bouton": 3,
+     "kc_claw": 0,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 14,
+     "pn_dendrite": 33,
+     "pn_bouton": 8,
+     "kc_claw": 0,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 15,
+     "pn_dendrite": 1,
+     "pn_bouton": 6,
+     "kc_claw": 1,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 16,
+     "pn_dendrite": 6,
+     "pn_bouton": 8,
+     "kc_claw": 1,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 17,
+     "pn_dendrite": 34,
+     "pn_bouton": 0,
+     "kc_claw": 0,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 18,
+     "pn_dendrite": 21,
+     "pn_bouton": 7,
+     "kc_claw": 1,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 19,
+     "pn_dendrite": 12,
+     "pn_bouton": 7,
+     "kc_claw": 2,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 20,
+     "pn_dendrite": 24,
+     "pn_bouton": 1,
+     "kc_claw": 1,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 21,
+     "pn_dendrite": 25,
+     "pn_bouton": 4,
+     "kc_claw": 2,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 22,
+     "pn_dendrite": 16,
+     "pn_bouton": 5,
+     "kc_claw": 2,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 23,
+     "pn_dendrite": 21,
+     "pn_bouton": 5,
+     "kc_claw": 1,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 24,
+     "pn_dendrite": 30,
+     "pn_bouton": 1,
+     "kc_claw": 0,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 25,
+     "pn_dendrite": 7,
+     "pn_bouton": 9,
+     "kc_claw": 2,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 26,
+     "pn_dendrite": 23,
+     "pn_bouton": 0,
+     "kc_claw": 1,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 27,
+     "pn_dendrite": 30,
+     "pn_bouton": 8,
+     "kc_claw": 1,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 28,
+     "pn_dendrite": 0,
+     "pn_bouton": 7,
+     "kc_claw": 0,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 29,
+     "pn_dendrite": 28,
+     "pn_bouton": 8,
+     "kc_claw": 2,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 30,
+     "pn_dendrite": 14,
+     "pn_bouton": 0,
+     "kc_claw": 2,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 31,
+     "pn_dendrite": 20,
+     "pn_bouton": 8,
+     "kc_claw": 2,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 32,
+     "pn_dendrite": 22,
+     "pn_bouton": 1,
+     "kc_claw": 1,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 33,
+     "pn_dendrite": 30,
+     "pn_bouton": 7,
+     "kc_claw": 1,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 34,
+     "pn_dendrite": 22,
+     "pn_bouton": 6,
+     "kc_claw": 1,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 35,
+     "pn_dendrite": 9,
+     "pn_bouton": 7,
+     "kc_claw": 2,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 36,
+     "pn_dendrite": 15,
+     "pn_bouton": 3,
+     "kc_claw": 2,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 37,
+     "pn_dendrite": 16,
+     "pn_bouton": 3,
+     "kc_claw": 0,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 38,
+     "pn_dendrite": 22,
+     "pn_bouton": 9,
+     "kc_claw": 0,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 39,
+     "pn_dendrite": 14,
+     "pn_bouton": 3,
+     "kc_claw": 2,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 40,
+     "pn_dendrite": 32,
+     "pn_bouton": 3,
+     "kc_claw": 1,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 41,
+     "pn_dendrite": 33,
+     "pn_bouton": 4,
+     "kc_claw": 2,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 42,
+     "pn_dendrite": 5,
+     "pn_bouton": 1,
+     "kc_claw": 0,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 43,
+     "pn_dendrite": 21,
+     "pn_bouton": 6,
+     "kc_claw": 0,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 44,
+     "pn_dendrite": 4,
+     "pn_bouton": 1,
+     "kc_claw": 1,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 45,
+     "pn_dendrite": 11,
+     "pn_bouton": 0,
+     "kc_claw": 2,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 46,
+     "pn_dendrite": 8,
+     "pn_bouton": 9,
+     "kc_claw": 0,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 47,
+     "pn_dendrite": 14,
+     "pn_bouton": 2,
+     "kc_claw": 0,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 48,
+     "pn_dendrite": 27,
+     "pn_bouton": 2,
+     "kc_claw": 0,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 49,
+     "pn_dendrite": 19,
+     "pn_bouton": 9,
+     "kc_claw": 2,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 50,
+     "pn_dendrite": 19,
+     "pn_bouton": 4,
+     "kc_claw": 1,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 51,
+     "pn_dendrite": 31,
+     "pn_bouton": 9,
+     "kc_claw": 2,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 52,
+     "pn_dendrite": 1,
+     "pn_bouton": 7,
+     "kc_claw": 2,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 53,
+     "pn_dendrite": 13,
+     "pn_bouton": 5,
+     "kc_claw": 2,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 54,
+     "pn_dendrite": 26,
+     "pn_bouton": 2,
+     "kc_claw": 1,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 55,
+     "pn_dendrite": 0,
+     "pn_bouton": 9,
+     "kc_claw": 1,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 56,
+     "pn_dendrite": 31,
+     "pn_bouton": 1,
+     "kc_claw": 0,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 57,
+     "pn_dendrite": 34,
+     "pn_bouton": 5,
+     "kc_claw": 2,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 58,
+     "pn_dendrite": 9,
+     "pn_bouton": 1,
+     "kc_claw": 1,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 59,
+     "pn_dendrite": 12,
+     "pn_bouton": 0,
+     "kc_claw": 1,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 60,
+     "pn_dendrite": 15,
+     "pn_bouton": 1,
+     "kc_claw": 1,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 61,
+     "pn_dendrite": 24,
+     "pn_bouton": 2,
+     "kc_claw": 1,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 62,
+     "pn_dendrite": 12,
+     "pn_bouton": 6,
+     "kc_claw": 0,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 63,
+     "pn_dendrite": 17,
+     "pn_bouton": 5,
+     "kc_claw": 0,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 64,
+     "pn_dendrite": 12,
+     "pn_bouton": 6,
+     "kc_claw": 2,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 65,
+     "pn_dendrite": 2,
+     "pn_bouton": 4,
+     "kc_claw": 1,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 66,
+     "pn_dendrite": 31,
+     "pn_bouton": 8,
+     "kc_claw": 2,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 67,
+     "pn_dendrite": 19,
+     "pn_bouton": 4,
+     "kc_claw": 0,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 68,
+     "pn_dendrite": 21,
+     "pn_bouton": 3,
+     "kc_claw": 2,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 69,
+     "pn_dendrite": 12,
+     "pn_bouton": 7,
+     "kc_claw": 2,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 70,
+     "pn_dendrite": 15,
+     "pn_bouton": 3,
+     "kc_claw": 0,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 71,
+     "pn_dendrite": 20,
+     "pn_bouton": 5,
+     "kc_claw": 0,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 72,
+     "pn_dendrite": 33,
+     "pn_bouton": 9,
+     "kc_claw": 2,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 73,
+     "pn_dendrite": 33,
+     "pn_bouton": 7,
+     "kc_claw": 1,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 74,
+     "pn_dendrite": 32,
+     "pn_bouton": 2,
+     "kc_claw": 2,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 75,
+     "pn_dendrite": 0,
+     "pn_bouton": 0,
+     "kc_claw": 2,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 76,
+     "pn_dendrite": 13,
+     "pn_bouton": 8,
+     "kc_claw": 0,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 77,
+     "pn_dendrite": 21,
+     "pn_bouton": 8,
+     "kc_claw": 1,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 78,
+     "pn_dendrite": 28,
+     "pn_bouton": 0,
+     "kc_claw": 1,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 79,
+     "pn_dendrite": 15,
+     "pn_bouton": 9,
+     "kc_claw": 2,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 80,
+     "pn_dendrite": 2,
+     "pn_bouton": 6,
+     "kc_claw": 2,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 81,
+     "pn_dendrite": 28,
+     "pn_bouton": 6,
+     "kc_claw": 0,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 82,
+     "pn_dendrite": 10,
+     "pn_bouton": 4,
+     "kc_claw": 0,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 83,
+     "pn_dendrite": 8,
+     "pn_bouton": 8,
+     "kc_claw": 1,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 84,
+     "pn_dendrite": 13,
+     "pn_bouton": 4,
+     "kc_claw": 0,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 85,
+     "pn_dendrite": 18,
+     "pn_bouton": 0,
+     "kc_claw": 1,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 86,
+     "pn_dendrite": 21,
+     "pn_bouton": 3,
+     "kc_claw": 0,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 87,
+     "pn_dendrite": 32,
+     "pn_bouton": 7,
+     "kc_claw": 1,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 88,
+     "pn_dendrite": 29,
+     "pn_bouton": 7,
+     "kc_claw": 1,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 89,
+     "pn_dendrite": 20,
+     "pn_bouton": 0,
+     "kc_claw": 1,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 90,
+     "pn_dendrite": 7,
+     "pn_bouton": 6,
+     "kc_claw": 2,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 91,
+     "pn_dendrite": 8,
+     "pn_bouton": 5,
+     "kc_claw": 2,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 92,
+     "pn_dendrite": 23,
+     "pn_bouton": 0,
+     "kc_claw": 0,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 93,
+     "pn_dendrite": 13,
+     "pn_bouton": 0,
+     "kc_claw": 0,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 94,
+     "pn_dendrite": 23,
+     "pn_bouton": 2,
+     "kc_claw": 1,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 95,
+     "pn_dendrite": 30,
+     "pn_bouton": 4,
+     "kc_claw": 2,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 96,
+     "pn_dendrite": 32,
+     "pn_bouton": 7,
+     "kc_claw": 2,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 97,
+     "pn_dendrite": 28,
+     "pn_bouton": 8,
+     "kc_claw": 1,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 98,
+     "pn_dendrite": 27,
+     "pn_bouton": 8,
+     "kc_claw": 2,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 99,
+     "pn_dendrite": 30,
+     "pn_bouton": 0,
+     "kc_claw": 1,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 100,
+     "pn_dendrite": 10,
+     "pn_bouton": 8,
+     "kc_claw": 1,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 101,
+     "pn_dendrite": 11,
+     "pn_bouton": 4,
+     "kc_claw": 0,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 102,
+     "pn_dendrite": 0,
+     "pn_bouton": 1,
+     "kc_claw": 2,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 103,
+     "pn_dendrite": 33,
+     "pn_bouton": 4,
+     "kc_claw": 0,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 104,
+     "pn_dendrite": 32,
+     "pn_bouton": 5,
+     "kc_claw": 2,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 105,
+     "pn_dendrite": 33,
+     "pn_bouton": 7,
+     "kc_claw": 0,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 106,
+     "pn_dendrite": 25,
+     "pn_bouton": 9,
+     "kc_claw": 2,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 107,
+     "pn_dendrite": 26,
+     "pn_bouton": 2,
+     "kc_claw": 0,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 108,
+     "pn_dendrite": 28,
+     "pn_bouton": 2,
+     "kc_claw": 0,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 109,
+     "pn_dendrite": 10,
+     "pn_bouton": 1,
+     "kc_claw": 0,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 110,
+     "pn_dendrite": 12,
+     "pn_bouton": 8,
+     "kc_claw": 1,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 111,
+     "pn_dendrite": 30,
+     "pn_bouton": 0,
+     "kc_claw": 2,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 112,
+     "pn_dendrite": 20,
+     "pn_bouton": 8,
+     "kc_claw": 1,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 113,
+     "pn_dendrite": 1,
+     "pn_bouton": 9,
+     "kc_claw": 2,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 114,
+     "pn_dendrite": 2,
+     "pn_bouton": 8,
+     "kc_claw": 1,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 115,
+     "pn_dendrite": 30,
+     "pn_bouton": 3,
+     "kc_claw": 1,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 116,
+     "pn_dendrite": 17,
+     "pn_bouton": 6,
+     "kc_claw": 0,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 117,
+     "pn_dendrite": 0,
+     "pn_bouton": 5,
+     "kc_claw": 0,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 118,
+     "pn_dendrite": 4,
+     "pn_bouton": 5,
+     "kc_claw": 0,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 119,
+     "pn_dendrite": 26,
+     "pn_bouton": 7,
+     "kc_claw": 1,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 120,
+     "pn_dendrite": 18,
+     "pn_bouton": 3,
+     "kc_claw": 0,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 121,
+     "pn_dendrite": 31,
+     "pn_bouton": 4,
+     "kc_claw": 0,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 122,
+     "pn_dendrite": 7,
+     "pn_bouton": 8,
+     "kc_claw": 1,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 123,
+     "pn_dendrite": 25,
+     "pn_bouton": 6,
+     "kc_claw": 2,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 124,
+     "pn_dendrite": 17,
+     "pn_bouton": 8,
+     "kc_claw": 2,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 125,
+     "pn_dendrite": 15,
+     "pn_bouton": 8,
+     "kc_claw": 2,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 126,
+     "pn_dendrite": 32,
+     "pn_bouton": 3,
+     "kc_claw": 0,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 127,
+     "pn_dendrite": 23,
+     "pn_bouton": 5,
+     "kc_claw": 2,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 128,
+     "pn_dendrite": 24,
+     "pn_bouton": 6,
+     "kc_claw": 2,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 129,
+     "pn_dendrite": 31,
+     "pn_bouton": 7,
+     "kc_claw": 1,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 130,
+     "pn_dendrite": 9,
+     "pn_bouton": 9,
+     "kc_claw": 1,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 131,
+     "pn_dendrite": 28,
+     "pn_bouton": 1,
+     "kc_claw": 0,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 132,
+     "pn_dendrite": 33,
+     "pn_bouton": 6,
+     "kc_claw": 0,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 133,
+     "pn_dendrite": 5,
+     "pn_bouton": 7,
+     "kc_claw": 1,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 134,
+     "pn_dendrite": 12,
+     "pn_bouton": 5,
+     "kc_claw": 2,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 135,
+     "pn_dendrite": 8,
+     "pn_bouton": 1,
+     "kc_claw": 0,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 136,
+     "pn_dendrite": 29,
+     "pn_bouton": 9,
+     "kc_claw": 0,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 137,
+     "pn_dendrite": 26,
+     "pn_bouton": 1,
+     "kc_claw": 1,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 138,
+     "pn_dendrite": 32,
+     "pn_bouton": 3,
+     "kc_claw": 2,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 139,
+     "pn_dendrite": 29,
+     "pn_bouton": 2,
+     "kc_claw": 2,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 140,
+     "pn_dendrite": 12,
+     "pn_bouton": 0,
+     "kc_claw": 1,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 141,
+     "pn_dendrite": 19,
+     "pn_bouton": 5,
+     "kc_claw": 0,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 142,
+     "pn_dendrite": 17,
+     "pn_bouton": 9,
+     "kc_claw": 0,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 143,
+     "pn_dendrite": 18,
+     "pn_bouton": 4,
+     "kc_claw": 2,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 144,
+     "pn_dendrite": 25,
+     "pn_bouton": 3,
+     "kc_claw": 1,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 145,
+     "pn_dendrite": 32,
+     "pn_bouton": 8,
+     "kc_claw": 1,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 146,
+     "pn_dendrite": 30,
+     "pn_bouton": 8,
+     "kc_claw": 2,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 147,
+     "pn_dendrite": 5,
+     "pn_bouton": 8,
+     "kc_claw": 0,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 148,
+     "pn_dendrite": 2,
+     "pn_bouton": 6,
+     "kc_claw": 2,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 149,
+     "pn_dendrite": 13,
+     "pn_bouton": 4,
+     "kc_claw": 0,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 150,
+     "pn_dendrite": 14,
+     "pn_bouton": 0,
+     "kc_claw": 1,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 151,
+     "pn_dendrite": 27,
+     "pn_bouton": 1,
+     "kc_claw": 0,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 152,
+     "pn_dendrite": 34,
+     "pn_bouton": 6,
+     "kc_claw": 1,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 153,
+     "pn_dendrite": 26,
+     "pn_bouton": 9,
+     "kc_claw": 1,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 154,
+     "pn_dendrite": 17,
+     "pn_bouton": 2,
+     "kc_claw": 0,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 155,
+     "pn_dendrite": 1,
+     "pn_bouton": 6,
+     "kc_claw": 2,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 156,
+     "pn_dendrite": 24,
+     "pn_bouton": 1,
+     "kc_claw": 2,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 157,
+     "pn_dendrite": 17,
+     "pn_bouton": 9,
+     "kc_claw": 1,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 158,
+     "pn_dendrite": 26,
+     "pn_bouton": 8,
+     "kc_claw": 2,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 159,
+     "pn_dendrite": 33,
+     "pn_bouton": 9,
+     "kc_claw": 1,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 160,
+     "pn_dendrite": 14,
+     "pn_bouton": 5,
+     "kc_claw": 1,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 161,
+     "pn_dendrite": 2,
+     "pn_bouton": 8,
+     "kc_claw": 2,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 162,
+     "pn_dendrite": 12,
+     "pn_bouton": 5,
+     "kc_claw": 0,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 163,
+     "pn_dendrite": 34,
+     "pn_bouton": 2,
+     "kc_claw": 0,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 164,
+     "pn_dendrite": 21,
+     "pn_bouton": 3,
+     "kc_claw": 1,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 165,
+     "pn_dendrite": 0,
+     "pn_bouton": 2,
+     "kc_claw": 2,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 166,
+     "pn_dendrite": 34,
+     "pn_bouton": 3,
+     "kc_claw": 1,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 167,
+     "pn_dendrite": 1,
+     "pn_bouton": 7,
+     "kc_claw": 0,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 168,
+     "pn_dendrite": 17,
+     "pn_bouton": 0,
+     "kc_claw": 0,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 169,
+     "pn_dendrite": 28,
+     "pn_bouton": 3,
+     "kc_claw": 1,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 170,
+     "pn_dendrite": 10,
+     "pn_bouton": 2,
+     "kc_claw": 0,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 171,
+     "pn_dendrite": 24,
+     "pn_bouton": 0,
+     "kc_claw": 1,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 172,
+     "pn_dendrite": 16,
+     "pn_bouton": 7,
+     "kc_claw": 2,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 173,
+     "pn_dendrite": 33,
+     "pn_bouton": 2,
+     "kc_claw": 2,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 174,
+     "pn_dendrite": 3,
+     "pn_bouton": 1,
+     "kc_claw": 0,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 175,
+     "pn_dendrite": 17,
+     "pn_bouton": 2,
+     "kc_claw": 0,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 176,
+     "pn_dendrite": 1,
+     "pn_bouton": 3,
+     "kc_claw": 1,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 177,
+     "pn_dendrite": 13,
+     "pn_bouton": 2,
+     "kc_claw": 0,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 178,
+     "pn_dendrite": 11,
+     "pn_bouton": 4,
+     "kc_claw": 0,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 179,
+     "pn_dendrite": 2,
+     "pn_bouton": 9,
+     "kc_claw": 1,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 180,
+     "pn_dendrite": 30,
+     "pn_bouton": 5,
+     "kc_claw": 0,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 181,
+     "pn_dendrite": 6,
+     "pn_bouton": 7,
+     "kc_claw": 1,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 182,
+     "pn_dendrite": 0,
+     "pn_bouton": 5,
+     "kc_claw": 1,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 183,
+     "pn_dendrite": 19,
+     "pn_bouton": 8,
+     "kc_claw": 1,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 184,
+     "pn_dendrite": 26,
+     "pn_bouton": 0,
+     "kc_claw": 0,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 185,
+     "pn_dendrite": 5,
+     "pn_bouton": 1,
+     "kc_claw": 2,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 186,
+     "pn_dendrite": 8,
+     "pn_bouton": 5,
+     "kc_claw": 2,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 187,
+     "pn_dendrite": 6,
+     "pn_bouton": 7,
+     "kc_claw": 2,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 188,
+     "pn_dendrite": 26,
+     "pn_bouton": 6,
+     "kc_claw": 2,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 189,
+     "pn_dendrite": 19,
+     "pn_bouton": 2,
+     "kc_claw": 1,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 190,
+     "pn_dendrite": 25,
+     "pn_bouton": 4,
+     "kc_claw": 2,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 191,
+     "pn_dendrite": 4,
+     "pn_bouton": 1,
+     "kc_claw": 1,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 192,
+     "pn_dendrite": 4,
+     "pn_bouton": 6,
+     "kc_claw": 0,
+     "kc_soma": 0,
+     "e136": false
+    },
+    {
+     "joint": 193,
+     "pn_dendrite": 1,
+     "pn_bouton": 1,
+     "kc_claw": 0,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 194,
+     "pn_dendrite": 34,
+     "pn_bouton": 5,
+     "kc_claw": 0,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 195,
+     "pn_dendrite": 32,
+     "pn_bouton": 0,
+     "kc_claw": 2,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 196,
+     "pn_dendrite": 28,
+     "pn_bouton": 7,
+     "kc_claw": 2,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 197,
+     "pn_dendrite": 29,
+     "pn_bouton": 3,
+     "kc_claw": 0,
+     "kc_soma": 1,
+     "e136": false
+    },
+    {
+     "joint": 198,
+     "pn_dendrite": 21,
+     "pn_bouton": 0,
+     "kc_claw": 2,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 199,
+     "pn_dendrite": 22,
+     "pn_bouton": 3,
+     "kc_claw": 0,
+     "kc_soma": 2,
+     "e136": false
+    },
+    {
+     "joint": 200,
+     "pn_dendrite": 25,
+     "pn_bouton": 8,
+     "kc_claw": 1,
+     "kc_soma": 1,
+     "e136": true
+    }
+   ]
+  }
+ },
+ "seeds": {
+  "joint": 0,
+  "boot": 0,
+  "n_boot": 1000,
+  "ci": [
+   0.05,
+   0.95
+  ],
+  "count": 0,
+  "n_count_draws": 200,
+  "count_sizes": [
+   2,
+   3,
+   4,
+   5
+  ],
+  "fallback": 0,
+  "n_fallback": 20
+ },
+ "settings": [
+  {
+   "name": "family",
+   "source": "E134",
+   "arm": "family",
+   "label": "the family held (E134's megamat_held runs; E136's reads and E90's part B on the held-out inputs)",
+   "role": "setting",
+   "calyx": "family_norm",
+   "panels": [
+    "validation2",
+    "mixtures",
+    "apl16"
+   ]
+  },
+  {
+   "name": "E136:A0",
+   "source": "E136",
+   "arm": "A0",
+   "label": "A0, the family refitted",
+   "role": "setting",
+   "calyx": "family_norm",
+   "panels": [
+    "validation2",
+    "mixtures",
+    "apl16"
+   ]
+  },
+  {
+   "name": "E136:A1",
+   "source": "E136",
+   "arm": "A1",
+   "label": "A1, the antennal lobe's normalization searched",
+   "role": "setting",
+   "calyx": "inhadd1000",
+   "panels": [
+    "validation2",
+    "mixtures",
+    "apl16"
+   ]
+  },
+  {
+   "name": "E136:A2",
+   "source": "E136",
+   "arm": "A2",
+   "label": "A2, APL's inhibition of the claws as a gain",
+   "role": "setting",
+   "calyx": "family_norm",
+   "panels": [
+    "validation2",
+    "mixtures",
+    "apl16"
+   ]
+  },
+  {
+   "name": "E136:A3",
+   "source": "E136",
+   "arm": "A3",
+   "label": "A3, the per-claw threshold searched",
+   "role": "setting",
+   "calyx": "family_norm",
+   "panels": [
+    "validation2",
+    "mixtures",
+    "apl16"
+   ]
+  },
+  {
+   "name": "E136:A4",
+   "source": "E136",
+   "arm": "A4",
+   "label": "A4, without the inhibition among KCs",
+   "role": "setting",
+   "calyx": "family_norm",
+   "panels": [
+    "validation2",
+    "mixtures",
+    "apl16"
+   ]
+  },
+  {
+   "name": "E139:F_inhadd100",
+   "source": "E139",
+   "arm": "F_inhadd100",
+   "label": "F, the family's calyx factors, at pn_inhadd 100",
+   "role": "setting",
+   "calyx": "",
+   "panels": [
+    "validation2",
+    "mixtures",
+    "apl16"
+   ]
+  },
+  {
+   "name": "E139:F_inhadd314",
+   "source": "E139",
+   "arm": "F_inhadd314",
+   "label": "F at pn_inhadd 314",
+   "role": "setting",
+   "calyx": "",
+   "panels": [
+    "validation2",
+    "mixtures",
+    "apl16"
+   ]
+  },
+  {
+   "name": "E139:F_inhadd1000",
+   "source": "E139",
+   "arm": "F_inhadd1000",
+   "label": "F at pn_inhadd 1000",
+   "role": "setting",
+   "calyx": "inhadd1000",
+   "panels": [
+    "validation2",
+    "mixtures",
+    "apl16"
+   ]
+  },
+  {
+   "name": "E139:F_inhadd3141",
+   "source": "E139",
+   "arm": "F_inhadd3141",
+   "label": "F at pn_inhadd 3141",
+   "role": "setting",
+   "calyx": "",
+   "panels": [
+    "validation2",
+    "mixtures",
+    "apl16"
+   ]
+  },
+  {
+   "name": "E139:B_inhadd314",
+   "source": "E139",
+   "arm": "B_inhadd314",
+   "label": "B, APL->bouton x0.155, at pn_inhadd 314",
+   "role": "setting",
+   "calyx": "",
+   "panels": [
+    "validation2",
+    "mixtures",
+    "apl16"
+   ]
+  },
+  {
+   "name": "E139:B_inhadd1000",
+   "source": "E139",
+   "arm": "B_inhadd1000",
+   "label": "B at pn_inhadd 1000",
+   "role": "setting",
+   "calyx": "inhadd1000",
+   "panels": [
+    "validation2",
+    "mixtures",
+    "apl16"
+   ]
+  },
+  {
+   "name": "E139:K_inhadd1000",
+   "source": "E139",
+   "arm": "K_inhadd1000",
+   "label": "K, KC-KC x3.24, at pn_inhadd 1000",
+   "role": "setting",
+   "calyx": "inhadd1000",
+   "panels": [
+    "validation2",
+    "mixtures",
+    "apl16"
+   ]
+  },
+  {
+   "name": "E139:A0_inhadd314",
+   "source": "E139",
+   "arm": "A0_inhadd314",
+   "label": "E139's refit, A0 at pn_inhadd 314",
+   "role": "setting",
+   "calyx": "",
+   "panels": [
+    "validation2",
+    "mixtures",
+    "apl16"
+   ]
+  },
+  {
+   "name": "E141:D1.8_inhadd1000",
+   "source": "E141",
+   "arm": "D1.8_inhadd1000",
+   "label": "D1.8, the matrix at x1.8",
+   "role": "setting",
+   "calyx": "inhadd1000",
+   "panels": [
+    "validation2",
+    "mixtures",
+    "apl16"
+   ]
+  },
+  {
+   "name": "E141:D5.8_inhadd1000",
+   "source": "E141",
+   "arm": "D5.8_inhadd1000",
+   "label": "D5.8, the matrix at x5.83",
+   "role": "setting",
+   "calyx": "inhadd1000",
+   "panels": [
+    "validation2",
+    "mixtures",
+    "apl16"
+   ]
+  },
+  {
+   "name": "E141:N_inhadd1000",
+   "source": "E141",
+   "arm": "N_inhadd1000",
+   "label": "N, the rise with APL on only",
+   "role": "setting",
+   "calyx": "inhadd1000",
+   "panels": [
+    "validation2",
+    "mixtures",
+    "apl16"
+   ]
+  },
+  {
+   "name": "E141:G_inhadd1000",
+   "source": "E141",
+   "arm": "G_inhadd1000",
+   "label": "G, APL's inhibition of the claws as a gain",
+   "role": "setting",
+   "calyx": "inhadd1000",
+   "panels": [
+    "validation2",
+    "mixtures",
+    "apl16"
+   ]
+  },
+  {
+   "name": "E141:S_inhadd1000",
+   "source": "E141",
+   "arm": "S_inhadd1000",
+   "label": "the shuffled matrix (within type pairs)",
+   "role": "setting",
+   "calyx": "inhadd1000",
+   "panels": [
+    "validation2",
+    "mixtures",
+    "apl16"
+   ]
+  },
+  {
+   "name": "E135:R1",
+   "source": "E135",
+   "arm": "R1",
+   "label": "E135's R1, the PN stage's global parameters fitted",
+   "role": "setting",
+   "calyx": "",
+   "panels": [
+    "apl16"
+   ]
+  },
+  {
+   "name": "E135:rung",
+   "source": "E135",
+   "arm": "rung",
+   "label": "E135's R3, the highest kept rung",
+   "role": "setting",
+   "calyx": "",
+   "panels": [
+    "apl16"
+   ]
+  },
+  {
+   "name": "E135:imposed",
+   "source": "E135",
+   "arm": "imposed",
+   "label": "E135's recorded dendrites imposed",
+   "role": "setting",
+   "calyx": "",
+   "panels": [
+    "apl16"
+   ]
+  },
+  {
+   "name": "E135:imposed_dff",
+   "source": "E135",
+   "arm": "imposed_dff",
+   "label": "E135's recorded dendrites imposed, table in dF/F",
+   "role": "setting",
+   "calyx": "",
+   "panels": []
+  },
+  {
+   "name": "E135:rung_glom_perm",
+   "source": "E135",
+   "arm": "rung_glom_perm",
+   "label": "E135's R3, glomeruli permuted",
+   "role": "yardstick",
+   "calyx": "",
+   "panels": []
+  },
+  {
+   "name": "E135:imposed_glom_perm",
+   "source": "E135",
+   "arm": "imposed_glom_perm",
+   "label": "E135's imposed, glomeruli permuted",
+   "role": "yardstick",
+   "calyx": "",
+   "panels": []
+  },
+  {
+   "name": "E135:imposed_odor_perm",
+   "source": "E135",
+   "arm": "imposed_odor_perm",
+   "label": "E135's imposed, odors permuted",
+   "role": "yardstick",
+   "calyx": "",
+   "panels": []
+  },
+  {
+   "name": "E135:imposed_glom_perm_dff",
+   "source": "E135",
+   "arm": "imposed_glom_perm_dff",
+   "label": "E135's imposed in dF/F, glomeruli permuted",
+   "role": "yardstick",
+   "calyx": "",
+   "panels": []
+  },
+  {
+   "name": "E135:imposed_odor_perm_dff",
+   "source": "E135",
+   "arm": "imposed_odor_perm_dff",
+   "label": "E135's imposed in dF/F, odors permuted",
+   "role": "yardstick",
+   "calyx": "",
+   "panels": []
+  }
+ ],
+ "definitions": {
+  "measure": "E136's MEASURES['strength'] (strength by odor: kcq/population_fit.py's parts strength/rate and strength/mean, each odor's entry relative to the panel's mean, the view's error the RMS of the two parts' errors in one-fly units); the guard every view (E136's error_column: the PN dendrites on four)",
+  "value": "the mean over the T wirings of each wiring's error; the megamat stage error per wiring the RMS of its four stages' errors",
+  "reading": "each run once: stage_readings.read_run with E134's default readings against all the stage's (or panel's) flies (E136's Flies(None) for megamat, a FlyCache for the held-out panels), seed index E136's seed_index(wiring); the parts reference_views against all the flies' reference",
+  "reference": "a subset or resample: the weighted mean of the flies' parts (NaN-aware), in all the flies' one-fly units (kcq/population_fit.py's subset_reference(keep_units=True))",
+  "check": {
+   "arms": [
+    "family",
+    "E136:A1"
+   ],
+   "tol": 0.02,
+   "against": "E136's classes.json (measure strength): the megamat 'arm' value on T against the held-out half",
+   "fallback": {
+    "n": 20,
+    "seed": 0
+   }
+  },
+  "consistency": "Spearman \u03c1 over the settings (role 'setting') of their values against half a and half b",
+  "interval": "5% to 95% percentiles over 1000 resamples (seed 0)",
+  "bar": "IMPROVE_SE = 2 standard errors by E136's compare (se the larger of half the spread and the SD of the per-wiring changes over T over sqrt(4)); spreads as scored in the class tables",
+  "calyx_groups": {
+   "inhadd1000": [
+    "E136:A1",
+    "E139:F_inhadd1000",
+    "E139:B_inhadd1000",
+    "E139:K_inhadd1000",
+    "E141:D1.8_inhadd1000",
+    "E141:D5.8_inhadd1000",
+    "E141:N_inhadd1000",
+    "E141:G_inhadd1000",
+    "E141:S_inhadd1000"
+   ],
+   "family_norm": [
+    "family",
+    "E136:A0",
+    "E136:A2",
+    "E136:A3",
+    "E136:A4"
+   ]
+  },
+  "class_tables": [
+   {
+    "experiment": "E136_stage_population_fit",
+    "path": "measure_strength/classes.json",
+    "prefix": "E136:"
+   },
+   {
+    "experiment": "E139_normalization_ladder",
+    "path": "classes.json",
+    "prefix": "E139:"
+   },
+   {
+    "experiment": "E141_kckc_rise_forms",
+    "path": "classes.json",
+    "prefix": "E141:"
+   }
+  ],
+  "stopped": [
+   "E141:P_inhadd1000",
+   "E141:T_inhadd1000"
+  ],
+  "near_ties": [
+   [
+    "E141_kckc_rise_forms",
+    "D1.8_inhadd1000"
+   ],
+   [
+    "E139_normalization_ladder",
+    "K_inhadd1000"
+   ],
+   [
+    "E141_kckc_rise_forms",
+    "K_inhadd1000"
+   ],
+   [
+    "E141_kckc_rise_forms",
+    "N_inhadd1000"
+   ],
+   [
+    "E141_kckc_rise_forms",
+    "G_inhadd1000"
+   ]
+  ],
+  "count": {
+   "panels": [
+    "apl16/apl16/on",
+    "apl16/apl16/off",
+    "mixtures/kmix/on",
+    "mixtures/cmix/on",
+    "validation2/validation2/on"
+   ],
+   "many": [
+    "apl16/apl16/on",
+    "apl16/apl16/off",
+    "mixtures/kmix/on"
+   ],
+   "many_as_named": [
+    "apl16/apl16/on",
+    "apl16/apl16/off",
+    "mixtures/cmix/on"
+   ],
+   "sizes": [
+    2,
+    3,
+    4,
+    5
+   ],
+   "draws": 200,
+   "seed": 0,
+   "statistic": "the median over draws"
+  },
+  "without_odor": "aa",
+  "flag": {
+   "setting": "E141:S_inhadd1000",
+   "wiring": "P3",
+   "statistic": "response rate \u03c1, APL on, against the control recordings in baseline-noise units"
+  },
+  "thresholds": {
+   "tells_median": 0.8,
+   "tells_min": 0.5,
+   "stands_share": 0.8,
+   "class_share": 0.8,
+   "near_tie_share": 0.8,
+   "count_low": 0.5,
+   "count_high": 0.8
+  }
+ },
+ "classes": {
+  "tells_apart": "\"A stage tells the saved models apart\": consistency over the settings is 0.8 or more at the median split and 0.5 or more on every split",
+  "reads_calyx": "\"Megamat reads the calyx\": the same over the nine settings at pn_inhadd 1000, at the claws and at the somata",
+  "change_stands": "\"A change stands through the flies\": its interval excludes zero; on megamat it is also beyond the bar against both halves on at least 80% of the joint splits",
+  "class_stands": "\"A class stands through the flies\": the scored class is read on at least 80% of the resamples",
+  "count": "\"The count's\": on at least two of the three panels with many flies, halves of 2 give consistency under 0.5 and the largest halves read give 0.8 or more",
+  "panel": "\"The panel's\": halves of 2 already give 0.8 or more there (on at least two of the three)",
+  "fifth_fly": "the fifth fly is a description, never a class: it is one fly"
+ },
+ "outcomes": {
+  "a": "megamat tells models apart at the PN stages only, and does not read the calyx",
+  "b": "all four stages tell models apart",
+  "c": "A1's megamat fall or its \"holds\" does not stand through the flies",
+  "d": "near-tie classes change with the flies (at least one changes on more than a fifth of the resamples)",
+  "e": "the count's or the panel's"
+ },
+ "narrow_readings": [
+  "the measure is E136's adopted one, strength by odor (E136's MEASURES['strength']); the PN dendrites read on it with E136's error column ('error', not the matrix view); E136's rule-3 guard reads every view (four at the PN dendrites) and is recomputed on each resample where a class reads it",
+  "only the T wirings are read: every value is the mean over T, and every spread is the one scored (the family over its eight wirings, from the class tables); the fitted arms' S wirings (their fits' best evaluations) are not read",
+  "E135's fitted (R1, R3) and imposed (from the trial-noise and the dF/F dendrites) arms are settings; their five permuted controls are yardsticks only (scored and reported, in no consistency and no class); consistency over the settings without E135's four is given beside, since their PN stages were set from the dendrite flies",
+  "a split's halves: 'a' the smaller half (floor(n / 2) flies, E136's fit-half size), 'b' the rest; for a 2 / 2 split 'a' the half with the stage's first fly, so each division is counted once; E136's own split is split_halves(n, 1, 0) as E136's split_names takes it",
+  "the joint splits: JOINT_SEED draws N_JOINT distinct combinations (np.random.default_rng(JOINT_SEED).choice without replacement over the product of the four stages' splits, in stage order), and E136's own split beside them",
+  "consistency is Spearman \u03c1 (scipy's, ties averaged) over the settings' values (the mean over T of each wiring's error) against the two halves, in all the stage's flies' one-fly units; the median over a stage's splits decides \"tells apart\"",
+  "beyond E136's bar against a half: the change (mean over T of the per-wiring changes) has the sign of the change as scored (the class table's, else against E136's held-out half) and exceeds IMPROVE_SE standard errors by E136's rule (compare: the larger of half the spread as scored and the SD of the per-wiring changes over T over 2)",
+  "the resamples: each stage's and each panel's flies drawn with replacement, as many as the stage or panel has, every stage and panel drawn independently on the same resample index (one generator, BOOT_SEED, stages in LOSS_STAGES order then the panels in HOLDS_PANELS + BESIDE_PANELS order); the reference is the drawn flies' mean view, in all the flies' one-fly units",
+  "a class recomputed on a resample: E136's classify ladder on the resampled values with every comparison's spread and bar (IMPROVE_SE standard errors) as scored in the class table, the permuted control's fall as scored, and the class table's reasons that do not depend on the flies (a bound, a realism band, a failed hold, reads stopped) kept; E141's added classes (stands in, does more than A1) recomputed the same way against A1",
+  "the class against all the flies, unresampled, is given beside each share",
+  "the changes minus another setting are E141's comparisons with A1 (against_a1: its megamat stage error and the held-out panels); the class tables' names map to the settings: 'A1' is E136's A1, E139's names E139's reads (E141's B_inhadd1000 and K_inhadd1000 among them), E141's names its reads",
+  "fit evaluations beside (FIT_EVALS_BESIDE): every saved evaluation of E136's fits whose stages this host holds (hal: A3's), read once on S as the settings are on T, their consistency on every split given beside as a description (E136's own read 483 evaluations of all fits on one split); they enter no class",
+  "item 5: the control mixtures have 4 flies as E136 reads them (the entry's 11 is the two mixture panels' KC flies together), so the third panel with many flies is the kiwi mixtures (7 flies; MANY_FLY_PANELS), and the classes on the entry's three (MANY_FLY_PANELS_AS_NAMED, the control mixtures at halves of 2 only) are given beside",
+  "item 5 beside: megamat's four stages read the same way at the half sizes they allow (halves of 2 at the claws and somata are their three splits)",
+  "item 5: disjoint halves of k flies drawn N_COUNT_DRAWS times (seed COUNT_SEED, each draw a permutation of the panel's flies, its first k one half and its next k the other); consistency over the settings read on that panel; \"halves of 2\" and \"the largest halves\" read at the median over draws",
+  "the fifth fly: each setting's somata strength error against the same-fly recording's somata alone (its parts the reference's mean), in the four soma flies' one-fly units, beside each of the four against the other three and each setting against the four; the claw fly 2023-04-11 fly03 against its second acquisition likewise",
+  "item 7: E136's stage_without_odor rule (E138's odor_entries: aa's term taken out of the squared error, the number of odors kept, nothing renormalized) applied to the somata parts read once; items 2 to 4 on the somata so read",
+  "the realism flag's interval: the response rate \u03c1 (Spearman over the 16 odors) of the shuffled matrix's APL-on read on P3 against the per-odor response fractions of resampled control recordings (each recording's KCs above the bands' noise criterion), N_BOOT draws with replacement, seed BOOT_SEED"
+ ],
+ "holds": [
+  "no simulation, no model run, no olfsysm change, nothing fitted, searched or chosen",
+  "no held-out panel enters a fit; nothing is chosen from E138's readings of validation2",
+  "Remy's processed data only, without the bouton fly 2022-10-21 fly02 and without her older megamat flies",
+  "Yang's processed products only",
+  "no connectome table"
+ ],
+ "note": "written before any statistic of E143 was computed; every part but lock refuses until this file is committed (require_lock)"
+}

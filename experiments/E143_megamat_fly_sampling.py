@@ -58,6 +58,7 @@ Usage (from the repository root):
 from __future__ import annotations
 
 import argparse
+import contextlib
 import itertools
 import json
 import os
@@ -93,6 +94,12 @@ HOLDS_PANELS: Tuple[str, ...] = ('validation2/validation2/on', 'mixtures/cmix/on
 BESIDE_PANELS: Tuple[str, ...] = ('mixtures/kmix/on',)
 PANEL_INPUTS: Tuple[str, ...] = ('validation2', 'mixtures', 'apl16')
 
+
+def side_key(class_key: str) -> str:
+    """The side (flies) key 'kc_soma/<panel>/<condition>' of a class table's panel key 'input/panel/condition'."""
+    _, pan, cond = class_key.split('/')
+    return f'kc_soma/{pan}/{cond}'
+
 # the read-once check (design item 1): E136's held-half megamat stage error on T, family and A1 (classes.json, measure
 # strength), reproduced by the shortcut to within CHECK_TOL; otherwise E136's way on N_FALLBACK seeded joint splits
 CHECK_ARMS: Tuple[str, ...] = ('family', 'E136:A1')
@@ -104,13 +111,19 @@ N_BOOT, BOOT_SEED = 1000, 0
 CI: Tuple[float, float] = (0.05, 0.95)
 COUNT_SIZES: Tuple[int, ...] = (2, 3, 4, 5)
 N_COUNT_DRAWS, COUNT_SEED = 200, 0
-# the panels of item 5: (input/panel/condition, label); the three with many flies first (the count's and the panel's
-# classes read those), validation2 beside
+# the panels of item 5: (input/panel/condition, label). The entry names the control mixtures with 11 flies; E136 reads
+# them on 4 (E134's fly_side_read of kc_soma / cmix / wild_type), 11 being the two mixture panels' KC flies together
+# (the kiwi mixtures 7, the control mixtures 4). So the three panels with many flies are the APL16 somata with APL on
+# (11) and off (8) and the kiwi mixtures (7, the mixture panel with the most flies; read as uploaded, a description of
+# the panel, no verdict on a model); the count's and the panel's classes on the entry's three (the control mixtures,
+# halves of 2 only) are given beside
 COUNT_PANELS: Tuple[Tuple[str, str], ...] = (('apl16/apl16/on', 'APL16 somata, APL on'),
                                              ('apl16/apl16/off', 'APL16 somata, APL off'),
+                                             ('mixtures/kmix/on', 'kiwi mixtures'),
                                              ('mixtures/cmix/on', 'control mixtures'),
                                              ('validation2/validation2/on', 'validation2'))
-MANY_FLY_PANELS: Tuple[str, ...] = ('apl16/apl16/on', 'apl16/apl16/off', 'mixtures/cmix/on')
+MANY_FLY_PANELS: Tuple[str, ...] = ('apl16/apl16/on', 'apl16/apl16/off', 'mixtures/kmix/on')
+MANY_FLY_PANELS_AS_NAMED: Tuple[str, ...] = ('apl16/apl16/on', 'apl16/apl16/off', 'mixtures/cmix/on')
 # the classes' thresholds (the entry's)
 TELLS_MEDIAN, TELLS_MIN = 0.8, 0.5
 STANDS_SHARE = 0.8
@@ -197,9 +210,12 @@ CLASS_TABLES: Tuple[Tuple[str, Tuple[str, ...], str], ...] = (
 )
 # E141's arms whose reads stopped after their holds failed (no megamat reads on T): no class whatever the flies
 STOPPED_ARMS: Tuple[str, ...] = ('E141:P_inhadd1000', 'E141:T_inhadd1000')
-# the near-tie classes the entry names (outcome (d))
-NEAR_TIES: Tuple[str, ...] = ('E141:D1.8_inhadd1000', 'E139:K_inhadd1000', 'E141:K_inhadd1000', 'E141:N_inhadd1000',
-                              'E141:G_inhadd1000')
+# the near-tie classes the entry names (outcome (d)), as (class table, its name there)
+NEAR_TIES: Tuple[Tuple[str, str], ...] = ((E141, 'D1.8_inhadd1000'), (E139, 'K_inhadd1000'), (E141, 'K_inhadd1000'),
+                                          (E141, 'N_inhadd1000'), (E141, 'G_inhadd1000'))
+# beside (a description): the fit evaluations whose stages this host holds (E136's fits on the S wirings), read once
+FIT_EVALS_BESIDE: Tuple[Tuple[str, str], ...] = ((E136, 'A3'),)
+S_WIRINGS: Tuple[str, ...] = ('real', 'P1', 'P2', 'M1')
 
 # the classes and outcomes (the entry's, fixed beforehand)
 CLASSES: Dict[str, str] = {
@@ -253,6 +269,17 @@ NARROW_READINGS: Tuple[str, ...] = (
     "class table's reasons that do not depend on the flies (a bound, a realism band, a failed hold, reads stopped) "
     "kept; E141's added classes (stands in, does more than A1) recomputed the same way against A1",
     'the class against all the flies, unresampled, is given beside each share',
+    "the changes minus another setting are E141's comparisons with A1 (against_a1: its megamat stage error and the "
+    "held-out panels); the class tables' names map to the settings: 'A1' is E136's A1, E139's names E139's reads "
+    "(E141's B_inhadd1000 and K_inhadd1000 among them), E141's names its reads",
+    "fit evaluations beside (FIT_EVALS_BESIDE): every saved evaluation of E136's fits whose stages this host holds "
+    "(hal: A3's), read once on S as the settings are on T, their consistency on every split given beside as a "
+    'description (E136\'s own read 483 evaluations of all fits on one split); they enter no class',
+    "item 5: the control mixtures have 4 flies as E136 reads them (the entry's 11 is the two mixture panels' KC flies "
+    'together), so the third panel with many flies is the kiwi mixtures (7 flies; MANY_FLY_PANELS), and the classes on '
+    "the entry's three (MANY_FLY_PANELS_AS_NAMED, the control mixtures at halves of 2 only) are given beside",
+    "item 5 beside: megamat's four stages read the same way at the half sizes they allow (halves of 2 at the claws "
+    'and somata are their three splits)',
     'item 5: disjoint halves of k flies drawn N_COUNT_DRAWS times (seed COUNT_SEED, each draw a permutation of the '
     "panel's flies, its first k one half and its next k the other); consistency over the settings read on that panel; "
     '"halves of 2" and "the largest halves" read at the median over draws',
@@ -319,19 +346,47 @@ def results_file(experiment: str, *parts: str) -> Path:
 def stage_splits(n: int) -> List[Tuple[Tuple[int, ...], Tuple[int, ...]]]:
     """Every way to divide n flies as E136 did, as (half a, half b) index tuples: half a the smaller half (floor(n / 2)
     flies), for an even n the half with fly 0, so each division is counted once (n = 7: 35, 5: 10, 4: 3)."""
-    raise NotImplementedError
+    if n < 2:
+        raise ValueError(f'{n=}')
+    k = n // 2
+    out = []
+    for a in itertools.combinations(range(n), k):
+        if 2 * k == n and 0 not in a:
+            continue
+        out.append((tuple(a), tuple(i for i in range(n) if i not in a)))
+    return out
 
 
 def e136_split(n: int) -> Tuple[Tuple[int, ...], Tuple[int, ...]]:
     """E136's own split of n flies (hal's `split_halves(n, 1, 0)`: its fit half, then its held-out half)."""
-    raise NotImplementedError
+    from kcq import population_fit as P
+    a, b = P.split_halves(n, 1, 0)[0]
+    return tuple(int(i) for i in a), tuple(int(i) for i in b)
+
+
+def split_index(n: int, split: Tuple[Sequence[int], Sequence[int]]) -> int:
+    """The index in `stage_splits(n)` of a division of n flies (either half may come first)."""
+    a = tuple(sorted(int(i) for i in split[0]))
+    b = tuple(sorted(int(i) for i in split[1]))
+    for i, (x, y) in enumerate(stage_splits(n)):
+        if (x, y) in ((a, b), (b, a)):
+            return i
+    raise ValueError(f'{split} is not a split of {n} flies')
 
 
 def joint_splits(sizes: Mapping[str, int], n_joint: int = N_JOINT, seed: int = JOINT_SEED) -> pd.DataFrame:
     """The joint splits: one split per stage (an index into `stage_splits`), `n_joint` drawn without replacement from
     their product (stage order LOSS_STAGES), then E136's own split ('e136'). Columns: joint, <stage> (the index), and
     whether the row is E136's own."""
-    raise NotImplementedError
+    stages = [s for s in LOSS_STAGES if s in sizes]
+    counts = [len(stage_splits(int(sizes[s]))) for s in stages]
+    total = int(np.prod(counts))
+    pick = np.random.default_rng(seed).choice(total, size=min(int(n_joint), total), replace=False)
+    idx = np.array(np.unravel_index(pick, counts)).T
+    rows = [dict(joint=int(j), **{s: int(v) for s, v in zip(stages, r)}, e136=False) for j, r in enumerate(idx)]
+    rows.append(dict(joint=len(rows), **{s: split_index(int(sizes[s]), e136_split(int(sizes[s]))) for s in stages},
+                     e136=True))
+    return pd.DataFrame(rows)
 
 
 # ---------------------------------------------------------------------------
@@ -340,51 +395,377 @@ def joint_splits(sizes: Mapping[str, int], n_joint: int = N_JOINT, seed: int = J
 def lock_inputs() -> dict:
     """The inputs the lock records with sha256: the locks and data files every statistic rests on ('data', checked when
     read) and the class tables and scores the parts reproduce or reread ('results', recorded)."""
-    raise NotImplementedError
+    E140 = _e140()
+    roi = H.shared_dir() / 'data' / 'remy_per_roi'
+    data = dict(e134_lock=E140.file_entry(E134_LOCK_COPY),
+                e135_lock=E140.file_entry(results_file(E135, 'lock.json')),
+                same_fly_trials=E140.file_entry(roi / 'same_fly_trials.npz'),
+                same_fly_checks=E140.file_entry(roi / 'same_fly_checks.json'))
+    res = {}
+    for k, (exp, parts) in dict(
+            e136_classes=(E136, ('measure_strength', 'classes.json')),
+            e136_score_megamat=(E136, ('measure_strength', 'score_megamat.csv')),
+            e136_score_panels=(E136, ('measure_strength', 'score_panels.csv')),
+            e136_consistency=(E136, ('measure_strength', 'consistency_strength.csv')),
+            e139_classes=(E139, ('classes.json',)), e139_score_megamat=(E139, ('score_megamat.csv',)),
+            e139_score_panels=(E139, ('score_panels.csv',)), e139_without_aa=(E139, ('score_without_aa.csv',)),
+            e141_classes=(E141, ('classes.json',)), e141_score_megamat=(E141, ('score_megamat.csv',)),
+            e141_score_panels=(E141, ('score_panels.csv',)), e141_score_apl16=(E141, ('score_apl16.csv',)),
+            e141_without_aa=(E141, ('score_without_aa.csv',)),
+            e135_score_scores=(E135, ('score_scores.csv',)), e135_verdict=(E135, ('score_verdict.json',)),
+            e134_score_scores=(E134, ('score_scores.csv',))).items():
+        p = results_file(exp, *parts)
+        res[k] = E140.file_entry(p) if p.exists() else dict(path=str(p), missing=True)
+    return dict(data=data, results=res)
 
 
 def recordings() -> dict:
     """The recordings read (names only, no value): per megamat stage the flies, criterion and E136's halves; the
     held-out panels' flies as E134 reads them; the same-fly populations; the exclusions."""
-    raise NotImplementedError
+    from data_prep import stage_population_data as D
+    from experiments import E134_population_baseline as B
+    from experiments import E136_stage_population_fit as F
+    out: Dict[str, dict] = {}
+    for stage in LOSS_STAGES:
+        p = D.load_population(stage, PANEL, 'wild_type')
+        n = len(p.flies)
+        out[f'{stage}/{PANEL}/on'] = dict(stage=stage, panel=PANEL, cohort='wild_type', flies=list(p.flies),
+                                          criterion=float(p.criterion), units=p.units, odors=list(p.odors),
+                                          e136_halves=F.split_names(p, F.HALF_SEED), n_splits=len(stage_splits(n)),
+                                          e136_split_index=split_index(n, e136_split(n)))
+    if any(f.startswith('2022-10-21__fly02') for f in out[f'pn_bouton/{PANEL}/on']['flies']):
+        raise RuntimeError('the excluded bouton fly is in the bouton population')
+    for key in HOLDS_PANELS + BESIDE_PANELS:
+        _, panel, cond = key.split('/')
+        fl = _fly_side('kc_soma', panel, cond)
+        fp, have = B.fly_side_read(fl)
+        out[key] = dict(stage='kc_soma', panel=panel, condition=cond, cohort=fl.key[2], flies=[f.name for f in fp],
+                        criterion=float(fl.criterion), units=fl.units, odors=list(have))
+    for stage in ('kc_claw', 'kc_soma'):
+        p = D.load_population(stage, PANEL, 'same_fly')
+        out[f'{stage}/{PANEL}/same_fly'] = dict(stage=stage, panel=PANEL, cohort='same_fly', flies=list(p.flies),
+                                                criterion=float(p.criterion), units=p.units,
+                                                n_units={f: int(p.tables[f].shape[0]) for f in p.flies})
+    out['excluded'] = dict(
+        flies=[dict(stage=x['stage'], fly=x['fly'], reason=x['reason']) for x in D.EXCLUDED_FLIES],
+        older_megamat="Remy's older megamat flies (pyolfsysm's data/from_remy/2024-11-12): never read",
+        same_fly='the same-fly claw and soma recording (2023-04-11 fly 3, megamat1_redo): read only in design item 6')
+    return out
+
+
+def _fly_side(stage: str, panel: str, cond: str):
+    """The flies a model condition is read against (stage_readings' `fly_side`; RuntimeError if none)."""
+    from kcq import stage_readings as R
+    fl = R.fly_side(stage, panel, cond)
+    if fl is None:
+        raise RuntimeError(f'no recorded {stage} on {panel} ({cond})')
+    return fl
 
 
 def lock_contents() -> dict:
     """The lock: inputs, recordings, splits, seeds, settings, classes, outcomes, narrow readings and holds. No statistic
     is read."""
-    raise NotImplementedError
+    from experiments import E136_stage_population_fit as F
+    from kcq import stage_readings as R
+    recs = recordings()
+    sizes = {s: len(recs[f'{s}/{PANEL}/on']['flies']) for s in LOSS_STAGES}
+    js = joint_splits(sizes)
+    splits = dict(rule="every way to divide a stage's flies as E136 did (stage_splits)",
+                  per_stage={s: [dict(a=list(a), b=list(b)) for a, b in stage_splits(n)] for s, n in sizes.items()},
+                  e136={s: dict(zip(('fit', 'held'), map(list, e136_split(n)))) for s, n in sizes.items()},
+                  joint=dict(n=N_JOINT, seed=JOINT_SEED, rows=js.to_dict('records')))
+    seeds = dict(joint=JOINT_SEED, boot=BOOT_SEED, n_boot=N_BOOT, ci=list(CI), count=COUNT_SEED,
+                 n_count_draws=N_COUNT_DRAWS, count_sizes=list(COUNT_SIZES), fallback=FALLBACK_SEED,
+                 n_fallback=N_FALLBACK)
+    settings = [dict(name=s.name, source=s.source, arm=s.arm, label=s.label, role=s.role, calyx=s.calyx,
+                     panels=list(s.panels)) for s in SETTINGS]
+    definitions = dict(
+        measure=f"E136's MEASURES[{MEASURE!r}] (strength by odor: kcq/population_fit.py's parts strength/rate and "
+                "strength/mean, each odor's entry relative to the panel's mean, the view's error the RMS of the two "
+                "parts' errors in one-fly units); the guard every view (E136's error_column: the PN dendrites on four)",
+        value='the mean over the T wirings of each wiring\'s error; the megamat stage error per wiring the RMS of its four '
+              'stages\' errors',
+        reading="each run once: stage_readings.read_run with E134's default readings against all the stage's (or "
+                "panel's) flies (E136's Flies(None) for megamat, a FlyCache for the held-out panels), seed index "
+                "E136's seed_index(wiring); the parts reference_views against all the flies' reference",
+        reference="a subset or resample: the weighted mean of the flies' parts (NaN-aware), in all the flies' one-fly "
+                  "units (kcq/population_fit.py's subset_reference(keep_units=True))",
+        check=dict(arms=list(CHECK_ARMS), tol=CHECK_TOL, against="E136's classes.json (measure strength): the "
+                   "megamat 'arm' value on T against the held-out half", fallback=dict(n=N_FALLBACK, seed=FALLBACK_SEED)),
+        consistency="Spearman ρ over the settings (role 'setting') of their values against half a and half b",
+        interval=f'{CI[0]:.0%} to {CI[1]:.0%} percentiles over {N_BOOT} resamples (seed {BOOT_SEED})',
+        bar=f"IMPROVE_SE = {IMPROVE_SE:g} standard errors by E136's compare (se the larger of half the spread and the "
+            "SD of the per-wiring changes over T over sqrt(4)); spreads as scored in the class tables",
+        calyx_groups={k: list(v) for k, v in CALYX_GROUPS.items()},
+        class_tables=[dict(experiment=e, path='/'.join(p), prefix=pre) for e, p, pre in CLASS_TABLES],
+        stopped=list(STOPPED_ARMS), near_ties=list(NEAR_TIES),
+        count=dict(panels=[k for k, _ in COUNT_PANELS], many=list(MANY_FLY_PANELS),
+                   many_as_named=list(MANY_FLY_PANELS_AS_NAMED), sizes=list(COUNT_SIZES),
+                   draws=N_COUNT_DRAWS, seed=COUNT_SEED, statistic='the median over draws'),
+        without_odor=WITHOUT_ODOR, flag=dict(setting=FLAG_SETTING, wiring=FLAG_WIRING, statistic='response rate ρ, '
+                                             'APL on, against the control recordings in baseline-noise units'),
+        thresholds=dict(tells_median=TELLS_MEDIAN, tells_min=TELLS_MIN, stands_share=STANDS_SHARE,
+                        class_share=CLASS_SHARE, near_tie_share=NEAR_TIE_SHARE, count_low=COUNT_LOW,
+                        count_high=COUNT_HIGH))
+    return dict(experiment=EXPERIMENT, script=SCRIPT, part='lock', written=_now(), host=_host(),
+                commits=H.code_commits(), panel=PANEL, measure=MEASURE, stages=list(LOSS_STAGES),
+                t_wirings=list(T_WIRINGS), e136_wirings=list(F.WIRINGS), readings=R.reading_definitions(),
+                inputs=lock_inputs(), recordings=recs, splits=splits, seeds=seeds, settings=settings,
+                definitions=definitions, classes=CLASSES, outcomes=OUTCOMES, narrow_readings=list(NARROW_READINGS),
+                holds=list(HOLDS),
+                note='written before any statistic of E143 was computed; every part but lock refuses until this file '
+                     'is committed (require_lock)')
 
 
 def part_lock() -> dict:
     """results/.../lock.json and its committed copy experiments/E143_lock.json (commit it before any other part);
     refuses to overwrite a committed lock."""
-    raise NotImplementedError
+    E140 = _e140()
+    if LOCK_COPY.exists() and E140._committed(LOCK_COPY):
+        raise PermissionError(f'{LOCK_COPY.name} is committed already; the lock is fixed')
+    lock = lock_contents()
+    text = json.dumps(lock, indent=1, default=E140._json_default) + '\n'
+    (out_dir() / LOCK_NAME).write_text(text)
+    LOCK_COPY.write_text(text)
+    print(f'wrote {out_dir() / LOCK_NAME} and {LOCK_COPY} (commit the copy before any other part)', flush=True)
+    return lock
 
 
 def require_lock(copy: Optional[Path] = None, shared: Optional[Path] = None) -> dict:
     """The committed lock (tracked, no uncommitted change, the same bytes as the shared copy); PermissionError
     otherwise."""
-    raise NotImplementedError
+    E140 = _e140()
+    copy = LOCK_COPY if copy is None else Path(copy)
+    if not copy.exists():
+        raise PermissionError(f'{copy.name}: no lock yet (--part lock, then commit it)')
+    if not E140._committed(copy):
+        raise PermissionError(f'{copy.name} is not committed (or has uncommitted changes)')
+    shared = (out_dir() / LOCK_NAME) if shared is None else Path(shared)
+    if not shared.exists() or shared.read_bytes() != copy.read_bytes():
+        raise PermissionError(f'{shared} differs from the committed {copy.name}')
+    lock = json.loads(copy.read_text())
+    lock['sha256'] = E140._sha256(copy)
+    return lock
+
+
+def require_all() -> Tuple[dict, dict]:
+    """(this experiment's lock, E134's lock), both required before any statistic; the lock's data files checked."""
+    from kcq import stage_readings as R
+    lock = require_lock()
+    for e in lock['inputs']['data'].values():
+        _e140()._check_file(e)
+    return lock, R.require_lock()
 
 
 # ---------------------------------------------------------------------------
 # the read (each run once against all flies)
 
-def setting_runs(setting: Setting, panel: str = PANEL) -> Dict[str, object]:
-    """A setting's saved runs on one input, per T wiring (missing wirings left out)."""
-    raise NotImplementedError
+@contextlib.contextmanager
+def e136():
+    """E136's module on the measure MEASURE with E139's and E141's variants registered (E139's refit by its fit
+    loader), for the block."""
+    from experiments import E139_normalization_ladder as E139m
+    from experiments import E141_kckc_rise_forms as E141m
+    with E139m.e136() as F:
+        for st in SETTINGS:
+            if st.source == 'E139':
+                if E139m.fit_rung(st.arm) is not None:
+                    F.register_variant(st.arm, E139m.load_fit_run)
+                else:
+                    E139m.register_variants(F, [st.arm])
+            elif st.source == 'E141':
+                E141m.register_variants(F, [st.arm])
+        yield F
+
+
+def setting_runs(setting: Setting, panel: str = PANEL, wirings: Sequence[str] = T_WIRINGS) -> Dict[str, object]:
+    """A setting's saved runs on one input, per wiring of `wirings` (missing wirings left out): E136's `load_read`
+    (E134's held runs and E90's part B for the family, the reads of E136, E139 and E141), E135's step-2 runs."""
+    from kcq import stage_readings as R
+    out = {}
+    if setting.source == 'E135':
+        from experiments import E135_antennal_lobe_dendrites as E135m
+        for w in wirings:
+            try:
+                out[w] = R.load_step3_run(E135m.tag_of(E135m.Arm(panel, setting.arm), w), dirs=E135m.step2_dirs())
+            except FileNotFoundError:
+                pass
+        return out
+    with e136() as F:
+        for w in wirings:
+            r = F.load_read(F.ReadPoint(setting.arm, panel, w, 'held' if panel == PANEL else None))
+            if r is not None:
+                out[w] = r
+    return out
+
+
+def fit_eval_runs(experiment: str, arm: str) -> Dict[str, Dict[str, object]]:
+    """The saved evaluations of an E136 fit whose stages this host holds, per evaluation its S runs (complete only)."""
+    from kcq import stage_readings as R
+    out = {}
+    with e136() as F:
+        if experiment != E136:
+            raise ValueError(experiment)
+        for i in F.history_evals(arm):
+            try:
+                out[f'e{i}'] = {w: R.load_step3_run(f'{arm}_e{i}_{w}', dirs=F.fit_dirs(arm)) for w in S_WIRINGS}
+            except FileNotFoundError:
+                continue
+    return out
+
+
+def views_dir() -> Path:
+    """outputs/E143_megamat_fly_sampling/views/ (created)."""
+    return local_dir('views')
+
+
+def _safe(name: str) -> str:
+    return name.replace(':', '__').replace('/', '_')
+
+
+def views_path(name: str, panel: str) -> Path:
+    """The saved parts of one setting (or fit evaluation) on one input."""
+    return views_dir() / f'{_safe(name)}__{panel}.parquet'
+
+
+def flies_path(key: str) -> Path:
+    """The saved parts and one-fly units of the flies of one stage or panel ('stage/panel/condition')."""
+    return views_dir() / f'flies__{_safe(key)}.parquet'
+
+
+_REFS: Dict[Tuple[str, Tuple[str, ...]], object] = {}
+
+
+def _reference(key: str, odors: Sequence[str]):
+    """All the flies' reference of a stage or panel on the model's odors (those the flies have), every part: megamat
+    stages as E136's Flies(None) reads them, held-out panels as E136's score_panels (E134's fly_side_read); cached, and
+    saved once to flies_path(key)."""
+    from experiments import E134_population_baseline as B
+    from kcq import population_fit as P
+    ck = (key, tuple(odors))
+    if ck not in _REFS:
+        stage, panel, cond = key.split('/')
+        fl = _fly_side(stage, panel, cond)
+        fp, have = B.fly_side_read(fl)
+        od = [o for o in odors if o in set(have)]
+        ref = P.fly_reference(fp, od, B.breadth_edges(len(od)))
+        _REFS[ck] = ref
+        path = flies_path(key)
+        if not path.exists():
+            rows = [pd.DataFrame(dict(key=key, part=q, fly=f, entry=list(df.columns),
+                                      value=df.loc[f].to_numpy(dtype=float), unit=float(ref.one_fly[q])))
+                    for q, df in ref.parts.items() for f in df.index]
+            tmp = path.with_name(f'.{path.name}.{_host()}.{os.getpid()}.tmp')
+            pd.concat(rows, ignore_index=True).to_parquet(tmp, index=False)
+            os.replace(tmp, path)
+    return _REFS[ck]
+
+
+def views_rows(pops: Mapping[str, object], key: str, name: str, panel: str, wiring: str) -> List[pd.DataFrame]:
+    """One wiring's populations (`read_run`'s) at a key read against all the flies' reference: long rows."""
+    from kcq import population_fit as P
+    pop = pops[key]
+    ref = _reference(key, list(pop.values.columns))
+    v = P.reference_views(pop, ref)
+    return [pd.DataFrame(dict(setting=name, input=panel, key=key, wiring=wiring, part=q, entry=list(x.index),
+                              value=x.to_numpy(dtype=float))) for q, x in v.items() if q in ref.parts]
+
+
+def read_runs(name: str, panel: str, runs: Mapping[str, object]) -> pd.DataFrame:
+    """Runs of one setting (or fit evaluation) on one input read once against all flies (E134's default readings, E136's
+    seed index): megamat at the four stages, a held-out input at its KC somata on every panel and condition with
+    flies."""
+    from experiments import E136_stage_population_fit as F
+    from kcq import stage_readings as R
+    lock = R.require_lock()
+    rows = []
+    for w, run in runs.items():
+        if panel == PANEL:
+            flies = F.Flies(None, LOSS_STAGES, views=None)
+            rd = R.read_run(run, stages=list(LOSS_STAGES), lock=lock, flies=flies.cache, seed_index=F.seed_index(w))
+            keys = [f'{st}/{PANEL}/on' for st in LOSS_STAGES]
+        else:
+            rd = R.read_run(run, stages=['kc_soma'], lock=lock, flies=R.FlyCache(), seed_index=F.seed_index(w))
+            want = {side_key(k) for k in HOLDS_PANELS + BESIDE_PANELS}
+            keys = [k for k in ('/'.join(t) for t in rd.populations) if k in want]
+        pops = {'/'.join(k): v for k, v in rd.populations.items()}
+        for key in keys:
+            rows += views_rows(pops, key, name, panel, w)
+    return pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
 
 
 def read_setting(setting: Setting, panel: str = PANEL) -> Optional[pd.DataFrame]:
-    """One setting's runs on one input read once (E134's default readings against all flies, E136's seed index), each
-    wiring's parts (every view) against all the flies of each stage or panel read: long table (setting, input, key
-    'stage/panel/condition', wiring, part, entry, value). Saved to outputs/.../views/<setting>__<input>.parquet."""
-    raise NotImplementedError
+    """One setting's T runs on one input read once (`read_runs`), each wiring's parts (every view) against all the flies
+    of each stage or panel read: long table (setting, input, key 'stage/panel/condition', wiring, part, entry, value),
+    saved to views_path. None if no run is saved."""
+    runs = setting_runs(setting, panel)
+    if not runs:
+        return None
+    df = read_runs(setting.name, panel, runs)
+    df['n_wirings'] = len(runs)
+    path = views_path(setting.name, panel)
+    tmp = path.with_name(f'.{path.name}.{_host()}.{os.getpid()}.tmp')
+    df.to_parquet(tmp, index=False)
+    os.replace(tmp, path)
+    return df
 
 
-def part_read(jobs: int = 1, settings: Optional[Sequence[str]] = None) -> pd.DataFrame:
-    """Every setting on every input it was read on (`read_setting`), skipping what is saved; a summary per file."""
-    raise NotImplementedError
+def read_fit_evals(experiment: str, arm: str) -> Optional[pd.DataFrame]:
+    """The fit evaluations beside (FIT_EVALS_BESIDE) read once on S, setting '<experiment>:<arm>_<eval>'; saved."""
+    path = views_path(f'fitevals_{experiment}_{arm}', PANEL)
+    if path.exists():
+        return pd.read_parquet(path)
+    evs = fit_eval_runs(experiment, arm)
+    if not evs:
+        return None
+    df = pd.concat([read_runs(f'fit:{arm}_{e}', PANEL, runs) for e, runs in evs.items()], ignore_index=True)
+    tmp = path.with_name(f'.{path.name}.{_host()}.{os.getpid()}.tmp')
+    df.to_parquet(tmp, index=False)
+    os.replace(tmp, path)
+    return df
+
+
+def read_jobs(settings: Optional[Sequence[str]] = None) -> List[Tuple[str, str]]:
+    """(setting, input) pairs to read, megamat first, then the held-out inputs."""
+    want = [s for s in SETTINGS if settings is None or s.name in settings]
+    return [(s.name, PANEL) for s in want] + [(s.name, p) for s in want for p in s.panels]
+
+
+def _read_job(job: Tuple[str, str]) -> dict:
+    name, panel = job
+    path = views_path(name, panel)
+    if path.exists():
+        return dict(setting=name, input=panel, status='saved before', seconds=0.0)
+    t0 = time.time()
+    try:
+        df = read_setting(SETTING_BY_NAME[name], panel)
+    except Exception as e:      # reported in the summary, the other jobs go on
+        return dict(setting=name, input=panel, status=f'failed: {type(e).__name__}: {e}', seconds=time.time() - t0)
+    st = 'no runs' if df is None else f"read {int(df['n_wirings'].iloc[0])} wirings"
+    print(f'E143 read {name} {panel}: {st}, {time.time() - t0:.0f} s', flush=True)
+    return dict(setting=name, input=panel, status=st, seconds=round(time.time() - t0, 1))
+
+
+def part_read(jobs: int = 1, settings: Optional[Sequence[str]] = None, fit_evals: bool = True) -> pd.DataFrame:
+    """Every setting on every input it was read on (`read_setting`), skipping what is saved, in `jobs` processes, then
+    the fit evaluations beside; a summary per file (read_summary_<host>.csv in the outputs)."""
+    todo = read_jobs(settings)
+    if jobs > 1:
+        import multiprocessing as mp
+        with mp.get_context('fork').Pool(jobs) as pool:
+            rows = list(pool.imap_unordered(_read_job, todo))
+    else:
+        rows = [_read_job(j) for j in todo]
+    if fit_evals and settings is None:
+        for exp, arm in FIT_EVALS_BESIDE:
+            t0 = time.time()
+            df = read_fit_evals(exp, arm)
+            rows.append(dict(setting=f'fitevals_{exp}_{arm}', input=PANEL,
+                             status='no evaluations held' if df is None else f'{df.setting.nunique()} evaluations',
+                             seconds=round(time.time() - t0, 1)))
+    out = pd.DataFrame(rows)
+    out.to_csv(local_dir() / f'read_summary_{_host()}.csv', index=False)
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -410,22 +791,138 @@ class Side:
     rows: pd.MultiIndex
 
 
-def load_side(key: str, parts: Optional[Sequence[str]] = None) -> Side:
-    """A stage or panel's side from the saved reads (`read_setting`) and the flies' parts (E134's fly_side_read)."""
-    raise NotImplementedError
+def side_from_tables(key: str, flies: pd.DataFrame, model: pd.DataFrame) -> Side:
+    """A side from long tables: `flies` (part, fly, entry, value, unit), `model` (setting, wiring, part, entry, value);
+    each part's entries in the flies' order, the model's rows (setting, wiring) in the order first met."""
+    from kcq import population_fit as P
+    fparts, units, mparts = {}, {}, {}
+    names = list(dict.fromkeys(flies['fly'].astype(str)))
+    rows = pd.MultiIndex.from_frame(model[['setting', 'wiring']].drop_duplicates()) if len(model) else \
+        pd.MultiIndex.from_tuples([], names=['setting', 'wiring'])
+    for q in [q for q in P.ALL_PARTS if q in set(flies['part'])]:
+        f = flies[flies['part'] == q]
+        entries = list(dict.fromkeys(f['entry'].astype(str)))
+        fparts[q] = f.pivot(index='fly', columns='entry', values='value').reindex(index=names, columns=entries
+                                                                                 ).to_numpy(dtype=float)
+        units[q] = float(f['unit'].iloc[0])
+        m = model[model['part'] == q]
+        M = m.pivot_table(index=['setting', 'wiring'], columns='entry', values='value', aggfunc='first', dropna=False)
+        mparts[q] = M.reindex(index=rows, columns=entries).to_numpy(dtype=float)
+    return Side(key=key, flies=names, fly_parts=fparts, units=units, model=mparts, rows=rows)
+
+
+def load_side(key: str, names: Optional[Sequence[str]] = None, fit_evals: bool = False) -> Side:
+    """A stage or panel's side from the saved reads (`read_setting`; the settings of `names`, default all saved, with
+    the fit evaluations beside if `fit_evals`) and the flies' parts saved with them (`flies_path`)."""
+    fl = pd.read_parquet(flies_path(key))
+    files = sorted(views_dir().glob('*.parquet'))
+    files = [f for f in files if not f.name.startswith('flies__') and (fit_evals or not f.name.startswith('fitevals_'))]
+    dfs = []
+    for f in files:
+        d = pd.read_parquet(f, filters=[('key', '==', key)])
+        if len(d) and (names is None or d['setting'].iloc[0] in set(names) or f.name.startswith('fitevals_')):
+            dfs.append(d)
+    model = pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame(columns=['setting', 'wiring', 'part', 'entry',
+                                                                                 'value'])
+    if names is not None:
+        order = {n: i for i, n in enumerate(names)}
+        model = model.assign(_o=model['setting'].map(lambda x: order.get(x, len(order)))).sort_values(
+            ['_o', 'wiring'], kind='stable').drop(columns='_o')
+    return side_from_tables(key, fl, model)
+
+
+def half_weights(n: int, halves: Sequence[Sequence[int]]) -> np.ndarray:
+    """References x flies weights of halves (each a set of fly indices; 1 / its size on its flies)."""
+    W = np.zeros((len(halves), n))
+    for i, h in enumerate(halves):
+        h = list(h)
+        W[i, h] = 1.0 / len(h)
+    return W
+
+
+def boot_weights(n: int, draws: np.ndarray) -> np.ndarray:
+    """References x flies weights of resamples (`draws`: resamples x n fly indices drawn with replacement)."""
+    W = np.zeros((len(draws), n))
+    for i, d in enumerate(draws):
+        np.add.at(W[i], d, 1.0)
+    return W / draws.shape[1]
+
+
+def _part_errors(side: Side, q: str, W: np.ndarray, drop: Sequence[str] = (), chunk: int = 100) -> np.ndarray:
+    """References x rows: each model row's error on part q (RMS over the entries both define, over the part's one-fly
+    unit, kcq/population_fit.py's score_rows) against each weighted reference; entries of `drop` count as matching the
+    reference (E138's 'without': the term out, the number of entries kept)."""
+    X = side.fly_parts[q]
+    fin = np.isfinite(X)
+    X0 = np.where(fin, X, 0.0)
+    with np.errstate(invalid='ignore', divide='ignore'):
+        mean = (W @ X0) / (W @ fin.astype(float))
+    M = side.model[q]
+    entries = _entries(side, q)
+    di = [entries.index(e) for e in drop if e in entries]
+    out = np.full((len(W), M.shape[0]), np.nan)
+    for a in range(0, len(W), chunk):
+        D = M[None, :, :] - mean[a:a + chunk, None, :]
+        if di:
+            D[:, :, di] = np.where(np.isfinite(D[:, :, di]), 0.0, D[:, :, di])
+        ok = np.isfinite(D)
+        with np.errstate(invalid='ignore', divide='ignore'):
+            msd = np.where(ok, D ** 2, 0.0).sum(axis=2) / np.maximum(ok.sum(axis=2), 1)
+        out[a:a + chunk] = np.where(ok.any(axis=2), np.sqrt(msd), np.nan) / side.units[q]
+    return out
+
+
+_ENTRIES: Dict[Tuple[str, str], List[str]] = {}
+
+
+def _entries(side: Side, q: str) -> List[str]:
+    """The entries of part q in the side's column order (from the saved flies' table)."""
+    k = (side.key, q)
+    if k not in _ENTRIES:
+        fl = pd.read_parquet(flies_path(side.key)) if flies_path(side.key).exists() else None
+        _ENTRIES[k] = list(dict.fromkeys(fl[fl['part'] == q]['entry'].astype(str))) if fl is not None else []
+    return _ENTRIES[k]
 
 
 def side_errors(side: Side, weights: np.ndarray, views: Optional[Sequence[str]] = ('strength',),
-                error_col: str = 'error') -> np.ndarray:
+                error_col: str = 'error', drop: Sequence[str] = ()) -> np.ndarray:
     """Every model row's error against many references at once: `weights` (references x flies) gives each reference's
     mean as the weighted mean of the flies' parts (a half: 1 / k on its flies; a resample: counts / n), in all the
-    flies' units. Returns references x rows."""
-    raise NotImplementedError
+    flies' units; the views of `views` (None: every view), combined as kcq/population_fit.py's score_rows does
+    ('error' over the three views read, 'error_with_matrix' with the matrix view too). Returns references x rows."""
+    from kcq import population_fit as P
+    view_err = {}
+    for v in (*P.VIEWS, P.NAMED_VIEW):
+        if views is not None and v not in views:
+            continue
+        qs = [f'{v}/{x}' for x in P.PARTS[v] if f'{v}/{x}' in side.fly_parts]
+        if not qs:
+            continue
+        pe = [_part_errors(side, q, weights, drop) for q in qs]
+        view_err[v] = np.sqrt(np.mean(np.square(pe), axis=0))
+    three = [view_err[v] for v in P.VIEWS if v in view_err]
+    if error_col == 'error_with_matrix':
+        if P.NAMED_VIEW not in view_err:
+            raise ValueError(f'{side.key}: no matrix view')
+        return np.sqrt(np.mean(np.square(three + [view_err[P.NAMED_VIEW]]), axis=0))
+    return np.sqrt(np.mean(np.square(three), axis=0))
 
 
-def setting_values(errors: np.ndarray, side: Side) -> pd.DataFrame:
-    """Per reference, each setting's value (the mean over its T wirings) from `side_errors`' output."""
-    raise NotImplementedError
+def stage_error_col(key: str, views: Optional[Sequence[str]]) -> str:
+    """E136's error column of a stage under a measure (`error_column`): the PN dendrites on four views where every
+    view is read, else 'error'."""
+    return 'error_with_matrix' if key.startswith('pn_dendrite/') and (views is None or 'matrix' in views) else 'error'
+
+
+def setting_values(errors: np.ndarray, side: Side, wirings: Sequence[str] = T_WIRINGS) -> pd.DataFrame:
+    """References x settings: each setting's value (the mean over `wirings` of each wiring's error; NaN unless all
+    are read) from `side_errors`' output."""
+    df = pd.DataFrame(errors, columns=side.rows)
+    out = {}
+    for name in dict.fromkeys(side.rows.get_level_values(0)):
+        cols = [(name, w) for w in wirings if (name, w) in df.columns]
+        out[name] = df[cols].mean(axis=1) if len(cols) == len(wirings) else pd.Series(np.nan, index=df.index)
+    return pd.DataFrame(out)
 
 
 # ---------------------------------------------------------------------------
