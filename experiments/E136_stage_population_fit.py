@@ -790,10 +790,23 @@ def base_arm(arm: str) -> str:
     return 'A0' if arm in (CONTROL, FAMILY) else arm
 
 
+# an arm's kwargs that set its APL-off condition only (`off_extra_of`), not model kwargs
+OFF_ONLY_KWS = ('kckc_off_factor',)
+
+
 def arm_kws(arm: str) -> dict:
     """The arm's fixed model kwargs beside the family's (make_fixed_param_kc_simulator kwargs; A4's KC-KC scale is not
-    a kwarg and is left out, and A1's PN stage depends on the wiring, the panel and E135: `a1_kws`)."""
-    return {k: v for k, v in ARMS[base_arm(arm)].kws.items() if k not in ('pn_rates', 'kckc_fixed')}
+    a kwarg and is left out, nor are the APL-off condition's own settings, OFF_ONLY_KWS, and A1's PN stage depends on
+    the wiring, the panel and E135: `a1_kws`)."""
+    return {k: v for k, v in ARMS[base_arm(arm)].kws.items() if k not in ('pn_rates', 'kckc_fixed', *OFF_ONLY_KWS)}
+
+
+def off_extra_of(arm: str, p: Mapping[str, float]) -> Optional[Dict[str, float]]:
+    """The APL-off condition's own parameters for an arm at APL-on parameters `p` (E77's `hold_rates` `off_extra`):
+    with 'kckc_off_factor' in the arm's kwargs, the KC-KC scale at that factor of `p`'s (E141's inhibition among KCs
+    present with APL on only); None for every other arm (the APL-off condition is the APL-on one with APL's scales 0)."""
+    f = ARMS[base_arm(arm)].kws.get('kckc_off_factor')
+    return None if f is None else dict(wKCKC_scale=float(p['wKCKC_scale']) * float(f))
 
 
 def arm_searched(arm: str) -> Tuple[str, ...]:
@@ -908,6 +921,9 @@ class ArmModel:
         if len(self.searched) + len(HELD) > MAX_FREE:
             raise ValueError(f'{arm}: more than {MAX_FREE} parameters')
         self.fixed = {'wKCKC_scale': float(a.kws['kckc_fixed'])} if 'kckc_fixed' in a.kws else {}
+        if any(k in a.kws for k in OFF_ONLY_KWS):
+            raise NotImplementedError(f"{arm}: a fit of an arm with an APL-off condition of its own "
+                                      f"({[k for k in OFF_ONLY_KWS if k in a.kws]}) is not written; reads only")
         self.kws = arm_kws(arm)
         self.pn_mode = require_e135()['mode'] if a.name == 'A1' else None
         self.pn_search = self.pn_mode == 'search'
@@ -1827,7 +1843,10 @@ def hold_at(arm: str, z: Mapping[str, float], wiring: str, panel: str, label: st
     threshold with APL off, then the tied APL scales, to `read_targets`' counts. Returns dict(hold: hold_rates' dict,
     kws: the model kwargs beside the family's (the arm's, A3's per-claw threshold, A1's PN stage), orn: the panel's
     input, breadth: the breadth behind the APL->KC weights, claw_thr: A3's threshold in Hz or None, targets:
-    (target_off, target_on, fraction_off, fraction_on), p0: the parameters the hold started from)."""
+    (target_off, target_on, fraction_off, fraction_on), p0: the parameters the hold started from, off_extra: the APL-off
+    condition's own parameters or None). An arm whose kwargs carry 'kckc_off_factor' (OFF_ONLY_KWS; E141's inhibition
+    among KCs present with APL on only) runs its APL-off condition with the KC-KC scale at that factor of its APL-on
+    scale (E77's `hold_rates` `off_extra`), the threshold held there."""
     from experiments import E83_cross_wiring_fit as E83
     from experiments import E134_population_baseline as B
     from experiments.E77_input_screen import hold_rates
@@ -1850,10 +1869,13 @@ def hold_at(arm: str, z: Mapping[str, float], wiring: str, panel: str, label: st
     targets = read_targets(wiring, panel, orn.shape[1], lock)
     t_off, t_on = targets[0], targets[1]
     rng = HOLD_RANGE_DIVISIVE_APL if kws.get('apl_inh_divisive') else HOLD_RANGE
+    off_extra = off_extra_of(base, p0)
     hold = hold_rates(lambda: E83.build_simulator(wiring, orn=orn, breadth=Pp['breadth'], params=dict(p0),
                                                   extra_kws=kws or None),
-                      target_off=t_off, target_on=t_on, params=dict(p0), label=label, apl_bracket=rng)
-    return dict(hold=hold, kws=kws, orn=orn, breadth=Pp['breadth'], claw_thr=ct, targets=tuple(targets), p0=p0)
+                      target_off=t_off, target_on=t_on, params=dict(p0), label=label, apl_bracket=rng,
+                      off_extra=off_extra)
+    return dict(hold=hold, kws=kws, orn=orn, breadth=Pp['breadth'], claw_thr=ct, targets=tuple(targets), p0=p0,
+                off_extra=off_extra)
 
 
 def read_at(tag: str, arm: str, z, wiring: str, panel: str, half: Optional[str], lane: str, root: Path,

@@ -723,7 +723,8 @@ def _fake_read_pipeline(monkeypatch, fail=False):
         if fail:
             raise RuntimeError('planted failure')
         got['hold_params'] = dict(kw['params'])
-        return dict(params=dict(kw['params']), params_off=dict(kw['params'], wAPLKC_scale=0.0),
+        got['off_extra'] = kw.get('off_extra')
+        return dict(params=dict(kw['params']), params_off=dict(kw['params'], wAPLKC_scale=0.0, **(kw.get('off_extra') or {})),
                     on=(out['on']['responses'], out['on']['spike_counts']),
                     off=(out['off']['responses'], out['off']['spike_counts']), thr_factor=1.0, apl_factor=1.0,
                     at_bound_thr=False, at_bound_apl=False, n_sims=2)
@@ -807,6 +808,27 @@ def test_hold_at(monkeypatch):
     assert h['kws']['pn_inhadd'] == pytest.approx(314.0) and got['hold_params']['wKCKC_scale'] == pytest.approx(52.0)
     assert h['hold']['params']['wAPLPN_scale'] == pytest.approx(0.2) and h['p0']['wAPLPN_scale'] == pytest.approx(0.2)
     assert F.hold_at('A0', {}, 'P3', 'apl16')['kws'] == {}
+
+
+def test_hold_at_off_only(monkeypatch):
+    """An arm with 'kckc_off_factor' (E141's inhibition among KCs with APL on only) holds its APL-off condition with
+    the KC-KC scale at that factor of its APL-on one (`off_extra_of`), which is no model kwarg (`arm_kws`); its fit is
+    refused; every other arm has no APL-off parameters of its own."""
+    got = _fake_read_pipeline(monkeypatch)
+    arm = F.Arm('N_test', 'the rise with APL on only', ('aplpn', 'kckc'),
+                dict(pn_inhadd=1000.0, pn_inhsc=544.4, kckc_off_factor=1 / 3.24))
+    with F.extra_arms(arm):
+        assert F.arm_kws('N_test') == dict(pn_inhadd=1000.0, pn_inhsc=544.4)
+        h = F.hold_at('N_test', dict(aplpn=np.log(0.155), kckc=np.log(3.24)), 'P3', 'apl16')
+        assert got['hold_params']['wKCKC_scale'] == pytest.approx(26.0 * 3.24)
+        assert got['off_extra'] == pytest.approx(dict(wKCKC_scale=26.0)) and h['off_extra'] == got['off_extra']
+        assert h['hold']['params_off']['wKCKC_scale'] == pytest.approx(26.0) and 'kckc_off_factor' not in h['kws']
+        assert F.off_extra_of('N_test', dict(wKCKC_scale=10.0)) == pytest.approx(dict(wKCKC_scale=10.0 / 3.24))
+        with pytest.raises(NotImplementedError):
+            F.ArmModel('N_test', wirings=('P3',), lock={})
+    assert F.off_extra_of('A0', dict(wKCKC_scale=10.0)) is None
+    F.hold_at('A0', {}, 'P3', 'apl16')
+    assert got['off_extra'] is None
 
 
 def _extra_arm(name='A0_inhadd314'):
