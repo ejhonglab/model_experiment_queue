@@ -143,3 +143,14 @@ def test_tables_planted(tmp_path, monkeypatch):
         pytest.approx(0.8)
     assert pick(arm=F.FAMILY, panel='mixtures/kmix/on', half='components_second_block',
                 statistic='strength_mean').iloc[0] == pytest.approx(2.425)
+
+
+def test_return_split():
+    """A return's rise of the loss is the stage error's rise plus the hold's penalty (A1's additive term, 2026-11-25:
+    +0.643 = +0.093 of stage error and a penalty of 0.549)."""
+    fit = dict(best=dict(loss_stages=0.8747, loss_sim=0.8747),
+               determined=dict(inhadd=dict(rise=0.6426), aplpn=dict(rise=0.0139)))
+    det = pd.DataFrame(dict(label=['aplpn0', 'inhadd0'], loss_stages=[0.8886, 0.9679], hold_penalty=[0.0, 0.5494]))
+    s = W.return_split(fit, det)
+    assert s['inhadd'] == pytest.approx((0.0932, 0.5494)) and s['aplpn'] == pytest.approx((0.0139, 0.0))
+    assert W.return_split(fit, None) == {}

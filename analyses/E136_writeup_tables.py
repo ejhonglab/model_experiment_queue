@@ -26,7 +26,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import Dict, List, Mapping, Optional, Sequence
+from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -153,7 +153,7 @@ def load(score_dir: Path, fit_dir: Path) -> dict:
              prov=_read_json(score_dir / 'provenance_score.json'))
     p = score_dir / f'consistency_{F.MEASURE}.csv'
     d['consistency'] = pd.read_csv(p) if p.exists() else pd.DataFrame()
-    fits, hist = {}, {}
+    fits, hist, dets = {}, {}, {}
     for a in ARM_ORDER[1:]:
         f = _read_json(fit_dir / f'fit_{a}.json')
         if f:
@@ -161,7 +161,10 @@ def load(score_dir: Path, fit_dir: Path) -> dict:
         h = fit_dir / f'fit_history_{a}.csv'
         if h.exists():
             hist[a] = pd.read_csv(h, float_precision='round_trip')
-    d['fits'], d['hist'] = fits, hist
+        r = fit_dir / f'determined_{a}.csv'
+        if r.exists():
+            dets[a] = pd.read_csv(r, float_precision='round_trip')
+    d['fits'], d['hist'], d['dets'] = fits, hist, dets
     e = F.e134_dir()
     d['flies_views'] = pd.read_csv(e / 'flies_views.csv') if (e / 'flies_views.csv').exists() else pd.DataFrame()
     d['no_step'] = pd.read_csv(e / 'flies_no_step.csv') if (e / 'flies_no_step.csv').exists() else pd.DataFrame()
@@ -481,8 +484,9 @@ def e137_table(d: dict, V: Values) -> List[str]:
 
 def fits_table(d: dict, V: Values) -> List[str]:
     """Per fit: searched coordinates, evaluations against the budget, restarts and how they ended, the best evaluation,
-    the single-factor returns (the loss's rise when a factor is returned to the family's value), the classed point and
-    its factors, and the bounds."""
+    the single-factor returns (the loss's rise when a factor is returned to the family's value; where the return leaves
+    a response rate that can no longer be held, the rise of the stage error alone beside it, the rest being the hold's
+    penalty, from determined_<arm>.csv), the classed point and its factors, and the bounds."""
     fits = d['fits']
     L = ['The fits, on S against the fit half (megamat stage error on strength; the family starts at its first '
          'evaluation).', '',
@@ -494,8 +498,11 @@ def fits_table(d: dict, V: Values) -> List[str]:
             continue
         best = (f.get('best') or {}).get('loss_sim')
         det = f.get('determined') or {}
+        split = return_split(f, d.get('dets', {}).get(a))
         rets = '; '.join(f"{FACTOR_NAMES.get(k, k)} {_f(v.get('rise'), '+.4f')}"
-                         f"{'' if v.get('determined') else ' (not determined)'}" for k, v in det.items()) or '–'
+                         + (f" (stages {_f(split[k][0], '+.4f')}, the hold's penalty {_f(split[k][1], '.4f')})"
+                            if k in split and split[k][1] > 0 else '')
+                         + f"{'' if v.get('determined') else ' (not determined)'}" for k, v in det.items()) or '–'
         cz = f.get('classed_z') or f.get('best_z') or {}
         fac = ', '.join(f'{FACTOR_NAMES.get(k, k)} ×{F.coord_value(k, v):.3g}' if k != 'claw_thr'
                         else f'{FACTOR_NAMES[k]} {F.coord_value(k, v):.1f}' for k, v in cz.items())
@@ -514,7 +521,27 @@ def fits_table(d: dict, V: Values) -> List[str]:
             V.add(a, 'factor', k, F.coord_value(k, v), half='fit_S')
         for k, v in det.items():
             V.add(a, 'factor', f'{k}_return_rise', v.get('rise'), half='fit_S')
+            if k in split:
+                V.add(a, 'factor', f'{k}_return_rise_stages', split[k][0], half='fit_S')
+                V.add(a, 'factor', f'{k}_return_penalty', split[k][1], half='fit_S')
+    if any(s[1] > 0 for a in fits for s in return_split(fits[a], d.get('dets', {}).get(a)).values()):
+        L += ['', 'Where a return leaves a response rate that can no longer be held, the rise of the loss is the rise of '
+              'the stage error plus the hold\'s penalty, given beside it.']
     return L + ['']
+
+
+def return_split(fit: dict, det: Optional[pd.DataFrame]) -> Dict[str, Tuple[float, float]]:
+    """Per searched factor returned alone (determined_<arm>.csv's '<factor>0' rows): the rise of the stage error from
+    the fit's best and the hold's penalty at the returned point, whose sum is the rise of the loss."""
+    if det is None or det.empty or 'loss_stages' not in det.columns:
+        return {}
+    best = float((fit.get('best') or {}).get('loss_stages', np.nan))
+    out = {}
+    for k in fit.get('determined') or {}:
+        r = det[det['label'].astype(str) == f'{k}0']
+        if len(r):
+            out[k] = (float(r['loss_stages'].iloc[0]) - best, float(r['hold_penalty'].iloc[0]))
+    return out
 
 
 def split_table(d: dict, V: Values) -> List[str]:
