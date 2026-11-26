@@ -272,18 +272,47 @@ def test_signature():
 
 
 def test_write_variants(monkeypatch, tmp_path):
-    arch, res = tmp_path / 'read', tmp_path / 'res'
-    arch.mkdir()
+    from experiments.E77_input_screen import inhsc_for
+    arch, res = tmp_path / 'arch', tmp_path / 'res'
+    for sub in ('read', 'fit_A0_inhadd314', 'extended/A0_inhadd314/B/inhadd314', 'extended/A1/B/inhadd1017.3'):
+        (arch / sub).mkdir(parents=True)
     res.mkdir()
     monkeypatch.setattr(L, 'out_dir', lambda: res)
     on = dict(fixed_thr=30.0, wAPLKC_scale=1.0, wKCAPL_scale=6e-4, wAPLPN_scale=0.06, wPNAPL_scale=3e-3, wKCKC_scale=40.0)
+    off = dict(on, wAPLKC_scale=0.0, wAPLPN_scale=0.0)
     d = dict(model='C2', wiring='P3', panel='megamat', reading='read', arm='A1', z=L.point_z('B', 314.0), params=on,
-             params_off=dict(on, wAPLKC_scale=0.0, wAPLPN_scale=0.0), tag='B_inhadd314_megamat_P3', variant='B_inhadd314',
+             params_off=off, tag='B_inhadd314_megamat_P3', variant='B_inhadd314',
              setting='B', rung=314.0, pn_inhadd=314.0, pn_inhsc=420.0, host='disco', lane='1', time='t')
-    (arch / 'B_inhadd314_megamat_P3_run.json').write_text(json.dumps(d))
-    df = L.write_variants(arch)
-    assert len(df) == 1 and df.variant.iloc[0] == 'B_inhadd314' and df.off_wAPLKC_scale.iloc[0] == 0.0
-    assert df.z_aplpn.iloc[0] == pytest.approx(np.log(0.155)) and (res / 'variants.csv').exists()
+    (arch / 'read' / 'B_inhadd314_megamat_P3_run.json').write_text(json.dumps(d))
+    # step 3's read and its fit's evaluation record neither the setting's PN terms nor (the evaluation) the setting
+    z0 = dict(aplpn=-1.65, kckc=0.0)
+    (arch / 'read' / 'A0_inhadd314_validation2_M1_run.json').write_text(json.dumps(dict(
+        model='C2', wiring='M1', panel='validation2', reading='read', arm='A0_inhadd314', z=z0, params=on,
+        params_off=off, tag='A0_inhadd314_validation2_M1', variant='A0_inhadd314', setting='A0', rung=314.0)))
+    (arch / 'fit_A0_inhadd314' / 'A0_inhadd314_e58_M1_run.json').write_text(json.dumps(dict(
+        model='C2', wiring='M1', panel='megamat', reading='fit', arm='A0_inhadd314', z=dict(z0, kckc=0.41), params=on,
+        params_off=off, tag='A0_inhadd314_e58_M1', eval=58)))
+    # the beside step's runs: <wiring>_point.json, E102's part-B layout, the PN terms in pn_kws
+    for sub, arm, rung, pn in (('extended/A0_inhadd314/B/inhadd314', 'A0_inhadd314', 314.0, None),
+                               ('extended/A1/B/inhadd1017.3', 'A1', float('nan'), dict(pn_inhadd=1017.3, pn_inhsc=598.9))):
+        (arch / sub / 'M1_point.json').write_text(json.dumps(dict(
+            tag=L.beside_tag(arm, 'M1'), variant=arm, setting='A0' if arm != 'A1' else 'A1', rung=rung, arm=arm,
+            wiring='M1', z=z0, params=on, params_off=off, **({'pn_kws': pn} if pn else {}))))
+    df = L.write_variants(arch).set_index(['subdir', 'tag'])
+    assert len(df) == 5 and (res / 'variants.csv').exists()
+    b = df.loc[('read', 'B_inhadd314_megamat_P3')]
+    assert b.variant == 'B_inhadd314' and b.off_wAPLKC_scale == 0.0 and b.z_aplpn == pytest.approx(np.log(0.155))
+    assert b.pn_inhadd == 314.0 and b.pn_inhsc == 420.0 and 'APL->bouton x0.155' in b.kind
+    for key in (('read', 'A0_inhadd314_validation2_M1'), ('fit_A0_inhadd314', 'A0_inhadd314_e58_M1'),
+                ('extended/A0_inhadd314/B/inhadd314', 'M1')):
+        r = df.loc[key]
+        assert r.pn_inhadd == pytest.approx(314.0) and r.pn_inhsc == pytest.approx(inhsc_for(314.0)), key
+        assert r.setting == 'A0' and r.rung == 314.0 and "step 3's refit" in r.kind, key
+    f = df.loc[('fit_A0_inhadd314', 'A0_inhadd314_e58_M1')]
+    assert f.reading == 'fit' and f.eval == 58 and f.part == 'fit_A0_inhadd314' and 'evaluation 58' in f.kind
+    a = df.loc[('extended/A1/B/inhadd1017.3', 'M1')]
+    assert a.panel == 'extended' and a.reading == 'extended' and a.part == 'extended' and a.pn_inhadd == 1017.3
+    assert "E136's A1" in a.kind and "extended input" in a.kind
     assert L._truthy(True) and L._truthy('True') and not L._truthy(False) and not L._truthy('False')
     assert not L._truthy(np.nan)
 

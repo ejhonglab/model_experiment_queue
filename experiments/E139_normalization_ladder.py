@@ -1278,30 +1278,87 @@ def name_rungs(mega_fit: Mapping[str, Mapping[str, Mapping[str, float]]], names:
     return out
 
 
+# the settings in words, for the archive's params.csv (ASCII)
+SETTING_WORDS = {'F': "the family's calyx factors", 'B': "APL->bouton x0.155, KC-KC x1",
+                 'K': "KC-KC x3.24, APL->bouton x1"}
+
+
+def variant_kind(setting, rung, reading: str, panel, wiring, eval_=None) -> str:
+    """A run's description for the archive's params.csv: the setting and rung (step 3's refit, E136's A1), then what
+    the run is (a read, a fit's evaluation, a run on E98's extended input)."""
+    rung = float(rung) if rung is not None and not pd.isna(rung) else None
+    at = f' at pn_inhadd {rung:g}' if rung is not None else ''
+    if setting == FIT_PREFIX:
+        what = f"step 3's refit A0 (APL->bouton and KC-KC fitted to the megamat stages) with pn_inhadd fixed{at[3:]}"
+        what += '' if reading == 'fit' else ', at its classed point'
+    elif setting == A1:
+        what = "E136's A1 at its classed point"
+    else:
+        what = f"setting {setting} ({SETTING_WORDS.get(str(setting), setting)}){at}"
+    if reading == 'fit':
+        return f'{what}: evaluation {eval_} of its fit on searched wiring {wiring}'
+    if reading == EXTENDED:
+        return (f"{what}, on E98's extended input (the beside step), wiring {wiring}, held at the wiring's own fit's "
+                "APL16 counts")
+    return f'{what}, read on the {panel} input, wiring {wiring}, both response rates held'
+
+
+def _arm_pn_terms(arm, rung) -> Dict[str, Optional[float]]:
+    """A step-3 arm's PN normalization terms from its definition (`fit_arm_def`), which its run records omit; Nones for
+    any other run."""
+    if arm is None or fit_rung(str(arm)) is None:
+        return dict(pn_inhadd=None, pn_inhsc=None)
+    kws = fit_arm_def(fit_rung(str(arm)) if rung is None or pd.isna(rung) else float(rung)).kws
+    return dict(pn_inhadd=float(kws['pn_inhadd']), pn_inhsc=float(kws['pn_inhsc']))
+
+
 def write_variants(arch: Optional[Path] = None) -> pd.DataFrame:
     """variants.csv in out_dir(), for the model-output archive's params.csv (as E136's `write_variants`): one row per
-    read the archive holds (`arch`, default archive_dir()/read/), from its <tag>_run.json: the tag, the variant, setting
-    and rung, the panel and wiring, a description, the coordinates (z_<name>), both conditions' absolute parameters
-    (E136's VARIANT_PARAMS; 'off_<name>' with APL off), the PN normalization's terms, and where and when it ran."""
+    run the archive folder holds (`arch`, default archive_dir()):
+    - every read in read/, from its <tag>_run.json;
+    - step 3's archived best evaluation in fit_<arm>/, from its <arm>_e<eval>_<wiring>_run.json;
+    - the beside step's runs in extended/<variant>/B/<step>/ (E102's part-B layout), from their <wiring>_point.json.
+    A row has the tag (the prefix of the run's file names: the wiring, for a beside run), the folder (subdir, relative
+    to `arch`; part, its top folder), the variant, setting and rung, the arm, the panel ('extended' for a beside run)
+    and wiring, the reading ('read', 'fit' or 'extended'), the evaluation (a fit's), a description (`variant_kind`), the
+    coordinates (z_<name>), both conditions' absolute parameters (E136's VARIANT_PARAMS; 'off_<name>' with APL off), the
+    PN normalization's terms (a step-3 arm's from its definition where its records omit them, `_arm_pn_terms`), and
+    where and when it ran. (subdir, tag) is unique."""
     from experiments import E136_stage_population_fit as F
-    arch = Path(arch) if arch is not None else archive_dir() / 'read'
+    arch = Path(arch) if arch is not None else archive_dir()
+    runs = [(p, 'read') for p in sorted((arch / 'read').glob('*_run.json'))]
+    runs += [(p, 'fit') for p in sorted(arch.glob(f'fit_{FIT_PREFIX}_inhadd*/*_run.json'))]
+    runs += [(p, EXTENDED) for p in sorted(arch.glob(f'{EXTENDED}/*/B/*/*_point.json'))]
     rows = []
-    for p in sorted(arch.glob('*_run.json')):
+    for p, reading in runs:
         d = json.loads(p.read_text())
-        r = dict(tag=d['tag'], variant=d.get('variant'), setting=d.get('setting'), rung=d.get('rung'), arm=d.get('arm'),
-                 panel=d.get('panel'), wiring=d.get('wiring'), reading=d.get('reading'), model=d.get('model'),
-                 kind=f"setting {d.get('setting')} (the family's calyx factors x {SETTINGS.get(d.get('setting'), {})}) at "
-                      f"pn_inhadd {d.get('rung')}, read on the {d.get('panel')} input, wiring {d.get('wiring')}, both "
-                      f"response rates held")
+        arm = d.get('arm')
+        setting = d.get('setting') or (FIT_PREFIX if fit_rung(str(arm)) is not None else None)
+        rung = d.get('rung')
+        if (rung is None or pd.isna(rung)) and fit_rung(str(arm)) is not None:
+            rung = fit_rung(str(arm))
+        panel = EXTENDED if reading == EXTENDED else d.get('panel')
+        tag = p.name[:-len('_point.json')] if reading == EXTENDED else d['tag']
+        sub = p.parent.relative_to(arch).as_posix()
+        r = dict(tag=tag, variant=d.get('variant') or arm, setting=setting, rung=rung, arm=arm, panel=panel,
+                 wiring=d.get('wiring'), reading=reading, eval=d.get('eval'), model=d.get('model'), subdir=sub,
+                 part=sub.split('/')[0],
+                 kind=variant_kind(setting, rung, reading, panel, d.get('wiring'), d.get('eval')))
         r.update({f'z_{k}': v for k, v in (d.get('z') or {}).items()})
         r.update({k: (d.get('params') or {}).get(k) for k in F.VARIANT_PARAMS})
         r.update({f'off_{k}': (d.get('params_off') or {}).get(k) for k in F.VARIANT_PARAMS})
-        r.update(pn_inhadd=d.get('pn_inhadd'), pn_inhsc=d.get('pn_inhsc'), host=d.get('host'), lane=d.get('lane'),
-                 time=d.get('time'))
+        pn = d.get('pn_kws') if isinstance(d.get('pn_kws'), dict) else {}
+        own = _arm_pn_terms(arm, rung)
+        for k in ('pn_inhadd', 'pn_inhsc'):
+            v = d.get(k, pn.get(k))
+            r[k] = own[k] if v is None or pd.isna(v) else v
+        r.update(host=d.get('host'), lane=d.get('lane'), time=d.get('time'))
         rows.append(r)
     df = pd.DataFrame(rows)
     if df.empty:
-        raise FileNotFoundError(f'no <tag>_run.json under {arch}')
+        raise FileNotFoundError(f'no <tag>_run.json or <wiring>_point.json under {arch}')
+    if df.duplicated(['subdir', 'tag']).any():
+        raise ValueError(f"runs named twice: {sorted(df.loc[df.duplicated(['subdir', 'tag']), 'tag'])}")
     df.to_csv(out_dir() / 'variants.csv', index=False)
     return df
 
