@@ -34,7 +34,9 @@ Judgments the entry leaves open (the narrowest reading; each is also in the docs
   wirings of each wiring's change from the family's (the classes' wirings); the mean over all eight wirings (the entry's
   quoted 0.056 and 0.072) is given beside;
 - "whose holds fail": a read whose hold ended at a bracket's bound or whose rate is more than E136's HOLD_TOL from its
-  target, or an E102 run at a bound or off its counts, on any wiring of the variant;
+  target, or an E102 run at a bound or whose count of responses is more than HOLD_TOL (relative) from its target, the
+  reads' rule, on any wiring of the variant (E102's holds end within a response of their counts on some wirings, 4068
+  against 4067 with APL off, which an exact count would fail);
 - step 3's candidate: a rung below CANDIDATE_BELOW at F or B whose class improves and whose price (the largest of the
   three targets' mean changes on T) is under CANDIDATE_PRICE_SHARE of A1's, read the same way;
 - the beside step's operating point: E102 held each extended run at its point's 16-odor APL16 counts (the wiring's own
@@ -1038,7 +1040,9 @@ def _truthy(x) -> bool:
 
 def holds_failed(name: str, reads: pd.DataFrame, apl16_runs: Mapping[str, object], tol: float) -> List[str]:
     """The reads of a variant whose holds fail: E139's reads at a bracket's bound or whose rate is more than `tol`
-    (relative) from its target, and for F's APL16 rows E102's points at a bound or off their counts; as tags."""
+    (relative) from its target, and for F's APL16 rows E102's points at a bound or whose count of responses with APL on
+    or off is more than `tol` (relative) from its target count, the same rule (E102's holds end within a response of
+    their counts on some wirings); as tags."""
     bad = []
     if len(reads) and 'variant' in reads.columns:
         for r in reads[reads.variant == name].itertuples():
@@ -1048,9 +1052,14 @@ def holds_failed(name: str, reads: pd.DataFrame, apl16_runs: Mapping[str, object
                 bad.append(str(r.tag))
     for w, run in apl16_runs.items():
         info = getattr(run, 'info', None) or {}
-        if getattr(run, 'source', '') == 'E102:B' and (info.get('at_bound_thr') or info.get('at_bound_apl')
-                                                         or info.get('n_on') != info.get('target_on')
-                                                         or info.get('n_off') != info.get('target_off')):
+        if getattr(run, 'source', '') != 'E102:B':
+            continue
+        try:
+            miss = [abs(float(info[f'n_{c}']) - float(info[f'target_{c}'])) / float(info[f'target_{c}'])
+                    for c in ('on', 'off')]
+        except (KeyError, TypeError, ValueError, ZeroDivisionError):
+            miss = [np.nan]
+        if info.get('at_bound_thr') or info.get('at_bound_apl') or not max(miss) <= tol:
             bad.append(run.tag)
     return bad
 

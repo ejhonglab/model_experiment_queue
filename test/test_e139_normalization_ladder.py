@@ -207,8 +207,19 @@ def test_holds_failed():
                                frac_on_target=0.0915, frac_off_target=0.2, at_bound_thr=False, at_bound_apl=True)])
     run_ok = types.SimpleNamespace(source='E102:B', tag='ok', info=dict(n_on=3, target_on=3, n_off=5, target_off=5))
     run_bad = types.SimpleNamespace(source='E102:B', tag='bad', info=dict(n_on=3, target_on=4, n_off=5, target_off=5))
-    bad = L.holds_failed('F_inhadd100', reads, {'P3': run_ok, 'P4': run_bad}, 0.005)
-    assert bad == ['F_inhadd100_megamat_P4', 'F_inhadd100_megamat_M2', 'bad']
+    # a count within the reads' relative tolerance holds (E102's 4068 against 4067); one beyond it, at a bound or
+    # without counts fails
+    run_near = types.SimpleNamespace(source='E102:B', tag='near', info=dict(n_on=1852, target_on=1852, n_off=4068,
+                                                                           target_off=4067))
+    run_far = types.SimpleNamespace(source='E102:B', tag='far', info=dict(n_on=1852, target_on=1852, n_off=4100,
+                                                                         target_off=4067))
+    run_bound = types.SimpleNamespace(source='E102:B', tag='bound', info=dict(n_on=3, target_on=3, n_off=5,
+                                                                             target_off=5, at_bound_apl=True))
+    run_none = types.SimpleNamespace(source='E102:B', tag='none', info={})
+    run_read = types.SimpleNamespace(source='E139', tag='read', info=dict(n_on=1, target_on=9))
+    bad = L.holds_failed('F_inhadd100', reads, {'P3': run_ok, 'P4': run_bad, 'M2': run_near, 'M3': run_far,
+                                                'P1': run_bound, 'P2': run_none, 'real': run_read}, 0.005)
+    assert bad == ['F_inhadd100_megamat_P4', 'F_inhadd100_megamat_M2', 'bad', 'far', 'bound', 'none']
     assert L.holds_failed('B_inhadd314', reads, {}, 0.005) == []
 
 
