@@ -1,0 +1,1229 @@
+{
+ "experiment": "E140_aa_claw_soma_step",
+ "script": "experiments/E140_aa_claw_soma_step.py",
+ "part": "lock",
+ "written": "2026-11-25 19:13",
+ "host": "viki",
+ "commits": {
+  "queue_commit": "10e0edd9091fccee647f42cdf8993302ea458511",
+  "queue_dirty": true,
+  "pyolfsysm_commit": "b1e89d7d119bbbb4888f31de4d94938dbc4bd60a",
+  "pyolfsysm_dirty": false,
+  "al_analysis_commit": "d891fe786ac5a103ef1ccb40bf108b3b5e16078e",
+  "al_analysis_dirty": false,
+  "hong2p_commit": "484da09afe90ce4dd37e8b9039b1881136b78b68",
+  "hong2p_dirty": false
+ },
+ "odor": "aa",
+ "panel": "megamat",
+ "odors": [
+  "2h",
+  "IaA",
+  "pa",
+  "2-but",
+  "eb",
+  "ep",
+  "6al",
+  "t2h",
+  "1-8ol",
+  "1-5ol",
+  "1-6ol",
+  "ms",
+  "B-cit",
+  "Lin",
+  "aa",
+  "benz",
+  "va"
+ ],
+ "inputs": {
+  "e134_lock": {
+   "path": "/home/yang/src/kc_queue/model_experiment_queue/experiments/E134_lock.json",
+   "bytes": 116395,
+   "mtime": "2026-11-24 11:48:20",
+   "sha256": "30015d97ea916ae42ad5c8e85535604fc9ee431b04ad27e260c71fca8636f92c"
+  },
+  "e138_classes_lock": {
+   "path": "/home/yang/src/kc_queue/model_experiment_queue/experiments/E138_classes_lock.json",
+   "bytes": 14551,
+   "mtime": "2026-11-25 02:51:00",
+   "sha256": "a1305ed38b3d79dcb4d5631b41c2eb349f6b4f0b6c16f2073ee3ba135c6ae47d"
+  },
+  "populations": {
+   "orn__wild_type": {
+    "file": {
+     "path": "<shared>/data/stage_populations/populations/orn__megamat__wild_type.parquet",
+     "bytes": 162591,
+     "mtime": "2026-11-24 11:46:28",
+     "sha256": "de37c9b215515030bec3ff6c108a27ba13b7a546abae82586e4b327f78d144d6"
+    },
+    "criterion": 2.0
+   },
+   "pn_dendrite__wild_type": {
+    "file": {
+     "path": "<shared>/data/stage_populations/populations/pn_dendrite__megamat__wild_type.parquet",
+     "bytes": 100700,
+     "mtime": "2026-11-24 11:46:28",
+     "sha256": "8a0c368d467db0a002a55e942f2e02f7097797a68dcd544aaa952d3959dd624b"
+    },
+    "criterion": 2.0
+   },
+   "pn_bouton__wild_type": {
+    "file": {
+     "path": "<shared>/data/stage_populations/populations/pn_bouton__megamat__wild_type.parquet",
+     "bytes": 2184535,
+     "mtime": "2026-11-24 11:46:28",
+     "sha256": "7440f96b6eb2e00386f5828259784e4b2e92cacd30403ea6ced1854fe9f611f6"
+    },
+    "criterion": 2.0
+   },
+   "kc_claw__wild_type": {
+    "file": {
+     "path": "<shared>/data/stage_populations/populations/kc_claw__megamat__wild_type.parquet",
+     "bytes": 1269264,
+     "mtime": "2026-11-24 11:46:28",
+     "sha256": "e379d5d261affaf8e2dc54e4a5f9dbf1329181b11a904fcf19c1aab6473df784"
+    },
+    "criterion": 2.0
+   },
+   "kc_claw__same_fly": {
+    "file": {
+     "path": "<shared>/data/stage_populations/populations/kc_claw__megamat__same_fly.parquet",
+     "bytes": 361542,
+     "mtime": "2026-11-24 11:46:29",
+     "sha256": "339cb793db257b5eded65b972a72fe6956138650a9e1f86311e02358bd93b0bc"
+    },
+    "criterion": 2.0
+   },
+   "kc_soma__wild_type": {
+    "file": {
+     "path": "<shared>/data/stage_populations/populations/kc_soma__megamat__wild_type.parquet",
+     "bytes": 4131703,
+     "mtime": "2026-11-24 11:46:29",
+     "sha256": "b7abd9ef92731a52bf8fec0bf001909f47e617dc337ae22281c2eedad5833fd6"
+    },
+    "criterion": 5.9486
+   },
+   "kc_soma__same_fly": {
+    "file": {
+     "path": "<shared>/data/stage_populations/populations/kc_soma__megamat__same_fly.parquet",
+     "bytes": 1077415,
+     "mtime": "2026-11-24 11:46:29",
+     "sha256": "c187eda48988590133ed9d2951442ba9af22a392fcc3373518dc9ecdb003ed14"
+    },
+    "criterion": 5.9486
+   }
+  },
+  "frames_reduced": {
+   "path": "/local/tensor/Tom/claude_kc_remapping/data/stage_populations/sources/remy_megamat_kc_soma/frames_reduced.parquet",
+   "bytes": 8365764,
+   "mtime": "2026-11-24 10:22:53",
+   "sha256": "a9d2c74589d7e050efa5268e26fb05be14ae0952389d643ed2122a4ee119879d"
+  },
+  "soma_frames": {
+   "2022-10-10/1": {
+    "acq": "2022-10-10/1/megamat0",
+    "trials": {
+     "path": "/local/matrix/Remy-Data/projects/odor_space_collab/processed_data/2022-10-10/1/megamat0/source_extraction_s2p/suite2p/combined/iscell_soma/xrds_suite2p_trials.nc",
+     "bytes": 1491848068,
+     "sha256": "9db285360d9476cb614259efe9047988c925f4910a5857d7d6174bc813e4ab34",
+     "source": "E134 sources/files.csv"
+    },
+    "respvec": {
+     "path": "/local/tensor/Tom/claude_kc_remapping/data/stage_populations/sources/remy_megamat_kc_soma/2022-10-10__fly01__megamat0/xrds_suite2p_respvec_mean_peak.nc",
+     "bytes": 14315685,
+     "mtime": "2022-12-01 16:22:44",
+     "sha256": "71c1e03dc9f05dd92dde7bea4ea7ec63798aa554b41daec70a20949de7463e19"
+    }
+   },
+   "2022-10-10/2": {
+    "acq": "2022-10-10/2/megamat0",
+    "trials": {
+     "path": "/local/matrix/Remy-Data/projects/odor_space_collab/processed_data/2022-10-10/2/megamat0/source_extraction_s2p/suite2p/combined/iscell_soma/xrds_suite2p_trials.nc",
+     "bytes": 1347951788,
+     "sha256": "04ea69af375fbf4a14e6695b20f2a7aef230308e1a6dc219ca9d15a843970683",
+     "source": "E134 sources/files.csv"
+    },
+    "respvec": {
+     "path": "/local/tensor/Tom/claude_kc_remapping/data/stage_populations/sources/remy_megamat_kc_soma/2022-10-10__fly02__megamat0/xrds_suite2p_respvec_mean_peak.nc",
+     "bytes": 14289637,
+     "mtime": "2022-12-01 16:23:00",
+     "sha256": "fff12cf6e0d15acc07f65e5fc6a08f0877053e2452b24e17b629cde169a4e2d0"
+    }
+   },
+   "2022-10-11/1": {
+    "acq": "2022-10-11/1/megamat0",
+    "trials": {
+     "path": "/local/matrix/Remy-Data/projects/odor_space_collab/processed_data/2022-10-11/1/megamat0/source_extraction_s2p/suite2p/combined/iscell_soma/xrds_suite2p_trials.nc",
+     "bytes": 1552799764,
+     "sha256": "eff2a5664058c98b1a8ac6345350efb0aec7163d0f54a031a73dcab015bf6acb",
+     "source": "E134 sources/files.csv"
+    },
+    "respvec": {
+     "path": "/local/tensor/Tom/claude_kc_remapping/data/stage_populations/sources/remy_megamat_kc_soma/2022-10-11__fly01__megamat0/xrds_suite2p_respvec_mean_peak.nc",
+     "bytes": 15651165,
+     "mtime": "2022-12-01 16:23:18",
+     "sha256": "1fe70e4c128109d5e791b7bb3f7c9336236f6b7b6d63f6dd8b543a53b305c89f"
+    }
+   },
+   "2022-11-10/1": {
+    "acq": "2022-11-10/1/megamat0__dsub03",
+    "trials": {
+     "path": "/local/matrix/Remy-Data/projects/odor_space_collab/processed_data/2022-11-10/1/megamat0__dsub03/source_extraction_s2p/suite2p/combined/iscell_soma/xrds_suite2p_trials.nc",
+     "bytes": 849607580,
+     "sha256": "057b594871d5e61e0df1857267b3cc6f521d34cfb28a971c2f1e98a87088d3c8",
+     "source": "E134 sources/files.csv"
+    },
+    "respvec": {
+     "path": "/local/tensor/Tom/claude_kc_remapping/data/stage_populations/sources/remy_megamat_kc_soma/2022-11-10__fly01__megamat0__dsub03/xrds_suite2p_respvec_mean_peak.nc",
+     "bytes": 9922333,
+     "mtime": "2022-12-01 16:23:52",
+     "sha256": "d13022043768b4b1cf067f80cbde1b6f404ba496ac2e9be7de27c3fb5f62be58"
+    }
+   }
+  },
+  "remy_binary": {
+   "2022-10-10__fly01__megamat0": {
+    "path": "/home/yang/src/kc_queue/olfsysm/pyolfsysm/data/from_remy/response_rates/refstim__ep_at_-3.0__median__0.120-0.130/by_acq_csvs/2022-10-10__fly01__megamat0/df_stim_responders_from_peak.csv",
+    "bytes": 355776,
+    "mtime": "2026-11-12 08:04:42",
+    "sha256": "71f5e966189deff1f034950429c398cfd35274bb9bc7a2dcd8f1cb2956e6c9f7"
+   },
+   "2022-10-10__fly02__megamat0": {
+    "path": "/home/yang/src/kc_queue/olfsysm/pyolfsysm/data/from_remy/response_rates/refstim__ep_at_-3.0__median__0.120-0.130/by_acq_csvs/2022-10-10__fly02__megamat0/df_stim_responders_from_peak.csv",
+    "bytes": 357961,
+    "mtime": "2026-11-12 08:04:42",
+    "sha256": "e3c10c1a580c2eb51026c597236396e606143476bd32c591e130b5d267230a80"
+   },
+   "2022-10-11__fly01__megamat0": {
+    "path": "/home/yang/src/kc_queue/olfsysm/pyolfsysm/data/from_remy/response_rates/refstim__ep_at_-3.0__median__0.120-0.130/by_acq_csvs/2022-10-11__fly01__megamat0/df_stim_responders_from_peak.csv",
+    "bytes": 386149,
+    "mtime": "2026-11-12 08:04:42",
+    "sha256": "0bda8f34924ca2be049448d25739e1fcc10bd09210d0a0c531c35c205fe9e27b"
+   },
+   "2022-11-10__fly01__megamat0__dsub03": {
+    "path": "/home/yang/src/kc_queue/olfsysm/pyolfsysm/data/from_remy/response_rates/refstim__ep_at_-3.0__median__0.120-0.130/by_acq_csvs/2022-11-10__fly01__megamat0__dsub03/df_stim_responders_from_peak.csv",
+    "bytes": 249786,
+    "mtime": "2026-11-12 08:04:42",
+    "sha256": "9df64ea23a77a4b25d2992389b25c431d5e520be0ff829613bad1139a558c74b"
+   },
+   "df_acqs.csv": {
+    "path": "/home/yang/src/kc_queue/olfsysm/pyolfsysm/data/from_remy/response_rates/refstim__ep_at_-3.0__median__0.120-0.130/df_acqs.csv",
+    "bytes": 807,
+    "mtime": "2026-11-12 08:04:42",
+    "sha256": "c1412290aeb737d90f064c78a53fdf18a13b089677147f7318ad00c9e02623e0"
+   }
+  },
+  "olfdb_dataset_1": {
+   "path": "/local/tensor/Tom/claude_kc_remapping/data/stage_populations/sources/olfdb/ds1_long.csv",
+   "bytes": 2000173,
+   "mtime": "2026-11-24 10:22:26",
+   "sha256": "8032591a7c6451c0cb7036ece856a20e38ec0964d806a824577c7cd9141e5dac"
+  },
+  "hallem": {
+   "path": "/home/yang/src/kc_queue/model_experiment_queue/venv/lib/python3.14/site-packages/drosolf/data/Hallem_Carlson_2006.csv",
+   "bytes": 10819,
+   "mtime": "2026-11-12 01:57:50",
+   "sha256": "3c8ca5e24406710fd4676341463783bd4c173a87c25b498916648ebb05f60ed7"
+  },
+  "dff_to_spiking": {
+   "path": "/home/yang/src/kc_queue/olfsysm/pyolfsysm/data/internal/dff2spiking_model_choices.csv",
+   "bytes": 131,
+   "mtime": "2026-11-12 08:04:42",
+   "sha256": "c719530057c7ff1c8b168b221dcab88c24eb27f7247ec6c5fd145730fb650b0b"
+  },
+  "megamat_input": {
+   "path": "/home/yang/src/kc_queue/olfsysm/pyolfsysm/data/internal/megamat_mean_est_spike_deltas.csv",
+   "bytes": 31473,
+   "mtime": "2026-11-12 08:04:42",
+   "sha256": "3345b05c0814526c6f589be89e157acc716e15f9b666023f041fb6a2ade14f69"
+  }
+ },
+ "recordings": {
+  "orn__wild_type": {
+   "stage": "orn",
+   "panel": "megamat",
+   "cohort": "wild_type",
+   "flies": [
+    "2023-04-22/2",
+    "2023-04-22/3",
+    "2023-04-26/2",
+    "2023-04-26/3",
+    "2023-05-08/1",
+    "2023-05-08/3",
+    "2023-05-09/1",
+    "2023-05-10/1",
+    "2023-06-22/1"
+   ],
+   "criterion": 2.0,
+   "units": "trial-noise SD",
+   "odors": [
+    "2h",
+    "IaA",
+    "pa",
+    "2-but",
+    "eb",
+    "ep",
+    "6al",
+    "t2h",
+    "1-8ol",
+    "1-5ol",
+    "1-6ol",
+    "ms",
+    "B-cit",
+    "Lin",
+    "aa",
+    "benz",
+    "va"
+   ],
+   "role": "beside"
+  },
+  "pn_dendrite__wild_type": {
+   "stage": "pn_dendrite",
+   "panel": "megamat",
+   "cohort": "wild_type",
+   "flies": [
+    "2023-06-22/2",
+    "2023-06-23/1",
+    "2023-06-24/1",
+    "2023-07-19/1",
+    "2023-07-19/2",
+    "2023-07-28/1",
+    "2023-07-28/2"
+   ],
+   "criterion": 2.0,
+   "units": "trial-noise SD",
+   "odors": [
+    "2h",
+    "IaA",
+    "pa",
+    "2-but",
+    "eb",
+    "ep",
+    "6al",
+    "t2h",
+    "1-8ol",
+    "1-5ol",
+    "1-6ol",
+    "ms",
+    "B-cit",
+    "Lin",
+    "aa",
+    "benz",
+    "va"
+   ],
+   "role": "read"
+  },
+  "pn_bouton__wild_type": {
+   "stage": "pn_bouton",
+   "panel": "megamat",
+   "cohort": "wild_type",
+   "flies": [
+    "2022-10-26__fly01__megamat1_001",
+    "2022-10-26__fly02__megamat1",
+    "2022-11-13__fly01__megamat1",
+    "2022-11-13__fly02__megamat1_002",
+    "2022-11-13__fly03__megamat1"
+   ],
+   "criterion": 2.0,
+   "units": "baseline-noise SD",
+   "odors": [
+    "2h",
+    "IaA",
+    "pa",
+    "2-but",
+    "eb",
+    "ep",
+    "6al",
+    "t2h",
+    "1-8ol",
+    "1-5ol",
+    "1-6ol",
+    "ms",
+    "B-cit",
+    "Lin",
+    "aa",
+    "benz",
+    "va"
+   ],
+   "role": "read"
+  },
+  "kc_claw__wild_type": {
+   "stage": "kc_claw",
+   "panel": "megamat",
+   "cohort": "wild_type",
+   "flies": [
+    "2023-04-11__fly02__megamat1",
+    "2023-04-11__fly03__megamat1",
+    "2023-04-13__fly01__megamat1_001",
+    "2023-04-15__fly02__megamat1"
+   ],
+   "criterion": 2.0,
+   "units": "baseline-noise SD",
+   "odors": [
+    "2h",
+    "IaA",
+    "pa",
+    "2-but",
+    "eb",
+    "ep",
+    "6al",
+    "t2h",
+    "1-8ol",
+    "1-5ol",
+    "1-6ol",
+    "ms",
+    "B-cit",
+    "Lin",
+    "aa",
+    "benz",
+    "va"
+   ],
+   "role": "read"
+  },
+  "kc_claw__same_fly": {
+   "stage": "kc_claw",
+   "panel": "megamat",
+   "cohort": "same_fly",
+   "flies": [
+    "2023-04-11/3/megamat1_redo"
+   ],
+   "criterion": 2.0,
+   "units": "baseline-noise SD",
+   "odors": [
+    "2h",
+    "IaA",
+    "pa",
+    "2-but",
+    "eb",
+    "ep",
+    "6al",
+    "t2h",
+    "1-8ol",
+    "1-5ol",
+    "1-6ol",
+    "ms",
+    "B-cit",
+    "Lin",
+    "aa",
+    "benz",
+    "va"
+   ],
+   "role": "read"
+  },
+  "kc_soma__wild_type": {
+   "stage": "kc_soma",
+   "panel": "megamat",
+   "cohort": "wild_type",
+   "flies": [
+    "2022-10-10/1",
+    "2022-10-10/2",
+    "2022-10-11/1",
+    "2022-11-10/1"
+   ],
+   "criterion": 5.9486,
+   "units": "baseline-noise SD",
+   "odors": [
+    "2h",
+    "IaA",
+    "pa",
+    "2-but",
+    "eb",
+    "ep",
+    "6al",
+    "t2h",
+    "1-8ol",
+    "1-5ol",
+    "1-6ol",
+    "ms",
+    "B-cit",
+    "Lin",
+    "aa",
+    "benz",
+    "va"
+   ],
+   "role": "read"
+  },
+  "kc_soma__same_fly": {
+   "stage": "kc_soma",
+   "panel": "megamat",
+   "cohort": "same_fly",
+   "flies": [
+    "2023-04-11/3/megamat1_redo"
+   ],
+   "criterion": 5.9486,
+   "units": "baseline-noise SD",
+   "odors": [
+    "2h",
+    "IaA",
+    "pa",
+    "2-but",
+    "eb",
+    "ep",
+    "6al",
+    "t2h",
+    "1-8ol",
+    "1-5ol",
+    "1-6ol",
+    "ms",
+    "B-cit",
+    "Lin",
+    "aa",
+    "benz",
+    "va"
+   ],
+   "role": "read"
+  },
+  "claw_recordings": {
+   "recordings": [
+    {
+     "cohort": "wild_type",
+     "fly": "2023-04-11__fly02__megamat1"
+    },
+    {
+     "cohort": "wild_type",
+     "fly": "2023-04-11__fly03__megamat1"
+    },
+    {
+     "cohort": "wild_type",
+     "fly": "2023-04-13__fly01__megamat1_001"
+    },
+    {
+     "cohort": "wild_type",
+     "fly": "2023-04-15__fly02__megamat1"
+    },
+    {
+     "cohort": "same_fly",
+     "fly": "2023-04-11/3/megamat1_redo"
+    }
+   ],
+   "note": "the same-fly recording (2023-04-11 fly 3, megamat1_redo) is another acquisition of the fly of the claw recording 2023-04-11__fly03__megamat1: five recordings of four flies"
+  },
+  "excluded": {
+   "flies": [
+    {
+     "stage": "pn_bouton",
+     "fly": "2022-10-21__fly02__megamat1_001__dsub3",
+     "reason": "Remy's dashboards and bouton analysis leave it out (median cellprob 0.03); data/remy_per_roi/README.md"
+    }
+   ],
+   "older_megamat": "Remy's older megamat flies (pyolfsysm's data/from_remy/2024-11-12, 2018-2019, partial panels): never read (Tom, 2026-11-25 10:19, relayed by hal: \"leave that data out still\")"
+  }
+ },
+ "definitions": {
+  "strength": "kcq/population_fit.py's strength view on the 17 megamat odors of each recording (population_views): part 'rate', each odor's response rate (the fraction of units above the stage's criterion) over the mean over the 17 odors; part 'mean', each odor's mean response over all units likewise; the flies' mean entry the mean over recordings, their range the min and max",
+  "concentration": {
+   "rule": "the share of the responders' summed response carried by the top tenth of them: the responders' values (units above the stage's criterion) sorted largest first, the Lorenz curve at a tenth of their number, linear between units (a unit at the boundary counts by its fraction)",
+   "top_share": 0.1,
+   "min_responders": 5,
+   "beside": "the responders' coefficient of variation (SD over mean, ddof 0)",
+   "model": "on the model's read population (values after the stage's curve and noise, its responders above the flies' criterion), as the flies are read",
+   "undefined": "fewer than 5 responders: NaN, no rank"
+  },
+  "ranks": {
+   "rule": "ascending among the 17 megamat odors (rank 1 the lowest), ties averaged; an undefined odor has no rank and the others are ranked among the odors defined",
+   "lowest_third": "the 6 lowest ranks (1 to 6 of 17)",
+   "highest_third": "the 6 highest ranks (12 to 17 of 17)",
+   "third": 6
+  },
+  "sharing_row": "aa's 16 cosine distances of the sharing view (parts 'who' and 'how_strongly'), each recording's and the flies' mean; aa's mean over its 16 pairs, ranked among the 17 odors' means (rank 17 the most apart)",
+  "responders_breadth": "per soma recording, the number of the 17 odors each of an odor's responders responds to (E134's breadth bins for 17 odors beside the mean)",
+  "same_fly_step": "the same-fly recording's somata minus its claws, each odor's rate and mean entries (one fly, a description); beside, the four soma flies' mean minus the four claw flies' mean",
+  "soma_readings": [
+   {
+    "name": "lock",
+    "source": "population",
+    "criterion": "lock",
+    "counts": true,
+    "what": "E134's lock: the population file's trial means (2 to 8 s minus -10 to -0.5 s over the pre-odor frame SD), criterion 5.9486"
+   },
+   {
+    "name": "presentation_1",
+    "source": "presentation:0",
+    "criterion": "rate",
+    "counts": true,
+    "what": "the first presentation of each odor alone (the population file's single trials), the criterion re-derived by the lock's rule (the level at which the mean over the four flies of each fly's response rate over the 17 odors is 0.0915)"
+   },
+   {
+    "name": "presentation_2",
+    "source": "presentation:1",
+    "criterion": "rate",
+    "counts": true,
+    "what": "the second presentation of each odor alone (the population file's single trials), the criterion re-derived by the lock's rule (the level at which the mean over the four flies of each fly's response rate over the 17 odors is 0.0915)"
+   },
+   {
+    "name": "presentation_3",
+    "source": "presentation:2",
+    "criterion": "rate",
+    "counts": true,
+    "what": "the third presentation of each odor alone (the population file's single trials), the criterion re-derived by the lock's rule (the level at which the mean over the four flies of each fly's response rate over the 17 odors is 0.0915)"
+   },
+   {
+    "name": "window_early",
+    "source": "window:early",
+    "criterion": "rate",
+    "counts": true,
+    "what": "the early half of the response window (2 to 4.8 s, closed), trial means, each cell's pre-odor mean and SD as the lock's; the criterion re-derived by the lock's rule"
+   },
+   {
+    "name": "window_late",
+    "source": "window:late",
+    "criterion": "rate",
+    "counts": true,
+    "what": "the late half of the response window (5 to 8 s, closed), trial means, each cell's pre-odor mean and SD as the lock's; the criterion re-derived by the lock's rule"
+   },
+   {
+    "name": "criterion_apl16",
+    "source": "population",
+    "criterion": "apl16",
+    "counts": true,
+    "what": "E134's alternative soma criterion: the lock's first, the APL16 somata's 1.9684 (E134's 'at 1.9684' column)"
+   },
+   {
+    "name": "criterion_remy",
+    "source": "remy_binary",
+    "criterion": "remy",
+    "counts": true,
+    "what": "E134's alternative soma criterion: Remy's own responder calls (her df_stim_responders_from_peak.csv per fly, the lock's remy_megamat_criterion_rate; the rate part only, the mean part the lock's)"
+   },
+   {
+    "name": "presentation_1_at_lock",
+    "source": "presentation:0",
+    "criterion": "lock",
+    "counts": false,
+    "what": "beside: presentation 1 alone at the lock's criterion 5.9486"
+   },
+   {
+    "name": "presentation_2_at_lock",
+    "source": "presentation:1",
+    "criterion": "lock",
+    "counts": false,
+    "what": "beside: presentation 2 alone at the lock's criterion 5.9486"
+   },
+   {
+    "name": "presentation_3_at_lock",
+    "source": "presentation:2",
+    "criterion": "lock",
+    "counts": false,
+    "what": "beside: presentation 3 alone at the lock's criterion 5.9486"
+   },
+   {
+    "name": "window_early_at_lock",
+    "source": "window:early",
+    "criterion": "lock",
+    "counts": false,
+    "what": "beside: the early half window at the lock's criterion 5.9486"
+   },
+   {
+    "name": "window_late_at_lock",
+    "source": "window:late",
+    "criterion": "lock",
+    "counts": false,
+    "what": "beside: the late half window at the lock's criterion 5.9486"
+   },
+   {
+    "name": "per_fly_level",
+    "source": "population",
+    "criterion": "per_fly",
+    "counts": false,
+    "what": "beside: each fly at its own level giving 0.0915 (Remy's two levels, E134's next step)"
+   }
+  ],
+  "soma_rate": 0.0915,
+  "lock_soma_criterion": 5.9486,
+  "apl16_soma_criterion": 1.9684,
+  "criterion_search": {
+   "lo": 0.1,
+   "hi": 100.0,
+   "steps": 60,
+   "decimals": 4,
+   "rule": "data_prep/stage_population_data.py's criterion_at_rate (the mean over flies of each fly's response rate over the 17 odors at 0.0915), rounded"
+  },
+  "windows": {
+   "full": [
+    2.0,
+    8.0
+   ],
+   "pre": [
+    -10.0,
+    -0.5
+   ],
+   "halves": {
+    "early": [
+     2.0,
+     4.8
+    ],
+    "late": [
+     5.0,
+     8.0
+    ]
+   },
+   "rule": "each cell's per-trial mean over the half's frames minus its mean over the pre-odor frames, over its pre-odor frame SD (the RMS over trials of each trial's SD), as stage_population_data.reduce_megamat_trials reduces the whole window; Remy's good cells"
+  },
+  "soma_halves": {
+   "fit": [
+    "2022-10-10/1",
+    "2022-10-11/1"
+   ],
+   "held": [
+    "2022-10-10/2",
+    "2022-11-10/1"
+   ]
+  }
+ },
+ "classes": {
+  "i": {
+   "name": "few and strong in the flies, many and weak in the model",
+   "rule": "in at least 4 of the 5 claw recordings aa is in the lowest third on the rate part and in the highest third on concentration, and on 6 of 8 wirings the family's aa (held at 0.0915, APL on, E134's default claw reading) is in the highest third on the rate part and the lowest third on concentration",
+   "flies_min": 4,
+   "flies_n": 5,
+   "model_min": 6,
+   "model_n": 8,
+   "model_group": "family_held",
+   "condition": "on",
+   "stage": "kc_claw",
+   "reading": "curve_noise"
+  },
+  "ii": {
+   "name": "apart",
+   "rule": "at the flies' somata (E134's lock reading, the four flies) aa's mean cosine distance to the 16 other odors on who responds (the sharing view's part 'who', the half's mean over its flies) is among the three largest of the 17 odors on both halves of the flies (E136's seeded split)",
+   "top": 3,
+   "part": "sharing/who",
+   "stage": "kc_soma",
+   "reading": "lock"
+  },
+  "iii": {
+   "name": "inside the ORN flies' spread",
+   "rule": "at least one ORN fly's aa vector brings the somata's aa entry (the rate part, the family held, APL on, E134's default soma reading) into the soma flies' range (the min to max over the four flies of aa's rate entry, the lock's reading) on 3 of the 4 T wirings",
+   "min_wirings": 3,
+   "wirings": [
+    "P3",
+    "P4",
+    "M2",
+    "M3"
+   ],
+   "read_in": "step 1 (not run in step 0)"
+  },
+  "iv": {
+   "name": "the reading's",
+   "rule": "under a reading of the lock that counts (SOMA_READINGS 'counts'), the rank of the flies' mean rate entry of aa among the 17 odors is 11 or lower (aa leaves the highest third)",
+   "part": "strength/rate"
+  }
+ },
+ "outcomes": {
+  "a": "(i) holds and (iii) does not: the lab's aa input, as the model reads it, lacks a strong channel that few claws carry; Tom's to weigh (step 2 on his or Yang's word)",
+  "b": "(iii) holds: the answer is inside what seven ORN flies showed; the choice of input is Tom's",
+  "c": "(i) does not hold: the flies' claws see aa as the model's do, and the step itself differs; item 2's tables say which KCs the model loses",
+  "d": "(iv) holds: aa's strength at the somata is the reading's"
+ },
+ "model": {
+  "groups": [
+   {
+    "name": "family_held",
+    "source": "E134:step3:megamat_held_{w}",
+    "wirings": [
+     "real",
+     "P1",
+     "P2",
+     "M1",
+     "P3",
+     "P4",
+     "M2",
+     "M3"
+    ],
+    "what": "the family held at the megamat flies' 0.0915 (E134's step 3), APL on and off"
+   },
+   {
+    "name": "family_fitted",
+    "source": "E134:step3:megamat_fitted_{w}",
+    "wirings": [
+     "real",
+     "P1",
+     "P2",
+     "M1",
+     "P3",
+     "P4",
+     "M2",
+     "M3"
+    ],
+    "what": "beside: the family as fitted (E134's step 3)"
+   },
+   {
+    "name": "A0",
+    "source": "E136:read:A0_megamat_{w}",
+    "wirings": [
+     "P3",
+     "P4",
+     "M2",
+     "M3"
+    ],
+    "what": "E136's arm A0, its megamat reads on the T wirings (the S wirings are its fit's evaluations)"
+   },
+   {
+    "name": "A1",
+    "source": "E136:read:A1_megamat_{w}",
+    "wirings": [
+     "P3",
+     "P4",
+     "M2",
+     "M3"
+    ],
+    "what": "E136's arm A1, its megamat reads on the T wirings (the S wirings are its fit's evaluations)"
+   },
+   {
+    "name": "A2",
+    "source": "E136:read:A2_megamat_{w}",
+    "wirings": [
+     "P3",
+     "P4",
+     "M2",
+     "M3"
+    ],
+    "what": "E136's arm A2, its megamat reads on the T wirings (the S wirings are its fit's evaluations)"
+   },
+   {
+    "name": "A3",
+    "source": "E136:read:A3_megamat_{w}",
+    "wirings": [
+     "P3",
+     "P4",
+     "M2",
+     "M3"
+    ],
+    "what": "E136's arm A3, its megamat reads on the T wirings (the S wirings are its fit's evaluations)"
+   },
+   {
+    "name": "A4",
+    "source": "E136:read:A4_megamat_{w}",
+    "wirings": [
+     "P3",
+     "P4",
+     "M2",
+     "M3"
+    ],
+    "what": "E136's arm A4, its megamat reads on the T wirings (the S wirings are its fit's evaluations)"
+   },
+   {
+    "name": "e135_imposed",
+    "source": "E135:step2:megamat_imposed_{w}",
+    "wirings": [
+     "real",
+     "P1",
+     "P2",
+     "M1",
+     "P3",
+     "P4",
+     "M2",
+     "M3"
+    ],
+    "what": "E135's recorded dendrites imposed (step 2, the table in noise units)"
+   }
+  ],
+  "e139": "a hook: E139_normalization_ladder has no saved megamat runs yet; `e139_runs` reads any that arrive in outputs/E139_normalization_ladder/ or the model-output archive (stage_readings' step-3 layout, megamat input)",
+  "readings": {
+   "stages": {
+    "orn": {
+     "default": {
+      "name": "curve_noise",
+      "stage": "orn",
+      "curve": "quantile",
+      "curve_set_on": "on",
+      "curve_scope": "wiring",
+      "fly_weighting": "fly",
+      "noise_aware_curve": false,
+      "noise": "residual",
+      "criterion": "flies",
+      "pool": null,
+      "subset": null,
+      "claw_spike_share": 0.0,
+      "glomeruli": "every_fly",
+      "settled_pre": true
+     },
+     "alternatives": [
+      {
+       "name": "affine_noise",
+       "stage": "orn",
+       "curve": "affine",
+       "curve_set_on": "on",
+       "curve_scope": "wiring",
+       "fly_weighting": "fly",
+       "noise_aware_curve": false,
+       "noise": "residual",
+       "criterion": "flies",
+       "pool": null,
+       "subset": null,
+       "claw_spike_share": 0.0,
+       "glomeruli": "every_fly",
+       "settled_pre": true
+      },
+      {
+       "name": "curve_nonoise",
+       "stage": "orn",
+       "curve": "quantile",
+       "curve_set_on": "on",
+       "curve_scope": "wiring",
+       "fly_weighting": "fly",
+       "noise_aware_curve": false,
+       "noise": "none",
+       "criterion": "flies",
+       "pool": null,
+       "subset": null,
+       "claw_spike_share": 0.0,
+       "glomeruli": "every_fly",
+       "settled_pre": true
+      }
+     ]
+    },
+    "pn_dendrite": {
+     "default": {
+      "name": "curve_noise",
+      "stage": "pn_dendrite",
+      "curve": "quantile",
+      "curve_set_on": "on",
+      "curve_scope": "wiring",
+      "fly_weighting": "fly",
+      "noise_aware_curve": false,
+      "noise": "residual",
+      "criterion": "flies",
+      "pool": null,
+      "subset": null,
+      "claw_spike_share": 0.0,
+      "glomeruli": "every_fly",
+      "settled_pre": true
+     },
+     "alternatives": [
+      {
+       "name": "affine_noise",
+       "stage": "pn_dendrite",
+       "curve": "affine",
+       "curve_set_on": "on",
+       "curve_scope": "wiring",
+       "fly_weighting": "fly",
+       "noise_aware_curve": false,
+       "noise": "residual",
+       "criterion": "flies",
+       "pool": null,
+       "subset": null,
+       "claw_spike_share": 0.0,
+       "glomeruli": "every_fly",
+       "settled_pre": true
+      },
+      {
+       "name": "curve_noise_shared28",
+       "stage": "pn_dendrite",
+       "curve": "quantile",
+       "curve_set_on": "on",
+       "curve_scope": "wiring",
+       "fly_weighting": "fly",
+       "noise_aware_curve": false,
+       "noise": "residual",
+       "criterion": "flies",
+       "pool": null,
+       "subset": null,
+       "claw_spike_share": 0.0,
+       "glomeruli": "shared28",
+       "settled_pre": true
+      }
+     ]
+    },
+    "pn_bouton": {
+     "default": {
+      "name": "curve_noise",
+      "stage": "pn_bouton",
+      "curve": "quantile",
+      "curve_set_on": "on",
+      "curve_scope": "wiring",
+      "fly_weighting": "fly",
+      "noise_aware_curve": false,
+      "noise": "residual",
+      "criterion": "flies",
+      "pool": "1",
+      "subset": "shared",
+      "claw_spike_share": 0.0,
+      "glomeruli": null,
+      "settled_pre": true
+     },
+     "alternatives": [
+      {
+       "name": "curve_noise_g3",
+       "stage": "pn_bouton",
+       "curve": "quantile",
+       "curve_set_on": "on",
+       "curve_scope": "wiring",
+       "fly_weighting": "fly",
+       "noise_aware_curve": false,
+       "noise": "residual",
+       "criterion": "flies",
+       "pool": "g3",
+       "subset": "shared",
+       "claw_spike_share": 0.0,
+       "glomeruli": null,
+       "settled_pre": true
+      },
+      {
+       "name": "affine_noise",
+       "stage": "pn_bouton",
+       "curve": "affine",
+       "curve_set_on": "on",
+       "curve_scope": "wiring",
+       "fly_weighting": "fly",
+       "noise_aware_curve": false,
+       "noise": "residual",
+       "criterion": "flies",
+       "pool": "1",
+       "subset": "shared",
+       "claw_spike_share": 0.0,
+       "glomeruli": null,
+       "settled_pre": true
+      }
+     ]
+    },
+    "kc_claw": {
+     "default": {
+      "name": "curve_noise",
+      "stage": "kc_claw",
+      "curve": "quantile",
+      "curve_set_on": "on",
+      "curve_scope": "wiring",
+      "fly_weighting": "fly",
+      "noise_aware_curve": false,
+      "noise": "residual",
+      "criterion": "flies",
+      "pool": "g14",
+      "subset": "all",
+      "claw_spike_share": 0.0,
+      "glomeruli": null,
+      "settled_pre": true
+     },
+     "alternatives": [
+      {
+       "name": "curve_noise_b14",
+       "stage": "kc_claw",
+       "curve": "quantile",
+       "curve_set_on": "on",
+       "curve_scope": "wiring",
+       "fly_weighting": "fly",
+       "noise_aware_curve": false,
+       "noise": "residual",
+       "criterion": "flies",
+       "pool": "b14",
+       "subset": "all",
+       "claw_spike_share": 0.0,
+       "glomeruli": null,
+       "settled_pre": true
+      },
+      {
+       "name": "curve_noise_share25",
+       "stage": "kc_claw",
+       "curve": "quantile",
+       "curve_set_on": "on",
+       "curve_scope": "wiring",
+       "fly_weighting": "fly",
+       "noise_aware_curve": false,
+       "noise": "residual",
+       "criterion": "flies",
+       "pool": "g14",
+       "subset": "all",
+       "claw_spike_share": 0.25,
+       "glomeruli": null,
+       "settled_pre": true
+      },
+      {
+       "name": "affine_noise",
+       "stage": "kc_claw",
+       "curve": "affine",
+       "curve_set_on": "on",
+       "curve_scope": "wiring",
+       "fly_weighting": "fly",
+       "noise_aware_curve": false,
+       "noise": "residual",
+       "criterion": "flies",
+       "pool": "g14",
+       "subset": "all",
+       "claw_spike_share": 0.0,
+       "glomeruli": null,
+       "settled_pre": true
+      }
+     ]
+    },
+    "kc_soma": {
+     "default": {
+      "name": "curve_noise",
+      "stage": "kc_soma",
+      "curve": "quantile",
+      "curve_set_on": "on",
+      "curve_scope": "wiring",
+      "fly_weighting": "fly",
+      "noise_aware_curve": false,
+      "noise": "residual",
+      "criterion": "flies",
+      "pool": null,
+      "subset": null,
+      "claw_spike_share": 0.0,
+      "glomeruli": null,
+      "settled_pre": true
+     },
+     "alternatives": [
+      {
+       "name": "raw",
+       "stage": "kc_soma",
+       "curve": "none",
+       "curve_set_on": "on",
+       "curve_scope": "wiring",
+       "fly_weighting": "fly",
+       "noise_aware_curve": false,
+       "noise": "none",
+       "criterion": "model_spikes",
+       "pool": null,
+       "subset": null,
+       "claw_spike_share": 0.0,
+       "glomeruli": null,
+       "settled_pre": true
+      },
+      {
+       "name": "affine_noise",
+       "stage": "kc_soma",
+       "curve": "affine",
+       "curve_set_on": "on",
+       "curve_scope": "wiring",
+       "fly_weighting": "fly",
+       "noise_aware_curve": false,
+       "noise": "residual",
+       "criterion": "flies",
+       "pool": null,
+       "subset": null,
+       "claw_spike_share": 0.0,
+       "glomeruli": null,
+       "settled_pre": true
+      },
+      {
+       "name": "curve_noise_own",
+       "stage": "kc_soma",
+       "curve": "quantile",
+       "curve_set_on": "own",
+       "curve_scope": "wiring",
+       "fly_weighting": "fly",
+       "noise_aware_curve": false,
+       "noise": "residual",
+       "criterion": "flies",
+       "pool": null,
+       "subset": null,
+       "claw_spike_share": 0.0,
+       "glomeruli": null,
+       "settled_pre": true
+      }
+     ]
+    }
+   },
+   "constants": {
+    "MODEL_WINDOW": [
+     0.0,
+     0.5
+    ],
+    "PRE_WINDOW": [
+     -0.5,
+     0.0
+    ],
+    "SETTLED_PRE_WINDOW": [
+     -0.25,
+     0.0
+    ],
+    "CLAW_REGION_SIZE": 14,
+    "N_CURVE_KNOTS": 201,
+    "N_NOISE_BINS": 10,
+    "MODEL_SPIKES": 2.0,
+    "POOL_SEED": 0,
+    "NOISE_SEED": 0
+   }
+  },
+  "reading_rule": "E134's default reading of each stage, against all the stage's recorded flies (stage_readings' FlyCache); APL off read with the APL-on flies' curve, noise and criterion (no megamat flies with APL output blocked); each wiring's seed index its position in WIRINGS (T_WIRINGS for E136's arms)",
+  "soma_beside": [
+   "raw",
+   "affine_noise"
+  ],
+  "claw_beside": [
+   "curve_noise_b14",
+   "curve_noise_share25"
+  ],
+  "rows": "each wiring; 'common' the wirings' mean views (rate and mean parts) and the mean of the wirings' concentrations; 'mean' the mean over wirings of each wiring's entries",
+  "anatomy": {
+   "responders": "the KCs with two or more spikes (the model's own criterion, at which the family is held), each odor",
+   "ir_glomeruli": [
+    "DC4",
+    "DL2d",
+    "DL2v",
+    "DP1l",
+    "DP1m",
+    "VL2a",
+    "VL2p"
+   ],
+   "ir_rule": "E138's lock class 'ir'",
+   "claws": "each responder's share of claws on an IR-fed glomerulus (the run's units: claw_glomerulus, kc_of_claw)",
+   "kc_types": "the spike counts' kc_type level"
+  }
+ },
+ "follows": {
+  "fit": "y = a + b x by least squares over the 16 odors other than aa; aa's residual y - (a + b x), in the entry's units and over the residual SD of the 16 (ddof 2); Pearson r and Spearman rho over the 16 beside; every odor's leave-one-out residual and aa's rank by its absolute value",
+  "y": [
+   "the KC somata's rate entry (the flies' mean; each model group's 'common' row)",
+   "beside: the mean entry"
+  ],
+  "x": {
+   "input_sum": "the sum over the model's 36 glomeruli of the odor's megamat input (spike deltas, signed)",
+   "input_max": "its largest entry",
+   "input_breadth": "the participation ratio of its positive part, (sum x+)^2 / sum x+^2",
+   "stages": "the same side's rate entry at the claws, boutons, dendrites and ORNs (the flies' at theirs, the model's at its own)"
+  }
+ },
+ "input": {
+  "model": "the megamat input's aa column on the 36 glomeruli (E134's panel_input('megamat'))",
+  "orn_flies": "olfdb dataset 1 (E134's copy, sources/olfdb/ds1_long.csv), the flies given aa @ -3: each fly scaled as E85 scales it ('to-avg-max': its largest |trial mean| over all its panels and ROIs brought to the lab's avg_flymax), then the least-squares slope through the origin of the megamat input on the flies' mean (36 glomeruli x 17 odors, each entry the mean over the flies that have it); E85's slope (12 odors) beside",
+  "hallem": "drosolf's Hallem and Carlson 2006 table (deltas, add_sfr False), odor 'acetic acid' (10^-2), on the glomeruli it shares with the model's 36 by name; a receptor \"responds\" at >= 20 spikes per s",
+  "dendrites": "the PN-dendrite recordings' aa column (7 flies, trial-noise SD units) on E138's lock's 28 glomeruli, beside the family held's PN stage (the PN rates before the curve, wiring 'real') and the model input on them",
+  "dendrite28": [
+   "D",
+   "DA2",
+   "DC1",
+   "DC2",
+   "DC3",
+   "DL1",
+   "DL5",
+   "DM1",
+   "DM2",
+   "DM3",
+   "DM4",
+   "DM5",
+   "DM6",
+   "DP1m",
+   "VA2",
+   "VA3",
+   "VA5",
+   "VA6",
+   "VA7l",
+   "VA7m",
+   "VC1",
+   "VC2",
+   "VL2a",
+   "VL2p",
+   "VM2",
+   "VM3",
+   "VM7d",
+   "VM7v"
+  ]
+ },
+ "step1": {
+  "rule": "only on class (i): aa's input taken from each of the seven ORN flies' own vectors by the lab's map, the other odors unchanged, the family held, on the four T wirings (28 runs); nothing searched",
+  "status": "not in this script"
+ },
+ "step2": {
+  "rule": "held for Tom's or Yang's word: aa's input on E138's IR-fed class at 1.5, 2 and 3 times, with seven other glomeruli of matched summed input as the control (24 runs)",
+  "status": "held"
+ },
+ "holds": [
+  "no simulation, no model run, no olfsysm change, no input factor searched in step 0",
+  "validation2 not read",
+  "only Pratyush's hemibrain (the family's wirings)",
+  "only Yang's processed products (none read here)",
+  "Remy's processed data without the bouton fly 2022-10-21 fly02 and her older megamat flies"
+ ],
+ "note": "written before any statistic of aa (or of any odor) was computed; every part but lock refuses until this file is committed (require_lock)"
+}
