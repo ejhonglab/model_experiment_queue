@@ -237,3 +237,60 @@ def test_lanes(monkeypatch, tmp_path):
     monkeypatch.setattr(X, 'read_point', lambda pt, lane, reclaim, done: got.append(pt))
     X.part_read('x', reverse=True)
     assert len(got) == 148 and got[0] == X.Point('L', 'Dabs', 'real', 'apl16') and got[-1].setting == 'family'
+
+
+def test_write_variants(monkeypatch, tmp_path):
+    arch, res = tmp_path / 'arch', tmp_path / 'res'
+    (arch / 'read').mkdir(parents=True)
+    res.mkdir()
+    monkeypatch.setattr(X, 'out_dir', lambda: res)
+    on = dict(fixed_thr=110.0, wAPLKC_scale=0.15, wKCAPL_scale=8e-5, wAPLPN_scale=0.044, wPNAPL_scale=3e-4,
+              wKCKC_scale=25.0)
+    (arch / 'read' / 'L_A1_megamat_P2_run.json').write_text(json.dumps(dict(
+        model='C2', wiring='L-P2', panel='megamat', reading='read', tag='L_A1_megamat_P2', variant='L_A1', params=on,
+        params_off=dict(on, wAPLKC_scale=0.0, wAPLPN_scale=0.0), start=dict(on, fixed_thr=157.2),
+        pn_kws=dict(pn_inhadd=1000.0, pn_inhsc=544.4), fit='malecns-left', kckc_factor=3.24, aplpn_factor=0.155)))
+    df = X.write_variants(arch)
+    r = df.iloc[0]
+    assert len(df) == 1 and (res / 'variants.csv').exists() and r.calyx == 'L' and r.wiring_seed == 2
+    assert r.off_wAPLKC_scale == 0.0 and r.start_fixed_thr == 157.2 and r.pn_inhadd == 1000.0 and r.kind.isascii()
+
+
+def test_score_classes_and_price():
+    """E144's classify on a calyx's four wirings against its family (E136's rule with the wirings given), a single
+    wiring's bar the spread, the price against the family, and the outcomes' letters."""
+    from experiments import E136_stage_population_fit as F
+    from experiments import E144_score as S
+    ws = ('real', 'P1', 'P2', 'P3')
+    st = ('pn_dendrite', 'pn_bouton', 'kc_claw', 'kc_soma')
+    spreads = dict(stage=0.02, **{s: 0.05 for s in st}, **{'/'.join(k): 0.05 for k in F.SCORED_PANELS})
+    fam = {w: dict(stage=1.0, **{s: 1.0 for s in st}) for w in ws}
+    a1 = {w: dict(stage=0.9, **{s: 0.98 for s in st}) for w in ws}
+    pv = {'L_family': {k: {w: 1.0 for w in ws} for k in F.SCORED_PANELS},
+          'L_A1': {k: {w: 1.01 for w in ws} for k in F.SCORED_PANELS}}
+    rec = S.classify_on(F, 'L_A1', 'L_family', ws, st, {'L_family': fam, 'L_A1': a1}, pv, spreads, {}, None)
+    assert rec['cls'] == 'holds' and rec['megamat']['change'] == pytest.approx(-0.1) and rec['bar'] == pytest.approx(0.02)
+    pv['L_A1'][F.HOLDS_PANELS[0]] = {w: 1.2 for w in ws}
+    assert S.classify_on(F, 'L_A1', 'L_family', ws, st, {'L_family': fam, 'L_A1': a1}, pv, spreads, {},
+                         None)['cls'] == 'megamat only'
+    flagged = S.classify_on(F, 'L_A1', 'L_family', ws, st, {'L_family': fam, 'L_A1': a1}, pv, spreads,
+                            {'L_A1': {'P2': 'rate_on'}}, None)
+    assert flagged['cls'] == 'no class' and 'P2' in flagged['reasons'][0]
+    one = S.classify_on(F, 'L_D1.8', 'L_family', ['real'], st, {'L_family': fam, 'L_D1.8': {'real': a1['real']}},
+                        {'L_family': pv['L_family'], 'L_D1.8': {k: {'real': 1.0} for k in F.SCORED_PANELS}}, spreads,
+                        {}, None)
+    assert one['cls'] == 'holds' and one['bar'] == pytest.approx(0.02)
+    parts = {'L_A1': {w: {'z8_pattern': 0.07, 'halfA_pattern': 0.07, 'halfB_pattern': 0.07} for w in ws},
+             'L_family': {w: {'z8_pattern': 0.06, 'halfA_pattern': 0.06, 'halfB_pattern': 0.06} for w in ws}}
+    from experiments import E139_normalization_ladder as E139
+    if set(E139.PRICE_TARGETS) <= {'z8', 'halfA', 'halfB'}:
+        pr = S.price_on(parts, 'L_A1', 'L_family', ws)
+        assert pr['price'] is True and pr['price_value'] == pytest.approx(0.01)
+    inside = {s: dict(inside=True) for s in S.FAMILY_INSIDE_STAGES}
+    cal = {'L': dict(a1_holds=True, a1_megamat_falls=True, b_holds=False, family_inside=inside),
+           'R': dict(a1_holds=False, a1_megamat_falls=True, b_holds=False,
+                     family_inside=dict(inside, pn_bouton=dict(inside=False)))}
+    o = S.outcome_letters(cal, {'A1': dict(class_differs=False)})
+    assert o == dict(a=False, b=False, c=True, d=False, e=True, f=False)
+    cal['R']['a1_holds'] = None
+    assert S.outcome_letters(cal, {})['c'] is None

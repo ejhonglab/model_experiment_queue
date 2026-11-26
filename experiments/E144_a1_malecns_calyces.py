@@ -964,13 +964,55 @@ def smoke_point(pt: Point, scratch: Path) -> dict:
 # the score and the archive's table
 
 def part_score() -> dict:
-    """The score (E141's, per calyx; the module docstring). Not written yet."""
-    raise NotImplementedError
+    """The score (design item 3, with item 4's readings beside): experiments/E144_score.py's `part_score`, which only
+    this part imports, so that the score can be committed while read lanes run (E108's `_still_clean` guard)."""
+    from experiments import E144_score as S
+    return S.part_score()
+
+
+def variant_kind(pt: Point) -> str:
+    """A read's description for the archive's params.csv (ASCII)."""
+    st = SETTINGS[pt.setting]
+    return (f"C2's family on {CALYCES[pt.calyx]} (E130's fit of the calyx), setting {pt.setting} ({st.label}), wiring "
+            f"{pt.wiring}" + (f" (E133's within-type claw permutation, seed {WIRING_SEEDS[pt.wiring]})"
+                              if pt.wiring != 'real' else '')
+            + f', read on the {pt.panel} input, both response rates held')
+
+
+VARIANT_PARAMS: Tuple[str, ...] = PARAM_KEYS
 
 
 def write_variants(arch: Optional[Path] = None) -> pd.DataFrame:
-    """variants.csv for the model-output archive's params.csv: one row per read in the archive's read/."""
-    raise NotImplementedError
+    """variants.csv in out_dir(), for the model-output archive's params.csv: one row per read the archive folder holds
+    (`arch`, default archive_dir(); <tag>_run.json in read/): the tag, the folder, the variant, calyx, connectome,
+    setting, panel and wiring (with its seed), a description (`variant_kind`), both conditions' absolute parameters
+    ('off_<name>' with APL off), the start (the calyx's fit's parameters with the setting's factors, 'start_<name>'),
+    the normalization's terms (pn_inhadd, pn_inhsc; empty for the family), the factors, the fit, and where and when it
+    ran. The tag is unique."""
+    arch = Path(arch) if arch is not None else archive_dir()
+    rows = []
+    for p in sorted((arch / 'read').glob('*_run.json')):
+        d = json.loads(p.read_text())
+        pt = parse_tag(d['tag'])
+        pn = d.get('pn_kws') if isinstance(d.get('pn_kws'), dict) else {}
+        r = dict(tag=d['tag'], variant=d.get('variant'), part='read', subdir='read', calyx=pt.calyx,
+                 connectome=CALYCES[pt.calyx], setting=pt.setting, panel=pt.panel, wiring=pt.wiring,
+                 wiring_seed=WIRING_SEEDS[pt.wiring], model=d.get('model'), reading=d.get('reading'),
+                 kind=variant_kind(pt), fit=d.get('fit'), aplpn_factor=d.get('aplpn_factor'),
+                 kckc_factor=d.get('kckc_factor'), kckc_abs=d.get('kckc_abs'),
+                 pn_inhadd=pn.get('pn_inhadd'), pn_inhsc=pn.get('pn_inhsc'))
+        r.update({k: (d.get('params') or {}).get(k) for k in VARIANT_PARAMS})
+        r.update({f'off_{k}': (d.get('params_off') or {}).get(k) for k in VARIANT_PARAMS})
+        r.update({f'start_{k}': (d.get('start') or {}).get(k) for k in VARIANT_PARAMS})
+        r.update(host=d.get('host'), lane=d.get('lane'), time=d.get('time'))
+        rows.append(r)
+    df = pd.DataFrame(rows)
+    if df.empty:
+        raise FileNotFoundError(f'no <tag>_run.json under {arch / "read"}')
+    if df.tag.duplicated().any():
+        raise ValueError(f'runs named twice: {sorted(df.tag[df.tag.duplicated()])}')
+    df.to_csv(out_dir() / 'variants.csv', index=False)
+    return df
 
 
 # ---------------------------------------------------------------------------
