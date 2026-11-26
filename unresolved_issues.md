@@ -8,20 +8,6 @@ directory's notes/ and are linked from here.
 
 ## Open
 
-### E141's write-ups said the shuffled KC–KC matrix keeps the matrix's unevenness (found 2026-11-26 12:34, viki's Summary planner)
-- **What.** E141's note (E141_kckc_rise_forms.md), its page and the Summary's section {#kckc-rise} read the failure of S
-  (the hemibrain's KC–KC matrix shuffled within pairs of KC types, E122's control) as "it keeps each pair of KC types'
-  weights, and so their unevenness; so which KCs inhibit which matters". E144's step 0
-  (results/E144_a1_malecns_calyces/step0_table.md) shows the shuffle keeps the type pairs' summed weights (0.680 within
-  type in both) but evens out the KCs' summed input (CV over KCs 0.483 to 0.294) and removes the matrix's reciprocity
-  (0.223 to 0.013) and its preference for KCs that share an input glomerulus (1.379 to 1.054). So E141 cannot say which of
-  these carries the hold. No number or class is wrong; the reading of S was.
-- **What it affects.** E141's note and page (In brief, Interpretation, Next steps), the Summary's {#kckc-rise} section and
-  any sentence of the Summary that echoes it, and disco's chat posts of 10:29 and 10:48.
-- **What has been done.** The note and page are corrected, with a dated line (2026-11-26 12:36, disco). The Summary's
-  sentences are with a planning subagent (Fable, spawned from disco 12:37).
-- **What remains.** Apply the Summary's corrected text, rebuild and save the Summary, then move this entry to Resolved.
-
 ### E134's mixture rows read the flies under a fixed stimulus order (found 2026-11-24 22:53, viki's held-out-panels planner)
 - **What.** Remy's kiwi / control mixture sessions present their stimuli in a fixed order: solvent, the five components,
   then the mixture at -2, -1 and 0, three consecutive presentations each (her olfactometer configs,
@@ -293,6 +279,21 @@ directory's notes/ and are linked from here.
   These two tables and the structure targets' are still typed.
 
 ## Resolved
+
+### E141's write-ups said the shuffled KC–KC matrix keeps the matrix's unevenness (found 2026-11-26 12:34, viki's Summary planner)
+- **What.** E141's note (E141_kckc_rise_forms.md), its page and the Summary's section {#kckc-rise} read the failure of S
+  (the hemibrain's KC–KC matrix shuffled within pairs of KC types, E122's control) as "it keeps each pair of KC types'
+  weights, and so their unevenness; so which KCs inhibit which matters". E144's step 0
+  (results/E144_a1_malecns_calyces/step0_table.md) shows the shuffle keeps the type pairs' summed weights (0.680 within
+  type in both) but evens out the KCs' summed input (CV over KCs 0.483 to 0.294) and removes the matrix's reciprocity
+  (0.223 to 0.013) and its preference for KCs that share an input glomerulus (1.379 to 1.054). So E141 cannot say which of
+  these carries the hold. No number or class is wrong; the reading of S was.
+- **What it affects.** E141's note and page (In brief, Interpretation, Next steps), the Summary's {#kckc-rise} section and
+  any sentence of the Summary that echoes it, and disco's chat posts of 10:29 and 10:48.
+- **What has been done.** The note and page are corrected, with a dated line (2026-11-26 12:36, disco). The Summary's
+  sentences were corrected by a planning subagent (Fable, claude-fable-5-2, spawned from disco 12:37), applied in 0d97e6d,
+  and the Summary rebuilt and saved (2026-11-26 13:08).
+- **Resolved** in 0d97e6d (the Summary) and by the note's correction of 2026-11-26 12:36.
 
 ### E134's score_classes.json quotes the shared-curve, all-units consistency rows in its gate block, not the ruled halves (found 2026-11-24 15:16, viki's gate planner; resolved 2026-11-24 16:15, queue 203fd4c)
 - **What.** experiments/E134_population_baseline.py's `consistency_gate` takes the last row per condition of
