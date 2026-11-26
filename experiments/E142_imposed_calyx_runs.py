@@ -500,9 +500,271 @@ def write_variants(root: Optional[Path] = None) -> pd.DataFrame:
     return df
 
 
+# ---------------------------------------------------------------------------
+# the score (design item 3) and step 1's classes (the lock's 'apl_hides_step', 'dendrites_carry', 'no_class')
+
+# the variants the score registers with E136's score functions: step 1's arms as 'E142_<arm>' (the APL16 arm shares
+# its name with the megamat arm of the same factors), E135's saved imposed arms at the family's calyx as 'E135_<arm>'
+E142_PREFIX = 'E142_'
+E135_VARIANTS: Dict[str, str] = {'E135_imposed': 'imposed', 'E135_imposed_glom_perm': 'imposed_glom_perm',
+                                 'E135_imposed_odor_perm': 'imposed_odor_perm'}
+DOWNSTREAM: Tuple[str, ...] = ('pn_bouton', 'kc_claw', 'kc_soma')
+# the lock's step-1 classes (experiments/E142_dendrite_bouton_step.py CLASSES, read from the lock at score time)
+APL_ARMS: Tuple[str, ...] = ('imposed_a1', 'imposed_aplpn', 'imposed_kckc_aplpn_none')
+CARRY_ARM = 'imposed_a1'
+CONTROL_ARMS: Tuple[str, ...] = ('imposed_a1_glom_perm', 'imposed_a1_odor_perm')
+APL_REFERENCE = 'E135_imposed'
+MIN_WIRINGS = 6
+SE_MULTIPLE = 2.0
+
+
+def variant_of(arm_name: str) -> str:
+    """A step-1 arm's variant name for E136's score functions, 'E142_<arm>'."""
+    return E142_PREFIX + arm_name
+
+
+def step1_variants() -> List[str]:
+    """Every step-1 arm's variant name, once (STEP1_ARMS' order)."""
+    return list(dict.fromkeys(variant_of(a.name) for a in STEP1_ARMS))
+
+
+def load_variant_run(pt, claw_after: bool = False):
+    """The run of a registered variant's point (E136's `ReadPoint` with the variant as its arm): a step-1 arm's from
+    `step1_dirs` ('<panel>_<arm>_<wiring>'), E135's imposed arms from E135's step-2 folders; None if absent (also for
+    the claws read after a threshold, which none of these has)."""
+    from kcq import stage_readings as R
+    if claw_after:
+        return None
+    if pt.arm in E135_VARIANTS:
+        tag, dirs = f'{pt.panel}_{E135_VARIANTS[pt.arm]}_{pt.wiring}', _e135().step2_dirs()
+    elif str(pt.arm).startswith(E142_PREFIX):
+        tag, dirs = f'{pt.panel}_{pt.arm[len(E142_PREFIX):]}_{pt.wiring}', step1_dirs()
+    else:
+        raise ValueError(f'{pt.arm!r} is not a variant of E142 step 1')
+    try:
+        return R.load_step3_run(tag, dirs=dirs)
+    except FileNotFoundError:
+        return None
+
+
+def holds_failed(rows: pd.DataFrame, tol: float) -> List[str]:
+    """The runs of a runs table (E142's runs_1 or E135's runs_2) whose hold failed: at a bracket's bound, or a response
+    rate more than `tol` (relative) from its target; as tags."""
+    bad = []
+    for r in rows.to_dict('records'):
+        miss = [abs(float(r[f'rate_{c}']) - float(r[f'frac_{c}_target'])) / float(r[f'frac_{c}_target'])
+                for c in ('on', 'off')]
+        if str(r.get('at_bound_thr')).lower() in ('true', '1', '1.0') or \
+                str(r.get('at_bound_apl')).lower() in ('true', '1', '1.0') or not max(miss) <= tol:
+            bad.append(str(r['tag']))
+    return bad
+
+
+def no_step_yardstick(F, stage: str = 'pn_bouton', half: Optional[str] = 'held') -> float:
+    """The no-step yardstick of a stage against a half of its flies: all seven dendrite flies' mean strength views as
+    the prediction (hal's `no_step_score`), scored against the half's mean views in all the stage's flies' one-fly
+    units (E136's `Flies`, strength views), as step 0 reads it (yardsticks.csv, glomeruli 'dendrites')."""
+    from data_prep import stage_population_data as D
+    from experiments import E134_population_baseline as B
+    from kcq import population_fit as P
+    stages = ('pn_dendrite', stage)
+    fl = F.Flies(half, stages, views=('strength',))
+    pops = B.fly_side_read(fl.full['pn_dendrite'])[0]
+    ref = fl.reference(stage, list(D.panel_odors(F.PANEL)))
+    return float(P.no_step_score(pops, ref).views['strength'])
+
+
+def mean_over(vals: Mapping[str, Mapping[str, float]], key: str, wirings: Sequence[str]) -> float:
+    return float(np.mean([vals[w][key] for w in wirings])) if all(w in vals for w in wirings) else np.nan
+
+
+def classify_step1(mega: Mapping[str, Mapping[str, Dict[str, float]]], spreads: Mapping[str, float], no_step: float,
+                   bad: Mapping[str, Sequence[str]], flagged: Mapping[str, Sequence[str]], F) -> dict:
+    """Step 1's classes as the lock fixes them, from the megamat values against the held-out half (`mega`: per variant,
+    per wiring, E136's `megamat_values`), the family's spreads over its eight wirings, the no-step yardstick of the
+    boutons against the held-out half, the runs whose holds failed (`bad`: per variant, wirings) and the wirings whose
+    APL16 run leaves a realism band where the family's does not (`flagged`: per variant).
+
+    - 'apl_hides_step': in at least one of APL_ARMS, the boutons' strength error is below the no-step yardstick on
+      MIN_WIRINGS of the eight wirings, and in E135's imposed arm (APL->bouton at the family's) it is not; an arm with a
+      failed hold or a flagged wiring gives no class.
+    - 'dendrites_carry': with A1's factors (CARRY_ARM), the error over the boutons, claws and somata ('downstream') is
+      below A1's on T by more than SE_MULTIPLE standard errors (E136's `compare`: the larger of half the spread and the
+      SD of the per-wiring changes over sqrt(4)), none of the three stages is worse than A1's by more than its spread,
+      and each of the three is below both permuted controls (the mean over T); no class with a failed hold or a flagged
+      wiring among the arm's or the controls' runs on T.
+    The PN dendrites are given beside (they are imposed, so the controls' rise there is by construction)."""
+    out: Dict[str, dict] = {}
+    # APL at the boutons hides the step
+    arms = {}
+    for a in APL_ARMS + (None,):
+        v = APL_REFERENCE if a is None else variant_of(a)
+        vals = mega.get(v, {})
+        below = {w: bool(vals[w]['pn_bouton'] < no_step) for w in F.WIRINGS if w in vals}
+        reasons = []
+        if len(below) < len(F.WIRINGS):
+            reasons.append('runs missing')
+        if bad.get(v):
+            reasons.append('holds fail: ' + ', '.join(bad[v]))
+        if flagged.get(v):
+            reasons.append('leaves a realism band on ' + ', '.join(flagged[v]))
+        arms[v] = dict(n_below=int(sum(below.values())), below=below, reasons=reasons,
+                       bouton_errors={w: float(vals[w]['pn_bouton']) for w in vals},
+                       meets=bool(not reasons and sum(below.values()) >= MIN_WIRINGS))
+    ref = arms[APL_REFERENCE]
+    met = [v for v in arms if v != APL_REFERENCE and arms[v]['meets']]
+    complete = all(not arms[v]['reasons'] for v in arms if v != APL_REFERENCE) and not ref['reasons']
+    holds = bool(met) and not ref['meets'] and not ref['reasons']
+    out['apl_hides_step'] = dict(holds=holds, arms_meeting=met, reference_meets=ref['meets'], arms=arms,
+                                 no_step=no_step, min_wirings=MIN_WIRINGS, complete=complete,
+                                 cls='no class' if (not holds and not complete and not met) else
+                                 ('holds' if holds else 'does not hold'))
+    # the dendrites carry under the calyx that holds
+    a, r = mega.get(variant_of(CARRY_ARM), {}), mega.get('A1', {})
+    dn = F.compare({w: v['downstream'] for w, v in a.items()}, {w: v['downstream'] for w, v in r.items()},
+                   spreads.get('downstream', np.nan))
+    if dn.get('complete'):
+        dn['improves_2se'] = bool(dn['change'] < -SE_MULTIPLE * dn['se'])
+    st = {s: F.compare({w: v[s] for w, v in a.items()}, {w: v[s] for w, v in r.items()}, spreads.get(s, np.nan))
+          for s in DOWNSTREAM}
+    worse = [s for s, v in st.items() if v.get('worse_than_spread')]
+    ctl = {}
+    for c in CONTROL_ARMS:
+        cv = mega.get(variant_of(c), {})
+        ctl[variant_of(c)] = {s: dict(arm=mean_over(a, s, F.T_WIRINGS), control=mean_over(cv, s, F.T_WIRINGS))
+                              for s in ('pn_dendrite',) + DOWNSTREAM}
+        for s, x in ctl[variant_of(c)].items():
+            x['below'] = bool(x['arm'] < x['control'])
+    below_controls = all(ctl[c][s]['below'] for c in ctl for s in DOWNSTREAM)
+    reasons = []
+    names = [variant_of(CARRY_ARM)] + [variant_of(c) for c in CONTROL_ARMS]
+    if not dn.get('complete') or not all(v.get('complete') for v in st.values()) or \
+            any(not np.isfinite(ctl[c][s]['control']) for c in ctl for s in DOWNSTREAM):
+        reasons.append('runs missing')
+    for v in names:
+        tb = [t for t in bad.get(v, []) if t.rsplit('_', 1)[-1] in F.T_WIRINGS]
+        if tb:
+            reasons.append(f'{v}: holds fail: ' + ', '.join(tb))
+        tf = [w for w in flagged.get(v, []) if w in F.T_WIRINGS]
+        if tf:
+            reasons.append(f'{v}: leaves a realism band on ' + ', '.join(tf))
+    carry = bool(not reasons and dn.get('improves_2se') and not worse and below_controls)
+    out['dendrites_carry'] = dict(holds=carry, downstream=dn, stages=st, stage_worse=worse, controls=ctl,
+                                  below_controls=below_controls, reasons=reasons, se_multiple=SE_MULTIPLE,
+                                  cls='no class' if reasons else ('holds' if carry else 'does not hold'))
+    return out
+
+
+def part_score() -> dict:
+    """Step 1's score (the entry's design item 3; the lock's step-1 classes): every step-1 arm and E135's three saved
+    imposed arms at the family's calyx registered with E136's score functions (`load_variant_run`), read as E136 reads
+    its arms under the adopted measure (strength by odor), with the unrefitted family and A1 beside: the megamat stages
+    on the eight wirings against the held-out half and all flies (score_step1_megamat.csv; per wiring, 'mean_S',
+    'mean_T' and 'common' the wirings' mean views); the APL16 somata's KC population errors (score_step1_panels.csv,
+    E136's `score_panels`); the APL16 rows with the realism bands and the APL effect, its calibrated parts beside (E136's
+    `apl16_rows`, E139's `apl_effect_parts`; score_step1_apl16.csv); the no-step yardstick of the boutons against the
+    held-out half (`no_step_yardstick`, checked against step 0's yardsticks.csv where it exists); the classes
+    (`classify_step1`) with the holds (`holds_failed`, E136's HOLD_TOL) and the bands. step1_classes.json and
+    provenance_score_step1.json."""
+    from experiments import E136_stage_population_fit as F
+    from experiments import E139_normalization_ladder as L
+    t0 = time.time()
+    E135 = _e135()
+    old = F.MEASURE
+    F.set_measure(E136_MEASURE)
+    try:
+        F.require_gate()
+        stages = tuple(F.LOSS_STAGES)
+        names = [*E135_VARIANTS, *step1_variants()]
+        for v in names:
+            F.register_variant(v, load_variant_run)
+        allv = [F.FAMILY, A1, *names]
+        mrows, mega = [], {}
+        for v in allv:
+            for half in ('held', None):
+                sc = F.score_megamat(v, stages, half, F.WIRINGS)
+                if sc is None:
+                    continue
+                vals = F.megamat_values(sc, stages, F.WIRINGS)
+                if half == 'held':
+                    mega[v] = vals
+                base = dict(variant=v, half=half or 'all')
+                for w, x in vals.items():
+                    mrows.append(dict(base, wiring=w, **x))
+                for lab, ws in (('mean_S', F.S_WIRINGS), ('mean_T', F.T_WIRINGS)):
+                    mrows.append(dict(base, wiring=lab, **pd.DataFrame([vals[w] for w in ws]).mean().to_dict()))
+                mrows.append(dict(base, wiring='common', stage=sc['stage_error'],
+                                  downstream=sc['stage_error_downstream'], **{s: sc[f'{s}_error'] for s in stages}))
+            print(f'E142 score: {v} ({time.time() - t0:.0f} s)', flush=True)
+        megadf = pd.DataFrame(mrows)
+        megadf.to_csv(out_dir() / 'score_step1_megamat.csv', index=False)
+        fam = mega.get(F.FAMILY, {})
+        spreads = dict(stage=F._sd(x['stage'] for x in fam.values()),
+                       downstream=F._sd(x['downstream'] for x in fam.values()),
+                       **{s: F._sd(x[s] for x in fam.values()) for s in stages})
+        prow = [F.score_panels(v) for v in allv]
+        panels = pd.concat([p for p in prow if len(p)], ignore_index=True) if any(len(p) for p in prow) else \
+            pd.DataFrame()
+        panels.to_csv(out_dir() / 'score_step1_panels.csv', index=False)
+        apl_rows, flagged = [], {}
+        fam_flags = {}
+        for v in allv:
+            r = F.apl16_rows(v)
+            if not len(r):
+                continue
+            parts = {}
+            for w in r.wiring:
+                run = F.load_read(F.ReadPoint(v, 'apl16', w, None))
+                parts[w] = L.apl_effect_parts(L.run_outputs(run)) if run is not None else {}
+            r = r.assign(variant=v)
+            for k in sorted({k for d in parts.values() for k in d}):
+                r[f'cal_{k}'] = r.wiring.map({w: d.get(k, np.nan) for w, d in parts.items()})
+            apl_rows.append(r)
+            fl = F.realism_of(r)
+            if v == F.FAMILY:
+                fam_flags = fl
+            flagged[v] = [w for w, f in fl.items() if f and not fam_flags.get(w)]
+        apl = pd.concat(apl_rows, ignore_index=True) if apl_rows else pd.DataFrame()
+        apl.to_csv(out_dir() / 'score_step1_apl16.csv', index=False)
+        # the APL16 arm's flags stand for the model of its factors: imposed_a1 on megamat is the same model
+        no_step = no_step_yardstick(F)
+        check = None
+        ys = out_dir() / 'yardsticks.csv'
+        if ys.exists():
+            y = pd.read_csv(ys)
+            y = y[(y.stage == 'pn_bouton') & (y.glomeruli == 'dendrites') & (y.fly_set == 'held')]
+            if len(y):
+                check = float(y.no_step.iloc[0])
+                if not np.isclose(check, no_step, rtol=0, atol=1e-9):
+                    raise RuntimeError(f"the no-step yardstick {no_step} is not step 0's {check}")
+        tol = float(F.HOLD_TOL)
+        r1, r2 = runs1_table(), E135.runs2_table()
+        bad = {}
+        for v in names:
+            if v in E135_VARIANTS:
+                rows = r2[r2.tag.astype(str).isin([f'megamat_{E135_VARIANTS[v]}_{w}' for w in F.WIRINGS])]
+            else:
+                arm = v[len(E142_PREFIX):]
+                rows = r1[r1.tag.astype(str).isin([f'{p}_{arm}_{w}' for p in ('megamat', 'apl16') for w in F.WIRINGS])]
+            bad[v] = holds_failed(rows, tol) if len(rows) else []
+        classes = classify_step1(mega, spreads, no_step, bad, flagged, F)
+        rec = dict(classes=classes, spreads=spreads, no_step=no_step, no_step_step0=check, holds_tol=tol, holds_failed=bad,
+                   flagged=flagged, variants=allv, stages=list(stages), measure=E136_MEASURE, a1=a1_factors(),
+                   time=_now(), host=_host(), seconds=round(time.time() - t0, 1),
+                   **{k: v for k, v in H.code_commits().items() if not isinstance(v, (dict, list))})
+        _write_json(out_dir() / 'step1_classes.json', rec)
+        _write_json(out_dir() / 'provenance_score_step1.json',
+                    dict(part='score', script=SCRIPT, time=_now(), host=_host(), code=H.code_commits(),
+                         e135_lock_sha256=E135._sha256(E135.LOCK_COPY) if E135.LOCK_COPY.exists() else None))
+        print(json.dumps({k: v['cls'] for k, v in classes.items()}, indent=1), flush=True)
+        return rec
+    finally:
+        F.set_measure(old)
+
+
 def main(argv: Optional[Sequence[str]] = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
-    ap.add_argument('--part', required=True, choices=('step1', 'step1_dry', 'variants'))
+    ap.add_argument('--part', required=True, choices=('step1', 'step1_dry', 'score', 'variants'))
     ap.add_argument('--lane')
     ap.add_argument('--reverse', action='store_true')
     ap.add_argument('--reclaim', action='store_true')
@@ -512,6 +774,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         part_step1(a.lane, a.reverse, a.reclaim)
     elif a.part == 'step1_dry':
         part_step1_dry(a.wiring)
+    elif a.part == 'score':
+        part_score()
     else:
         write_variants()
 

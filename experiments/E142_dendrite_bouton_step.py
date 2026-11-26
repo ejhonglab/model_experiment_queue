@@ -567,10 +567,7 @@ def part_step0(pieces: Optional[Sequence[str]] = None) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# step 1: hal's module (E142_imposed_calyx_runs.py); its score and classes are reserved for it
-
-STEP1_SCORE_TODO = "E142 step 1's score: hal's (the classes 'apl_hides_step', 'dendrites_carry' as the lock fixes them)"
-
+# step 1: hal's module (E142_imposed_calyx_runs.py), its runs and its score
 
 def run_step1(lane: Optional[str] = None, reverse: bool = False, reclaim: bool = False):
     """Step 1's runs on one lane: hal's `part_step1` (E135's step-2 runner with A1's calyx factors; guarded by
@@ -582,8 +579,10 @@ def run_step1(lane: Optional[str] = None, reverse: bool = False, reclaim: bool =
 def score_step1() -> dict:
     """Step 1's score and classes ('apl_hides_step', 'dendrites_carry', 'no_class'): E136's reading of the boutons,
     claws and somata on T against the held-out half, E135's saved runs at the family's calyx re-scored the same way,
-    A1 beside; realism. Reserved for hal."""
-    raise NotImplementedError(STEP1_SCORE_TODO)
+    A1 beside; realism: hal's `part_score` (E142_imposed_calyx_runs.py; step1_classes.json and the score_step1_*.csv
+    tables in the results folder)."""
+    from experiments import E142_imposed_calyx_runs as S1
+    return S1.part_score()
 
 
 def main(argv: Optional[Sequence[str]] = None) -> None:

@@ -181,3 +181,118 @@ def test_run_point1_refuses_a_hold_that_moves_a_calyx_scale(env, monkeypatch):
     with pytest.raises(RuntimeError, match='moved wKCKC_scale'):
         M.run_point1(M.STEP1_ARMS[0], 'real', env.ctx, env.res / 't.csv', env.res / 'p.json')
     assert not (env.res / 'claims' / 'megamat_imposed_a1_real').exists()
+
+
+# ---------------------------------------------------------------------------
+# the score's classes on planted values
+
+def _F():
+    from experiments import E136_stage_population_fit as F
+    return F
+
+
+def _vals(bouton, claw=0.9, soma=0.95, den=0.8, wirings=None, jitter=0.0):
+    F = _F()
+    ws = list(wirings or F.WIRINGS)
+    out = {}
+    for i, w in enumerate(ws):
+        b = bouton[w] if isinstance(bouton, dict) else bouton
+        d = dict(pn_dendrite=den, pn_bouton=b + jitter * i, kc_claw=claw + jitter * i, kc_soma=soma + jitter * i)
+        d['downstream'] = float(np.sqrt(np.mean([d[s] ** 2 for s in M.DOWNSTREAM])))
+        d['stage'] = float(np.sqrt(np.mean([d[s] ** 2 for s in ('pn_dendrite',) + M.DOWNSTREAM])))
+        out[w] = d
+    return out
+
+
+def _mega(carry_bouton=0.8, a1_bouton=1.0, ref_bouton=1.10, apl_bouton=1.0, ctrl_bouton=1.2):
+    F = _F()
+    mega = {F.FAMILY: _vals(1.19, jitter=0.01), 'A1': _vals(a1_bouton, jitter=0.001),
+            M.APL_REFERENCE: _vals(ref_bouton)}
+    for a in M.APL_ARMS:
+        mega[M.variant_of(a)] = _vals(apl_bouton)
+    mega[M.variant_of(M.CARRY_ARM)] = _vals(carry_bouton, jitter=0.001)
+    for c in M.CONTROL_ARMS:
+        mega[M.variant_of(c)] = _vals(ctrl_bouton, claw=1.0, soma=1.05)
+    fam = mega[F.FAMILY]
+    spreads = dict(downstream=F._sd(v['downstream'] for v in fam.values()),
+                   **{s: F._sd(v[s] for v in fam.values()) for s in ('pn_dendrite',) + M.DOWNSTREAM})
+    return mega, spreads
+
+
+def test_apl_hides_step_class():
+    F = _F()
+    mega, spreads = _mega(carry_bouton=1.0, apl_bouton=1.0, ref_bouton=1.10)
+    c = M.classify_step1(mega, spreads, 1.084, {}, {}, F)['apl_hides_step']
+    assert c['holds'] and c['cls'] == 'holds' and not c['reference_meets'] and len(c['arms_meeting']) == 3
+    # the family's calyx gets below the yardstick too: not hidden by APL
+    mega, spreads = _mega(carry_bouton=1.0, apl_bouton=1.0, ref_bouton=1.0)
+    c = M.classify_step1(mega, spreads, 1.084, {}, {}, F)['apl_hides_step']
+    assert not c['holds'] and c['reference_meets'] and c['cls'] == 'does not hold'
+    # below on only 5 of 8 wirings
+    b = {w: (1.0 if i < 5 else 1.2) for i, w in enumerate(F.WIRINGS)}
+    mega, spreads = _mega(carry_bouton=1.2, apl_bouton=1.2)
+    for a in M.APL_ARMS:
+        mega[M.variant_of(a)] = _vals(b)
+    c = M.classify_step1(mega, spreads, 1.084, {}, {}, F)['apl_hides_step']
+    assert not c['holds'] and all(c['arms'][M.variant_of(a)]['n_below'] == 5 for a in M.APL_ARMS)
+    # a failed hold takes the arm out
+    mega, spreads = _mega(carry_bouton=1.2, apl_bouton=1.2)
+    mega[M.variant_of('imposed_aplpn')] = _vals(1.0)
+    c = M.classify_step1(mega, spreads, 1.084, {M.variant_of('imposed_aplpn'): ['megamat_imposed_aplpn_P3']}, {},
+                         F)['apl_hides_step']
+    assert not c['holds'] and c['arms'][M.variant_of('imposed_aplpn')]['reasons']
+
+
+def test_dendrites_carry_class():
+    F = _F()
+    mega, spreads = _mega(carry_bouton=0.80, a1_bouton=1.0, ctrl_bouton=1.2)
+    c = M.classify_step1(mega, spreads, 1.084, {}, {}, F)['dendrites_carry']
+    assert c['holds'] and c['cls'] == 'holds' and c['downstream']['improves_2se'] and c['below_controls']
+    assert set(c['controls']) == {M.variant_of(x) for x in M.CONTROL_ARMS}
+    # a control below the arm at the boutons
+    mega, spreads = _mega(carry_bouton=0.80, a1_bouton=1.0, ctrl_bouton=0.7)
+    c = M.classify_step1(mega, spreads, 1.084, {}, {}, F)['dendrites_carry']
+    assert not c['holds'] and not c['below_controls'] and c['cls'] == 'does not hold'
+    # no better than A1
+    mega, spreads = _mega(carry_bouton=1.0, a1_bouton=1.0)
+    c = M.classify_step1(mega, spreads, 1.084, {}, {}, F)['dendrites_carry']
+    assert not c['holds'] and not c['downstream']['improves_2se']
+    # a stage worse than A1's by more than its spread
+    mega, spreads = _mega(carry_bouton=0.6, a1_bouton=1.0)
+    for w in F.WIRINGS:
+        mega[M.variant_of(M.CARRY_ARM)][w]['kc_soma'] = 2.0
+    c = M.classify_step1(mega, spreads, 1.084, {}, {}, F)['dendrites_carry']
+    assert 'kc_soma' in c['stage_worse'] and not c['holds']
+    # a band left on a T wiring: no class
+    mega, spreads = _mega(carry_bouton=0.80, a1_bouton=1.0)
+    c = M.classify_step1(mega, spreads, 1.084, {}, {M.variant_of(M.CARRY_ARM): ['P3']}, F)['dendrites_carry']
+    assert c['cls'] == 'no class' and not c['holds']
+
+
+def test_variant_runs_and_holds(monkeypatch, tmp_path):
+    from kcq import stage_readings as R
+    seen = []
+
+    def load(tag, dirs=None):
+        seen.append((tag, [str(d) for d in dirs]))
+        raise FileNotFoundError(tag)
+    monkeypatch.setattr(R, 'load_step3_run', load)
+    monkeypatch.setattr(M, 'step1_dirs', lambda: [tmp_path / 's1'])
+    monkeypatch.setattr(E135, 'step2_dirs', lambda: [tmp_path / 's2'])
+    F = _F()
+    assert M.load_variant_run(F.ReadPoint('E142_imposed_a1', 'apl16', 'M2', None)) is None
+    assert M.load_variant_run(F.ReadPoint('E135_imposed_odor_perm', 'megamat', 'P1', 'held')) is None
+    assert seen == [('apl16_imposed_a1_M2', [str(tmp_path / 's1')]),
+                    ('megamat_imposed_odor_perm_P1', [str(tmp_path / 's2')])]
+    with pytest.raises(ValueError):
+        M.load_variant_run(F.ReadPoint('A1', 'megamat', 'P1', 'held'))
+    assert M.step1_variants() == ['E142_' + n for n in ('imposed_a1', 'imposed_aplpn', 'imposed_kckc',
+                                                         'imposed_kckc_aplpn_none', 'imposed_a1_glom_perm',
+                                                         'imposed_a1_odor_perm')]
+    rows = pd.DataFrame([dict(tag='a', rate_on=0.0915, rate_off=0.2, frac_on_target=0.0915, frac_off_target=0.2,
+                              at_bound_thr=False, at_bound_apl=False),
+                         dict(tag='b', rate_on=0.0915, rate_off=0.2, frac_on_target=0.0915, frac_off_target=0.2,
+                              at_bound_thr='True', at_bound_apl=False),
+                         dict(tag='c', rate_on=0.0960, rate_off=0.2, frac_on_target=0.0915, frac_off_target=0.2,
+                              at_bound_thr=False, at_bound_apl=False)])
+    assert M.holds_failed(rows, 0.005) == ['b', 'c']

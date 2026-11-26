@@ -196,8 +196,9 @@ def test_committed_lock_copy_is_consistent():
     assert lock['amendments'] == list(E142.AMENDMENTS)
 
 
-def test_cli_parts():
+def test_cli_parts(monkeypatch):
+    from experiments import E142_imposed_calyx_runs as S1
     with pytest.raises(SystemExit):
         E142.main(['--help'])
-    with pytest.raises(NotImplementedError):
-        E142.score_step1()
+    monkeypatch.setattr(S1, 'part_score', lambda: dict(called=True))
+    assert E142.score_step1() == dict(called=True)
