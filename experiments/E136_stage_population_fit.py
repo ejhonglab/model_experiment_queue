@@ -66,8 +66,11 @@ Parts (CLI `--part`):
   claims as E134's step 3): megamat on T against the held-out half; validation2 (the lock's 0.0504) and the mixtures
   (E134's held mixture rate) with the wiring's own ratio for APL off; the APL16 input at the wiring's own fit's two
   counts. The unrefitted family's reads are E134's megamat_held and mixtures_held runs and E90's part B (the APL16
-  fit) where they exist; only its validation2 reads are run here.
-- score: the reads scored and classed (`score_megamat`, `score_panels`, `apl16_rows`, `classify`, `part_score`).
+  fit) where they exist; only its validation2 reads are run here. `read_at` reads an arm's model at any coordinates,
+  with a tag, claims root and run folders of the caller's (E139's points; `read_arm` is it at an arm's fitted point).
+- score: the reads scored and classed (`score_megamat`, `score_panels`, `apl16_rows`, `classify`, `part_score`); a
+  variant whose runs live elsewhere is scored by the same functions once registered (`register_variant`, its loader
+  consulted by `load_read`; read on every wiring, where a fitted arm's S wirings are its fit's best evaluation).
 - variants: variants.csv, one row per run in the model-output archive with its parameters, for the archive's
   params.csv (`write_variants`; archive_tools/archive_model_outputs.py reads it).
 
@@ -1765,31 +1768,36 @@ def reads_table() -> pd.DataFrame:
     return pd.concat(fs, ignore_index=True, sort=False).drop_duplicates('tag', keep='last').reset_index(drop=True)
 
 
-def read_arm(pt: ReadPoint, lane: str, reclaim: bool = False, done: Optional[set] = None,
-             archive: bool = True) -> Optional[dict]:
-    """One read, claimed as E134's step-3 points are (mkdir of claims/<tag>/; None if done or claimed elsewhere): the
-    arm on the point's wiring and panel at its fitted coordinates on the wiring's held megamat point, both rates held
-    exactly at the panel's operating point (E77's `hold_rates`, the threshold with APL off, then the tied APL scales;
-    `read_targets`), built again at the held parameters and run with every stage saved (which must give the hold's
-    outputs exactly); A3's claws also read after the threshold (saved as '<tag>_clawafter'). Saved locally and in the
-    archive (E134's step-3 layout); its row in reads_<host>_<lane>.csv and its provenance in
-    provenance_read_<host>_<lane>.json. The claim is released on failure."""
+def read_at(tag: str, arm: str, z, wiring: str, panel: str, half: Optional[str], lane: str, root: Path,
+            dirs: Sequence[Path], reclaim: bool = False, done: Optional[set] = None, extra: Optional[Mapping] = None,
+            label: str = 'E136', script: str = SCRIPT) -> Optional[dict]:
+    """One read of an arm's model at given coordinates, claimed as E134's step-3 points are (mkdir of
+    <root>/claims/<tag>/; None if done or claimed elsewhere): `arm`'s model (built as `base_arm(arm)`) on `wiring` and
+    `panel` at coordinates `z` (a mapping of coordinates, or a function returning it, called once the claim is held)
+    on the wiring's held megamat point, both rates held exactly at the panel's operating point (E77's `hold_rates`, the
+    threshold with APL off, then the tied APL scales; `read_targets`), built again at the held parameters and run with
+    every stage saved (which must give the hold's outputs exactly); A3's claws also read after the threshold (saved as
+    '<tag>_clawafter'). Saved in each of `dirs` (E134's step-3 layout); its row (with `extra`'s fields after the half,
+    also recorded in the run's info) in <root>/reads_<host>_<lane>.csv and its provenance in
+    <root>/provenance_read_<host>_<lane>.json (`script` named there). The claim is released on failure. `label` heads
+    the printed lines."""
     from experiments import E83_cross_wiring_fit as E83
     from experiments import E134_population_baseline as B
     from experiments.E77_input_screen import frame_sha256, hold_rates
-    tag = read_tag(pt)
+    root = Path(root)
+    extra = dict(extra or {})
     if done is not None and tag in done:
         return None
-    if not B.claim(tag, lane, reclaim, root=out_dir()):
-        print(f'E136 {tag}: claimed by another process, skipped', flush=True)
+    if not B.claim(tag, lane, reclaim, root=root):
+        print(f'{label} {tag}: claimed by another process, skipped', flush=True)
         return None
     t0 = time.time()
     try:
-        z = fitted_z(pt.arm)
-        arm = base_arm(pt.arm)
-        a = ARMS[arm]
+        z = dict(z() if callable(z) else z)
+        base = base_arm(arm)
+        a = ARMS[base]
         lock = R.require_lock()
-        p0, _ = start_params(pt.wiring)
+        p0, _ = start_params(wiring)
         if 'kckc_fixed' in a.kws:
             p0['wKCKC_scale'] = float(a.kws['kckc_fixed'])
         for k, v in z.items():
@@ -1797,38 +1805,37 @@ def read_arm(pt: ReadPoint, lane: str, reclaim: bool = False, done: Optional[set
                 for kk in FACTORS[k]:
                     p0[kk] = p0[kk] * float(np.exp(v))
         ct = CLAW_THR_UNIT * float(z['claw_thr']) if 'claw_thr' in z else None
-        orn = B.panel_input(pt.panel)
-        kws = dict(arm_kws(arm), **({'claw_thr': ct} if ct else {}))
-        if arm == 'A1':
-            kws.update(a1_kws(pt.wiring, pt.panel, orn, z))
-        Pp = E83.wiring_parts(pt.wiring)
-        t_off, t_on, f_off, f_on = read_targets(pt.wiring, pt.panel, orn.shape[1], lock)
+        orn = B.panel_input(panel)
+        kws = dict(arm_kws(base), **({'claw_thr': ct} if ct else {}))
+        if base == 'A1':
+            kws.update(a1_kws(wiring, panel, orn, z))
+        Pp = E83.wiring_parts(wiring)
+        t_off, t_on, f_off, f_on = read_targets(wiring, panel, orn.shape[1], lock)
         rng = HOLD_RANGE_DIVISIVE_APL if kws.get('apl_inh_divisive') else HOLD_RANGE
-        hold = hold_rates(lambda: E83.build_simulator(pt.wiring, orn=orn, breadth=Pp['breadth'], params=dict(p0),
+        hold = hold_rates(lambda: E83.build_simulator(wiring, orn=orn, breadth=Pp['breadth'], params=dict(p0),
                                                       extra_kws=kws or None),
-                          target_off=t_off, target_on=t_on, params=dict(p0), label=f'E136 {tag}', apl_bracket=rng)
-        built = B.build_family(pt.wiring, pt.panel, hold['params'], orn=orn, extra_kws=kws or None)
+                          target_off=t_off, target_on=t_on, params=dict(p0), label=f'{label} {tag}', apl_bracket=rng)
+        built = B.build_family(wiring, panel, hold['params'], orn=orn, extra_kws=kws or None)
         p, poff = dict(hold['params']), dict(hold['params_off'])
-        reader = claw_reader_of(arm)
-        out = B.run_stages(B.Point(PANEL, 'held', pt.wiring), built, p, poff, claw_reader=reader)
+        reader = claw_reader_of(base)
+        out = B.run_stages(B.Point(PANEL, 'held', wiring), built, p, poff, claw_reader=reader)
         for c in R.CONDITIONS:
             if B._differ(out[c]['spike_counts'], hold[c][1]) or B._differ(out[c]['responses'], hold[c][0]):
                 raise RuntimeError(f"{tag} {c}: the saved run differs from the hold's outputs")
-        info = dict(model=B.FAMILY, wiring=pt.wiring, panel=pt.panel, reading='read', arm=pt.arm, z=z, params=p,
-                    params_off=poff, claw_thr=ct, tag=tag, host=_host(), lane=lane, time=_now())
+        info = dict(model=B.FAMILY, wiring=wiring, panel=panel, reading='read', arm=arm, z=z, params=p,
+                    params_off=poff, claw_thr=ct, tag=tag, host=_host(), lane=lane, time=_now(), **extra)
         pn_rec = {}
-        if arm == 'A1':
+        if base == 'A1':
             h = require_e135()
             pn_rec = dict(pn_mode=h['mode'], pn_rung=h['rung'], e135_outcome=h['outcome'],
                           **{k: float(v) for k, v in kws.items() if k in ('pn_inhadd', 'pn_inhsc')})
-            chk = a1_pn_check(built, pt.wiring, pt.panel)
+            chk = a1_pn_check(built, wiring, panel)
             info.update(pn_rec, pn_check=chk)
             if chk is not None:
                 pn_rec['pn_check_max_abs_diff'] = max(chk['max_abs_diff_set'], chk['max_abs_diff_unset'])
-        dirs = read_dirs() if archive else read_dirs()[:1]
         R.save_step3_run(tag, out, built.meta, built.orn, info, dirs)
         if ct:
-            out2 = B.run_stages(B.Point(PANEL, 'held', pt.wiring), built, p, poff,
+            out2 = B.run_stages(B.Point(PANEL, 'held', wiring), built, p, poff,
                                 claw_reader=claw_reader_after_threshold(ct, bool(kws.get('apl_inh_divisive'))))
             R.save_step3_run(f'{tag}_clawafter', out2, built.meta, built.orn,
                              dict(info, tag=f'{tag}_clawafter', reading='read, claws after the threshold'), dirs)
@@ -1836,7 +1843,7 @@ def read_arm(pt: ReadPoint, lane: str, reclaim: bool = False, done: Optional[set
         for c in R.CONDITIONS:
             rr.update({f'rate_{c}': float((out[c]['responses'].to_numpy(dtype=float) > 0.5).mean()),
                        f'max_count_{c}': float(out[c]['spike_counts'].to_numpy(dtype=float).max())})
-        row = dict(tag=tag, arm=pt.arm, panel=pt.panel, wiring=pt.wiring, half=pt.half,
+        row = dict(tag=tag, arm=arm, panel=panel, wiring=wiring, half=half, **extra,
                    **{f'z_{k}': v for k, v in z.items()}, claw_thr=ct, **pn_rec,
                    **{k: float(v) for k, v in p.items()}, **{f'off_{k}': float(v) for k, v in poff.items()}, **rr,
                    target_on=t_on, target_off=t_off, frac_on_target=f_on, frac_off_target=f_off,
@@ -1844,17 +1851,30 @@ def read_arm(pt: ReadPoint, lane: str, reclaim: bool = False, done: Optional[set
                    at_bound_apl=hold['at_bound_apl'], hold_n_sims=hold['n_sims'], seconds=round(time.time() - t0, 1),
                    host=_host(), lane=lane, time=_now(), threads=os.environ.get('OMP_NUM_THREADS'),
                    input_sha256=frame_sha256(built.orn), **_commits())
-        _append_row(out_dir() / f'reads_{_host()}_{lane}.csv', row)
-        prov_path = out_dir() / f'provenance_read_{_host()}_{lane}.json'
-        prov = _read_json(prov_path) or dict(part='read', lane=lane, script=SCRIPT, points={})
+        _append_row(root / f'reads_{_host()}_{lane}.csv', row)
+        prov_path = root / f'provenance_read_{_host()}_{lane}.json'
+        prov = _read_json(prov_path) or dict(part='read', lane=lane, script=script, points={})
         prov['points'][tag] = dict(info={k: v for k, v in built.info.items() if not str(k).startswith('_')},
                                    params=p, params_off=poff, model=H.model_provenance(orn_deltas=built.orn))
         _write_json(prov_path, prov)
-        print(f"E136 {tag}: {row['seconds']:.0f} s, rate on {rr['rate_on']:.4f} / off {rr['rate_off']:.4f}", flush=True)
+        print(f"{label} {tag}: {row['seconds']:.0f} s, rate on {rr['rate_on']:.4f} / off {rr['rate_off']:.4f}",
+              flush=True)
         return row
     except BaseException:
-        B.release(tag, root=out_dir())
+        B.release(tag, root=root)
         raise
+
+
+def read_arm(pt: ReadPoint, lane: str, reclaim: bool = False, done: Optional[set] = None,
+             archive: bool = True) -> Optional[dict]:
+    """One read (`read_at`), claimed under this experiment's out_dir() as E134's step-3 points are (None if done or
+    claimed elsewhere): the arm on the point's wiring and panel at its fitted coordinates (`fitted_z`) on the wiring's
+    held megamat point, both rates held exactly at the panel's operating point; saved locally and in the archive
+    (`read_dirs`; locally only without `archive`), its row in reads_<host>_<lane>.csv and its provenance in
+    provenance_read_<host>_<lane>.json. The claim is released on failure."""
+    dirs = read_dirs() if archive else read_dirs()[:1]
+    return read_at(read_tag(pt), pt.arm, lambda: fitted_z(pt.arm), pt.wiring, pt.panel, pt.half, lane, out_dir(), dirs,
+                   reclaim=reclaim, done=done)
 
 
 def part_read(lane: str, arms: Optional[Sequence[str]] = None, reverse: bool = False, reclaim: bool = False) -> None:
@@ -1870,11 +1890,34 @@ def part_read(lane: str, arms: Optional[Sequence[str]] = None, reverse: bool = F
 # ---------------------------------------------------------------------------
 # the score
 
+# variants scored as E136 scores its arms whose runs live elsewhere (e.g. E139's points): a name that is not an arm, the
+# control or the family -> its loader, called as loader(pt, claw_after) and returning the saved run or None
+# (`register_variant`); `load_read` consults it first, and `score_megamat` reads such a variant on every wiring from it
+VARIANT_LOADERS: Dict[str, Callable[..., Optional['R.SavedRun']]] = {}
+
+
+def register_variant(name: str, loader: Callable[..., Optional['R.SavedRun']]) -> None:
+    """Registers a variant for E136's score functions (VARIANT_LOADERS): `loader(pt, claw_after)` gives the run of
+    `ReadPoint(name, panel, wiring, half)` or None. ValueError for a name of E136's own (an arm, CONTROL, FAMILY)."""
+    if name in (*ARMS, CONTROL, FAMILY):
+        raise ValueError(f'{name!r} is one of E136\'s own names')
+    VARIANT_LOADERS[name] = loader
+
+
+def fitted_arm(arm: str) -> bool:
+    """Whether `arm` is one of E136's fitted arms (an arm or the control), whose S wirings are its fit's best
+    evaluation; the unrefitted family and registered variants are read on every wiring."""
+    return arm in ARMS or arm == CONTROL
+
+
 def load_read(pt: ReadPoint, claw_after: bool = False) -> Optional['R.SavedRun']:
     """A saved read (locally, else the archive; with `claw_after` A3's run with its claws read after the threshold,
     the same run elsewhere); the unrefitted family's megamat and mixture runs are E134's saved megamat_held and
-    mixtures_held runs, and its APL16 runs E90's part B (the wirings' own fits); None if absent."""
+    mixtures_held runs, and its APL16 runs E90's part B (the wirings' own fits); a registered variant's from its loader
+    (VARIANT_LOADERS); None if absent."""
     from experiments import E134_population_baseline as B
+    if pt.arm in VARIANT_LOADERS:
+        return VARIANT_LOADERS[pt.arm](pt, claw_after)
     if claw_after and pt.arm in ARMS and 'claw_thr' in ARMS[pt.arm].searched:
         try:
             return R.load_step3_run(f'{read_tag(pt)}_clawafter', dirs=read_dirs())
@@ -1896,13 +1939,14 @@ def load_read(pt: ReadPoint, claw_after: bool = False) -> Optional['R.SavedRun']
 def score_megamat(arm: str, stages: Sequence[str], half: Optional[str] = 'held',
                   wirings: Sequence[str] = T_WIRINGS, perms: bool = False,
                   claw_after: bool = False, views='measure') -> Optional[Dict[str, float]]:
-    """An arm's (or the unrefitted family's) megamat stages on `wirings` against a half of the flies (all of them for
-    None; under the control's permutations with `perms`): `StageLoss`'s dict. A fitted arm's S wirings are its fit's
-    best evaluation (saved under outputs/.../fit_<arm>/). None while a run is missing."""
+    """An arm's (or the unrefitted family's, or a registered variant's) megamat stages on `wirings` against a half of
+    the flies (all of them for None; under the control's permutations with `perms`): `StageLoss`'s dict. A fitted
+    arm's S wirings are its fit's best evaluation (saved under outputs/.../fit_<arm>/; `fitted_arm`); every other
+    name's runs are its reads on every wiring (`load_read`). None while a run is missing."""
     from data_prep import stage_population_data as D
     runs = {}
     for w in wirings:
-        if arm != FAMILY and w in S_WIRINGS:
+        if fitted_arm(arm) and w in S_WIRINGS:
             f = _read_json(out_dir() / f'fit_{arm}.json')
             try:
                 r = R.load_step3_run(f"{arm}_e{f['best_eval']}_{w}", dirs=fit_dirs(arm)) if f else None

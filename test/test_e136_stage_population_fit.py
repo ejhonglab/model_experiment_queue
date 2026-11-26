@@ -677,3 +677,121 @@ def test_write_variants(monkeypatch, tmp_path):
     assert df.loc['A1_e122_real', 'subdir'] == 'fit_A1' and df.loc['A1_e122_real', 'eval'] == 122
     assert (df.pn_inhadd == 1017.3).all() and (df.off_wAPLKC_scale == 0).all() and (df.wKCKC_scale == 138.3).all()
     assert df.loc['A1_megamat_P3', 'z_inhadd'] == 3.48 and (res / 'variants.csv').exists()
+
+
+def test_read_arm_calls_read_at(monkeypatch, tmp_path):
+    """`read_arm` is `read_at` at the arm's fitted coordinates, its tag, claims and rows under out_dir(), its runs in
+    read_dirs() (the local folder only without the archive)."""
+    seen = {}
+    monkeypatch.setattr(F, 'out_dir', lambda: tmp_path)
+    monkeypatch.setattr(F, 'read_dirs', lambda: [tmp_path / 'loc', tmp_path / 'arch'])
+    monkeypatch.setattr(F, 'fitted_z', lambda arm: {'aplpn': -1.0} if arm == 'A0' else {})
+
+    def fake(tag, arm, z, wiring, panel, half, lane, root, dirs, reclaim=False, done=None, extra=None, **kw):
+        seen.update(tag=tag, arm=arm, z=z(), wiring=wiring, panel=panel, half=half, lane=lane, root=root, dirs=dirs,
+                    reclaim=reclaim, done=done, extra=extra, kw=kw)
+        return 'row'
+    monkeypatch.setattr(F, 'read_at', fake)
+    assert F.read_arm(F.ReadPoint('A0', 'apl16', 'M3', None), 'x', reclaim=True, done={'a'}) == 'row'
+    assert seen == dict(tag='A0_apl16_M3', arm='A0', z={'aplpn': -1.0}, wiring='M3', panel='apl16', half=None,
+                        lane='x', root=tmp_path, dirs=[tmp_path / 'loc', tmp_path / 'arch'], reclaim=True, done={'a'},
+                        extra=None, kw={})
+    F.read_arm(F.ReadPoint(F.FAMILY, 'validation2', 'P3', None), 'x', archive=False)
+    assert seen['dirs'] == [tmp_path / 'loc'] and seen['z'] == {} and seen['arm'] == F.FAMILY
+
+
+def _fake_read_pipeline(monkeypatch, fail=False):
+    """read_at's model calls replaced by planted ones (no simulation): the hold returns the planted run's outputs."""
+    from experiments import E77_input_screen as S
+    from experiments import E83_cross_wiring_fit as E83
+    from experiments import E134_population_baseline as B
+    from kcq import harness as H
+    out, built = _out_and_built()
+    built.info = {'model': 'C2'}
+    p = dict(fixed_thr=40.0, wAPLKC_scale=0.2, wKCAPL_scale=1e-4, wAPLPN_scale=0.4, wPNAPL_scale=1e-3, wKCKC_scale=26.0)
+    got = {}
+    monkeypatch.setattr(R, 'require_lock', lambda: {})
+    monkeypatch.setattr(F, 'start_params', lambda w, panel=F.PANEL: (dict(p), dict(p, wAPLKC_scale=0.0)))
+    monkeypatch.setattr(B, 'panel_input', lambda panel: built.orn)
+    monkeypatch.setattr(E83, 'wiring_parts', lambda w: {'breadth': None})
+    monkeypatch.setattr(F, 'read_targets', lambda w, panel, n, lock: (20, 10, 0.2, 0.1))
+    monkeypatch.setattr(F, 'a1_kws', lambda w, panel, orn, z: F.pn_norm_kws(z))
+    monkeypatch.setattr(F, 'require_e135', lambda: dict(mode='search', rung=None, outcome='e'))
+    monkeypatch.setattr(F, 'a1_pn_check', lambda built, w, panel: None)
+
+    def hold(build, **kw):
+        if fail:
+            raise RuntimeError('planted failure')
+        got['hold_params'] = dict(kw['params'])
+        return dict(params=dict(kw['params']), params_off=dict(kw['params'], wAPLKC_scale=0.0),
+                    on=(out['on']['responses'], out['on']['spike_counts']),
+                    off=(out['off']['responses'], out['off']['spike_counts']), thr_factor=1.0, apl_factor=1.0,
+                    at_bound_thr=False, at_bound_apl=False, n_sims=2)
+    monkeypatch.setattr(S, 'hold_rates', hold)
+
+    def build_family(w, panel, params, orn=None, extra_kws=None):
+        got['kws'] = extra_kws
+        return built
+    monkeypatch.setattr(B, 'build_family', build_family)
+    monkeypatch.setattr(B, 'run_stages', lambda pt, b, p, poff, claw_reader=None: out)
+    monkeypatch.setattr(H, 'model_provenance', lambda orn_deltas=None: {})
+    monkeypatch.setattr(F, '_commits', lambda: {})
+    return got
+
+
+def test_read_at_mechanics(monkeypatch, tmp_path):
+    """`read_at` on planted model calls: the claim, the row and the provenance under the given root, the run in the
+    given folders with the extra fields in its info, the coordinates on the wiring's parameters, A1's normalization from
+    `z`; a done tag or a claimed one is skipped, and a failure releases the claim."""
+    import json
+    got = _fake_read_pipeline(monkeypatch)
+    root, d1, d2 = tmp_path / 'res', tmp_path / 'loc', tmp_path / 'arch'
+    z = dict(aplpn=np.log(0.5), kckc=0.0, inhadd=np.log(1000.0 / 31.4088), inhsc=0.0)
+    tag = 'F_inhadd1000_megamat_P3'
+    row = F.read_at(tag, 'A1', z, 'P3', 'megamat', None, 'smoke', root, [d1, d2],
+                    extra=dict(setting='F', rung=1000.0), label='E139')
+    assert row['setting'] == 'F' and row['rung'] == 1000.0 and row['arm'] == 'A1' and row['tag'] == tag
+    assert list(row)[:7] == ['tag', 'arm', 'panel', 'wiring', 'half', 'setting', 'rung']
+    assert got['hold_params']['wAPLPN_scale'] == pytest.approx(0.2) and got['kws']['pn_inhadd'] == pytest.approx(1000.0)
+    assert row['pn_inhadd'] == pytest.approx(1000.0) and row['pn_mode'] == 'search'
+    assert (root / 'claims' / tag / 'claim.json').exists()
+    tab = pd.read_csv(root / f'reads_{F._host()}_smoke.csv')
+    assert list(tab.tag) == [tag] and tab.setting.iloc[0] == 'F'
+    for d in (d1, d2):
+        info = json.loads((d / f'{tag}_run.json').read_text())
+        assert info['setting'] == 'F' and info['rung'] == 1000.0 and info['arm'] == 'A1'
+    prov = json.loads((root / f'provenance_read_{F._host()}_smoke.json').read_text())
+    assert set(prov['points']) == {tag}
+    assert F.read_at(tag, 'A1', z, 'P3', 'megamat', None, 'smoke', root, [d1], done={tag}) is None
+    assert F.read_at(tag, 'A1', z, 'P3', 'megamat', None, 'smoke', root, [d1]) is None    # claimed
+    _fake_read_pipeline(monkeypatch, fail=True)
+    with pytest.raises(RuntimeError, match='planted failure'):
+        F.read_at('K_inhadd1000_megamat_P3', 'A1', z, 'P3', 'megamat', None, 'smoke', root, [d1])
+    assert not (root / 'claims' / 'K_inhadd1000_megamat_P3').exists()
+
+
+def test_registered_variants(monkeypatch, tmp_path):
+    """A registered variant is loaded by its loader and read on every wiring by `score_megamat`; E136's fitted arms
+    keep their fit's best evaluation on the S wirings; E136's own names cannot be registered."""
+    import json
+    with pytest.raises(ValueError):
+        F.register_variant('A1', lambda pt, claw_after: None)
+    with pytest.raises(ValueError):
+        F.register_variant(F.FAMILY, lambda pt, claw_after: None)
+    assert F.fitted_arm('A0') and F.fitted_arm(F.CONTROL) and not F.fitted_arm(F.FAMILY) and not F.fitted_arm('V')
+    monkeypatch.setattr(F, 'out_dir', lambda: tmp_path)
+    monkeypatch.setattr(F, 'read_dirs', lambda: [])
+    monkeypatch.setattr(F, 'fit_dirs', lambda arm: [])
+    (tmp_path / 'fit_A0.json').write_text(json.dumps({'best_eval': 7}))
+    monkeypatch.setattr(R, 'load_step3_run', lambda tag, dirs=None: f'step3:{tag}')
+    monkeypatch.setattr(R, 'require_lock', lambda: {})
+    monkeypatch.setattr(F, 'Flies', lambda half, stages, perms=None, views='measure': half)
+    monkeypatch.setattr(F, 'StageLoss', lambda stages, flies, lock, split=False: (lambda runs: dict(runs)))
+    monkeypatch.setitem(F.VARIANT_LOADERS, 'V', lambda pt, claw_after: f'V:{pt.panel}:{pt.wiring}:{pt.half}')
+    assert F.load_read(F.ReadPoint('V', 'apl16', 'P3', None)) == 'V:apl16:P3:None'
+    v = F.score_megamat('V', F.LOSS_STAGES, 'held', F.WIRINGS)
+    assert v == {w: f'V:megamat:{w}:held' for w in F.WIRINGS}
+    a = F.score_megamat('A0', F.LOSS_STAGES, 'held', F.WIRINGS)
+    assert a == {**{w: f'step3:A0_e7_{w}' for w in F.S_WIRINGS}, **{w: f'step3:A0_megamat_{w}' for w in F.T_WIRINGS}}
+    monkeypatch.setitem(F.VARIANT_LOADERS, 'W', lambda pt, claw_after: None)
+    assert F.score_megamat('W', F.LOSS_STAGES, 'held', F.WIRINGS) is None
