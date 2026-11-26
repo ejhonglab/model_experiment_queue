@@ -296,3 +296,106 @@ def test_variant_runs_and_holds(monkeypatch, tmp_path):
                          dict(tag='c', rate_on=0.0960, rate_off=0.2, frac_on_target=0.0915, frac_off_target=0.2,
                               at_bound_thr=False, at_bound_apl=False)])
     assert M.holds_failed(rows, 0.005) == ['b', 'c']
+
+
+# ---------------------------------------------------------------------------
+# the routes' check (route 2, E135's solved input), on E135's planted PN stage (olfsysm's parameters, no fit_mb_model)
+
+def _toy_stage():
+    import olfsysm as osm
+    rng = np.random.default_rng(1)
+    mp = osm.ModelParams()
+    for k, v in dict(time_pre_start=-0.6, time_start=-0.3, time_end=0.7).items():
+        setattr(mp, k, v)
+    G, O = 10, 4
+    delta = rng.uniform(-20, 150, (G, O))
+    spont = rng.uniform(5, 30, (G, 1))
+    delta[-2:] = 0
+    mp.orn.data.spont = spont
+    mp.orn.data.delta = delta
+    mp.orn.n_physical_gloms = 12
+    mp.kc.N = 10
+    return E135.PNStage.from_mp(mp, [f'g{i}' for i in range(G)], [f'o{j}' for j in range(O)])
+
+
+@pytest.fixture(scope='module')
+def toy():
+    st = _toy_stage()
+    own = st.run(reading='preset')
+    gl = [g for g in st.glomeruli if np.any(st.delta.loc[g].to_numpy() != 0)]
+    return st, own, gl
+
+
+def test_route2_tables_are_the_four_step1_uses():
+    got = [(a.panel, a.table) for a in M.route2_tables()]
+    assert got == [('megamat', 'imposed'), ('megamat', 'imposed_glom_perm'), ('megamat', 'imposed_odor_perm'),
+                   ('apl16', 'imposed')]
+
+
+def test_route2_target_sets_only_the_set_entries(toy):
+    st, own, gl = toy
+    table = own * 0 + 7.0
+    has, od, tgt = M.route2_target(st, table, ['g0', 'g1', 'g9'], ['o1', 'o2'])
+    assert has == gl and od == ['o1', 'o2']
+    assert (tgt.loc[['g0', 'g1'], ['o1', 'o2']] == 7.0).all().all()
+    pd.testing.assert_frame_equal(tgt.loc[gl, ['o0', 'o3']], own.loc[gl, ['o0', 'o3']])
+    pd.testing.assert_frame_equal(tgt.loc[gl[2:], ['o1', 'o2']], own.loc[gl[2:], ['o1', 'o2']])
+
+
+def test_route2_mean_map_finds_the_stages_own_fixed_point(toy):
+    st, own, gl = toy
+    m = M.route2_mean_map(st, own.loc[gl], gl, st.odors)
+    assert list(m.odor) == st.odors
+    assert m.root_in_grid.all()
+    assert (m.F_at_own_mean.abs() < M.ROUTE2_ROOT_TOL).all()
+    np.testing.assert_allclose(m.own_total_hz, m.target_total_hz)
+
+
+def test_route2_mean_map_names_a_target_out_of_reach(toy):
+    st, own, gl = toy
+    tgt = own.loc[gl].copy()
+    tgt['o0'] = tgt['o0'] * 1.6       # under the stage's normalization no input returns this much for o0
+    tgt['o1'] = tgt['o1'] * 0.6       # less is within reach
+    m = M.route2_mean_map(st, tgt, gl, st.odors).set_index('odor')
+    assert not m.loc['o0', 'root_in_grid'] and m.loc['o0', 'min_F'] > M.ROUTE2_ROOT_TOL
+    assert m.loc['o1', 'root_in_grid']
+    assert m.loc['o0', 'target_total_hz'] == pytest.approx(1.6 * m.loc['o0', 'own_total_hz'])
+
+
+def test_routes_verdict():
+    row = dict(wiring='real', panel='megamat', table='imposed', converged=True, max_abs_diff_hz=0.1, at_edge=0,
+               identity_ok=True)
+    ok = pd.DataFrame([dict(row, wiring=w) for w in ('real', 'P1')])
+    v = M.routes_verdict(ok, 2, 0.5)
+    assert v['check1']['passes'] and v['check2'] == 'to run' and v['route'].startswith('2')
+    assert not M.routes_verdict(ok, 3, 0.5)['check1']['passes']          # a table not read
+    bad = ok.copy()
+    bad.loc[1, 'max_abs_diff_hz'] = 20.9
+    v = M.routes_verdict(bad, 2, 0.5)
+    assert not v['check1']['passes'] and v['check1']['failing'] == ['megamat imposed P1']
+    assert v['check2'].startswith('not run') and v['route'].startswith('1')
+    bad = ok.copy()
+    bad.loc[0, 'identity_ok'] = False
+    assert not M.routes_verdict(bad, 2, 0.5)['check1']['passes']
+
+
+def test_part_routes_check_and_summary_on_the_planted_stage(toy, monkeypatch, tmp_path):
+    st, own, gl = toy
+    monkeypatch.setattr(M, 'out_dir', lambda: tmp_path)
+    monkeypatch.setattr(E135, 'require_e134_gate', lambda: None)
+    monkeypatch.setattr(M, 'a1_factors', lambda: A1F)
+    reach = own.copy()
+    reach.loc[['g0', 'g1'], ['o0', 'o1']] = own.loc[['g0', 'g1'], ['o0', 'o1']].to_numpy() * 0.9
+
+    def point_table(arm, wiring, ctx):
+        return reach, ['g0', 'g1'], dict(set_odors=['o0', 'o1']), st, {}
+    monkeypatch.setattr(M, 'point_table', point_table)
+    rows = M.part_routes_check(['real'], 'test')
+    assert len(rows) == 4 and rows.converged.all() and (rows.max_abs_diff_hz <= 0.5).all()
+    assert rows.identity_ok.all() and (rows.n_odors_without_root == 0).all()
+    assert (tmp_path / f'routes_check_1_{M._host()}_test.csv').exists()
+    odors = pd.read_csv(tmp_path / f'routes_check_1_odors_{M._host()}_test.csv')
+    assert len(odors) == 8 and (odors.solve_max_abs_diff_hz <= 0.5).all()
+    v = M.part_routes_summary()
+    assert v['check1']['n_tables'] == 4 and not v['check1']['passes']   # 4 of the 32 tables read
+    assert json.loads((tmp_path / M.ROUTES_FILE).read_text())['check2'].startswith('not run')

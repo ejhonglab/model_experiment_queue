@@ -58,6 +58,14 @@ Usage (from the repository root, as modules):
     OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 PYTHONUNBUFFERED=1 nice -n 10 ./venv/bin/python -u \\
         -m experiments.E142_imposed_calyx_runs --part step1 --lane <host>[-<n>] [--reverse]
     ./venv/bin/python -u -m experiments.E142_imposed_calyx_runs --part step1_dry [--wiring real]
+    ./venv/bin/python -u -m experiments.E142_imposed_calyx_runs --part routes_check [--wirings real P1 ...] --lane <l>
+    ./venv/bin/python -u -m experiments.E142_imposed_calyx_runs --part routes_summary
+
+The routes' check (`part_routes_check`, `part_routes_summary`; the entry's "Step 1's route" of 2026-11-26 10:53):
+whether route 2, E135's solved ORN input, returns every table step 1 uses to within 0.5 Hz with no mushroom-body run
+(check 1), with where each odor's fixed point lies (`route2_mean_map`); checks 2 and 3 (8 route-2 runs of E135's
+imposed arm against its route-1 runs) only once check 1 passes. Outputs: routes_check_1_<host>_<lane>.csv,
+routes_check_1_odors_<host>_<lane>.csv and routes_check.json in the results folder.
 """
 from __future__ import annotations
 
@@ -475,6 +483,220 @@ def part_step1_dry(wiring: str = 'real') -> dict:
     return out
 
 
+# ---------------------------------------------------------------------------
+# the routes' check (the entry's "Step 1's route", added 2026-11-26 10:53; planned by a Fable subagent,
+# claude-fable-5-2, spawned from viki 2026-11-26 10:31): route 2, E135's ORN input solved so that the family's PN stage
+# returns the table, may carry step 1's runs in place of olfsysm's `pn_rates` only if (1) with no mushroom-body
+# simulation the solve returns every table step 1 uses to within 0.5 Hz on every solved entry and `solve_identity`
+# passes, (2) E135's imposed arm at the family's calyx, run by route 2 on the eight wirings, has its PN rates within
+# 0.5 Hz of the table, and (3) its stage errors agree with E135's saved route-1 runs by E135's ruling 9. Checks 2 and 3
+# run only once check 1 passes (`part_routes_summary` says which), so this part runs check 1.
+
+ROUTES_PART = 'routes_check'
+ROUTES_FILE = 'routes_check.json'
+# the input's own mean delta of each odor times these factors: where route 2's fixed point is looked for, from no
+# input at all to nine times the input's (beyond that the solved entries reach the bracket's edge), closer near the
+# input's own mean, where a target near the stage's own rates puts it
+ROUTE2_MEAN_GRID: Tuple[float, ...] = (0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 1.0, 1.05, 1.1, 1.25, 1.5,
+                                       2.0, 3.0, 5.0, 9.0)
+# |F| (in the delta's units, averaged over the stage's glomeruli) at or under which a grid point counts as a fixed
+# point: a target near the stage's own rates can put two roots closer together than the grid's points
+ROUTE2_ROOT_TOL = 0.05
+# E135's `solve_input` bracket of an entry's delta
+ROUTE2_BRACKET: Tuple[float, float] = (-400.0, 2000.0)
+
+
+def route2_tables() -> List[Step1Arm]:
+    """The tables step 1 uses, one arm per distinct (panel, E135 table): megamat's imposed table, its two permuted
+    tables (each wiring's own seeded permutation) and APL16's imposed table."""
+    seen, out = set(), []
+    for arm in STEP1_ARMS:
+        if (arm.panel, arm.table) not in seen:
+            seen.add((arm.panel, arm.table))
+            out.append(arm)
+    return out
+
+
+def route2_target(stage, table: pd.DataFrame, set_gl: Sequence[str],
+                  set_od: Sequence[str]) -> Tuple[List[str], List[str], pd.DataFrame]:
+    """Route 2's target as E135's `arm_input` builds it: on the glomeruli with input, the table's rates on the set
+    glomeruli and odors and the stage's own rates elsewhere ('preset' reading). Returns (the glomeruli with input, the
+    set odors, the target)."""
+    own = stage.run(reading='preset')
+    has_input = [g for g in stage.glomeruli if np.any(stage.delta.loc[g].to_numpy() != 0)]
+    setg = [g for g in set_gl if g in set(has_input)]
+    od = [o for o in set_od if o in set(own.columns)]
+    target = own.loc[has_input].copy()
+    target.loc[setg, od] = table.loc[setg, od].to_numpy()
+    return has_input, od, target
+
+
+def route2_mean_map(stage, target: pd.DataFrame, glomeruli: Sequence[str], odors: Sequence[str],
+                    grid: Sequence[float] = ROUTE2_MEAN_GRID, bracket: Tuple[float, float] = ROUTE2_BRACKET,
+                    n_iter: int = 60, root_tol: float = ROUTE2_ROOT_TOL) -> pd.DataFrame:
+    """Where route 2's fixed point lies, odor by odor. E135's `solve_input` looks, for each odor, for the mean delta m
+    over the stage's glomeruli at which the deltas solved at m's LN (each entry at its target, E135's `_solve_entries`)
+    have the mean m: a root of F(m) = mean(solved deltas) - m. F is read at m = factor x the input's own mean delta for
+    each factor of `grid`, at the points where no entry reaches the bracket's edge.
+
+    An odor whose F stays above 0 at every point has no input, under the stage's LN, that returns its target: its PNs
+    ask for more input than the LN that input drives lets through (the stage's divisive normalization).
+
+    Returns one row per odor: the stage's own and the target's PN rates summed over `glomeruli`, F at the input's own
+    mean, the least and the largest F, whether F changes sign between neighbouring points or comes within `root_tol` of
+    0 at one (a root inside the grid), and the number of points read."""
+    E135 = _e135()
+    sp = stage.sp
+    G = stage.glomeruli
+    nG = len(G)
+    rows = np.array([G.index(g) for g in glomeruli])
+    cols = np.array([stage.odors.index(o) for o in odors])
+    T = target.loc[list(glomeruli), list(odors)].to_numpy(dtype=float)
+    d = stage.delta.to_numpy(dtype=float)
+    others = [i for i in range(nG) if i not in set(rows.tolist())]
+    fixed = d[others][:, cols].sum(axis=0) if others else np.zeros(len(cols))
+    k = E135.orn_layer(sp, np.zeros(1), np.ones((1, 1)))[0, 0]
+    inhA, inhB = stage.ln(sp)
+    inhA, inhB = inhA.copy(), inhB.copy()
+    m0 = d[:, cols].mean(axis=0)
+    Fs, ok = [], []
+    for f in grid:
+        m = m0 * float(f)
+        a, b = E135.ln_layer_mean(sp, stage.spont.mean() + m[:, None] * k[None, :], nG)
+        inhA[cols], inhB[cols] = a, b
+        x, n_edge = E135._solve_entries(sp, stage.spont, rows, cols, T, k, inhA, inhB, 'preset', bracket, n_iter,
+                                        E135.SOLVE_TOL_HZ / 100)
+        Fs.append((x.sum(axis=0) + fixed) / nG - m)
+        ok.append(n_edge == 0)
+    Fs, ok = np.asarray(Fs), np.asarray(ok)
+    own = stage.run(reading='preset')
+    at_own = [i for i, f in enumerate(grid) if float(f) == 1.0]
+    out = []
+    for j, o in enumerate(odors):
+        fj = Fs[ok, j]
+        out.append(dict(odor=o, own_total_hz=float(own.loc[list(glomeruli), o].sum()),
+                        target_total_hz=float(target.loc[list(glomeruli), o].sum()),
+                        F_at_own_mean=float(Fs[at_own[0], j]) if at_own and ok[at_own[0]] else np.nan,
+                        min_F=float(fj.min()) if len(fj) else np.nan, max_F=float(fj.max()) if len(fj) else np.nan,
+                        root_in_grid=bool(len(fj) and ((np.sign(fj[:-1]) != np.sign(fj[1:])).any()
+                                                       or (np.abs(fj) <= root_tol).any())),
+                        n_grid=int(ok.sum())))
+    return pd.DataFrame(out)
+
+
+def route2_odor_diffs(stage, solved: pd.DataFrame, target: pd.DataFrame, glomeruli: Sequence[str],
+                      odors: Sequence[str]) -> pd.Series:
+    """The largest difference of each odor's PN rates from the target (Hz, 'preset' reading, over `glomeruli`), with
+    the stage re-run exactly on route 2's solved input (its LN on that input)."""
+    E135 = _e135()
+    got = E135.PNStage(solved, pd.Series(stage.spont, index=stage.glomeruli), stage.sp).run(reading='preset')
+    gl, od = list(glomeruli), list(odors)
+    return (got.loc[gl, od] - target.loc[gl, od]).abs().max(axis=0)
+
+
+def part_routes_check(wirings: Optional[Sequence[str]] = None, lane: Optional[str] = None) -> pd.DataFrame:
+    """The routes' check 1, with no mushroom-body simulation: on each wiring, for each table step 1 uses
+    (`route2_tables`), E135's route 2 (`arm_input` with route 2: `solve_input` on the glomeruli with input), its record,
+    each odor's largest difference from the target and where its fixed point lies (`route2_mean_map`); and on each
+    (panel, wiring) the solve's identity on the stage's own rates (`E135.solve_identity`). The family's PN stage is
+    built as step 1 builds it (`Step1.stage`, without the lane identity, which runs the mushroom body). Rows in
+    routes_check_1_<host>_<lane>.csv and routes_check_1_odors_<host>_<lane>.csv; `part_routes_summary` reads them."""
+    from experiments import E136_stage_population_fit as F
+    E135 = _e135()
+    E135.require_e134_gate()
+    lane = lane or _host()
+    ctx = Step1(lane, identity=False)
+    wirings = list(F.WIRINGS if not wirings else wirings)
+    tpath = out_dir() / f'routes_check_1_{_host()}_{lane}.csv'
+    opath = out_dir() / f'routes_check_1_odors_{_host()}_{lane}.csv'
+    prov = out_dir() / f'provenance_routes_check_1_{_host()}_{lane}.json'
+    _write_json(prov, dict(script=SCRIPT, part=ROUTES_PART, wirings=wirings, lane=lane, host=_host(), time=_now(),
+                           grid=list(ROUTE2_MEAN_GRID), bracket=list(ROUTE2_BRACKET), tol_hz=E135.SOLVE_TOL_HZ,
+                           **H.code_commits()))
+    trows, orows, idents = [], [], {}
+    for w in wirings:
+        for arm in route2_tables():
+            t0 = time.time()
+            table, set_gl, trec, stage, _ = point_table(arm, w, ctx)
+            has_input, od, target = route2_target(stage, table, set_gl, trec['set_odors'])
+            key = (arm.panel, w)
+            if key not in idents:
+                ident = E135.solve_identity(stage, glomeruli=has_input)
+                idents[key] = dict(ok=ident['ok'], max_rate_diff_hz=ident['max_rate_diff'],
+                                   max_delta_diff=ident['max_delta_diff'])
+            kw, rec = E135.arm_input(stage, table, set_gl, 2, set_odors=trec['set_odors'])
+            diffs = route2_odor_diffs(stage, kw['orn'], target, has_input, od)
+            mp_ = route2_mean_map(stage, target, has_input, od)
+            mp_['solve_max_abs_diff_hz'] = mp_['odor'].map(diffs).astype(float)
+            mp_.insert(0, 'table', arm.table)
+            mp_.insert(0, 'panel', arm.panel)
+            mp_.insert(0, 'wiring', w)
+            orows.append(mp_)
+            ln = rec.get('ln_change') or {}
+            trows.append(dict(
+                wiring=w, panel=arm.panel, table=arm.table, n_set_glomeruli=len(set_gl), n_set_odors=len(od),
+                n_solved=rec.get('n_solved'), converged=bool(rec['converged']),
+                max_abs_diff_hz=float(rec['max_abs_diff']), at_edge=int(rec['at_edge']), method=rec['method'],
+                fixed_point=bool(rec['fixed_point']), bracketed=bool(rec['bracketed']), outer=int(rec['outer']),
+                no_input_max_drift_hz=float(rec['no_input_max_drift_hz']),
+                ln_inhA_max_abs=ln.get('inhA_max_abs'), ln_pn_inh_factor_max_rel=ln.get('pn_inh_factor_max_rel'),
+                n_odors_without_root=int((~mp_['root_in_grid']).sum()),
+                odors_without_root=';'.join(mp_.loc[~mp_['root_in_grid'], 'odor'].astype(str)),
+                identity_ok=idents[key]['ok'], identity_max_rate_diff_hz=idents[key]['max_rate_diff_hz'],
+                seconds=round(time.time() - t0, 1), host=_host(), lane=lane, time=_now(),
+                queue_commit=H.code_commits().get('queue_commit')))
+            pd.DataFrame(trows).to_csv(tpath, index=False)
+            pd.concat(orows, ignore_index=True).to_csv(opath, index=False)
+            r = trows[-1]
+            print(f"E142 routes' check 1 {w} {arm.panel} {arm.table}: converged {r['converged']}, largest difference "
+                  f"{r['max_abs_diff_hz']:.2f} Hz ({r['method']}), {r['n_odors_without_root']} of {len(od)} odors "
+                  f"without a fixed point, identity {r['identity_ok']} ({r['seconds']:.0f} s)", flush=True)
+    return pd.DataFrame(trows)
+
+
+def routes_verdict(tables: pd.DataFrame, n_expected: int, tol: float) -> dict:
+    """Check 1's verdict from its rows: it passes when every table step 1 uses was read on every wiring
+    (`n_expected` rows) and each converged to within `tol` Hz, at no bracket edge, with the solve's identity passing.
+    Checks 2 and 3 run only once it passes."""
+    n = len(tables)
+    bad = tables[~(tables['converged'].astype(bool) & (tables['max_abs_diff_hz'] <= tol) & (tables['at_edge'] == 0)
+                   & tables['identity_ok'].astype(bool))] if n else tables
+    passes = bool(n == n_expected and n and bad.empty)
+    return dict(check1=dict(passes=passes, n_tables=n, n_expected=n_expected, tol_hz=tol, n_failing=int(len(bad)),
+                            failing=[f"{r.panel} {r.table} {r.wiring}" for r in bad.itertuples()]),
+                check2='to run' if passes else 'not run: check 1 failed',
+                check3='to run' if passes else 'not run: check 1 failed',
+                route='2 after checks 2 and 3' if passes else "1 (olfsysm's pn_rates), on Yang's word")
+
+
+def part_routes_summary() -> dict:
+    """Check 1's rows from every lane, its verdict (`routes_verdict`) and, per table, the solve's largest difference and
+    the odors without a fixed point, into routes_check.json."""
+    from experiments import E136_stage_population_fit as F
+    E135 = _e135()
+    d = out_dir()
+    tabs = [pd.read_csv(p) for p in sorted(d.glob('routes_check_1_*.csv')) if '_odors_' not in p.name]
+    ods = [pd.read_csv(p) for p in sorted(d.glob('routes_check_1_odors_*.csv'))]
+    tables = pd.concat(tabs, ignore_index=True) if tabs else pd.DataFrame()
+    odors = pd.concat(ods, ignore_index=True) if ods else pd.DataFrame()
+    v = routes_verdict(tables, len(F.WIRINGS) * len(route2_tables()), E135.SOLVE_TOL_HZ)
+    if len(tables):
+        v['tables'] = tables[['wiring', 'panel', 'table', 'converged', 'max_abs_diff_hz', 'method',
+                              'n_odors_without_root', 'odors_without_root', 'identity_ok']].to_dict('records')
+    if len(odors):
+        o = odors.assign(no_root=~odors['root_in_grid'].astype(bool),
+                         target_over_own=odors['target_total_hz'] / odors['own_total_hz'])
+        g = o.groupby(['panel', 'table', 'odor'], sort=False)
+        v['odors'] = g.agg(n_wirings=('wiring', 'size'), n_without_root=('no_root', 'sum'),
+                           target_over_own=('target_over_own', 'mean'), least_min_F=('min_F', 'min'),
+                           solve_max_abs_diff_hz=('solve_max_abs_diff_hz', 'max')).reset_index().to_dict('records')
+    v.update(time=_now(), host=_host(), script=SCRIPT, **{k: x for k, x in H.code_commits().items()
+                                                         if not isinstance(x, (dict, list))})
+    _write_json(d / ROUTES_FILE, v)
+    print(json.dumps({k: v[k] for k in ('check1', 'check2', 'check3', 'route')}, indent=1, default=str), flush=True)
+    return v
+
+
 def load_point(tag: str):
     """A saved step-1 run (stage_readings' `load_step3_run` from `step1_dirs`); FileNotFoundError if absent."""
     from kcq import stage_readings as R
@@ -764,16 +986,22 @@ def part_score() -> dict:
 
 def main(argv: Optional[Sequence[str]] = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
-    ap.add_argument('--part', required=True, choices=('step1', 'step1_dry', 'score', 'variants'))
+    ap.add_argument('--part', required=True,
+                    choices=('step1', 'step1_dry', 'score', 'variants', 'routes_check', 'routes_summary'))
     ap.add_argument('--lane')
     ap.add_argument('--reverse', action='store_true')
     ap.add_argument('--reclaim', action='store_true')
     ap.add_argument('--wiring', default='real')
+    ap.add_argument('--wirings', nargs='*', help="routes_check: the wirings to read (default all eight)")
     a = ap.parse_args(argv)
     if a.part == 'step1':
         part_step1(a.lane, a.reverse, a.reclaim)
     elif a.part == 'step1_dry':
         part_step1_dry(a.wiring)
+    elif a.part == 'routes_check':
+        part_routes_check(a.wirings, a.lane)
+    elif a.part == 'routes_summary':
+        part_routes_summary()
     elif a.part == 'score':
         part_score()
     else:
