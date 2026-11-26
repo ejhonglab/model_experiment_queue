@@ -399,3 +399,6 @@ def test_part_routes_check_and_summary_on_the_planted_stage(toy, monkeypatch, tm
     v = M.part_routes_summary()
     assert v['check1']['n_tables'] == 4 and not v['check1']['passes']   # 4 of the 32 tables read
     assert json.loads((tmp_path / M.ROUTES_FILE).read_text())['check2'].startswith('not run')
+    tabs = pd.read_csv(tmp_path / 'routes_check_tables.csv')
+    assert [(r.panel, r.table) for r in tabs.itertuples()] == [(a.panel, a.table) for a in M.route2_tables()]
+    assert len(pd.read_csv(tmp_path / 'routes_check_odors.csv')) == 8

@@ -671,7 +671,8 @@ def routes_verdict(tables: pd.DataFrame, n_expected: int, tol: float) -> dict:
 
 def part_routes_summary() -> dict:
     """Check 1's rows from every lane, its verdict (`routes_verdict`) and, per table, the solve's largest difference and
-    the odors without a fixed point, into routes_check.json."""
+    the odors without a fixed point, into routes_check.json; every lane's rows together, in a fixed order, into
+    routes_check_tables.csv and routes_check_odors.csv (names that do not depend on the lanes, for the Summary's keys)."""
     from experiments import E136_stage_population_fit as F
     E135 = _e135()
     d = out_dir()
@@ -679,6 +680,12 @@ def part_routes_summary() -> dict:
     ods = [pd.read_csv(p) for p in sorted(d.glob('routes_check_1_odors_*.csv'))]
     tables = pd.concat(tabs, ignore_index=True) if tabs else pd.DataFrame()
     odors = pd.concat(ods, ignore_index=True) if ods else pd.DataFrame()
+    order = {w: i for i, w in enumerate(F.WIRINGS)}
+    tab_order = {(a.panel, a.table): i for i, a in enumerate(route2_tables())}
+    for df, name in ((tables, 'routes_check_tables.csv'), (odors, 'routes_check_odors.csv')):
+        if len(df):
+            key = df.apply(lambda r: (tab_order.get((r['panel'], r['table']), 99), order.get(r['wiring'], 99)), axis=1)
+            df.iloc[np.argsort(key.to_numpy(), kind='stable')].to_csv(d / name, index=False)
     v = routes_verdict(tables, len(F.WIRINGS) * len(route2_tables()), E135.SOLVE_TOL_HZ)
     if len(tables):
         v['tables'] = tables[['wiring', 'panel', 'table', 'converged', 'max_abs_diff_hz', 'method',
