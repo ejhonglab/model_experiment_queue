@@ -154,3 +154,23 @@ def test_return_split():
     s = W.return_split(fit, det)
     assert s['inhadd'] == pytest.approx((0.0932, 0.5494)) and s['aplpn'] == pytest.approx((0.0139, 0.0))
     assert W.return_split(fit, None) == {}
+
+
+def test_without_odor_table():
+    """The somata with and without aa's entry: means over T, the common error, the change from the family on the same
+    wirings, and the family on all eight wirings beside."""
+    rows = []
+    for arm, e, wo in (('family', 1.0, 0.6), ('A1', 0.9, 0.55)):
+        for w in F.T_WIRINGS:
+            rows.append(dict(arm=arm, stage='kc_soma', odor='aa', half='held', row=w, view_error=e, view_error_without=wo,
+                             view_share=0.5))
+        rows.append(dict(arm=arm, stage='kc_soma', odor='aa', half='held', row='common', view_error=e - 0.05,
+                         view_error_without=wo - 0.05, view_share=0.5))
+    rows.append(dict(arm='family', stage='kc_soma', odor='aa', half='all', row='common', view_error=0.817,
+                     view_error_without=0.531, view_share=0.58))
+    V = W.Values()
+    md = '\n'.join(W.without_odor_table(dict(fits={}), pd.DataFrame(rows), V))
+    assert '| 0.900 (0.850) | 0.550 (0.500) | -0.100 | -0.050 |' in md and '0.817 and 0.531' in md
+    v = V.frame().set_index(['arm', 'statistic', 'half']).value
+    assert v[('A1', 'change_without_aa', 'held')] == pytest.approx(-0.05)
+    assert v[('family', 'strength_without_aa_common', 'all')] == pytest.approx(0.531)

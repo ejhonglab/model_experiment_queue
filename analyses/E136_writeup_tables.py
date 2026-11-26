@@ -864,6 +864,66 @@ def apl_effect_table(d: dict, parts: Optional[pd.DataFrame], V: Values) -> List[
     return L + ['']
 
 
+WITHOUT_ODOR = 'aa'
+
+
+def without_odor_rows(arms: Sequence[str]) -> pd.DataFrame:
+    """The megamat KC somata's strength error with and without aa's entry (E140's outcome (d); E136's
+    `stage_without_odor`, E138's definition: the odor's term removed, the number of odors kept): every arm but the
+    control on T against the held-out half, and the unrefitted family on all eight wirings against all flies as well
+    (E138's 0.817 and 0.531)."""
+    out = [F.stage_without_odor(a, odor=WITHOUT_ODOR) for a in arms if a != CONTROL]
+    out.append(F.stage_without_odor(F.FAMILY, odor=WITHOUT_ODOR, half=None, wirings=F.WIRINGS))
+    return pd.concat([x for x in out if x is not None], ignore_index=True)
+
+
+def without_odor_table(d: dict, rows: Optional[pd.DataFrame], V: Values) -> List[str]:
+    """The megamat KC somata's strength error with and without aa's entry, per arm on T against the held-out half (the
+    mean over T, the common error, and the change from the unrefitted family), with the family on all eight wirings
+    against all flies beside."""
+    if rows is None or not len(rows):
+        return []
+    fits = d['fits']
+    o = WITHOUT_ODOR
+    L = [f"The megamat KC somata's strength error with and without {o}'s entry (E140's outcome (d)): {o}'s term taken "
+         f"out of the squared error with the number of odors kept (E138's definition, which equals {o}'s entry at the "
+         "flies' value), on T against the held-out half: the mean over T (the common error); the change is from the "
+         "unrefitted family on the same wirings.", '',
+         f"| model | with {o} | without {o} | change, with {o} | change, without {o} | {o}'s share of the squared error |",
+         '|---|---:|---:|---:|---:|---:|']
+    held = rows[rows.half == 'held']
+    fam = held[(held.arm == F.FAMILY) & held.row.isin(F.T_WIRINGS)].set_index('row')
+    for a in [a for a in ARM_ORDER if a in set(held.arm)]:
+        g = held[held.arm == a]
+        w = g[g.row.isin(F.T_WIRINGS)].set_index('row')
+        cm = g[g.row == 'common'].iloc[0]
+        m_with, m_wo = float(w.view_error.mean()), float(w.view_error_without.mean())
+        ch = (w.view_error - fam.view_error.reindex(w.index)).mean() if a != F.FAMILY else np.nan
+        ch_wo = (w.view_error_without - fam.view_error_without.reindex(w.index)).mean() if a != F.FAMILY else np.nan
+        L.append(f"| {arm_label(a, fits)} | {m_with:.3f} ({cm.view_error:.3f}) | {m_wo:.3f} ({cm.view_error_without:.3f}) | "
+                 f"{_f(ch, '+.3f')} | {_f(ch_wo, '+.3f')} | {float(w.view_share.mean()):.2f} |")
+        V.add(a, 'kc_soma', f'strength_with_{o}_mean', m_with)
+        V.add(a, 'kc_soma', f'strength_without_{o}_mean', m_wo)
+        V.add(a, 'kc_soma', f'strength_with_{o}_common', cm.view_error)
+        V.add(a, 'kc_soma', f'strength_without_{o}_common', cm.view_error_without)
+        V.add(a, 'kc_soma', f'{o}_share_mean', float(w.view_share.mean()))
+        if a != F.FAMILY:
+            V.add(a, 'kc_soma', f'change_with_{o}', ch)
+            V.add(a, 'kc_soma', f'change_without_{o}', ch_wo)
+    al = rows[(rows.half == 'all') & (rows.arm == F.FAMILY)]
+    if len(al):
+        cm = al[al.row == 'common'].iloc[0]
+        w = al[al.row.isin(F.WIRINGS)]
+        L += ['', f"The unrefitted family on all eight wirings against all flies: {float(w.view_error.mean()):.3f} with "
+              f"{o} and {float(w.view_error_without.mean()):.3f} without (the common error {cm.view_error:.3f} and "
+              f"{cm.view_error_without:.3f}, E138's)."]
+        V.add(F.FAMILY, 'kc_soma', f'strength_with_{o}_common', cm.view_error, half='all')
+        V.add(F.FAMILY, 'kc_soma', f'strength_without_{o}_common', cm.view_error_without, half='all')
+        V.add(F.FAMILY, 'kc_soma', f'strength_with_{o}_mean_8', float(w.view_error.mean()), half='all')
+        V.add(F.FAMILY, 'kc_soma', f'strength_without_{o}_mean_8', float(w.view_error_without.mean()), half='all')
+    return L + ['']
+
+
 def main(score_dir: Optional[Path] = None, fit_dir: Optional[Path] = None, with_apl: bool = True) -> Path:
     """Writes writeup_tables.md and writeup_values.csv into `score_dir` (default the measure's out_dir); `with_apl`
     False skips what reads the saved runs (the APL effect's parts and where APL's inhibition is made)."""
@@ -875,12 +935,13 @@ def main(score_dir: Optional[Path] = None, fit_dir: Optional[Path] = None, with_
     arms = [a for a in arms_present(d)]
     parts = apl_effect_parts(arms) if with_apl and len(d['apl']) else None
     sites = apl_sites(arms) if with_apl else None
+    without = without_odor_rows(arms) if with_apl else None
     L = ['# E136 write-up tables', '',
          f"From the score of {pv.get('time')} ({pv.get('host')}, queue {str(pv.get('queue_commit'))[:7]}): measure "
          f"{c.get('measure')!r}, stages {', '.join(c.get('stages') or [])}; arms scored: "
          f"{', '.join(pv.get('arms') or [])}.", '',
          '## The stage table', ''] + stage_table(d, V) + halves_table(d, V)
-    L += ['## The classes', ''] + classes_table(d, V) + stage_changes_table(d, V)
+    L += ['## The classes', ''] + classes_table(d, V) + stage_changes_table(d, V) + without_odor_table(d, without, V)
     L += ['## The held-out panels', ''] + panels_table(d, V) + e137_table(d, V)
     L += ['## The fits', ''] + fits_table(d, V)
     L += ['## The strength split', ''] + split_table(d, V)

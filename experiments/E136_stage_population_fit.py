@@ -1944,6 +1944,18 @@ def score_megamat(arm: str, stages: Sequence[str], half: Optional[str] = 'held',
     arm's S wirings are its fit's best evaluation (saved under outputs/.../fit_<arm>/; `fitted_arm`); every other
     name's runs are its reads on every wiring (`load_read`). None while a run is missing."""
     from data_prep import stage_population_data as D
+    runs = megamat_runs(arm, wirings, half, claw_after)
+    if runs is None:
+        return None
+    lock = R.require_lock()
+    flies = Flies(half, stages, perms=permutations(list(D.panel_odors(PANEL))) if perms else None, views=views)
+    return StageLoss(stages, flies, lock, split=True)(runs)
+
+
+def megamat_runs(arm: str, wirings: Sequence[str], half: Optional[str] = 'held',
+                 claw_after: bool = False) -> Optional[Dict[str, 'R.SavedRun']]:
+    """The megamat runs `score_megamat` reads, per wiring: a fitted arm's best evaluation on the S wirings, every other
+    run a read (`load_read`); None while one is missing."""
     runs = {}
     for w in wirings:
         if fitted_arm(arm) and w in S_WIRINGS:
@@ -1957,9 +1969,34 @@ def score_megamat(arm: str, stages: Sequence[str], half: Optional[str] = 'held',
         if r is None:
             return None
         runs[w] = r
+    return runs
+
+
+def stage_without_odor(arm: str, stage: str = 'kc_soma', odor: str = 'aa', half: Optional[str] = 'held',
+                       wirings: Sequence[str] = T_WIRINGS) -> Optional[pd.DataFrame]:
+    """A megamat stage's strength error with and without one odor's entry (E140's outcome (d): the KC somata without
+    aa's), read as `score_megamat` reads it (the runs of `megamat_runs`, the half's references in all flies' units):
+    E138's `odor_entries`, whose 'view_error_without' takes the odor's term out of the squared error and keeps the
+    number of odors, nothing renormalized, which equals the odor's entry set to the flies' value. One row per wiring
+    and 'common' (the wirings' mean views): arm, stage, odor, half, row, view_error, view_error_without, the odor's
+    view_share. None while a run is missing."""
+    from experiments import E138_strength_by_odor_entries as E138
+    runs = megamat_runs(arm, wirings, half)
+    if runs is None:
+        return None
+    flies = Flies(half, [stage])
     lock = R.require_lock()
-    flies = Flies(half, stages, perms=permutations(list(D.panel_odors(PANEL))) if perms else None, views=views)
-    return StageLoss(stages, flies, lock, split=True)(runs)
+    pops = [R.read_run(runs[w], stages=[stage], lock=lock, flies=flies.cache, seed_index=seed_index(w)
+                       ).populations[(stage, PANEL, 'on')] for w in wirings]
+    ref = flies.reference(stage, list(pops[0].values.columns))
+    ent = E138.odor_entries(pops, ref, names=list(wirings))
+    ent = ent[ent['odor'].astype(str) == odor]
+    if ent.empty:
+        raise KeyError(f'{odor!r} is not among the {stage} odors')
+    out = ent[['row', 'view_error', 'view_error_without', 'view_share']].copy()
+    for k, v in (('half', 'all' if half is None else half), ('odor', odor), ('stage', stage), ('arm', arm)):
+        out.insert(0, k, v)
+    return out.reset_index(drop=True)
 
 
 def score_panels(arm: str, flies: Optional['R.FlyCache'] = None, views='measure') -> pd.DataFrame:
