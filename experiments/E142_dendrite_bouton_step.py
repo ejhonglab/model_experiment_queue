@@ -36,9 +36,9 @@ touch the same lines):
   with the megamat stage error over the three other stages;
 - the planner's probe numbers reproduced (`PROBE`), and step 0's classes ("the counts make the step", "the reading's").
 
-Step 1 (56 runs at fixed scales on E135's step-2 runner and table; hal's code, `--part step1`, `--part score`) is
-reserved below: its arms and classes are fixed in the lock (`STEP1_ARMS`, `CLASSES`), its functions raise
-NotImplementedError until hal fills them.
+Step 1 (56 runs at fixed scales on E135's step-2 runner and table) is hal's module, experiments/E142_imposed_calyx_runs.py
+(`--part step1` calls its `part_step1`); its arms, A1's factors and its classes are fixed in the lock (the module's
+STEP1_ARMS, `CLASSES`); its score (`--part score`) is reserved for hal.
 
 Judgments the entry leaves open (the narrowest reading; each is in the lock's 'narrow_readings'):
 see NARROW_READINGS.
@@ -191,28 +191,22 @@ E119_EXPERIMENT = 'E119_stages_per_roi'
 READING_ARM = 'A1'
 FAMILY = 'family'
 
-# step 1 (hal's): the arms at fixed scales on E135's step-2 runner and table, both response rates re-held; factors as
-# multiples of each wiring's family scales (E136's coordinates 'aplpn' = wAPLPN_scale, 'kckc' = wKCKC_scale), the
-# entry's rounded values as E139's settings B and K take them; None for "at none" (APL->bouton 0)
-A1_FACTORS: Dict[str, float] = {'aplpn': 0.155, 'kckc': 3.24}
-Step1Arm = namedtuple('Step1Arm', 'name input table factors wirings what')
-STEP1_ARMS: Tuple[Step1Arm, ...] = (
-    Step1Arm('imposed_a1', 'megamat', 'imposed', {'aplpn': 0.155, 'kckc': 3.24}, WIRINGS,
-             "the dendrites imposed with A1's calyx factors (APL->bouton x0.155, KC-KC x3.24)"),
-    Step1Arm('imposed_aplpn', 'megamat', 'imposed', {'aplpn': 0.155, 'kckc': 1.0}, WIRINGS,
-             'APL->bouton x0.155 alone'),
-    Step1Arm('imposed_kckc', 'megamat', 'imposed', {'aplpn': 1.0, 'kckc': 3.24}, WIRINGS, 'KC-KC x3.24 alone'),
-    Step1Arm('imposed_kckc_aplpn0', 'megamat', 'imposed', {'aplpn': 0.0, 'kckc': 3.24}, WIRINGS,
-             'KC-KC x3.24 with APL->bouton at none'),
-    Step1Arm('imposed_a1_glom_perm', 'megamat', 'imposed_glom_perm', {'aplpn': 0.155, 'kckc': 3.24}, WIRINGS,
-             "A1's factors with the table's glomeruli permuted (E135's permutation)"),
-    Step1Arm('imposed_a1_odor_perm', 'megamat', 'imposed_odor_perm', {'aplpn': 0.155, 'kckc': 3.24}, WIRINGS,
-             "A1's factors with the table's odors permuted (E135's permutation)"),
-    Step1Arm('imposed_a1_apl16', 'apl16', 'imposed', {'aplpn': 0.155, 'kckc': 3.24}, WIRINGS,
-             "A1's factors on the APL16 input, its 12 megamat odors set (E135's APL16 imposed arm), for the bands and "
-             'the APL effect'),
-)
+# step 1 (hal's module experiments/E142_imposed_calyx_runs.py, queue d6b58ff): its arms (`STEP1_ARMS` there: panel,
+# name, E135's table, and each calyx factor 'A1' (A1's), 'family' (x1, the wiring's own fit's scale) or 'none' (0)), tags
+# '<panel>_<arm>_<wiring>', 7 arms x 8 wirings; A1's factors E136's classed point of A1 under strength (fit_A1.json's
+# 'classed_z': APL->bouton x0.155, KC-KC x3.238), the lock records them as read when it was written
+STEP1_MODULE = 'experiments/E142_imposed_calyx_runs.py'
+STEP1_APL_ARMS: Tuple[str, ...] = ('megamat_imposed_a1', 'megamat_imposed_aplpn', 'megamat_imposed_kckc_aplpn_none')
+STEP1_CARRY_ARM = 'megamat_imposed_a1'
+STEP1_CONTROLS: Tuple[str, ...] = ('megamat_imposed_a1_glom_perm', 'megamat_imposed_a1_odor_perm')
 N_STEP1_RUNS = 56
+# the lock's amendments (each before any statistic of E142 was computed)
+AMENDMENTS: Tuple[str, ...] = (
+    "2026-11-26 05:23, viki (before any statistic): step 1's arms, names and readings taken from hal's runner "
+    "(E142_imposed_calyx_runs.py, d6b58ff) in place of the first lock's (059753e), which had named the arm with "
+    "APL->bouton at none 'imposed_kckc_aplpn0' and the APL16 arm 'imposed_a1_apl16' and read the factors as the entry's "
+    "rounded x0.155 and x3.24; step 0's definitions unchanged",
+)
 
 # the classes, fixed before any statistic (the entry's, made exact; NARROW_READINGS say where a reading was chosen)
 CLASSES = {
@@ -233,18 +227,17 @@ CLASSES = {
     'apl_hides_step': dict(
         name='APL at the boutons hides the step', step=1,
         rule="the imposed dendrites' boutons read below the no-step yardstick on 6 of 8 wirings in an arm with "
-             "APL->bouton at x0.155 or none (imposed_a1, imposed_aplpn, imposed_kckc_aplpn0: any of them), and not "
-             "with it at the family's (E135's saved imposed arm, re-scored the same way)",
-        min_wirings=6, n_wirings=8, arms=['imposed_a1', 'imposed_aplpn', 'imposed_kckc_aplpn0'],
-        reference_arm='e135_imposed'),
+             "APL->bouton at x0.155 or none (megamat_imposed_a1, megamat_imposed_aplpn, "
+             "megamat_imposed_kckc_aplpn_none: any of them), and not with it at the family's (E135's saved imposed arm, "
+             're-scored the same way)',
+        min_wirings=6, n_wirings=8, arms=list(STEP1_APL_ARMS), reference_arm='e135_imposed'),
     'dendrites_carry': dict(
         name='the dendrites carry under the calyx that holds', step=1,
-        rule="with A1's factors (imposed_a1), the root mean square of the boutons', claws' and somata's strength errors "
-             "is below A1's own by more than twice its standard error over T, no stage is worse than A1's by more than "
-             "its spread, and every stage is below both permuted controls (imposed_a1_glom_perm, "
-             'imposed_a1_odor_perm)',
-        se_multiple=2.0, arm='imposed_a1', reference=READING_ARM,
-        controls=['imposed_a1_glom_perm', 'imposed_a1_odor_perm']),
+        rule="with A1's factors (megamat_imposed_a1), the root mean square of the boutons', claws' and somata's "
+             "strength errors is below A1's own by more than twice its standard error over T, no stage is worse than "
+             "A1's by more than its spread, and every stage is below both permuted controls "
+             '(megamat_imposed_a1_glom_perm, megamat_imposed_a1_odor_perm)',
+        se_multiple=2.0, arm=STEP1_CARRY_ARM, reference=READING_ARM, controls=list(STEP1_CONTROLS)),
     'readings': dict(
         name="the reading's", step=0,
         rule="under the equal-weight reading of the boutons, A1's change at the boutons from the family (the mean over "
@@ -320,8 +313,14 @@ NARROW_READINGS: Tuple[str, ...] = (
     "the model's bouton sampling is read on each wiring's saved runs of the family held (the units per glomerulus, APL "
     "on, after the silent drop); the share of units on the 18 glomeruli without input counts every bouton of the "
     "wiring, and the default reading's share (subset 'shared': 0 by construction) is given beside",
-    "step 1's factors are the entry's rounded x0.155 and x3.24 (E139's settings; A1's fitted factors 0.15504 and 3.23775 "
-    'beside); "at none" is APL->bouton x0; the permuted controls reuse E135\'s permutations of its table',
+    "step 1 (hal's runner, agreed): A1's calyx factors are E136's classed point of A1 under strength (fit_A1.json's "
+    "'classed_z', x0.155 and x3.238; the entry's x3.24 is its rounding), because A1's own reads, against which 'the "
+    "dendrites carry under the calyx that holds' is classed, are at that point; on each wiring's own fit's wAPLPN_scale and "
+    "wKCKC_scale; A1's weaker antennal-lobe normalization is not taken (the glomeruli and odors not imposed, and the "
+    "distribution the dendrites are ranked onto, are the family's, as in E135), so the change from E135's runs is the "
+    'calyx alone; "APL->bouton at none" is wAPLPN_scale 0; the hold is E135\'s (E134\'s held megamat targets, the '
+    "APL16 arm at each wiring's own fit's counts); the permuted controls reuse E135's permutations (per-wiring seeds); "
+    "no run before results/E142_dendrite_bouton_step/step1_authorized.json records Yang's word on pn_rates",
     "step 1's 'below the no-step yardstick on 6 of 8 wirings': each wiring's bouton strength error against the "
     "held-out half of the bouton flies, below the no-step yardstick against the same half",
     "step 1's 'twice its standard error over T': E136's compare (the larger of half the spread and the SD of the "
@@ -487,16 +486,22 @@ def lock_contents() -> dict:
                  reading_rule="E134's default reading of each stage (stage_readings' DEFAULT_READINGS), APL on, "
                               "against each fly set as E136's Flies reads it; seed index the wiring's position in "
                               'WIRINGS', fly_sets=list(FLY_SETS), entry_stages=list(ENTRY_STAGES))
-    step1 = dict(arms=[a._asdict() for a in STEP1_ARMS], n_runs=N_STEP1_RUNS,
-                 a1_factors=A1_FACTORS, a1_fitted_factors=dict(aplpn=0.15503624494608895, kckc=3.2377527347867603),
-                 runner="E135's step-2 runner and table (pn_rates, olfsysm b1e89d7), both response rates re-held at "
-                        "E136's held megamat targets (the APL16 arm at the wiring's own fit's counts)",
+    from experiments import E142_imposed_calyx_runs as S1
+    a1 = S1.a1_factors()
+    step1 = dict(module=STEP1_MODULE, arms=[a._asdict() for a in S1.STEP1_ARMS],
+                 tags=[S1.tag_of(a, w) for a, w in S1.planned_step1()], n_runs=N_STEP1_RUNS, a1_factors=a1,
+                 runner="E135's step-2 runner and table (pn_rates, olfsysm b1e89d7) with the two calyx scales changed "
+                        "before the hold, both response rates re-held at E134's held megamat targets (the APL16 arm at "
+                        "the wiring's own fit's counts)",
                  score="E136's reading of the boutons, claws and somata on T against the held-out half; E135's saved "
                        'runs at the family\'s calyx re-scored the same way, with A1 beside',
                  realism="the megamat response rate beside the flies' 0.0915, the four bands on the APL16 arm, the "
                          'largest spike counts and bouton rates, the entries clipped, and where APL\'s inhibition is '
                          'made',
-                 status="hal's code (claimed); not in step 0")
+                 guard="results/E142_dendrite_bouton_step/step1_authorized.json (Yang's word on pn_rates)",
+                 status="hal's code (E142_imposed_calyx_runs.py); not in step 0")
+    if len(step1['tags']) != N_STEP1_RUNS:
+        raise RuntimeError(f"step 1 plans {len(step1['tags'])} runs, not {N_STEP1_RUNS}")
     holds = ['no simulation, no model run, no olfsysm change, no new default, nothing fitted or searched in step 0',
              'no bouton region given a glomerulus or an identity from position or tuning; tuning groups unnamed',
              "only Pratyush's hemibrain and male CNS", 'only processed data',
@@ -506,7 +511,7 @@ def lock_contents() -> dict:
                 commits=H.code_commits(), panel=PANEL, odors=list(D.panel_odors(PANEL)),
                 inputs=lock_inputs(), recordings=recordings(), glomeruli=glomerulus_sets(), definitions=definitions,
                 model=model, classes=CLASSES, outcomes=OUTCOMES, step1=step1, narrow_readings=list(NARROW_READINGS),
-                probe=PROBE, probe_tol=PROBE_TOL, holds=holds,
+                probe=PROBE, probe_tol=PROBE_TOL, holds=holds, amendments=list(AMENDMENTS),
                 note='written before any statistic of E142 was computed; every part but lock refuses until this file '
                      'is committed (require_lock)')
 
@@ -562,27 +567,23 @@ def part_step0(pieces: Optional[Sequence[str]] = None) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# step 1 (hal's: E135's step-2 runner with A1's calyx factors; reserved here)
+# step 1: hal's module (E142_imposed_calyx_runs.py); its score and classes are reserved for it
 
-STEP1_TODO = "E142 step 1: hal's (E135's step-2 runner with A1's calyx factors)"
-
-
-def step1_arms() -> Tuple[Step1Arm, ...]:
-    """Step 1's arms as the lock fixes them (STEP1_ARMS), each on its wirings: 56 runs."""
-    raise NotImplementedError(STEP1_TODO)
+STEP1_SCORE_TODO = "E142 step 1's score: hal's (the classes 'apl_hides_step', 'dendrites_carry' as the lock fixes them)"
 
 
-def run_step1(lane: str, arms: Optional[Sequence[str]] = None, reverse: bool = False, reclaim: bool = False) -> None:
-    """Step 1's runs on one lane (E135's step-2 runner and table, A1's factors on the two calyx scales, both response
-    rates re-held), saved in stage_readings' step-3 layout."""
-    raise NotImplementedError(STEP1_TODO)
+def run_step1(lane: Optional[str] = None, reverse: bool = False, reclaim: bool = False):
+    """Step 1's runs on one lane: hal's `part_step1` (E135's step-2 runner with A1's calyx factors; guarded by
+    step1_authorized.json)."""
+    from experiments import E142_imposed_calyx_runs as S1
+    return S1.part_step1(lane, reverse, reclaim)
 
 
 def score_step1() -> dict:
     """Step 1's score and classes ('apl_hides_step', 'dendrites_carry', 'no_class'): E136's reading of the boutons,
     claws and somata on T against the held-out half, E135's saved runs at the family's calyx re-scored the same way,
-    A1 beside; realism."""
-    raise NotImplementedError(STEP1_TODO)
+    A1 beside; realism. Reserved for hal."""
+    raise NotImplementedError(STEP1_SCORE_TODO)
 
 
 def main(argv: Optional[Sequence[str]] = None) -> None:
@@ -591,7 +592,6 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     ap.add_argument('--pieces', nargs='*', default=None,
                     help="step 0's pieces to run (default all, in order; E142_step0.PIECES)")
     ap.add_argument('--lane', default=None, help="step 1's lane (hal's)")
-    ap.add_argument('--arms', nargs='*', default=None, help="step 1's arms (default all)")
     ap.add_argument('--reverse', action='store_true', help="step 1: run the planned points in reverse")
     ap.add_argument('--reclaim', action='store_true', help="step 1: reclaim stale claims")
     a = ap.parse_args(argv)
@@ -600,7 +600,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     elif a.part == 'step0':
         part_step0(a.pieces)
     elif a.part == 'step1':
-        run_step1(a.lane, a.arms, a.reverse, a.reclaim)
+        run_step1(a.lane, a.reverse, a.reclaim)
     else:
         score_step1()
 

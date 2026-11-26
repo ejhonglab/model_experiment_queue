@@ -2,10 +2,10 @@
  "experiment": "E142_dendrite_bouton_step",
  "script": "experiments/E142_dendrite_bouton_step.py",
  "part": "lock",
- "written": "2026-11-26 05:21",
+ "written": "2026-11-26 05:23",
  "host": "viki",
  "commits": {
-  "queue_commit": "f5bdba9cae30f9924fb6344f87e13b6d331e2553",
+  "queue_commit": "059753e786668cabdb62e077d19dfc980e5e8b21",
   "queue_dirty": true,
   "pyolfsysm_commit": "b1e89d7d119bbbb4888f31de4d94938dbc4bd60a",
   "pyolfsysm_dirty": false,
@@ -1258,26 +1258,26 @@
   "apl_hides_step": {
    "name": "APL at the boutons hides the step",
    "step": 1,
-   "rule": "the imposed dendrites' boutons read below the no-step yardstick on 6 of 8 wirings in an arm with APL->bouton at x0.155 or none (imposed_a1, imposed_aplpn, imposed_kckc_aplpn0: any of them), and not with it at the family's (E135's saved imposed arm, re-scored the same way)",
+   "rule": "the imposed dendrites' boutons read below the no-step yardstick on 6 of 8 wirings in an arm with APL->bouton at x0.155 or none (megamat_imposed_a1, megamat_imposed_aplpn, megamat_imposed_kckc_aplpn_none: any of them), and not with it at the family's (E135's saved imposed arm, re-scored the same way)",
    "min_wirings": 6,
    "n_wirings": 8,
    "arms": [
-    "imposed_a1",
-    "imposed_aplpn",
-    "imposed_kckc_aplpn0"
+    "megamat_imposed_a1",
+    "megamat_imposed_aplpn",
+    "megamat_imposed_kckc_aplpn_none"
    ],
    "reference_arm": "e135_imposed"
   },
   "dendrites_carry": {
    "name": "the dendrites carry under the calyx that holds",
    "step": 1,
-   "rule": "with A1's factors (imposed_a1), the root mean square of the boutons', claws' and somata's strength errors is below A1's own by more than twice its standard error over T, no stage is worse than A1's by more than its spread, and every stage is below both permuted controls (imposed_a1_glom_perm, imposed_a1_odor_perm)",
+   "rule": "with A1's factors (megamat_imposed_a1), the root mean square of the boutons', claws' and somata's strength errors is below A1's own by more than twice its standard error over T, no stage is worse than A1's by more than its spread, and every stage is below both permuted controls (megamat_imposed_a1_glom_perm, megamat_imposed_a1_odor_perm)",
    "se_multiple": 2.0,
-   "arm": "imposed_a1",
+   "arm": "megamat_imposed_a1",
    "reference": "A1",
    "controls": [
-    "imposed_a1_glom_perm",
-    "imposed_a1_odor_perm"
+    "megamat_imposed_a1_glom_perm",
+    "megamat_imposed_a1_odor_perm"
    ]
   },
   "readings": {
@@ -1300,161 +1300,133 @@
   "f": "the reading's: A1's gain at the boutons depends on how regions are counted; to Tom and Yang with the megamat stage error under both readings"
  },
  "step1": {
+  "module": "experiments/E142_imposed_calyx_runs.py",
   "arms": [
    {
+    "panel": "megamat",
     "name": "imposed_a1",
-    "input": "megamat",
     "table": "imposed",
-    "factors": {
-     "aplpn": 0.155,
-     "kckc": 3.24
-    },
-    "wirings": [
-     "real",
-     "P1",
-     "P2",
-     "M1",
-     "P3",
-     "P4",
-     "M2",
-     "M3"
-    ],
-    "what": "the dendrites imposed with A1's calyx factors (APL->bouton x0.155, KC-KC x3.24)"
+    "aplpn": "A1",
+    "kckc": "A1"
    },
    {
+    "panel": "megamat",
     "name": "imposed_aplpn",
-    "input": "megamat",
     "table": "imposed",
-    "factors": {
-     "aplpn": 0.155,
-     "kckc": 1.0
-    },
-    "wirings": [
-     "real",
-     "P1",
-     "P2",
-     "M1",
-     "P3",
-     "P4",
-     "M2",
-     "M3"
-    ],
-    "what": "APL->bouton x0.155 alone"
+    "aplpn": "A1",
+    "kckc": "family"
    },
    {
+    "panel": "megamat",
     "name": "imposed_kckc",
-    "input": "megamat",
     "table": "imposed",
-    "factors": {
-     "aplpn": 1.0,
-     "kckc": 3.24
-    },
-    "wirings": [
-     "real",
-     "P1",
-     "P2",
-     "M1",
-     "P3",
-     "P4",
-     "M2",
-     "M3"
-    ],
-    "what": "KC-KC x3.24 alone"
+    "aplpn": "family",
+    "kckc": "A1"
    },
    {
-    "name": "imposed_kckc_aplpn0",
-    "input": "megamat",
+    "panel": "megamat",
+    "name": "imposed_kckc_aplpn_none",
     "table": "imposed",
-    "factors": {
-     "aplpn": 0.0,
-     "kckc": 3.24
-    },
-    "wirings": [
-     "real",
-     "P1",
-     "P2",
-     "M1",
-     "P3",
-     "P4",
-     "M2",
-     "M3"
-    ],
-    "what": "KC-KC x3.24 with APL->bouton at none"
+    "aplpn": "none",
+    "kckc": "A1"
    },
    {
+    "panel": "megamat",
     "name": "imposed_a1_glom_perm",
-    "input": "megamat",
     "table": "imposed_glom_perm",
-    "factors": {
-     "aplpn": 0.155,
-     "kckc": 3.24
-    },
-    "wirings": [
-     "real",
-     "P1",
-     "P2",
-     "M1",
-     "P3",
-     "P4",
-     "M2",
-     "M3"
-    ],
-    "what": "A1's factors with the table's glomeruli permuted (E135's permutation)"
+    "aplpn": "A1",
+    "kckc": "A1"
    },
    {
+    "panel": "megamat",
     "name": "imposed_a1_odor_perm",
-    "input": "megamat",
     "table": "imposed_odor_perm",
-    "factors": {
-     "aplpn": 0.155,
-     "kckc": 3.24
-    },
-    "wirings": [
-     "real",
-     "P1",
-     "P2",
-     "M1",
-     "P3",
-     "P4",
-     "M2",
-     "M3"
-    ],
-    "what": "A1's factors with the table's odors permuted (E135's permutation)"
+    "aplpn": "A1",
+    "kckc": "A1"
    },
    {
-    "name": "imposed_a1_apl16",
-    "input": "apl16",
+    "panel": "apl16",
+    "name": "imposed_a1",
     "table": "imposed",
-    "factors": {
-     "aplpn": 0.155,
-     "kckc": 3.24
-    },
-    "wirings": [
-     "real",
-     "P1",
-     "P2",
-     "M1",
-     "P3",
-     "P4",
-     "M2",
-     "M3"
-    ],
-    "what": "A1's factors on the APL16 input, its 12 megamat odors set (E135's APL16 imposed arm), for the bands and the APL effect"
+    "aplpn": "A1",
+    "kckc": "A1"
    }
+  ],
+  "tags": [
+   "megamat_imposed_a1_real",
+   "megamat_imposed_a1_P1",
+   "megamat_imposed_a1_P2",
+   "megamat_imposed_a1_M1",
+   "megamat_imposed_a1_P3",
+   "megamat_imposed_a1_P4",
+   "megamat_imposed_a1_M2",
+   "megamat_imposed_a1_M3",
+   "megamat_imposed_aplpn_real",
+   "megamat_imposed_aplpn_P1",
+   "megamat_imposed_aplpn_P2",
+   "megamat_imposed_aplpn_M1",
+   "megamat_imposed_aplpn_P3",
+   "megamat_imposed_aplpn_P4",
+   "megamat_imposed_aplpn_M2",
+   "megamat_imposed_aplpn_M3",
+   "megamat_imposed_kckc_real",
+   "megamat_imposed_kckc_P1",
+   "megamat_imposed_kckc_P2",
+   "megamat_imposed_kckc_M1",
+   "megamat_imposed_kckc_P3",
+   "megamat_imposed_kckc_P4",
+   "megamat_imposed_kckc_M2",
+   "megamat_imposed_kckc_M3",
+   "megamat_imposed_kckc_aplpn_none_real",
+   "megamat_imposed_kckc_aplpn_none_P1",
+   "megamat_imposed_kckc_aplpn_none_P2",
+   "megamat_imposed_kckc_aplpn_none_M1",
+   "megamat_imposed_kckc_aplpn_none_P3",
+   "megamat_imposed_kckc_aplpn_none_P4",
+   "megamat_imposed_kckc_aplpn_none_M2",
+   "megamat_imposed_kckc_aplpn_none_M3",
+   "megamat_imposed_a1_glom_perm_real",
+   "megamat_imposed_a1_glom_perm_P1",
+   "megamat_imposed_a1_glom_perm_P2",
+   "megamat_imposed_a1_glom_perm_M1",
+   "megamat_imposed_a1_glom_perm_P3",
+   "megamat_imposed_a1_glom_perm_P4",
+   "megamat_imposed_a1_glom_perm_M2",
+   "megamat_imposed_a1_glom_perm_M3",
+   "megamat_imposed_a1_odor_perm_real",
+   "megamat_imposed_a1_odor_perm_P1",
+   "megamat_imposed_a1_odor_perm_P2",
+   "megamat_imposed_a1_odor_perm_M1",
+   "megamat_imposed_a1_odor_perm_P3",
+   "megamat_imposed_a1_odor_perm_P4",
+   "megamat_imposed_a1_odor_perm_M2",
+   "megamat_imposed_a1_odor_perm_M3",
+   "apl16_imposed_a1_real",
+   "apl16_imposed_a1_P1",
+   "apl16_imposed_a1_P2",
+   "apl16_imposed_a1_M1",
+   "apl16_imposed_a1_P3",
+   "apl16_imposed_a1_P4",
+   "apl16_imposed_a1_M2",
+   "apl16_imposed_a1_M3"
   ],
   "n_runs": 56,
   "a1_factors": {
-   "aplpn": 0.155,
-   "kckc": 3.24
-  },
-  "a1_fitted_factors": {
    "aplpn": 0.15503624494608895,
-   "kckc": 3.2377527347867603
+   "kckc": 3.2377527347867603,
+   "z": {
+    "aplpn": -1.8640963510369546,
+    "kckc": 1.1748794887777576
+   },
+   "source": "/local/tensor/Tom/claude_kc_remapping/results/E136_stage_population_fit/measure_strength/fit_A1.json",
+   "sha256": "772090b1224b211a8bd6def362b085dee90490fb70592f065734a6c51367bb9e",
+   "measure": "strength"
   },
-  "runner": "E135's step-2 runner and table (pn_rates, olfsysm b1e89d7), both response rates re-held at E136's held megamat targets (the APL16 arm at the wiring's own fit's counts)",
+  "runner": "E135's step-2 runner and table (pn_rates, olfsysm b1e89d7) with the two calyx scales changed before the hold, both response rates re-held at E134's held megamat targets (the APL16 arm at the wiring's own fit's counts)",
   "score": "E136's reading of the boutons, claws and somata on T against the held-out half; E135's saved runs at the family's calyx re-scored the same way, with A1 beside",
   "realism": "the megamat response rate beside the flies' 0.0915, the four bands on the APL16 arm, the largest spike counts and bouton rates, the entries clipped, and where APL's inhibition is made",
-  "status": "hal's code (claimed); not in step 0"
+  "guard": "results/E142_dendrite_bouton_step/step1_authorized.json (Yang's word on pn_rates)",
+  "status": "hal's code (E142_imposed_calyx_runs.py); not in step 0"
  },
  "narrow_readings": [
   "the saved runs: 'E139's F and B at 314 and 1000 and K at 1000' read as F and B each at pn_inhadd 314 and 1000, and K at 1000 (five variants; F at 100 and 3141 and E139's step-3 fit A0_inhadd314 are not read)",
@@ -1476,7 +1448,7 @@
   "the equal-weight reading of the model: the default bouton reading (pool 1, the 28 shared glomeruli, silent boutons dropped, curve and noise from the fly set), then each glomerulus's read boutons averaged into one unit, responding above 2.0; the glomerulus labels are the run's own (meta bouton_glomerulus), never the flies'",
   "the classes read again with the equal-weight reading keep from the original records what does not involve the bouton strength error (the held-out panels, the all-views guard, realism, bounds, the control fit's fall); the bouton stage's spread and the megamat stage error's are recomputed from the family's eight wirings under the reading; 'over the three other stages' drops the boutons from the stage error and the stage comparisons",
   "the model's bouton sampling is read on each wiring's saved runs of the family held (the units per glomerulus, APL on, after the silent drop); the share of units on the 18 glomeruli without input counts every bouton of the wiring, and the default reading's share (subset 'shared': 0 by construction) is given beside",
-  "step 1's factors are the entry's rounded x0.155 and x3.24 (E139's settings; A1's fitted factors 0.15504 and 3.23775 beside); \"at none\" is APL->bouton x0; the permuted controls reuse E135's permutations of its table",
+  "step 1 (hal's runner, agreed): A1's calyx factors are E136's classed point of A1 under strength (fit_A1.json's 'classed_z', x0.155 and x3.238; the entry's x3.24 is its rounding), because A1's own reads, against which 'the dendrites carry under the calyx that holds' is classed, are at that point; on each wiring's own fit's wAPLPN_scale and wKCKC_scale; A1's weaker antennal-lobe normalization is not taken (the glomeruli and odors not imposed, and the distribution the dendrites are ranked onto, are the family's, as in E135), so the change from E135's runs is the calyx alone; \"APL->bouton at none\" is wAPLPN_scale 0; the hold is E135's (E134's held megamat targets, the APL16 arm at each wiring's own fit's counts); the permuted controls reuse E135's permutations (per-wiring seeds); no run before results/E142_dendrite_bouton_step/step1_authorized.json records Yang's word on pn_rates",
   "step 1's 'below the no-step yardstick on 6 of 8 wirings': each wiring's bouton strength error against the held-out half of the bouton flies, below the no-step yardstick against the same half",
   "step 1's 'twice its standard error over T': E136's compare (the larger of half the spread and the SD of the per-wiring changes over sqrt(4)), the spread the SD over the family's eight wirings of the downstream error (the boutons', claws' and somata's root mean square); 'no stage worse than A1's by more than its spread' E136's spreads per stage; 'every stage below both permuted controls' the mean over T of each stage's error"
  ],
@@ -1608,6 +1580,9 @@
   "only processed data",
   "Remy's processed data without the bouton fly 2022-10-21 fly02 and without her older megamat flies",
   "validation2 not read"
+ ],
+ "amendments": [
+  "2026-11-26 05:23, viki (before any statistic): step 1's arms, names and readings taken from hal's runner (E142_imposed_calyx_runs.py, d6b58ff) in place of the first lock's (059753e), which had named the arm with APL->bouton at none 'imposed_kckc_aplpn0' and the APL16 arm 'imposed_a1_apl16' and read the factors as the entry's rounded x0.155 and x3.24; step 0's definitions unchanged"
  ],
  "note": "written before any statistic of E142 was computed; every part but lock refuses until this file is committed (require_lock)"
 }
