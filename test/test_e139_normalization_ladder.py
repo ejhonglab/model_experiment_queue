@@ -244,3 +244,20 @@ def test_signature():
     from scipy import stats
     assert stats.spearmanr(sig, tot)[0] < -0.5
     assert np.allclose(L._signature(x, 3.0 * y), sig)       # scale-free
+
+
+def test_write_variants(monkeypatch, tmp_path):
+    arch, res = tmp_path / 'read', tmp_path / 'res'
+    arch.mkdir()
+    res.mkdir()
+    monkeypatch.setattr(L, 'out_dir', lambda: res)
+    on = dict(fixed_thr=30.0, wAPLKC_scale=1.0, wKCAPL_scale=6e-4, wAPLPN_scale=0.06, wPNAPL_scale=3e-3, wKCKC_scale=40.0)
+    d = dict(model='C2', wiring='P3', panel='megamat', reading='read', arm='A1', z=L.point_z('B', 314.0), params=on,
+             params_off=dict(on, wAPLKC_scale=0.0, wAPLPN_scale=0.0), tag='B_inhadd314_megamat_P3', variant='B_inhadd314',
+             setting='B', rung=314.0, pn_inhadd=314.0, pn_inhsc=420.0, host='disco', lane='1', time='t')
+    (arch / 'B_inhadd314_megamat_P3_run.json').write_text(json.dumps(d))
+    df = L.write_variants(arch)
+    assert len(df) == 1 and df.variant.iloc[0] == 'B_inhadd314' and df.off_wAPLKC_scale.iloc[0] == 0.0
+    assert df.z_aplpn.iloc[0] == pytest.approx(np.log(0.155)) and (res / 'variants.csv').exists()
+    assert L._truthy(True) and L._truthy('True') and not L._truthy(False) and not L._truthy('False')
+    assert not L._truthy(np.nan)

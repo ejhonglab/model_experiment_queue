@@ -56,7 +56,8 @@ Design:
   (`part_fit`: not written yet).
 
 Outputs: results/E139_normalization_ladder/ (reads_<host>_<lane>.csv, provenance_read_<host>_<lane>.json, claims/,
-step0_*.csv and step0_*.json, stage_classes.json, score_*.csv, classes.json, provenance_score.json); runs in
+step0_*.csv and step0_*.json, stage_classes.json, score_*.csv, classes.json, provenance_score.json, variants.csv from
+`--part variants` for the archive's params.csv); runs in
 outputs/E139_normalization_ladder/read/ and data/model_outputs/E139_normalization_ladder/read/ (E134's step-3 layout,
 written in place, as E136's).
 
@@ -504,7 +505,8 @@ def e102_ladder() -> pd.DataFrame:
         rows = []
         for name in names:
             rung = None if name == F.FAMILY else parse_variant(name)[1]
-            apl = F.apl16_rows(name).set_index('wiring')
+            apl = F.apl16_rows(name)
+            apl = apl.set_index('wiring') if len(apl) else pd.DataFrame()
             pans = {v: _panel_rows(F, name, v) for v in ('measure', None)}
             for w in F.WIRINGS:
                 run = F.load_read(F.ReadPoint(name, 'apl16', w, None))
@@ -550,6 +552,18 @@ def e102_ladder() -> pd.DataFrame:
                     means.append(dict(variant=name, step=step, wiring=lab, **x[num].mean().to_dict(),
                                       **{c: g[c].iloc[0] for c in df.columns if c.startswith('e102_')}))
     return pd.concat([df, pd.DataFrame(means)], ignore_index=True, sort=False)
+
+
+_STAGE: dict = {}
+
+
+def family_pn_stage():
+    """The family's PN stage on the megamat input (E135's `family_stage` on the real wiring, checked against olfsysm
+    there; built once per process)."""
+    from experiments import E135_antennal_lobe_dendrites as AL
+    if 'stage' not in _STAGE:
+        _STAGE['stage'], _ = AL.family_stage('megamat', 'real', purpose='E139 step 0')
+    return _STAGE['stage']
 
 
 def pn_stage_points() -> Dict[str, Dict[str, float]]:
@@ -605,8 +619,7 @@ def pn_stage_ladder(stage=None) -> pd.DataFrame:
     from kcq import population_fit as P
     from kcq import stage_readings as R
     with e136() as F:
-        if stage is None:
-            stage, _ = AL.family_stage('megamat', 'real', purpose='E139 step 0')
+        stage = family_pn_stage() if stage is None else stage
         pts = pn_stage_points()
         gl28 = AL.shared_glomeruli()
         lock = R.require_lock()
@@ -696,9 +709,7 @@ def recorded_step_signature(stage=None, n_boot: int = N_BOOT_SIGNATURE, seed: in
     q = ((1 - SIGNATURE_CI) / 2, 1 - (1 - SIGNATURE_CI) / 2)
     lo, hi = AL.centered(sig, draws, q)
     half = (hi - lo) / 2.0
-    if stage is None:
-        with e136():
-            stage, _ = AL.family_stage('megamat', 'real', purpose='E139 step 0')
+    stage = family_pn_stage() if stage is None else stage
     x_model = stage.delta.reindex(index=gl, columns=odors).to_numpy(dtype=float)
     df = pd.DataFrame(dict(odor=odors, total_orn=total, flies=sig, flies_lo=lo, flies_hi=hi))
     pts = pn_stage_points()
@@ -743,6 +754,11 @@ def stages_read(F) -> Tuple[str, ...]:
     return tuple(F.LOSS_STAGES)
 
 
+def _truthy(x) -> bool:
+    """A flag as read back from a CSV (a bool, or its text where the column holds missing values too)."""
+    return str(x).strip().lower() in ('true', '1', '1.0')
+
+
 def holds_failed(name: str, reads: pd.DataFrame, apl16_runs: Mapping[str, object], tol: float) -> List[str]:
     """The reads of a variant whose holds fail: E139's reads at a bracket's bound or whose rate is more than `tol`
     (relative) from its target, and for F's APL16 rows E102's points at a bound or off their counts; as tags."""
@@ -751,7 +767,7 @@ def holds_failed(name: str, reads: pd.DataFrame, apl16_runs: Mapping[str, object
         for r in reads[reads.variant == name].itertuples():
             miss = [abs(float(getattr(r, f'rate_{c}')) - float(getattr(r, f'frac_{c}_target')))
                     / float(getattr(r, f'frac_{c}_target')) for c in ('on', 'off')]
-            if bool(r.at_bound_thr) or bool(r.at_bound_apl) or max(miss) > tol:
+            if _truthy(r.at_bound_thr) or _truthy(r.at_bound_apl) or not max(miss) <= tol:
                 bad.append(str(r.tag))
     for w, run in apl16_runs.items():
         info = getattr(run, 'info', None) or {}
@@ -940,6 +956,34 @@ def name_rungs(mega_fit: Mapping[str, Mapping[str, Mapping[str, float]]], names:
     return out
 
 
+def write_variants(arch: Optional[Path] = None) -> pd.DataFrame:
+    """variants.csv in out_dir(), for the model-output archive's params.csv (as E136's `write_variants`): one row per
+    read the archive holds (`arch`, default archive_dir()/read/), from its <tag>_run.json: the tag, the variant, setting
+    and rung, the panel and wiring, a description, the coordinates (z_<name>), both conditions' absolute parameters
+    (E136's VARIANT_PARAMS; 'off_<name>' with APL off), the PN normalization's terms, and where and when it ran."""
+    from experiments import E136_stage_population_fit as F
+    arch = Path(arch) if arch is not None else archive_dir() / 'read'
+    rows = []
+    for p in sorted(arch.glob('*_run.json')):
+        d = json.loads(p.read_text())
+        r = dict(tag=d['tag'], variant=d.get('variant'), setting=d.get('setting'), rung=d.get('rung'), arm=d.get('arm'),
+                 panel=d.get('panel'), wiring=d.get('wiring'), reading=d.get('reading'), model=d.get('model'),
+                 kind=f"setting {d.get('setting')} (the family's calyx factors x {SETTINGS.get(d.get('setting'), {})}) at "
+                      f"pn_inhadd {d.get('rung')}, read on the {d.get('panel')} input, wiring {d.get('wiring')}, both "
+                      f"response rates held")
+        r.update({f'z_{k}': v for k, v in (d.get('z') or {}).items()})
+        r.update({k: (d.get('params') or {}).get(k) for k in F.VARIANT_PARAMS})
+        r.update({f'off_{k}': (d.get('params_off') or {}).get(k) for k in F.VARIANT_PARAMS})
+        r.update(pn_inhadd=d.get('pn_inhadd'), pn_inhsc=d.get('pn_inhsc'), host=d.get('host'), lane=d.get('lane'),
+                 time=d.get('time'))
+        rows.append(r)
+    df = pd.DataFrame(rows)
+    if df.empty:
+        raise FileNotFoundError(f'no <tag>_run.json under {arch}')
+    df.to_csv(out_dir() / 'variants.csv', index=False)
+    return df
+
+
 def part_fit(rung: float) -> dict:
     """Step 3, only on a candidate: A0's two-factor fit (E136's `fit_arm`) with the normalization fixed at `rung`, on S
     against the fit half. Not written yet: NotImplementedError."""
@@ -952,7 +996,7 @@ def part_fit(rung: float) -> dict:
 
 def main(argv: Optional[Sequence[str]] = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
-    ap.add_argument('--part', required=True, choices=('step0', 'read', 'score', 'fit'))
+    ap.add_argument('--part', required=True, choices=('step0', 'read', 'score', 'fit', 'variants'))
     ap.add_argument('--step', nargs='+', default=['1', '2'], choices=('1', '2', 'beside'))
     ap.add_argument('--lane', default='1')
     ap.add_argument('--reverse', action='store_true')
@@ -980,6 +1024,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         if a.rung is None:
             raise SystemExit('--part fit needs --rung')
         print(json.dumps(part_fit(a.rung), indent=1, default=str))
+    elif a.part == 'variants':
+        print(f'variants.csv: {len(write_variants())} runs', flush=True)
 
 
 if __name__ == '__main__':
