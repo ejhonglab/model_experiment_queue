@@ -46,9 +46,11 @@ Parts (CLI `--part`):
 - input (design item 4): aa's model input beside each of the seven ORN flies that were given aa (by E85's map of the
   lab's dF/F to spike deltas), beside Hallem's aa on the shared glomeruli, and beside the dendrite recordings on their
   28 glomeruli.
+- realism: the family held's and E136's A1's response rates, their ratio, response rate rho, odors per KC and largest
+  spike counts as read in saved runs and E136's tables, beside the KC data's (no model changed); realism.csv.
 - classes: the classes (i) to (iv) as the lock fixes them, and the outcome they point to; classes.json, tables.md.
 - figures: a few figures of the above.
-- all: flies, models, follows, input, classes, figures.
+- all: flies, models, follows, input, realism, classes, figures.
 
 Step 1 (28 runs, aa's input from each ORN fly's own vector on the four T wirings) runs only on class (i), after the
 worker reads step 0; step 2 waits for Tom's or Yang's word. Neither is in this script yet.
@@ -64,7 +66,7 @@ Outputs (<shared>/results/E140_aa_claw_soma_step/): lock.json; soma_windows.parq
 flies_entries.csv, flies_sharing.csv, flies_sharing_summary.csv, flies_breadth.csv, flies_same_fly_step.csv,
 flies_soma_readings.csv; models_entries.csv, models_sharing.csv, models_sharing_summary.csv, models_breadth.csv,
 models_anatomy.csv, models_a1_stages.csv; follows.csv, follows_points.csv, input_features.csv; input_aa.csv,
-input_summary.csv; classes.json, tables.md; fig_*.png; provenance_<part>.json.
+input_summary.csv; realism.csv; classes.json, tables.md; fig_*.png; provenance_<part>.json.
 
 Usage (from the repository root; one thread under nice):
     ./venv/bin/python -u experiments/E140_aa_claw_soma_step.py --part lock      # then commit experiments/E140_lock.json
@@ -1471,6 +1473,72 @@ def part_input() -> dict:
 
 
 # ---------------------------------------------------------------------------
+# realism (read from saved runs and tables; no model is changed)
+
+REALISM_GROUPS: Tuple[str, ...] = ('family_held', 'A1')
+REALISM_DATA_KEYS: Dict[str, str] = {
+    'rate_on': 'noise_ctrl_frac', 'rate_off': 'noise_tnt_frac', 'ratio': 'noise_rate_ratio_fraction',
+    'opk_on_tv': 'noise_ctrl_odors_per_kc_tv_max', 'opk_off_tv': 'noise_tnt_odors_per_kc_tv_max'}
+
+
+def part_realism() -> pd.DataFrame:
+    """Realism of the family held and E136's A1 as read in saved runs (no model changed): on the APL16 panel E136's
+    score_apl16.csv rows (measure_strength; every wiring: response rates with APL on and off, their ratio, response
+    rate rho with APL on and off, odors per KC as total variation from the flies, the largest spike counts, the flag),
+    beside the KC data's values from the data-target registry (REALISM_DATA_KEYS); on megamat each saved run's response
+    rates by two or more spikes, their ratio, the largest spike counts and response rate rho against Remy's four soma
+    flies' per-odor response rates (E134's lock); realism.csv (one row per group, panel and wiring, and the range)."""
+    from scipy import stats
+    from kcq import stage_readings as R
+    lock, e134 = require_all()
+    odors = list(lock['odors'])
+    rows = []
+    src = H.shared_dir() / 'results' / 'E136_stage_population_fit' / f'measure_{E136_MEASURE}' / 'score_apl16.csv'
+    a = pd.read_csv(src)
+    arm = {'family_held': 'family', 'A1': 'A1'}
+    for g in REALISM_GROUPS:
+        x = a[a.arm == arm[g]]
+        for r in x.itertuples():
+            rows.append(dict(group=g, panel='apl16', wiring=r.wiring, rate_on=r.rate_on, rate_off=r.rate_off,
+                             ratio=r.ratio, rate_rho_on=r.rate_rho_on, rate_rho_off=r.rate_rho_off,
+                             opk_on_tv=r.opk_on_tv, opk_off_tv=r.opk_off_tv, max_count_on=r.max_count_on,
+                             max_count_off=r.max_count_off, flag=r.realism_flag, source=str(src)))
+    rows.append(dict(group='kc_data', panel='apl16', wiring='', source='data-target registry: ' + ', '.join(
+        f'{k} = {v}' for k, v in REALISM_DATA_KEYS.items()), **{k: H.data_target(v) for k, v in REALISM_DATA_KEYS.items()}))
+    flies_rate = pd.Series(e134['populations'][f'kc_soma__{PANEL}__wild_type']['response_rate']['per_odor'])
+    for g in (x for x in MODEL_GROUPS if x.name in REALISM_GROUPS):
+        runs, _ = group_runs(g)
+        for w, run in runs.items():
+            c = {k: R._abbrev(run.conditions[k]['spike_counts'].astype(float))[odors] for k in R.CONDITIONS}
+            on, off = (c[k] >= 2.0 for k in R.CONDITIONS)
+            per = on.mean(axis=0)
+            rows.append(dict(group=g.name, panel=PANEL, wiring=w, rate_on=float(on.to_numpy().mean()),
+                             rate_off=float(off.to_numpy().mean()),
+                             ratio=float(off.to_numpy().mean() / on.to_numpy().mean()),
+                             rate_rho_on=float(stats.spearmanr(per.reindex(odors), flies_rate.reindex(odors)).statistic),
+                             max_count_on=float(c['on'].to_numpy().max()), max_count_off=float(c['off'].to_numpy().max()),
+                             source=';'.join(f['path'] for f in run.files if f['path'].endswith('spike_counts.parquet'))))
+    rows.append(dict(group='kc_data', panel=PANEL, wiring='', rate_on=float(e134['populations'][
+        f'kc_soma__{PANEL}__wild_type']['response_rate']['mean_over_flies']), source="E134's lock (Remy's four flies)"))
+    df = pd.DataFrame(rows)
+    num = ['rate_on', 'rate_off', 'ratio', 'rate_rho_on', 'rate_rho_off', 'opk_on_tv', 'opk_off_tv', 'max_count_on',
+           'max_count_off']
+    rng = []
+    for (g, pn), x in df[df.group != 'kc_data'].groupby(['group', 'panel'], sort=False):
+        rec = dict(group=g, panel=pn, wiring='range')
+        for c in num:
+            v = x[c].dropna()
+            rec[f'{c}_min'] = float(v.min()) if len(v) else np.nan
+            rec[f'{c}_max'] = float(v.max()) if len(v) else np.nan
+        rec['n_flagged'] = int(x.flag.notna().sum()) if 'flag' in x else 0
+        rng.append(rec)
+    out = pd.concat([df, pd.DataFrame(rng)], ignore_index=True)
+    _write_csv(out, 'realism.csv')
+    provenance('realism', lock, sources=[str(src)])
+    return out
+
+
+# ---------------------------------------------------------------------------
 # the classes
 
 def aa_rows(df: pd.DataFrame, **sel) -> pd.DataFrame:
@@ -1715,14 +1783,15 @@ def part_figures() -> None:
 def main(argv: Optional[Sequence[str]] = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     ap.add_argument('--part', required=True,
-                    choices=('lock', 'reduce', 'flies', 'models', 'follows', 'input', 'classes', 'figures', 'all'))
+                    choices=('lock', 'reduce', 'flies', 'models', 'follows', 'input', 'realism', 'classes', 'figures',
+                             'all'))
     a = ap.parse_args(argv)
     if a.part == 'all':
-        for f in (part_flies, part_models, part_follows, part_input, part_classes, part_figures):
+        for f in (part_flies, part_models, part_follows, part_input, part_realism, part_classes, part_figures):
             f()
         return
     dict(lock=part_lock, reduce=part_reduce, flies=part_flies, models=part_models, follows=part_follows,
-         input=part_input, classes=part_classes, figures=part_figures)[a.part]()
+         input=part_input, realism=part_realism, classes=part_classes, figures=part_figures)[a.part]()
 
 
 if __name__ == '__main__':
