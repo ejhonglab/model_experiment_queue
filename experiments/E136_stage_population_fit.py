@@ -50,7 +50,8 @@ scale being set by the operating point (so A0, A1, A2 have four parameters, A3 f
   its loss the mean over N_PERMS seeded permutations that leave no odor in place (`permutations`).
 The search (`fit_arm`): Nelder-Mead from the family's held megamat points of E134 (every factor 1, no per-claw
 threshold), first steps FIRST_STEP, XATOL / FATOL, MAXFEV by arm, one restart from the best point with half the steps
-if it stops with RESTART_MIN_LEFT or more evaluations left; a point outside BOUNDS is evaluated at the clipped point plus
+if it stops with RESTART_MIN_LEFT or more evaluations left (that point kept in fit_restart_<arm>.json, so that a resumed
+fit restarts from it again; `restart_point`); a point outside BOUNDS is evaluated at the clipped point plus
 one one-fly unit per BOUND_PENALTY_PER of overshoot. In A0, A2, A3 and A4 nothing searched acts before the boutons, so
 the PN-dendrite error must be the same at every evaluation (checked).
 
@@ -1343,6 +1344,25 @@ def restore_memory(m: ArmModel, hist: pd.DataFrame) -> List[dict]:
     return rows
 
 
+def restart_point(name: str, hist: Sequence[dict], resumed: bool) -> dict:
+    """The row the restart starts from: the best evaluation when the first run stopped, kept in fit_restart_<arm>.json
+    so that a resumed fit starts its restart where it started it before. Without the record, the best of the history
+    at a resume can be a point the restart itself found, and restarting from there begins the restart again with all
+    of its budget left (A3's fit, 2026-11-25, began it from evals 22, 68 and 99 over its resumes). A fit that resumes
+    with no record (one begun before the record existed) takes the best of the history, as those fits did."""
+    path = out_dir() / f'fit_restart_{name}.json'
+    rec = _read_json(path) if resumed else {}
+    if rec:
+        rows = [r for r in hist if int(r['eval']) == int(rec['from_eval'])]
+        if not rows:
+            raise RuntimeError(f"{path} names eval {rec['from_eval']}, which is not in the history")
+        return rows[0]
+    best = min(hist, key=lambda r: r['loss_sim'])
+    _write_json(path, dict(arm=name, from_eval=int(best['eval']), loss=float(best['loss_sim']), n_evals=len(hist),
+                           host=_host(), time=_now()))
+    return best
+
+
 def fit_arm(arm: str, control: bool = False, maxfev: Optional[int] = None, resume: bool = True,
             save_stages: bool = True, claw_mode: Optional[str] = None) -> dict:
     """One arm's fit on the S wirings against the fit half (the control: A0 against the permuted fit half), as the
@@ -1379,6 +1399,9 @@ def fit_arm(arm: str, control: bool = False, maxfev: Optional[int] = None, resum
             memo[tuple(float(r[f'z_{k}']) for k in searched)] = float(r['loss_sim'])
             hist.append(r)
         print(f'E136 {name}: resumed from {len(hist)} evaluations', flush=True)
+    resumed = bool(hist)
+    if not resumed:
+        (out_dir() / f'fit_restart_{name}.json').unlink(missing_ok=True)
     calls = {'n': 0}
     t0 = time.time()
 
@@ -1429,10 +1452,11 @@ def fit_arm(arm: str, control: bool = False, maxfev: Optional[int] = None, resum
     res = run_nm(np.zeros(len(searched)), steps, budget)
     messages = [str(res.message)]
     left = budget - calls['n']
-    restarted = False
+    restarted, restart_from = False, None
     if left >= RESTART_MIN_LEFT:
-        best = min(hist, key=lambda r: r['loss_sim'])
-        x1 = np.array([float(best[f'z_{k}']) for k in searched])
+        start = restart_point(name, hist, resumed)
+        restart_from = int(start['eval'])
+        x1 = np.array([float(start[f'z_{k}']) for k in searched])
         res2 = run_nm(x1, steps / 2.0, left)
         messages.append(str(res2.message))
         restarted = True
@@ -1442,7 +1466,8 @@ def fit_arm(arm: str, control: bool = False, maxfev: Optional[int] = None, resum
     flags += [f'hold at an end on {w}' for w in S_WIRINGS if best.get(f'hold_at_end_{w}')]
     out = dict(arm=name, base_arm=base, searched=list(searched), stages=list(stages), start=START_GROUP, measure=MEASURE,
                gate_measure=gate['gate'].get('measure'), gate_verdict_as_read=gate['gate'].get('verdict_as_read'),
-               n_evals=len(hist), n_calls=calls['n'], budget=budget, restarted=restarted, best_eval=int(best['eval']),
+               n_evals=len(hist), n_calls=calls['n'], budget=budget, restarted=restarted, restart_from=restart_from,
+               best_eval=int(best['eval']),
                best_z=bz, at_bound=flags, best=dict(best), messages=messages, claw_mode=m.claw_mode,
                seconds=round(time.time() - t0, 1), host=_host(), time=_now(), **_commits())
     out['factors'] = {k: coord_value(k, v) for k, v in bz.items()}

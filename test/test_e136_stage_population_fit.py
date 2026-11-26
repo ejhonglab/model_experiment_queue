@@ -565,6 +565,23 @@ def test_require_e135(monkeypatch, tmp_path):
         assert len(searched) + len(F.HELD) <= F.MAX_FREE and set(searched) <= set(F.BOUNDS) <= set(F.FIRST_STEP)
 
 
+def test_restart_point(monkeypatch, tmp_path):
+    """The restart starts from the best when the first run stopped, and a resumed fit starts it there again although
+    the restart has since found a better point; a resume with no record takes the history's best."""
+    monkeypatch.setattr(F, 'out_dir', lambda: tmp_path)
+    hist = [dict(eval=i, loss_sim=v) for i, v in enumerate((0.97, 0.96, 0.965))]
+    assert F.restart_point('A3', hist, resumed=False)['eval'] == 1
+    rec = F._read_json(tmp_path / 'fit_restart_A3.json')
+    assert (rec['from_eval'], rec['n_evals']) == (1, 3)
+    hist += [dict(eval=3, loss_sim=0.95)]              # found by the restart
+    assert F.restart_point('A3', hist, resumed=True)['eval'] == 1
+    (tmp_path / 'fit_restart_A3.json').unlink()
+    assert F.restart_point('A3', hist, resumed=True)['eval'] == 3
+    F._write_json(tmp_path / 'fit_restart_A3.json', dict(from_eval=7))
+    with pytest.raises(RuntimeError, match='not in the history'):
+        F.restart_point('A3', hist, resumed=True)
+
+
 def test_pn_norm_kws():
     from experiments.E3_drive_dependent_gain import PN_INHADD_DEFAULT
     from experiments.E77_input_screen import inhsc_for
