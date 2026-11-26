@@ -833,6 +833,91 @@ def write_prediction() -> dict:
     return rec
 
 
+def _f(x, sp: str = '.3f') -> str:
+    try:
+        return '' if x is None or (isinstance(x, float) and not np.isfinite(x)) else format(float(x), sp)
+    except (TypeError, ValueError):
+        return str(x)
+
+
+MATRIX_ROWS: Tuple[Tuple[str, str, str], ...] = (
+    ('n_kcs', 'KCs', '.0f'), ('inputs_per_kc', 'KC-KC inputs per KC (nonzero entries)', '.2f'),
+    ('kcs_without_input', 'KCs with no KC-KC input', '.0f'),
+    ('row_sum_cv', "unevenness: CV of the KCs' summed input", '.3f'),
+    ('row_sum_gini', "unevenness: Gini of the KCs' summed input", '.3f'),
+    ('row_sum_top10_share', "unevenness: the top 10 % of KCs' share of the summed input", '.3f'),
+    ('shared_glomerulus_pair_share', 'KC pairs that share an input glomerulus (share of pairs)', '.3f'),
+    ('shared_glomerulus_weight_share', 'weight between KCs that share an input glomerulus (share of the total)', '.3f'),
+    ('shared_glomerulus_ratio', 'the same, over the share of pairs (1: no preference)', '.3f'),
+    ('reciprocal_share', 'reciprocity: nonzero entries whose transpose is nonzero', '.3f'),
+    ('reciprocity_weighted', 'reciprocity: sum of min(M, transpose) over the total', '.3f'),
+    ('within_type_weight_share', 'weight within KC type (share of the total)', '.3f'),
+    ('within_type_pair_share', 'KC pairs within type (share of pairs)', '.3f'),
+) + tuple((f'block_{a}_from_{b}', f'weight from {b} to {a} KCs (share of the total)', '.3f')
+          for a in ('g', 'apbp', 'ab') for b in ('g', 'apbp', 'ab'))
+MATRIX_NAMES = {'hemibrain': "hemibrain ('first' KCs)", 'hemibrain_SH': 'hemibrain shuffled within type pairs',
+                'H': "H (hemibrain, 'argmax')", 'L': 'L (male CNS left)', 'R': 'R (male CNS right)'}
+
+
+def step0_table(res: Mapping[str, pd.DataFrame]) -> str:
+    """Step 0's tables as markdown: the identity, the input glomeruli's boutons, the matrices (statistic down the first
+    column, the matrices across) and the absolute KC-KC scales per setting (the calyces beside the hemibrain's eight
+    wirings' range)."""
+    L: List[str] = ['# E144 step 0', '']
+    if 'identity' in res:
+        d = res['identity']
+        L += ['## Identity against E130\'s counted fits (APL16 input, real wiring)', '',
+              '| calyx | fit | condition | counts differing | responses differing | stage reading |',
+              '|---|---|---|---:|---:|---|']
+        L += [f'| {r.calyx} | {r.fit} | {r.condition} | {r.counts_differ} | {r.responses_differ} | '
+              f'{"ok" if r.stage_reading_ok else r.stage_reading_error} |' for r in d.itertuples()]
+        L.append('')
+    if 'glomeruli' in res:
+        g = res['glomeruli']
+        g = g[g['in_input']]
+        L += ['## The input glomeruli\'s boutons per calyx', '',
+              '| calyx | input glomeruli | without boutons | boutons per input glomerulus, min / median / max |',
+              '|---|---:|---:|---:|']
+        for c, x in g.groupby('calyx'):
+            L.append(f"| {c} | {len(x)} | {int((~x['has_boutons']).sum())} | {int(x.n_boutons.min())} / "
+                     f"{x.n_boutons.median():g} / {int(x.n_boutons.max())} |")
+        L.append('')
+    if 'matrices' in res:
+        m = res['matrices'].set_index('matrix')
+        cols = [k for k in MATRIX_NAMES if k in m.index]
+        L += ['## The KC-KC matrices (normalized to a mean row sum of 1)', '',
+              '| statistic | ' + ' | '.join(MATRIX_NAMES[k] for k in cols) + ' |', '|---|' + '---:|' * len(cols)]
+        for col, lab, sp in MATRIX_ROWS:
+            if col in m.columns:
+                L.append(f'| {lab} | ' + ' | '.join(_f(m.loc[k, col], sp) for k in cols) + ' |')
+        L.append('')
+    if 'scales' in res:
+        sc = res['scales']
+        own = sc[sc['calyx'].isin(list(CALYCES))]
+        hb = sc[~sc['calyx'].isin(list(CALYCES))]
+        L += ["## The absolute KC-KC scale each setting reaches (before the hold; APL->bouton beside)", '',
+              "| setting | H | L | R | the hemibrain's eight wirings (min to max) | APL->bouton H / L / R |",
+              '|---|---:|---:|---:|---:|---:|']
+        for s in SETTINGS:
+            v = {c: own[(own.calyx == c) & (own.setting == s)] for c in CALYCES}
+            hh = hb[hb.setting == s]
+            rng = f'{hh.kckc.min():.1f} to {hh.kckc.max():.1f}' if len(hh) else ''
+            L.append(f'| {s} | ' + ' | '.join(_f(v[c].kckc.iloc[0], '.1f') if len(v[c]) else '' for c in CALYCES)
+                     + f' | {rng} | ' + ' / '.join(_f(v[c].aplpn.iloc[0], '.3f') if len(v[c]) else '-'
+                                                    for c in CALYCES) + ' |')
+        L.append('')
+    return '\n'.join(L) + '\n'
+
+
+def write_step0_table() -> str:
+    """step0_table.md from the step0_<part>.csv files in the results folder."""
+    res = {k: pd.read_csv(out_dir() / f'step0_{k}.csv') for k in ('identity', 'glomeruli', 'matrices', 'scales')
+           if (out_dir() / f'step0_{k}.csv').exists()}
+    t = step0_table(res)
+    (out_dir() / 'step0_table.md').write_text(t)
+    return t
+
+
 def part_step0(parts: Sequence[str] = ('glomeruli', 'matrices', 'scales', 'identity')) -> dict:
     """Step 0 (design item 1): the prediction first (`write_prediction`), then step0_<part>.csv for each of `parts`
     (identity, glomeruli, matrices, scales), and step0.json (identity_passes, glomeruli_pass and the tables' files),
@@ -858,7 +943,21 @@ def part_step0(parts: Sequence[str] = ('glomeruli', 'matrices', 'scales', 'ident
     rec.update(prediction_written=pred.get('written'), time=_now(), host=_host(), script=SCRIPT,
                commits=H.code_commits())
     _write_json(out_dir() / 'step0.json', rec)
+    print(write_step0_table(), flush=True)
     return {k: v for k, v in rec.items() if k not in ('commits',)}
+
+
+def smoke_point(pt: Point, scratch: Path) -> dict:
+    """One read into a scratch folder (claims, row, provenance and run there; nothing in results or the archive), then
+    the saved run loaded back and read at every stage (atlas's `read_run`): the read path and the stage readings on the
+    point's wiring. Returns the row and the populations' sizes."""
+    from kcq import stage_readings as R
+    scratch = Path(scratch)
+    row = read_point(pt, 'smoke', root=scratch, dirs=[scratch / 'read'], reclaim=True)
+    run = R.load_step3_run(point_tag(pt), dirs=[scratch / 'read'])
+    rd = R.read_run(run, seed_index=seed_index(pt.calyx, pt.wiring))
+    return dict(row=row, populations={'/'.join(k): int(v.values.shape[0]) for k, v in rd.populations.items()},
+                skipped={'/'.join(k): v for k, v in rd.skipped.items()})
 
 
 # ---------------------------------------------------------------------------
@@ -1028,18 +1127,27 @@ def require_lock() -> dict:
 
 def main(argv: Optional[Sequence[str]] = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
-    ap.add_argument('--part', required=True, choices=('lock', 'step0', 'read', 'score', 'variants'))
+    ap.add_argument('--part', required=True, choices=('lock', 'step0', 'step0_table', 'read', 'smoke', 'score',
+                                                       'variants'))
     ap.add_argument('--step', nargs='+', default=['1'], choices=('1', '2'))
     ap.add_argument('--lane', default='1')
     ap.add_argument('--reverse', action='store_true')
     ap.add_argument('--reclaim', action='store_true')
+    ap.add_argument('--point', help="--part smoke: the point's tag (e.g. L_family_megamat_real)")
+    ap.add_argument('--scratch', help='--part smoke: the scratch folder')
     a = ap.parse_args(argv)
     if a.part == 'lock':
         print(json.dumps(write_lock(), indent=1, default=str)[:2000])
     elif a.part == 'step0':
         print(json.dumps(part_step0(), indent=1, default=str))
+    elif a.part == 'step0_table':
+        print(write_step0_table())
     elif a.part == 'read':
         part_read(a.lane, a.step, a.reverse, a.reclaim)
+    elif a.part == 'smoke':
+        if not a.point or not a.scratch:
+            raise SystemExit('--part smoke needs --point and --scratch')
+        print(json.dumps(smoke_point(parse_tag(a.point), Path(a.scratch)), indent=1, default=str))
     elif a.part == 'score':
         print(json.dumps(part_score(), indent=1, default=str))
     elif a.part == 'variants':
