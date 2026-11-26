@@ -769,6 +769,11 @@ def part_read(jobs: int = 1, settings: Optional[Sequence[str]] = None, fit_evals
                              seconds=round(time.time() - t0, 1)))
     out = pd.DataFrame(rows)
     out.to_csv(local_dir() / f'read_summary_{_host()}.csv', index=False)
+    from kcq import stage_readings as R
+    provenance('read', require_lock(), e134_lock_sha256=R.require_lock().get('sha256'), jobs=int(jobs),
+               threads=os.environ.get('OMP_NUM_THREADS'), views=str(views_dir()),
+               files=sorted(f.name for f in views_dir().glob('*.parquet')),
+               summary=out.to_dict('records'))
     return out
 
 
