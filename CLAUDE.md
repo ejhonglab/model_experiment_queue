@@ -1279,6 +1279,8 @@ Canonical experiment names for summary reports:
 | E136 | the best family fitted to all megamat stages at once |
 | E137 | the held-out panels read like for like |
 | E138 | the odors that carry the strength error and the glomeruli that feed them |
+| E139 | the weaker antennal-lobe normalization without the calyx refit, along its strength |
+| E140 | aa at the step from the claws to the somata |
 
 ## Model-output archive (data/model_outputs/ in the shared directory)
 
