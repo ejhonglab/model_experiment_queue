@@ -61,8 +61,9 @@ change; no fit, no search, no simulation; only Yang's processed products (none a
 without the bouton fly 2022-10-21 fly02 and without her older megamat flies. Nothing is published.
 
 Outputs (<shared>/results/E140_aa_claw_soma_step/): lock.json; soma_windows.parquet, soma_windows.json;
-flies_entries.csv, flies_sharing.csv, flies_breadth.csv, flies_same_fly_step.csv, flies_soma_readings.csv;
-models_entries.csv, models_sharing.csv, models_anatomy.csv, models_a1_stages.csv; follows.csv; input_aa.csv,
+flies_entries.csv, flies_sharing.csv, flies_sharing_summary.csv, flies_breadth.csv, flies_same_fly_step.csv,
+flies_soma_readings.csv; models_entries.csv, models_sharing.csv, models_sharing_summary.csv, models_breadth.csv,
+models_anatomy.csv, models_a1_stages.csv; follows.csv, follows_points.csv, input_features.csv; input_aa.csv,
 input_summary.csv; classes.json, tables.md; fig_*.png; provenance_<part>.json.
 
 Usage (from the repository root; one thread under nice):
@@ -1194,7 +1195,8 @@ def part_models() -> dict:
     """Design item 2 (the saved megamat runs, no simulation): models_entries.csv (each group's per-odor entries,
     concentration and ranks at every stage, APL on and off, each wiring and the wirings' mean 'common', in the
     default reading; the family held also in MODEL_SOMA_BESIDE and MODEL_CLAW_BESIDE), models_sharing.csv and
-    models_sharing_summary.csv (aa's row of the sharing view), models_anatomy.csv (each odor's somatic responders by
+    models_sharing_summary.csv (aa's row of the sharing view), models_breadth.csv (the number of odors each odor's
+    somatic responders respond to, in the default reading), models_anatomy.csv (each odor's somatic responders by
     the glomeruli of their claws and by KC type), models_a1_stages.csv (each odor's entry at each stage under A1 beside
     the flies'), and the groups not found."""
     from kcq import stage_readings as R
@@ -1204,7 +1206,7 @@ def part_models() -> dict:
     ir = lock['model']['anatomy']['ir_glomeruli']
     flies = R.FlyCache()
     groups = [(g.name, g.source) for g in MODEL_GROUPS]
-    ent, sh, shs, an, missing, read_info = [], [], [], [], {}, {}
+    ent, sh, shs, an, brd, missing, read_info = [], [], [], [], [], {}, {}
     e139 = e139_runs()
     if not e139:
         missing['e139'] = [f'{E139_EXPERIMENT}: no saved megamat runs yet']
@@ -1223,6 +1225,16 @@ def part_models() -> dict:
                     ent.append(_tag(s, **tags, wiring=w))
                 if len(d) >= 2:
                     ent.append(_tag(mean_rows(d), **tags, wiring='common'))
+                if with_sharing and stage == 'kc_soma':
+                    b = {w: responders_breadth(p, odors) for w, p in pops.items()}
+                    for w, x in b.items():
+                        brd.append(_tag(x, **tags, wiring=w))
+                    if len(b) >= 2:
+                        m = pd.concat(b.values()).groupby('odor', sort=False).mean(numeric_only=True).reindex(odors)
+                        r = ranks(m.breadth_mean.to_numpy())
+                        m['breadth_mean_rank'] = r.to_numpy()
+                        m['breadth_mean_third'] = [third(v, int(r.notna().sum())) for v in r]
+                        brd.append(_tag(m.reset_index(), **tags, wiring='mean'))
                 if with_sharing:
                     parts = {w: sharing_parts(p, odors) for w, p in pops.items()}
                     sets = dict(parts, **({'common': mean_parts(list(parts.values()))} if len(parts) >= 2 else {}))
@@ -1259,6 +1271,7 @@ def part_models() -> dict:
     _write_csv(entries, 'models_entries.csv')
     _write_csv(pd.DataFrame(sh), 'models_sharing.csv')
     _write_csv(pd.concat(shs, ignore_index=True), 'models_sharing_summary.csv')
+    _write_csv(pd.concat(brd, ignore_index=True), 'models_breadth.csv')
     anat = pd.concat(an, ignore_index=True)
     am = anat.groupby(['group', 'condition', 'odor'], sort=False).mean(numeric_only=True).reset_index()
     _write_csv(pd.concat([anat, am.assign(wiring='mean')], ignore_index=True), 'models_anatomy.csv')
@@ -1550,6 +1563,16 @@ def write_tables(classes: Mapping) -> None:
         L.append(f'| {r.set} | {_f(r.claws_rate)} ({_f(r.claws_rate_rank, "g")}) | {_f(r.somata_rate)} '
                  f'({_f(r.somata_rate_rank, "g")}) | {_f(r.step_rate, "+.2f")} ({_f(r.step_rate_rank, "g")}) | '
                  f'{_f(r.step_mean, "+.2f")} |')
+    if (d / 'models_breadth.csv').exists():
+        fb, mb = pd.read_csv(d / 'flies_breadth.csv'), pd.read_csv(d / 'models_breadth.csv')
+        L += ['', "## How many odors aa's somatic responders respond to (of 17)", '',
+              '| side | responders | their mean breadth (rank) | all units\' mean breadth |', '|---|---:|---:|---:|']
+        for r in aa_rows(fb, recording='mean').itertuples():
+            L.append(f'| the flies ({r.cohort}) | {_f(r.n_responders, ".0f")} | {_f(r.breadth_mean)} '
+                     f'({_f(r.breadth_mean_rank, "g")}) | {_f(r.all_units_breadth_mean)} |')
+        for r in aa_rows(mb, wiring='mean').itertuples():
+            L.append(f'| {r.group}, APL {r.condition} | {_f(r.n_responders, ".0f")} | {_f(r.breadth_mean)} '
+                     f'({_f(r.breadth_mean_rank, "g")}) | {_f(r.all_units_breadth_mean)} |')
     if (d / 'follows.csv').exists():
         fo = pd.read_csv(d / 'follows.csv')
         L += ['', "## What each side's somata follow (aa left out of the fit; rate part)", '',
