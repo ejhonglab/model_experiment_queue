@@ -104,6 +104,8 @@ PRICE = 0.003
 PRICE_TARGETS: Tuple[str, ...] = ('z8', 'halfA', 'halfB')
 # step 3's candidate: a rung below this "improves" at F or B with a price under this share of A1's
 CANDIDATE_BELOW, CANDIDATE_PRICE_SHARE = 1000.0, 0.5
+# beside every setting, the megamat somata without this odor's entry (E140's outcome (d), E138's definition)
+WITHOUT_ODOR = 'aa'
 # E136's arm whose model the points are read with (its normalization searched: E135's outcome (e), mode 'search'), and
 # the arm read beside as the two-by-two's fourth cell
 A1 = 'A1'
@@ -786,7 +788,8 @@ def part_score(names: Optional[Sequence[str]] = None) -> dict:
     each wiring's errors); the held-out panels' KC population errors on the measure and on every view
     (score_panels.csv, score_panels_all_views.csv); the APL16 rows (E136's `apl16_rows` with the price's statistics,
     `apl_effect_parts`; F's are E102's saved runs; score_apl16.csv); the mixture panels under E137's readings
-    (score_panels_e137.csv; `score_e137_beside`, `e137_beside`); E136's classes (`classify`, on T against the held-out
+    (score_panels_e137.csv; `score_e137_beside`, `e137_beside`); the megamat somata with and without aa's entry
+    (score_without_aa.csv, classes.json's beside.kc_soma_without_aa; E136's `stage_without_odor`); E136's classes (`classify`, on T against the held-out
     half, the spreads over the family's eight wirings, rule 3's guard on every view; no permuted control, no bound:
     nothing is fitted), with no class for a variant whose holds fail (`holds_failed`); the price on the APL effect
     (`price_of`), "serves both" (holds, no price); the rung named per setting on S against the fit half; step 3's
@@ -870,6 +873,24 @@ def part_score(names: Optional[Sequence[str]] = None) -> dict:
         beside = dict(two_view={v: F.compare(tv[v], tv[F.FAMILY], np.nan) for v in allv[1:] if v in tv and F.FAMILY in tv},
                       e137_readings=F.e137_beside(e137, allv[1:]), panels_beside=['/'.join(k) for k in F.BESIDE_PANELS],
                       spreads_all_views=g_spreads, yardsticks=F.yardsticks(stages))
+        # beside: the megamat somata with and without aa's entry (E140's outcome (d); E136's `stage_without_odor`, E138's
+        # definition), on T against the held-out half, with the change from the family on the same wirings
+        wo_rows = [F.stage_without_odor(v, odor=WITHOUT_ODOR) for v in allv]
+        wo = pd.concat([r for r in wo_rows if r is not None], ignore_index=True) if any(r is not None for r in wo_rows) \
+            else pd.DataFrame()
+        if len(wo):
+            wo.to_csv(out_dir() / f'score_without_{WITHOUT_ODOR}.csv', index=False)
+            ft = wo[(wo.arm == F.FAMILY) & wo.row.isin(F.T_WIRINGS)].set_index('row')
+            rec_wo = {}
+            for v, g in wo.groupby('arm', sort=False):
+                tw = g[g.row.isin(F.T_WIRINGS)].set_index('row')
+                rec_wo[v] = dict(with_mean=float(tw.view_error.mean()), without_mean=float(tw.view_error_without.mean()),
+                                 share_mean=float(tw.view_share.mean()))
+                if v != F.FAMILY and len(ft):
+                    rec_wo[v].update(change_with=float((tw.view_error - ft.view_error.reindex(tw.index)).mean()),
+                                     change_without=float((tw.view_error_without
+                                                           - ft.view_error_without.reindex(tw.index)).mean()))
+            beside[f'kc_soma_without_{WITHOUT_ODOR}'] = rec_wo
         # the classes
         reads = reads_table()
         e136_classes = json.loads((F.out_dir() / 'classes.json').read_text()) if (F.out_dir() / 'classes.json').exists() \
