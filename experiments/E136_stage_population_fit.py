@@ -112,6 +112,7 @@ Usage (from the repository root):
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import socket
@@ -276,8 +277,51 @@ def _measure_sub() -> str:
     return '' if MEASURE == 'all' else f'measure_{MEASURE}'
 
 
+# folders another experiment's parts have E136's parts write under, in place of E136's own (`paths`): 'out' (the
+# results: histories, fit records, restarts), 'local' (the outputs: each evaluation's stages) and 'archive' (the
+# model-output archive: a fit's best evaluation); empty outside that context
+PATHS: Dict[str, Path] = {}
+
+
+@contextlib.contextmanager
+def paths(out: Optional[Path] = None, local: Optional[Path] = None, archive: Optional[Path] = None):
+    """For the block, `out_dir`, `local_dir` and `archive_dir` return the folders given (as they are: no measure
+    subfolder; each one not given keeps E136's), so that E136's fit, its single-factor returns and its rescore
+    (`fit_arm`, `determined`, `rescore`) write another experiment's records (E139's step 3). The reads' folders
+    (`read_dirs`) and E134's are not changed."""
+    old = dict(PATHS)
+    PATHS.update({k: Path(v) for k, v in (('out', out), ('local', local), ('archive', archive)) if v is not None})
+    try:
+        yield
+    finally:
+        PATHS.clear()
+        PATHS.update(old)
+
+
+@contextlib.contextmanager
+def extra_arms(*arms: Arm):
+    """For the block, ARMS also holds `arms` (each an `Arm` whose name is none of E136's: an arm, CONTROL, FAMILY or a
+    registered variant), so that E136's fit and reads build them as their own (`ArmModel`, `fit_arm`, `hold_at`,
+    `read_at`; e.g. E139's A0 with the normalization fixed); they are removed after. Their budgets are passed to
+    `fit_arm` (MAXFEV holds E136's arms only)."""
+    added = []
+    try:
+        for a in arms:
+            if a.name in ARMS or a.name in (CONTROL, FAMILY) or a.name in VARIANT_LOADERS:
+                raise ValueError(f'{a.name!r} is already a name of E136 or a registered variant')
+            ARMS[a.name] = a
+            added.append(a.name)
+        yield
+    finally:
+        for n in added:
+            ARMS.pop(n, None)
+
+
 def out_dir() -> Path:
-    """<shared>/results/E136_stage_population_fit/[measure_<name>/] (created)."""
+    """<shared>/results/E136_stage_population_fit/[measure_<name>/] (created); PATHS['out'] inside `paths`."""
+    if 'out' in PATHS:
+        PATHS['out'].mkdir(parents=True, exist_ok=True)
+        return PATHS['out']
     d = H.results_dir(EXPERIMENT)
     if _measure_sub():
         d = d / _measure_sub()
@@ -286,7 +330,12 @@ def out_dir() -> Path:
 
 
 def local_dir(part: str = '') -> Path:
-    """outputs/E136_stage_population_fit/[measure_<name>/][<part>/] (created)."""
+    """outputs/E136_stage_population_fit/[measure_<name>/][<part>/] (created); PATHS['local']/[<part>/] inside
+    `paths`."""
+    if 'local' in PATHS:
+        d = PATHS['local'] / part if part else PATHS['local']
+        d.mkdir(parents=True, exist_ok=True)
+        return d
     d = H.outputs_dir(EXPERIMENT)
     for x in (_measure_sub(), part):
         if x:
@@ -1027,7 +1076,9 @@ def in_memory_run(tag: str, out: Mapping[str, dict], built, info: Mapping[str, o
 
 
 def archive_dir() -> Path:
-    """<shared>/data/model_outputs/E136_stage_population_fit/[measure_<name>/]."""
+    """<shared>/data/model_outputs/E136_stage_population_fit/[measure_<name>/]; PATHS['archive'] inside `paths`."""
+    if 'archive' in PATHS:
+        return PATHS['archive']
     d = H.shared_dir() / 'data' / 'model_outputs' / EXPERIMENT
     return d / _measure_sub() if _measure_sub() else d
 
@@ -1768,6 +1819,43 @@ def reads_table() -> pd.DataFrame:
     return pd.concat(fs, ignore_index=True, sort=False).drop_duplicates('tag', keep='last').reset_index(drop=True)
 
 
+def hold_at(arm: str, z: Mapping[str, float], wiring: str, panel: str, label: str = 'E136',
+            lock: Optional[Mapping] = None) -> dict:
+    """Both response rates of `arm`'s model (built as `base_arm(arm)`) on `wiring` and `panel` at coordinates `z`
+    (applied as log factors to the wiring's held megamat point, `start_params`) held exactly at the panel's operating
+    point, as a read holds them (`read_at`): E77's `hold_rates` on E83's simulator with the lab input's breadth, the
+    threshold with APL off, then the tied APL scales, to `read_targets`' counts. Returns dict(hold: hold_rates' dict,
+    kws: the model kwargs beside the family's (the arm's, A3's per-claw threshold, A1's PN stage), orn: the panel's
+    input, breadth: the breadth behind the APL->KC weights, claw_thr: A3's threshold in Hz or None, targets:
+    (target_off, target_on, fraction_off, fraction_on), p0: the parameters the hold started from)."""
+    from experiments import E83_cross_wiring_fit as E83
+    from experiments import E134_population_baseline as B
+    from experiments.E77_input_screen import hold_rates
+    base = base_arm(arm)
+    a = ARMS[base]
+    lock = lock if lock is not None else R.require_lock()
+    p0, _ = start_params(wiring)
+    if 'kckc_fixed' in a.kws:
+        p0['wKCKC_scale'] = float(a.kws['kckc_fixed'])
+    for k, v in z.items():
+        if k in FACTORS:
+            for kk in FACTORS[k]:
+                p0[kk] = p0[kk] * float(np.exp(v))
+    ct = CLAW_THR_UNIT * float(z['claw_thr']) if 'claw_thr' in z else None
+    orn = B.panel_input(panel)
+    kws = dict(arm_kws(base), **({'claw_thr': ct} if ct else {}))
+    if base == 'A1':
+        kws.update(a1_kws(wiring, panel, orn, z))
+    Pp = E83.wiring_parts(wiring)
+    targets = read_targets(wiring, panel, orn.shape[1], lock)
+    t_off, t_on = targets[0], targets[1]
+    rng = HOLD_RANGE_DIVISIVE_APL if kws.get('apl_inh_divisive') else HOLD_RANGE
+    hold = hold_rates(lambda: E83.build_simulator(wiring, orn=orn, breadth=Pp['breadth'], params=dict(p0),
+                                                  extra_kws=kws or None),
+                      target_off=t_off, target_on=t_on, params=dict(p0), label=label, apl_bracket=rng)
+    return dict(hold=hold, kws=kws, orn=orn, breadth=Pp['breadth'], claw_thr=ct, targets=tuple(targets), p0=p0)
+
+
 def read_at(tag: str, arm: str, z, wiring: str, panel: str, half: Optional[str], lane: str, root: Path,
             dirs: Sequence[Path], reclaim: bool = False, done: Optional[set] = None, extra: Optional[Mapping] = None,
             label: str = 'E136', script: str = SCRIPT) -> Optional[dict]:
@@ -1781,9 +1869,8 @@ def read_at(tag: str, arm: str, z, wiring: str, panel: str, half: Optional[str],
     also recorded in the run's info) in <root>/reads_<host>_<lane>.csv and its provenance in
     <root>/provenance_read_<host>_<lane>.json (`script` named there). The claim is released on failure. `label` heads
     the printed lines."""
-    from experiments import E83_cross_wiring_fit as E83
     from experiments import E134_population_baseline as B
-    from experiments.E77_input_screen import frame_sha256, hold_rates
+    from experiments.E77_input_screen import frame_sha256
     root = Path(root)
     extra = dict(extra or {})
     if done is not None and tag in done:
@@ -1795,26 +1882,10 @@ def read_at(tag: str, arm: str, z, wiring: str, panel: str, half: Optional[str],
     try:
         z = dict(z() if callable(z) else z)
         base = base_arm(arm)
-        a = ARMS[base]
         lock = R.require_lock()
-        p0, _ = start_params(wiring)
-        if 'kckc_fixed' in a.kws:
-            p0['wKCKC_scale'] = float(a.kws['kckc_fixed'])
-        for k, v in z.items():
-            if k in FACTORS:
-                for kk in FACTORS[k]:
-                    p0[kk] = p0[kk] * float(np.exp(v))
-        ct = CLAW_THR_UNIT * float(z['claw_thr']) if 'claw_thr' in z else None
-        orn = B.panel_input(panel)
-        kws = dict(arm_kws(base), **({'claw_thr': ct} if ct else {}))
-        if base == 'A1':
-            kws.update(a1_kws(wiring, panel, orn, z))
-        Pp = E83.wiring_parts(wiring)
-        t_off, t_on, f_off, f_on = read_targets(wiring, panel, orn.shape[1], lock)
-        rng = HOLD_RANGE_DIVISIVE_APL if kws.get('apl_inh_divisive') else HOLD_RANGE
-        hold = hold_rates(lambda: E83.build_simulator(wiring, orn=orn, breadth=Pp['breadth'], params=dict(p0),
-                                                      extra_kws=kws or None),
-                          target_off=t_off, target_on=t_on, params=dict(p0), label=f'{label} {tag}', apl_bracket=rng)
+        h = hold_at(arm, z, wiring, panel, label=f'{label} {tag}', lock=lock)
+        hold, kws, orn, ct = h['hold'], h['kws'], h['orn'], h['claw_thr']
+        t_off, t_on, f_off, f_on = h['targets']
         built = B.build_family(wiring, panel, hold['params'], orn=orn, extra_kws=kws or None)
         p, poff = dict(hold['params']), dict(hold['params_off'])
         reader = claw_reader_of(base)

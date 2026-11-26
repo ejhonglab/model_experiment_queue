@@ -795,3 +795,125 @@ def test_registered_variants(monkeypatch, tmp_path):
     assert a == {**{w: f'step3:A0_e7_{w}' for w in F.S_WIRINGS}, **{w: f'step3:A0_megamat_{w}' for w in F.T_WIRINGS}}
     monkeypatch.setitem(F.VARIANT_LOADERS, 'W', lambda pt, claw_after: None)
     assert F.score_megamat('W', F.LOSS_STAGES, 'held', F.WIRINGS) is None
+
+
+def test_hold_at(monkeypatch):
+    """`hold_at` holds the arm's model at `z` as a read does: the factors on the wiring's parameters, A1's normalization
+    from `z`, the panel's targets; `read_at` uses it (`test_read_at_mechanics`)."""
+    got = _fake_read_pipeline(monkeypatch)
+    z = dict(aplpn=np.log(0.5), kckc=np.log(2.0), inhadd=np.log(314.0 / 31.4088), inhsc=0.0)
+    h = F.hold_at('A1', z, 'P3', 'apl16', label='x')
+    assert h['targets'] == (20, 10, 0.2, 0.1) and h['claw_thr'] is None and h['breadth'] is None
+    assert h['kws']['pn_inhadd'] == pytest.approx(314.0) and got['hold_params']['wKCKC_scale'] == pytest.approx(52.0)
+    assert h['hold']['params']['wAPLPN_scale'] == pytest.approx(0.2) and h['p0']['wAPLPN_scale'] == pytest.approx(0.2)
+    assert F.hold_at('A0', {}, 'P3', 'apl16')['kws'] == {}
+
+
+def _extra_arm(name='A0_inhadd314'):
+    return F.Arm(name, 'A0 with the normalization fixed', ('aplpn', 'kckc'),
+                 dict(pn_inhadd=314.0, pn_inhsc=419.948))
+
+
+def test_paths_and_extra_arms(monkeypatch, tmp_path):
+    """Inside `paths` E136's out_dir, local_dir and archive_dir (and so fit_dirs) are the folders given, with no measure
+    subfolder, and E136's own come back after; inside `extra_arms` an extra arm is built and read as one of E136's (its
+    kwargs, its searched coordinates, its read tags) and is gone after; E136's names are refused."""
+    out0, arch0 = F.out_dir(), F.archive_dir()
+    res, loc, arch = tmp_path / 'res', tmp_path / 'loc', tmp_path / 'arch'
+    try:
+        F.set_measure('strength')
+        with F.paths(out=res, local=loc, archive=arch):
+            assert F.out_dir() == res and res.is_dir() and F.local_dir('fit_X') == loc / 'fit_X' and F.local_dir() == loc
+            assert F.archive_dir() == arch and F.fit_dirs('X') == [loc / 'fit_X', arch / 'fit_X']
+            with F.paths(out=tmp_path / 'inner'):
+                assert F.out_dir() == tmp_path / 'inner' and F.archive_dir() == arch
+            assert F.out_dir() == res
+        assert F.out_dir().name == 'measure_strength' and F.PATHS == {}
+    finally:
+        F.set_measure('all')
+    assert F.out_dir() == out0 and F.archive_dir() == arch0
+    arms0 = tuple(F.ARMS)
+    with F.extra_arms(_extra_arm()):
+        assert F.arm_kws('A0_inhadd314') == dict(pn_inhadd=314.0, pn_inhsc=419.948)
+        assert F.arm_searched('A0_inhadd314') == ('aplpn', 'kckc') and F.base_arm('A0_inhadd314') == 'A0_inhadd314'
+        assert F.claw_reader_of('A0_inhadd314') is None and F.fitted_arm('A0_inhadd314')
+        pts = F.planned_reads(['A0_inhadd314'])
+        assert len(pts) == 28 and F.read_tag(pts[0]) == 'A0_inhadd314_megamat_P3'
+    assert tuple(F.ARMS) == arms0 and 'A0_inhadd314' not in F.ARMS
+    with pytest.raises(ValueError):
+        F.read_tag(F.ReadPoint('A0_inhadd314', 'apl16', 'P3', None))
+    for bad in ('A1', F.CONTROL, F.FAMILY):
+        with pytest.raises(ValueError):
+            with F.extra_arms(_extra_arm(bad)):
+                pass
+    assert tuple(F.ARMS) == arms0
+    with pytest.raises(RuntimeError):
+        with F.extra_arms(_extra_arm()):
+            raise RuntimeError('inside')
+    assert tuple(F.ARMS) == arms0
+
+
+class _FakeModel:
+    """A planted ArmModel: no simulation; each wiring's 'run' carries the coordinates' factors and a hold that reached
+    its target in one simulation per rate."""
+
+    def __init__(self, arm, wirings=F.S_WIRINGS, claw_mode='in_place', lock=None):
+        self.arm, self.wirings = arm, tuple(wirings)
+        self.searched = F.arm_searched(arm)
+        self.kws = F.arm_kws(arm)
+        self.pn_search, self.pn_mode, self.claw_mode, self.pn_checks = False, None, None, {}
+        self.memory = {w: [] for w in self.wirings}
+        self.slopes = {w: dict(F.HOLD_SLOPE0) for w in self.wirings}
+
+    def run(self, z, tag_prefix=''):
+        hd = dict(x_thr=0.0, x_apl=0.0, off=dict(slope=-3.0, n_sims=1, ok=True, at_end=False, miss=0.0),
+                  on=dict(slope=-1.0, n_sims=1, ok=True, at_end=False, miss=0.0))
+        p = dict(wAPLPN_scale=float(np.exp(z.get('aplpn', 0.0))), wKCKC_scale=float(np.exp(z.get('kckc', 0.0))))
+        return {w: types.SimpleNamespace(info=dict(hold=hd, params=dict(p), claw_thr=None, z=dict(z),
+                                                   pn_kws=dict(self.kws)))
+                for w in self.wirings}
+
+
+def test_fit_arm_in_another_folder(monkeypatch, tmp_path):
+    """E136's fit of an extra arm inside `paths` (planted model and loss, no simulation): its history, its record and
+    its restart are written in the folder given, E136's own folder gets nothing, the arm's kwargs reach the model, and
+    the evaluations and the best are saved and archived through the folders given."""
+    saved, archived, seen = [], [], {}
+    res = tmp_path / 'res'
+    monkeypatch.setattr(F, 'require_gate', lambda: dict(gate={}, classes={}))
+    monkeypatch.setattr(F, 'readable_stages', lambda classes=None, group=F.START_GROUP: F.LOSS_STAGES)
+    monkeypatch.setattr(R, 'require_lock', lambda: {})
+    monkeypatch.setattr(F, 'Flies', lambda half, stages, perms=None, views='measure': half)
+
+    def model(arm, wirings=F.S_WIRINGS, claw_mode='in_place', lock=None):
+        m = _FakeModel(arm, wirings, claw_mode, lock)
+        seen['kws'] = m.kws
+        return m
+    monkeypatch.setattr(F, 'ArmModel', model)
+
+    def loss_of(stages, flies, lock, check_pn=False):
+        def f(runs):
+            p = next(iter(runs.values())).info['params']
+            v = (np.log(p['wAPLPN_scale']) + 0.5) ** 2 + (np.log(p['wKCKC_scale']) - 0.3) ** 2 + 0.9
+            return dict(loss_stages=v, stage_error=v, rate_on=0.09, rate_off=0.2)
+        seen['check_pn'] = check_pn
+        return f
+    monkeypatch.setattr(F, 'StageLoss', loss_of)
+    monkeypatch.setattr(F, 'save_eval', lambda arm, i, runs: saved.append((arm, i)) or [])
+    monkeypatch.setattr(F, 'archive_best', lambda arm, i: archived.append((arm, i, str(F.archive_dir()))) or [])
+    monkeypatch.setattr(F, '_commits', lambda: {})
+    e136_out = tmp_path / 'e136'
+    monkeypatch.setattr(H_module(), 'results_dir', lambda exp: (e136_out / exp))
+    with F.paths(out=res, local=tmp_path / 'loc', archive=tmp_path / 'arch'), F.extra_arms(_extra_arm()):
+        fit = F.fit_arm('A0_inhadd314', maxfev=12)
+    assert (res / 'fit_history_A0_inhadd314.csv').exists() and (res / 'fit_A0_inhadd314.json').exists()
+    assert fit['n_evals'] >= 3 and fit['searched'] == ['aplpn', 'kckc'] and seen['check_pn'] is True
+    assert seen['kws'] == dict(pn_inhadd=314.0, pn_inhsc=419.948)
+    assert saved and all(a == 'A0_inhadd314' for a, _ in saved)
+    assert archived == [('A0_inhadd314', fit['best_eval'], str(tmp_path / 'arch'))]
+    assert not e136_out.exists() and 'A0_inhadd314' not in F.ARMS and F.PATHS == {}
+
+
+def H_module():
+    from kcq import harness as H
+    return H
