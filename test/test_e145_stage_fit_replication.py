@@ -194,3 +194,40 @@ def test_saved_evals_for_a_moved_fit(monkeypatch, tmp_path):
     assert E.saved_evals('W') == []
     with pytest.raises(ValueError):
         E.part_archive('F', control=True)
+
+
+def test_write_variants_on_a_planted_archive(tmp_path, monkeypatch):
+    import json
+    import pandas as pd
+    out = tmp_path / 'results'
+    out.mkdir()
+    monkeypatch.setattr(E, 'out_dir', lambda cell=None: out)
+    arch = tmp_path / 'archive'
+    params = dict(fixed_thr=50.0, wAPLKC_scale=1.0, wKCAPL_scale=2.0, wAPLPN_scale=0.05, wPNAPL_scale=3.0,
+                  wKCKC_scale=100.0)
+    runs = [('X', 'fit_A1', dict(tag='A1_e115_P3', arm='A1', panel='megamat', wiring='P3', reading='fit', eval=115,
+                                 z=dict(aplpn=-1.7, kckc=1.99), params=params, params_off=params,
+                                 pn_kws=dict(pn_inhadd=2144.0, pn_inhsc=273.4), host='viki', time='t')),
+            ('W', 'fit_A1', dict(tag='A1_e115_P3', arm='A1', panel='megamat', wiring='P3', reading='fit', eval=115,
+                                 z={}, params=params, params_off=params, host='hal', time='t')),
+            ('F', 'read', dict(tag='F_A1_megamat_P3', arm='A1', panel='megamat', wiring='P3', reading='read',
+                               params=params, params_off=params, pn_inhadd=1633.0, pn_inhsc=468.5, host='disco',
+                               lane='disco', time='t')),
+            ('X', 'fit_A1_perm', dict(tag='A1_perm_e0_M2', arm='A1_perm', panel='megamat', wiring='M2',
+                                      reading='fit', eval=0, params=params, params_off=params, host='hal',
+                                      time='t'))]
+    for cell, part, d in runs:
+        (arch / cell / part).mkdir(parents=True, exist_ok=True)
+        (arch / cell / part / f"{d['tag']}_run.json").write_text(json.dumps(d))
+    df = E.write_variants(arch).set_index('subdir')
+    assert len(df) == 4 and (out / 'variants.csv').exists()
+    assert df.loc['X/fit_A1', 'pn_inhadd'] == 2144.0 and df.loc['X/fit_A1', 'z_kckc'] == 1.99
+    assert df.loc['F/read', 'pn_inhadd'] == 1633.0 and df.loc['F/read', 'searched'] == 'S'
+    assert df.loc['F/read', 'fit_half'] == 'b' and df.loc['W/fit_A1', 'read_half'] == 'b'
+    assert 'evaluation 115 on searched wiring P3' in df.loc['W/fit_A1', 'kind']
+    assert 'four-factor control' in df.loc['X/fit_A1_perm', 'kind']
+    assert 'classed point, read on the megamat input' in df.loc['F/read', 'kind']
+    assert df.loc['X/fit_A1', 'off_wKCKC_scale'] == 100.0
+    (arch / 'X' / 'fit_A1' / 'A1_e115_P3b_run.json').write_text(json.dumps(dict(runs[0][2], tag='A1_e115_P3')))
+    with pytest.raises(ValueError):
+        E.write_variants(arch)

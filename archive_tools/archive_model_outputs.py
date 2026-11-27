@@ -108,6 +108,9 @@ PARAMS_TABLES = {
     'E142_dendrite_bouton_step': ('step1_variants.csv',),
     # E144: one row per read its script wrote into the archive (`--part variants`: read/)
     'E144_a1_malecns_calyces': ('variants.csv',),
+    # E145: one row per run its script wrote into the archive (`--part variants`: <cell>/fit_A1/, <cell>/read/, the
+    # control's X/fit_A1_perm*/)
+    'E145_stage_fit_replication': ('variants.csv',),
 }
 
 # experiments whose step folders repeat their files' names: per folder pattern (fnmatch on the file's folder under
@@ -140,6 +143,9 @@ IN_PLACE = {
     'E142_dendrite_bouton_step': 'every step-1 run in step1/ (tag <panel>_<arm>_<wiring>)',
     'E144_a1_malecns_calyces': ('every read in read/ (tag <calyx>_<setting>_<panel>_<wiring>; the calyx H, L or R, the '
                                 'wiring real or a within-type claw permutation P1 to P3)'),
+    'E145_stage_fit_replication': ('per cell (X, F, W) its fit\'s archived evaluations in <cell>/fit_A1/ (tag '
+                                   'A1_e<eval>_<wiring>, unique with its subdir) and its reads in <cell>/read/ (tag '
+                                   '<cell>_A1_<panel>_<wiring>); the four-factor control\'s evaluations in X/fit_A1_perm*/'),
 }
 # folders of outputs withheld from queue work (e.g. E97's withheld_2026-11-15/, built from connectome tables that queue
 # work does not use; CLAUDE.md, "Connectome data"): never copied, at any depth

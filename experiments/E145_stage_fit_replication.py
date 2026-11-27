@@ -44,6 +44,7 @@ Design (the entry's):
 - E143's resampled reading per cell (`--part resampled`, experiments/E145_score.py, after the score): each cell's class
   and the experiment's classes and outcomes over E143's 1,000 resamples, with E143's read-once check on each cell's read
   half; E136's own cell gives A1's class back on 0.535 of the resamples, as E143 read it.
+- variants (`--part variants`): variants.csv for the model-output archive's params.csv (one row per archived run).
 
 Outputs: <shared>/results/E145_stage_fit_replication/ (E145_lock.json, step0.json, step0_*.csv, prediction.json, and per
 cell <cell>/: E136's fit records, identity_A1.json, determined_A1.csv, rescore_A1.csv, consistency_*.csv, claims/,
@@ -813,10 +814,60 @@ def part_rescore(cell: str) -> dict:
         return dict(rescored_here=len(evals), rows=int(len(df)), history=len(F.history_evals(ARM)))
 
 
+def run_kind(cell: str, part: str, d: Mapping) -> str:
+    """A description of an archived run (`write_variants`): which cell's fit or read, or the control's, and where."""
+    c = get_cell(cell)
+    control = str(d.get('arm')) == CONTROL or part.startswith(f'fit_{CONTROL}')
+    what = (f"the four-factor control in cell {cell} (A1's form fitted to odor-permuted flies)" if control else
+            f"cell {cell}'s fit of A1's form ({c.label})")
+    if d.get('reading') == 'fit':
+        return f"{what}: evaluation {d.get('eval')} on searched wiring {d.get('wiring')}"
+    return (f"{what} at its {'best' if control else 'classed'} point, read on the {d.get('panel')} input, wiring "
+            f"{d.get('wiring')}, both response rates held")
+
+
+def write_variants(arch: Optional[Path] = None) -> pd.DataFrame:
+    """variants.csv in out_dir(), for the model-output archive's params.csv: one row per run the archive holds (`arch`,
+    default archive_dir(); <tag>_run.json in <cell>/<folder>/: a fit's archived evaluations in fit_A1/ (tag
+    A1_e<eval>_<wiring>), the reads in read/ (tag <cell>_A1_<panel>_<wiring>), the four-factor control's evaluations in
+    X/fit_A1_perm*/). A row has the tag (the files' variant name; unique with its folder, `subdir`, since two cells' fits
+    can archive the same evaluation of the same wiring), the cell with its searched wirings and halves, the arm, panel,
+    wiring, the reading ('fit' or 'read'), the evaluation, a description (`run_kind`), the searched coordinates
+    (z_<name>), both conditions' absolute parameters (E136's VARIANT_PARAMS; 'off_<name>' with APL off), the PN
+    normalization's terms (pn_inhadd, pn_inhsc), and where and when it ran. The runs were written into the archive from
+    every host that ran them, so the archive, not this host's outputs, is the list."""
+    from experiments import E136_stage_population_fit as F
+    arch = Path(arch) if arch is not None else archive_dir()
+    rows = []
+    for p in sorted(arch.glob('*/*/*_run.json')):
+        d = json.loads(p.read_text())
+        cell, part = p.parent.parent.name, p.parent.name
+        c = get_cell(cell)
+        pn = d.get('pn_kws') if isinstance(d.get('pn_kws'), dict) else {}
+        r = dict(tag=d['tag'], variant=d['tag'], part=part, subdir=f'{cell}/{part}', cell=cell, searched=c.searched,
+                 fit_half=c.fit_half, read_half=c.read_half, arm=d.get('arm'), panel=d.get('panel'),
+                 wiring=d.get('wiring'), reading=d.get('reading'), eval=d.get('eval'), model=d.get('model'),
+                 kind=run_kind(cell, part, d))
+        r.update({f'z_{k}': v for k, v in (d.get('z') or {}).items()})
+        r.update({k: (d.get('params') or {}).get(k) for k in F.VARIANT_PARAMS})
+        r.update({f'off_{k}': (d.get('params_off') or {}).get(k) for k in F.VARIANT_PARAMS})
+        r['pn_inhadd'] = d.get('pn_inhadd', pn.get('pn_inhadd'))
+        r['pn_inhsc'] = d.get('pn_inhsc', pn.get('pn_inhsc'))
+        r.update(host=d.get('host'), lane=d.get('lane'), time=d.get('time'))
+        rows.append(r)
+    df = pd.DataFrame(rows)
+    if df.empty:
+        raise FileNotFoundError(f'no <tag>_run.json under {arch}/<cell>/<folder>/')
+    if df.duplicated(['subdir', 'tag']).any():
+        raise ValueError(f"runs named twice: {sorted(df.loc[df.duplicated(['subdir', 'tag']), 'tag'])}")
+    df.to_csv(out_dir() / 'variants.csv', index=False)
+    return df
+
+
 def main(argv: Optional[Sequence[str]] = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('--part', required=True, choices=('lock', 'step0', 'fit', 'read', 'score', 'resampled', 'control',
-                                                       'archive', 'rescore'))
+                                                       'archive', 'rescore', 'variants'))
     ap.add_argument('--cell', nargs='+', default=list(FIT_CELLS), choices=FIT_CELLS)
     ap.add_argument('--lane', default='1')
     ap.add_argument('--reverse', action='store_true')
@@ -841,6 +892,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         print(json.dumps(part_resampled(), indent=1, default=str))
     elif a.part == 'control':
         print(json.dumps(part_control(a.lane, a.reclaim), indent=1, default=str))
+    elif a.part == 'variants':
+        print(f'variants.csv: {len(write_variants())} runs', flush=True)
     elif a.part in ('archive', 'rescore'):
         if len(a.cell) != 1:
             raise SystemExit(f'--part {a.part} takes one --cell')
