@@ -92,6 +92,10 @@ Usage (from the repository root, as modules; `--tags` runs only the points named
     ./venv/bin/python -u -m experiments.E142_imposed_calyx_runs --part step1_dry [--wiring real] [--tags <tag> ...]
     ./venv/bin/python -u -m experiments.E142_imposed_calyx_runs --part routes_check [--wirings real P1 ...] --lane <l>
     ./venv/bin/python -u -m experiments.E142_imposed_calyx_runs --part routes_summary
+    ./venv/bin/python -u -m experiments.E142_imposed_calyx_runs --part score_apl16
+
+`--part score_apl16` (`part_score_apl16`, 2026-11-26) rewrites score_step1_apl16.csv alone with each variant's 'mean'
+row over the eight wirings, which the score of 16:54 had not written, after checking that no value it held changes.
 
 The routes' check (`part_routes_check`, `part_routes_summary`; the entry's "Step 1's route" of 2026-11-26 10:53):
 whether route 2, E135's solved ORN input, returns every table step 1 uses to within 0.5 Hz with no mushroom-body run
@@ -1442,6 +1446,113 @@ def e143_beside(spreads: Mapping[str, float], scored_cls: Optional[str], carry_a
                 e143_lock_sha256=lock.get('sha256'))
 
 
+APL16_SCORE = 'score_step1_apl16.csv'
+
+
+def apl16_table(F, L, names: Sequence[str]) -> Tuple[pd.DataFrame, Dict[str, List[str]]]:
+    """The APL16 rows of `names` (E136's `F.apl16_rows`: one per wiring, with the realism bands and the largest counts,
+    'variant' the name), with the calibrated APL effect's parts of E139's `L.apl_effect_parts` beside as 'cal_<part>';
+    and per name the wirings whose realism flag the family (the first name, `F.FAMILY`) does not share. Names without an
+    APL16 read have no rows."""
+    rows, flagged, fam_flags = [], {}, {}
+    for v in names:
+        r = F.apl16_rows(v)
+        if not len(r):
+            continue
+        parts = {}
+        for w in r.wiring:
+            run = F.load_read(F.ReadPoint(v, 'apl16', w, None))
+            parts[w] = L.apl_effect_parts(L.run_outputs(run)) if run is not None else {}
+        r = r.assign(variant=v)
+        for k in sorted({k for d in parts.values() for k in d}):
+            r[f'cal_{k}'] = r.wiring.map({w: d.get(k, np.nan) for w, d in parts.items()})
+        rows.append(r)
+        fl = F.realism_of(r)
+        if v == F.FAMILY:
+            fam_flags = fl
+        flagged[v] = [w for w, f in fl.items() if f and not fam_flags.get(w)]
+    return (pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()), flagged
+
+
+def with_mean_rows(apl: pd.DataFrame, wirings: Sequence[str]) -> pd.DataFrame:
+    """`apl16_table`'s rows with, after each variant's wirings, its 'mean' row (wiring 'mean', as the other score files
+    have): the mean over its rows on `wirings` of every numeric column; K_at_bound true where any wiring's is; the
+    realism flag left blank (the flags are per wiring)."""
+    if not len(apl):
+        return apl
+    out = []
+    for v, g in apl.groupby('variant', sort=False):
+        g = g[g.wiring.astype(str).isin(list(wirings))]
+        row = {c: v if c == 'variant' else g[c].iloc[0] if c == 'arm' else np.nan for c in apl.columns}
+        row['wiring'] = 'mean'
+        for c in apl.columns:
+            if c in ('arm', 'variant', 'wiring', 'realism_flag'):
+                continue
+            if pd.api.types.is_bool_dtype(g[c]):
+                row[c] = bool(g[c].any())
+            elif pd.api.types.is_numeric_dtype(g[c]):
+                row[c] = float(g[c].mean())
+        out += [g, pd.DataFrame([row])]
+    return pd.concat(out, ignore_index=True)
+
+
+def part_score_apl16() -> dict:
+    """The APL16 part of step 1's score alone (`apl16_table` with `with_mean_rows`, as `part_score` writes it): rewrites
+    score_step1_apl16.csv with each variant's 'mean' row (added 2026-11-26, after the score of 16:54) and writes
+    provenance_score_step1_apl16.json; nothing else of the score is read or written. Refuses (RuntimeError, nothing
+    written) where a per-wiring value the file already holds would change."""
+    from experiments import E136_stage_population_fit as F
+    from experiments import E139_normalization_ladder as L
+    t0 = time.time()
+    old = F.MEASURE
+    F.set_measure(E136_MEASURE)
+    try:
+        F.require_gate()
+        names = [*E135_VARIANTS, *step1_variants()]
+        for v in names:
+            F.register_variant(v, load_variant_run)
+        apl, _ = apl16_table(F, L, [F.FAMILY, A1, *names])
+    finally:
+        F.set_measure(old)
+    path = out_dir() / APL16_SCORE
+    check = unchanged_rows(pd.read_csv(path), apl, F.WIRINGS) if path.exists() else dict(n_values=0, differ=[])
+    if check['differ']:
+        raise RuntimeError(f'{path.name}: {len(check["differ"])} per-wiring values would change, not written: '
+                           f'{check["differ"][:10]}')
+    with_mean_rows(apl, F.WIRINGS).to_csv(path, index=False)
+    _write_json(out_dir() / 'provenance_score_step1_apl16.json',
+                dict(part='score_apl16', script=SCRIPT, time=_now(), host=_host(), code=H.code_commits(),
+                     seconds=round(time.time() - t0, 1), checked_against_previous=check))
+    print(f'wrote {path} ({len(apl)} per-wiring rows, unchanged: {check["n_values"]} values compared)', flush=True)
+    return check
+
+
+def unchanged_rows(old: pd.DataFrame, new: pd.DataFrame, wirings: Sequence[str]) -> dict:
+    """Whether every per-wiring value of `old` (a score_step1_apl16.csv as read) is in `new` unchanged, after `new`'s
+    round trip through CSV: the number of values compared and the differing (variant, wiring, column) cells. Missing
+    rows or columns count as differing."""
+    import io
+    new = pd.read_csv(io.StringIO(new.to_csv(index=False)))
+    old = old[old.wiring.astype(str).isin(list(wirings))]
+    key = ['variant', 'wiring']
+    o, n = old.set_index(key), new.set_index(key)
+    differ, count = [], 0
+    for c in o.columns:
+        if c not in n.columns:
+            differ.append(('*', '*', c))
+            continue
+        for k in o.index:
+            if k not in n.index:
+                differ.append((*k, '*'))
+                continue
+            a, b = o.at[k, c], n.at[k, c]
+            count += 1
+            same = (pd.isna(a) and pd.isna(b)) or (not pd.isna(a) and not pd.isna(b) and a == b)
+            if not same:
+                differ.append((*k, c))
+    return dict(n_values=count, differ=sorted(set(differ)))
+
+
 def part_score() -> dict:
     """Step 1's score (the entry's design item 3; the step-1 classes as amended 2026-11-26 13:59, with the lock's own
     reading kept as the record): every step-1 arm and E135's three saved
@@ -1450,7 +1561,8 @@ def part_score() -> dict:
     on the eight wirings against the held-out half and all flies (score_step1_megamat.csv; per wiring, 'mean_S',
     'mean_T' and 'common' the wirings' mean views); the APL16 somata's KC population errors (score_step1_panels.csv,
     E136's `score_panels`); the APL16 rows with the realism bands and the APL effect, its calibrated parts beside (E136's
-    `apl16_rows`, E139's `apl_effect_parts`; score_step1_apl16.csv); the no-step yardstick of the boutons against the
+    `apl16_rows`, E139's `apl_effect_parts`; score_step1_apl16.csv, `apl16_table`, with each variant's 'mean' row over
+    the eight wirings since 2026-11-26, `with_mean_rows`; `part_score_apl16` rewrites that file alone); the no-step yardstick of the boutons against the
     held-out half (`no_step_yardstick`, checked against step 0's yardsticks.csv where it exists); the classes as amended
     (`classify_step1`) and the lock's own reading of them ('lock_reading'), with the holds (`holds_failed`, E136's
     HOLD_TOL) and the bands; the outcomes (`step1_outcome`, (g) among them); the holds table (`holds_table`,
@@ -1497,26 +1609,8 @@ def part_score() -> dict:
         panels = pd.concat([p for p in prow if len(p)], ignore_index=True) if any(len(p) for p in prow) else \
             pd.DataFrame()
         panels.to_csv(out_dir() / 'score_step1_panels.csv', index=False)
-        apl_rows, flagged = [], {}
-        fam_flags = {}
-        for v in allv:
-            r = F.apl16_rows(v)
-            if not len(r):
-                continue
-            parts = {}
-            for w in r.wiring:
-                run = F.load_read(F.ReadPoint(v, 'apl16', w, None))
-                parts[w] = L.apl_effect_parts(L.run_outputs(run)) if run is not None else {}
-            r = r.assign(variant=v)
-            for k in sorted({k for d in parts.values() for k in d}):
-                r[f'cal_{k}'] = r.wiring.map({w: d.get(k, np.nan) for w, d in parts.items()})
-            apl_rows.append(r)
-            fl = F.realism_of(r)
-            if v == F.FAMILY:
-                fam_flags = fl
-            flagged[v] = [w for w, f in fl.items() if f and not fam_flags.get(w)]
-        apl = pd.concat(apl_rows, ignore_index=True) if apl_rows else pd.DataFrame()
-        apl.to_csv(out_dir() / 'score_step1_apl16.csv', index=False)
+        apl, flagged = apl16_table(F, L, allv)
+        with_mean_rows(apl, F.WIRINGS).to_csv(out_dir() / APL16_SCORE, index=False)
         # the APL16 arm's flags stand for the model of its factors: imposed_a1 on megamat is the same model
         no_step = no_step_yardstick(F)
         check = None
@@ -1571,7 +1665,8 @@ def part_score() -> dict:
 def main(argv: Optional[Sequence[str]] = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     ap.add_argument('--part', required=True,
-                    choices=('step1', 'step1_dry', 'score', 'variants', 'routes_check', 'routes_summary'))
+                    choices=('step1', 'step1_dry', 'score', 'score_apl16', 'variants', 'routes_check',
+                             'routes_summary'))
     ap.add_argument('--lane')
     ap.add_argument('--reverse', action='store_true')
     ap.add_argument('--reclaim', action='store_true')
@@ -1591,6 +1686,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         part_routes_summary()
     elif a.part == 'score':
         part_score()
+    elif a.part == 'score_apl16':
+        part_score_apl16()
     else:
         write_variants()
 

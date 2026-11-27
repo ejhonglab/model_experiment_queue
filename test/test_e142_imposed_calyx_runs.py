@@ -943,3 +943,67 @@ def test_write_variants_fills_the_family_stage_normalization(tmp_path):
     assert v.loc['megamat_imposed_aplpn_none_P2', 'pn_inhadd'] == 31.4088
     assert v.loc['megamat_imposed_a1_P1', 'wKCKC_scale'] == 133.3 and (v.route == 1).all()
     assert "A1's APL->bouton and KC-KC factors" in v.loc['megamat_imposed_a1_P1', 'kind']
+
+
+# ---------------------------------------------------------------------------
+# the APL16 part of the score alone: the mean row over the wirings, and the check that no value already written changes
+
+def _apl_rows(variants=('family', 'A1'), wirings=('real', 'P1', 'P2')):
+    rows = []
+    for i, v in enumerate(variants):
+        for j, w in enumerate(wirings):
+            rows.append(dict(arm=v, wiring=w, K=8.0 + j, K_at_bound=(v == 'A1' and w == 'P1'),
+                             cal_loss=0.05 + 0.01 * i + 0.001 * j, realism_flag='rate' if w == 'P2' and i else np.nan,
+                             variant=v, cal_z8_pattern=np.nan if (i, j) == (1, 2) else 0.06 + 0.002 * j))
+    return pd.DataFrame(rows)
+
+
+def test_with_mean_rows_and_unchanged_rows():
+    apl = _apl_rows()
+    out = M.with_mean_rows(apl, ('real', 'P1', 'P2'))
+    assert list(out.wiring) == ['real', 'P1', 'P2', 'mean'] * 2 and list(out.columns) == list(apl.columns)
+    m = out[out.wiring == 'mean'].set_index('variant')
+    assert m.loc['family', 'cal_loss'] == pytest.approx(0.051) and m.loc['A1', 'K'] == pytest.approx(9.0)
+    assert m.loc['A1', 'arm'] == 'A1' and bool(m.loc['A1', 'K_at_bound']) and not bool(m.loc['family', 'K_at_bound'])
+    # a NaN wiring is left out of the mean; the flags stay per wiring
+    assert m.loc['A1', 'cal_z8_pattern'] == pytest.approx(0.061) and m.realism_flag.isna().all()
+    # a mean over the wirings named only
+    assert M.with_mean_rows(apl, ('real',)).set_index(['variant', 'wiring']).loc[('A1', 'mean'), 'cal_loss'] == \
+        pytest.approx(0.06)
+    # the per-wiring rows of a file written with the mean rows are those of a file written without them
+    import io
+    old = pd.read_csv(io.StringIO(apl.to_csv(index=False)))
+    chk = M.unchanged_rows(pd.read_csv(io.StringIO(out.to_csv(index=False))), apl, ('real', 'P1', 'P2'))
+    assert chk['differ'] == [] and chk['n_values'] == 6 * (len(apl.columns) - 2)
+    new = apl.copy()
+    new.loc[(new.variant == 'A1') & (new.wiring == 'P1'), 'cal_loss'] += 1e-12
+    new.loc[(new.variant == 'family') & (new.wiring == 'real'), 'realism_flag'] = 'x'
+    assert M.unchanged_rows(old, new, ('real', 'P1', 'P2'))['differ'] == [('A1', 'P1', 'cal_loss'),
+                                                                         ('family', 'real', 'realism_flag')]
+    assert ('A1', 'P2', '*') in M.unchanged_rows(old, new[new.wiring != 'P2'], ('real', 'P1', 'P2'))['differ']
+    assert ('*', '*', 'K') in M.unchanged_rows(old, new.drop(columns='K'), ('real', 'P1', 'P2'))['differ']
+
+
+def test_part_score_apl16_writes_the_mean_rows_or_refuses(monkeypatch, tmp_path):
+    from experiments import E136_stage_population_fit as F
+    apl = _apl_rows(wirings=tuple(F.WIRINGS))
+    monkeypatch.setattr(F, 'require_gate', lambda: None)
+    monkeypatch.setattr(F, 'register_variant', lambda v, f: None)
+    monkeypatch.setattr(M, 'apl16_table', lambda F_, L_, names: (apl.copy(), {}))
+    monkeypatch.setattr(M, 'out_dir', lambda: tmp_path)
+    path = tmp_path / M.APL16_SCORE
+    apl.to_csv(path, index=False)
+    chk = M.part_score_apl16()
+    assert chk['differ'] == [] and chk['n_values'] > 0
+    out = pd.read_csv(path)
+    assert (out.wiring == 'mean').sum() == 2 and len(out) == len(apl) + 2
+    prov = json.loads((tmp_path / 'provenance_score_step1_apl16.json').read_text())
+    assert prov['part'] == 'score_apl16' and 'queue_commit' in prov['code']
+    # a value that would change: nothing written
+    changed = apl.copy()
+    changed.loc[0, 'K'] += 1
+    monkeypatch.setattr(M, 'apl16_table', lambda F_, L_, names: (changed, {}))
+    before = path.read_bytes()
+    with pytest.raises(RuntimeError, match='would change'):
+        M.part_score_apl16()
+    assert path.read_bytes() == before

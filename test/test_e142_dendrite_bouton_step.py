@@ -209,3 +209,15 @@ def test_cli_parts(monkeypatch):
         E142.main(['--help'])
     monkeypatch.setattr(S1, 'part_score', lambda: dict(called=True))
     assert E142.score_step1() == dict(called=True)
+
+
+def test_lock_records_step1_as_amended():
+    from experiments import E142_imposed_calyx_runs as S1
+    lock = json.loads(E142.LOCK_COPY.read_text())
+    # the lock's own count stays; the amendment's arms give the points planned, written or stopped by claim
+    assert lock['step1']['n_runs'] == E142.N_STEP1_RUNS == 56
+    c = lock['amendment_counts']
+    assert c == E142.AMENDMENT_COUNTS
+    assert c['n_runs_as_amended'] == E142.N_STEP1_RUNS_AS_AMENDED == len(S1.STEP1_ARMS) * len(E142.WIRINGS) == 96
+    assert c['n_written'] + c['n_stopped_by_claim'] == c['n_runs_as_amended']
+    assert list(lock)[list(lock).index('amendments') + 1] == 'amendment_counts'

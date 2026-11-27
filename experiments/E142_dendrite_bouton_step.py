@@ -236,6 +236,15 @@ AMENDMENTS: Tuple[str, ...] = (
     "experiments/E142_imposed_calyx_runs.py (the arms' pn_stage, LOCK_ARMS and AMENDED_ARMS, classify_step1, "
     "step1_outcome)",
 )
+# step 1's points as amended, recorded in the lock beside the amendments (2026-11-26, after the score, changing no run
+# or class): the amendment of 14:22 added five arms (AMENDED_ARMS) to the lock's seven; step1's n_runs stays the lock's
+N_STEP1_RUNS_AS_AMENDED = 96
+AMENDMENT_COUNTS = dict(
+    n_runs_as_amended=N_STEP1_RUNS_AS_AMENDED, n_written=59, n_stopped_by_claim=37,
+    note="the amendment of 2026-11-26 14:22 added 5 arms to the lock's 7, so step 1 planned 12 arms x 8 wirings = 96 "
+         "points: 59 written, 37 stopped by claim (step1_holds.csv); step1.n_runs (56) is the lock's own count and its "
+         "'step 1 is 66' the runs the amendment meant to run (7 of them later stopped too); recorded 2026-11-26 after "
+         "the score, changing no run or class")
 
 # the classes, fixed before any statistic (the entry's, made exact; NARROW_READINGS say where a reading was chosen)
 CLASSES = {
@@ -544,6 +553,7 @@ def lock_contents() -> dict:
                 inputs=lock_inputs(), recordings=recordings(), glomeruli=glomerulus_sets(), definitions=definitions,
                 model=model, classes=CLASSES, outcomes=OUTCOMES, step1=step1, narrow_readings=list(NARROW_READINGS),
                 probe=PROBE, probe_tol=PROBE_TOL, holds=holds, amendments=list(AMENDMENTS),
+                amendment_counts=dict(AMENDMENT_COUNTS),
                 note='written before any statistic of E142 was computed; every part but lock refuses until this file '
                      'is committed (require_lock)')
 
