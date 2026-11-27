@@ -1815,12 +1815,16 @@ def a1_lab_runs(panel: str) -> Dict[str, Tuple[str, str, object]]:
     """E136's A1 reads at its classed point on the lab's input (megamat on T, read against the held-out half; APL16 on
     T), as model flies of the input fly 'lab'; missing reads are left out."""
     from experiments import E136_stage_population_fit as E136m
+    before = E136m.MEASURE
     E136m.set_measure(MEASURE)
-    out = {}
-    for w in T_WIRINGS:
-        r = E136m.load_read(E136m.ReadPoint('A1', panel, w, 'held' if panel == 'megamat' else None))
-        if r is not None:
-            out[f'lab_A1_{panel}_{w}'] = (w, 'lab', r)
+    try:
+        out = {}
+        for w in T_WIRINGS:
+            r = E136m.load_read(E136m.ReadPoint('A1', panel, w, 'held' if panel == 'megamat' else None))
+            if r is not None:
+                out[f'lab_A1_{panel}_{w}'] = (w, 'lab', r)
+    finally:
+        E136m.set_measure(before)       # E136's measure is a module global: leave it as it was
     return out
 
 
