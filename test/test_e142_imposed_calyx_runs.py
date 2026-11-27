@@ -918,3 +918,28 @@ def test_e143_beside_on_planted_views(monkeypatch, tmp_path):
     assert M.e143_beside(spreads, 'holds')['status'].startswith('not given')
     monkeypatch.setattr(S, 'views_path', lambda name, panel: tmp_path / 'none.parquet')
     assert M.e143_beside(spreads, 'holds')['status'].startswith('not given')
+
+
+def test_write_variants_fills_the_family_stage_normalization(tmp_path):
+    """step1_variants.csv, the archive's params table: a row written before the amendment (no pn_stage, no
+    normalization: the family's PN stage) gets olfsysm's defaults; the amendment's rows keep what they record."""
+    rows = [dict(tag='megamat_imposed_a1_P1', panel='megamat', arm='imposed_a1', table_arm='imposed', wiring='P1',
+                 seed=1, aplpn_factor=0.155, kckc_factor=3.24, fixed_thr=8.3, wKCKC_scale=133.3),
+            dict(tag='megamat_a1stage_imposed_P1', panel='megamat', arm='a1stage_imposed', table_arm='imposed',
+                 wiring='P1', seed=1, aplpn_factor=0.155, kckc_factor=3.24, pn_stage='A1', pn_inhadd=1017.303,
+                 pn_inhsc=598.8538, fixed_thr=46.1, wKCKC_scale=133.3),
+            dict(tag='megamat_imposed_aplpn_none_P2', panel='megamat', arm='imposed_aplpn_none', table_arm='imposed',
+                 wiring='P2', seed=2, aplpn_factor=0.0, kckc_factor=1.0, pn_stage='family', pn_inhadd=31.4088,
+                 pn_inhsc=368.6631, fixed_thr=30.3, wKCKC_scale=22.9)]
+    pd.DataFrame(rows[:1]).to_csv(tmp_path / 'runs_1_hal_hal-s1.csv', index=False)
+    pd.DataFrame(rows[1:]).to_csv(tmp_path / 'runs_1_hal_hal-s3.csv', index=False)
+    v = M.write_variants(tmp_path).set_index('tag')
+    assert (tmp_path / 'step1_variants.csv').exists()
+    assert list(v.pn_stage) == ['family', 'A1', 'family']
+    assert v.loc['megamat_imposed_a1_P1', 'pn_inhadd'] == E135.OLFSYSM_DEFAULTS['pn_inhadd']
+    assert v.loc['megamat_imposed_a1_P1', 'pn_inhsc'] == E135.OLFSYSM_DEFAULTS['pn_inhsc']
+    assert (v.loc['megamat_a1stage_imposed_P1', 'pn_inhadd'], v.loc['megamat_a1stage_imposed_P1', 'pn_inhsc']) == \
+        (1017.303, 598.8538)
+    assert v.loc['megamat_imposed_aplpn_none_P2', 'pn_inhadd'] == 31.4088
+    assert v.loc['megamat_imposed_a1_P1', 'wKCKC_scale'] == 133.3 and (v.route == 1).all()
+    assert "A1's APL->bouton and KC-KC factors" in v.loc['megamat_imposed_a1_P1', 'kind']

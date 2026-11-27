@@ -73,6 +73,8 @@ PARAM_COLS = ['tag', 'variant', 'base', 'config', 'kind', 'point', 'part', 'seed
     # reading, fit evaluation and searched coordinates
     'off_fixed_thr', 'off_wKCAPL_scale', 'off_wPNAPL_scale', 'off_wKCKC_scale', 'model', 'subdir', 'reading', 'eval',
     'z_aplpn', 'z_kckc', 'z_claw_thr', 'z_inhadd', 'z_inhsc',
+    # E142's step1_variants.csv: the E135 table a run imposed, its route, the APL->bouton factor and the PN stage
+    'table_arm', 'route', 'aplpn_factor', 'pn_stage',
     'n_kcs', 'n_glomeruli', 'rate_on', 'rate_off', 'rate_acute_off', 'rate_homeo_full_off',
     'rate_homeo_data_off', 'error']
 STATS_NAMES = ['stats_variants.csv', 'models.csv', 'wkckc_controls.csv', 'sweep.csv']
@@ -102,6 +104,8 @@ PARAMS_TABLES = {
     'E139_normalization_ladder': ('variants.csv',),
     # E141: one row per run its script wrote into the archive (`--part variants`: read/, extended/)
     'E141_kckc_rise_forms': ('variants.csv',),
+    # E142: one row per step-1 run its script wrote into the archive (`--part variants`); step 0 runs no model
+    'E142_dendrite_bouton_step': ('step1_variants.csv',),
 }
 
 # experiments whose step folders repeat their files' names: per folder pattern (fnmatch on the file's folder under
@@ -131,6 +135,7 @@ IN_PLACE = {
                                   'extended/<variant>/B/<step>/ (E102\'s part-B layout: tag <wiring>, unique with its subdir)'),
     'E141_kckc_rise_forms': ('every read in read/ (tag <variant>_<panel>_<wiring>) and the beside step\'s runs in '
                              'extended/<variant>/B/<step>/ (E102\'s part-B layout: tag <wiring>, unique with its subdir)'),
+    'E142_dendrite_bouton_step': 'every step-1 run in step1/ (tag <panel>_<arm>_<wiring>)',
 }
 # folders of outputs withheld from queue work (e.g. E97's withheld_2026-11-15/, built from connectome tables that queue
 # work does not use; CLAUDE.md, "Connectome data"): never copied, at any depth

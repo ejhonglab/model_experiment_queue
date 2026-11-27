@@ -1054,15 +1054,24 @@ def _pn_stage_of(row: Mapping) -> str:
 def write_variants(root: Optional[Path] = None) -> pd.DataFrame:
     """step1_variants.csv: one row per saved step-1 run (`runs1_table`), for the model-output archive's params.csv:
     the tag, panel, arm, the E135 table, wiring, seed, the factors, the PN stage and its normalization, what the arm is
-    (ARM_KINDS) and the absolute parameters of both conditions (E135's VARIANT_COLUMNS)."""
+    (ARM_KINDS) and the absolute parameters of both conditions (E135's VARIANT_COLUMNS).
+
+    The rows written before the amendment (the lock's arms, all on the family's PN stage) record no normalization: that
+    stage is built with olfsysm's defaults (no pn_inhadd / pn_inhsc kwargs; E135's OLFSYSM_DEFAULTS, which the
+    amendment's family-stage rows record from the stage itself), so those are filled in."""
     E135 = _e135()
     d = out_dir() if root is None else Path(root)
     rows = []
     for r in runs1_table(d).to_dict('records'):
+        stage = _pn_stage_of(r)
+        norm = {k: r.get(k) for k in ('pn_inhadd', 'pn_inhsc')}
+        for k, v in norm.items():
+            if stage == 'family' and (v is None or (isinstance(v, float) and np.isnan(v))):
+                norm[k] = E135.OLFSYSM_DEFAULTS[k]
         rows.append(dict(tag=r['tag'], variant=r['tag'], part=PART, subdir=PART, panel=r.get('panel'), arm=r.get('arm'),
                          table_arm=r.get('table_arm'), model=E135.FAMILY, wiring=r.get('wiring'), route=1,
                          seed=r.get('seed'), aplpn_factor=r.get('aplpn_factor'), kckc_factor=r.get('kckc_factor'),
-                         pn_stage=_pn_stage_of(r), pn_inhadd=r.get('pn_inhadd'), pn_inhsc=r.get('pn_inhsc'),
+                         pn_stage=stage, **norm,
                          kind=f"C2's family on wiring {r.get('wiring')}, on the {r.get('panel')} input, both response "
                               f"rates re-held: {ARM_KINDS.get(str(r.get('arm')), r.get('arm'))}",
                          **{c: r.get(c) for c in E135.VARIANT_COLUMNS if c in r}))

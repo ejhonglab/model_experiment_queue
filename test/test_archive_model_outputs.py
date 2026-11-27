@@ -187,3 +187,41 @@ def test_in_place(tmp_path, monkeypatch):
     assert list(q['tag']) == ['A1_megamat_P3', 'A1_e122_real'] and list(q['off_wKCKC_scale']) == [138.3, 40.1]
     assert (arch / name / 'measure_strength' / 'provenance_score.json').exists()
     assert 'Written in place' in (arch / name / 'README.md').read_text()
+
+
+def test_e142_in_place_from_step1_variants(tmp_path, monkeypatch):
+    """E142's step-1 runs are written into the archive from every host: nothing of this host's outputs/ is copied, and
+    params.csv comes from step1_variants.csv only (step 0's *_summary.csv tables are readings of the flies), keeping the
+    table a run imposed, its route, the APL->bouton factor and the PN stage."""
+    name = 'E142_dendrite_bouton_step'
+    here, shared = tmp_path / 'repo', tmp_path / 'shared'
+    src, res = here / 'outputs' / name, shared / 'results' / name
+    arch = shared / 'data' / 'model_outputs'
+    monkeypatch.setattr(H, 'HERE', here)
+    monkeypatch.setattr(H, 'shared_dir', lambda: shared)
+    monkeypatch.setattr(H, 'results_dir', lambda e: shared / 'results' / e)
+    monkeypatch.setattr(A, 'ARCHIVE', arch)
+    local = src / 'step1' / 'megamat_imposed_a1_real_on_spike_counts.parquet'
+    local.parent.mkdir(parents=True)
+    pd.DataFrame(np.ones((3, 2)), columns=['a', 'b']).to_parquet(local)
+    (src / 'logs').mkdir()
+    (src / 'logs' / 'step1_hal-s1.log').write_text('x')
+    tags = ['megamat_a1stage_imposed_P3', 'apl16_a1stage_imposed_P3']
+    for tag in tags:
+        for cond in ('on', 'acute_off'):
+            p = arch / name / 'step1' / f'{tag}_{cond}_spike_counts.parquet'
+            p.parent.mkdir(parents=True, exist_ok=True)
+            pd.DataFrame(np.ones((3, 2)), columns=['a', 'b']).to_parquet(p)
+    res.mkdir(parents=True)
+    pd.DataFrame(dict(odor=['pa', 'va'], rate=[0.4, -0.4])).to_csv(res / 'flies_steps_summary.csv', index=False)
+    pd.DataFrame(dict(tag=tags, subdir=['step1'] * 2, table_arm=['imposed'] * 2, route=[1, 1], aplpn_factor=[0.155] * 2,
+                      pn_stage=['A1'] * 2, pn_inhadd=[1017.3] * 2)).to_csv(res / 'step1_variants.csv', index=False)
+    (res / 'provenance_score_step1.json').write_text('{}')
+    r = A.archive_experiment(name, 'host')
+    assert not (arch / name / 'logs').exists() and not (arch / name / 'step1' / local.name).exists()
+    assert (r['n_files'], r['n_variants']) == (4, 2)
+    q = pd.read_csv(arch / name / 'params.csv')
+    assert list(q['tag']) == tags and set(q['source_table']) == {'step1_variants.csv'}
+    assert list(q['pn_stage']) == ['A1', 'A1'] and list(q['aplpn_factor']) == [0.155, 0.155]
+    assert list(q['table_arm']) == ['imposed'] * 2 and list(q['route']) == [1, 1] and 'odor' not in q.columns
+    assert (arch / name / 'provenance_score_step1.json').exists()
