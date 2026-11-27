@@ -16,8 +16,9 @@ held-out half of the flies, with the family read there too: the change rule 3 ga
 classes). No point for a variant outside the realism bands, one read on fewer than four wirings, a control fit or a fit
 to permuted flies. Hollow points (shown; no staircase steps on them): a fitted variant its experiment's score leaves
 without a class, and a value that holds a stage the variant was fitted to or set from, on flies not held out (the PN
-dendrites of the antennal-lobe fits and of the imposed recordings, and a megamat stage error that includes them). An
-experiment's point is its lowest filled variant, else its lowest hollow one; each series' staircase is the running best
+dendrites of the antennal-lobe fits and of the imposed recordings, and a megamat stage error that includes them), and
+a variant on another brain's wiring (the male CNS's calyces), drawn from its calyx's own family's value against all
+the flies plus its change from that family. An experiment's point is its lowest filled variant, else its lowest hollow one; each series' staircase is the running best
 of its filled points.
 
 The experiments read (`ADAPTERS`; one function each, from the experiment's own committed tables):
@@ -40,13 +41,15 @@ The experiments read (`ADAPTERS`; one function each, from the experiment's own c
   their dendrites and stage errors hollow (imposed); no point for the permuted controls, the arms stopped by claim and
   E135's arms re-scored beside;
 - E144, A1 and its parts on the male CNS's two calyces: the settings read on a calyx's four wirings, each against its
-  calyx's own family on the same wirings (classes.json, score_apl16.csv), drawn at the level plus that change; the
-  settings read on one wiring (all of H's, F, Dabs) without a point.
+  calyx's own family on the same wirings (classes.json, score_apl16.csv), drawn from that family's value against all
+  the flies (score_megamat.csv, score_panels.csv) plus that change, all hollow (a variant on another brain's wiring);
+  the settings read on one wiring (all of H's, F, Dabs) and those without a class (L's D5.8) without a point.
 A variant at fixed scales that carries a fitted arm's parameters (E139's B and K, E141's arms, E142's arms, E144's
 settings: A1's APL→bouton ×0.155 or KC–KC rise, fitted on S against the fit half) is read as a fitted one, where those
 were not fitted: on wirings outside S and, at the megamat stages, against the held-out half; each experiment's own
 classes are read there. E144's change is from each male calyx's own family (E130's fit of the family on that calyx,
-as each of the hemibrain's wirings has its own fit of the family), added to the hemibrain family's level.
+as each of the hemibrain's wirings has its own fit of the family), added to that family's own value against all the
+flies, and its points are hollow (ruled 2026-11-26 by a Fable subagent, claude-fable-5-2, spawned from viki 19:31).
 Not read (nothing of their own to draw): E137, the held-out panels read like for like (new readings of the flies,
 with the family and yardsticks re-read); E138, the odors that carry the strength error (no simulation, saved runs'
 entries); E140, aa at the step from the claws to the somata (no simulation; its step 1 did not run); E143, the megamat
@@ -406,11 +409,12 @@ def _flags(apl: pd.DataFrame, name: str, key: str = 'arm') -> List[str]:
 
 def _emit(exp: str, label: str, comps: Dict[str, tuple], lv: Dict[str, float], drawn: bool = True, why: str = '',
           hollow: Optional[Dict[str, str]] = None, cls: Optional[str] = None, control_fall: Optional[float] = None,
-          fitted: bool = True) -> List[dict]:
+          fitted: bool = True, level_note: Optional[str] = None) -> List[dict]:
     """A variant's points: each complete comparison drawn at the series' level plus its change (`lv`, `levels`), with
     the popup's readings; `hollow` the series drawn open, by reason ('*' every series); `fitted` False for a variant
-    fitted to no flies, read on all eight wirings (no bar: the class is read elsewhere). None complete: one row on the
-    stage error, not drawn, saying why."""
+    fitted to no flies, read on all eight wirings (no bar: the class is read elsewhere); `level_note` names a level
+    that is not the unrefitted family's (E144's calyx families), and the popup then gives it. None complete: one row on
+    the stage error, not drawn, saying why."""
     hollow = hollow or {}
     out = []
     for k, (c, where) in comps.items():
@@ -421,7 +425,8 @@ def _emit(exp: str, label: str, comps: Dict[str, tuple], lv: Dict[str, float], d
         out.append(_point(exp, label, k, lv[k] + float(c['change']), where, drawn, hw is None,
                           why if (why or not drawn) else (hw or ''), arm=c.get('arm'), family=c.get('ref'),
                           change=c.get('change'), se=se, bar=-IMPROVE_SE * se if fitted and se is not None else None,
-                          cls=cls, control_fall=control_fall, where=where))
+                          cls=cls, control_fall=control_fall, where=where,
+                          **(dict(level=lv[k], level_note=level_note) if level_note else {})))
     if not out:
         out.append(_point(exp, label, 'stage_error', np.nan, '-', drawn=False,
                           why=why or 'no comparison with the family on four wirings or more'))
@@ -580,18 +585,49 @@ E144_SETTINGS = {'F': 'F (pn_inhadd 1000)', 'B': 'B (pn_inhadd 1000, APL→bouto
                  'D5.8': "D5.8 (B with the calyx's KC–KC ×5.83)", 'Dabs': "Dabs (B with L's KC–KC at 85.6)"}
 
 
+E144_HOLLOW = ("a variant on another brain's wiring: drawn from its calyx's own family against all the flies plus its "
+               "change from that family; no staircase steps on it")
+
+
+def _e144_levels(fam: str, wirings: Sequence[str], mega: pd.DataFrame, panels: pd.DataFrame,
+                 apl: pd.DataFrame) -> Dict[str, float]:
+    """A male calyx's levels: its own family (E130's fit of the family there) read against all the flies, the mean over
+    `wirings` (the megamat stages and their stage error from score_megamat.csv's half 'all', the held-out panels' KC
+    somata from score_panels.csv, the calibrated APL effect from score_apl16.csv), as `levels` reads the hemibrain's
+    family over its eight wirings; a series missing on any of `wirings` has no level."""
+    out = {}
+
+    def put(k, v):
+        if all(w in v and np.isfinite(v[w]) for w in wirings):
+            out[k] = float(np.mean([v[w] for w in wirings]))
+    if len(mega):
+        for k, col in (('stage_error', 'stage'), *((s, s) for s in STAGES)):
+            put(k, _by_wiring(mega, 'variant', fam, col, half='all'))
+    if len(panels):
+        p = panels[panels.stage.astype(str) == 'kc_soma'] if 'stage' in panels else panels
+        for k, (pan, cond) in PANEL_SERIES.items():
+            put(k, _by_wiring(p, 'variant', fam, 'error', panel=pan, condition=cond))
+    if len(apl):
+        for k, col in APL_SERIES.items():
+            put(k, _by_wiring(apl, 'variant', fam, col))
+    return out
+
+
 def e144_points() -> List[dict]:
     """E144's settings on the male CNS's two calyces (and on the hemibrain with 'argmax' claws), each against its
-    calyx's own family (E130's fit of the family there, as each of the hemibrain's wirings has its own fit) on the same
-    wirings: drawn at the level plus that change, the megamat stages against the held-out half (its settings carry
-    A1's factors, fitted on S against the fit half) and the held-out panels against all their flies (classes.json),
-    the APL effect on the same wirings (score_apl16.csv); hollow without a class; no point for a setting read on fewer
-    than four wirings (every one on H's real wiring, F and Dabs) or outside the realism bands; the calyces' families
+    calyx's own family (E130's fit of the family there) on the same wirings. Ruled 2026-11-26 (a Fable subagent,
+    claude-fable-5-2, spawned from viki 19:31): a setting on another brain's wiring is drawn from its calyx's own
+    family's value against all the flies (`_e144_levels`) plus its change from that family (the megamat stages against
+    the held-out half, as its settings carry A1's factors fitted on S against the fit half; the held-out panels against
+    all their flies, classes.json; the APL effect on the same wirings, score_apl16.csv), and every such point is hollow
+    (E144_HOLLOW). No point for a setting read on fewer than four wirings (every one on H's real wiring, F and Dabs),
+    outside the realism bands, or without a class (L's D5.8, whose real wiring's hold failed); the calyces' families
     are the references."""
     d = RESULTS / 'E144_a1_malecns_calyces'
     cl = json.loads((d / 'classes.json').read_text())
     apl = pd.read_csv(d / 'score_apl16.csv')
-    lv = levels()
+    mega = pd.read_csv(d / 'score_megamat.csv') if (d / 'score_megamat.csv').exists() else pd.DataFrame()
+    panels = pd.read_csv(d / 'score_panels.csv') if (d / 'score_panels.csv').exists() else pd.DataFrame()
     out = []
     for v, r in cl['classes'].items():
         cx, st = r.get('calyx', v.split('_')[0]), r.get('setting', v.split('_', 1)[-1])
@@ -601,16 +637,20 @@ def e144_points() -> List[dict]:
             out.append(_undrawn('E144', label, f'read on {len(ws)} wiring{"s" if len(ws) != 1 else ""}'))
             continue
         cls, ref = r.get('cls'), r.get('reference', f'{cx}_family')
+        if cls == 'no class':
+            out.append(_undrawn('E144', label, 'no class: ' + '; '.join(r.get('reasons') or [])))
+            continue
         flags = [f'{w}: {f}' for w, f in (r.get('flagged_wirings') or {}).items()] or _flags(apl, v, 'variant')
         drawn, why = (False, 'outside the realism bands: ' + flags[0]) if flags else (True, '')
-        hollow = {'*': 'no class: ' + '; '.join(r.get('reasons') or [])} if cls == 'no class' else None
         name = E144_CALYCES.get(cx, cx)
         where = f"{name}'s {len(ws)} wirings against the held-out half, beside the family's own fit there"
         pwhere = f"{name}'s {len(ws)} wirings against all the panel's flies, beside the family's own fit there"
         comps = {**_class_comps(r, where, pwhere),
                  **_apl_comps(apl, v, ref, ws, f"{name}'s {len(ws)} wirings, beside the family's own fit there",
                               'variant')}
-        out += _emit('E144', label, comps, lv, drawn, why, hollow, cls, r.get('control_fall'))
+        lv = _e144_levels(ref, ws, mega, panels, apl)
+        out += _emit('E144', label, comps, lv, drawn, why, {'*': E144_HOLLOW}, cls, r.get('control_fall'),
+                     level_note=f"{name}'s own family's ({len(ws)} wirings, all flies)")
     for cx in sorted({str(r.get('calyx')) for r in cl['classes'].values()}):
         out.append(_undrawn('E144', f'{E144_CALYCES.get(cx, cx)}: the family',
                             "the reference of its calyx's settings (E130's fit of the family there)"))
@@ -775,7 +815,7 @@ def plot_html(pts: pd.DataFrame, fl: Dict[str, float], lv: Optional[Dict[str, fl
     var h = (seg ? '<b>best so far on: ' + s.label + '</b><br>' : '<b>' + p.exp + ': ' + p.name + '</b><br>completed ' + p.t.replace('T', ' ') + '<br>') +
       s.label + ': <b>' + p.value.toFixed(3) + '</b>' + (seg ? ' (' + p.exp + ')' : '') + '<br>variant: ' + p.variant;
     if (p.fit) {
-      h += '<br><span class="muted">drawn at the unrefitted family’s ' + f3(p.level) + ' (eight wirings, all flies) plus its change where it was not fitted, on ' + p.fit.where +
+      h += '<br><span class="muted">drawn at ' + (p.fit.level_note ? 'the ' + p.fit.level_note + ' ' + f3(p.fit.level) : 'the unrefitted family’s ' + f3(p.level) + ' (eight wirings, all flies)') + ' plus its change where it was not fitted, on ' + p.fit.where +
         ': the variant ' + f3(p.fit.arm) + ', the family ' + f3(p.fit.family) + ', change ' + f3(p.fit.change, true) +
         (p.fit.se !== undefined && p.fit.se !== null ? ' (SE ' + f3(p.fit.se) + ', bar ' + f3(p.fit.bar, true) + ')' : '') +
         '; class: ' + p.fit.cls + (p.fit.control_fall !== null && p.fit.control_fall !== undefined ? '; the control fit’s fall ' + f3(p.fit.control_fall) : '') + '</span>';

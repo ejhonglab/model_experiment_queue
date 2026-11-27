@@ -233,7 +233,7 @@ def test_e142_imposed_arms_hollow_at_the_dendrites_and_without_a_class(results):
     assert 'read on 1 of 8' in _pt(pts, 'E142_imposed_aplpn_none', 'stage_error')['why']
 
 
-def test_e144_settings_against_their_calyx_family(results):
+def test_e144_settings_from_their_calyx_familys_own_value(results):
     ws = ['real', 'P1', 'P2', 'P3']
     rec = lambda ch, cls, cx, st: dict(_class_rec(ch, cls=cls), calyx=cx, setting=st, wirings=ws,
                                        reference=f'{cx}_family', flagged_wirings={})
@@ -241,19 +241,32 @@ def test_e144_settings_against_their_calyx_family(results):
                        'L_D5.8': dict(rec(-0.16, 'no class', 'L', 'D5.8'), reasons=['a hold fails: L_D5.8_megamat_real']),
                        'R_D5.8': rec(-0.12, 'holds', 'R', 'D5.8'),
                        'H_A1': dict(rec(-0.11, 'megamat only', 'H', 'A1'), wirings=['real'])})
-    # the male calyces' wirings are named as the hemibrain's are; each setting is read against its own calyx's family
+    # the male calyces' wirings are named as the hemibrain's are; each setting is read against its own calyx's family,
+    # and drawn from that family's own value against all the flies (half 'all'), not from the hemibrain family's level
     apl = _apl({'L_family': 0.10, 'L_A1': 0.09, 'R_family': 0.05, 'R_D5.8': 0.07, 'L_D5.8': 0.10}, key='variant',
                wirings=ws)
-    _write(results / 'E144_a1_malecns_calyces', {'classes.json': cl, 'score_apl16.csv': apl})
+    mega = _mega({'L_family': lambda w: 1.1 + 0.02 * ws.index(w) if w in ws else 9.0, 'R_family': 1.0})
+    mega.loc[mega.half == 'held', ['stage', *S.STAGES]] = 5.0     # the held-out half is not the family's level
+    pan = _panels({'L_family': 1.3, 'R_family': 1.2}, key='variant', wirings=ws)
+    _write(results / 'E144_a1_malecns_calyces', {'classes.json': cl, 'score_apl16.csv': apl,
+                                                 'score_megamat.csv': mega, 'score_panels.csv': pan})
     pts = S.e144_points()
     la = "the male CNS's left calyx: A1 (B with the calyx's KC–KC ×3.24)"
     p = _pt(pts, la, 'stage_error')
-    assert p['filled'] and p['value'] == pytest.approx(0.9 - 0.15) and "left calyx's 4 wirings" in p['reading']
-    assert _pt(pts, la, 'apl_loss')['value'] == pytest.approx(0.06 - 0.01)
-    assert _pt(pts, "the male CNS's right calyx: D5.8 (B with the calyx's KC–KC ×5.83)", 'apl_loss')['value'] == \
-        pytest.approx(0.06 + 0.02)
+    assert p['drawn'] and not p['filled'] and "another brain's wiring" in p['why']
+    assert p['value'] == pytest.approx(1.13 - 0.15) and "left calyx's 4 wirings" in p['reading']
+    fit = json.loads(p['popup'])
+    assert fit['level'] == pytest.approx(1.13) and 'own family' in fit['level_note']
+    assert _pt(pts, la, 'kc_soma')['value'] == pytest.approx(1.13 - 0.075)
+    assert _pt(pts, la, 'validation2')['value'] == pytest.approx(1.3 + 0.01)
+    assert _pt(pts, la, 'apl_loss')['value'] == pytest.approx(0.10 - 0.01)
+    rd = "the male CNS's right calyx: D5.8 (B with the calyx's KC–KC ×5.83)"
+    assert _pt(pts, rd, 'stage_error')['value'] == pytest.approx(1.0 - 0.12)
+    assert _pt(pts, rd, 'apl_loss')['value'] == pytest.approx(0.05 + 0.02)
+    assert all(not p['filled'] for p in pts)
+    # L's D5.8 has no class, so no point; H's settings are read on one wiring
     ld = [p for p in pts if p['variant'].startswith("the male CNS's left calyx: D5.8")]
-    assert ld and all(p['drawn'] and not p['filled'] for p in ld)
+    assert ld and not any(p['drawn'] for p in ld) and ld[0]['why'].startswith('no class')
     h = _pt(pts, "the hemibrain with 'argmax' claws: A1 (B with the calyx's KC–KC ×3.24)", 'stage_error')
     assert not h['drawn'] and h['why'] == 'read on 1 wiring'
     assert not _pt(pts, "the male CNS's left calyx: the family", 'stage_error')['drawn']

@@ -1030,7 +1030,10 @@ bare ID ("the per-glomerulus drive normalization sweep (E20)", not "E20").
     score leaves without a class (no better than its control fit, at a bound, a class that differs between readings).
     The other is a value that holds a stage the variant was fitted to or set from, on flies not held out of that fit:
     the PN dendrites of the antennal-lobe fits and of the imposed recordings, and a megamat stage error that includes
-    them. An experiment's point is its lowest filled variant, or its lowest hollow one if none is filled.
+    them. A variant on another brain's wiring (the male CNS's calyces) is drawn from that calyx's own family's value
+    against all the flies plus its change from that family, as a hollow point: no staircase steps on it (ruled
+    2026-11-26 on hal's question of 19:46; planned by a Fable subagent, claude-fable-5-2, spawned from viki 19:31). An
+    experiment's point is its lowest filled variant, or its lowest hollow one if none is filled.
   - **The APL16 Summary keeps its own plot:** the section right after its "Where the best models stand" is the
     interactive plot of how far the best model so far has closed the gap to the KC data on each statistic
     (`./venv/bin/python reports/summary_progress_plot.py` writes `results/summary_progress/progress_plot.html`, which
