@@ -36,8 +36,10 @@ Design (the entry's):
   reads;
 - the reads (`--part read`): per fitted cell, megamat on the four read wirings against the cell's read half, and the
   validation2, mixture and APL16 inputs with APL on and off on all eight wirings, at the classed point;
-- the score, E143's resampled reading per cell and the four-factor control fit (`--part score`, `--part resampled`,
-  `--part control`) are written once the fits run (stubs here).
+- the four-factor control (`--part control`, beside): A1's form fitted in cell X to flies with permuted odor labels
+  (E136's CONTROL_A1), 80 evaluations, and its four megamat reads on cell X's read wirings;
+- the score and E143's resampled reading per cell (`--part score`, `--part resampled`) are written once the fits run
+  (stubs here).
 
 Outputs: <shared>/results/E145_stage_fit_replication/ (E145_lock.json, step0.json, step0_*.csv, prediction.json, and per
 cell <cell>/: E136's fit records, identity_A1.json, determined_A1.csv, rescore_A1.csv, consistency_*.csv, claims/,
@@ -567,24 +569,37 @@ def require_step0() -> dict:
 # ---------------------------------------------------------------------------
 # step 1: the fits
 
+# the four-factor control (beside, gating nothing): A1's form fitted in cell CONTROL_CELL to flies with permuted odor
+# labels (E136's CONTROL_A1, E136's 20 permutations), CONTROL_BUDGET evaluations, read on the cell's read wirings
+CONTROL = 'A1_perm'
+CONTROL_CELL = 'X'
+CONTROL_BUDGET = 80
+# the arms of the reads, as their tags name them
+TAG_ARMS: Dict[str, str] = {ARM: 'A1', CONTROL: 'A1perm'}
+
+
 @dataclass(frozen=True)
 class Point:
-    """A cell's read: A1 at the cell's classed point on one wiring and one panel's input."""
+    """A cell's read: A1 at the cell's classed point (or the control at its best point) on one wiring and one panel's
+    input."""
     cell: str
     panel: str
     wiring: str
+    arm: str = ARM
 
 
 def point_tag(pt: Point) -> str:
-    """'<cell>_A1_<panel>_<wiring>', e.g. 'X_A1_megamat_real'."""
-    return f'{pt.cell}_{ARM}_{pt.panel}_{pt.wiring}'
+    """'<cell>_A1_<panel>_<wiring>' (the control's '<cell>_A1perm_<panel>_<wiring>'), e.g. 'X_A1_megamat_real'."""
+    return f'{pt.cell}_{TAG_ARMS[pt.arm]}_{pt.panel}_{pt.wiring}'
 
 
 def parse_tag(tag: str) -> Point:
     cell, arm, panel, wiring = str(tag).split('_', 3)
-    if cell not in FIT_CELLS or arm != ARM or panel not in PANELS:
+    names = {v: k for k, v in TAG_ARMS.items()}
+    if cell not in FIT_CELLS or arm not in names or panel not in PANELS \
+            or (names[arm] == CONTROL and (cell, panel) != (CONTROL_CELL, 'megamat')):
         raise ValueError(f'{tag!r} is not a read of {EXPERIMENT}')
-    return Point(cell, panel, wiring)
+    return Point(cell, panel, wiring, names[arm])
 
 
 def planned_points(cells: Sequence[str] = FIT_CELLS) -> List[Point]:
@@ -607,28 +622,32 @@ def reads_table(cell: str) -> pd.DataFrame:
     return pd.concat(fs, ignore_index=True, sort=False).drop_duplicates('tag', keep='last').reset_index(drop=True)
 
 
-def fit_record(cell: str) -> dict:
-    """A cell's fit_A1.json ({} before its fit ends)."""
-    return _read_json(out_dir(cell) / f'fit_{ARM}.json')
+def fit_record(cell: str, arm: str = ARM) -> dict:
+    """A cell's fit_A1.json (the control's fit_A1_perm.json; {} before its fit ends)."""
+    return _read_json(out_dir(cell) / f'fit_{arm}.json')
 
 
 def read_point(pt: Point, lane: str, reclaim: bool = False, done: Optional[set] = None) -> Optional[dict]:
-    """One read, claimed in the cell's folder: E136's `read_at` of A1 at the cell's classed point (`fitted_z` inside
-    the cell) on the point's wiring and panel, both rates held at the panel's operating point, saved in the cell's
-    read folders; its row (with the cell and its halves) in the cell's reads_<host>_<lane>.csv. None if done or
-    claimed elsewhere; RuntimeError before the cell's single-factor returns."""
+    """One read, claimed in the cell's folder: E136's `read_at` of A1 at the cell's classed point (the control at its
+    best point; `fitted_z` inside the cell) on the point's wiring and panel, both rates held at the panel's operating
+    point, saved in the cell's read folders; its row (with the cell and its halves) in the cell's
+    reads_<host>_<lane>.csv. None if done or claimed elsewhere; RuntimeError before the cell's single-factor returns
+    (the control's fit)."""
     c = get_cell(pt.cell)
     tag = point_tag(pt)
     if done is not None and tag in done:
         return None
-    if 'classed_z' not in fit_record(pt.cell):
+    if pt.arm == ARM and 'classed_z' not in fit_record(pt.cell):
         raise RuntimeError(f"cell {pt.cell}'s fit has no classed point yet (its single-factor returns)")
+    if pt.arm == CONTROL and not fit_record(pt.cell, CONTROL):
+        raise RuntimeError(f"the control's fit in cell {pt.cell} has not ended")
     half = c.read_half if pt.panel == 'megamat' else None
-    extra = dict(cell=pt.cell, searched=c.searched, fit_half=c.fit_half, read_half=half, step='1')
+    extra = dict(cell=pt.cell, searched=c.searched, fit_half=c.fit_half, read_half=half,
+                 step='1' if pt.arm == ARM else 'control')
     with e136_cell(pt.cell) as F:
-        return F.read_at(tag, ARM, lambda: F.fitted_z(ARM), pt.wiring, pt.panel, 'held' if half else None, lane,
-                         out_dir(pt.cell), read_dirs(pt.cell), reclaim=reclaim, done=done, extra=extra, label='E145',
-                         script=SCRIPT)
+        return F.read_at(tag, pt.arm, lambda: F.fitted_z(pt.arm), pt.wiring, pt.panel, 'held' if half else None,
+                         lane, out_dir(pt.cell), read_dirs(pt.cell), reclaim=reclaim, done=done, extra=extra,
+                         label='E145', script=SCRIPT)
 
 
 def part_read(lane: str, cells: Sequence[str] = FIT_CELLS, reverse: bool = False, reclaim: bool = False) -> None:
@@ -707,11 +726,41 @@ def part_resampled() -> dict:
     raise NotImplementedError("E145's resampled reading is written while the fits run")
 
 
+def control_points() -> List[Point]:
+    """The control's reads: megamat on its cell's four read wirings (against the permuted read half, in the score)."""
+    return [Point(CONTROL_CELL, 'megamat', w, CONTROL) for w in get_cell(CONTROL_CELL).read_wirings()]
+
+
 def part_control(lane: str, reclaim: bool = False) -> dict:
-    """Beside: A1's form fitted in cell X to flies with permuted odor labels (E136's 20 permutations, 80 evaluations),
-    its fall where cell X is read against the permuted half; gates nothing. Not written yet (it needs E136's control
-    on A1's form)."""
-    raise NotImplementedError("E145's four-factor control fit is written while the fits run")
+    """Beside, gating nothing: A1's form fitted in cell CONTROL_CELL to flies with permuted odor labels (E136's
+    `fit_arm` of A1 with `control`, as E136's CONTROL_A1: E136's 20 permutations, one for all flies and stages, the
+    loss their mean; CONTROL_BUDGET evaluations, one restart; the first evaluation checked against the cell's start
+    value on the recorded labels), claimed in the cell's folder ('control_<cell>'; `reclaim` resumes it), then its
+    reads at its best point on the cell's read wirings (`control_points`). Its fall where the cell is read, against
+    the permuted read half, is the score's. The claim is released when the lane stops on an error."""
+    from experiments import E134_population_baseline as B
+    require_lock()
+    checks = require_step0()['start_checks']
+    root = out_dir(CONTROL_CELL)
+    tag = f'control_{CONTROL_CELL}'
+    if not B.claim(tag, lane, reclaim, root=root):
+        raise RuntimeError(f'the control is claimed by another lane ({root}/claims/{tag}); pass --reclaim to resume it')
+    out: Dict[str, object] = dict(cell=CONTROL_CELL, arm=CONTROL, lane=lane, host=_host())
+    try:
+        with e136_cell(CONTROL_CELL, checks[CONTROL_CELL]) as F:
+            if F.CONTROL_A1 != CONTROL:
+                raise RuntimeError(f"E136's four-factor control is {F.CONTROL_A1!r}, not {CONTROL!r}")
+            if not fit_record(CONTROL_CELL, CONTROL):
+                F.fit_arm(ARM, control=True, maxfev=CONTROL_BUDGET)
+        fit = fit_record(CONTROL_CELL, CONTROL)
+        out['fit'] = {k: fit.get(k) for k in ('best_eval', 'factors', 'at_bound', 'n_evals', 'pn_kws')}
+        for pt in control_points():
+            read_point(pt, lane, reclaim, set(reads_table(pt.cell).tag))
+        out['reads'] = int(reads_table(CONTROL_CELL).tag.isin([point_tag(p) for p in control_points()]).sum())
+    except BaseException:
+        B.release(tag, root=root)
+        raise
+    return out
 
 
 def main(argv: Optional[Sequence[str]] = None) -> None:

@@ -86,3 +86,19 @@ def test_repeat_ranges_are_the_entrys():
     assert (E.REPEAT['inhadd']['lo'], E.REPEAT['inhadd']['hi']) == (562.0, 1778.0)
     assert (E.REPEAT['aplpn']['lo'], E.REPEAT['aplpn']['hi']) == (0.078, 0.31) and E.REPEAT['aplpn']['determined']
     assert E.REPEAT['kckc']['lo'] == 1.8 and E.REPEAT['kckc']['hi'] is None and E.REPEAT['kckc']['determined']
+
+
+def test_the_four_factor_control():
+    assert F.CONTROL_A1 == E.CONTROL == 'A1_perm' and F.CONTROLS == {F.CONTROL: 'A0', F.CONTROL_A1: 'A1'}
+    assert F.base_arm(F.CONTROL_A1) == 'A1' and F.base_arm(F.CONTROL) == 'A0' and F.base_arm(F.FAMILY) == 'A0'
+    assert F.base_arm('A3') == 'A3'
+    pts = E.control_points()
+    assert [p.wiring for p in pts] == list(E.CELLS[E.CONTROL_CELL].read_wirings()) and all(p.arm == E.CONTROL for p in pts)
+    tags = [E.point_tag(p) for p in pts]
+    assert tags[0] == 'X_A1perm_megamat_real' and [E.parse_tag(t) for t in tags] == pts
+    assert not set(tags) & {E.point_tag(p) for p in E.planned_points()}
+    for bad in ('F_A1perm_megamat_P3', 'X_A1perm_validation2_real'):
+        with pytest.raises(ValueError):
+            E.parse_tag(bad)
+    with pytest.raises(ValueError):
+        F.register_variant(F.CONTROL_A1, lambda pt, claw_after: None)

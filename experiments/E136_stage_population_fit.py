@@ -172,6 +172,9 @@ ARMS: Dict[str, Arm] = {
     'A4': Arm('A4', "without the inhibition among KCs (E110's form)", ('aplpn',), {'kckc_fixed': 0.0}),
 }
 CONTROL = 'A0_perm'
+# A1's form fitted to the permuted flies, built as A1 (E145's four-factor control; `fit_arm(..., control=True)` of A1)
+CONTROL_A1 = 'A1_perm'
+CONTROLS: Dict[str, str] = {CONTROL: 'A0', CONTROL_A1: 'A1'}
 FAMILY = 'family'   # the unrefitted family in the reads: z = 0, each wiring at its held megamat point
 
 # the search (the rulings): the coordinates (ln factors; the per-claw threshold in units of CLAW_THR_UNIT Hz), their
@@ -307,7 +310,7 @@ def extra_arms(*arms: Arm):
     added = []
     try:
         for a in arms:
-            if a.name in ARMS or a.name in (CONTROL, FAMILY) or a.name in VARIANT_LOADERS:
+            if a.name in ARMS or a.name in (*CONTROLS, FAMILY) or a.name in VARIANT_LOADERS:
                 raise ValueError(f'{a.name!r} is already a name of E136 or a registered variant')
             ARMS[a.name] = a
             added.append(a.name)
@@ -826,8 +829,11 @@ def claw_thr_check(wirings: Optional[Sequence[str]] = None, value: float = CLAW_
 # the model: an arm on several wirings, its rates held
 
 def base_arm(arm: str) -> str:
-    """The arm an arm name, the control (CONTROL) or the unrefitted family (FAMILY) is built as."""
-    return 'A0' if arm in (CONTROL, FAMILY) else arm
+    """The arm an arm name, a control (CONTROLS: CONTROL as A0, CONTROL_A1 as A1) or the unrefitted family (FAMILY) is
+    built as."""
+    if arm in CONTROLS:
+        return CONTROLS[arm]
+    return 'A0' if arm == FAMILY else arm
 
 
 # an arm's kwargs that set its APL-off condition only (`off_extra_of`), not model kwargs
@@ -1523,8 +1529,8 @@ def restart_point(name: str, hist: Sequence[dict], resumed: bool) -> dict:
 
 def fit_arm(arm: str, control: bool = False, maxfev: Optional[int] = None, resume: bool = True,
             save_stages: bool = True, claw_mode: Optional[str] = None) -> dict:
-    """One arm's fit on the S wirings against the fit half (the control: A0 against the permuted fit half), as the
-    module docstring says. Every simulated evaluation's loss, parts, rates, holds and parameters are appended to
+    """One arm's fit on the S wirings against the fit half (`control`: the arm against the permuted fit half, as
+    CONTROL for A0 and CONTROL_A1 for A1, E145's four-factor control), as the module docstring says. Every simulated evaluation's loss, parts, rates, holds and parameters are appended to
     fit_history_<arm>.csv and its stages saved (`save_eval`); resumable: an evaluation whose clipped coordinates are in
     the history is not simulated again, and the holds' warm starts and slopes are restored from it, so a restarted fit
     retraces its path and continues. A3's per-claw threshold is set in place only where claw_thr_check.json says it
@@ -1534,7 +1540,7 @@ def fit_arm(arm: str, control: bool = False, maxfev: Optional[int] = None, resum
     gate = require_gate()
     stages = readable_stages(gate['classes'])
     lock = R.require_lock()
-    name = CONTROL if control else arm
+    name = (CONTROL_A1 if base_arm(arm) == 'A1' else CONTROL) if control else arm
     base = base_arm(name)
     if base == 'A1':
         require_e135()
@@ -1656,7 +1662,7 @@ def determined(arm: str, threshold: float = NOT_DETERMINED, save_stages: bool = 
     fit = _read_json(out_dir() / f'fit_{arm}.json')
     if not fit:
         raise RuntimeError(f'{arm} is not fitted yet (fit_{arm}.json)')
-    control = arm == CONTROL
+    control = arm in CONTROLS
     base = base_arm(arm)
     perms = permutations(list(D.panel_odors(PANEL))) if control else None
     loss = StageLoss(stages, Flies('fit', stages, perms=perms), lock, check_pn=base != 'A1')
@@ -2036,7 +2042,7 @@ VARIANT_LOADERS: Dict[str, Callable[..., Optional['R.SavedRun']]] = {}
 def register_variant(name: str, loader: Callable[..., Optional['R.SavedRun']]) -> None:
     """Registers a variant for E136's score functions (VARIANT_LOADERS): `loader(pt, claw_after)` gives the run of
     `ReadPoint(name, panel, wiring, half)` or None. ValueError for a name of E136's own (an arm, CONTROL, FAMILY)."""
-    if name in (*ARMS, CONTROL, FAMILY):
+    if name in (*ARMS, *CONTROLS, FAMILY):
         raise ValueError(f'{name!r} is one of E136\'s own names')
     VARIANT_LOADERS[name] = loader
 
