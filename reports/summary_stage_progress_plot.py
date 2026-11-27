@@ -27,7 +27,30 @@ The experiments read (`ADAPTERS`; one function each, from the experiment's own c
 - E135, the antennal lobe held to the recorded PN dendrites: its arms on eight wirings, but the permuted controls
   (score_scores.csv, score_apl_effect.csv, score_realism.csv);
 - E136, the best family fitted to all megamat stages at once: its arms but the permuted control (classes.json's changes
-  on T against the held-out half, score_apl16.csv, in its measure's folder).
+  on T against the held-out half, score_apl16.csv, in its measure's folder);
+- E139, the weaker antennal-lobe normalization without the calyx refit: F at the four rungs, fitted to no flies, on
+  all eight wirings against all the flies (score_megamat.csv's 'all' half, score_panels.csv, score_apl16.csv); B, K
+  and step 3's refit A0 at 314 as fitted (classes.json, T against the held-out half); A1 beside is E136's;
+- E141, the rise of the inhibition among KCs: its arms, all on E139's B at 1000, as fitted (classes.json); S outside
+  a realism band and P and T, whose reads stopped after their holds failed, without a point; B, K and A1 beside are
+  E139's and E136's;
+- E142, the step from the PN dendrites to the PN boutons: the amended main arm, the arm with APL→bouton ×0.155 alone
+  and the lock's main arm (no class: its holds fail), as fitted, from the step-1 score's tables on T against the
+  held-out half (score_step1_megamat.csv, score_step1_panels.csv, score_step1_apl16.csv; step1_classes.json's classes);
+  their dendrites and stage errors hollow (imposed); no point for the permuted controls, the arms stopped by claim and
+  E135's arms re-scored beside;
+- E144, A1 and its parts on the male CNS's two calyces: the settings read on a calyx's four wirings, each against its
+  calyx's own family on the same wirings (classes.json, score_apl16.csv), drawn at the level plus that change; the
+  settings read on one wiring (all of H's, F, Dabs) without a point.
+A variant at fixed scales that carries a fitted arm's parameters (E139's B and K, E141's arms, E142's arms, E144's
+settings: A1's APL→bouton ×0.155 or KC–KC rise, fitted on S against the fit half) is read as a fitted one, where those
+were not fitted: on wirings outside S and, at the megamat stages, against the held-out half; each experiment's own
+classes are read there. E144's change is from each male calyx's own family (E130's fit of the family on that calyx,
+as each of the hemibrain's wirings has its own fit of the family), added to the hemibrain family's level.
+Not read (nothing of their own to draw): E137, the held-out panels read like for like (new readings of the flies,
+with the family and yardsticks re-read); E138, the odors that carry the strength error (no simulation, saved runs'
+entries); E140, aa at the step from the claws to the somata (no simulation; its step 1 did not run); E143, the megamat
+stage error through the flies' sampling (no simulation; resamples of the flies under saved runs).
 An experiment counts once it is completed in the experiment index (`--include E<n>` dates a running one now, for a
 preview). Writes, under <shared>/results/summary_progress/:
 
@@ -289,11 +312,325 @@ def e136_points() -> List[dict]:
     return out
 
 
-ADAPTERS: Dict[str, Callable[[], List[dict]]] = {'E134': e134_points, 'E135': e135_points, 'E136': e136_points}
+# ---------------------------------------------------------------------------
+# the readings shared by the adapters from E139 on: a variant's comparisons with the family (E136's `compare` dicts),
+# from its experiment's classes or from its score tables, and its points at the level plus each change
+
+T_HELD = 'the held-out wirings (T) against the held-out half'
+T_PANEL = "the held-out wirings (T) against all the panel's flies"
+ALL8 = 'all eight wirings against all the flies (fitted to none)'
+ALL8_PANEL = "all eight wirings against all the panel's flies (fitted to none)"
+# the series of the held-out panels and the APL effect: (panel, condition) of the score_panels tables, and the column
+# of the score_apl16 tables
+PANEL_SERIES = {'validation2': ('validation2', 'on'), 'cmix': ('cmix', 'on'), 'apl16_on': ('apl16', 'on'),
+                'apl16_off': ('apl16', 'off')}
+APL_SERIES = {'apl_loss': 'cal_loss', 'apl_pattern': 'cal_pattern'}
+# each series' spread in the classes' spreads (the family's SD over its eight wirings); the APL effect has none
+SPREAD_KEYS = {'stage_error': 'stage', **{s: s for s in STAGES}, **E136_PANELS}
+
+
+def _compare(arm_v: Dict[str, float], base_v: Dict[str, float], spread: float, wirings: Sequence[str]) -> dict:
+    """E136's `compare` (experiments/E136_stage_population_fit.py) on table values (per wiring): the change over
+    `wirings` (the variant minus the family on the same wiring), its standard error over the wirings (the larger of
+    half the spread and the changes' SD over sqrt(n)) and the two means; incomplete where a wiring is missing."""
+    ch = [arm_v[w] - base_v[w] for w in wirings if w in arm_v and w in base_v
+          and np.isfinite(arm_v[w]) and np.isfinite(base_v[w])]
+    if len(ch) < len(wirings) or not len(ch):
+        return dict(n=len(ch), complete=False)
+    sd = float(np.std(ch, ddof=1)) if len(ch) > 1 else np.nan
+    se = float(max(spread / 2.0 if np.isfinite(spread) else 0.0, sd / np.sqrt(len(ch))))
+    return dict(n=len(ch), complete=True, change=float(np.mean(ch)), se=se, spread=spread,
+                arm=float(np.mean([arm_v[w] for w in wirings])), ref=float(np.mean([base_v[w] for w in wirings])))
+
+
+def _by_wiring(df: pd.DataFrame, key: str, name: str, value: str, **sel) -> Dict[str, float]:
+    """{wiring: value} of the rows of `df` whose `key` column is `name` (and each `sel` column its value)."""
+    x = df[df[key].astype(str) == name]
+    for c, v in sel.items():
+        x = x[x[c].astype(str) == str(v)]
+    return {str(w): float(v) for w, v in zip(x.wiring, x[value]) if str(w) not in ('mean', 'common', 'mean_S',
+                                                                                    'mean_T')}
+
+
+def _class_comps(r: dict, where: str = T_HELD, panel_where: str = T_PANEL) -> Dict[str, tuple]:
+    """A classes record's comparisons (E136's form: 'megamat', 'stages', 'panels'), per series with where it was read."""
+    return {'stage_error': (r.get('megamat') or {}, where),
+            **{s: ((r.get('stages') or {}).get(s) or {}, where) for s in STAGES},
+            **{k: ((r.get('panels') or {}).get(key) or {}, panel_where) for k, key in E136_PANELS.items()}}
+
+
+def _table_comps(mega: pd.DataFrame, panels: pd.DataFrame, apl: pd.DataFrame, name: str, family: str,
+                 wirings: Sequence[str], half: str, spreads: Dict[str, float], where: str, panel_where: str,
+                 apl_where: str, key: str = 'variant', panel_key: str = 'arm', apl_key: str = 'arm') -> Dict[str, tuple]:
+    """A variant's comparisons with `family` from its experiment's score tables, on `wirings`: the megamat stages and
+    their stage error against `half` of the flies (score_megamat: 'stage' and each stage's column), the held-out panels'
+    KC somata against all their flies (score_panels' 'error', strength by odor), the calibrated APL effect
+    (score_apl16)."""
+    out = {}
+    if len(mega):
+        for k, col in (('stage_error', 'stage'), *((s, s) for s in STAGES)):
+            out[k] = (_compare(_by_wiring(mega, key, name, col, half=half),
+                               _by_wiring(mega, key, family, col, half=half),
+                               float(spreads.get(SPREAD_KEYS[k], np.nan)), wirings), where)
+    if len(panels):
+        p = panels[panels.stage.astype(str) == 'kc_soma'] if 'stage' in panels else panels
+        for k, (pan, cond) in PANEL_SERIES.items():
+            out[k] = (_compare(_by_wiring(p, panel_key, name, 'error', panel=pan, condition=cond),
+                               _by_wiring(p, panel_key, family, 'error', panel=pan, condition=cond),
+                               float(spreads.get(SPREAD_KEYS[k], np.nan)), wirings), panel_where)
+    out.update(_apl_comps(apl, name, family, wirings, apl_where, apl_key))
+    return out
+
+
+def _apl_comps(apl: pd.DataFrame, name: str, family: str, wirings: Sequence[str], where: str,
+               key: str = 'arm') -> Dict[str, tuple]:
+    """The calibrated APL effect's loss and pattern part (score_apl16's cal_loss, cal_pattern): the variant minus the
+    family on `wirings`, with no standard error (as E136's adapter reads it)."""
+    out = {}
+    if not len(apl):
+        return out
+    for k, col in APL_SERIES.items():
+        c = _compare(_by_wiring(apl, key, name, col), _by_wiring(apl, key, family, col), np.nan,
+                     wirings)
+        out[k] = (dict(c, se=None), where)
+    return out
+
+
+def _flags(apl: pd.DataFrame, name: str, key: str = 'arm') -> List[str]:
+    """The realism flags of a variant's APL16 reads (score_apl16's realism_flag), as '<wiring>: <flag>'."""
+    if not len(apl) or 'realism_flag' not in apl:
+        return []
+    x = apl[(apl[key].astype(str) == name) & ~apl.wiring.astype(str).isin(['mean', 'common'])]
+    return [f'{w}: {f}' for w, f in zip(x.wiring, x.realism_flag) if isinstance(f, str) and f.strip()]
+
+
+def _emit(exp: str, label: str, comps: Dict[str, tuple], lv: Dict[str, float], drawn: bool = True, why: str = '',
+          hollow: Optional[Dict[str, str]] = None, cls: Optional[str] = None, control_fall: Optional[float] = None,
+          fitted: bool = True) -> List[dict]:
+    """A variant's points: each complete comparison drawn at the series' level plus its change (`lv`, `levels`), with
+    the popup's readings; `hollow` the series drawn open, by reason ('*' every series); `fitted` False for a variant
+    fitted to no flies, read on all eight wirings (no bar: the class is read elsewhere). None complete: one row on the
+    stage error, not drawn, saying why."""
+    hollow = hollow or {}
+    out = []
+    for k, (c, where) in comps.items():
+        if not c.get('complete') or k not in lv:
+            continue
+        se = c.get('se')
+        hw = hollow.get(k, hollow.get('*'))
+        out.append(_point(exp, label, k, lv[k] + float(c['change']), where, drawn, hw is None,
+                          why if (why or not drawn) else (hw or ''), arm=c.get('arm'), family=c.get('ref'),
+                          change=c.get('change'), se=se, bar=-IMPROVE_SE * se if fitted and se is not None else None,
+                          cls=cls, control_fall=control_fall, where=where))
+    if not out:
+        out.append(_point(exp, label, 'stage_error', np.nan, '-', drawn=False,
+                          why=why or 'no comparison with the family on four wirings or more'))
+    return out
+
+
+def _undrawn(exp: str, label: str, why: str) -> dict:
+    """A variant with no point (a control, a reference, a beside arm drawn under its own experiment), on the stage
+    error, saying why."""
+    return _point(exp, label, 'stage_error', np.nan, '-', drawn=False, why=why)
+
+
+E139_LABELS = {'F_inhadd100': "the family's calyx, pn_inhadd 100", 'F_inhadd314': "the family's calyx, pn_inhadd 314",
+               'F_inhadd1000': "the family's calyx, pn_inhadd 1000",
+               'F_inhadd3141': "the family's calyx, pn_inhadd 3141",
+               'B_inhadd314': 'APL→bouton ×0.155, pn_inhadd 314', 'B_inhadd1000': 'APL→bouton ×0.155, pn_inhadd 1000',
+               'K_inhadd1000': 'KC–KC ×3.24, pn_inhadd 1000', 'A0_inhadd314': 'A0 refitted at pn_inhadd 314'}
+
+
+def e139_points() -> List[dict]:
+    """E139's settings: F at the four rungs (the family's calyx, a ladder of the normalization fitted to no flies) on
+    all eight wirings against all the flies (score_megamat.csv's 'all' half, score_panels.csv, score_apl16.csv),
+    the class beside as read on T; B and K (A1's APL→bouton ×0.155 or KC–KC ×3.24, fitted on S against the fit half)
+    and step 3's refit A0 at 314 on T against the held-out half (classes.json; the APL effect on T from
+    score_apl16.csv); hollow without a class, no point outside the realism bands; A1 beside is E136's arm."""
+    d = RESULTS / 'E139_normalization_ladder'
+    cl = json.loads((d / 'classes.json').read_text())
+    mega, pan, apl = (pd.read_csv(d / f) for f in ('score_megamat.csv', 'score_panels.csv', 'score_apl16.csv'))
+    lv, spreads = levels(), cl.get('spreads') or {}
+    ref = cl.get('reference', 'family')
+    out = []
+    for v in [*cl.get('variants', []), *cl.get('fitted', [])]:
+        r = cl['classes'].get(v) or {}
+        label, cls = E139_LABELS.get(v, v), r.get('cls')
+        flags = _flags(apl, v)
+        drawn, why = (False, 'outside the realism bands: ' + flags[0]) if flags else (True, '')
+        hollow = {'*': 'no class: ' + '; '.join(r.get('reasons') or [])} if cls == 'no class' else None
+        if r.get('setting') == 'F':
+            comps = _table_comps(mega, pan, apl, v, ref, WIRINGS, 'all', spreads, ALL8, ALL8_PANEL,
+                                 'all eight wirings (fitted to none)')
+            out += _emit('E139', label, comps, lv, drawn, why, hollow,
+                         f'{cls} (its class, read on T against the held-out half)', fitted=False)
+        else:
+            comps = {**_class_comps(r), **_apl_comps(apl, v, ref, T_WIRINGS, 'the held-out wirings (T)')}
+            out += _emit('E139', label, comps, lv, drawn, why, hollow, cls, r.get('control_fall'))
+    if cl.get('beside_arm'):
+        out.append(_undrawn('E139', f"{cl['beside_arm']} (beside)", "E136's arm, drawn under E136"))
+    return out
+
+
+E141_LABELS = {'D1.8_inhadd1000': "D1.8: KC–KC ×1.8, on E139's B at 1000",
+               'D5.8_inhadd1000': "D5.8: KC–KC ×5.83, on E139's B at 1000",
+               'N_inhadd1000': "N: KC–KC ×3.24 with APL on, ×1 with APL off, on E139's B at 1000",
+               'G_inhadd1000': "G: APL's inhibition of the claws as a gain, KC–KC ×1, on E139's B at 1000",
+               'P_inhadd1000': "P: a uniform neuron in the matrix's place, on E139's B at 1000",
+               'T_inhadd1000': "T: one neuron per KC type, on E139's B at 1000",
+               'S_inhadd1000': "S: the matrix shuffled within type pairs, on E139's B at 1000"}
+
+
+def e141_points() -> List[dict]:
+    """E141's arms, all at E139's B at 1000 (A1's APL→bouton ×0.155, fitted on S against the fit half), so read as
+    fitted: on T against the held-out half (classes.json; the APL effect on T from score_apl16.csv); hollow without a
+    class; no point outside the realism bands (classes.json's flagged wirings or score_apl16.csv's flags: S) or with
+    no comparison on T (P and T, whose reads stopped after their holds failed); B and K beside are E139's, A1 E136's."""
+    d = RESULTS / 'E141_kckc_rise_forms'
+    cl = json.loads((d / 'classes.json').read_text())
+    apl = pd.read_csv(d / 'score_apl16.csv')
+    lv, ref = levels(), cl.get('reference', 'family')
+    out = []
+    for v in cl.get('variants', []):
+        r = cl['classes'].get(v) or {}
+        label, cls = E141_LABELS.get(v, v), r.get('cls')
+        flags = [f'{w}: {f}' for w, f in (r.get('flagged_wirings') or {}).items()] or _flags(apl, v)
+        comps = {**_class_comps(r), **_apl_comps(apl, v, ref, T_WIRINGS, 'the held-out wirings (T)')}
+        if flags:
+            drawn, why = False, 'outside the realism bands: ' + flags[0]
+        elif not (r.get('megamat') or {}).get('complete'):
+            drawn, why = False, 'no reading on T: ' + '; '.join(r.get('reasons') or [str(cls)])
+        else:
+            drawn, why = True, ''
+        hollow = {'*': 'no class: ' + '; '.join(r.get('reasons') or [])} if cls == 'no class' else None
+        out += _emit('E141', label, comps, lv, drawn, why, hollow, cls, r.get('control_fall'))
+    for v in cl.get('beside_e139') or []:
+        out.append(_undrawn('E141', f'{v} (beside)', "E139's setting, drawn under E139"))
+    if cl.get('beside_arm'):
+        out.append(_undrawn('E141', f"{cl['beside_arm']} (beside)", "E136's arm, drawn under E136"))
+    return out
+
+
+E142_LABELS = {'E142_a1stage_imposed': "the dendrites imposed on A1's own PN stage (the amended main arm)",
+               'E142_imposed_aplpn': "the dendrites imposed on the family's PN stage, APL→bouton ×0.155 alone",
+               'E142_imposed_a1': "the dendrites imposed on the family's PN stage, A1's two calyx factors (the lock's "
+                                  "main arm)"}
+# E142's dendrites are set from all the PN flies (imposed), so its dendrite values and the stage errors that hold them
+# are hollow
+E142_HOLLOW = ('pn_dendrite', 'stage_error')
+
+
+def e142_points() -> List[dict]:
+    """E142's step-1 arms with A1's calyx factors (fitted on S against the fit half), read as fitted: on T against the
+    held-out half (score_step1_megamat.csv), the APL16 somata on T (score_step1_panels.csv) and the APL effect on T
+    (score_step1_apl16.csv), each against the unrefitted family there; the dendrites and the stage error hollow (set
+    from all the PN flies); an arm whose hold fails has no class and is hollow; the class as amended
+    (step1_classes.json) in the popup. No point for the permuted controls, for the arms read on fewer than four
+    wirings (stopped by claim) and for E135's imposed arms re-scored beside (drawn under E135)."""
+    d = RESULTS / 'E142_dendrite_bouton_step'
+    sc = json.loads((d / 'step1_classes.json').read_text())
+    mega, pan, apl = (pd.read_csv(d / f) for f in ('score_step1_megamat.csv', 'score_step1_panels.csv',
+                                                   'score_step1_apl16.csv'))
+    e136 = _e136_dir() / 'classes.json'
+    spreads = {**(json.loads(e136.read_text()).get('spreads', {}) if e136.exists() else {}), **sc.get('spreads', {})}
+    lv = levels()
+    carry, hides = sc['classes'].get('dendrites_carry') or {}, sc['classes'].get('apl_hides_step') or {}
+    n_read: Dict[str, int] = {}
+    for row in sc.get('holds_table') or []:
+        if str(row.get('panel', 'megamat')) == 'megamat':
+            n_read[row['variant']] = int(row['n_read'])
+    out = []
+    for v in sc.get('variants', []):
+        if v in ('family', 'A1'):
+            continue
+        label = E142_LABELS.get(v, v)
+        if v.startswith('E135_'):
+            out.append(_undrawn('E142', label, "E135's arm re-scored beside, drawn under E135"))
+            continue
+        if v.endswith('_perm'):
+            out.append(_undrawn('E142', label, 'a permuted control'))
+            continue
+        if n_read.get(v, 0) < MIN_WIRINGS:
+            out.append(_undrawn('E142', label, f'read on {n_read.get(v, 0)} of 8 wirings (the rest stopped by claim '
+                                                'after a hold failed)'))
+            continue
+        bad = sc.get('holds_failed', {}).get(v) or []
+        flags = _flags(apl, v, 'variant')
+        if bad:
+            cls = f'no class: a hold fails ({len(bad)} of 8 wirings)'
+        elif v == carry.get('arm'):
+            cls = f"the dendrites carry under the calyx that holds: {carry.get('cls')}"
+        elif v in (hides.get('kept') or []):
+            cls = f"APL at the boutons hides the step: {hides.get('cls')}"
+        else:
+            cls = 'no class'
+        hollow = {'*': cls} if cls.startswith('no class') else \
+            {k: 'the PN dendrites are set from all the PN flies (imposed)' for k in E142_HOLLOW}
+        comps = _table_comps(mega, pan, apl, v, 'family', T_WIRINGS, 'held', spreads, T_HELD, T_PANEL,
+                             'the held-out wirings (T)', apl_key='variant')
+        drawn, why = (False, 'outside the realism bands: ' + flags[0]) if flags else (True, '')
+        out += _emit('E142', label, comps, lv, drawn, why, hollow, cls)
+    return out
+
+
+E144_CALYCES = {'H': "the hemibrain with 'argmax' claws", 'L': "the male CNS's left calyx",
+                'R': "the male CNS's right calyx"}
+E144_SETTINGS = {'F': 'F (pn_inhadd 1000)', 'B': 'B (pn_inhadd 1000, APL→bouton ×0.155)',
+                 'D1.8': "D1.8 (B with the calyx's KC–KC ×1.8)", 'A1': "A1 (B with the calyx's KC–KC ×3.24)",
+                 'D5.8': "D5.8 (B with the calyx's KC–KC ×5.83)", 'Dabs': "Dabs (B with L's KC–KC at 85.6)"}
+
+
+def e144_points() -> List[dict]:
+    """E144's settings on the male CNS's two calyces (and on the hemibrain with 'argmax' claws), each against its
+    calyx's own family (E130's fit of the family there, as each of the hemibrain's wirings has its own fit) on the same
+    wirings: drawn at the level plus that change, the megamat stages against the held-out half (its settings carry
+    A1's factors, fitted on S against the fit half) and the held-out panels against all their flies (classes.json),
+    the APL effect on the same wirings (score_apl16.csv); hollow without a class; no point for a setting read on fewer
+    than four wirings (every one on H's real wiring, F and Dabs) or outside the realism bands; the calyces' families
+    are the references."""
+    d = RESULTS / 'E144_a1_malecns_calyces'
+    cl = json.loads((d / 'classes.json').read_text())
+    apl = pd.read_csv(d / 'score_apl16.csv')
+    lv = levels()
+    out = []
+    for v, r in cl['classes'].items():
+        cx, st = r.get('calyx', v.split('_')[0]), r.get('setting', v.split('_', 1)[-1])
+        label = f'{E144_CALYCES.get(cx, cx)}: {E144_SETTINGS.get(st, st)}'
+        ws = list(r.get('wirings') or [])
+        if len(ws) < MIN_WIRINGS:
+            out.append(_undrawn('E144', label, f'read on {len(ws)} wiring{"s" if len(ws) != 1 else ""}'))
+            continue
+        cls, ref = r.get('cls'), r.get('reference', f'{cx}_family')
+        flags = [f'{w}: {f}' for w, f in (r.get('flagged_wirings') or {}).items()] or _flags(apl, v, 'variant')
+        drawn, why = (False, 'outside the realism bands: ' + flags[0]) if flags else (True, '')
+        hollow = {'*': 'no class: ' + '; '.join(r.get('reasons') or [])} if cls == 'no class' else None
+        name = E144_CALYCES.get(cx, cx)
+        where = f"{name}'s {len(ws)} wirings against the held-out half, beside the family's own fit there"
+        pwhere = f"{name}'s {len(ws)} wirings against all the panel's flies, beside the family's own fit there"
+        comps = {**_class_comps(r, where, pwhere),
+                 **_apl_comps(apl, v, ref, ws, f"{name}'s {len(ws)} wirings, beside the family's own fit there",
+                              'variant')}
+        out += _emit('E144', label, comps, lv, drawn, why, hollow, cls, r.get('control_fall'))
+    for cx in sorted({str(r.get('calyx')) for r in cl['classes'].values()}):
+        out.append(_undrawn('E144', f'{E144_CALYCES.get(cx, cx)}: the family',
+                            "the reference of its calyx's settings (E130's fit of the family there)"))
+    return out
+
+
+ADAPTERS: Dict[str, Callable[[], List[dict]]] = {'E134': e134_points, 'E135': e135_points, 'E136': e136_points,
+                                                 'E139': e139_points, 'E141': e141_points, 'E142': e142_points,
+                                                 'E144': e144_points}
 # the canonical names (CLAUDE.md), for an experiment not yet in the index as completed
 CANONICAL = {'E134': 'the models as populations at every recorded stage',
              'E135': 'the antennal lobe held to the recorded PN dendrites',
-             'E136': 'the best family fitted to all megamat stages at once'}
+             'E136': 'the best family fitted to all megamat stages at once',
+             'E139': 'the weaker antennal-lobe normalization without the calyx refit, along its strength',
+             'E141': 'the rise of the inhibition among KCs beside the weaker antennal-lobe normalization, along its '
+                     'dose and in other forms',
+             'E142': 'the step from the PN dendrites to the PN boutons by itself, with the recorded dendrites under '
+                     "the stage fit's calyx",
+             'E144': "the weaker antennal-lobe normalization and the rise of the inhibition among KCs on the male "
+                     "CNS's two calyces"}
 
 
 def floors() -> Dict[str, float]:
