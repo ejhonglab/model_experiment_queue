@@ -834,6 +834,43 @@ def _share_of(x: Optional[np.ndarray], scored) -> dict:
                 share_scored=None if scored is None else float(np.mean(x[:-1] == bool(scored))))
 
 
+def shortcut_check(classes: Mapping[str, dict], e143_lock: Mapping, sides: Mapping[str, object]) -> pd.DataFrame:
+    """E143's read-once check (its design item 1) on this experiment's reads: the shortcut (the model read once against
+    all the flies, a half changing only the reference) against E136's own held-out half of each megamat stage (E143's
+    `e136_split`; the held-out panels against all their flies, as scored), beside each class's scored values (its
+    comparison's 'arm' and 'ref', the means over the wirings scored); within E143's CHECK_TOL it stands for the score's
+    reading. A description of the method: it gates nothing."""
+    from experiments import E143_megamat_fly_sampling as E143
+    W = {}
+    for st in E143.LOSS_STAGES:
+        n = len(E143.lock_flies(e143_lock, E143.megamat_key(st)))
+        W[E143.megamat_key(st)] = E143.half_weights(n, [E143.e136_split(n)[1]])
+    for k in E143.HOLDS_PANELS + E143.BESIDE_PANELS:
+        n = len(E143.lock_flies(e143_lock, k))
+        W[k] = E143.half_weights(n, [tuple(range(n))])
+    rv = E143.weighted_values(e143_lock, W, side_of=sides.__getitem__, wirings=ALL_WIRINGS)
+    rows = []
+    for v, rec in classes.items():
+        if 'megamat' not in rec or not (rec.get('megamat') or {}).get('complete'):
+            continue
+        ref, ws = rec['reference'], list(rec['wirings'])
+        idx = [ALL_WIRINGS.index(w) for w in ws]
+        comps = [('stage', rec['megamat']), *((st, x) for st, x in rec['stages'].items()),
+                 *((k, x) for k, x in rec['panels'].items())]
+        for what, sc in comps:
+            if not sc.get('complete'):
+                continue
+            src = rv.mega.get(what) if what in rv.mega else rv.panels.get(what, {})
+            for side_name, nm in (('arm', v), ('ref', ref)):
+                got = float(np.mean(src[nm][0, idx])) if nm in src else np.nan
+                rows.append(dict(variant=v, statistic=what, side=side_name, name=nm, scored=float(sc[side_name]),
+                                 shortcut=got, diff=got - float(sc[side_name])))
+    df = pd.DataFrame(rows).drop_duplicates(['statistic', 'name', 'side', 'variant'])
+    if len(df):
+        df['within_tol'] = df['diff'].abs() <= E143.CHECK_TOL
+    return df
+
+
 def amended_lock() -> dict:
     """E144's lock as amended for the resampled reading: `require_lock` (results, its committed copy and the code
     agree), the amendment AMENDMENT_ID in it, and the committed copy tracked with no uncommitted change (E140's
@@ -854,7 +891,8 @@ def part_resampled() -> dict:
     its lock's flies (`resamples`: N_BOOT, seed BOOT_SEED, megamat's four stages and the held-out panels from one
     generator) as references with all the flies last (`resampled_values` on this experiment's sides and wirings), and
     every class of classes.json recomputed on each (`resampled_classes`), with the derived classes and outcomes (a) to
-    (d) (`derived_per_reference`, `outcomes_per_reference`). Writes e143_intervals_changes.csv, e143_class_shares.csv,
+    (d) (`derived_per_reference`, `outcomes_per_reference`); beside, E143's read-once check on these reads
+    (`shortcut_check`). Writes e143_intervals_changes.csv, e143_class_shares.csv, e143_shortcut_check.csv,
     e143_intervals.json and provenance_resampled.json beside the score's tables."""
     from experiments import E143_megamat_fly_sampling as E143
     t0 = time.time()
@@ -870,6 +908,8 @@ def part_resampled() -> dict:
     rv = E143.resampled_values(e143_lock, draws, side_of=sides.__getitem__, wirings=ALL_WIRINGS)
     K = int(next(iter(rv.mega['stage'].values())).shape[0])
     kdf, cdf, cls_of, comps_of = resampled_classes(cl['classes'], rv)
+    chk = shortcut_check(cl['classes'], e143_lock, sides)
+    chk.to_csv(out_dir() / 'e143_shortcut_check.csv', index=False)
     der = derived_per_reference(cls_of, comps_of, K)
     oc = outcomes_per_reference(der, K)
     scored_c = cl.get('calyces') or {}
@@ -883,6 +923,12 @@ def part_resampled() -> dict:
                          "unresampled); the model read once against all the flies",
                scored_against='the held-out half (classes.json), as scored', n_changes=int(len(cdf)),
                n_classes=int(len(kdf)), derived=derived, outcomes=outcomes,
+               shortcut_check=dict(file='e143_shortcut_check.csv', tol=E143.CHECK_TOL,
+                                   megamat_stage_max_abs_diff=float(chk[chk.statistic == 'stage']['diff'].abs().max())
+                                   if len(chk) else None,
+                                   any_max_abs_diff=float(chk['diff'].abs().max()) if len(chk) else None,
+                                   megamat_stage_within_tol=bool(chk[chk.statistic == 'stage']['within_tol'].all())
+                                   if len(chk) else None),
                e143_lock_sha256=e143_lock.get('sha256'), views=str(views_dir()),
                views_summary=json.loads(summary.to_json(orient='records')) if len(summary) else [])
     _write_json(out_dir() / 'e143_intervals.json', out)

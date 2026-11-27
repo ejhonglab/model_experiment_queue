@@ -399,3 +399,34 @@ def test_score_reads_complete_settings_only(monkeypatch):
     assert o['a'] is None and o['c'] is None and o['d'] is None
     o = S.outcome_letters({'L': dict(a1_holds=None, b_holds=True), 'R': dict(a1_holds=True, b_holds=None)}, {})
     assert o['d'] is True
+
+
+def test_shortcut_check(monkeypatch):
+    """E143's read-once check on this experiment's classes: the shortcut's held-half values (E136's split) beside each
+    comparison's scored arm and reference, means over the wirings scored."""
+    from experiments import E143_megamat_fly_sampling as E143
+    from experiments import E144_score as S
+    nw = len(S.ALL_WIRINGS)
+    vals = {'L_family': np.full((1, nw), 1.0), 'L_A1': np.array([[0.9, 0.92, 0.94, 0.96]])}
+    keys = ['stage', *E143.LOSS_STAGES]
+    rv = E143.Resampled(mega={k: dict(vals) for k in keys}, guard={}, panels={'apl16/apl16/on': dict(vals)},
+                        guard_panels={})
+    seen = {}
+
+    def wv(lock, W, side_of=None, wirings=None):
+        seen.update(W=W, wirings=wirings)
+        return rv
+    monkeypatch.setattr(E143, 'weighted_values', wv)
+    lock = dict(recordings={k: dict(flies=[f'f{i}' for i in range(4)]) for k in
+                            [E143.megamat_key(s) for s in E143.LOSS_STAGES] + list(E143.HOLDS_PANELS + E143.BESIDE_PANELS)})
+    sc = lambda arm, ref: dict(complete=True, arm=arm, ref=ref)
+    rec = dict(megamat=sc(0.93, 1.0), stages={st: sc(0.93, 1.0) for st in E143.LOSS_STAGES},
+               panels={'apl16/apl16/on': sc(0.98, 1.0), 'mixtures/cmix/on': dict(complete=False)},
+               reference='L_family', wirings=list(S.ALL_WIRINGS))
+    df = S.shortcut_check({'L_A1': rec, 'L_F': dict(cls='reads missing')}, lock, {})
+    assert seen['wirings'] == S.ALL_WIRINGS and seen['W'][E143.megamat_key('kc_soma')].shape == (1, 4)
+    assert set(df.variant) == {'L_A1'} and 'mixtures/cmix/on' not in set(df.statistic)
+    a = df[(df.statistic == 'stage') & (df.side == 'arm')].iloc[0]
+    assert a.shortcut == pytest.approx(0.93) and a['diff'] == pytest.approx(0.0) and a.within_tol
+    p = df[(df.statistic == 'apl16/apl16/on') & (df.side == 'arm')].iloc[0]
+    assert p['diff'] == pytest.approx(-0.05) and not p.within_tol      # beyond E143's 0.02
