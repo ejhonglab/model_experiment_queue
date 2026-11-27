@@ -1286,6 +1286,8 @@ Canonical experiment names for summary reports:
 | E142 | the step from the PN dendrites to the PN boutons by itself, with the recorded dendrites under the stage fit's calyx |
 | E143 | the megamat stage error through the flies' sampling |
 | E144 | the weaker antennal-lobe normalization and the rise of the inhibition among KCs on the male CNS's two calyces |
+| E145 | the fit of all megamat stages made again on the other wirings and the other halves of the flies |
+| E146 | what could make the flies' step from the PN dendrites to the PN boutons |
 
 ## Model-output archive (data/model_outputs/ in the shared directory)
 
