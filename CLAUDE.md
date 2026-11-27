@@ -1012,28 +1012,38 @@ bare ID ("the per-glomerulus drive normalization sweep (E20)", not "E20").
     on the control mixtures as uploaded and on the APL16 panel with APL on and off; and, as descriptions, the
     APL-effect loss and its pattern part under the calibrated readout.
   - **One reading per series** (ruled 2026-11-25 on disco's question of 11:20; planned by a Fable subagent,
-    claude-fable-5-2, spawned from hal 2026-11-25 11:35). A series' level is the unrefitted best family's value: the mean
-    over its eight wirings against all the flies, as the stage table gives it. Every other variant is drawn at that
-    value plus its change from the family: the mean over its wirings of the variant minus the family on the same
-    wiring and the same flies. For a variant run on all eight wirings and fitted to no flies, that is its own value.
+    claude-fable-5-2, spawned from hal 2026-11-25 11:35). A series' level is the unrefitted best family's value: the
+    mean over its eight wirings against all the flies, as the stage table gives it. Every other variant is drawn at that
+    value plus its change from the family: the mean over its wirings of the variant minus the family on the same wiring
+    and the same flies. For a variant run on all eight wirings and fitted to no flies, that is its own value. A variant
+    on another brain's wiring (a male calyx) is drawn from that calyx's own family instead: the family's value there
+    against all the flies, the mean over the calyx's wirings, plus the variant's change from it (ruled 2026-11-26 on
+    hal's questions of 19:46; planned by a Fable subagent, claude-fable-5-2, spawned from viki 2026-11-26 19:30).
   - **A fitted variant's change is read where it was not fitted:** on the four wirings it was not fitted on and, at a
-    fitted stage, against the held-out half of the flies, with the family read there too. It is the change that rule
-    3 gates on. The readings themselves are not plotted: against half of the flies every model reads higher (the
-    family 1.049 in place of 0.919 on the four held-out wirings, E136's score), off the scale of the lines and of the
-    stage table.
+    fitted stage, against the held-out half of the flies, with the family read there too. It is the change that rule 3
+    gates on. The readings themselves are not plotted: against half of the flies every model reads higher (the family
+    1.049 in place of 0.919 on the four held-out wirings, E136's score), off the scale of the lines and of the stage
+    table. A setting at fixed scales that carries a factor fitted to megamat flies (the stage fit's bouton scale or its
+    scale of the inhibition among KCs) is a fitted variant, whatever else is set beside it. A setting that carries none
+    (a rung of the antennal lobe's normalization with the family's calyx) is fitted to no flies: it is read on all eight
+    wirings against all the flies, with the class that its experiment read.
   - **Popups.** A fitted point's popup gives the two readings behind it (the variant's and the family's on the
     held-out wirings and flies), the change with its standard error over wirings and its bar, the class, and the
     control fit's fall. A note under the plot says in one sentence how fitted points are drawn.
-  - **No point:** a variant outside the realism bands; a variant read on fewer than four wirings; a control fit or
-    any fit to permuted flies (yardsticks, not models).
-  - **Hollow points** are shown, and no staircase steps on them. One kind is a fitted variant that its experiment's
-    score leaves without a class (no better than its control fit, at a bound, a class that differs between readings).
-    The other is a value that holds a stage the variant was fitted to or set from, on flies not held out of that fit:
-    the PN dendrites of the antennal-lobe fits and of the imposed recordings, and a megamat stage error that includes
-    them. A variant on another brain's wiring (the male CNS's calyces) is drawn from that calyx's own family's value
-    against all the flies plus its change from that family, as a hollow point: no staircase steps on it (ruled
-    2026-11-26 on hal's question of 19:46; planned by a Fable subagent, claude-fable-5-2, spawned from viki 19:31). An
-    experiment's point is its lowest filled variant, or its lowest hollow one if none is filled.
+  - **No point:** a variant outside the realism bands; a variant read on fewer than four wirings; a variant with a
+    response rate that could not be held at its target on any wiring (it is not at the operating point); a control fit
+    or any fit to permuted flies (yardsticks, not models).
+  - **Hollow points** are shown, and no staircase steps on them. A staircase steps only on the family's own readings and
+    on a variant that its experiment's score classes as holding: by rule 3 a fall that is megamat only, or bought at
+    another stage's or another view's cost, is not an improvement. So a point is hollow if its variant has any other
+    class (megamat only, one stage at another's cost, strength at another view's cost, does not improve) or none (no
+    better than its control fit, at a bound, a class that differs between readings, an experiment scored without these
+    classes). It is hollow too if its value holds a stage the variant was fitted to or set from, on flies not held out
+    of that fit: the PN dendrites of the antennal-lobe fits and of the imposed recordings, and a megamat stage error
+    that includes them. And it is hollow on another brain's wiring: a step is a change of the model, not of the brain.
+    An experiment's point is its lowest filled variant, or its lowest hollow one if none is filled. (Ruled 2026-11-26 on
+    hal's questions of 19:46, with the drawing rules above; planned by a Fable subagent, claude-fable-5-2, spawned from
+    viki 2026-11-26 19:30.)
   - **The APL16 Summary keeps its own plot:** the section right after its "Where the best models stand" is the
     interactive plot of how far the best model so far has closed the gap to the KC data on each statistic
     (`./venv/bin/python reports/summary_progress_plot.py` writes `results/summary_progress/progress_plot.html`, which
