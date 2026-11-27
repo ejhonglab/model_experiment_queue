@@ -13,13 +13,16 @@ One reading per series. A series' level is the unrefitted best family's value, t
 all the flies (`levels`). A variant run on all eight wirings and fitted to no flies is drawn at its own value; a fitted
 variant at the level plus its change from the family where it was not fitted (the T wirings and, at a fitted stage, the
 held-out half of the flies, with the family read there too: the change rule 3 gates on, from its experiment's
-classes). No point for a variant outside the realism bands, one read on fewer than four wirings, a control fit or a fit
-to permuted flies. Hollow points (shown; no staircase steps on them): a fitted variant its experiment's score leaves
-without a class, and a value that holds a stage the variant was fitted to or set from, on flies not held out (the PN
-dendrites of the antennal-lobe fits and of the imposed recordings, and a megamat stage error that includes them), and
-a variant on another brain's wiring (the male CNS's calyces), drawn from its calyx's own family's value against all
-the flies plus its change from that family. An experiment's point is its lowest filled variant, else its lowest hollow one; each series' staircase is the running best
-of its filled points.
+classes). No point for a variant outside the realism bands, one read on fewer than four wirings, one with a response
+rate not held at its target on any wiring, a control fit or a fit to permuted flies. Hollow points (shown; no
+staircase steps on them; ruled 2026-11-26 by a Fable subagent, claude-fable-5-2, spawned from viki 19:30): every
+variant but the family's own readings and those that their experiment's score classes as holding (rule 3: megamat
+only, a fall at another stage's or view's cost, does not improve, no class, and an experiment scored without these
+classes), a value that holds a stage the variant was fitted to or set from, on flies not held out (the PN dendrites of
+the antennal-lobe fits and of the imposed recordings, and a megamat stage error that includes them), and a variant on
+another brain's wiring (the male CNS's calyces), drawn from its calyx's own family's value against all the flies plus
+its change from that family. An experiment's point is its lowest filled variant, else its lowest hollow one; each
+series' staircase is the running best of its filled points.
 
 The experiments read (`ADAPTERS`; one function each, from the experiment's own committed tables):
 - E134, the models as populations at every recorded stage: the best family as fitted and held at the megamat flies'
@@ -136,6 +139,27 @@ def _point(exp, variant, series, value, reading, drawn=True, filled=True, why=''
                 filled=bool(filled and drawn), why=why, popup=json.dumps(popup) if popup else '')
 
 
+HOLDS = 'holds'
+RULE3 = ('not a hold (rule 3: a fall that is megamat only, or bought at another stage or view, is no improvement; '
+         'ruled 2026-11-26 by a Fable subagent, claude-fable-5-2, spawned from viki 19:30)')
+NOT_HELD = 'a response rate not held at its target (not at the operating point)'
+
+
+def _class_hollow(cls: Optional[str], reasons: Sequence[str] = ()) -> Optional[str]:
+    """Why a variant's points are hollow by its class: None for a variant its experiment classes as holding (rule 3),
+    else its other class or its lack of one (a staircase steps only on the family's readings and on a hold)."""
+    if cls == HOLDS:
+        return None
+    if not cls or str(cls).startswith('no class'):
+        return 'no class' + (': ' + '; '.join(reasons) if reasons else '')
+    return f'{cls}: {RULE3}'
+
+
+def _hold_fails(reasons: Sequence[str]) -> List[str]:
+    """The reasons that say a hold failed: a variant with any has no point (NOT_HELD)."""
+    return [str(r) for r in reasons or [] if str(r).startswith('a hold fails')]
+
+
 def _e134_dir() -> Path:
     return RESULTS / 'E134_population_baseline'
 
@@ -216,13 +240,16 @@ E135_ARMS = {'imposed': 'the recorded dendrites imposed', 'imposed_dff': 'the re
 # E135's dendrites are fitted to or set from all the PN flies, so its dendrite values and the stage errors that hold
 # them are hollow
 E135_HOLLOW = ('pn_dendrite', 'stage_error')
+# and E135 was scored without rule 3's classes, so every point of it is hollow (ruled 2026-11-26)
+E135_NO_CLASS = 'no class: scored without the classes of rule 3'
 
 
 def e135_points() -> List[dict]:
     """E135's arms but the permuted controls: the megamat stages and the APL16 panel (score_scores.csv, the default
     reading), the calibrated APL effect (score_apl_effect.csv), on eight wirings and fitted to no KC or bouton flies, so
-    drawn at their own values; the dendrites and the stage errors that hold them hollow (E135_HOLLOW); no point for an
-    arm on fewer than four wirings or outside the realism bands (score_realism.csv)."""
+    drawn at their own values; every point hollow (scored without rule 3's classes; the dendrites and the stage errors
+    that hold them also set from the PN flies, E135_HOLLOW); no point for an arm on fewer than four wirings or outside
+    the realism bands (score_realism.csv)."""
     d = RESULTS / 'E135_antennal_lobe_dendrites'
     s = pd.read_csv(d / 'score_scores.csv')
     s = s[(s.reading == READING) & ~s.wiring.isin(['mean', 'common'])]
@@ -240,21 +267,21 @@ def e135_points() -> List[dict]:
             drawn, why = False, f'read on {len(p)} wiring{"s" if len(p) != 1 else ""}'
         reading = f'{len(p)} wiring{"s" if len(p) != 1 else ""} against all flies'
         for k in p.columns:
-            hollow = k in E135_HOLLOW
-            out.append(_point('E135', label, k, float(p[k].mean()), reading, drawn, not hollow,
-                              why or ('the PN dendrites are fitted to or set from all the PN flies' if hollow else '')))
+            hw = ('the PN dendrites are fitted to or set from all the PN flies; ' if k in E135_HOLLOW else '') + \
+                E135_NO_CLASS
+            out.append(_point('E135', label, k, float(p[k].mean()), reading, drawn, False, why or hw))
         a = s[(s.group == f'apl16_{arm}') & (s.stage == 'kc_soma') & (s.panel == 'apl16')]
         for c in ('on', 'off'):
             x = a[a.condition == c]
             if len(x):
                 out.append(_point('E135', label, f'apl16_{c}', _mean(x.view_strength),
                                   f'the APL16 panel, {x.wiring.nunique()} wirings, against all recordings',
-                                  drawn and x.wiring.nunique() >= MIN_WIRINGS, True, why))
+                                  drawn and x.wiring.nunique() >= MIN_WIRINGS, False, why or E135_NO_CLASS))
         e = ae[ae.arm == arm]
         if len(e):
             for k, col in (('apl_loss', 'cal_apl_effect_rmse'), ('apl_pattern', 'cal_apl_effect_rmse_centered')):
                 out.append(_point('E135', label, k, _mean(e[col]), f'{e.wiring.nunique()} wirings',
-                                  drawn and e.wiring.nunique() >= MIN_WIRINGS, True, why))
+                                  drawn and e.wiring.nunique() >= MIN_WIRINGS, False, why or E135_NO_CLASS))
     return out
 
 
@@ -268,8 +295,8 @@ E136_PANELS = {'validation2': 'validation2/validation2/on', 'cmix': 'mixtures/cm
 def e136_points() -> List[dict]:
     """E136's arms but the permuted control (fitted): each drawn at the level plus its change from the unrefitted family
     on T (classes.json: against the held-out half at the megamat stages, against all the panel's flies on a held-out
-    panel; the APL effect from score_apl16.csv, the mean over T of the arm minus the family); hollow without a class;
-    no point outside the realism bands (any wiring's flag in score_apl16.csv)."""
+    panel; the APL effect from score_apl16.csv, the mean over T of the arm minus the family); hollow unless classed
+    as holding (rule 3; `_class_hollow`); no point outside the realism bands (any wiring's flag in score_apl16.csv)."""
     d = _e136_dir()
     cl = json.loads((d / 'classes.json').read_text()) if (d / 'classes.json').exists() else {}
     if not cl.get('classes'):
@@ -285,9 +312,10 @@ def e136_points() -> List[dict]:
         cls = r.get('cls')
         flags = [f for f in (a[a.arm == arm].realism_flag if len(a) else []) if isinstance(f, str) and f.strip()]
         drawn, why = (False, 'outside the realism bands: ' + flags[0]) if flags else (True, '')
-        filled = cls not in ('no class',)
+        hw = _class_hollow(cls, r.get('reasons') or [])
+        filled = hw is None
         if drawn and not filled:
-            why = 'no class: ' + '; '.join(r.get('reasons') or [])
+            why = hw
         comps = {'stage_error': (r.get('megamat') or {}, 'the held-out wirings (T) against the held-out half'),
                  **{s: ((r.get('stages') or {}).get(s) or {}, 'the held-out wirings (T) against the held-out half')
                     for s in STAGES},
@@ -451,7 +479,8 @@ def e139_points() -> List[dict]:
     all eight wirings against all the flies (score_megamat.csv's 'all' half, score_panels.csv, score_apl16.csv),
     the class beside as read on T; B and K (A1's APL→bouton ×0.155 or KC–KC ×3.24, fitted on S against the fit half)
     and step 3's refit A0 at 314 on T against the held-out half (classes.json; the APL effect on T from
-    score_apl16.csv); hollow without a class, no point outside the realism bands; A1 beside is E136's arm."""
+    score_apl16.csv); hollow unless classed as holding (rule 3: every one of them), no point outside the realism bands
+    or with a hold that fails; A1 beside is E136's arm."""
     d = RESULTS / 'E139_normalization_ladder'
     cl = json.loads((d / 'classes.json').read_text())
     mega, pan, apl = (pd.read_csv(d / f) for f in ('score_megamat.csv', 'score_panels.csv', 'score_apl16.csv'))
@@ -462,8 +491,12 @@ def e139_points() -> List[dict]:
         r = cl['classes'].get(v) or {}
         label, cls = E139_LABELS.get(v, v), r.get('cls')
         flags = _flags(apl, v)
+        if _hold_fails(r.get('reasons')):
+            out.append(_undrawn('E139', label, NOT_HELD + ': ' + '; '.join(_hold_fails(r.get('reasons')))))
+            continue
         drawn, why = (False, 'outside the realism bands: ' + flags[0]) if flags else (True, '')
-        hollow = {'*': 'no class: ' + '; '.join(r.get('reasons') or [])} if cls == 'no class' else None
+        hw = _class_hollow(cls, r.get('reasons') or [])
+        hollow = {'*': hw} if hw else None
         if r.get('setting') == 'F':
             comps = _table_comps(mega, pan, apl, v, ref, WIRINGS, 'all', spreads, ALL8, ALL8_PANEL,
                                  'all eight wirings (fitted to none)')
@@ -488,9 +521,10 @@ E141_LABELS = {'D1.8_inhadd1000': "D1.8: KC–KC ×1.8, on E139's B at 1000",
 
 def e141_points() -> List[dict]:
     """E141's arms, all at E139's B at 1000 (A1's APL→bouton ×0.155, fitted on S against the fit half), so read as
-    fitted: on T against the held-out half (classes.json; the APL effect on T from score_apl16.csv); hollow without a
-    class; no point outside the realism bands (classes.json's flagged wirings or score_apl16.csv's flags: S) or with
-    no comparison on T (P and T, whose reads stopped after their holds failed); B and K beside are E139's, A1 E136's."""
+    fitted: on T against the held-out half (classes.json; the APL effect on T from score_apl16.csv); hollow unless
+    classed as holding (rule 3: D1.8 and D5.8 hold); no point outside the realism bands (classes.json's flagged
+    wirings or score_apl16.csv's flags: S, P), with a hold that fails (T) or with no comparison on T; B and K beside are
+    E139's, A1 E136's."""
     d = RESULTS / 'E141_kckc_rise_forms'
     cl = json.loads((d / 'classes.json').read_text())
     apl = pd.read_csv(d / 'score_apl16.csv')
@@ -503,12 +537,14 @@ def e141_points() -> List[dict]:
         comps = {**_class_comps(r), **_apl_comps(apl, v, ref, T_WIRINGS, 'the held-out wirings (T)')}
         if flags:
             drawn, why = False, 'outside the realism bands: ' + flags[0]
+        elif _hold_fails(r.get('reasons')):
+            drawn, why = False, NOT_HELD + ': ' + '; '.join(_hold_fails(r.get('reasons')))
         elif not (r.get('megamat') or {}).get('complete'):
             drawn, why = False, 'no reading on T: ' + '; '.join(r.get('reasons') or [str(cls)])
         else:
             drawn, why = True, ''
-        hollow = {'*': 'no class: ' + '; '.join(r.get('reasons') or [])} if cls == 'no class' else None
-        out += _emit('E141', label, comps, lv, drawn, why, hollow, cls, r.get('control_fall'))
+        hw = _class_hollow(cls, r.get('reasons') or [])
+        out += _emit('E141', label, comps, lv, drawn, why, {'*': hw} if hw else None, cls, r.get('control_fall'))
     for v in cl.get('beside_e139') or []:
         out.append(_undrawn('E141', f'{v} (beside)', "E139's setting, drawn under E139"))
     if cl.get('beside_arm'):
@@ -523,15 +559,17 @@ E142_LABELS = {'E142_a1stage_imposed': "the dendrites imposed on A1's own PN sta
 # E142's dendrites are set from all the PN flies (imposed), so its dendrite values and the stage errors that hold them
 # are hollow
 E142_HOLLOW = ('pn_dendrite', 'stage_error')
+E142_NO_CLASS = "no class of rule 3: the step's own classes, not a hold"
 
 
 def e142_points() -> List[dict]:
     """E142's step-1 arms with A1's calyx factors (fitted on S against the fit half), read as fitted: on T against the
     held-out half (score_step1_megamat.csv), the APL16 somata on T (score_step1_panels.csv) and the APL effect on T
-    (score_step1_apl16.csv), each against the unrefitted family there; the dendrites and the stage error hollow (set
-    from all the PN flies); an arm whose hold fails has no class and is hollow; the class as amended
-    (step1_classes.json) in the popup. No point for the permuted controls, for the arms read on fewer than four
-    wirings (stopped by claim) and for E135's imposed arms re-scored beside (drawn under E135)."""
+    (score_step1_apl16.csv), each against the unrefitted family there; every point hollow (scored with the step's own
+    classes, not rule 3's; the dendrites and the stage error also set from all the PN flies); no point for an arm
+    whose hold fails (the lock's main arm, NOT_HELD); the class as amended (step1_classes.json) in the popup. No point
+    for the permuted controls, for the arms read on fewer than four wirings (stopped by claim) and for E135's imposed
+    arms re-scored beside (drawn under E135)."""
     d = RESULTS / 'E142_dendrite_bouton_step'
     sc = json.loads((d / 'step1_classes.json').read_text())
     mega, pan, apl = (pd.read_csv(d / f) for f in ('score_step1_megamat.csv', 'score_step1_panels.csv',
@@ -562,15 +600,18 @@ def e142_points() -> List[dict]:
         bad = sc.get('holds_failed', {}).get(v) or []
         flags = _flags(apl, v, 'variant')
         if bad:
-            cls = f'no class: a hold fails ({len(bad)} of 8 wirings)'
-        elif v == carry.get('arm'):
+            out.append(_undrawn('E142', label, f'{NOT_HELD}: a hold fails on {len(bad)} of 8 wirings'))
+            continue
+        if v == carry.get('arm'):
             cls = f"the dendrites carry under the calyx that holds: {carry.get('cls')}"
         elif v in (hides.get('kept') or []):
             cls = f"APL at the boutons hides the step: {hides.get('cls')}"
         else:
             cls = 'no class'
-        hollow = {'*': cls} if cls.startswith('no class') else \
-            {k: 'the PN dendrites are set from all the PN flies (imposed)' for k in E142_HOLLOW}
+        # scored without rule 3's classes, so hollow at every series (ruled 2026-11-26)
+        hollow = {'*': E142_NO_CLASS,
+                  **{k: 'the PN dendrites are set from all the PN flies (imposed); ' + E142_NO_CLASS
+                     for k in E142_HOLLOW}}
         comps = _table_comps(mega, pan, apl, v, 'family', T_WIRINGS, 'held', spreads, T_HELD, T_PANEL,
                              'the held-out wirings (T)', apl_key='variant')
         drawn, why = (False, 'outside the realism bands: ' + flags[0]) if flags else (True, '')
@@ -637,6 +678,9 @@ def e144_points() -> List[dict]:
             out.append(_undrawn('E144', label, f'read on {len(ws)} wiring{"s" if len(ws) != 1 else ""}'))
             continue
         cls, ref = r.get('cls'), r.get('reference', f'{cx}_family')
+        if _hold_fails(r.get('reasons')):
+            out.append(_undrawn('E144', label, NOT_HELD + ': ' + '; '.join(_hold_fails(r.get('reasons')))))
+            continue
         if cls == 'no class':
             out.append(_undrawn('E144', label, 'no class: ' + '; '.join(r.get('reasons') or [])))
             continue

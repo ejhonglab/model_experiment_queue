@@ -156,18 +156,21 @@ def test_e139_unfitted_rungs_on_all_wirings_and_fitted_settings_on_t(results):
             'score_panels.csv': _panels({'family': 1.0, 'F_inhadd1000': 1.03})})
     pts = S.e139_points()
     f = _pt(pts, "the family's calyx, pn_inhadd 1000", 'stage_error')
-    assert f['value'] == pytest.approx(0.9 - 0.1) and f['drawn'] and f['filled'] and f['reading'] == S.ALL8
+    # 'megamat only' is not a hold (rule 3), so every E139 setting is hollow
+    assert f['value'] == pytest.approx(0.9 - 0.1) and f['drawn'] and not f['filled'] and f['reading'] == S.ALL8
+    assert f['why'].startswith('megamat only: not a hold')
     fp = json.loads(f['popup'])
     assert fp['bar'] is None and fp['family'] == pytest.approx(1.0) and 'read on T' in fp['cls']
     assert _pt(pts, "the family's calyx, pn_inhadd 1000", 'validation2')['value'] == pytest.approx(1.03)
     assert _pt(pts, "the family's calyx, pn_inhadd 1000", 'apl_loss')['value'] == pytest.approx(0.07)
     b = _pt(pts, 'APL→bouton ×0.155, pn_inhadd 1000', 'stage_error')
-    assert b['value'] == pytest.approx(0.9 - 0.11) and b['filled'] and b['reading'] == S.T_HELD
+    assert b['value'] == pytest.approx(0.9 - 0.11) and not b['filled'] and b['reading'] == S.T_HELD
     assert json.loads(b['popup'])['bar'] == pytest.approx(-0.02)
     assert _pt(pts, 'APL→bouton ×0.155, pn_inhadd 1000', 'kc_soma')['value'] == pytest.approx(0.8 - 0.055)
     assert _pt(pts, 'APL→bouton ×0.155, pn_inhadd 1000', 'apl_loss')['value'] == pytest.approx(0.07)
     a0 = [p for p in pts if p['variant'] == 'A0 refitted at pn_inhadd 314']
-    assert a0 and all(p['drawn'] and not p['filled'] and 'a hold fails' in p['why'] for p in a0)
+    # a hold that fails: not at the operating point, so no point
+    assert a0 and not any(p['drawn'] for p in a0) and a0[0]['why'].startswith(S.NOT_HELD)
     assert not any(p['drawn'] for p in pts if p['variant'] == 'KC–KC ×3.24, pn_inhadd 1000')
     assert not _pt(pts, 'A1 (beside)', 'stage_error')['drawn']
 
@@ -189,7 +192,7 @@ def test_e141_arms_on_t_and_the_arms_without_a_point(results):
     s = [p for p in pts if p['variant'].startswith('S:')]
     assert s and not any(p['drawn'] for p in s) and 'realism' in s[0]['why']
     t = _pt(pts, "T: one neuron per KC type, on E139's B at 1000", 'stage_error')
-    assert not t['drawn'] and 'a hold fails' in t['why']
+    assert not t['drawn'] and t['why'].startswith(S.NOT_HELD) and 'a hold fails' in t['why']
     assert not _pt(pts, 'B_inhadd1000 (beside)', 'stage_error')['drawn']
 
 
@@ -218,16 +221,17 @@ def test_e142_imposed_arms_hollow_at_the_dendrites_and_without_a_class(results):
     pts = S.e142_points()
     m = "the dendrites imposed on A1's own PN stage (the amended main arm)"
     bo = _pt(pts, m, 'pn_bouton')
-    assert bo['filled'] and bo['value'] == pytest.approx(1.0 + 0.2)
+    # scored with the step's own classes, not rule 3's: hollow at every series
+    assert bo['drawn'] and not bo['filled'] and bo['value'] == pytest.approx(1.0 + 0.2)
     assert 'does not hold' in json.loads(bo['popup'])['cls']
     for k in ('pn_dendrite', 'stage_error'):
         p = _pt(pts, m, k)
         assert p['drawn'] and not p['filled'] and 'imposed' in p['why']
-    assert _pt(pts, m, 'apl16_on')['value'] == pytest.approx(1.0 + 0.1) and _pt(pts, m, 'apl16_on')['filled']
+    assert _pt(pts, m, 'apl16_on')['value'] == pytest.approx(1.0 + 0.1) and not _pt(pts, m, 'apl16_on')['filled']
     assert _pt(pts, m, 'apl_loss')['value'] == pytest.approx(0.06 + 0.02)
     assert not [p for p in pts if p['variant'] == m and p['series'] in ('validation2', 'cmix')]
     lock = [p for p in pts if p['variant'].endswith("(the lock's main arm)")]
-    assert lock and all(p['drawn'] and not p['filled'] and p['why'].startswith('no class') for p in lock)
+    assert lock and not any(p['drawn'] for p in lock) and lock[0]['why'].startswith(S.NOT_HELD)
     assert not _pt(pts, 'E135_imposed', 'stage_error')['drawn']
     assert 'permuted' in _pt(pts, 'E142_a1stage_imposed_glom_perm', 'stage_error')['why']
     assert 'read on 1 of 8' in _pt(pts, 'E142_imposed_aplpn_none', 'stage_error')['why']
@@ -264,12 +268,22 @@ def test_e144_settings_from_their_calyx_familys_own_value(results):
     assert _pt(pts, rd, 'stage_error')['value'] == pytest.approx(1.0 - 0.12)
     assert _pt(pts, rd, 'apl_loss')['value'] == pytest.approx(0.05 + 0.02)
     assert all(not p['filled'] for p in pts)
-    # L's D5.8 has no class, so no point; H's settings are read on one wiring
+    # L's D5.8's hold fails on its real wiring, so no point; H's settings are read on one wiring
     ld = [p for p in pts if p['variant'].startswith("the male CNS's left calyx: D5.8")]
-    assert ld and not any(p['drawn'] for p in ld) and ld[0]['why'].startswith('no class')
+    assert ld and not any(p['drawn'] for p in ld) and ld[0]['why'].startswith(S.NOT_HELD)
     h = _pt(pts, "the hemibrain with 'argmax' claws: A1 (B with the calyx's KC–KC ×3.24)", 'stage_error')
     assert not h['drawn'] and h['why'] == 'read on 1 wiring'
     assert not _pt(pts, "the male CNS's left calyx: the family", 'stage_error')['drawn']
+
+
+def test_only_a_hold_fills():
+    assert S._class_hollow('holds') is None
+    for cls in ('megamat only', "one stage at another's cost", "strength at another view's cost", 'does not improve'):
+        assert S._class_hollow(cls).startswith(cls + ': not a hold')
+    assert S._class_hollow('no class', ['no better than the permuted control']) == \
+        'no class: no better than the permuted control'
+    assert S._class_hollow(None) == 'no class'
+    assert S._hold_fails(['a hold fails: x', 'reads stopped']) == ['a hold fails: x']
 
 
 def test_compare_is_e136s():
