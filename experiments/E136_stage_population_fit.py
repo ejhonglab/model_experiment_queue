@@ -113,6 +113,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import gc
 import json
 import os
 import socket
@@ -1036,22 +1037,31 @@ class ArmModel:
             self.built[wiring].vars()[0].kc.claw_thr = float(value)
         else:
             kws = dict(self.wkws[wiring], **({'claw_thr': float(value)} if value > 0 else {}))
-            self.built[wiring] = B.build_family(wiring, PANEL, dict(self.base[wiring]), extra_kws=kws or None)
-            self._built_kws[wiring] = kws
+            self._rebuild(wiring, kws)
         self._claw_thr[wiring] = float(value)
+
+    def _rebuild(self, wiring: str, kws: Mapping) -> None:
+        """The wiring's simulator built again with `kws` (E134's `build_family` at the start's parameters), the old one
+        dropped and collected first. pyolfsysm's fixed-parameter simulator is a reference cycle (its closure refers to
+        itself), so a dropped one, with olfsysm's variables behind it (about 0.4 GB a wiring on megamat), is freed only by
+        the cycle collector, which counts Python objects and not that memory: without the collection A1's search, which
+        rebuilds every wiring at every evaluation, grew by about 1 GB per evaluation (2026-11-27, disco's probe)."""
+        from experiments import E134_population_baseline as B
+        self.built.pop(wiring, None)
+        gc.collect()
+        self.built[wiring] = B.build_family(wiring, PANEL, dict(self.base[wiring]), extra_kws=dict(kws) or None)
+        self._built_kws[wiring] = dict(kws)
 
     def set_pn(self, wiring: str, z: Mapping[str, float]) -> None:
         """A1 when E135 hands on no stage: the wiring's simulator rebuilt with the normalization at `z`
-        (`pn_norm_kws`) where its current build has other kwargs."""
-        from experiments import E134_population_baseline as B
+        (`pn_norm_kws`) where its current build has other kwargs (`_rebuild`)."""
         if not self.pn_search:
             return
         kws = dict(self.wkws[wiring], **pn_norm_kws(z))
         if kws == self._built_kws[wiring]:
             return
-        self.built[wiring] = B.build_family(wiring, PANEL, dict(self.base[wiring]), extra_kws=kws or None)
+        self._rebuild(wiring, kws)
         self.built[wiring].info.update(arm=self.arm)
-        self._built_kws[wiring] = kws
 
     def hold(self, wiring: str, z: Mapping[str, float]) -> Tuple[Dict[str, float], Dict[str, float], dict]:
         """Both response counts of a wiring held at `z` (`secant_hold`, warm-started from the evaluated point nearest

@@ -72,6 +72,49 @@ def test_params_for_factors_and_ties():
     assert _model('A3').params_for('real', {})[2] == 0.0
 
 
+def _cyclic_built():
+    """A planted Built whose simulator refers to itself, as pyolfsysm's fixed-parameter simulator does."""
+    def sim(p):
+        return sim
+    return types.SimpleNamespace(sim=sim, info={})
+
+
+def test_rebuild_frees_the_old_simulator(monkeypatch):
+    """A rebuild (A1's `set_pn`, A3's `set_claw_thr` in rebuild mode) drops the wiring's old simulator and collects it
+    before building the new one, also with the automatic collector off (the old simulator is a reference cycle)."""
+    import gc
+    import weakref
+    from experiments import E134_population_baseline as B
+    calls = []
+
+    def build_family(w, panel, params, orn=None, extra_kws=None):
+        calls.append(dict(old_alive=old() is not None, kws=extra_kws, built=w in m.built))
+        return _cyclic_built()
+    monkeypatch.setattr(B, 'build_family', build_family)
+    m = _model('A1')
+    m.pn_search, m.wkws, m._built_kws, m.built = True, {'real': {}}, {'real': {}}, {'real': _cyclic_built()}
+    old = weakref.ref(m.built['real'].sim)
+    on = gc.isenabled()
+    gc.disable()
+    try:
+        m.set_pn('real', {})                         # the normalization of the current build: no rebuild
+        assert not calls and old() is not None
+        m.set_pn('real', dict(inhadd=np.log(2.0)))
+        assert calls == [dict(old_alive=False, kws=F.pn_norm_kws(dict(inhadd=np.log(2.0))), built=False)]
+        assert m._built_kws['real'] == F.pn_norm_kws(dict(inhadd=np.log(2.0))) and m.built['real'].info == {'arm': 'A1'}
+        m3 = _model('A3')
+        m3.claw_mode, m3._claw_thr, m3.wkws, m3._built_kws = 'rebuild', {'real': 0.0}, {'real': {}}, {'real': {}}
+        m3.built = {'real': _cyclic_built()}
+        old = weakref.ref(m3.built['real'].sim)
+        m = m3
+        m3.set_claw_thr('real', 30.0)
+        assert calls[-1] == dict(old_alive=False, kws={'claw_thr': 30.0}, built=False)
+        assert m3._built_kws['real'] == {'claw_thr': 30.0} and m3._claw_thr['real'] == 30.0
+    finally:
+        if on:
+            gc.enable()
+
+
 def _counts_run(k, n0=10000.0):
     """A planted run whose number of responses falls with the log factor as n0 * exp(k x) (rounded)."""
     calls = []
