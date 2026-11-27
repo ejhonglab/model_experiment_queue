@@ -1,0 +1,241 @@
+{
+ "experiment": "E145_stage_fit_replication",
+ "script": "experiments/E145_stage_fit_replication.py",
+ "part": "lock",
+ "planner": "a Fable subagent, claude-fable-5-2, spawned from viki 2026-11-26 19:30",
+ "entry": "experiment_priorities.md item E145 (proposed and moved by viki 2026-11-26 20:05)",
+ "cells": {
+  "A1": {
+   "label": "E136's A1 (done): S against half a, read on T against half b",
+   "searched": "S",
+   "searched_wirings": [
+    "real",
+    "P1",
+    "P2",
+    "M1"
+   ],
+   "read_on": "T",
+   "read_wirings": [
+    "P3",
+    "P4",
+    "M2",
+    "M3"
+   ],
+   "fit_half": "a",
+   "read_half": "b",
+   "fitted_here": false
+  },
+  "X": {
+   "label": "the exchange: T against half b, read on S against half a",
+   "searched": "T",
+   "searched_wirings": [
+    "P3",
+    "P4",
+    "M2",
+    "M3"
+   ],
+   "read_on": "S",
+   "read_wirings": [
+    "real",
+    "P1",
+    "P2",
+    "M1"
+   ],
+   "fit_half": "b",
+   "read_half": "a",
+   "fitted_here": true
+  },
+  "F": {
+   "label": "the other flies: S against half b, read on T against half a",
+   "searched": "S",
+   "searched_wirings": [
+    "real",
+    "P1",
+    "P2",
+    "M1"
+   ],
+   "read_on": "T",
+   "read_wirings": [
+    "P3",
+    "P4",
+    "M2",
+    "M3"
+   ],
+   "fit_half": "b",
+   "read_half": "a",
+   "fitted_here": true
+  },
+  "W": {
+   "label": "the other wirings: T against half a, read on S against half b",
+   "searched": "T",
+   "searched_wirings": [
+    "P3",
+    "P4",
+    "M2",
+    "M3"
+   ],
+   "read_on": "S",
+   "read_wirings": [
+    "real",
+    "P1",
+    "P2",
+    "M1"
+   ],
+   "fit_half": "a",
+   "read_half": "b",
+   "fitted_here": true
+  }
+ },
+ "halves": {
+  "a": "E136's fit half: the first part of hal's split_halves(n, 1, seed 0) of each stage's flies",
+  "b": "E136's held-out half: the rest",
+  "seed": 0
+ },
+ "fit": {
+  "arm": "A1",
+  "measure": "strength",
+  "coordinates": [
+   "aplpn",
+   "kckc",
+   "inhadd",
+   "inhsc"
+  ],
+  "bounds": {
+   "aplpn": [
+    0.03333333333333333,
+    1.07
+   ],
+   "kckc": [
+    0.10000000000000002,
+    7.300000000000001
+   ],
+   "inhadd": [
+    0.10000000000000002,
+    319.99999999999994
+   ],
+   "inhsc": [
+    0.3333333333333333,
+    3.0000000000000004
+   ]
+  },
+  "first_steps": {
+   "aplpn": -0.7,
+   "kckc": -0.7,
+   "inhadd": 1.1580820775608478,
+   "inhsc": 0.4
+  },
+  "xatol": 0.02,
+  "fatol": 0.005,
+  "budget": 140,
+  "restart_min_left": 15,
+  "not_determined": 0.01,
+  "hold_tol": 0.005,
+  "hold_max_sims": 8,
+  "hold_first_max_sims": 20,
+  "hold_miss_per": 0.1,
+  "bound_penalty_per": 0.1,
+  "start": "the family's held megamat points of the cell's searched wirings (E134's step 3), every factor 1",
+  "start_check_tol": 6e-05
+ },
+ "reads": {
+  "per_cell": 28,
+  "panels": [
+   "megamat",
+   "validation2",
+   "mixtures",
+   "apl16"
+  ],
+  "rule": "megamat on the four read wirings against the read half; validation2, the mixtures and the APL16 input with APL on and off on all eight wirings; at the classed point, both rates held at each panel's operating point (E136's read_at)"
+ },
+ "yardsticks": {
+  "bar_se": 2.0,
+  "bar": "twice the standard error of a change over the cell's four read wirings",
+  "spreads": "the family's over its eight wirings, as E136 scored them",
+  "control_fall": 0.04029272444686488
+ },
+ "repeat": {
+  "inhadd": {
+   "lo": 562.0,
+   "hi": 1778.0,
+   "unit": "pn_inhadd",
+   "rule": "pn_inhadd at the classed point between 562 and 1,778, nearer 1000 than E139's rungs at 314 and 3141"
+  },
+  "aplpn": {
+   "lo": 0.078,
+   "hi": 0.31,
+   "unit": "factor",
+   "determined": true,
+   "rule": "the APL->bouton factor determined (its single-factor return raises the loss by 0.010 or more) and between x0.078 and x0.31"
+  },
+  "kckc": {
+   "lo": 1.8,
+   "hi": null,
+   "unit": "factor",
+   "determined": true,
+   "rule": "the KC-KC factor determined and at x1.8 or more (the lower end of E141's range)"
+  }
+ },
+ "classes": {
+  "per_cell": "E136's classes with E139's price, per cell, against the unrefitted family where the cell is read (its read wirings against its read half); A1's row beside as scored.",
+  "fall_repeats": "in all three cells the megamat stage error falls from the family's by more than the bar and by more than 0.040 (the control fit's fall).",
+  "megamat_fixes_a_factor": "the factor repeats (REPEAT) in all three cells.",
+  "hold_repeats": "\"holds\" as scored in cell X and in at least one of F and W; each with its share over the resamples, a share under 0.8 named a near-tie.",
+  "the_flies": "cell F differs from A1 in its class or in whether KC-KC repeats, and cell W does not.",
+  "the_wirings": "cell W differs from A1 in its class or in whether KC-KC repeats, and cell F does not.",
+  "no_class": "for a cell whose fit ends at a bound or whose holds fail, or for a wiring outside a realism band; the number of cells is reported with any that holds."
+ },
+ "outcomes": {
+  "a": "The fall, the hold and all three factors repeat (about 1 in 5): A1 has been found twice where nothing of it was chosen; to Tom and Yang as a model that can be built on, with E141's question of the dose.",
+  "b": "The fall and the two factors before the calyx repeat, and KC-KC does not in two or more cells, which then read \"megamat only\" (about 1 in 3): megamat fixes the normalization and APL->bouton and nothing after them.",
+  "c": "The hold repeats at other factors (about 1 in 5): a larger additive term, or KC-KC elsewhere in E141's range; the fitted model is a range.",
+  "d": "The cells disagree (about 1 in 4): \"the flies'\" or \"the wirings'\"; A1's hold stays a near-tie.",
+  "e": "The fall does not repeat in a cell (about 1 in 20): to Tom and Yang at once.",
+  "f": "A fit ends at a bound (about 1 in 10, beside the others): that cell has no class; a planner rules on the bound before any wider search."
+ },
+ "prediction": {
+  "fall_repeats_all_three": "about 9 in 10",
+  "holds_in_X": "about 2 in 5",
+  "holds_in_all_three": "about 1 in 6",
+  "kckc_determined_at_1.8_or_more_in_all_three": "about 2 in 5",
+  "kckc_determined_at_1.8_or_more_in_none": "about 1 in 6",
+  "source": "the planner's chances (the entry's), written before any fit"
+ },
+ "judgments": [
+  "A cell's fit is E136's `fit_arm` of A1 in its search mode inside E136's `cell` and `paths`, so that E136's code, not a copy, fits each cell; 'fit' and 'held' in its records are the cell's own halves.",
+  "A cell's first evaluation (the family at z = 0) is checked against the start values step 0 reads from E134's saved held megamat runs on the cell's searched wirings against its fit half, to START_TOL (E136's START_CHECK_TOL); E136's own cell is read the same way and must reproduce E136's START_CHECK, which checks the reading.",
+  "The 0 differing counts at z = 0 are E136's `identity` of A1 on the cell's searched wirings, run before the fit (identity_A1.json in the cell's folder): every run reproduces E134's saved counts and responses exactly.",
+  "A fitted point is the cell's classed point (E136's `determined`: 'classed_z', else the best point), as E136 reads its arms.",
+  "Reads are tagged '<cell>_A1_<panel>_<wiring>' and claimed in the cell's folder, so that no tag is shared between cells or with E136.",
+  "The repeat of the additive term reads pn_inhadd at the classed point (E136's `pn_norm_kws`); the entry's 562 and 1,778 are taken as written.",
+  "The entry says the gain on pn_inhsc is not read; E136's returns found it determined in A1 (rise 0.064), and it is reported beside, reading nothing."
+ ],
+ "resampled": {
+  "n": 1000,
+  "read_once_check": 0.02,
+  "source": "E143's reading, per cell"
+ },
+ "control": {
+  "cell": "X",
+  "arm": "A1's form (its four coordinates)",
+  "permutations": 20,
+  "perm_seed": 136,
+  "budget": 80,
+  "gates": false
+ },
+ "e134_lock_sha256": null,
+ "e136_fit_a1_sha256": "772090b1224b211a8bd6def362b085dee90490fb70592f065734a6c51367bb9e",
+ "e136_classes_sha256": "89202b44f72263a9033b88913a50927fa3e67c03d892c80bcd0f1a2adf418b88",
+ "amendments": [],
+ "written": "2026-11-26 20:18",
+ "host": "disco",
+ "commits": {
+  "queue_commit": "b2921bfcae2cf08f2099e33f5b88f760b5c858cc",
+  "queue_dirty": false,
+  "pyolfsysm_commit": "b1e89d7d119bbbb4888f31de4d94938dbc4bd60a",
+  "pyolfsysm_dirty": false,
+  "al_analysis_commit": "d891fe786ac5a103ef1ccb40bf108b3b5e16078e",
+  "al_analysis_dirty": false,
+  "hong2p_commit": "484da09afe90ce4dd37e8b9039b1881136b78b68",
+  "hong2p_dirty": false
+ }
+}
