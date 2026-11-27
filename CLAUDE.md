@@ -1301,6 +1301,7 @@ Canonical experiment names for summary reports:
 | E144 | the weaker antennal-lobe normalization and the rise of the inhibition among KCs on the male CNS's two calyces |
 | E145 | the fit of all megamat stages made again on the other wirings and the other halves of the flies |
 | E146 | what could make the flies' step from the PN dendrites to the PN boutons |
+| E147 | the megamat stage error read on model flies with each ORN fly's own input |
 
 ## Model-output archive (data/model_outputs/ in the shared directory)
 
