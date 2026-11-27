@@ -250,10 +250,17 @@ def test_write_variants(monkeypatch, tmp_path):
         model='C2', wiring='L-P2', panel='megamat', reading='read', tag='L_A1_megamat_P2', variant='L_A1', params=on,
         params_off=dict(on, wAPLKC_scale=0.0, wAPLPN_scale=0.0), start=dict(on, fixed_thr=157.2),
         pn_kws=dict(pn_inhadd=1000.0, pn_inhsc=544.4), fit='malecns-left', kckc_factor=3.24, aplpn_factor=0.155)))
-    df = X.write_variants(arch)
-    r = df.iloc[0]
-    assert len(df) == 1 and (res / 'variants.csv').exists() and r.calyx == 'L' and r.wiring_seed == 2
+    # the family's runs record no normalization (olfsysm's defaults): filled in
+    (arch / 'read' / 'R_family_apl16_real_run.json').write_text(json.dumps(dict(
+        model='C2', wiring='R-real', panel='apl16', reading='read', tag='R_family_apl16_real', variant='R_family',
+        params=on, params_off=on, start=on, pn_kws={}, fit='malecns-right_s2', kckc_factor=1.0, aplpn_factor=1.0)))
+    df = X.write_variants(arch).set_index('tag')
+    r = df.loc['L_A1_megamat_P2']
+    assert len(df) == 2 and (res / 'variants.csv').exists() and r.calyx == 'L' and r.wiring_seed == 2
     assert r.off_wAPLKC_scale == 0.0 and r.start_fixed_thr == 157.2 and r.pn_inhadd == 1000.0 and r.kind.isascii()
+    from experiments.E135_antennal_lobe_dendrites import OLFSYSM_DEFAULTS
+    f = df.loc['R_family_apl16_real']
+    assert f.pn_inhadd == OLFSYSM_DEFAULTS['pn_inhadd'] and f.pn_inhsc == OLFSYSM_DEFAULTS['pn_inhsc']
 
 
 def test_score_classes_and_price():

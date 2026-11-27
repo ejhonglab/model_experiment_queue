@@ -988,13 +988,17 @@ def write_variants(arch: Optional[Path] = None) -> pd.DataFrame:
     setting, panel and wiring (with its seed), a description (`variant_kind`), both conditions' absolute parameters
     ('off_<name>' with APL off), the start (the calyx's fit's parameters with the setting's factors, 'start_<name>'),
     the normalization's terms (pn_inhadd, pn_inhsc; empty for the family), the factors, the fit, and where and when it
-    ran. The tag is unique."""
+    ran. The tag is unique. The family's runs record no normalization (their PN stage is built with olfsysm's defaults,
+    no pn_inhadd / pn_inhsc kwargs), so those are filled with E135's OLFSYSM_DEFAULTS, as E142's table does."""
+    from experiments.E135_antennal_lobe_dendrites import OLFSYSM_DEFAULTS
     arch = Path(arch) if arch is not None else archive_dir()
     rows = []
     for p in sorted((arch / 'read').glob('*_run.json')):
         d = json.loads(p.read_text())
         pt = parse_tag(d['tag'])
         pn = d.get('pn_kws') if isinstance(d.get('pn_kws'), dict) else {}
+        if pt.setting == 'family' and not pn:
+            pn = {k: OLFSYSM_DEFAULTS[k] for k in ('pn_inhadd', 'pn_inhsc')}
         r = dict(tag=d['tag'], variant=d.get('variant'), part='read', subdir='read', calyx=pt.calyx,
                  connectome=CALYCES[pt.calyx], setting=pt.setting, panel=pt.panel, wiring=pt.wiring,
                  wiring_seed=WIRING_SEEDS[pt.wiring], model=d.get('model'), reading=d.get('reading'),
