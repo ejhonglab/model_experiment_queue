@@ -1,0 +1,569 @@
+{
+ "experiment": "E146_bouton_step_forms",
+ "script": "experiments/E146_bouton_step_forms.py",
+ "part": "lock",
+ "written": "2026-11-26 20:18",
+ "host": "atlas",
+ "commits": {
+  "queue_commit": "b2921bfcae2cf08f2099e33f5b88f760b5c858cc",
+  "queue_dirty": false,
+  "pyolfsysm_commit": "b1e89d7d119bbbb4888f31de4d94938dbc4bd60a",
+  "pyolfsysm_dirty": false,
+  "al_analysis_commit": "d891fe786ac5a103ef1ccb40bf108b3b5e16078e",
+  "al_analysis_dirty": false,
+  "hong2p_commit": "484da09afe90ce4dd37e8b9039b1881136b78b68",
+  "hong2p_dirty": false
+ },
+ "panel": "megamat",
+ "odors": [
+  "2h",
+  "IaA",
+  "pa",
+  "2-but",
+  "eb",
+  "ep",
+  "6al",
+  "t2h",
+  "1-8ol",
+  "1-5ol",
+  "1-6ol",
+  "ms",
+  "B-cit",
+  "Lin",
+  "aa",
+  "benz",
+  "va"
+ ],
+ "e142_lock_sha256": "833622b227e55e0acf91dbe7dd92b1d52556b62dfa057117dfffde46e2d32703",
+ "inputs": {
+  "data": {
+   "e142_lock": {
+    "rel": "repo:experiments/E142_lock.json",
+    "path": "/home/tom/src/model_experiment_queue/experiments/E142_lock.json",
+    "bytes": 48959,
+    "mtime": "2026-11-26 20:07:07",
+    "sha256": "833622b227e55e0acf91dbe7dd92b1d52556b62dfa057117dfffde46e2d32703"
+   },
+   "e142_lock_shared": {
+    "rel": "shared:results/E142_dendrite_bouton_step/lock.json",
+    "path": "/mnt/tensor/Tom/claude_kc_remapping/results/E142_dendrite_bouton_step/lock.json",
+    "bytes": 48959,
+    "mtime": "2026-11-26 19:26:16",
+    "sha256": "833622b227e55e0acf91dbe7dd92b1d52556b62dfa057117dfffde46e2d32703"
+   },
+   "e134_lock": {
+    "rel": "repo:experiments/E134_lock.json",
+    "path": "/home/tom/src/model_experiment_queue/experiments/E134_lock.json",
+    "bytes": 116395,
+    "mtime": "2026-11-24 12:04:18",
+    "sha256": "30015d97ea916ae42ad5c8e85535604fc9ee431b04ad27e260c71fca8636f92c"
+   },
+   "e138_classes_lock": {
+    "rel": "repo:experiments/E138_classes_lock.json",
+    "path": "/home/tom/src/model_experiment_queue/experiments/E138_classes_lock.json",
+    "bytes": 14551,
+    "mtime": "2026-11-25 02:33:43",
+    "sha256": "a1305ed38b3d79dcb4d5631b41c2eb349f6b4f0b6c16f2073ee3ba135c6ae47d"
+   },
+   "e119_a4_groups": {
+    "rel": "shared:results/E119_stages_per_roi/a4_groups.csv",
+    "path": "/mnt/tensor/Tom/claude_kc_remapping/results/E119_stages_per_roi/a4_groups.csv",
+    "bytes": 13741,
+    "mtime": "2026-11-20 13:59:42",
+    "sha256": "df6682e035432e8b0b86006bed165ac5120b2837a15632bdf28a2da301f0260c"
+   },
+   "e119_a4_summary": {
+    "rel": "shared:results/E119_stages_per_roi/a4_summary.csv",
+    "path": "/mnt/tensor/Tom/claude_kc_remapping/results/E119_stages_per_roi/a4_summary.csv",
+    "bytes": 418,
+    "mtime": "2026-11-20 13:59:42",
+    "sha256": "de54fd15acaeadaeabaa5c4b88cf1b0144cb8833f55f45c49566ba7101728009"
+   }
+  },
+  "results": {
+   "e142_no_step_entries": {
+    "rel": "shared:results/E142_dendrite_bouton_step/no_step_entries.csv",
+    "path": "/mnt/tensor/Tom/claude_kc_remapping/results/E142_dendrite_bouton_step/no_step_entries.csv",
+    "bytes": 71081,
+    "mtime": "2026-11-26 05:35:14",
+    "sha256": "366ec359d2482808ea647bf5847e4a4a3bcdeca72b43de0432b2fed2b0fc920b"
+   },
+   "e142_yardsticks": {
+    "rel": "shared:results/E142_dendrite_bouton_step/yardsticks.csv",
+    "path": "/mnt/tensor/Tom/claude_kc_remapping/results/E142_dendrite_bouton_step/yardsticks.csv",
+    "bytes": 9601,
+    "mtime": "2026-11-26 05:36:12",
+    "sha256": "3dc0f0d60fe7d6ff318ea6eb760ecb273aa4a41edf11f8bf322a5201911ae7b1"
+   },
+   "e142_counts": {
+    "rel": "shared:results/E142_dendrite_bouton_step/counts.csv",
+    "path": "/mnt/tensor/Tom/claude_kc_remapping/results/E142_dendrite_bouton_step/counts.csv",
+    "bytes": 10640,
+    "mtime": "2026-11-26 05:36:12",
+    "sha256": "752ab3b5f39fe0223cbcbe7b5e6aaa7c0dcad2d2d9cadad25f6122a26a860101"
+   },
+   "e142_flies_steps_summary": {
+    "rel": "shared:results/E142_dendrite_bouton_step/flies_steps_summary.csv",
+    "path": "/mnt/tensor/Tom/claude_kc_remapping/results/E142_dendrite_bouton_step/flies_steps_summary.csv",
+    "bytes": 9630,
+    "mtime": "2026-11-26 05:35:14",
+    "sha256": "91f4975eff802b69f12d78689dbe950757716836f0d54be5032842f44bca1d9d"
+   },
+   "e142_models_step": {
+    "rel": "shared:results/E142_dendrite_bouton_step/models_step.csv",
+    "path": "/mnt/tensor/Tom/claude_kc_remapping/results/E142_dendrite_bouton_step/models_step.csv",
+    "bytes": 55338,
+    "mtime": "2026-11-26 05:36:06",
+    "sha256": "6ddde1ec1c565c058083b93ef6db4a10135a1aaf2adf703c37c861206c778918"
+   },
+   "e142_models_entries": {
+    "rel": "shared:results/E142_dendrite_bouton_step/models_entries.csv",
+    "path": "/mnt/tensor/Tom/claude_kc_remapping/results/E142_dendrite_bouton_step/models_entries.csv",
+    "bytes": 6781017,
+    "mtime": "2026-11-26 05:36:05",
+    "sha256": "a9af9507f99c21885b5d7f44995fb2d660f8b53ba821f78e3828d8f82383a4a4"
+   },
+   "e142_classes_step0": {
+    "rel": "shared:results/E142_dendrite_bouton_step/classes_step0.json",
+    "path": "/mnt/tensor/Tom/claude_kc_remapping/results/E142_dendrite_bouton_step/classes_step0.json",
+    "bytes": 12658,
+    "mtime": "2026-11-26 05:36:14",
+    "sha256": "acb1c3dca8f691cb7f1ee1ea0f951c4c6dbb141edde401de8047053cb4f40233"
+   },
+   "e134_flies_megamat_vs_control": {
+    "rel": "shared:results/E134_population_baseline/flies_megamat_vs_control.csv",
+    "path": "/mnt/tensor/Tom/claude_kc_remapping/results/E134_population_baseline/flies_megamat_vs_control.csv",
+    "bytes": 7971,
+    "mtime": "2026-11-24 11:49:26",
+    "sha256": "dd114e50e83e1cb98b27653d826ab691654069f31526b6c0804c402049f7d0a8"
+   },
+   "e134_flies_no_step": {
+    "rel": "shared:results/E134_population_baseline/flies_no_step.csv",
+    "path": "/mnt/tensor/Tom/claude_kc_remapping/results/E134_population_baseline/flies_no_step.csv",
+    "bytes": 11431,
+    "mtime": "2026-11-24 11:49:26",
+    "sha256": "b45f431e3b6cb2fe30904d6556f6a6d05bb9453aae70153e22b85b04adeda88e"
+   },
+   "e128_part0": {
+    "rel": "shared:results/E128_bouton_groups/part0.json",
+    "path": "/mnt/tensor/Tom/claude_kc_remapping/results/E128_bouton_groups/part0.json",
+    "bytes": 2555,
+    "mtime": "2026-11-22 13:02:55",
+    "sha256": "7470f7b2315894d9aae3819b4227abe20e734a8049e0c3a7bf39b159ff105021"
+   },
+   "e138_feeders": {
+    "rel": "shared:results/E138_strength_by_odor_entries/feeders.csv",
+    "path": "/mnt/tensor/Tom/claude_kc_remapping/results/E138_strength_by_odor_entries/feeders.csv",
+    "bytes": 139403,
+    "mtime": "2026-11-25 02:45:38",
+    "sha256": "b3c0a9d8919e9a0987e0711d8793f068db7e35537dc216c3bb0254f849c0a643"
+   }
+  }
+ },
+ "recordings": {
+  "pn_dendrite": {
+   "flies": [
+    "2023-06-22/2",
+    "2023-06-23/1",
+    "2023-06-24/1",
+    "2023-07-19/1",
+    "2023-07-19/2",
+    "2023-07-28/1",
+    "2023-07-28/2"
+   ],
+   "halves": {
+    "fit": [
+     "2023-06-24/1",
+     "2023-07-19/1",
+     "2023-07-19/2"
+    ],
+    "held": [
+     "2023-06-22/2",
+     "2023-06-23/1",
+     "2023-07-28/1",
+     "2023-07-28/2"
+    ]
+   },
+   "criterion": 2.0,
+   "units": "trial-noise SD"
+  },
+  "pn_bouton": {
+   "flies": [
+    "2022-10-26__fly01__megamat1_001",
+    "2022-10-26__fly02__megamat1",
+    "2022-11-13__fly01__megamat1",
+    "2022-11-13__fly02__megamat1_002",
+    "2022-11-13__fly03__megamat1"
+   ],
+   "halves": {
+    "fit": [
+     "2022-11-13__fly01__megamat1",
+     "2022-11-13__fly03__megamat1"
+    ],
+    "held": [
+     "2022-10-26__fly01__megamat1_001",
+     "2022-10-26__fly02__megamat1",
+     "2022-11-13__fly02__megamat1_002"
+    ]
+   },
+   "criterion": 2.0,
+   "units": "baseline-noise SD"
+  },
+  "kc_claw": {
+   "flies": [
+    "2023-04-11__fly02__megamat1",
+    "2023-04-11__fly03__megamat1",
+    "2023-04-13__fly01__megamat1_001",
+    "2023-04-15__fly02__megamat1"
+   ],
+   "halves": {
+    "fit": [
+     "2023-04-11__fly02__megamat1",
+     "2023-04-13__fly01__megamat1_001"
+    ],
+    "held": [
+     "2023-04-11__fly03__megamat1",
+     "2023-04-15__fly02__megamat1"
+    ]
+   },
+   "criterion": 2.0,
+   "units": "baseline-noise SD"
+  },
+  "orn": {
+   "key": [
+    "orn",
+    "megamat",
+    "wild_type"
+   ],
+   "flies": [
+    "2023-04-22/2",
+    "2023-04-22/3",
+    "2023-04-26/2",
+    "2023-04-26/3",
+    "2023-05-08/1",
+    "2023-05-08/3",
+    "2023-05-09/1",
+    "2023-05-10/1",
+    "2023-06-22/1"
+   ],
+   "criterion": 2.0,
+   "units": "trial-noise SD"
+  },
+  "kc_soma_megamat": {
+   "key": [
+    "kc_soma",
+    "megamat",
+    "wild_type"
+   ],
+   "flies": [
+    "2022-10-10/1",
+    "2022-10-10/2",
+    "2022-10-11/1",
+    "2022-11-10/1"
+   ],
+   "criterion": 5.9486,
+   "units": "baseline-noise SD"
+  },
+  "kc_soma_control": {
+   "key": [
+    "kc_soma",
+    "apl16",
+    "control"
+   ],
+   "flies": [
+    "2024-07-10/2/L",
+    "2024-07-10/2/R",
+    "2024-07-12/2/L",
+    "2024-07-26/4/R",
+    "2024-08-01/3/L",
+    "2024-08-01/3/R",
+    "2024-08-02/5/R",
+    "2024-08-09/3/L",
+    "2024-08-09/3/R",
+    "2024-08-14/1/L",
+    "2024-08-30/3/R"
+   ],
+   "criterion": 1.9684,
+   "units": "baseline-noise SD"
+  },
+  "excluded": {
+   "flies": [
+    {
+     "stage": "pn_bouton",
+     "fly": "2022-10-21__fly02__megamat1_001__dsub3",
+     "reason": "Remy's dashboards and bouton analysis leave it out (median cellprob 0.03); data/remy_per_roi/README.md"
+    }
+   ],
+   "older_megamat": "Remy's older megamat flies (pyolfsysm's data/from_remy/2024-11-12): never read",
+   "validation2": "not read",
+   "kiwi_control_mixtures": "not read",
+   "tnt": "not read (APL output blocked flies)"
+  }
+ },
+ "glomeruli": {
+  "dendrites": [
+   "D",
+   "DA2",
+   "DC1",
+   "DC2",
+   "DC3",
+   "DL1",
+   "DL5",
+   "DM1",
+   "DM2",
+   "DM3",
+   "DM4",
+   "DM5",
+   "DM6",
+   "DP1m",
+   "VA2",
+   "VA3",
+   "VA4",
+   "VA5",
+   "VA6",
+   "VA7l",
+   "VA7m",
+   "VC1",
+   "VC2",
+   "VL2a",
+   "VL2p",
+   "VM2",
+   "VM3",
+   "VM7d",
+   "VM7v"
+  ]
+ },
+ "definitions": {
+  "weight_per_glomerulus": "E142's count-weighted yardstick (E142_step0.weighted_arrays) with one non-negative weight per glomerulus of the dendrite recordings in place of the counts, the same for every odor and every dendrite fly: rate the weighted fraction of glomeruli responding, mean the weighted mean response, each relative to its mean over the odors, the dendrite flies' mean parts the prediction",
+  "left_out": "weights fitted on 16 odors predict the 17th odor's two entries; the 17 predictions make one view, scored against all five bouton flies and against each half",
+  "permuted_weights": "the fitted weights permuted among the glomeruli, N_PERM permutations",
+  "power_check": "known weights planted on the dendrite flies (the hemibrain's bouton counts, 20 deals of each bouton fly's tuning-group sizes, 20 draws as uneven as the fitted weights), each with the noise of a resampled set of the bouton flies",
+  "features": {
+   "names": [
+    "dendrite_top3_share",
+    "orn_summed",
+    "orn_top3_share",
+    "other_part"
+   ],
+   "top_k": 3,
+   "dendrite_features": [
+    "dendrite_top3_share",
+    "other_part"
+   ],
+   "rule": "the boutons' entry as a linear function of the dendrites' entry and one feature, with the odor left out; a dendrite feature from the half of the dendrite flies the upstream entry is not, both ways"
+  },
+  "two_sets": "Remy's megamat soma flies and the control flies on the 12 shared odors (E134): each set's mean view in the other's one-fly units, with a 5-95 % interval over N_BOOT_SETS resamples of both sets; the no-step yardstick the same interval over the dendrite and bouton flies",
+  "megamat12": [
+   "2h",
+   "IaA",
+   "pa",
+   "2-but",
+   "eb",
+   "ep",
+   "6al",
+   "t2h",
+   "1-8ol",
+   "1-5ol",
+   "1-6ol",
+   "ms"
+  ],
+  "megamat12_criterion": "the megamat somata at E134's lock criterion (MEGAMAT_CRITERIA 'lock', megamat's own level, the reading E134's 0.85 and 0.92 are of); the control flies at theirs"
+ },
+ "constants": {
+  "margin": 0.1,
+  "null_percentile": 5.0,
+  "n_perm": 1000,
+  "perm_seed": 0,
+  "penalties": [
+   0.0,
+   0.01,
+   0.03,
+   0.1,
+   0.3,
+   1.0,
+   3.0
+  ],
+  "w_min": 1e-09,
+  "fit_options": {
+   "maxiter": 3000,
+   "ftol": 1e-13,
+   "gtol": 1e-09
+  },
+  "n_hemibrain_plants": 20,
+  "n_deals_per_fly": 20,
+  "n_uneven": 20,
+  "plant_kinds": [
+   "hemibrain",
+   "deals",
+   "uneven"
+  ],
+  "power_eligible": 0.9,
+  "power_share": 0.9,
+  "power_min_eligible": 10,
+  "power_seed": 0,
+  "group_criterion": 2.0,
+  "group_cut": 0.3,
+  "hemibrain": "hemibrain-first",
+  "calyces": [
+   "hemibrain-first",
+   "malecns-left",
+   "malecns-right"
+  ],
+  "features": [
+   "dendrite_top3_share",
+   "orn_summed",
+   "orn_top3_share",
+   "other_part"
+  ],
+  "top_k": 3,
+  "n_boot_sets": 1000,
+  "sets_seed": 0,
+  "sets_q": [
+   5.0,
+   95.0
+  ],
+  "megamat12_criterion": "lock",
+  "seven_odors": [
+   "IaA",
+   "pa",
+   "ep",
+   "t2h",
+   "1-6ol",
+   "benz",
+   "va"
+  ],
+  "beside_groups": [
+   "family_held",
+   "A1"
+  ]
+ },
+ "identities": {
+  "no_step_all": {
+   "quoted": 1.052,
+   "digits": 3,
+   "source": "E142 no_step_entries.csv / yardsticks.csv (all flies)"
+  },
+  "no_step_fit": {
+   "quoted": 1.184,
+   "digits": 3,
+   "source": "E142 no_step_entries.csv (fit half)"
+  },
+  "no_step_held": {
+   "quoted": 1.084,
+   "digits": 3,
+   "source": "E142 no_step_entries.csv (held-out half)"
+  },
+  "hemibrain_counts": {
+   "quoted": 0.997,
+   "digits": 3,
+   "source": "E142 yardsticks.csv (pn_bouton, dendrites, hemibrain-first, all flies)"
+  },
+  "megamat_in_control_units": {
+   "quoted": 0.85,
+   "digits": 2,
+   "source": "E134 flies_megamat_vs_control.csv (lock criterion, reference control, view_strength, mean_views)"
+  },
+  "control_in_megamat_units": {
+   "quoted": 0.92,
+   "digits": 2,
+   "source": "E134 flies_megamat_vs_control.csv (lock criterion, reference megamat, view_strength, mean_views)"
+  },
+  "control_floor": {
+   "quoted": 0.26,
+   "digits": 2,
+   "source": "E134 flies_megamat_vs_control.csv ref_floor (reference control)"
+  },
+  "megamat_floor": {
+   "quoted": 0.33,
+   "digits": 2,
+   "source": "E134 flies_megamat_vs_control.csv ref_floor (reference megamat)"
+  }
+ },
+ "identity_tol": 1e-09,
+ "classes": {
+  "power": {
+   "name": "the bound has power",
+   "rule": "on at least POWER_SHARE of the plants of each kind whose planted no-step is POWER_ELIGIBLE or more, the left-out reading (against all five synthetic bouton flies) is below the planted no-step by MARGIN; a kind with no such plant is vacuous and named; the class holds when every kind that is not vacuous passes and POWER_MIN_ELIGIBLE or more plants are eligible over the kinds; read at the chosen penalty; otherwise the weight class is \"not readable\"",
+   "share": 0.9,
+   "eligible": 0.9,
+   "margin": 0.1,
+   "min_eligible": 10,
+   "kinds": [
+    "hemibrain",
+    "deals",
+    "uneven"
+   ]
+  },
+  "weight_makes_step": {
+   "name": "a weight per glomerulus makes the step",
+   "rule": "at the chosen penalty, the left-out reading (17 left-out predictions, weights fitted to all five bouton flies on the other 16 odors) is below the no-step by MARGIN against each half of the bouton flies (E136's halves, each half's mean in all five flies' one-fly units), and below the NULL_PERCENTILE-th percentile of the permuted weights against all five",
+   "margin": 0.1,
+   "null_percentile": 5.0,
+   "n_perm": 1000,
+   "perm_seed": 0
+  },
+  "feature_makes_step": {
+   "name": "a population feature makes the step",
+   "rule": "for one of the four features, the left-out reading is below the no-step by MARGIN against each half and below the NULL_PERCENTILE-th percentile of the best of the four with the features permuted among the odors, against all five",
+   "margin": 0.1,
+   "null_percentile": 5.0,
+   "n_perm": 1000,
+   "perm_seed": 0,
+   "features": [
+    "dendrite_top3_share",
+    "orn_summed",
+    "orn_top3_share",
+    "other_part"
+   ]
+  },
+  "not_told_apart": {
+   "name": "not told apart from two sets of recordings",
+   "rule": "the no-step's interval (SETS_Q over N_BOOT_SETS resamples of the dendrite and bouton flies) and either interval between the sets (megamat somata in the control flies' units, the control flies in the megamat somata's) overlap; a statement of size, naming no cause",
+   "q": [
+    5.0,
+    95.0
+   ],
+   "n_boot": 1000,
+   "seed": 0
+  }
+ },
+ "outcomes": {
+  "a": "a weight per glomerulus makes the step (with power): the step lies in which glomeruli the boutons' regions weigh (by counts, by the regions a recording holds or by a gain; the three cannot be told apart without labels); whether a weighting fitted on some odors and tested on others may enter the boutons' reading goes to Tom and Yang",
+  "b": "a population feature makes it: the step is a term at the boutons that follows the whole odor; a planner writes it as a form, and the ORN->PN step with terms per glomerulus is worth reading again",
+  "c": "neither, with power, and the step is not told apart from two sets of recordings: the lead closes; Tom and Yang decide the boutons' weight in the megamat stage error and the yardstick for a stage recorded by another hand",
+  "d": "neither, with power, and the step is larger than two sets differ by: the lead stays, named as lying outside the recorded glomeruli (the input glomeruli the dendrite recordings do not hold, or the regions)",
+  "e": "not readable: the bound has no power on the plants (and no feature makes the step); the decision of (c) goes to Tom and Yang without it"
+ },
+ "outcome_rule": "(a) when the power holds and the weight class holds; (b) when a feature makes the step (whatever the power; both letters when both hold); otherwise, with power: (c) when not told apart, else (d); without power and no feature: (e)",
+ "choices": [
+  "paths: E142's lock was written on viki, so its data files' paths (under /home/yang/src/kc_queue/model_experiment_queue and /local/tensor/Tom/claude_kc_remapping) are read at this repository's root and this host's shared directory (`remap_path`), and their sha256 checked there; E146's lock records each input both absolute (this host) and relative ('repo:' or 'shared:'), and is checked by the relative path",
+  "the left-out fit: weights fitted on 16 odors with both sides relative to their mean over those 16 odors (each dendrite fly's weighted parts and each bouton fly's parts re-normalized over the 16, then averaged over the flies), so the left-out odor's bouton value enters nothing in the fit; the prediction of the 17th is the weighted dendrites' entry relative over all 17 odors (as E142's count-weighted yardstick reads it, and equal to the 16-odor prediction p16 converted exactly by p17 = 17 p16 / (16 + p16))",
+  "the fit's loss: the mean over the two strength parts of the mean squared difference over the fit odors in the bouton flies' one-fly units (all five flies' units, also for a half's fit), plus the penalty times the weights' squared coefficient of variation over the 29 glomeruli (population variance over the squared mean; 0 at equal weights; scale-free, as the parts are); weights bounded below by W_MIN, from equal weights, L-BFGS-B with the analytic gradient, then scaled to mean 1",
+  "the penalty grid PENALTIES; the penalty is chosen by the power check alone: the one whose smallest passing share over the kinds that are not vacuous is largest, ties to the larger penalty; the class of the power is read at it",
+  "the uneven draws: their unevenness is, at each penalty, the coefficient of variation over the 29 glomeruli of the weights fitted to all 17 odors of all five bouton flies at that penalty, the only quantity of a fit to the real boutons read before the power check (no prediction or error of a fit is read); each draw lognormal, iid over glomeruli, its log-SD solved so that the draw's coefficient of variation equals that one exactly",
+  "a plant: the truth the planted weights' weighted strength parts of the seven dendrite flies (their mean over the flies, relative over 17 odors); its noise five bouton flies drawn with replacement, each synthetic fly the truth plus that bouton fly's deviation from the bouton flies' mean (per part and odor, uncorrected); the synthetic reference in the real bouton flies' one-fly units; the planted no-step the seven dendrite flies unweighted against the synthetic flies; the left-out reading against all five synthetic flies. The hemibrain kind: the hemibrain's bouton counts on the 29 glomeruli (E138's all_counts, 'hemibrain-first'), 20 noise draws. The deals: per bouton fly 20 deals of its tuning groups (E128's fly_groups on its trial means over E119's 12 odors, criterion 2, cut 0.3; the groups only, the remainder not dealt), each group to one of the 29 glomeruli at random with replacement, a glomerulus's weight the summed sizes dealt to it (E128's deal_population's weights), each deal its own noise draw: 100 plants. The uneven kind: 20 draws, each its own noise draw. Seeds: np.random.default_rng([POWER_SEED, kind index, plant index]) for the weights and the noise; the uneven draws' standard normals are shared by the penalties (only their spread follows the penalty's unevenness)",
+  "beside the power check (classing nothing): at the chosen penalty, the same plants with the truth from a resampled set of the seven dendrite flies (drawn with replacement) in place of the measured set, so that the dendrites' own noise enters too",
+  "'9 of 10' read as a share of POWER_SHARE or more of each kind's eligible plants; a kind with no eligible plant is vacuous; at least POWER_MIN_ELIGIBLE eligible plants over the kinds",
+  "the weight bound's permuted control: the 17 left-out folds' fitted weights each permuted among the 29 glomeruli by the same permutation (N_PERM, PERM_SEED; E142_step0.permutations), the 17 predictions scored; the class reads the 5th percentile against all five bouton flies, the halves' beside",
+  "the left-out predictions are fitted to all five bouton flies' entries and scored against all five and against each half (E136's halves, ctx.reference: the half's mean in all five flies' one-fly units)",
+  "the features: on the positive part of the responses (values clipped at 0); 'dendrite_top3_share' the share of an odor's summed dendrite response in its three strongest glomeruli, from the per-glomerulus mean over a half of the dendrite flies (the glomeruli that half recorded); 'orn_summed' the odor's summed response at the ORN terminals, the sum over glomeruli of the per-glomerulus mean over the nine megamat ORN flies (the glomeruli any of them recorded); 'orn_top3_share' the same share at the ORN terminals; 'other_part' the odor's entry in the other strength part (for the rate part the mean part's entry, and the reverse) of the upstream flies",
+  "a feature's prediction, per part: the boutons' entry (each bouton fly relative over the 16 fit odors, averaged) as a + b x the upstream entry + c x the feature, least squares on the 16 odors, predicted on the 17th and converted to the 17-odor scale (p17 = 17 p16 / (16 + p16)); the ORN features with the upstream entry of all seven dendrite flies; the dendrite features both ways: the upstream entry from one of E136's dendrite halves (3 / 4 flies) and the feature from the other, the two ways' predictions averaged; 'the dendrites' entry rescaled alone' a + b x the entry of all seven flies (and, beside, both ways on the halves)",
+  "the features' permuted control: N_PERM permutations of the 17 odors (PERM_SEED), each permuting every feature's values among the odors (the same permutation for the four, and for both ways), the lowest of the four left-out readings against all five per permutation; the class reads its 5th percentile",
+  "two sets at one stage: each set's flies resampled with replacement, independently (N_BOOT_SETS, SETS_SEED), each resample's scored set's mean strength parts against the reference set's resampled mean in the measured reference set's one-fly units (as hal's floor keeps them); the megamat somata at E134's lock criterion (megamat's own level), the control flies at theirs, the 12 shared odors (E134's MEGAMAT12, entries relative over the 12); the no-step the same over the seven dendrite and five bouton flies, in all five bouton flies' units; the intervals the SETS_Q percentiles of the resampled errors; 'overlap' the no-step's interval meeting either between-sets interval",
+  "the 12 odors' differences between the sets: per odor and part, Remy's megamat somata's mean entry minus the control flies' (relative over the 12), in the control flies' one-fly units and in the megamat somata's, beside the flies' step by odor from the dendrites to the boutons (E142's flies_steps_summary.csv, all flies) in the bouton flies' units; their root mean squares beside",
+  "beside, the model's own stages: E142's groups 'family_held' (the family held at the megamat flies' 0.0915, eight wirings) and 'A1' (E136's A1 on its four T wirings), read as E142's step 0 reads them against all flies (E134's default readings, APL on); the wirings as the dendrite flies (their dendrite populations, named glomeruli) and the wirings' bouton populations as the bouton flies (their mean entries the target, the real bouton flies' one-fly units); the model's no-step and the left-out weight reading at the chosen penalty over the glomeruli the model's dendrite reading names",
+  "beside, the flies' step from the boutons to the claws: item 3 with the dendrite glomeruli weighted to the four claw flies' entries (left-out, the chosen penalty, the claw flies' units; E142's claw halves 2 / 2), against the no-step from the dendrites and from the boutons; item 4 with the boutons as the upstream stage (all five bouton flies' entry; 'other_part' both ways on E136's bouton halves 2 / 3; the dendrite top-3 share from all seven dendrite flies; the ORN features as for the step to the boutons); no class",
+  "beside, each bouton fly's own step for the seven odors: the fly's entry minus the seven dendrite flies' mean entry, both parts; the seven are those outside zero on both halves in a part (E142's flies_steps_summary.csv), checked against SEVEN_ODORS",
+  "beside, the fitted weights' Spearman rank correlation over the 29 glomeruli with each calyx's bouton counts (the weights fitted to all 17 odors of all five bouton flies at the chosen penalty; the median over the 17 left-out folds beside)",
+  "beside, classing nothing: the weight bound at every penalty of the grid (bound_by_penalty.csv), computed after the class is read at the chosen one"
+ ],
+ "holds": [
+  "no simulation, no model run, no olfsysm change; nothing fitted to a model or searched in one",
+  "no bouton region given an identity: the weights are over the dendrite recordings' named glomeruli, the same for every region; they enter no reading and no model without Tom's or Yang's word",
+  "nothing fitted to a held-out panel: the control flies' somata are read as a yardstick only",
+  "only Pratyush's hemibrain and male CNS for the counts (E138's all_counts)",
+  "Remy's processed data without the bouton fly 2022-10-21 fly02 and without her older megamat flies; Yang's processed products only",
+  "validation2 and the mixtures not read"
+ ],
+ "note": "written before any statistic of E146 was computed; every part but lock refuses until this file is committed (require_lock)"
+}
