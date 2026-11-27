@@ -48,8 +48,9 @@ What hal's runner writes, which `--part score` reads:
   data/model_outputs/E147_megamat_input_flies/... equivalent); a read whose `<tag>_run.json` is there is done;
 - its row in results/E147_megamat_input_flies/reads_<lane>.csv (any name reads_*.csv; the last row per tag counts,
   `reads_table`), with the columns of READ_COLUMNS: tag, step, setting, panel, fly, wiring; the held parameters
-  (PARAM_KEYS, absolute, and off_<key> of the APL-off run); thr_factor, apl_factor (against the wiring's held point the
-  hold started from); n_on, n_off, target_on, target_off, frac_on_target, frac_off_target; at_bound_thr, at_bound_apl;
+  (PARAM_KEYS, absolute, and off_<key> of the APL-off run); thr_factor, apl_factor (against the point the hold started
+  from, which the row's 'start' column names); thr_vs_own, apl_vs_own (hal's runner: against the setting's own reading at
+  the lab's input, which the realism tables give beside); n_on, n_off, target_on, target_off, frac_on_target, frac_off_target; at_bound_thr, at_bound_apl;
   held (the runner's own reading of its hold); rate_on, rate_off,
   max_count_on, max_count_off; input_sha256 (E77's `frame_sha256` of the input, which `--part score` checks against
   `input_fly`); hold_n_sims, seconds, host, lane, time, threads and the commits (`H.code_commits()`). The score decides
@@ -1750,15 +1751,16 @@ def without_odor_rows(name: str, side: Side, odor: str = 'aa') -> pd.DataFrame:
 
 def megamat_realism_rows(pts: pd.DataFrame, runs_info: Mapping[str, dict]) -> pd.DataFrame:
     """Per megamat model fly: the response rates with APL on and off beside the flies' 0.0915 (E134's lock), the
-    threshold and APL factors after the re-hold (against the wiring's own point), the held parameters and the largest
-    spike counts (the reads' rows, and the runs where the rows lack them)."""
+    threshold and APL factors after the re-hold (thr_vs_own / apl_vs_own: against the setting's own reading at the lab's
+    input; thr_factor / apl_factor: against the hold's start), the held parameters and the largest spike counts (the
+    reads' rows, and the runs where the rows lack them)."""
     rows = []
     for r in pts.to_dict('records'):
         info = runs_info.get(r['tag'], {})
         rows.append(dict(tag=r['tag'], group=r['group'], wiring=r['wiring'], fly=r['fly'], held=r['held'],
                          rate_on=r.get('rate_on', info.get('rate_on')), rate_off=r.get('rate_off', info.get('rate_off')),
-                         flies_rate=0.0915, thr_factor=r.get('thr_factor'), apl_factor=r.get('apl_factor'),
-                         fixed_thr=r.get('fixed_thr'), wAPLKC_scale=r.get('wAPLKC_scale'),
+                         flies_rate=0.0915, thr_vs_own=r.get('thr_vs_own'), apl_vs_own=r.get('apl_vs_own'),
+                         thr_factor=r.get('thr_factor'), apl_factor=r.get('apl_factor'), fixed_thr=r.get('fixed_thr'), wAPLKC_scale=r.get('wAPLKC_scale'),
                          max_count_on=r.get('max_count_on', info.get('max_count_on')),
                          max_count_off=r.get('max_count_off', info.get('max_count_off'))))
     return pd.DataFrame(rows)
@@ -2016,7 +2018,8 @@ def apl16_realism_score(pts: pd.DataFrame) -> pd.DataFrame:
             continue
         on, off = run.conditions['on'], run.conditions['off']
         rows.append(dict(group=r['group'], unit=r['tag'], kind='model_fly', wiring=r['wiring'], fly=r['fly'],
-                         held=r['held'], n_model_flies=1, thr_factor=r.get('thr_factor'), apl_factor=r.get('apl_factor'),
+                         held=r['held'], n_model_flies=1, thr_vs_own=r.get('thr_vs_own'), apl_vs_own=r.get('apl_vs_own'),
+                         thr_factor=r.get('thr_factor'), apl_factor=r.get('apl_factor'),
                          max_count_on=float(on['spike_counts'].to_numpy(dtype=float).max()),
                          max_count_off=float(off['spike_counts'].to_numpy(dtype=float).max()),
                          **E136m.apl16_realism(on['responses'], off['responses'])))
