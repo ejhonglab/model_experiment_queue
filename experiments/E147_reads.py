@@ -62,10 +62,11 @@ Holds (CLAUDE.md, the entry): no olfsysm change (the wirings keep 'first' claws,
 them); nothing searched, fitted or weighted (the inputs are atlas's, the recorded flies' own deviations); validation2 is
 not read; Pratyush's hemibrain only.
 
-Usage (from the repository root; a megamat read takes about 280 s at 16 threads on viki or disco, several times that on
-hal; a read is mostly single-threaded, so a host may run two lanes):
+Usage (from the repository root, with -m, so that a worktree's own experiments/ package is the one imported and not the
+venv's editable install; a megamat read takes about 280 s at 16 threads on viki or disco, several times that on hal; a
+read is mostly single-threaded, so a host may run two lanes):
     OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 PYTHONUNBUFFERED=1 nice -n 10 ./venv/bin/python -u \\
-        experiments/E147_reads.py --part identity --lane <host>
+        -m experiments.E147_reads --part identity --lane <host>
     ... --part reads --step 1 --lane <host>[-<n>] [--reverse]
     ... --part reads --step 2 --lane <host>[-<n>] [--reverse]
     ... --part reads --step 1 --free --lane <host>[-<n>]        # the free reading, beside
