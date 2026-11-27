@@ -57,6 +57,10 @@ nothing fitted to a held-out panel; Remy's processed data without the bouton fly
 megamat flies (E134's lock). Cells X and W search the T wirings, which every fit so far left unsearched: they are this
 entry's cells only.
 
+A fit that moves between hosts resumes from its history with `--reclaim`; the host it leaves then runs `--part archive
+--cell <cell> [--control]` (its evaluations to the archive, where the fit's last step finds a best evaluation it ran) and,
+after the fit, `--part rescore --cell <cell>` (its evaluations rescored, merged with the others').
+
 Usage (from the repository root):
     ./venv/bin/python -u -m experiments.E145_stage_fit_replication --part lock | --part step0
     OMP_NUM_THREADS=16 OMP_THREAD_LIMIT=16 PYTHONUNBUFFERED=1 nice -n 10 ./venv/bin/python -u \\
@@ -771,14 +775,55 @@ def part_control(lane: str, reclaim: bool = False) -> dict:
     return out
 
 
+def saved_evals(cell: str, arm: str = ARM) -> List[int]:
+    """The evaluations of a cell's fit (or the control's) whose stages this host saved (every wiring's run.json under
+    outputs/.../<cell>/fit_<arm>/)."""
+    from experiments import E136_stage_population_fit as F
+    d = local_dir(cell, f'fit_{arm}')
+    ws = get_cell(cell).searched_wirings()
+    hist = out_dir(cell) / f'fit_history_{arm}.csv'
+    evals = [int(i) for i in pd.read_csv(hist)['eval']] if hist.exists() else []
+    return [i for i in evals if all((d / f'{arm}_e{i}_{w}_run.json').exists() for w in ws)]
+
+
+def part_archive(cell: str, control: bool = False, evals: Optional[Sequence[int]] = None) -> List[int]:
+    """For a fit that moved between hosts: copies the evaluations this host saved (`evals`, default all of
+    `saved_evals`) of a cell's fit (the control's with `control`) to the archive's <cell>/fit_<arm>/ (E136's
+    `archive_evals` inside the cell), where E136's `archive_best` finds a best evaluation the host that ends the fit did
+    not run. Returns the evaluations copied."""
+    arm = CONTROL if control else ARM
+    if control and cell != CONTROL_CELL:
+        raise ValueError(f'the control is fitted in cell {CONTROL_CELL}')
+    evals = saved_evals(cell, arm) if evals is None else [int(i) for i in evals]
+    if not evals:
+        return []
+    with e136_cell(cell) as F:
+        return F.archive_evals(arm, evals)
+
+
+def part_rescore(cell: str) -> dict:
+    """For a fit that moved between hosts: E136's `rescore` of the cell's fit inside the cell on the evaluations this
+    host saved (merged with the rows other hosts wrote) and the order between the halves (`consistency`). Returns the
+    number of evaluations rescored and the history's."""
+    with e136_cell(cell) as F:
+        evals = saved_evals(cell)
+        df = F.rescore(ARM, evals=evals) if evals else pd.DataFrame()
+        for meas in F.MEASURES:
+            F.consistency([ARM], meas)
+        return dict(rescored_here=len(evals), rows=int(len(df)), history=len(F.history_evals(ARM)))
+
+
 def main(argv: Optional[Sequence[str]] = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
-    ap.add_argument('--part', required=True, choices=('lock', 'step0', 'fit', 'read', 'score', 'resampled', 'control'))
+    ap.add_argument('--part', required=True, choices=('lock', 'step0', 'fit', 'read', 'score', 'resampled', 'control',
+                                                       'archive', 'rescore'))
     ap.add_argument('--cell', nargs='+', default=list(FIT_CELLS), choices=FIT_CELLS)
     ap.add_argument('--lane', default='1')
     ap.add_argument('--reverse', action='store_true')
     ap.add_argument('--reclaim', action='store_true')
     ap.add_argument('--fit-parts', nargs='+', default=list(FIT_PARTS), choices=FIT_PARTS)
+    ap.add_argument('--control', action='store_true', help='--part archive: the control\'s evaluations')
+    ap.add_argument('--evals', nargs='+', type=int, help='--part archive: these evaluations (default: all saved here)')
     a = ap.parse_args(argv)
     if a.part == 'lock':
         print(json.dumps(write_lock(), indent=1, default=str)[:3000])
@@ -796,6 +841,13 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         print(json.dumps(part_resampled(), indent=1, default=str))
     elif a.part == 'control':
         print(json.dumps(part_control(a.lane, a.reclaim), indent=1, default=str))
+    elif a.part in ('archive', 'rescore'):
+        if len(a.cell) != 1:
+            raise SystemExit(f'--part {a.part} takes one --cell')
+        if a.part == 'archive':
+            print(json.dumps(part_archive(a.cell[0], a.control, a.evals), default=str))
+        else:
+            print(json.dumps(part_rescore(a.cell[0]), indent=1, default=str))
 
 
 if __name__ == '__main__':

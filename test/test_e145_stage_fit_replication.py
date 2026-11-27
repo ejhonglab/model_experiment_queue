@@ -170,3 +170,22 @@ def test_resampled_derived_classes():
     s = S._share_of(d['hold_repeats'], True)
     assert s['all_flies'] is False and abs(s['share_true'] - 2 / 3) < 1e-12 and abs(s['share_scored'] - 2 / 3) < 1e-12
     assert S.derived_per_reference({'X': cls['X']}, comps, recs, 0.04, K) == {}
+
+
+def test_saved_evals_for_a_moved_fit(monkeypatch, tmp_path):
+    import pandas as pd
+    out, loc = tmp_path / 'out', tmp_path / 'loc'
+    monkeypatch.setattr(E, 'out_dir', lambda cell=None: (out / cell if cell else out))
+    monkeypatch.setattr(E, 'local_dir', lambda cell=None, part='': (loc / cell / part))
+    (out / 'F').mkdir(parents=True)
+    pd.DataFrame(dict(eval=[0, 1, 2], loss_sim=[1.0, 0.9, 0.95])).to_csv(out / 'F' / 'fit_history_A1.csv', index=False)
+    d = loc / 'F' / 'fit_A1'
+    d.mkdir(parents=True)
+    for i in (0, 2):
+        for w in E.CELLS['F'].searched_wirings():
+            (d / f'A1_e{i}_{w}_run.json').write_text('{}')
+    (d / 'A1_e1_real_run.json').write_text('{}')     # one wiring only: not a saved evaluation
+    assert E.saved_evals('F') == [0, 2]
+    assert E.saved_evals('W') == []
+    with pytest.raises(ValueError):
+        E.part_archive('F', control=True)
