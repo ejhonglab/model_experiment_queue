@@ -106,6 +106,8 @@ PARAMS_TABLES = {
     'E141_kckc_rise_forms': ('variants.csv',),
     # E142: one row per step-1 run its script wrote into the archive (`--part variants`); step 0 runs no model
     'E142_dendrite_bouton_step': ('step1_variants.csv',),
+    # E144: one row per read its script wrote into the archive (`--part variants`: read/)
+    'E144_a1_malecns_calyces': ('variants.csv',),
 }
 
 # experiments whose step folders repeat their files' names: per folder pattern (fnmatch on the file's folder under
@@ -136,6 +138,8 @@ IN_PLACE = {
     'E141_kckc_rise_forms': ('every read in read/ (tag <variant>_<panel>_<wiring>) and the beside step\'s runs in '
                              'extended/<variant>/B/<step>/ (E102\'s part-B layout: tag <wiring>, unique with its subdir)'),
     'E142_dendrite_bouton_step': 'every step-1 run in step1/ (tag <panel>_<arm>_<wiring>)',
+    'E144_a1_malecns_calyces': ('every read in read/ (tag <calyx>_<setting>_<panel>_<wiring>; the calyx H, L or R, the '
+                                'wiring real or a within-type claw permutation P1 to P3)'),
 }
 # folders of outputs withheld from queue work (e.g. E97's withheld_2026-11-15/, built from connectome tables that queue
 # work does not use; CLAUDE.md, "Connectome data"): never copied, at any depth
