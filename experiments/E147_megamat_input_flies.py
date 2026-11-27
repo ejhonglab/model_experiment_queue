@@ -22,13 +22,13 @@ Definitions (the entry's, fixed in experiments/E147_lock.json before any statist
 - a model fly: one wiring with one input fly, at the setting's parameters, both response rates re-held at the panel's
   operating point as E136's `read_at` holds a read (E134's `held_targets` on megamat, the wiring's own fit's counts on
   APL16), the breadth the lab input's, the wiring's seed for pooling and noise kept; read exactly as a wiring is read
-  (E134's default readings, E136's `Flies` and `StageLoss`);
+  (E134's default readings, seed index the wiring's, E136's `Flies` for the held-out half; `read_sides_multi`);
 - the population's error: the error of the mean view over the model flies; a model fly's error: its own; both against
   all the stage's flies, E136's held-out half beside;
 - the terms: the SD over input flies of the mean over wirings (the input-fly term), the SD over wirings of the mean
   over input flies (the wiring term), and the remainder (`terms`);
 - a model fly against the others: its view against the mean view of the model flies with another wiring and another
-  input fly, in the stage's one-fly units (`fly_against_others`);
+  input fly, in the stage's one-fly units (`against_others`);
 - the spread over model flies: the SD over all model flies of the quantity whose SD over the eight wirings the classes
   use (`model_fly_spreads`).
 
@@ -54,16 +54,20 @@ What hal's runner writes, which `--part score` reads:
   max_count_on, max_count_off; input_sha256 (E77's `frame_sha256` of the input, which `--part score` checks against
   `input_fly`); hold_n_sims, seconds, host, lane, time, threads and the commits (`H.code_commits()`). The score decides
   "held" itself (`is_held`: both counts within HOLD_TOL, 0.5 %, of their targets and no factor at a bound), so the
-  row's own 'held' is informative only. A read that failed to hold writes its row and its run as held so far, so that
-  the score counts it unheld;
-- E134's reading of the run beside its counts is optional: `--part score` reads every run itself, through E136's
-  `StageLoss` and `Flies` (E134's default readings, seed index the wiring's).
+  row's own 'held' is informative only; where a row lacks n_on or n_off the score counts them from the run's saved
+  responses (`fill_counts`). A read that failed to hold writes its row and its run as held so far, so that the score
+  counts it unheld;
+- the free reading's points ('familyfree', 'A1free') in the same layout under the step of their held twin; the score
+  reads them beside, with no class;
+- E134's reading of the run beside its counts is optional: `--part score` reads every run itself
+  (`read_sides_multi`: E134's default readings, seed index the wiring's, all the flies and E136's held-out half).
 
 Parts (CLI `--part`):
 - lock (atlas): experiments/E147_lock.json and results/.../lock.json; commit the copy before any statistic is read;
 - step0 (atlas, no simulation): the identities (E134's 0.918 and 0.894; E85's part A on the 12 shared odors; E140's aa
   vectors), the table of megamat's input flies on its 17 odors, E85's 72 saved model flies and its bounds on S scored
-  at the APL16 somata as E134's archive scoring scores a run, every class of E136, E139 and E141 recomputed with the
+  at the APL16 somata as E134 and E136 score a run (seed index the wiring's; the planner's probe, E134's archive
+  scoring at seed 0, beside in step0_probe.csv), every class of E136, E139 and E141 recomputed with the
   APL16 spreads over model flies, and prediction.json (a prediction per megamat stage, timestamped, before any run);
 - step1, step2: hal's (experiments/E147_reads.py --part reads --step 1|2); here they only say so;
 - score (atlas, no simulation; run once hal's reads are in): the classes per megamat stage, for the megamat stage error
@@ -224,23 +228,28 @@ CHOICES: Tuple[str, ...] = (
 # ---------------------------------------------------------------------------
 # folders and the lock
 
+# folders in place of the defaults (tests): 'results', 'local', 'archive'
+DIRS: Dict[str, Path] = {}
+
+
 def results_dir() -> Path:
     """<shared>/results/E147_megamat_input_flies/ (created)."""
-    d = H.results_dir(EXPERIMENT)
+    d = Path(DIRS['results']) if 'results' in DIRS else H.results_dir(EXPERIMENT)
     d.mkdir(parents=True, exist_ok=True)
     return d
 
 
 def local_dir(part: str = '') -> Path:
     """outputs/E147_megamat_input_flies/[<part>/] in this repository (created)."""
-    d = H.outputs_dir(EXPERIMENT) / part if part else H.outputs_dir(EXPERIMENT)
+    root = Path(DIRS['local']) if 'local' in DIRS else H.outputs_dir(EXPERIMENT)
+    d = root / part if part else root
     d.mkdir(parents=True, exist_ok=True)
     return d
 
 
 def archive_dir() -> Path:
     """<shared>/data/model_outputs/E147_megamat_input_flies/ (not created)."""
-    return H.shared_dir() / 'data' / 'model_outputs' / EXPERIMENT
+    return Path(DIRS['archive']) if 'archive' in DIRS else H.shared_dir() / 'data' / 'model_outputs' / EXPERIMENT
 
 
 def lock_path() -> Path:
@@ -732,38 +741,49 @@ def _fly_cache(half: Optional[str], stages: Sequence[str]):
 
 def read_sides(runs: Mapping[str, Tuple[str, str, object]], stages: Sequence[str], panel: str,
                half: Optional[str] = None, conditions: Sequence[str] = ('on', 'off')) -> Dict[tuple, Side]:
-    """The model flies `runs` ({tag: (wiring, input fly, SavedRun)}) read at `stages` on `panel` (E134's default
-    readings, seed index the wiring's, `_fly_cache(half)`), one `Side` per (stage, panel, condition) with flies: the
-    reference E134's `fly_reference_for` on all the stage's flies (every part), or for a half E136's `Flies.reference`
-    (every part, the half's mean in all flies' units)."""
+    """The model flies `runs` ({tag: (wiring, input fly, SavedRun or a function returning it)}) read at `stages` on
+    `panel` (E134's default readings, seed index the wiring's, `_fly_cache(half)`), one `Side` per (stage, panel,
+    condition) with flies: the reference E134's `fly_reference_for` on all the stage's flies (every part), or for a half
+    E136's `Flies.reference` (every part, the half's mean in all flies' units)."""
+    return read_sides_multi(runs, stages, panel, (half,), conditions)[half]
+
+
+def read_sides_multi(runs: Mapping[str, Tuple[str, str, object]], stages: Sequence[str], panel: str,
+                     halves: Sequence[Optional[str]] = (None,), conditions: Sequence[str] = ('on', 'off')
+                     ) -> Dict[Optional[str], Dict[tuple, Side]]:
+    """`read_sides` for several readings of the flies at once ({half: {key: Side}}; None all the flies), each run
+    loaded once (a function in `runs` is called and its run dropped after reading)."""
     from experiments import E134_population_baseline as B
     from experiments import E136_stage_population_fit as E136m
     from kcq import population_fit as P
     from kcq import stage_readings as R
     lock = R.require_lock()
-    fc = _fly_cache(half, stages)
-    cache = fc if half is None else fc.cache
-    pops: Dict[tuple, list] = {}
+    fcs = {h: _fly_cache(h, stages) for h in halves}
+    pops: Dict[Optional[str], Dict[tuple, list]] = {h: {} for h in halves}
     for tag, (w, f, run) in runs.items():
-        rd = R.read_run(run, stages=list(stages), lock=lock, flies=cache, seed_index=E136m.seed_index(w))
-        for k, pop in rd.populations.items():
-            if k[1] == panel and k[2] in conditions:
-                pops.setdefault(k, []).append((tag, w, f, pop))
-        del rd
-    out = {}
-    for k, items in pops.items():
-        odors = list(items[0][3].values.columns)
-        if half is None:
-            fl = cache.get(k)
-            if fl is None:
-                continue
-            _, ref, _ = B.fly_reference_for(fl, odors)
-        else:
-            if k[2] != 'on':
-                continue
-            ref = fc.reference(k[0], odors)
-        arrays = P.stack_views([P.reference_views(it[3], ref) for it in items], ref)
-        out[k] = Side(k, ref, [it[0] for it in items], [it[1] for it in items], [it[2] for it in items], arrays)
+        run = run() if callable(run) else run
+        for h in halves:
+            cache = fcs[h] if h is None else fcs[h].cache
+            rd = R.read_run(run, stages=list(stages), lock=lock, flies=cache, seed_index=E136m.seed_index(w))
+            for k, pop in rd.populations.items():
+                if k[1] == panel and k[2] in conditions and (h is None or k[2] == 'on'):
+                    pops[h].setdefault(k, []).append((tag, w, f, pop))
+            del rd
+        del run
+    out: Dict[Optional[str], Dict[tuple, Side]] = {}
+    for h in halves:
+        out[h] = {}
+        for k, items in pops[h].items():
+            odors = list(items[0][3].values.columns)
+            if h is None:
+                fl = fcs[h].get(k)
+                if fl is None:
+                    continue
+                _, ref, _ = B.fly_reference_for(fl, odors)
+            else:
+                ref = fcs[h].reference(k[0], odors)
+            arrays = P.stack_views([P.reference_views(it[3], ref) for it in items], ref)
+            out[h][k] = Side(k, ref, [it[0] for it in items], [it[1] for it in items], [it[2] for it in items], arrays)
     return out
 
 
@@ -1528,9 +1548,584 @@ def write_tables_step0(ids: Mapping, groups: pd.DataFrame, rc: pd.DataFrame) -> 
     (results_dir() / 'tables_step0.md').write_text('\n'.join(lines))
 
 
-def part_score() -> dict:
-    """The score of hal's reads (the module docstring; no simulation)."""
-    raise NotImplementedError
+# ---------------------------------------------------------------------------
+# the score
+
+READINGS: Tuple[Optional[str], ...] = (None, 'held')   # all the flies (the primary reading), E136's held-out half
+DOWNSTREAM: Tuple[str, ...] = ('pn_bouton', 'kc_claw', 'kc_soma')
+
+
+def reading_name(half: Optional[str]) -> str:
+    return 'all' if half is None else half
+
+
+def points_from_rows(rows: pd.DataFrame) -> pd.DataFrame:
+    """The reads' rows with setting, panel, fly, wiring and step parsed from their tags (rows whose tag does not parse
+    are dropped), 'held' by `is_held` (True for the free reading, which is not held) and 'group' '<setting>/<panel>';
+    the last row per tag counts."""
+    if rows.empty:
+        return pd.DataFrame(columns=['tag', 'setting', 'panel', 'fly', 'wiring', 'step', 'held', 'group'])
+    out = []
+    for r in rows.drop_duplicates('tag', keep='last').to_dict('records'):
+        try:
+            st, pn, f, w = parse_tag(str(r['tag']))
+        except ValueError:
+            continue
+        free = st.endswith('free')
+        out.append(dict(r, setting=st, panel=pn, fly=f, wiring=w, step=step_of(st, pn),
+                        held=True if free else is_held(r), free=free, group=f'{st}/{pn}'))
+    return pd.DataFrame(out)
+
+
+def unheld_rule(n_unheld: int, n_total: int) -> bool:
+    """True when a population has no class: more than UNHELD_MAX_SHARE of its model flies unheld."""
+    return bool(n_total > 0 and n_unheld > UNHELD_MAX_SHARE * n_total)
+
+
+def paired(a: pd.Series, b: pd.Series) -> pd.DataFrame:
+    """Per (wiring, input fly) the change a - b of two per-model-fly Series indexed by (wiring, fly), both present."""
+    j = pd.concat([a.rename('a'), b.rename('b')], axis=1).dropna()
+    j['change'] = j['a'] - j['b']
+    return j
+
+
+def a1_fall(changes: pd.DataFrame) -> dict:
+    """A1's fall through the input flies from `paired` changes (A1 minus the family on the same wiring and input
+    fly): the mean change, the standard error (the larger of the SD over input flies of the per-fly means over sqrt of
+    their number and the SD over wirings of the per-wiring means over sqrt of theirs), the fall (minus the mean) and
+    whether it stands (beyond IMPROVE_SE standard errors and beyond CONTROL_FALL)."""
+    if changes.empty:
+        return dict(n=0, stands=None)
+    ch = changes['change']
+    by_f = ch.groupby(level=1).mean()
+    by_w = ch.groupby(level=0).mean()
+    se_f = float(by_f.std(ddof=1) / np.sqrt(len(by_f))) if len(by_f) > 1 else np.nan
+    se_w = float(by_w.std(ddof=1) / np.sqrt(len(by_w))) if len(by_w) > 1 else np.nan
+    se = float(np.nanmax([se_f, se_w])) if np.isfinite([se_f, se_w]).any() else np.nan
+    mean = float(ch.mean())
+    fall = -mean
+    return dict(n=int(len(ch)), n_wirings=int(len(by_w)), n_flies=int(len(by_f)), mean_change=mean, fall=fall,
+                se=se, se_over_input_flies=se_f, se_over_wirings=se_w, se_multiples=fall / se if se > 0 else np.nan,
+                control_fall=CONTROL_FALL, n_model_flies_falling=int((ch < 0).sum()),
+                per_fly={str(k): float(v) for k, v in by_f.items()}, per_wiring={str(k): float(v) for k, v in by_w.items()},
+                stands=bool(np.isfinite(se) and fall > IMPROVE_SE * se and fall > CONTROL_FALL))
+
+
+def a1_apl16_shares(changes: pd.DataFrame, spread: float) -> dict:
+    """A1 at the APL16 somata: per input fly the mean over wirings of A1's change, and the share of input flies on
+    which it is worse than the spread as scored (above it), better than it (below minus it)."""
+    if changes.empty:
+        return dict(n_flies=0)
+    by_f = changes['change'].groupby(level=1).mean()
+    return dict(n_flies=int(len(by_f)), n_model_flies=int(len(changes)), mean_change=float(changes['change'].mean()),
+                spread=float(spread), share_worse=float((by_f > spread).mean()), share_better=float((by_f < -spread).mean()),
+                per_fly={str(k): float(v) for k, v in by_f.items()})
+
+
+def per_fly_series(values: pd.Series, side: Side) -> pd.Series:
+    """A per-model-fly Series (index the side's tags) re-indexed by (wiring, input fly)."""
+    return pd.Series(values.reindex(side.tags).to_numpy(dtype=float),
+                     index=pd.MultiIndex.from_arrays([side.wiring, side.fly], names=['wiring', 'fly']))
+
+
+def megamat_values(sides: Mapping[str, Side]) -> Dict[str, pd.Series]:
+    """Per model fly ((wiring, input fly) index): the megamat stage error ('stage'), the error after the PN dendrites
+    ('downstream'), each stage's strength error, and each stage's error on every view ('guard/<stage>')."""
+    out = {}
+    each = {st: side_scores(sd) for st, sd in sides.items()}
+    for st, sd in sides.items():
+        out[st] = per_fly_series(each[st]['view_strength'], sd)
+        out[f'guard/{st}'] = per_fly_series(each[st][stage_column(st, None)], sd)
+    stg = [st for st in LOSS_STAGES if st in out]
+    df = pd.concat({st: out[st] for st in stg}, axis=1)
+    out['stage'] = np.sqrt((df ** 2).mean(axis=1, skipna=False))
+    dn = [st for st in DOWNSTREAM if st in out]
+    out['downstream'] = np.sqrt((df[dn] ** 2).mean(axis=1, skipna=False)) if dn else pd.Series(dtype=float)
+    return out
+
+
+def population_rows(name: str, sides: Mapping[str, Side], lab: Optional[Mapping[str, Side]], spreads: Mapping[str, float],
+                    reading: str, n_unheld: int = 0, n_missing: int = 0, classed: bool = True) -> List[dict]:
+    """One megamat population read one way: per stage and for the megamat stage error, the population's error against
+    the wirings' mean view at the lab's input on the same wirings, each model fly's error (mean, min, max), the terms,
+    a model fly against the others, the spread over model flies and the classes (none where `classed` is False, a
+    reference is missing, or more than a ninth of the model flies are unheld); every view's error of the population
+    beside."""
+    rows = []
+    total = len(next(iter(sides.values()))) + n_unheld if sides else 0
+    no_class = unheld_rule(n_unheld, total) or not classed
+    vals = megamat_values(sides)
+    pops = {st: population_score(sd) for st, sd in sides.items()}
+    oth = {st: against_others(sd) for st, sd in sides.items()}
+    labpops = {st: population_score(sd) for st, sd in lab.items()} if lab else {}
+    ws = sorted(set(next(iter(sides.values())).wiring), key=WIRINGS.index) if sides else []
+    for st in [*[x for x in LOSS_STAGES if x in sides], 'megamat_stage_error']:
+        if st == 'megamat_stage_error':
+            pv = float(np.sqrt(np.mean([float(pops[x]['view_strength']) ** 2 for x in sides])))
+            lv = float(np.sqrt(np.mean([float(labpops[x]['view_strength']) ** 2 for x in sides]))) if labpops else np.nan
+            each = vals['stage']
+            o = np.sqrt(pd.concat({x: per_fly_series(oth[x]['view_strength'], sides[x]) for x in sides}, axis=1).pow(2)
+                        .mean(axis=1, skipna=False))
+            spread = spreads.get('stage', np.nan)
+            extra = {}
+        else:
+            pv = float(pops[st]['view_strength'])
+            lv = float(labpops[st]['view_strength']) if st in labpops else np.nan
+            each = vals[st]
+            o = per_fly_series(oth[st]['view_strength'], sides[st])
+            spread = spreads.get(st, np.nan)
+            extra = {f'pop_{c}': float(pops[st][c]) for c in pops[st].index
+                     if c.startswith('view_') or c in ('error', 'error_with_matrix')}
+            extra.update({f'labpop_{c}': float(labpops[st][c]) for c in (labpops[st].index if st in labpops else [])
+                          if c.startswith('view_') or c in ('error', 'error_with_matrix')})
+        T = each.unstack('fly').reindex(index=[w for w in WIRINGS if w in ws], columns=[f for f in FLY_LABELS])
+        T = T.dropna(axis=1, how='all')
+        tm = terms(T)
+        rec = dict(population=name, reading=reading, stage=st, n_model_flies=int(each.notna().sum()), n_unheld=n_unheld,
+                   n_missing=n_missing, wirings=' '.join(ws), population_error=pv, lab_common=lv,
+                   population_minus_lab=pv - lv, spread_as_scored=float(spread),
+                   mean_model_fly=float(each.mean()), min_model_fly=float(each.min()), max_model_fly=float(each.max()),
+                   spread_model_flies=float(each.std(ddof=1)) if each.notna().sum() > 1 else np.nan,
+                   term_input_fly=tm['input_fly'], term_wiring=tm['wiring'], term_remainder=tm['remainder'],
+                   term_ratio=tm['ratio'], terms_complete=tm['complete'], against_others_mean=float(o.mean()),
+                   against_others_min=float(o.min()), against_others_max=float(o.max()), no_class=no_class, **extra)
+        rec.update(stand_in='no class' if no_class or not np.isfinite(lv) else stand_in_class(pv, lv, spread),
+                   input_fly_term='no class' if no_class or not tm['complete'] else term_class(tm['ratio']),
+                   model_flies='no class' if no_class else flies_class(rec['against_others_mean']))
+        rows.append(rec)
+    return rows
+
+
+def model_fly_spreads(vals: Mapping[str, pd.Series]) -> Tuple[Dict[str, float], Dict[str, float]]:
+    """(the spreads keyed as E136's: 'stage', 'downstream', each stage; the guard's: each stage on every view), the SD
+    (ddof 1) over the model flies of `megamat_values`."""
+    st = {k: float(vals[k].std(ddof=1)) for k in ('stage', 'downstream', *LOSS_STAGES) if k in vals and len(vals[k]) > 1}
+    gd = {k: float(vals[f'guard/{k}'].std(ddof=1)) for k in LOSS_STAGES if f'guard/{k}' in vals}
+    return st, gd
+
+
+def odor_entry_rows(name: str, sides: Mapping[str, Side]) -> pd.DataFrame:
+    """Each odor's strength entries by input fly at every stage (leads): the mean over the population's wirings of each
+    input fly's model flies' entry, the flies' mean, and their difference in the part's one-fly units; and the
+    population's (all its model flies) beside as 'all'."""
+    rows = []
+    for st, sd in sides.items():
+        for q in [q for q in ('strength/rate', 'strength/mean') if q in sd.arrays]:
+            m = sd.ref.mean[q]
+            u = float(sd.ref.one_fly[q])
+            for f in [*FLY_LABELS, 'all']:
+                mask = np.ones(len(sd), bool) if f == 'all' else (sd.fly == f)
+                if not mask.any():
+                    continue
+                a = _nanmean0(sd.arrays[q][mask])
+                for o, av, mv in zip(m.index, a, m.to_numpy(dtype=float)):
+                    rows.append(dict(population=name, stage=st, part=q, fly=f, odor=o, model=float(av), flies=float(mv),
+                                     diff_units=float((av - mv) / u)))
+    return pd.DataFrame(rows)
+
+
+def without_odor_rows(name: str, side: Side, odor: str = 'aa') -> pd.DataFrame:
+    """The strength error of each model fly and of the population with and without one odor's entry (E138's
+    `odor_entries` rule, as E136's `stage_without_odor` reads it: the odor's term out of each strength part's squared
+    error, the number of odors kept, nothing renormalized)."""
+    parts = [q for q in ('strength/rate', 'strength/mean') if q in side.arrays]
+    labels = [*side.tags, 'population']
+    with_, without = np.zeros(len(labels)), np.zeros(len(labels))
+    for q in parts:
+        m = side.ref.mean[q]
+        if odor not in list(m.index):
+            raise KeyError(f'{odor!r} not among the odors of {side.key}')
+        A = np.vstack([side.arrays[q], _nanmean0(side.arrays[q])[None, :]])
+        e = (A - m.to_numpy(dtype=float)[None, :]) / float(side.ref.one_fly[q])
+        ok = np.isfinite(e)
+        n = np.maximum(ok.sum(axis=1), 1)
+        e2 = np.where(ok, e ** 2, 0.0)
+        j = list(m.index).index(odor)
+        with_ += e2.sum(axis=1) / n
+        without += (e2.sum(axis=1) - e2[:, j]) / n
+    k = len(parts)
+    return pd.DataFrame(dict(population=name, stage=side.key[0], odor=odor, row=labels,
+                             view_error=np.sqrt(with_ / k), view_error_without=np.sqrt(without / k)))
+
+
+def megamat_realism_rows(pts: pd.DataFrame, runs_info: Mapping[str, dict]) -> pd.DataFrame:
+    """Per megamat model fly: the response rates with APL on and off beside the flies' 0.0915 (E134's lock), the
+    threshold and APL factors after the re-hold (against the wiring's own point), the held parameters and the largest
+    spike counts (the reads' rows, and the runs where the rows lack them)."""
+    rows = []
+    for r in pts.to_dict('records'):
+        info = runs_info.get(r['tag'], {})
+        rows.append(dict(tag=r['tag'], group=r['group'], wiring=r['wiring'], fly=r['fly'], held=r['held'],
+                         rate_on=r.get('rate_on', info.get('rate_on')), rate_off=r.get('rate_off', info.get('rate_off')),
+                         flies_rate=0.0915, thr_factor=r.get('thr_factor'), apl_factor=r.get('apl_factor'),
+                         fixed_thr=r.get('fixed_thr'), wAPLKC_scale=r.get('wAPLKC_scale'),
+                         max_count_on=r.get('max_count_on', info.get('max_count_on')),
+                         max_count_off=r.get('max_count_off', info.get('max_count_off'))))
+    return pd.DataFrame(rows)
+
+
+def _loader(tag: str, step: int, info: dict):
+    """A function loading a read (`load_point`) that records its rates and largest counts into `info`."""
+    def load():
+        run = load_point(tag, step)
+        if run is None:
+            raise FileNotFoundError(tag)
+        rec = {}
+        for c in ('on', 'off'):
+            st = run.conditions[c]
+            rec[f'rate_{c}'] = float((st['responses'].to_numpy(dtype=float) > 0.5).mean())
+            rec[f'max_count_{c}'] = float(st['spike_counts'].to_numpy(dtype=float).max())
+        info[tag] = rec
+        return run
+    return load
+
+
+def fill_counts(pts: pd.DataFrame) -> pd.DataFrame:
+    """The points with n_on and n_off (the runs' response counts, from their saved responses) where the rows lack them,
+    and 'held' re-read by `is_held` for those."""
+    pts = pts.copy()
+    for c in ('n_on', 'n_off'):
+        if c not in pts:
+            pts[c] = np.nan
+    for i, r in pts.iterrows():
+        if np.isfinite(pd.to_numeric(r.get('n_on'), errors='coerce')) and \
+                np.isfinite(pd.to_numeric(r.get('n_off'), errors='coerce')):
+            continue
+        for c, cc in (('on', 'on'), ('off', 'acute_off')):
+            for d in run_dirs(r['step'], r['setting'], r['wiring'], r['fly']):
+                f = Path(d) / f"{r['tag']}_{cc}_responses.parquet"
+                if f.exists():
+                    pts.at[i, f'n_{c}'] = float((pd.read_parquet(f).to_numpy(dtype=float) > 0.5).sum())
+                    break
+        if not r['free']:
+            pts.at[i, 'held'] = is_held(pts.loc[i].to_dict())
+    return pts
+
+
+def available(pts: pd.DataFrame) -> pd.DataFrame:
+    """The points whose run is saved (locally or in the archive)."""
+    keep = []
+    for r in pts.itertuples():
+        d = run_dirs(r.step, r.setting, r.wiring, r.fly)
+        keep.append(any((Path(x) / f'{r.tag}_run.json').exists() for x in d))
+    return pts[np.asarray(keep, dtype=bool)] if len(pts) else pts
+
+
+def a1_lab_runs(panel: str) -> Dict[str, Tuple[str, str, object]]:
+    """E136's A1 reads at its classed point on the lab's input (megamat on T, read against the held-out half; APL16 on
+    T), as model flies of the input fly 'lab'; missing reads are left out."""
+    from experiments import E136_stage_population_fit as E136m
+    E136m.set_measure(MEASURE)
+    out = {}
+    for w in T_WIRINGS:
+        r = E136m.load_read(E136m.ReadPoint('A1', panel, w, 'held' if panel == 'megamat' else None))
+        if r is not None:
+            out[f'lab_A1_{panel}_{w}'] = (w, 'lab', r)
+    return out
+
+
+def check_inputs(pts: pd.DataFrame) -> List[str]:
+    """Tags whose row's input_sha256 is not the sha256 of `input_fly` of its fly and panel (or that have none)."""
+    from experiments.E77_input_screen import frame_sha256
+    want = {(f, pn): frame_sha256(input_fly(f, pn)) for f in FLY_LABELS for pn in PANELS}
+    bad = []
+    for r in pts.to_dict('records'):
+        if r.get('input_sha256') != want[(r['fly'], r['panel'])]:
+            bad.append(r['tag'])
+    return bad
+
+
+def part_score(rows: Optional[pd.DataFrame] = None) -> dict:
+    """The score of hal's reads (the module docstring; no simulation), on whatever reads are saved: writes
+    score_populations.csv, score_model_flies.csv, score_a1.json, score_apl16_groups.csv, score_apl16_a1.csv,
+    score_realism_megamat.csv, score_realism_apl16.csv, score_classes_recomputed.csv, score_odor_entries.csv,
+    score_without_aa.csv, score_e85_beside.csv, classes.json, tables.md and provenance_score.json."""
+    import time
+    t0 = time.time()
+    lock = require_lock()
+    check_files(lock)
+    spreads = lock['spreads_as_scored']
+    pts = available(points_from_rows(reads_table() if rows is None else rows))
+    if not pts.empty:
+        pts = fill_counts(pts)
+    if pts.empty:
+        print('score: no reads yet', flush=True)
+        return {}
+    bad_inputs = check_inputs(pts)
+    info: Dict[str, dict] = {}
+    res: Dict[str, object] = dict(time=_now(), n_reads=int(len(pts)), bad_input_sha256=bad_inputs,
+                                  groups={g: int(n) for g, n in pts.group.value_counts().items()})
+    poprows, flyrows, mega_vals = [], [], {}
+    # megamat
+    lab_fam = None
+    for group in ('family/megamat', 'A1/megamat', 'familyfree/megamat', 'A1free/megamat'):
+        g = pts[pts.group == group]
+        if g.empty:
+            continue
+        setting = group.split('/')[0]
+        unheld = int((~g.held.astype(bool)).sum())
+        use = g[g.held.astype(bool)]
+        runs = {r.tag: (r.wiring, r.fly, _loader(r.tag, r.step, info)) for r in use.itertuples()}
+        sides = read_sides_multi(runs, LOSS_STAGES, 'megamat', READINGS, ('on',))
+        base = setting[:-4] if setting.endswith('free') else setting
+        ws = sorted(set(use.wiring), key=WIRINGS.index)
+        if base == 'family':
+            lab_fam = lab_fam or read_sides_multi(e134_held_runs(), LOSS_STAGES, 'megamat', READINGS, ('on',))
+            lab = {h: {k: v.subset([w in ws for w in v.wiring]) for k, v in lab_fam[h].items()} for h in READINGS}
+        else:
+            lab = read_sides_multi(a1_lab_runs('megamat'), LOSS_STAGES, 'megamat', READINGS, ('on',))
+        for h in READINGS:
+            sd = {k[0]: v for k, v in sides[h].items()}
+            lb = {k[0]: v for k, v in lab[h].items()}
+            name = group
+            poprows += population_rows(name, sd, lb, spreads, reading_name(h), unheld, 0, classed=not setting.endswith('free'))
+            if base == 'family' and set(ws) > set(T_WIRINGS):
+                tmask = {k: v.subset([w in T_WIRINGS for w in v.wiring]) for k, v in sd.items()}
+                lmask = {k: v.subset([w in T_WIRINGS for w in v.wiring]) for k, v in lb.items()}
+                poprows += population_rows(f'{name} (T)', tmask, lmask, spreads, reading_name(h), unheld, 0,
+                                           classed=not setting.endswith('free'))
+            vals = megamat_values(sd)
+            mega_vals[(group, reading_name(h))] = vals
+            for k, v in vals.items():
+                for (w, f), x in v.items():
+                    flyrows.append(dict(population=group, reading=reading_name(h), quantity=k, wiring=w, fly=f,
+                                        value=float(x)))
+            if h is None:
+                odor = odor_entry_rows(group, sd)
+                _append_frame(res, 'odor_entries', odor)
+                if 'kc_soma' in sd:
+                    _append_frame(res, 'without_aa', without_odor_rows(group, sd['kc_soma']))
+        print(f'score: {group} read ({len(use)} held, {unheld} unheld; {time.time() - t0:.0f} s)', flush=True)
+    pop = pd.DataFrame(poprows)
+    if len(pop):
+        _write_csv(pop, 'score_populations.csv')
+    if flyrows:
+        _write_csv(pd.DataFrame(flyrows), 'score_model_flies.csv')
+    for k, fname in (('odor_entries', 'score_odor_entries.csv'), ('without_aa', 'score_without_aa.csv')):
+        if k in res:
+            _write_csv(res.pop(k), fname)
+    # A1's fall, model fly by model fly
+    a1 = {}
+    for rd in ('held', 'all'):
+        A, F = mega_vals.get(('A1/megamat', rd)), mega_vals.get(('family/megamat', rd))
+        if A is not None and F is not None:
+            a1[rd] = dict(stage=a1_fall(paired(A['stage'], F['stage'])),
+                          **{st: a1_fall(paired(A[st], F[st])) for st in LOSS_STAGES if st in A and st in F})
+    if a1:
+        _write_json(results_dir() / 'score_a1.json', a1)
+    # the APL16 somata
+    apl_rows, apl_per, apl_sides = [], [], {}
+    for group in ('family/apl16', 'A1/apl16', 'familyfree/apl16', 'A1free/apl16'):
+        g = pts[pts.group == group]
+        if g.empty:
+            continue
+        setting = group.split('/')[0]
+        base = setting[:-4] if setting.endswith('free') else setting
+        runs = {r.tag: (r.wiring, r.fly, _loader(r.tag, r.step, info)) for r in g.itertuples()}
+        sides = read_sides(runs, ['kc_soma'], 'apl16')
+        apl_sides[group] = sides
+        ws = sorted(set(g.wiring), key=WIRINGS.index)
+        lab = read_sides(lab_apl16_runs(ws) if base == 'family' else a1_lab_runs('apl16'), ['kc_soma'], 'apl16')
+        r_, pf = apl16_group_rows(group, sides, lab, g.set_index('tag').held, spreads)
+        if setting.endswith('free'):
+            for q in r_:
+                q.update(stand_in='beside', input_fly_term='beside', model_flies='beside')
+        apl_rows += r_
+        apl_per.append(pf)
+    groups = pd.DataFrame(apl_rows)
+    if len(groups):
+        _write_csv(groups, 'score_apl16_groups.csv')
+        _write_csv(pd.concat(apl_per, ignore_index=True), 'score_apl16_model_flies.csv')
+    a1_apl = {}
+    if 'A1/apl16' in apl_sides and 'family/apl16' in apl_sides:
+        for c in ('on', 'off'):
+            k = ('kc_soma', 'apl16', c)
+            sa, sf = apl_sides['A1/apl16'][k], apl_sides['family/apl16'][k]
+            ch = paired(per_fly_series(side_scores(sa)['view_strength'], sa),
+                        per_fly_series(side_scores(sf)['view_strength'], sf))
+            a1_apl[c] = a1_apl16_shares(ch, float(spreads[f'apl16/apl16/{c}']))
+        _write_json(results_dir() / 'score_apl16_a1.json', a1_apl)
+    # realism
+    _write_csv(megamat_realism_rows(pts[pts.panel == 'megamat'], info), 'score_realism_megamat.csv')
+    if (pts.panel == 'apl16').any():
+        _write_csv(apl16_realism_score(pts[pts.panel == 'apl16']), 'score_realism_apl16.csv')
+    # E85's saved model flies beside step 2's family APL16 reads
+    if 'family/apl16' in apl_sides:
+        _write_csv(e85_beside(pts[pts.group == 'family/apl16'], apl_sides['family/apl16']), 'score_e85_beside.csv')
+    # the classes recomputed with the spreads over model flies (a description)
+    recomputed = {}
+    fam = mega_vals.get(('family/megamat', 'held'))
+    if fam is not None:
+        mst, mgd = model_fly_spreads(fam)
+        s0 = json.loads((results_dir() / 'classes_step0.json').read_text()) if (results_dir() / 'classes_step0.json').exists() else {}
+        variants = {'a_megamat': ({}, {})}
+        if s0:
+            variants['b_megamat_apl16_e85'] = (s0.get('spreads_model_flies', {}), s0.get('spreads_model_flies_all_views', {}))
+        if len(groups) and (groups.group == 'family/apl16').any():
+            gg = groups[groups.group == 'family/apl16'].set_index('condition')
+            variants['c_megamat_apl16_step2'] = (
+                {f'apl16/apl16/{c}': float(gg.loc[c, 'strength_spread_model_flies']) for c in gg.index},
+                {f'apl16/apl16/{c}': float(gg.loc[c, 'all_views_spread_model_flies']) for c in gg.index})
+        tabs = class_tables()
+        parts = []
+        for vname, (ast, agd) in variants.items():
+            t = classes_with_spreads(dict(mst, **ast), dict(mgd, **agd), tabs).assign(variant=vname)
+            parts.append(t)
+            recomputed[vname] = t[t.changed][['table', 'arm', 'cls_scored', 'cls_new']].to_dict('records')
+        _write_csv(pd.concat(parts, ignore_index=True), 'score_classes_recomputed.csv')
+        res['spreads_model_flies_megamat'] = dict(strength=mst, guard=mgd)
+    # the classes
+    classes = dict(time=_now(), n_reads=int(len(pts)), megamat={}, apl16={}, a1_fall={}, a1_apl16=a1_apl,
+                   recomputed_changed=recomputed, bad_input_sha256=bad_inputs)
+    if len(pop):
+        for r in pop[pop.reading == 'all'].itertuples():
+            classes['megamat'].setdefault(r.population, {})[r.stage] = dict(
+                stand_in=r.stand_in, input_fly_term=r.input_fly_term, model_flies=r.model_flies, n_unheld=int(r.n_unheld))
+    if len(groups):
+        for r in groups.itertuples():
+            classes['apl16'].setdefault(r.group, {})[r.condition] = dict(
+                stand_in=r.stand_in, input_fly_term=r.input_fly_term, model_flies=r.model_flies, n_unheld=int(r.n_unheld))
+    for rd, v in a1.items():
+        classes['a1_fall'][rd] = dict(stands=v['stage'].get('stands'), fall=v['stage'].get('fall'), se=v['stage'].get('se'))
+    classes['outcomes'] = outcomes(classes, pop)
+    _write_json(results_dir() / 'classes.json', dict(classes, **{k: v for k, v in res.items() if k not in classes}))
+    write_tables_score(pop, groups, a1, a1_apl, recomputed, classes)
+    provenance('score', lock, seconds=round(time.time() - t0, 1), n_reads=int(len(pts)),
+               reads=sorted(pts.tag), inputs={k: v['sha256'] for k, v in lock['files'].items()})
+    print(f'score done in {time.time() - t0:.0f} s', flush=True)
+    return classes
+
+
+def _append_frame(res: dict, key: str, df: pd.DataFrame) -> None:
+    res[key] = pd.concat([res[key], df], ignore_index=True) if key in res else df
+
+
+def apl16_realism_score(pts: pd.DataFrame) -> pd.DataFrame:
+    """The four realism bands per APL16 model fly (E136's `apl16_realism`) and per population (E85's
+    `population_realism` over its model flies), per group, with the largest counts and the factors."""
+    from experiments import E136_stage_population_fit as E136m
+    from experiments import E85_orn_fly_population as E85m
+    rows, parts = [], {}
+    for r in pts.to_dict('records'):
+        run = load_point(r['tag'], r['step'])
+        if run is None:
+            continue
+        on, off = run.conditions['on'], run.conditions['off']
+        rows.append(dict(group=r['group'], unit=r['tag'], kind='model_fly', wiring=r['wiring'], fly=r['fly'],
+                         held=r['held'], n_model_flies=1, thr_factor=r.get('thr_factor'), apl_factor=r.get('apl_factor'),
+                         max_count_on=float(on['spike_counts'].to_numpy(dtype=float).max()),
+                         max_count_off=float(off['spike_counts'].to_numpy(dtype=float).max()),
+                         **E136m.apl16_realism(on['responses'], off['responses'])))
+        parts.setdefault(r['group'], []).append(E85m.run_realism_parts({'on': (on['responses'], on['spike_counts']),
+                                                                         'off': (off['responses'], off['spike_counts'])}))
+    for g, ps in parts.items():
+        pr = E85m.population_realism(ps)
+        rows.append(dict(group=g, unit='population', kind='population', n_model_flies=len(ps), rate_on=pr['rate_on'],
+                         rate_off=pr['rate_off'], rate_ratio=pr['ratio'], rate_rho_on=pr['rate_rho_on'],
+                         rate_rho_off=pr['rate_rho_off'], opk_on_tv=pr['opk_on_tv'], opk_off_tv=pr['opk_off_tv'],
+                         realism_flag=pr['realism_flag']))
+    return pd.DataFrame(rows)
+
+
+def e85_beside(pts: pd.DataFrame, sides: Mapping[tuple, Side]) -> pd.DataFrame:
+    """Step 2's family APL16 reads (breadth the lab input's) beside E85's saved B1T model flies (breadth recomputed per
+    input) on the same wiring and input fly: the entries whose spike counts differ, the response counts, and the
+    strength error of each at the APL16 somata."""
+    from experiments import E85_orn_fly_population as E85m
+    rows = []
+    e85_scores = pd.read_csv(results_dir() / 'step0_apl16_model_flies.csv') \
+        if (results_dir() / 'step0_apl16_model_flies.csv').exists() else pd.DataFrame()
+    for r in pts.to_dict('records'):
+        tag85 = f"B1T_repro_{r['fly']}_{r['wiring']}" if r['wiring'] in T_WIRINGS else f"B1S_repro_{r['fly']}_{r['wiring']}"
+        o = E85m.load_run('B', tag85)
+        run = load_point(r['tag'], r['step'])
+        if o is None or run is None:
+            continue
+        rec = dict(tag=r['tag'], e85_tag=tag85, wiring=r['wiring'], fly=r['fly'])
+        for c, cc in (('on', 'on'), ('off', 'off')):
+            a = H.abbrev_columns(run.conditions[c]['spike_counts'].astype(float))
+            b = H.abbrev_columns(o[cc][1].astype(float))[list(a.columns)]
+            rec[f'differing_counts_{c}'] = int((a.to_numpy() != b.to_numpy()).sum())
+            rec[f'responses_{c}'] = int((run.conditions[c]['responses'].to_numpy(dtype=float) > 0.5).sum())
+            rec[f'e85_responses_{c}'] = int((o[cc][0].to_numpy(dtype=float) > 0.5).sum())
+            sd = sides[('kc_soma', 'apl16', c)]
+            rec[f'strength_{c}'] = float(side_scores(sd)['view_strength'].get(r['tag'], np.nan))
+            if len(e85_scores):
+                m = e85_scores[(e85_scores.group == 'B1') & (e85_scores.condition == c) & (e85_scores.tag == tag85)]
+                rec[f'e85_strength_{c}'] = float(m.strength.iloc[0]) if len(m) else np.nan
+        rows.append(rec)
+    return pd.DataFrame(rows)
+
+
+def outcomes(classes: Mapping, pop: pd.DataFrame) -> dict:
+    """The entry's outcomes read off the classes (a description; nothing follows by itself): (a) a fair stand-in at
+    every megamat stage and the megamat stage error with a small input-fly term, (b) a fair stand-in with an input-fly
+    term as large as the wiring's, (c) the population reading moves a megamat stage, (d) A1's fall does not stand,
+    (e) the model's flies vary too much or too little at a stage, (f) a population without a class for its holds."""
+    fam = (classes.get('megamat') or {}).get('family/megamat') or {}
+    out: Dict[str, object] = {}
+    if fam:
+        stands = [v['stand_in'] for v in fam.values()]
+        tterm = [v['input_fly_term'] for v in fam.values()]
+        out['a'] = bool(all(x == 'a fair stand-in' for x in stands) and all(x == 'small' for x in tterm))
+        out['b'] = bool(all(x == 'a fair stand-in' for x in stands) and any(x.startswith('as large') for x in tterm))
+        out['c'] = sorted(k for k, v in fam.items() if v['stand_in'].startswith('moves'))
+        out['e'] = {k: v['model_flies'] for k, v in fam.items() if v['model_flies'] in ('vary too little', 'vary too much')}
+    a1 = (classes.get('a1_fall') or {}).get('held')
+    if a1 and a1.get('stands') is not None:
+        out['d'] = not a1['stands']
+    out['f'] = sorted({p for p, st in (classes.get('megamat') or {}).items() for v in st.values()
+                       if v['stand_in'] == 'no class' and v['n_unheld'] > 0}
+                      | {g for g, st in (classes.get('apl16') or {}).items() for v in st.values()
+                         if v['stand_in'] == 'no class' and v['n_unheld'] > 0})
+    return out
+
+
+def write_tables_score(pop: pd.DataFrame, groups: pd.DataFrame, a1: Mapping, a1_apl: Mapping, recomputed: Mapping,
+                       classes: Mapping) -> None:
+    """tables.md: the score's tables (populations, A1's fall, the APL16 somata, the recomputed classes) above step 0's
+    (tables_step0.md)."""
+    lines = ["# E147: the megamat stage error read on model flies with each ORN fly's own input", '',
+             f'Generated by {SCRIPT} at {H.code_commits()["queue_commit"][:7]} ({_now()}) from {classes["n_reads"]} '
+             f'reads. Strength by odor in one-fly units, lower is better.', '']
+    if len(pop):
+        cols = ['population', 'reading', 'stage', 'n_model_flies', 'n_unheld', 'population_error', 'lab_common',
+                'spread_as_scored', 'stand_in', 'mean_model_fly', 'term_input_fly', 'term_wiring', 'term_remainder',
+                'input_fly_term', 'against_others_mean', 'model_flies', 'spread_model_flies']
+        lines += ['## Megamat populations', '', _md(pop[cols]), '']
+    if a1:
+        lines += ["## A1's fall, model fly by model fly (A1 minus the family on the same wiring and input fly)", '']
+        for rd, v in a1.items():
+            st = v['stage']
+            if st.get('n'):
+                lines.append(f"- {rd} flies: fall {st['fall']:.4f} over {st['n']} model flies, se {st['se']:.4f} (over "
+                             f"input flies {st['se_over_input_flies']:.4f}, over wirings {st['se_over_wirings']:.4f}); "
+                             f"stands: {st['stands']}.")
+        lines.append('')
+    if len(groups):
+        cols = ['group', 'condition', 'n_model_flies', 'n_unheld', 'strength_population', 'strength_lab_common',
+                'spread_as_scored', 'stand_in', 'strength_term_input_fly', 'strength_term_wiring', 'input_fly_term',
+                'strength_against_others_mean', 'model_flies', 'strength_spread_model_flies']
+        lines += ['## The APL16 somata', '', _md(groups[cols]), '']
+    if a1_apl:
+        lines += ['## A1 at the APL16 somata, by input fly', '']
+        for c, v in a1_apl.items():
+            if v.get('n_flies'):
+                lines.append(f"- APL {c}: mean change {v['mean_change']:+.4f}; worse than the spread ({v['spread']:.3f}) "
+                             f"on {v['share_worse']:.0%} of the input flies, better on {v['share_better']:.0%}.")
+        lines.append('')
+    if recomputed:
+        lines += ['## The classes recomputed with the spreads over model flies (changed only; a description)', '']
+        for k, v in recomputed.items():
+            lines.append(f"- {k}: " + ('; '.join(f"{x['table']} {x['arm']}: {x['cls_scored']} -> {x['cls_new']}" for x in v)
+                                      if v else 'no class changes'))
+        lines.append('')
+    lines += ['## Outcomes (a description)', '', '```', json.dumps(classes.get('outcomes'), indent=1, default=_json_default),
+              '```', '']
+    st0 = results_dir() / 'tables_step0.md'
+    if st0.exists():
+        lines += ['---', '', st0.read_text()]
+    (results_dir() / 'tables.md').write_text('\n'.join(lines))
 
 
 def main(argv: Optional[Sequence[str]] = None) -> None:

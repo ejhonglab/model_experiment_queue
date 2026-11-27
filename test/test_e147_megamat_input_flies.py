@@ -175,3 +175,99 @@ def test_recompare_and_reclass_on_a_planted_record():
     assert M.reclass_record(rec2, 'E136_stage_population_fit')['cls'] == 'holds'
     rec3 = M.respread(rec, {'stage': 0.06})
     assert M.reclass_record(rec3, 'E136_stage_population_fit')['cls'] == 'does not improve'
+
+
+def test_points_and_holds_from_planted_rows():
+    rows = pd.DataFrame([
+        dict(tag='family_megamat_f0_P3', n_on=1900, target_on=1900, n_off=4000, target_off=4000, at_bound_thr=False,
+             at_bound_apl=False),
+        dict(tag='family_megamat_f1_P3', n_on=1700, target_on=1900, n_off=4000, target_off=4000, at_bound_thr=False,
+             at_bound_apl=False),
+        dict(tag='familyfree_megamat_f1_P3', n_on=1700, target_on=1900, n_off=4000, target_off=4000),
+        dict(tag='not_a_tag', n_on=1, target_on=1, n_off=1, target_off=1)])
+    pts = M.points_from_rows(rows)
+    assert list(pts.tag) == ['family_megamat_f0_P3', 'family_megamat_f1_P3', 'familyfree_megamat_f1_P3']
+    assert list(pts.held) == [True, False, True]
+    assert list(pts.step) == [1, 1, 1] and list(pts.group) == ['family/megamat'] * 2 + ['familyfree/megamat']
+    assert not M.unheld_rule(8, 72) and M.unheld_rule(9, 72) and M.unheld_rule(5, 36)
+
+
+def test_a1_fall_and_apl16_shares_on_planted_changes():
+    idx = pd.MultiIndex.from_product([list(M.T_WIRINGS), list(M.FLY_LABELS)], names=['wiring', 'fly'])
+    fam = pd.Series(1.0, index=idx)
+    rng = np.random.default_rng(1)
+    a1 = fam - 0.1 + 0.01 * rng.standard_normal(len(idx))
+    r = M.a1_fall(M.paired(a1, fam))
+    assert r['n'] == 36 and r['fall'] == pytest.approx(0.1, abs=0.01) and r['stands']
+    assert r['se'] == pytest.approx(max(r['se_over_input_flies'], r['se_over_wirings']))
+    assert not M.a1_fall(M.paired(fam - 0.03, fam))['stands']          # under the control's 0.040
+    worse = pd.Series([0.2 if f in ('f0', 'f1', 'f2') else 0.0 for _, f in idx], index=idx)
+    sh = M.a1_apl16_shares(M.paired(fam + worse, fam), 0.051)
+    assert sh['share_worse'] == pytest.approx(3 / 9) and sh['share_better'] == 0.0
+
+
+def test_without_odor_matches_e138():
+    from experiments import E138_strength_by_odor_entries as E138
+    from kcq import population_fit as P
+    rng = np.random.default_rng(2)
+    odors = ['aa', 'b', 'c', 'd', 'e']
+
+    def pop(name, scale):
+        v = pd.DataFrame(rng.gamma(2.0, scale, size=(40, len(odors))), columns=odors)
+        return P.Population.from_criterion(v, 3.0, name=name)
+
+    flies = [pop(f'fly{i}', 1.0 + 0.1 * i) for i in range(4)]
+    ref = P.fly_reference(flies, odors, P.APL16_BREADTH_EDGES, parts=['strength/rate', 'strength/mean'])
+    models = [pop(f'm{i}', 1.2) for i in range(3)]
+    arrays = P.stack_views([P.reference_views(m, ref) for m in models], ref)
+    sd = M.Side(('kc_soma', 'megamat', 'on'), ref, ['m0', 'm1', 'm2'], ['P3', 'P4', 'M2'], ['f0', 'f0', 'f1'], arrays)
+    mine = M.without_odor_rows('x', sd).set_index('row')
+    e = E138.odor_entries(models, ref, names=['m0', 'm1', 'm2'])
+    e = e[e.odor == 'aa'].set_index('row')
+    for row, theirs in (('m0', 'm0'), ('m2', 'm2'), ('population', 'common')):
+        assert mine.loc[row, 'view_error'] == pytest.approx(float(e.loc[theirs, 'view_error']))
+        assert mine.loc[row, 'view_error_without'] == pytest.approx(float(e.loc[theirs, 'view_error_without']))
+
+
+def test_score_on_planted_reads(tmp_path, monkeypatch):
+    """The score end to end on planted reads: every input fly's read is the lab input's saved run of its wiring
+    (E134's held megamat runs, the wirings' own APL16 fits), and A1's reads are the family's, so the population is the
+    lab's, the input-fly term is 0 and A1 does not fall."""
+    import shutil
+    from experiments import E134_population_baseline as B
+    shutil.copy(M.LOCK_COPY, tmp_path / M.LOCK_NAME)
+    monkeypatch.setitem(M.DIRS, 'results', tmp_path)
+    monkeypatch.setitem(M.DIRS, 'local', tmp_path / 'local')
+    monkeypatch.setitem(M.DIRS, 'archive', tmp_path / 'archive')
+    cache = {}
+
+    def load(tag, step=None):
+        setting, panel, fly, w = M.parse_tag(tag)
+        if (panel, w) not in cache:
+            cache[(panel, w)] = (B.load_run(B.tag_of(B.Point('megamat', 'held', w))) if panel == 'megamat'
+                                 else M.lab_apl16_runs([w])[f'lab_apl16_{w}'][2])
+        return cache[(panel, w)]
+
+    monkeypatch.setattr(M, 'load_point', load)
+    monkeypatch.setattr(M, 'available', lambda pts: pts)
+    rows = []
+    for f in ('f0', 'f1'):
+        for w in M.WIRINGS:
+            rows.append(dict(tag=M.point_tag('family', 'megamat', f, w)))
+        for w in M.T_WIRINGS:
+            rows += [dict(tag=M.point_tag(s_, p_, f, w)) for s_, p_ in (('A1', 'megamat'), ('family', 'apl16'),
+                                                                         ('A1', 'apl16'))]
+    rows = pd.DataFrame([dict(r, n_on=100, target_on=100, n_off=200, target_off=200, at_bound_thr=False,
+                              at_bound_apl=False) for r in rows])
+    cl = M.part_score(rows)
+    pop = pd.read_csv(tmp_path / 'score_populations.csv')
+    fam = pop[(pop.population == 'family/megamat') & (pop.reading == 'all')].set_index('stage')
+    assert np.allclose(fam.population_error, fam.lab_common, atol=1e-12)
+    assert (fam.stand_in == 'a fair stand-in').all()
+    assert np.allclose(fam.term_input_fly, 0.0, atol=1e-12) and (fam.input_fly_term == 'small').all()
+    assert fam.loc['megamat_stage_error', 'lab_common'] == pytest.approx(M.E134_IDENTITY['common'])
+    assert cl['a1_fall']['all']['fall'] == pytest.approx(0.0, abs=1e-12) and not cl['a1_fall']['all']['stands']
+    g = pd.read_csv(tmp_path / 'score_apl16_groups.csv').set_index(['group', 'condition'])
+    assert np.isclose(g.loc[('family/apl16', 'on'), 'strength_population'],
+                      g.loc[('family/apl16', 'on'), 'strength_lab_common'])
+    assert (tmp_path / 'classes.json').exists() and (tmp_path / 'tables.md').exists()
