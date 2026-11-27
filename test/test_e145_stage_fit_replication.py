@@ -130,6 +130,11 @@ def test_score_fall_and_experiment_classes():
     c = S.experiment_classes(e, 0.04)
     assert 'e' in c['outcome'] and 'f' in c['outcome'] and c['no_class_cells'] == ['W'] and c['at_bound_cells'] == ['W']
     assert S.experiment_classes(dict(A1=a1, X=_rec('holds', -0.1, 0.01)), 0.04)['complete'] is False
+    # a cell classed before its held-out panels are all read does not count as scored
+    w = _rec("strength at another view's cost", -0.1, 0.01)
+    w['cls']['panel_missing'] = ['apl16/apl16/on']
+    c = S.experiment_classes(dict(e, W=w), 0.04)
+    assert c['complete'] is False and c['cells_scored'] == ['X', 'F']
 
 
 def test_score_repeats_on_a_planted_fit():

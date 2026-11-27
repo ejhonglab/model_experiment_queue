@@ -272,9 +272,12 @@ def fall_repeats_in(rec: Mapping, control_fall: float) -> Optional[bool]:
 
 def experiment_classes(recs: Mapping[str, Mapping], control_fall: float) -> dict:
     """The entry's classes over the three cells (CLASSES) and the outcome letters whose conditions hold (OUTCOMES), from
-    the cells' records (`score_cell`); every class None while a cell is unscored."""
+    the cells' records (`score_cell`); every class None while a cell is unscored. A cell counts as scored only once all
+    its reads are in: a cell whose held-out panels are not all read can still change class (a wiring outside a realism
+    band on the APL16 input makes it "no class"), even where E136's class does not wait for them."""
     cells = list(E.FIT_CELLS)
-    have = [k for k in cells if k in recs and (recs[k]['cls'] or {}).get('cls') not in (None, 'reads missing')]
+    have = [k for k in cells if k in recs and (recs[k]['cls'] or {}).get('cls') not in (None, 'reads missing')
+            and not (recs[k]['cls'] or {}).get('panel_missing')]
     cls = {k: recs[k]['cls'].get('cls') for k in recs}
     fall = {k: fall_repeats_in(recs[k], control_fall) for k in recs}
     rep = {k: recs[k]['repeats'] for k in recs}
