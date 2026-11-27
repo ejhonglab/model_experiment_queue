@@ -38,8 +38,10 @@ Design (the entry's):
   validation2, mixture and APL16 inputs with APL on and off on all eight wirings, at the classed point;
 - the four-factor control (`--part control`, beside): A1's form fitted in cell X to flies with permuted odor labels
   (E136's CONTROL_A1), 80 evaluations, and its four megamat reads on cell X's read wirings;
-- the score and E143's resampled reading per cell (`--part score`, `--part resampled`) are written once the fits run
-  (stubs here).
+- the score (`--part score`, experiments/E145_score.py): per cell E136's classes with E139's price against the family
+  where the cell is read, E136's own cell scored the same way and checked against E136's score, and the experiment's
+  classes and outcome letters;
+- E143's resampled reading per cell (`--part resampled`) is written once the cells' reads are in (a stub here).
 
 Outputs: <shared>/results/E145_stage_fit_replication/ (E145_lock.json, step0.json, step0_*.csv, prediction.json, and per
 cell <cell>/: E136's fit records, identity_A1.json, determined_A1.csv, rescore_A1.csv, consistency_*.csv, claims/,
@@ -716,8 +718,10 @@ def part_fit(cell: str, lane: str, reclaim: bool = False, parts: Sequence[str] =
 
 def part_score() -> dict:
     """Step 5: per cell, E136's classes with E139's price against the unrefitted family where the cell is read, with
-    A1's row beside as scored; the experiment's classes (CLASSES) and outcome. Not written yet."""
-    raise NotImplementedError("E145's score is written while the fits run")
+    E136's own cell (A1) scored the same way and checked against E136's score; the experiment's classes (CLASSES) and
+    outcome letters (OUTCOMES). experiments/E145_score.py's `part_score`."""
+    from experiments import E145_score as S
+    return S.part_score()
 
 
 def part_resampled() -> dict:

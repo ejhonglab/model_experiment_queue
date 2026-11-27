@@ -102,3 +102,49 @@ def test_the_four_factor_control():
             E.parse_tag(bad)
     with pytest.raises(ValueError):
         F.register_variant(F.CONTROL_A1, lambda pt, claw_after: None)
+
+
+def _rec(cls, change, se, kckc=True, at_bound=None, inhadd=True, aplpn=True):
+    return dict(cls=dict(cls=cls, megamat=dict(complete=True, change=change, se=se)),
+                repeats=dict(inhadd=dict(repeats=inhadd), aplpn=dict(repeats=aplpn), kckc=dict(repeats=kckc)),
+                fit=dict(at_bound_classed=at_bound or []))
+
+
+def test_score_fall_and_experiment_classes():
+    from experiments import E145_score as S
+    assert S.fall_repeats_in(_rec('holds', -0.10, 0.01), 0.04) is True
+    assert S.fall_repeats_in(_rec('holds', -0.03, 0.01), 0.04) is False     # beyond the bar, not the control's fall
+    assert S.fall_repeats_in(_rec('holds', -0.05, 0.03), 0.04) is False     # beyond the control's fall, not the bar
+    assert S.fall_repeats_in(dict(cls=dict(megamat=dict(complete=False))), 0.04) is None
+    a1 = _rec('holds', -0.115, 0.01)
+    allhold = dict(A1=a1, X=_rec('holds', -0.1, 0.01), F=_rec('holds', -0.09, 0.01), W=_rec('megamat only', -0.1, 0.01))
+    c = S.experiment_classes(allhold, 0.04)
+    assert c['complete'] and c['fall_repeats'] and c['hold_repeats'] and c['outcome'][0] == 'a'
+    assert c['the_wirings'] and not c['the_flies'] and 'd' in c['outcome']
+    b = dict(A1=a1, X=_rec('megamat only', -0.1, 0.01, kckc=False), F=_rec('megamat only', -0.1, 0.01, kckc=False),
+             W=_rec('holds', -0.1, 0.01))
+    c = S.experiment_classes(b, 0.04)
+    assert 'b' in c['outcome'] and not c['hold_repeats'] and not c['megamat_fixes']['kckc']
+    e = dict(A1=a1, X=_rec('holds', -0.1, 0.01), F=_rec('does not improve', 0.0, 0.01),
+             W=_rec('no class', -0.1, 0.01, at_bound=['kckc high']))
+    c = S.experiment_classes(e, 0.04)
+    assert 'e' in c['outcome'] and 'f' in c['outcome'] and c['no_class_cells'] == ['W'] and c['at_bound_cells'] == ['W']
+    assert S.experiment_classes(dict(A1=a1, X=_rec('holds', -0.1, 0.01)), 0.04)['complete'] is False
+
+
+def test_score_repeats_on_a_planted_fit():
+    import numpy as np
+    from experiments import E145_score as S
+    from experiments.E3_drive_dependent_gain import PN_INHADD_DEFAULT
+    z = dict(aplpn=float(np.log(0.155)), kckc=float(np.log(3.24)), inhadd=float(np.log(1000.0 / PN_INHADD_DEFAULT)),
+             inhsc=0.0)
+    det = {k: dict(determined=True) for k in z}
+    r = S.repeats('X', dict(classed_z=z, best_z=z, determined=det))
+    assert r['complete'] and r['inhadd']['repeats'] and r['aplpn']['repeats'] and r['kckc']['repeats']
+    assert abs(r['inhadd']['value'] - 1000.0) < 1e-6 and r['inhsc_gain']['read'] is False
+    det['kckc'] = dict(determined=False)
+    z2 = dict(z, inhadd=float(np.log(3141.0 / PN_INHADD_DEFAULT)), aplpn=float(np.log(0.05)))
+    r = S.repeats('X', dict(classed_z=z2, best_z=z2, determined=det))
+    assert not r['kckc']['repeats'] and not r['inhadd']['repeats'] and not r['aplpn']['repeats']
+    assert S.repeats('X', dict(best_z=z))['complete'] is False
+    assert S.variant('W') == 'E145_W'
