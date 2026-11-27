@@ -1056,8 +1056,32 @@ CLASSES: Dict[str, str] = {
                 "tried is reported with any that holds. No calyx, dose or setting becomes a base without Tom's or "
                 "Yang's word.",
 }
-# amendments to the lock after its first commit (each a dict: when, by whom, what, why); none yet
-AMENDMENTS: Tuple[dict, ...] = ()
+# amendments to the lock after its first commit (each a dict: id, when, by whom, what, why, what it gates), in order;
+# each written by `write_lock` before any number it defines is read
+AMENDMENTS: Tuple[dict, ...] = (
+    dict(id='e143_resampled', when='2026-11-26 16:41',
+         by="viki's Opus code subagent (claude-opus-5-5, xhigh), at the brief of viki's queue session",
+         what="Design item 4's \"E143's intervals over flies on every change, if they are in\" made concrete (they are "
+              "in: E143 completed 2026-11-26 11:34). Every read is read once against all the flies of each stage and "
+              "panel, as E143 reads saved runs (E143's read_runs: E134's default readings with the curve, noise and "
+              "criterion of all the stage's flies, this experiment's seed index), into outputs/"
+              "E144_a1_malecns_calyces/views/. E143's 1,000 resamples of the flies (its resamples: seed 0, N_BOOT "
+              "1000, each megamat stage and each held-out panel drawn with replacement from one generator, so that "
+              "megamat's four stages are resampled together; the flies of E143's lock) are the references, in all the "
+              "flies' one-fly units, the unresampled flies last. For every change in classes.json's class tables (each "
+              "setting against its calyx's family on the wirings it was read on): its 5th to 95th percentile over the "
+              "resamples (E143's CI), the share of resamples better than the bar and worse than the spread; each class "
+              "recomputed on every resample (E143's reclass: E136's ladder with the spreads, bars and the reasons that "
+              "do not depend on the flies as scored) and the share of resamples that give the scored class; the "
+              "derived classes (A1 replicates, the rise is needed, B holds, megamat falls with A1) and the outcomes "
+              "(a) to (d) recomputed the same way. E143's joint splits are not read, so its \"a change stands\" is "
+              "given for the held-out panels only (the interval excluding zero); 'stands' is None on megamat's rows. "
+              "Tables: e143_intervals_changes.csv, e143_class_shares.csv, e143_intervals.json "
+              "(experiments/E144_score.py's part_resampled).",
+         why="The entry's design item 4 names E143's intervals beside the score; E143's note found that A1's \"holds\" "
+             "on the hemibrain stands on 54 % of its resamples, so a class on a male calyx is read with its share.",
+         gates='nothing: a description beside the classes, which stay as scored against the held-out half'),
+)
 JUDGMENTS: Tuple[str, ...] = (
     "The start of every hold is the calyx's fit's absolute parameters (E130's counted fit, its fits.csv row) with the "
     "setting's factors; the threshold (APL off) and the APL->KC scale with KC->APL and bouton->APL tied (APL on) are then "
@@ -1121,7 +1145,7 @@ def lock_dict() -> dict:
         e134_lock_sha256=lk.get('sha256'), amendments=list(AMENDMENTS))
 
 
-VOLATILE = ('written', 'host', 'commits')
+VOLATILE = ('written', 'host', 'commits', 'amended', 'amended_host', 'amended_commits')
 
 
 def lock_path() -> Path:
@@ -1137,14 +1161,31 @@ def _same_lock(a: Mapping, b: Mapping) -> bool:
     return strip(a) == strip(b)
 
 
+def _amended_only(cur: Mapping, new: Mapping) -> bool:
+    """Whether `new` is the lock `cur` with amendments appended to its own (AMENDMENTS) and nothing else changed."""
+    strip = lambda d: json.loads(json.dumps({k: v for k, v in d.items() if k not in VOLATILE + ('amendments',)},
+                                            default=str))
+    a = json.loads(json.dumps(list(cur.get('amendments') or []), default=str))
+    b = json.loads(json.dumps(list(new.get('amendments') or []), default=str))
+    return strip(cur) == strip(new) and len(b) > len(a) and b[:len(a)] == a
+
+
 def write_lock(force: bool = False) -> dict:
     """results/E144_a1_malecns_calyces/E144_lock.json and its committed copy experiments/E144_lock.json (`lock_dict`
     with the time, host and commits). A lock already written is kept when it is the same; a different one is refused
-    once any read is claimed or done (a change after that goes in as an amendment, AMENDMENTS), unless `force`."""
+    once any read is claimed or done, unless `force` or the only change is amendments appended (AMENDMENTS): the lock is
+    then written with its first writing's time, host and commits kept and the amendment's beside ('amended',
+    'amended_host', 'amended_commits')."""
     cur = _read_json(lock_path())
     new = lock_dict()
     if cur and _same_lock(cur, new):
         return cur
+    if cur and _amended_only(cur, new):
+        new = dict(new, written=cur.get('written'), host=cur.get('host'), commits=cur.get('commits'), amended=_now(),
+                   amended_host=_host(), amended_commits=H.code_commits())
+        _write_json(lock_path(), new)
+        committed_lock_path().write_text(json.dumps(new, indent=1, default=str) + '\n')
+        return new
     if cur and not force and (len(reads_table()) or any((out_dir() / 'claims').glob('*'))):
         raise RuntimeError(f'{lock_path()} differs from the code\'s lock and reads exist: add an amendment instead')
     new = dict(new, written=_now(), host=_host(), commits=H.code_commits())
@@ -1170,7 +1211,7 @@ def require_lock() -> dict:
 def main(argv: Optional[Sequence[str]] = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('--part', required=True, choices=('lock', 'step0', 'step0_table', 'read', 'smoke', 'score',
-                                                       'variants'))
+                                                       'resampled', 'variants'))
     ap.add_argument('--step', nargs='+', default=['1'], choices=('1', '2'))
     ap.add_argument('--lane', default='1')
     ap.add_argument('--reverse', action='store_true')
@@ -1192,6 +1233,9 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         print(json.dumps(smoke_point(parse_tag(a.point), Path(a.scratch)), indent=1, default=str))
     elif a.part == 'score':
         print(json.dumps(part_score(), indent=1, default=str))
+    elif a.part == 'resampled':
+        from experiments import E144_score as S
+        print(json.dumps(S.part_resampled(), indent=1, default=str))
     elif a.part == 'variants':
         print(f'variants.csv: {len(write_variants())} runs', flush=True)
 

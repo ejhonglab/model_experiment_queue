@@ -294,3 +294,108 @@ def test_score_classes_and_price():
     assert o == dict(a=False, b=False, c=True, d=False, e=True, f=False)
     cal['R']['a1_holds'] = None
     assert S.outcome_letters(cal, {})['c'] is None
+
+
+def test_lock_amendment_appended(monkeypatch, tmp_path):
+    """An amendment appended to the lock is written once reads exist (nothing else may change), keeping the first
+    writing's time and adding the amendment's; the real lock's amendment for the resampled reading is in AMENDMENTS."""
+    monkeypatch.setattr(X, 'out_dir', lambda: tmp_path / 'res')
+    monkeypatch.setattr(X, 'committed_lock_path', lambda: tmp_path / 'E144_lock.json')
+    d = dict(experiment=X.EXPERIMENT, definitions=dict(rise=3.24), amendments=[])
+    monkeypatch.setattr(X, 'lock_dict', lambda: json.loads(json.dumps(d)))
+    w = X.write_lock()
+    (tmp_path / 'res' / 'claims' / 'x').mkdir(parents=True)
+    d['amendments'] = [dict(id='a1', what='x')]
+    with pytest.raises(RuntimeError):
+        X.require_lock()
+    a = X.write_lock()
+    assert a['written'] == w['written'] and a['amendments'] == d['amendments'] and 'amended' in a
+    assert X.require_lock()['amendments'][0]['id'] == 'a1'
+    assert json.loads((tmp_path / 'E144_lock.json').read_text())['amended'] == a['amended']
+    d['amendments'] = []                                   # an amendment taken back is a change
+    with pytest.raises(RuntimeError):
+        X.write_lock()
+    d['definitions'] = dict(rise=3.0)                      # an amendment with any other change is refused
+    d['amendments'] = [dict(id='a1', what='x'), dict(id='a2')]
+    with pytest.raises(RuntimeError):
+        X.write_lock()
+    from experiments import E144_score as S
+    assert [x['id'] for x in X.AMENDMENTS] == [S.AMENDMENT_ID] and json.dumps(list(X.AMENDMENTS)).isascii()
+
+
+def test_resampled_reading_planted():
+    """E143's resampled reading of E144's class tables on a planted `Resampled` (references x the four wirings, the
+    last all the flies): each comparison kept to its calyx's family and its wirings, the classes recomputed, their
+    shares, the derived classes and the outcomes (a) to (d)."""
+    from experiments import E143_megamat_fly_sampling as E143
+    from experiments import E144_score as S
+    K, nw = 5, len(S.ALL_WIRINGS)
+    full = lambda v: np.full((K, nw), float(v))
+    stage = {'L_family': full(1.0), 'L_A1': full(0.9), 'L_B': full(0.99), 'L_D1.8': full(0.9), 'R_family': full(1.0),
+             'R_A1': full(0.9), 'R_B': full(0.99)}
+    stage['L_D1.8'][:, 1:] = np.nan                         # read on the real wiring only
+    stage['R_A1'][1:3] = 0.995                              # two of the four resamples lose R's fall
+    ones = {k: full(1.0) for k in stage}
+    rv = E143.Resampled(mega={'stage': stage, **{st: dict(ones) for st in E143.LOSS_STAGES}},
+                        guard={st: dict(ones) for st in E143.LOSS_STAGES},
+                        panels={k: dict(ones) for k in E143.HOLDS_PANELS + E143.BESIDE_PANELS},
+                        guard_panels={k: dict(ones) for k in E143.HOLDS_PANELS + E143.BESIDE_PANELS})
+    sub = S.restrict(rv, 'L_D1.8', 'L_family', ['real'])
+    assert sub.mega['stage']['L_D1.8'].shape == (K, 1) and set(sub.mega['stage']) == {'L_D1.8', 'family'}
+    assert not np.isnan(sub.mega['stage']['L_D1.8']).any()
+
+    def rec(v, ws, cls):
+        sc = lambda spread: dict(complete=True, se=0.01, spread=spread, change=-0.1)
+        c, s = v.split('_', 1)
+        return dict(megamat=sc(0.02), stages={st: sc(0.02) for st in E143.LOSS_STAGES},
+                    panels={k: sc(0.03) for k in E143.HOLDS_PANELS},
+                    panels_beside={k: sc(0.1) for k in E143.BESIDE_PANELS},
+                    guard={k: sc(0.02) for k in list(E143.LOSS_STAGES) + list(E143.HOLDS_PANELS + E143.BESIDE_PANELS)},
+                    reasons=[], panel_missing=[], cls=cls, calyx=c, setting=s, reference=f'{c}_family', wirings=list(ws))
+    classes = {'L_A1': rec('L_A1', S.ALL_WIRINGS, 'holds'), 'L_B': rec('L_B', S.ALL_WIRINGS, 'does not improve'),
+               'L_D1.8': rec('L_D1.8', ['real'], 'holds'), 'L_D5.8': dict(cls='reads missing', n_reads=0),
+               'R_A1': rec('R_A1', S.ALL_WIRINGS, 'holds'), 'R_B': rec('R_B', S.ALL_WIRINGS, 'does not improve')}
+    kdf, cdf, cls_of, comps_of = S.resampled_classes(classes, rv)
+    k = kdf.set_index('arm')
+    assert k.loc['L_A1', 'share_scored'] == 1.0 and k.loc['R_A1', 'share_scored'] == 0.5
+    assert k.loc['L_D1.8', 'wirings'] == 'real' and k.loc['L_D5.8', 'cls_all_flies'] == 'reads missing'
+    assert json.loads(k.loc['R_A1', 'shares']) == {'does not improve': 0.5, 'holds': 0.5}
+    m = cdf[(cdf.arm == 'R_A1') & (cdf.statistic == 'megamat')].iloc[0]
+    assert m.all_flies == pytest.approx(-0.1) and m.share_improves == 0.5 and m.stands is None and m.calyx == 'R'
+    assert not len(cdf[cdf.arm == 'L_D5.8'])
+    der = S.derived_per_reference(cls_of, comps_of, K)
+    assert der['L']['a1_holds'].all() and der['R']['a1_holds'].tolist() == [True, False, False, True, True]
+    assert der['L']['rise_needed'].all() and not der['L']['b_holds'].any() and der['H']['a1_holds'] is None
+    oc = S.outcomes_per_reference(der, K)
+    assert oc['a'].tolist() == [True, False, False, True, True] and oc['c'].tolist() == [False, True, True, False, False]
+    assert not oc['b'].any() and not oc['d'].any()
+    sh = S._share_of(oc['a'], True)
+    assert sh == dict(scored=True, all_flies=True, share_true=0.5, share_scored=0.5)
+    assert S._share_of(None, True)['share_scored'] is None
+
+
+def test_score_reads_complete_settings_only(monkeypatch):
+    """A class waits for every expected read of the setting (its step-1 points, and its step-2 points once one is
+    saved); the derived classes and outcome (d) are None while a class they need is not read."""
+    from experiments import E144_score as S
+    saved = set()
+    monkeypatch.setattr(S, 'has_run', lambda pt: X.point_tag(pt) in saved)
+    assert len(S.expected_points('L', 'A1')) == 16 and len(S.expected_points('L', 'D1.8')) == 4
+    assert len(S.expected_points('H', 'A1')) == 4 and S.expected_points('R', 'Dabs') == []
+    assert len(S.missing_points('L', 'D1.8')) == 4
+    saved.update(X.point_tag(p) for p in S.expected_points('L', 'D1.8'))
+    assert S.missing_points('L', 'D1.8') == []
+    saved.add('L_D1.8_megamat_P1')                          # step 2 begun: the class waits for all of it
+    assert len(S.expected_points('L', 'D1.8')) == 16 and len(S.missing_points('L', 'D1.8')) == 11
+    assert S.read_wirings('L', 'D1.8', 'megamat') == ['real', 'P1']
+    rn = S.rise_needed
+    assert rn({'B': 'does not improve', 'D1.8': 'holds', 'A1': 'reads missing', 'D5.8': None}) is True
+    assert rn({'B': 'reads missing', 'A1': 'holds'}) is None
+    assert rn({'B': 'does not improve', 'D1.8': 'megamat only', 'A1': 'reads missing', 'D5.8': 'no class'}) is None
+    assert rn({'B': 'holds', 'D1.8': 'holds', 'A1': 'holds', 'D5.8': 'holds'}) is False
+    assert rn({'B': 'megamat only', 'D1.8': 'does not improve', 'A1': 'megamat only', 'D5.8': 'no class'}) is False
+    assert S._known('reads missing', True) is None and S._known('holds', True) is True
+    o = S.outcome_letters({'L': dict(a1_holds=None, b_holds=None), 'R': dict(a1_holds=True, b_holds=False)}, {})
+    assert o['a'] is None and o['c'] is None and o['d'] is None
+    o = S.outcome_letters({'L': dict(a1_holds=None, b_holds=True), 'R': dict(a1_holds=True, b_holds=None)}, {})
+    assert o['d'] is True

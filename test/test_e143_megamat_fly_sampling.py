@@ -242,3 +242,90 @@ def test_setting_of_and_settings():
     assert len(E.CALYX_GROUPS['inhadd1000']) == 9 and len(E.CALYX_GROUPS['family_norm']) == 5
     assert len(E.setting_names()) == 23 and len(E.setting_names('yardstick')) == 5
     assert all(E.setting_of(t, a) in E.SETTING_BY_NAME for t, a in E.NEAR_TIES)
+
+
+# ---------------------------------------------------------------------------
+# what another experiment's resampled reading calls (E144's class tables)
+
+def test_views_at_redirects_and_restores(tmp_path):
+    """Inside `views_at` the views, the flies' files and the caches are the block's own; after it, E143's again."""
+    E._REFS[('x', ())] = 'kept'
+    try:
+        with E.views_at(tmp_path / 'v') as d:
+            assert d == tmp_path / 'v' and d.is_dir() and E.views_dir() == d
+            assert E.flies_path('kc_soma/megamat/on').parent == d and E.views_path('L_A1', 'megamat').parent == d
+            assert not E._REFS and not E._SIDES and not E._ENTRIES
+            E._REFS[('y', ())] = 'inside'
+        assert not E.VIEWS_AT and E._REFS == {('x', ()): 'kept'}
+    finally:
+        E._REFS.pop(('x', ()), None)
+
+
+def _planted_named(n_flies, seed, scale=1.0, n_units=20, odors=('a', 'b', 'c', 'd', 'e', 'f')):
+    """Planted populations of named units (glomeruli, the PN dendrites': the matrix view is read)."""
+    rng = np.random.default_rng(seed)
+    return [P.Population.from_criterion(pd.DataFrame(rng.gamma(2.0, scale, size=(n_units, len(odors))),
+                                                     index=[f'g{u}' for u in range(n_units)], columns=list(odors)),
+                                        2.0, name=f'f{i}', named_units=True) for i in range(n_flies)]
+
+
+def _planted_sides(wirings=('real', 'P1'), names=('family', 'arm')):
+    """A side per megamat stage and held-out panel (E143's keys) of planted populations (the PN dendrites' units
+    named): five flies, the settings of `names` on `wirings`, and a lock listing the flies."""
+    sides = {}
+    keys = [E.megamat_key(s) for s in E.LOSS_STAGES] + [E.side_key(k) for k in E.HOLDS_PANELS + E.BESIDE_PANELS]
+    for i, key in enumerate(keys):
+        named = key.startswith('pn_dendrite/')
+        flies = _planted_named(5, 7) if named else _planted_pops()
+        models = {(nm, w): (_planted_named(1, 100 + 10 * i + 3 * j + k, 1.0 + 0.3 * j) if named else
+                            _planted_pops(1, 30, seed=100 + 10 * i + 3 * j + k, scale=1.0 + 0.3 * j))[0]
+                  for j, nm in enumerate(names) for k, w in enumerate(wirings)}
+        sides[key], _ = _side_of(flies, models, key)
+    lock = dict(recordings={k: dict(flies=[f'f{i}' for i in range(5)])
+                            for k in [E.megamat_key(s) for s in E.LOSS_STAGES] + list(E.HOLDS_PANELS + E.BESIDE_PANELS)})
+    return sides, lock
+
+
+def test_weighted_values_on_given_sides_and_wirings():
+    """`weighted_values` on another experiment's sides (`side_of`) and wirings: each value the side's error on that
+    wiring, NaN on a wiring not read; the stage error the RMS of the four stages."""
+    sides, lock = _planted_sides()
+    W = {k: E.half_weights(5, [(0, 1, 2, 3, 4), (1, 2)]) for k in lock['recordings']}
+    ws = ('real', 'P1', 'P2')
+    rv = E.weighted_values(lock, W, side_of=sides.__getitem__, wirings=ws)
+    for st in E.LOSS_STAGES:
+        sd = sides[E.megamat_key(st)]
+        e = E.side_errors(sd, W[E.megamat_key(st)], ('strength',), E.stage_error_col(sd.key, ('strength',)))
+        for nm in ('family', 'arm'):
+            got = rv.mega[st][nm]
+            assert got.shape == (2, 3) and np.isnan(got[:, 2]).all()
+            for j, w in enumerate(ws[:2]):
+                assert np.allclose(got[:, j], e[:, list(sd.rows).index((nm, w))])
+    stage = np.sqrt(np.mean(np.square([rv.mega[st]['arm'] for st in E.LOSS_STAGES]), axis=0))
+    assert np.allclose(rv.mega['stage']['arm'][:, :2], stage[:, :2])
+    k = E.HOLDS_PANELS[0]
+    sd = sides[E.side_key(k)]
+    assert np.allclose(rv.guard_panels[k]['arm'][:, 0], E.side_errors(sd, W[k], None)[:, list(sd.rows).index(('arm', 'real'))])
+    # the resamples' form: the unresampled flies last
+    draws = {k: np.array([[0, 0, 1, 2, 3], [4, 4, 4, 1, 0]]) for k in lock['recordings']}
+    rb = E.resampled_values(lock, draws, side_of=sides.__getitem__, wirings=ws)
+    assert rb.mega['stage']['arm'].shape == (3, 3)
+    assert np.allclose(rb.mega['kc_soma']['arm'][-1, :2], rv.mega['kc_soma']['arm'][0, :2])
+
+
+def test_class_interval_rows():
+    """One record's rows: the share of resamples giving the scored class (the last reference, all flies, apart), each
+    comparison's interval; megamat's 'stands' None without the joint splits, False with an empty table of them."""
+    K = 5
+    rv = _rv(0.9, K=K)
+    rv.mega['stage']['arm'][1:3] = 0.995                    # two of the four resamples lose the fall
+    krow, rows = E.class_interval_rows('E144', 'L_A1', 'arm', _rec(), rv, None)
+    assert krow['cls_scored'] == 'holds' and krow['cls_all_flies'] == 'holds' and krow['share_scored'] == 0.5
+    assert krow['shares'] == {'does not improve': 0.5, 'holds': 0.5} and not krow['stands'] and krow['table'] == 'E144'
+    m = next(r for r in rows if r['statistic'] == 'megamat')
+    assert m['stands'] is None and np.isnan(m['share_beyond_bar_both']) and m['all_flies'] == pytest.approx(-0.1)
+    assert m['share_improves'] == 0.5 and m['lo'] == pytest.approx(np.quantile([-0.1, -0.005, -0.005, -0.1], E.CI[0]))
+    p = next(r for r in rows if r['statistic'] == 'panel/' + E.HOLDS_PANELS[0])
+    assert p['stands'] is False and not p['excludes_zero'] and np.isnan(p['scored'])   # no change; none scored
+    _, rows2 = E.class_interval_rows('E144', 'L_A1', 'arm', _rec(), rv, pd.DataFrame())
+    assert next(r for r in rows2 if r['statistic'] == 'megamat')['stands'] is False

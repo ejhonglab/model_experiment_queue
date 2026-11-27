@@ -263,12 +263,33 @@
   "The KC-KC matrix of a male calyx is E130's (Pratyush's KCclaw-to-KCclaw table, matrices.json's sha256); H's is olfsysm's hemibrain matrix among H's KCs ('argmax' claws), as E130's refit has it."
  ],
  "e134_lock_sha256": null,
- "amendments": [],
+ "amendments": [
+  {
+   "id": "e143_resampled",
+   "when": "2026-11-26 16:41",
+   "by": "viki's Opus code subagent (claude-opus-5-5, xhigh), at the brief of viki's queue session",
+   "what": "Design item 4's \"E143's intervals over flies on every change, if they are in\" made concrete (they are in: E143 completed 2026-11-26 11:34). Every read is read once against all the flies of each stage and panel, as E143 reads saved runs (E143's read_runs: E134's default readings with the curve, noise and criterion of all the stage's flies, this experiment's seed index), into outputs/E144_a1_malecns_calyces/views/. E143's 1,000 resamples of the flies (its resamples: seed 0, N_BOOT 1000, each megamat stage and each held-out panel drawn with replacement from one generator, so that megamat's four stages are resampled together; the flies of E143's lock) are the references, in all the flies' one-fly units, the unresampled flies last. For every change in classes.json's class tables (each setting against its calyx's family on the wirings it was read on): its 5th to 95th percentile over the resamples (E143's CI), the share of resamples better than the bar and worse than the spread; each class recomputed on every resample (E143's reclass: E136's ladder with the spreads, bars and the reasons that do not depend on the flies as scored) and the share of resamples that give the scored class; the derived classes (A1 replicates, the rise is needed, B holds, megamat falls with A1) and the outcomes (a) to (d) recomputed the same way. E143's joint splits are not read, so its \"a change stands\" is given for the held-out panels only (the interval excluding zero); 'stands' is None on megamat's rows. Tables: e143_intervals_changes.csv, e143_class_shares.csv, e143_intervals.json (experiments/E144_score.py's part_resampled).",
+   "why": "The entry's design item 4 names E143's intervals beside the score; E143's note found that A1's \"holds\" on the hemibrain stands on 54 % of its resamples, so a class on a male calyx is read with its share.",
+   "gates": "nothing: a description beside the classes, which stay as scored against the held-out half"
+  }
+ ],
  "written": "2026-11-26 11:03",
  "host": "viki",
  "commits": {
   "queue_commit": "6b7b1b8746cdcb80608a912f0c6e33cc382aee9a",
   "queue_dirty": false,
+  "pyolfsysm_commit": "b1e89d7d119bbbb4888f31de4d94938dbc4bd60a",
+  "pyolfsysm_dirty": false,
+  "al_analysis_commit": "d891fe786ac5a103ef1ccb40bf108b3b5e16078e",
+  "al_analysis_dirty": false,
+  "hong2p_commit": "484da09afe90ce4dd37e8b9039b1881136b78b68",
+  "hong2p_dirty": false
+ },
+ "amended": "2026-11-26 16:51",
+ "amended_host": "viki",
+ "amended_commits": {
+  "queue_commit": "887ef4a0e8f5eded6eb999cf2924479e1608df7c",
+  "queue_dirty": true,
   "pyolfsysm_commit": "b1e89d7d119bbbb4888f31de4d94938dbc4bd60a",
   "pyolfsysm_dirty": false,
   "al_analysis_commit": "d891fe786ac5a103ef1ccb40bf108b3b5e16078e",

@@ -1,23 +1,30 @@
 """E144's score (design item 3, with item 4's readings beside): the reads of experiments/E144_a1_malecns_calyces.py
 scored per calyx, each setting against the calyx's own family on the same wirings, by E136's classes and E139's price
-(E141's score, on the calyx's wirings). Kept out of the read module, which the read lanes load, so that this file can
-change while lanes run (E108's `_still_clean` guard checks only the files a lane has loaded).
+(E141's score, on the calyx's wirings); and beside it E143's resampled reading of its class tables (design item 4's
+"E143's intervals over flies on every change", the lock's first amendment; `part_resampled`). Kept out of the read
+module, which the read lanes load, so that this file can change while lanes run (E108's `_still_clean` guard checks
+only the files a lane has loaded).
 
 Usage (from the repository root): ./venv/bin/python -u -m experiments.E144_a1_malecns_calyces --part score
+[--part resampled, after the score]
 """
 from __future__ import annotations
 
 import contextlib
+import json
+import os
 import time
+from pathlib import Path
 from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
 
 from kcq import harness as H
-from experiments.E144_a1_malecns_calyces import (CALYCES, DOSES, MALE, SCRIPT, SETTINGS, WIRINGS_OF, Point, _host,
-                                                 _now, _read_json, _write_json, lock_path, out_dir, point_tag,
-                                                 read_dirs, reads_table, require_lock, seed_index, tables, variant)
+from experiments.E144_a1_malecns_calyces import (CALYCES, DOSES, EXPERIMENT, MALE, PANELS, SCRIPT, SETTINGS,
+                                                 WIRING_SEEDS, WIRINGS_OF, Point, _host, _now, _read_json, _write_json,
+                                                 local_dir, lock_path, out_dir, point_tag, read_dirs, reads_table,
+                                                 require_lock, seed_index, tables, variant)
 
 
 # the 'first' real wiring's counterpart of each setting on H (E139's and E141's scored reads of the hemibrain's real
@@ -56,9 +63,31 @@ def load_run(pt: Point):
         return None
 
 
+def has_run(pt: Point) -> bool:
+    """Whether a read's run is saved (its <tag>_run.json in `read_dirs`), without loading it."""
+    return any((Path(d) / f'{point_tag(pt)}_run.json').exists() for d in read_dirs())
+
+
+def expected_points(calyx: str, setting: str) -> List[Point]:
+    """The reads a setting's class on a calyx waits for: its step-1 points (`planned_points`), and its step-2 points
+    (D1.8 and D5.8 on a male calyx's permutations) once any of them is saved."""
+    from experiments.E144_a1_malecns_calyces import planned_points
+    pts = [p for p in planned_points(['1']) if p.calyx == calyx and p.setting == setting]
+    if calyx in MALE and setting in ('D1.8', 'D5.8'):
+        p2 = [p for p in planned_points(['2'], calyces=[calyx]) if p.setting == setting]
+        if any(has_run(p) for p in p2):
+            pts += p2
+    return pts
+
+
+def missing_points(calyx: str, setting: str) -> List[str]:
+    """The tags of a setting's expected reads on a calyx (`expected_points`) that are not saved yet."""
+    return [point_tag(p) for p in expected_points(calyx, setting) if not has_run(p)]
+
+
 def read_wirings(calyx: str, setting: str, panel: str) -> List[str]:
     """The wirings of the calyx on which the setting's read of `panel` is saved, in WIRINGS_OF's order."""
-    return [w for w in WIRINGS_OF[calyx] if load_run(Point(calyx, setting, w, panel)) is not None]
+    return [w for w in WIRINGS_OF[calyx] if has_run(Point(calyx, setting, w, panel))]
 
 
 def hemibrain_spreads() -> dict:
@@ -346,6 +375,47 @@ def first_values(stages: Sequence[str]) -> Tuple[Dict[str, dict], Dict[str, dict
     return mega, pan, src
 
 
+def check_against_first(stages: Sequence[str]) -> pd.DataFrame:
+    """The score's megamat reading checked where it overlaps E141's and E139's tables: each setting's counterpart on
+    the 'first' real wiring (FIRST_COUNTERPART: E134's held run for the family, E139's and E141's reads, E136's A1 its
+    fit's best evaluation on the S wiring 'real') read through this score's path (E136's `StageLoss` with the split,
+    against the held-out half and all flies, inside `e136_for('H')`: the real wiring's seed index 0, as E136's), beside
+    the value of the table `first_values` takes it from (score_megamat.csv, wiring 'real'); each difference should be
+    0, a wiring's errors not depending on the wirings read with it. One row per counterpart, half and statistic."""
+    from experiments import E139_normalization_ladder as E139
+    from experiments import E141_kckc_rise_forms as E141
+    from kcq import stage_readings as R
+    _, _, src = first_values(stages)
+    rows = []
+    with e136_for('H') as F:
+        for s, cp in FIRST_COUNTERPART.items():
+            exp = (src.get(s) or ':').split(':')[0]
+            if not exp:
+                continue
+            if cp not in ('family', 'A1'):
+                try:
+                    E141.parse_variant(cp)
+                    E141.register_variants(F, [cp])
+                except ValueError:
+                    E139.register_variants(F, [cp])
+            runs = F.megamat_runs(cp, ['real'], 'held')
+            tab = pd.read_csv(H.results_dir(exp) / 'score_megamat.csv')
+            for half in ('held', None):
+                if runs is None:
+                    rows.append(dict(setting=s, counterpart=cp, table=exp, half=half or 'all', statistic='stage',
+                                     status='run not on this host'))
+                    continue
+                sc = F.StageLoss(stages, F.Flies(half, stages), R.require_lock(), split=True)(runs)
+                got = F.megamat_values(sc, stages, ['real'])['real']
+                x = tab[(tab.variant == cp) & (tab.half == (half or 'all')) & (tab.wiring == 'real')]
+                for k in ('stage', *stages):
+                    want = float(x.iloc[-1][k]) if len(x) else np.nan
+                    rows.append(dict(setting=s, counterpart=cp, table=exp, half=half or 'all', statistic=k,
+                                     score_path=float(got[k]), table_value=want, diff=float(got[k]) - want,
+                                     status='read'))
+    return pd.DataFrame(rows)
+
+
 def hemibrain_family_range(stages: Sequence[str]) -> Dict[str, Tuple[float, float]]:
     """The hemibrain family's range over its eight wirings of each megamat stage's error against the held-out half (E141's
     score_megamat.csv, variant 'family'), for "the calyx's family is inside the hemibrain's wirings"."""
@@ -368,6 +438,22 @@ def stages_read(F) -> Tuple[str, ...]:
     return tuple(F.LOSS_STAGES)
 
 
+def _known(cls: Optional[str], value: bool) -> Optional[bool]:
+    """A derived class from a setting's class: None while the setting's class is not read ('reads missing', absent)."""
+    return None if cls in (None, 'reads missing') else bool(value)
+
+
+def rise_needed(cls: Mapping[str, Optional[str]]) -> Optional[bool]:
+    """"The rise is needed there": B does not hold and D1.8, A1 or D5.8 does; None while B's class is not read, or no
+    rise holds and one of them is not read."""
+    if cls.get('B') in (None, 'reads missing'):
+        return None
+    rises = [cls.get(s) for s in RISES]
+    if any(x == 'holds' for x in rises):
+        return cls.get('B') != 'holds'
+    return None if any(x in (None, 'reads missing') for x in rises) else False
+
+
 def outcome_letters(cal: Mapping[str, dict], h_default: Mapping[str, dict]) -> dict:
     """The entry's outcomes read off the calyces' classes: (a) A1 holds on both male calyces; (b) megamat falls with A1
     on both and A1 holds on neither; (c) A1 holds on one; (d) B holds on a male calyx; (e) a male calyx's family is
@@ -381,7 +467,8 @@ def outcome_letters(cal: Mapping[str, dict], h_default: Mapping[str, dict]) -> d
     out = dict(a=b(known and all(holds.values())) if known else None,
                b=b(known and not any(holds.values()) and all(bool(falls[c]) for c in MALE)) if known else None,
                c=b(known and sum(bool(x) for x in holds.values()) == 1) if known else None,
-               d=any(bool(cal.get(c, {}).get('b_holds')) for c in MALE),
+               d=True if any(cal.get(c, {}).get('b_holds') is True for c in MALE) else
+               None if any(cal.get(c, {}).get('b_holds') is None for c in MALE) else False,
                e=any(not all(cal.get(c, {}).get('family_inside', {}).get(st, {}).get('inside', True)
                              for st in FAMILY_INSIDE_STAGES) for c in MALE),
                f=any(bool(x.get('class_differs')) for x in h_default.values()))
@@ -408,9 +495,11 @@ def part_score() -> dict:
       wiring's (`first_values`), differing where by more than the spread, and whether its class on the real wiring
       differs from the 'first' counterpart's against the 'first' family on the same values;
     - beside: where APL's inhibition is made (score_sites.csv), the megamat somata with and without aa's entry
-      (score_without_aa.csv); E143's intervals over flies are not read here (not in at the time of writing).
-    classes.json (with the outcomes' letters) and provenance_score.json. A setting whose reads are not all in is
-    scored on what is in and named."""
+      (score_without_aa.csv); the check of this path against E141's and E139's tables on the 'first' real wiring
+      (`check_against_first`, score_check_first.csv); E143's intervals over flies are `part_resampled`'s.
+    classes.json (with the outcomes' letters) and provenance_score.json. A setting whose expected reads
+    (`expected_points`) are not all in, or whose calyx's family's are not, gets no class ('reads missing', with the
+    missing tags); its values are scored on what is in."""
     from experiments import E139_normalization_ladder as E139
     from kcq import stage_readings as R
     t0 = time.time()
@@ -425,11 +514,14 @@ def part_score() -> dict:
         stages = stages_read(F0)
     fam_range = hemibrain_family_range(stages)
     first_mega, first_pan, first_src = first_values(stages)
+    check = check_against_first(stages)
+    check.to_csv(out_dir() / 'score_check_first.csv', index=False)
     h_default = {}
     for c in CALYCES:
         with e136_for(c) as F:
             names = [s for s in SETTINGS if c in SETTINGS[s].calyces]
             ws_of = {s: read_wirings(c, s, 'megamat') for s in names}
+            missing = {s: missing_points(c, s) for s in names}
             mega, mega_all, pv, g_mega, g_pv, parts, flags = {}, {}, {}, {}, {}, {}, {}
             for s in names:
                 v, ws = variant(c, s), ws_of[s]
@@ -452,8 +544,7 @@ def part_score() -> dict:
                 sc = megamat_of(F, c, s, ws, stages, 'held', views=None)
                 if sc is not None:
                     g_mega[v] = F.megamat_values(sc, stages, ws)
-                pws = [w for w in ws if all(load_run(Point(c, s, w, p)) is not None
-                                            for p in ('validation2', 'mixtures', 'apl16'))]
+                pws = [w for w in ws if all(has_run(Point(c, s, w, p)) for p in ('validation2', 'mixtures', 'apl16'))]
                 pr = panels_of(F, c, s, pws)
                 gr = panels_of(F, c, s, pws, views=None)
                 prow.append(pr)
@@ -474,9 +565,12 @@ def part_score() -> dict:
                 if s == 'family':
                     continue
                 ws = [w for w in ws_of[s] if w in ws_of.get('family', [])]
-                if v not in mega or ref not in mega or not ws:
-                    classes[v] = dict(cls='reads missing', n_reads=int((reads.get('variant', pd.Series(dtype=object))
-                                                                        == v).sum()))
+                if missing[s] or missing['family'] or v not in mega or ref not in mega or not ws:
+                    # a class reads only complete settings (every expected read of the setting and of the family)
+                    classes[v] = dict(cls='reads missing', calyx=c, setting=s, reference=ref,
+                                      n_reads=int((reads.get('variant', pd.Series(dtype=object)) == v).sum()),
+                                      n_expected=len(expected_points(c, s)), missing=missing[s],
+                                      family_missing=missing['family'])
                     continue
                 rec = classify_on(F, v, ref, ws, stages, mega, pv, spreads, flags, guard)
                 failed = E139.holds_failed(v, reads, {}, F.HOLD_TOL)
@@ -505,16 +599,17 @@ def part_score() -> dict:
             a1 = classes.get(variant(c, 'A1'), {})
             calyces[c] = dict(classes=cls, a1_holds=None if a1.get('cls') in (None, 'reads missing') else
                               bool(a1.get('cls') == 'holds'),
-                              a1_megamat_falls=(a1.get('megamat') or {}).get('improves'),
-                              b_holds=classes.get(variant(c, 'B'), {}).get('cls') == 'holds',
-                              rise_needed=bool(classes.get(variant(c, 'B'), {}).get('cls') != 'holds'
-                                               and any(classes.get(variant(c, s), {}).get('cls') == 'holds'
-                                                       for s in RISES)),
+                              a1_megamat_falls=None if a1.get('cls') in (None, 'reads missing') else
+                              (a1.get('megamat') or {}).get('improves'),
+                              b_holds=_known(cls.get('B'), cls.get('B') == 'holds'),
+                              rise_needed=rise_needed(cls),
                               family_inside=inside,
                               family_inside_all=all(bool(inside[st]['inside']) for st in FAMILY_INSIDE_STAGES
                                                     if inside[st]['inside'] is not None),
                               dose_ladder=ladder, own_sd_family=own_sd, settings_read=sum(1 for s in names if ws_of[s]),
+                              settings_complete=[s for s in names if not missing[s]],
                               settings_holding=[s for s, x in cls.items() if x == 'holds'],
+                              missing={s: missing[s] for s in names if missing[s]},
                               wirings={s: ws_of[s] for s in names})
             if c == 'H':
                 fm = first_mega.get('family')
@@ -522,8 +617,9 @@ def part_score() -> dict:
                     v = variant(c, s)
                     hv = mega.get(v, {}).get('real')
                     fv = first_mega.get(s)
-                    if hv is None or fv is None:
-                        h_default[s] = dict(complete=False, first=first_src.get(s))
+                    if hv is None or fv is None or missing[s] or missing['family']:
+                        h_default[s] = dict(complete=False, first=first_src.get(s), missing=missing[s],
+                                            family_missing=missing['family'])
                         continue
                     diffs = {k: dict(H=float(hv[k]), first=float(fv[k]), diff=float(hv[k] - fv[k]),
                                      spread=float(spreads[k]), differs=bool(abs(hv[k] - fv[k]) > spreads[k]))
@@ -534,7 +630,11 @@ def part_score() -> dict:
                             diffs[k] = dict(H=float(hp[k]), first=float(x), diff=float(hp[k] - x),
                                             spread=float(spreads.get(k, np.nan)),
                                             differs=bool(abs(hp[k] - x) > spreads.get(k, np.inf)))
-                    rec = dict(first=first_src.get(s), diffs=diffs, differs=[k for k, x in diffs.items() if x['differs']])
+                    differs = [k for k, x in diffs.items() if x['differs']]
+                    # the entry's class (a stage or panel differs by more than its spread) beside outcome (f)'s reading
+                    # (a class differs, `class_differs`)
+                    rec = dict(first=first_src.get(s), diffs=diffs, differs=differs, changes_it=bool(differs),
+                               complete=True)
                     if s != 'family' and fm is not None:
                         # the class on one wiring with H's values and with the 'first' values (the same rule)
                         def one(mv, fmv, pvv, fpv):
@@ -563,6 +663,9 @@ def part_score() -> dict:
                price_rule=dict(threshold=E139.PRICE, targets=list(E139.PRICE_TARGETS),
                                decided_on="the calyx's wirings the setting was read on"),
                hemibrain_family_range=fam_range, first_counterparts=first_src, claw_default=h_default,
+               check_first=dict(file='score_check_first.csv', n_read=int((check.get('status') == 'read').sum()),
+                                max_abs_diff=float(check['diff'].abs().max()) if 'diff' in check and len(check)
+                                else None),
                calyces=calyces, outcomes=outcome_letters(calyces, h_default), classes=classes,
                n_settings_read=sum(x['settings_read'] for x in calyces.values()),
                n_calyces_read=sum(1 for x in calyces.values() if x['settings_read']))
@@ -571,3 +674,220 @@ def part_score() -> dict:
         part='score', script=SCRIPT, lock=_read_json(lock_path()).get('written'), e134_lock=R.require_lock().get('sha256'),
         seconds=round(time.time() - t0, 1), host=_host(), time=_now(), **H.code_commits()))
     return {v: x.get('cls') for v, x in classes.items()}
+
+
+# ---------------------------------------------------------------------------
+# E143's resampled reading of the class tables (design item 4; the lock's amendment 'e143_resampled')
+
+ALL_WIRINGS: Tuple[str, ...] = tuple(WIRING_SEEDS)
+AMENDMENT_ID = 'e143_resampled'
+# the derived classes recomputed on each resample (classes.json's 'calyces' -> <calyx> -> key)
+DERIVED: Tuple[str, ...] = ('a1_holds', 'a1_megamat_falls', 'b_holds', 'rise_needed')
+
+
+def views_dir() -> Path:
+    """outputs/E144_a1_malecns_calyces/views/: the reads read once against all the flies (E143's layout)."""
+    return local_dir('views')
+
+
+def resampled_names() -> List[str]:
+    """Every variant of the design (calyx and setting), in CALYCES' and SETTINGS' order."""
+    return [variant(c, s) for c in CALYCES for s in SETTINGS if c in SETTINGS[s].calyces]
+
+
+def read_views(names: Optional[Sequence[str]] = None) -> pd.DataFrame:
+    """Each variant's saved reads on each input read once against all the flies, as E143 reads saved runs (E143's
+    `read_runs` inside its `views_at` on `views_dir`: E134's default readings with the curve, noise and criterion of
+    all the stage's or panel's flies, this experiment's seed index through `e136_for`), one file per variant and input
+    (E143's `views_path`; the flies' parts beside, E143's `flies_path`), read again only where its wirings changed.
+    Returns a summary row per variant and input."""
+    from experiments import E143_megamat_fly_sampling as E143
+    want = set(names) if names is not None else None
+    out = []
+    with E143.views_at(views_dir()):
+        for c in CALYCES:
+            with e136_for(c):
+                for s in SETTINGS:
+                    if c not in SETTINGS[s].calyces or (want is not None and variant(c, s) not in want):
+                        continue
+                    v = variant(c, s)
+                    for panel in PANELS:
+                        ws = [w for w in WIRINGS_OF[c] if has_run(Point(c, s, w, panel))]
+                        if not ws:
+                            continue
+                        path = E143.views_path(v, panel)
+                        if path.exists() and sorted(set(pd.read_parquet(path, columns=['wiring'])['wiring'])) \
+                                == sorted(ws):
+                            out.append(dict(variant=v, input=panel, wirings=','.join(ws), status='saved before'))
+                            continue
+                        t0 = time.time()
+                        runs = {w: load_run(Point(c, s, w, panel)) for w in ws}
+                        df = E143.read_runs(v, panel, runs)
+                        df['n_wirings'] = len(runs)
+                        tmp = path.with_name(f'.{path.name}.{_host()}.{os.getpid()}.tmp')
+                        df.to_parquet(tmp, index=False)
+                        os.replace(tmp, path)
+                        out.append(dict(variant=v, input=panel, wirings=','.join(ws), status='read',
+                                        seconds=round(time.time() - t0, 1)))
+                        print(f'E144 views {v} {panel}: {len(ws)} wirings, {time.time() - t0:.0f} s', flush=True)
+    return pd.DataFrame(out)
+
+
+def resampled_sides(names: Sequence[str], lock: Mapping) -> Dict[str, object]:
+    """E143's sides (per megamat stage 'stage/megamat/on' and held-out panel 'kc_soma/<panel>/<condition>') of the
+    variants `names` from `views_dir` (E143's `load_side`), each side's flies checked against E143's lock."""
+    from experiments import E143_megamat_fly_sampling as E143
+    keys = {E143.megamat_key(s): E143.megamat_key(s) for s in E143.LOSS_STAGES}
+    keys.update({E143.side_key(k): k for k in E143.HOLDS_PANELS + E143.BESIDE_PANELS})
+    out = {}
+    with E143.views_at(views_dir()):
+        for key, lock_key in keys.items():
+            if not E143.flies_path(key).exists():
+                raise RuntimeError(f'{E143.flies_path(key)}: no flies read for {key} (read_views first)')
+            out[key] = E143.load_side(key, list(names))
+            E143.check_side_flies(out[key], E143.lock_flies(lock, lock_key))
+    return out
+
+
+def restrict(rv, v: str, ref: str, ws: Sequence[str]):
+    """E143's `Resampled` (on ALL_WIRINGS) kept to one comparison, as E143's `reclass` reads it: the variant `v` under
+    its own name and the calyx's family `ref` as 'family' (reclass's reference), both on the wirings `ws`; a value
+    either lacks is left out (its comparison is then not given)."""
+    from experiments import E143_megamat_fly_sampling as E143
+    idx = [ALL_WIRINGS.index(w) for w in ws]
+
+    def pick(d: Mapping[str, np.ndarray]) -> Dict[str, np.ndarray]:
+        return {v: d[v][:, idx], 'family': d[ref][:, idx]} if v in d and ref in d else {}
+    return E143.Resampled(mega={k: pick(d) for k, d in rv.mega.items()}, guard={k: pick(d) for k, d in rv.guard.items()},
+                          panels={k: pick(d) for k, d in rv.panels.items()},
+                          guard_panels={k: pick(d) for k, d in rv.guard_panels.items()})
+
+
+def resampled_classes(classes: Mapping[str, dict], rv) -> Tuple[pd.DataFrame, pd.DataFrame, Dict[str, np.ndarray],
+                                                                  Dict[str, dict]]:
+    """Every class of classes.json's 'classes' through E143's resamples (`rv`, on ALL_WIRINGS, the last reference all
+    the flies): E143's `class_interval_rows` on the comparison (`restrict`: the setting against its calyx's family on
+    the wirings it was scored on; E144's records carry E136's comparisons, so E143's reclass reads them as they are),
+    with no joint splits (megamat's 'stands' None). Returns (the class rows, the change rows, each variant's class per
+    reference and its comparisons, for the derived classes)."""
+    from experiments import E143_megamat_fly_sampling as E143
+    krows, crows, cls_of, comps_of = [], [], {}, {}
+    for v, rec in classes.items():
+        c = rec.get('calyx') or str(v).split('_', 1)[0]
+        ref = rec.get('reference') or variant(c, 'family')
+        sub = restrict(rv, v, ref, rec.get('wirings') or []) if 'megamat' in rec else rv
+        krow, rows = E143.class_interval_rows(EXPERIMENT, v, v, rec, sub, None)
+        cls_of[v], comps_of[v] = E143.reclass(rec, v, sub, EXPERIMENT)
+        label = dict(calyx=c, setting=rec.get('setting') or str(v).split('_', 1)[1], reference=ref,
+                     wirings=','.join(rec.get('wirings') or []))
+        krows.append(dict(label, **krow))
+        crows += [dict(label, **r) for r in rows]
+    kdf = pd.DataFrame(krows)
+    if len(kdf):
+        kdf['shares'] = kdf['shares'].map(json.dumps)
+    return kdf, pd.DataFrame(crows), cls_of, comps_of
+
+
+def derived_per_reference(cls_of: Mapping[str, np.ndarray], comps_of: Mapping[str, dict], K: int
+                          ) -> Dict[str, Dict[str, Optional[np.ndarray]]]:
+    """Per calyx the derived classes on every reference, as the score derives them from the classes (`part_score`):
+    'a1_holds' (A1 holds), 'a1_megamat_falls' (A1's megamat stage error improves), 'b_holds' (B holds), 'rise_needed'
+    (B does not hold and D1.8, A1 or D5.8 does); None where A1's (or B's) class is not read."""
+    def holds(x: Optional[np.ndarray]) -> Optional[np.ndarray]:
+        return None if x is None or x[0] == 'reads missing' else np.asarray(x == 'holds', bool)
+    none = np.zeros(K, bool)
+    out = {}
+    for c in CALYCES:
+        g = lambda s: holds(cls_of.get(variant(c, s))) if c in SETTINGS[s].calyces else None
+        mm = (comps_of.get(variant(c, 'A1')) or {}).get('megamat')
+        # as the score: a setting not read does not hold
+        bh = g('B') if g('B') is not None else none
+        rises = [x if x is not None else none for x in (g(s) for s in RISES)]
+        out[c] = dict(a1_holds=g('A1'), a1_megamat_falls=None if mm is None else np.asarray(mm['improves'], bool),
+                      b_holds=bh, rise_needed=~bh & np.any(rises, axis=0))
+    return out
+
+
+def outcomes_per_reference(der: Mapping[str, Mapping[str, Optional[np.ndarray]]], K: int
+                           ) -> Dict[str, Optional[np.ndarray]]:
+    """The outcomes (a) to (d) on every reference from the male calyces' derived classes (`outcome_letters`' rules);
+    None where A1's class is not read on a male calyx. (e) and (f) are not class changes and are not resampled."""
+    hold = [der.get(c, {}).get('a1_holds') for c in MALE]
+    falls = [der.get(c, {}).get('a1_megamat_falls') for c in MALE]
+    known = all(x is not None for x in hold)
+    n = np.sum(hold, axis=0) if known else None
+    d = np.any([der.get(c, {}).get('b_holds') if der.get(c, {}).get('b_holds') is not None else np.zeros(K, bool)
+                for c in MALE], axis=0)
+    return dict(a=(n == len(MALE)) if known else None,
+                b=((n == 0) & np.all([f if f is not None else np.zeros(K, bool) for f in falls], axis=0))
+                if known else None,
+                c=(n == 1) if known else None, d=d)
+
+
+def _share_of(x: Optional[np.ndarray], scored) -> dict:
+    """A derived class through the resamples: its value against all the flies (the last reference), the share of
+    resamples on which it is True and the share giving the scored value."""
+    if x is None:
+        return dict(scored=scored, all_flies=None, share_true=None, share_scored=None)
+    x = np.asarray(x, bool)
+    return dict(scored=scored, all_flies=bool(x[-1]), share_true=float(np.mean(x[:-1])),
+                share_scored=None if scored is None else float(np.mean(x[:-1] == bool(scored))))
+
+
+def amended_lock() -> dict:
+    """E144's lock as amended for the resampled reading: `require_lock` (results, its committed copy and the code
+    agree), the amendment AMENDMENT_ID in it, and the committed copy tracked with no uncommitted change (E140's
+    `_committed`), so that no resampled number is read before the amendment is committed; RuntimeError otherwise."""
+    from experiments import E140_aa_claw_soma_step as E140
+    from experiments.E144_a1_malecns_calyces import committed_lock_path
+    lk = require_lock()
+    if not any(isinstance(a, dict) and a.get('id') == AMENDMENT_ID for a in lk.get('amendments') or []):
+        raise RuntimeError(f"the lock has no amendment {AMENDMENT_ID!r}: write it (--part lock) and commit it first")
+    if not E140._committed(committed_lock_path()):
+        raise RuntimeError(f'{committed_lock_path()} is not committed (or has uncommitted changes)')
+    return lk
+
+
+def part_resampled() -> dict:
+    """E143's intervals over flies on every change of the score's class tables (design item 4, the lock's amendment
+    'e143_resampled'; it gates nothing): the reads read once against all the flies (`read_views`), E143's resamples of
+    its lock's flies (`resamples`: N_BOOT, seed BOOT_SEED, megamat's four stages and the held-out panels from one
+    generator) as references with all the flies last (`resampled_values` on this experiment's sides and wirings), and
+    every class of classes.json recomputed on each (`resampled_classes`), with the derived classes and outcomes (a) to
+    (d) (`derived_per_reference`, `outcomes_per_reference`). Writes e143_intervals_changes.csv, e143_class_shares.csv,
+    e143_intervals.json and provenance_resampled.json beside the score's tables."""
+    from experiments import E143_megamat_fly_sampling as E143
+    t0 = time.time()
+    lk = amended_lock()
+    cl = _read_json(out_dir() / 'classes.json')
+    if not cl.get('classes'):
+        raise RuntimeError('no score yet (classes.json): run --part score first')
+    e143_lock = E143.require_lock()
+    names = resampled_names()
+    summary = read_views(names)
+    sides = resampled_sides(names, e143_lock)
+    draws = E143.resamples(e143_lock)
+    rv = E143.resampled_values(e143_lock, draws, side_of=sides.__getitem__, wirings=ALL_WIRINGS)
+    K = int(next(iter(rv.mega['stage'].values())).shape[0])
+    kdf, cdf, cls_of, comps_of = resampled_classes(cl['classes'], rv)
+    der = derived_per_reference(cls_of, comps_of, K)
+    oc = outcomes_per_reference(der, K)
+    scored_c = cl.get('calyces') or {}
+    derived = {c: {k: _share_of(der[c][k], (scored_c.get(c) or {}).get(k)) for k in DERIVED} for c in CALYCES}
+    outcomes = {k: _share_of(x, (cl.get('outcomes') or {}).get(k)) for k, x in oc.items()}
+    cdf.to_csv(out_dir() / 'e143_intervals_changes.csv', index=False)
+    kdf.to_csv(out_dir() / 'e143_class_shares.csv', index=False)
+    out = dict(amendment=AMENDMENT_ID, gates='nothing', n_boot=int(K - 1), boot_seed=E143.BOOT_SEED, ci=list(E143.CI),
+               class_stands_share=E143.CLASS_SHARE, wirings=list(ALL_WIRINGS),
+               reference="E143's resamples of all the stage's or panel's flies (the last reference all the flies, "
+                         "unresampled); the model read once against all the flies",
+               scored_against='the held-out half (classes.json), as scored', n_changes=int(len(cdf)),
+               n_classes=int(len(kdf)), derived=derived, outcomes=outcomes,
+               e143_lock_sha256=e143_lock.get('sha256'), views=str(views_dir()),
+               views_summary=json.loads(summary.to_json(orient='records')) if len(summary) else [])
+    _write_json(out_dir() / 'e143_intervals.json', out)
+    _write_json(out_dir() / 'provenance_resampled.json', dict(
+        part='resampled', script='experiments/E144_score.py', lock=lk.get('written'), lock_amended=lk.get('amended'),
+        e143_lock_sha256=e143_lock.get('sha256'), seconds=round(time.time() - t0, 1), host=_host(), time=_now(),
+        **H.code_commits()))
+    return dict(n_changes=len(cdf), n_classes=len(kdf), outcomes={k: v['share_scored'] for k, v in outcomes.items()})

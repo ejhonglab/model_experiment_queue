@@ -70,7 +70,7 @@ import socket
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -618,8 +618,32 @@ def fit_eval_runs(experiment: str, arm: str) -> Dict[str, Dict[str, object]]:
     return out
 
 
+VIEWS_AT: Dict[str, Path] = {}
+
+
+@contextlib.contextmanager
+def views_at(path: Path):
+    """For the block, `views_dir` is `path` (created) and the caches of the flies' references, the sides and the
+    entries start empty (restored after), so that another experiment reads its own runs once into its own folder
+    (E144's resampled reading of its class tables) through `read_runs`, `views_path`, `flies_path` and `load_side`,
+    without writing into E143's views."""
+    old = (dict(VIEWS_AT), dict(_REFS), dict(_SIDES), dict(_ENTRIES))
+    VIEWS_AT['dir'] = Path(path)
+    for c in (_REFS, _SIDES, _ENTRIES):
+        c.clear()
+    try:
+        yield views_dir()
+    finally:
+        for c, o in zip((VIEWS_AT, _REFS, _SIDES, _ENTRIES), old):
+            c.clear()
+            c.update(o)
+
+
 def views_dir() -> Path:
-    """outputs/E143_megamat_fly_sampling/views/ (created)."""
+    """outputs/E143_megamat_fly_sampling/views/ (created); the folder of `views_at` inside its block."""
+    if 'dir' in VIEWS_AT:
+        VIEWS_AT['dir'].mkdir(parents=True, exist_ok=True)
+        return VIEWS_AT['dir']
     return local_dir('views')
 
 
@@ -1003,11 +1027,13 @@ def _aligned(sides: Mapping[str, Side]) -> pd.MultiIndex:
 
 
 def stage_errors(weights: Mapping[str, np.ndarray], views: Optional[Sequence[str]] = ('strength',),
-                 drop_soma: Sequence[str] = (), fit_evals: bool = False) -> StageErrors:
+                 drop_soma: Sequence[str] = (), fit_evals: bool = False,
+                 side_of: Optional[Callable[[str], Side]] = None) -> StageErrors:
     """Per megamat stage, every row's error against the references of `weights` (per stage, references x flies), on
     the views of `views` with E136's error column (`stage_error_col`); the somata's entries of `drop_soma` left out
-    (E138's rule)."""
-    sides = {st: side(megamat_key(st), fit_evals) for st in weights}
+    (E138's rule). `side_of(key)` gives a stage's side (default `side`: E143's settings)."""
+    sides = {st: (side_of(megamat_key(st)) if side_of is not None else side(megamat_key(st), fit_evals))
+             for st in weights}
     rows = _aligned(sides)
     out = {}
     for st, W in weights.items():
@@ -1418,9 +1444,10 @@ def resamples(lock: Mapping, n_boot: int = N_BOOT, seed: int = BOOT_SEED) -> Dic
     return out
 
 
-def _values_by_wiring(errors: np.ndarray, rows: pd.MultiIndex) -> Dict[str, np.ndarray]:
-    """Per setting, references x T wirings."""
-    return {nm: per_wiring(errors, rows, nm) for nm in dict.fromkeys(rows.get_level_values(0))}
+def _values_by_wiring(errors: np.ndarray, rows: pd.MultiIndex,
+                      wirings: Sequence[str] = T_WIRINGS) -> Dict[str, np.ndarray]:
+    """Per setting, references x wirings (default the T wirings)."""
+    return {nm: per_wiring(errors, rows, nm, wirings) for nm in dict.fromkeys(rows.get_level_values(0))}
 
 
 @dataclass
@@ -1439,32 +1466,39 @@ class Resampled:
     guard_panels: Dict[str, Dict[str, np.ndarray]]
 
 
-def resampled_values(lock: Mapping, draws: Mapping[str, np.ndarray], drop_soma: Sequence[str] = ()) -> Resampled:
+def resampled_values(lock: Mapping, draws: Mapping[str, np.ndarray], drop_soma: Sequence[str] = (),
+                     side_of: Optional[Callable[[str], Side]] = None,
+                     wirings: Sequence[str] = T_WIRINGS) -> Resampled:
     """Every value a class reads against each resample (`draws`), with the unresampled flies appended as the last
-    reference."""
+    reference (`side_of` and `wirings` as `weighted_values`')."""
     W = {}
     for key, d in draws.items():
         n = d.shape[1]
         W[key] = np.vstack([boot_weights(n, d), np.full((1, n), 1.0 / n)])
-    return weighted_values(lock, W, drop_soma)
+    return weighted_values(lock, W, drop_soma, side_of, wirings)
 
 
-def weighted_values(lock: Mapping, W: Mapping[str, np.ndarray], drop_soma: Sequence[str] = ()) -> Resampled:
+def weighted_values(lock: Mapping, W: Mapping[str, np.ndarray], drop_soma: Sequence[str] = (),
+                    side_of: Optional[Callable[[str], Side]] = None,
+                    wirings: Sequence[str] = T_WIRINGS) -> Resampled:
     """Every value a class reads against the references of `W` (per megamat stage 'stage/megamat/on' and held-out
-    panel class key, references x flies weights)."""
+    panel class key, references x flies weights), per setting on `wirings` (default the T wirings; NaN where a wiring
+    is not read); `side_of(key)` gives a stage's or panel's side (default `side`: E143's settings; another
+    experiment's own, E144's)."""
+    get = side_of if side_of is not None else side
     ws = {st: W[megamat_key(st)] for st in LOSS_STAGES}
-    se = stage_errors(ws, drop_soma=drop_soma)
-    mega = {'stage': _values_by_wiring(rms_stages(se), se.rows),
-            'downstream': _values_by_wiring(rms_stages(se, CALYX_STAGES), se.rows)}
-    mega.update({st: _values_by_wiring(se.errors[st], se.rows) for st in LOSS_STAGES})
-    ge = stage_errors(ws, views=None)
-    guard = {st: _values_by_wiring(ge.errors[st], ge.rows) for st in LOSS_STAGES}
+    se = stage_errors(ws, drop_soma=drop_soma, side_of=side_of)
+    mega = {'stage': _values_by_wiring(rms_stages(se), se.rows, wirings),
+            'downstream': _values_by_wiring(rms_stages(se, CALYX_STAGES), se.rows, wirings)}
+    mega.update({st: _values_by_wiring(se.errors[st], se.rows, wirings) for st in LOSS_STAGES})
+    ge = stage_errors(ws, views=None, side_of=side_of)
+    guard = {st: _values_by_wiring(ge.errors[st], ge.rows, wirings) for st in LOSS_STAGES}
     panels, gpanels = {}, {}
     for key in HOLDS_PANELS + BESIDE_PANELS:
-        sd = side(side_key(key))
+        sd = get(side_key(key))
         check_side_flies(sd, lock_flies(lock, key))
-        panels[key] = _values_by_wiring(side_errors(sd, W[key], ('strength',)), sd.rows)
-        gpanels[key] = _values_by_wiring(side_errors(sd, W[key], None), sd.rows)
+        panels[key] = _values_by_wiring(side_errors(sd, W[key], ('strength',)), sd.rows, wirings)
+        gpanels[key] = _values_by_wiring(side_errors(sd, W[key], None), sd.rows, wirings)
     return Resampled(mega, guard, panels, gpanels)
 
 
@@ -1583,6 +1617,53 @@ def e141_entry(rec: Mapping, cls: np.ndarray, vs: Mapping[str, dict]) -> Dict[st
     return out
 
 
+def class_interval_rows(exp: str, arm: str, name: str, rec: Mapping, rv: Resampled,
+                        bar: Optional[pd.DataFrame]) -> Tuple[dict, List[dict]]:
+    """One class table's record through the resamples (`part_intervals`' rows): its class recomputed on every
+    reference of `rv` (`reclass`; E141's comparisons with A1 and added classes where the record has them) with the
+    share of resamples that give the scored class, and every comparison's change with its interval over the resamples
+    (CI), the share of resamples better than the bar and worse than the spread. `bar` is splits_beyond_bar.csv indexed
+    by setting, for "a change stands" on megamat (empty: NaN shares, so a megamat change does not stand); None where the
+    joint splits are not read (another experiment's table, E144's): the megamat rows' 'stands' is then None. Returns
+    (the class row, the change rows)."""
+    cls, comps = reclass(rec, name, rv, exp)
+    extra = {}
+    if exp == E141 and 'against_a1' in rec:
+        vs = against_a1(rec, name, rv)
+        comps.update(vs)
+        extra = e141_entry(rec, cls, vs)
+    boot, allf = cls[:-1], cls[-1]
+    krow = dict(table=exp, arm=arm, setting=name, cls_scored=rec.get('cls'), cls_all_flies=allf,
+                share_scored=float(np.mean(boot == rec.get('cls'))),
+                stands=class_stands(float(np.mean(boot == rec.get('cls')))),
+                shares={c: float(np.mean(boot == c)) for c in sorted(set(boot))},
+                **{f'{k}_scored': rec.get(k) for k in extra},
+                **{f'{k}_share_scored': float(np.mean(v[:-1] == bool(rec.get(k)))) for k, v in extra.items()},
+                near_tie=(exp, arm) in NEAR_TIES)
+    rows = []
+    for what, c in comps.items():
+        if c is None:
+            continue
+        ch = c['change']
+        lo, hi = np.quantile(ch[:-1], CI)
+        scored = _scored_change(rec, what)
+        row = dict(table=exp, arm=arm, setting=name, statistic=what, scored=scored, all_flies=float(ch[-1]),
+                   lo=float(lo), hi=float(hi), excludes_zero=bool(lo > 0 or hi < 0),
+                   share_improves=float(np.mean(c['improves'][:-1])), share_worse=float(np.mean(c['worse'][:-1])))
+        if what == 'megamat' or what.startswith('stage/'):
+            if bar is None:
+                row.update(share_beyond_bar_both=np.nan, stands=None)
+            else:
+                col = 'stage' if what == 'megamat' else what.split('/', 1)[1]
+                sh = bar.loc[name, f'{col}_share_both'] if name in bar.index and f'{col}_share_both' in bar.columns \
+                    else np.nan
+                row.update(share_beyond_bar_both=float(sh), stands=change_stands(lo, hi, float(sh)))
+        else:
+            row['stands'] = change_stands(lo, hi)
+        rows.append(row)
+    return krow, rows
+
+
 def part_intervals(drop_soma: Sequence[str] = (), suffix: str = '') -> dict:
     """Design item 4: every megamat and held-out panel change of the class tables (minus the family; E141's minus A1)
     with its interval over flies, the classes recomputed on each resample and the share that gives the scored class;
@@ -1597,38 +1678,9 @@ def part_intervals(drop_soma: Sequence[str] = (), suffix: str = '') -> dict:
     for exp, path, pre in CLASS_TABLES:
         tab = json.loads(results_file(exp, *path).read_text())
         for arm, rec in tab['classes'].items():
-            name = setting_of(exp, arm)
-            cls, comps = reclass(rec, name, rv, exp)
-            extra = {}
-            if exp == E141 and 'against_a1' in rec:
-                vs = against_a1(rec, name, rv)
-                comps.update(vs)
-                extra = e141_entry(rec, cls, vs)
-            boot, allf = cls[:-1], cls[-1]
-            krows.append(dict(table=exp, arm=arm, setting=name, cls_scored=rec.get('cls'), cls_all_flies=allf,
-                              share_scored=float(np.mean(boot == rec.get('cls'))),
-                              stands=class_stands(float(np.mean(boot == rec.get('cls')))),
-                              shares={c: float(np.mean(boot == c)) for c in sorted(set(boot))},
-                              **{f'{k}_scored': rec.get(k) for k in extra},
-                              **{f'{k}_share_scored': float(np.mean(v[:-1] == bool(rec.get(k)))) for k, v in extra.items()},
-                              near_tie=(exp, arm) in NEAR_TIES))
-            for what, c in comps.items():
-                if c is None:
-                    continue
-                ch = c['change']
-                lo, hi = np.quantile(ch[:-1], CI)
-                scored = _scored_change(rec, what)
-                row = dict(table=exp, arm=arm, setting=name, statistic=what, scored=scored, all_flies=float(ch[-1]),
-                           lo=float(lo), hi=float(hi), excludes_zero=bool(lo > 0 or hi < 0),
-                           share_improves=float(np.mean(c['improves'][:-1])), share_worse=float(np.mean(c['worse'][:-1])))
-                if what == 'megamat' or what.startswith('stage/'):
-                    col = 'stage' if what == 'megamat' else what.split('/', 1)[1]
-                    sh = bar.loc[name, f'{col}_share_both'] if name in bar.index and f'{col}_share_both' in bar.columns \
-                        else np.nan
-                    row.update(share_beyond_bar_both=float(sh), stands=change_stands(lo, hi, float(sh)))
-                else:
-                    row['stands'] = change_stands(lo, hi)
-                crows.append(row)
+            krow, rows = class_interval_rows(exp, arm, setting_of(exp, arm), rec, rv, bar)
+            krows.append(krow)
+            crows += rows
     ch_df = pd.DataFrame(crows)
     cl_df = pd.DataFrame(krows)
     cl_df['shares'] = cl_df['shares'].map(json.dumps)
