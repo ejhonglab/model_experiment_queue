@@ -41,7 +41,9 @@ Design (the entry's):
 - the score (`--part score`, experiments/E145_score.py): per cell E136's classes with E139's price against the family
   where the cell is read, E136's own cell scored the same way and checked against E136's score, and the experiment's
   classes and outcome letters;
-- E143's resampled reading per cell (`--part resampled`) is written once the cells' reads are in (a stub here).
+- E143's resampled reading per cell (`--part resampled`, experiments/E145_score.py, after the score): each cell's class
+  and the experiment's classes and outcomes over E143's 1,000 resamples, with E143's read-once check on each cell's read
+  half; E136's own cell gives A1's class back on 0.535 of the resamples, as E143 read it.
 
 Outputs: <shared>/results/E145_stage_fit_replication/ (E145_lock.json, step0.json, step0_*.csv, prediction.json, and per
 cell <cell>/: E136's fit records, identity_A1.json, determined_A1.csv, rescore_A1.csv, consistency_*.csv, claims/,
@@ -726,8 +728,10 @@ def part_score() -> dict:
 
 def part_resampled() -> dict:
     """Beside: E143's resampled reading of every cell (1,000 resamples, each class recomputed, after its read-once
-    check to 0.02). Not written yet."""
-    raise NotImplementedError("E145's resampled reading is written while the fits run")
+    check to 0.02), and the experiment's classes and outcomes on each; experiments/E145_score.py's `part_resampled`
+    (after the score)."""
+    from experiments import E145_score as S
+    return S.part_resampled()
 
 
 def control_points() -> List[Point]:

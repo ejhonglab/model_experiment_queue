@@ -148,3 +148,25 @@ def test_score_repeats_on_a_planted_fit():
     assert not r['kckc']['repeats'] and not r['inhadd']['repeats'] and not r['aplpn']['repeats']
     assert S.repeats('X', dict(best_z=z))['complete'] is False
     assert S.variant('W') == 'E145_W'
+
+
+def test_resampled_derived_classes():
+    import numpy as np
+    from experiments import E145_score as S
+    K = 4
+    cls = {'A1': np.array(['holds'] * K, dtype=object),
+           'X': np.array(['holds', 'holds', 'megamat only', 'holds'], dtype=object),
+           'F': np.array(['holds', 'megamat only', 'megamat only', 'does not improve'], dtype=object),
+           'W': np.array(['holds', 'holds', 'megamat only', 'megamat only'], dtype=object)}
+    comps = {k: dict(megamat=dict(improves=np.array([True, True, True, False]), change=np.array([-0.1, -0.1, -0.1, 0.0])))
+             for k in cls}
+    rep = dict(inhadd=dict(repeats=True), aplpn=dict(repeats=True), kckc=dict(repeats=True))
+    recs = {k: dict(repeats=rep) for k in cls}
+    d = S.derived_per_reference(cls, comps, recs, 0.04, K)
+    assert list(d['hold_repeats']) == [True, True, False, False]
+    assert list(d['fall_repeats']) == [True, True, True, False]
+    assert list(d['outcome_a']) == [True, True, False, False]
+    assert list(d['the_wirings']) == [False, False, False, False] and list(d['the_flies']) == [False, True, False, False]
+    s = S._share_of(d['hold_repeats'], True)
+    assert s['all_flies'] is False and abs(s['share_true'] - 2 / 3) < 1e-12 and abs(s['share_scored'] - 2 / 3) < 1e-12
+    assert S.derived_per_reference({'X': cls['X']}, comps, recs, 0.04, K) == {}
