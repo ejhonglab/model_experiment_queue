@@ -317,6 +317,42 @@ def extra_arms(*arms: Arm):
             ARMS.pop(n, None)
 
 
+# which of `split_names`' two parts is the fit half: 0 E136's (its first part), 1 the other (inside `cell`)
+FIT_PART = 0
+
+
+@contextlib.contextmanager
+def cell(searched: Sequence[str], fit_part: int, start_check: Optional[Mapping[str, float]] = None):
+    """For the block, E136's fit, single-factor returns, rescore, reads and score functions work in another cell of
+    wirings by halves of the flies (E145, the fit of all megamat stages made again): S_WIRINGS (the searched wirings) is
+    `searched`, four of WIRINGS, and T_WIRINGS (the read wirings) the other four in WIRINGS' order; the fit half 'fit' is
+    part `fit_part` of `split_names`' split (0 E136's fit half, 1 its held-out half) and 'held' the other part, so that
+    'fit' and 'held' name the cell's own halves. `start_check` (the measure in force's start values, START_CHECK's keys:
+    the family at z = 0 on the searched wirings against the cell's fit half, read from saved runs) replaces START_CHECK
+    for A0's and A1's first evaluation; without it, in a cell other than E136's, the first evaluation is not checked.
+    WIRINGS, and so every wiring's seed index (`seed_index`), are unchanged. Restored after, also on an error.
+    ValueError for wirings that are not four distinct names of WIRINGS, or a part other than 0 and 1."""
+    global S_WIRINGS, T_WIRINGS, FIT_PART, START_CHECK
+    searched = tuple(str(w) for w in searched)
+    if len(searched) != len(WIRINGS) // 2 or len(set(searched)) != len(searched) or not set(searched) <= set(WIRINGS):
+        raise ValueError(f'a cell searches four distinct wirings of {WIRINGS}: {searched}')
+    if fit_part not in (0, 1):
+        raise ValueError(f'{fit_part=}: 0 or 1')
+    old = S_WIRINGS, T_WIRINGS, FIT_PART, START_CHECK
+    own = (tuple(searched), int(fit_part)) == (tuple(old[0]), int(old[2]))
+    S_WIRINGS = searched
+    T_WIRINGS = tuple(w for w in WIRINGS if w not in searched)
+    FIT_PART = int(fit_part)
+    if start_check is not None:
+        START_CHECK = {MEASURE: {k: float(v) for k, v in start_check.items()}}
+    elif not own:
+        START_CHECK = {}
+    try:
+        yield
+    finally:
+        S_WIRINGS, T_WIRINGS, FIT_PART, START_CHECK = old
+
+
 def out_dir() -> Path:
     """<shared>/results/E136_stage_population_fit/[measure_<name>/] (created); PATHS['out'] inside `paths`."""
     if 'out' in PATHS:
@@ -581,10 +617,13 @@ def all_flies(stages: Sequence[str] = LOSS_STAGES, panel: str = PANEL) -> Dict[s
 
 def split_names(flies, seed: int = HALF_SEED) -> Dict[str, List[str]]:
     """One stage's flies split as ruled: hal's `split_halves(n, 1, seed)`, its first part the fit half (floor(n / 2)
-    flies) and the rest the held-out half, in the population's order."""
+    flies) and the rest the held-out half, in the population's order; inside a `cell` with FIT_PART 1 the two parts
+    are exchanged (the fit half is the second part)."""
     from kcq import population_fit as P
     names = [str(f) for f in flies.flies]
     a, b = P.split_halves(len(names), 1, seed)[0]
+    if FIT_PART:
+        a, b = b, a
     return dict(fit=[names[i] for i in a], held=[names[i] for i in b])
 
 
@@ -759,11 +798,12 @@ def _outs_differ(a: Mapping[str, dict], b: Mapping[str, dict]) -> Dict[str, int]
     return d
 
 
-def claw_thr_check(wirings: Sequence[str] = S_WIRINGS, value: float = CLAW_THR_CHECK_HZ) -> dict:
+def claw_thr_check(wirings: Optional[Sequence[str]] = None, value: float = CLAW_THR_CHECK_HZ) -> dict:
     """A3's mechanics: on each wiring at its held megamat point, a run with the per-claw threshold set in place on the
     simulator built without it (olfsysm's mp.kc.claw_thr) equals a fresh build at that threshold exactly, counts and
     every stage; written to claw_thr_check.json ('exact' True only if every wiring's is)."""
     from experiments import E134_population_baseline as B
+    wirings = S_WIRINGS if wirings is None else wirings
     rec = dict(value=value, wirings={}, time=_now(), host=_host())
     for w in wirings:
         p, poff = start_params(w)
@@ -911,11 +951,11 @@ class ArmModel:
     response counts), built (per wiring, E134's `Built`), memory (per wiring, the evaluated points' coordinates and
     held log factors), slopes (per wiring, the holds' last slopes)."""
 
-    def __init__(self, arm: str, wirings: Sequence[str] = S_WIRINGS, claw_mode: str = 'in_place',
+    def __init__(self, arm: str, wirings: Optional[Sequence[str]] = None, claw_mode: str = 'in_place',
                  lock: Optional[Mapping] = None):
         from experiments import E83_cross_wiring_fit as E83
         from experiments import E134_population_baseline as B
-        self.arm, self.panel, self.wirings = arm, PANEL, tuple(wirings)
+        self.arm, self.panel, self.wirings = arm, PANEL, tuple(S_WIRINGS if wirings is None else wirings)
         a = ARMS[base_arm(arm)]
         self.searched = arm_searched(arm)
         if len(self.searched) + len(HELD) > MAX_FREE:
@@ -1367,13 +1407,14 @@ class StageLoss:
 # ---------------------------------------------------------------------------
 # the parts: identity and the fit
 
-def identity(arm: str = 'A0', wirings: Sequence[str] = S_WIRINGS) -> dict:
+def identity(arm: str = 'A0', wirings: Optional[Sequence[str]] = None) -> dict:
     """At z = 0 (each wiring at its held megamat point of E134's step 3): the hold changes nothing (one simulation per
     rate, no factor), every run reproduces E134's saved counts and responses exactly, the in-memory runs read exactly as
     the saved runs do (every population's values and responses), and, against all flies, each wiring's population
     errors reproduce E134's score_scores.csv ('megamat_held', the default readings) to IDENTITY_TOL where that file
     exists; written to identity_<arm>.json; RuntimeError otherwise."""
     from experiments import E134_population_baseline as B
+    wirings = S_WIRINGS if wirings is None else wirings
     t0 = time.time()
     lock = R.require_lock()
     m = ArmModel(arm, wirings, lock=lock)
@@ -2033,13 +2074,14 @@ def load_read(pt: ReadPoint, claw_after: bool = False) -> Optional['R.SavedRun']
 
 
 def score_megamat(arm: str, stages: Sequence[str], half: Optional[str] = 'held',
-                  wirings: Sequence[str] = T_WIRINGS, perms: bool = False,
+                  wirings: Optional[Sequence[str]] = None, perms: bool = False,
                   claw_after: bool = False, views='measure') -> Optional[Dict[str, float]]:
     """An arm's (or the unrefitted family's, or a registered variant's) megamat stages on `wirings` against a half of
     the flies (all of them for None; under the control's permutations with `perms`): `StageLoss`'s dict. A fitted
     arm's S wirings are its fit's best evaluation (saved under outputs/.../fit_<arm>/; `fitted_arm`); every other
     name's runs are its reads on every wiring (`load_read`). None while a run is missing."""
     from data_prep import stage_population_data as D
+    wirings = T_WIRINGS if wirings is None else wirings
     runs = megamat_runs(arm, wirings, half, claw_after)
     if runs is None:
         return None
@@ -2069,7 +2111,7 @@ def megamat_runs(arm: str, wirings: Sequence[str], half: Optional[str] = 'held',
 
 
 def stage_without_odor(arm: str, stage: str = 'kc_soma', odor: str = 'aa', half: Optional[str] = 'held',
-                       wirings: Sequence[str] = T_WIRINGS) -> Optional[pd.DataFrame]:
+                       wirings: Optional[Sequence[str]] = None) -> Optional[pd.DataFrame]:
     """A megamat stage's strength error with and without one odor's entry (E140's outcome (d): the KC somata without
     aa's), read as `score_megamat` reads it (the runs of `megamat_runs`, the half's references in all flies' units):
     E138's `odor_entries`, whose 'view_error_without' takes the odor's term out of the squared error and keeps the
@@ -2077,6 +2119,7 @@ def stage_without_odor(arm: str, stage: str = 'kc_soma', odor: str = 'aa', half:
     and 'common' (the wirings' mean views): arm, stage, odor, half, row, view_error, view_error_without, the odor's
     view_share. None while a run is missing."""
     from experiments import E138_strength_by_odor_entries as E138
+    wirings = T_WIRINGS if wirings is None else wirings
     runs = megamat_runs(arm, wirings, half)
     if runs is None:
         return None
@@ -2257,11 +2300,12 @@ def panel_values(panels: pd.DataFrame, arm: str) -> Dict[Tuple[str, str, str], D
 
 
 def compare(arm_v: Mapping[str, float], base_v: Mapping[str, float], spread: float,
-            wirings: Sequence[str] = T_WIRINGS) -> dict:
+            wirings: Optional[Sequence[str]] = None) -> dict:
     """The classes' comparison of one value as ruled: the per-wiring changes (arm minus the reference on the same
     wiring) over `wirings`, their mean, the standard error over wirings (the larger of half the spread and the SD of
     the changes over the wirings divided by sqrt(n)), and whether the change is an improvement (below -IMPROVE_SE
     standard errors) or a worsening beyond the spread."""
+    wirings = T_WIRINGS if wirings is None else wirings
     ch = [arm_v[w] - base_v[w] for w in wirings if w in arm_v and w in base_v]
     if len(ch) < len(wirings):
         return dict(n=len(ch), complete=False)
