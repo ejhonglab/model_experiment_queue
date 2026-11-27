@@ -104,3 +104,74 @@ def test_tags_and_points():
     assert len({M.point_tag(p.setting, p.panel, p.fly, p.wiring) for p in p1 + p2}) == 180
     assert all(p.setting.endswith('free') for p in M.planned_points(2, free=True))
     assert M.step_of('familyfree', 'megamat') == 1 and M.step_of('family', 'apl16') == 2
+
+
+def test_terms_on_a_planted_table():
+    w = np.array([0.0, 0.1, -0.1, 0.2])[:, None]
+    f = np.linspace(-0.3, 0.3, 9)[None, :]
+    E = pd.DataFrame(1.0 + w + f, index=list(M.T_WIRINGS), columns=list(M.FLY_LABELS))
+    t = M.terms(E)
+    assert t['input_fly'] == pytest.approx(np.std(f, ddof=1))
+    assert t['wiring'] == pytest.approx(np.std(w, ddof=1))
+    assert t['remainder'] == pytest.approx(0.0, abs=1e-12)
+    assert M.term_class(0.4) == 'small' and M.term_class(0.7) == 'a part' and M.term_class(1.0).startswith('as large')
+    E.iloc[0, 0] = np.nan
+    assert not M.terms(E)['complete']
+
+
+def test_classes_of_planted_values():
+    assert M.stand_in_class(1.00, 1.04, 0.05) == 'a fair stand-in'
+    assert M.stand_in_class(0.90, 1.00, 0.05) == 'moves it nearer'
+    assert M.stand_in_class(1.10, 1.00, 0.05) == 'moves it further'
+    assert M.flies_class(0.5) == 'vary too little' and M.flies_class(1.0) == 'as the flies'
+    assert M.flies_class(1.3) == 'vary too much'
+    row = dict(n_on=1900, target_on=1905, n_off=4100, target_off=4100, at_bound_thr=False, at_bound_apl='False')
+    assert M.is_held(row)
+    assert not M.is_held(dict(row, n_on=1880))
+    assert not M.is_held(dict(row, at_bound_apl='True'))
+    assert not M.is_held({})
+
+
+def planted_side(n_w=3, n_f=3, seed=0):
+    from kcq import population_fit as P
+    rng = np.random.default_rng(seed)
+    odors = ['a', 'b', 'c', 'd']
+    ref = P.FlyReference(parts={}, mean={'strength/rate': pd.Series(1.0, index=odors)},
+                         one_fly={'strength/rate': 0.5}, flies=['x', 'y'], odors=odors)
+    tags, ws, fs, rows = [], [], [], []
+    for i in range(n_w):
+        for j in range(n_f):
+            tags.append(f't{i}{j}'); ws.append(f'w{i}'); fs.append(f'f{j}')
+            rows.append(1.0 + 0.1 * i + 0.05 * j + 0.01 * rng.standard_normal(len(odors)))
+    return M.Side(('s', 'p', 'on'), ref, tags, ws, fs, {'strength/rate': np.array(rows)})
+
+
+def test_against_others_uses_other_wirings_and_input_flies():
+    sd = planted_side()
+    om = M.others_means(sd)['strength/rate']
+    A = sd.arrays['strength/rate']
+    # t00 against the mean of the model flies with another wiring and another input fly (t11, t12, t21, t22)
+    idx = [sd.tags.index(t) for t in ('t11', 't12', 't21', 't22')]
+    assert np.allclose(om[0], A[idx].mean(axis=0))
+    sc = M.against_others(sd)
+    assert sc.loc['t00', 'part_strength_rate'] == pytest.approx(np.sqrt(np.mean((A[0] - om[0]) ** 2)) / 0.5)
+    pop = M.population_score(sd)
+    assert pop['part_strength_rate'] == pytest.approx(np.sqrt(np.mean((A.mean(axis=0) - 1.0) ** 2)) / 0.5)
+
+
+def test_recompare_and_reclass_on_a_planted_record():
+    c = dict(n=4, complete=True, changes=[-0.05, -0.06, -0.04, -0.05], change=-0.05, se=0.01, spread=0.02,
+             improves=True, worse_than_spread=False)
+    r = M.recompare(c, 0.06)
+    assert r['se'] == pytest.approx(0.03) and not r['improves']
+    assert M.recompare(c, None) == c
+    ok = dict(n=4, complete=True, changes=[0.0, 0.01, -0.01, 0.0], change=0.0, se=0.01, spread=0.02, improves=False,
+              worse_than_spread=False)
+    bad = dict(ok, changes=[0.06, 0.07, 0.05, 0.06], change=0.06, worse_than_spread=True)
+    rec = dict(arm='X', megamat=c, stages={s: ok for s in M.LOSS_STAGES}, panels={'apl16/apl16/on': bad},
+               panels_beside={}, guard={}, control_fall=0.04, reasons=[], cls='megamat only', panel_missing=[])
+    assert M.reclass_record(rec, 'E136_stage_population_fit')['cls'] == 'megamat only'
+    rec2 = M.respread(rec, {'apl16/apl16/on': 0.08})
+    assert M.reclass_record(rec2, 'E136_stage_population_fit')['cls'] == 'holds'
+    rec3 = M.respread(rec, {'stage': 0.06})
+    assert M.reclass_record(rec3, 'E136_stage_population_fit')['cls'] == 'does not improve'
