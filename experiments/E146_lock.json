@@ -537,7 +537,7 @@
  "outcome_rule": "(a) when the power holds and the weight class holds; (b) when a feature makes the step (whatever the power; both letters when both hold); otherwise, with power: (c) when not told apart, else (d); without power and no feature: (e)",
  "choices": [
   "paths: E142's lock was written on viki, so its data files' paths (under /home/yang/src/kc_queue/model_experiment_queue and /local/tensor/Tom/claude_kc_remapping) are read at this repository's root and this host's shared directory (`remap_path`), and their sha256 checked there; E146's lock records each input both absolute (this host) and relative ('repo:' or 'shared:'), and is checked by the relative path",
-  "the left-out fit: weights fitted on 16 odors with both sides relative to their mean over those 16 odors (each dendrite fly's weighted parts and each bouton fly's parts re-normalized over the 16, then averaged over the flies), so the left-out odor's bouton value enters nothing in the fit; the prediction of the 17th is the weighted dendrites' entry relative over all 17 odors (as E142's count-weighted yardstick reads it, and equal to the 16-odor prediction p16 converted exactly by p17 = 17 p16 / (16 + p16))",
+  "the left-out fit (as amended 2026-11-26 20:28, AMENDMENTS): weights fitted on 16 odors with both sides relative to their mean over those 16 odors: the dendrite flies' mean weighted entries (each fly relative over all 17 odors, as the prediction reads them) re-normalized over the 16, and each bouton fly's parts re-normalized over the 16, then averaged over the flies, so the left-out odor's bouton value enters nothing in the fit; the prediction of the 17th is the weighted dendrites' entry relative over all 17 odors (as E142's count-weighted yardstick reads it, and equal to the 16-odor prediction p16 converted exactly by p17 = 17 p16 / (16 + p16))",
   "the fit's loss: the mean over the two strength parts of the mean squared difference over the fit odors in the bouton flies' one-fly units (all five flies' units, also for a half's fit), plus the penalty times the weights' squared coefficient of variation over the 29 glomeruli (population variance over the squared mean; 0 at equal weights; scale-free, as the parts are); weights bounded below by W_MIN, from equal weights, L-BFGS-B with the analytic gradient, then scaled to mean 1",
   "the penalty grid PENALTIES; the penalty is chosen by the power check alone: the one whose smallest passing share over the kinds that are not vacuous is largest, ties to the larger penalty; the class of the power is read at it",
   "the uneven draws: their unevenness is, at each penalty, the coefficient of variation over the 29 glomeruli of the weights fitted to all 17 odors of all five bouton flies at that penalty, the only quantity of a fit to the real boutons read before the power check (no prediction or error of a fit is read); each draw lognormal, iid over glomeruli, its log-SD solved so that the draw's coefficient of variation equals that one exactly",
@@ -565,5 +565,12 @@
   "Remy's processed data without the bouton fly 2022-10-21 fly02 and without her older megamat flies; Yang's processed products only",
   "validation2 and the mixtures not read"
  ],
- "note": "written before any statistic of E146 was computed; every part but lock refuses until this file is committed (require_lock)"
+ "note": "written before any statistic of E146 was computed; every part but lock refuses until this file is committed (require_lock)",
+ "amendments": [
+  "2026-11-26 20:28, atlas, before any statistic of E146 was computed (only the tests on planted data had run; the results folder held lock.json alone): the left-out fit's dendrite side is the dendrite flies' mean weighted entries (each fly relative over all 17 odors, as the prediction reads them) re-normalized over the 16 fit odors, in place of each dendrite fly re-normalized over the 16 and then averaged (the lock's second choice as first written); the bouton side is unchanged (each bouton fly re-normalized over the 16, then averaged). With the form as first written a plant's own weights did not reproduce its noiseless truth on the fit odors (the mean of re-normalized flies is not the re-normalized mean), so the bound would have been charged an error that no weighting removes; with the amended form the planted weights reproduce the truth exactly. The prediction of the left-out odor is unchanged (the weighted dendrites' entry relative over all 17). Code: fit_entries, fit_loss"
+ ],
+ "amended": {
+  "time": "2026-11-26 20:29",
+  "host": "atlas"
+ }
 }
