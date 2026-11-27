@@ -533,7 +533,8 @@ def scales_table(d: dict, V: Values, panel: str = 'megamat') -> List[str]:
     """A panel's operating point and the absolute scales the holds reached (range over each setting's wirings), with
     the largest spike counts."""
     r = d['reads']
-    L = [f"The {dict(apl16='APL16').get(panel, panel)} reads' operating point and the absolute scales the holds reached, range over each setting's "
+    name = dict(apl16='APL16').get(panel, panel)
+    L = [f"The {name} reads' operating point and the absolute scales the holds reached, range over each setting's "
          "wirings" + (" (the flies' response rate with APL on 0.0915)." if panel == 'megamat' else
                       " (the calyx's fit's two response counts).") , '',
          '| model | wirings | response rate, APL on | APL off | APL→bouton | APL→KC | KC–KC | somatic threshold (Hz) | '
@@ -585,11 +586,20 @@ def apl_effect_table(d: dict, V: Values) -> List[str]:
     mean over each setting's wirings: the loss, the mean APL effect, the pattern part with its amplitude and shape parts
     and the spread ratio, ρ and Pearson r on the per-pair APL effect."""
     a = d['apl']
+    t = W.data_targets()
     L = ['The APL effect on odor-odor distances (a held-out test; gates nothing), under the calibrated readout against '
-         "all recordings, mean over each setting's wirings. The flies' mean APL effect is +0.178; the floor of the "
-         'pattern part about 0.029.', '',
+         "all recordings, mean over each setting's wirings. The KC data's row gives the flies' mean APL effect and the "
+         'floors of the loss and its parts (a resampled set of recordings against the measured one) and the ceiling of '
+         'ρ (the data-target registry).', '',
          '| model | wirings | loss | mean APL effect | pattern part | amplitude part | shape part | spread ratio | ρ on '
          'the per-pair APL effect | Pearson r |', '|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|']
+    if t:
+        g = lambda k, f='.4f': _f(t.get(k), f)
+        L.append(f"| the KC data (floors; ceilings) | – | {g('apl_effect_rmse_floor')} | {g('apl_effect_mean', '+.3f')} | "
+                 f"{g('apl_effect_pattern_floor')} | {g('apl_effect_amplitude_floor')} | {g('apl_effect_shape_floor')} | "
+                 f"1 | {g('apl_effect_rho_ceiling', '.2f')} | {g('apl_effect_pearson_ceiling', '.2f')} |")
+        for k in ('apl_effect_rmse_floor', 'apl_effect_mean', 'apl_effect_pattern_floor', 'apl_effect_rho_ceiling'):
+            V.add('kc_data', 'apl_effect', k, t.get(k), panel='apl16', condition='on_off', half='all')
     cols = ('price_z8_loss', 'price_mean_effect', 'price_z8_pattern', 'price_z8_amplitude', 'price_z8_shape',
             'price_z8_sd_ratio', 'price_z8_rho', 'price_z8_pearson')
     for v in variants():
