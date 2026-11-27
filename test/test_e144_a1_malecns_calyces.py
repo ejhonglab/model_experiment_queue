@@ -430,3 +430,55 @@ def test_shortcut_check(monkeypatch):
     assert a.shortcut == pytest.approx(0.93) and a['diff'] == pytest.approx(0.0) and a.within_tol
     p = df[(df.statistic == 'apl16/apl16/on') & (df.side == 'arm')].iloc[0]
     assert p['diff'] == pytest.approx(-0.05) and not p.within_tol      # beyond E143's 0.02
+
+
+def test_beside_on_wirings_held():
+    """A setting whose hold fails on one wiring keeps 'no class'; beside it, the class on the wirings whose holds all held
+    (step 2's D5.8 on L: the real wiring's megamat hold at APL's x10 bound), and that description through E143's
+    resamples as its own row '<variant>@held'."""
+    from experiments import E136_stage_population_fit as F
+    from experiments import E143_megamat_fly_sampling as E143
+    from experiments import E144_score as S
+    ws = ('real', 'P1', 'P2', 'P3')
+    st = ('pn_dendrite', 'pn_bouton', 'kc_claw', 'kc_soma')
+    assert S.wirings_held(ws, ['L_D5.8_megamat_real']) == ['P1', 'P2', 'P3']
+    assert S.wirings_held(ws, []) == list(ws)
+    spreads = dict(stage=0.02, **{s: 0.05 for s in st}, **{'/'.join(k): 0.05 for k in F.SCORED_PANELS})
+    fam = {w: dict(stage=1.0, **{s: 1.0 for s in st}) for w in ws}
+    arm = {w: dict(stage=0.9, **{s: 0.98 for s in st}) for w in ws}
+    arm['real'] = dict(stage=1.3, **{s: 1.3 for s in st})        # the failed wiring would fail the class
+    pv = {'L_family': {k: {w: 1.0 for w in ws} for k in F.SCORED_PANELS},
+          'L_D5.8': {k: {w: 1.01 for w in ws} for k in F.SCORED_PANELS}}
+    mega = {'L_family': fam, 'L_D5.8': arm}
+    b = S.beside_on_wirings_held(F, 'L_D5.8', 'L_family', ws, ['L_D5.8_megamat_real'], st, mega, pv, spreads, {}, None)
+    assert b['cls'] == 'holds' and b['wirings'] == ['P1', 'P2', 'P3'] and b['note'] == S.HELD_NOTE
+    assert b['megamat']['change'] == pytest.approx(-0.1)
+    assert S.classify_on(F, 'L_D5.8', 'L_family', ws, st, mega, pv, spreads, {}, None)['cls'] != 'holds'
+    assert S.beside_on_wirings_held(F, 'L_D5.8', 'L_family', ws, [], st, mega, pv, spreads, {}, None) is None
+    every = [f'L_D5.8_megamat_{w}' for w in ws]
+    assert S.beside_on_wirings_held(F, 'L_D5.8', 'L_family', ws, every, st, mega, pv, spreads, {}, None) is None
+    # through the resamples: the scored record stays 'no class' (its failed hold is not fly-dependent), the beside row
+    # is read on its three wirings
+    K, nw = 3, len(S.ALL_WIRINGS)
+    full = lambda v: np.full((K, nw), float(v))
+    stage = {'L_family': full(1.0), 'L_D5.8': full(0.9)}
+    stage['L_D5.8'][:, 0] = 1.3
+    ones = {k: full(1.0) for k in stage}
+    rv = E143.Resampled(mega={'stage': stage, **{s: dict(ones) for s in E143.LOSS_STAGES}},
+                        guard={s: dict(ones) for s in E143.LOSS_STAGES},
+                        panels={k: dict(ones) for k in E143.HOLDS_PANELS + E143.BESIDE_PANELS},
+                        guard_panels={k: dict(ones) for k in E143.HOLDS_PANELS + E143.BESIDE_PANELS})
+    sc = lambda spread: dict(complete=True, se=0.01, spread=spread, change=-0.1)
+    rec_b = dict(megamat=sc(0.02), stages={s: sc(0.02) for s in E143.LOSS_STAGES},
+                 panels={k: sc(0.03) for k in E143.HOLDS_PANELS},
+                 panels_beside={k: sc(0.1) for k in E143.BESIDE_PANELS}, guard={}, reasons=[], panel_missing=[],
+                 cls='holds', wirings=['P1', 'P2', 'P3'])
+    rec = dict(rec_b, cls='no class', reasons=['a hold fails: L_D5.8_megamat_real'], wirings=list(ws), calyx='L',
+               setting='D5.8', reference='L_family', on_wirings_held=rec_b)
+    kdf, cdf, cls_of, _ = S.resampled_classes({'L_D5.8': rec}, rv)
+    k = kdf.set_index('arm')
+    assert k.loc['L_D5.8', 'cls_all_flies'] == 'no class' and k.loc['L_D5.8', 'share_scored'] == 1.0
+    assert k.loc['L_D5.8@held', 'cls_all_flies'] == 'holds' and k.loc['L_D5.8@held', 'wirings'] == 'P1,P2,P3'
+    assert k.loc['L_D5.8@held', 'beside'] == 'on_wirings_held' and set(cls_of) == {'L_D5.8'}
+    m = cdf[(cdf.arm == 'L_D5.8@held') & (cdf.statistic == 'megamat')].iloc[0]
+    assert m.all_flies == pytest.approx(-0.1)

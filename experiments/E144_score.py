@@ -275,6 +275,33 @@ def classify_on(F, v: str, ref: str, ws: Sequence[str], stages: Sequence[str], m
     return rec
 
 
+HELD_NOTE = ("a description beside the scored class: the class on the wirings on which none of the setting's reads "
+             "failed its hold (the lock's 'no class for a wiring ... whose holds fail' read per wiring); the setting's "
+             "class stays 'no class', as E139's and E141's read a failed hold")
+
+
+def wirings_held(ws: Sequence[str], failed: Sequence[str]) -> List[str]:
+    """The wirings of `ws` on which none of a setting's reads failed its hold (`failed`, E139's `holds_failed` tags)."""
+    from experiments.E144_a1_malecns_calyces import parse_tag
+    bad = {parse_tag(t).wiring for t in failed}
+    return [w for w in ws if w not in bad]
+
+
+def beside_on_wirings_held(F, v: str, ref: str, ws: Sequence[str], failed: Sequence[str], stages: Sequence[str],
+                           mega: Mapping, pv: Mapping, spreads: Mapping[str, float], flags: Mapping[str, Mapping[str, str]],
+                           guard: Optional[Mapping]) -> Optional[dict]:
+    """Beside a setting whose holds fail on some of its wirings (step 2's D5.8 on L: the real wiring's megamat hold at
+    APL's x10 bound, its three permutations held): `classify_on` on the wirings whose holds all held (`wirings_held`),
+    with HELD_NOTE; None where no hold fails or none of the wirings is left. A description: the setting's class stays
+    'no class'."""
+    held = wirings_held(ws, failed)
+    if not failed or not held:
+        return None
+    b = classify_on(F, v, ref, held, stages, mega, pv, spreads, flags, guard)
+    b['note'] = HELD_NOTE
+    return b
+
+
 def sites_of(calyx: str, setting: str, ws: Sequence[str]) -> pd.DataFrame:
     """Where APL's inhibition is made in a setting's megamat and APL16 reads (analyses/E136_writeup_tables.py's
     `sites_row` on the calyx's own claw x bouton wiring: the share of the claws' summed drive APL removes and the share of
@@ -485,7 +512,8 @@ def part_score() -> dict:
     - the APL16 reads with E67's statistics, the realism bands and the price's statistics (score_apl16.csv);
     - E136's classes on the calyx's wirings (`classify_on`; the spreads the hemibrain family's, `hemibrain_spreads`; the
       calyx's own SD over its wirings beside), no class where a hold fails (E139's `holds_failed`) or a wiring leaves a
-      band; E139's price against the calyx's family (`price_on`);
+      band, and beside a failed hold the class on the wirings whose holds held (`beside_on_wirings_held`, a
+      description: 'on_wirings_held'); E139's price against the calyx's family (`price_on`);
     - per calyx: "A1 replicates" (A1 holds), "the rise is needed" (B does not hold and D1.8, A1 or D5.8 does), "the
       family is inside the hemibrain's wirings" (its strength error on the real wiring, against the held-out half, inside
       the hemibrain family's range over its eight wirings at the boutons, the claws and the somata), the dose ladder
@@ -577,6 +605,9 @@ def part_score() -> dict:
                 if failed:
                     rec['reasons'].append('a hold fails: ' + ', '.join(failed))
                     rec['cls'] = 'no class'
+                    b = beside_on_wirings_held(F, v, ref, ws, failed, stages, mega, pv, spreads, flags, guard)
+                    if b is not None:
+                        rec['on_wirings_held'] = b
                 rec.update(holds_failed=failed, calyx=c, setting=s, flagged_wirings={w: f for w, f in flags.get(v, {})
                                                                                      .items() if f},
                            price_on_apl_effect=price_on(parts, v, ref, ws))
@@ -597,7 +628,10 @@ def part_score() -> dict:
                 inside[st] = dict(value=val, hemibrain_min=lo, hemibrain_max=hi,
                                   inside=None if val is None else bool(lo <= val <= hi))
             a1 = classes.get(variant(c, 'A1'), {})
-            calyces[c] = dict(classes=cls, a1_holds=None if a1.get('cls') in (None, 'reads missing') else
+            held = {s: dict(cls=x['on_wirings_held']['cls'], wirings=x['on_wirings_held']['wirings'])
+                    for s in names if s != 'family'
+                    for x in [classes.get(variant(c, s), {})] if x.get('on_wirings_held')}
+            calyces[c] = dict(classes=cls, classes_on_wirings_held=held, a1_holds=None if a1.get('cls') in (None, 'reads missing') else
                               bool(a1.get('cls') == 'holds'),
                               a1_megamat_falls=None if a1.get('cls') in (None, 'reads missing') else
                               (a1.get('megamat') or {}).get('improves'),
@@ -782,6 +816,13 @@ def resampled_classes(classes: Mapping[str, dict], rv) -> Tuple[pd.DataFrame, pd
                      wirings=','.join(rec.get('wirings') or []))
         krows.append(dict(label, **krow))
         crows += [dict(label, **r) for r in rows]
+        b = rec.get('on_wirings_held')
+        if b and 'megamat' in b:
+            # the description on the wirings whose holds held (`beside_on_wirings_held`), as its own row '<v>@held'
+            kb, rb = E143.class_interval_rows(EXPERIMENT, f'{v}@held', v, b, restrict(rv, v, ref, b['wirings']), None)
+            lb = dict(label, wirings=','.join(b['wirings']), beside='on_wirings_held')
+            krows.append(dict(lb, **kb))
+            crows += [dict(lb, **r) for r in rb]
     kdf = pd.DataFrame(krows)
     if len(kdf):
         kdf['shares'] = kdf['shares'].map(json.dumps)
