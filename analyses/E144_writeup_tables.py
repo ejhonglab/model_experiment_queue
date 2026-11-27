@@ -319,6 +319,29 @@ def panels_table(d: dict, V: Values) -> List[str]:
     return L + ['']
 
 
+def guard_panels_table(d: dict, V: Values) -> List[str]:
+    """The held-out panels on all views (rule 3's guard): each setting's change of the KC population error over all
+    views from its calyx's family (mean over the wirings), the spreads on all views above."""
+    cl = d['classes'].get('classes') or {}
+    sp = d['classes']['spreads_all_views']
+    L = ["The held-out panels' KC somata over all three views (rule 3's guard): each setting's change from its calyx's "
+         "family on the same wirings (mean over them; lower is better). A change above the spread on all views fails "
+         'the class as a held-out panel does; the kiwi mixtures are beside.', '',
+         '| calyx and setting | wirings | ' + ' | '.join(PANEL_NAMES[k] for k in PANEL_KEYS) + ' |',
+         '|---|---|' + '---:|' * len(PANEL_KEYS),
+         '| the spread on all views | – | ' + ' | '.join(_f(sp[k]) for k in PANEL_KEYS) + ' |']
+    for v in variants():
+        r = cl.get(v)
+        if not r or 'guard' not in r:
+            continue
+        g = r['guard']
+        L.append(f"| {label(v)} | {', '.join(r['wirings'])} | " + ' | '.join(_ch(g.get(k)) for k in PANEL_KEYS) + ' |')
+        for k in PANEL_KEYS:
+            inp, pan, cond = k.split('/')
+            V.add(v, 'kc_soma', 'change_all_views', (g.get(k) or {}).get('change'), panel=pan, condition=cond)
+    return L + ['']
+
+
 def ladder_table(d: dict, V: Values) -> List[str]:
     """The dose ladder (a description): validation2's change from the calyx's family along B, D1.8, A1 and D5.8 on the
     real wiring, beside the hemibrain's (E141's, on its 'first' real wiring), and on the male calyces' four wirings."""
@@ -747,6 +770,7 @@ def main(score_dir: Optional[Path] = None) -> Path:
              ('The families over all views', all_views_table),
              ('The megamat stage error against each set of flies', halves_table), ('The classes', classes_table),
              ('The megamat stages', stage_changes_table), ('The held-out panels', panels_table),
+             ('The held-out panels over all views', guard_panels_table),
              ('The dose ladder at validation2', ladder_table),
              ('Step 2: the doses on the permutations', lambda d_, V_: step2_table(d_, step1, V_)),
              ('The resampled reading', shares_table), ('The read-once check by calyx', shortcut_table),
