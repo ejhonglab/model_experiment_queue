@@ -529,17 +529,18 @@ def realism_table(d: dict, V: Values) -> List[str]:
     return L + ['']
 
 
-def scales_table(d: dict, V: Values) -> List[str]:
-    """The megamat operating point and the absolute scales the holds reached (range over each setting's wirings), with
-    the largest megamat spike counts."""
+def scales_table(d: dict, V: Values, panel: str = 'megamat') -> List[str]:
+    """A panel's operating point and the absolute scales the holds reached (range over each setting's wirings), with
+    the largest spike counts."""
     r = d['reads']
-    L = ["The megamat reads' operating point and the absolute scales the holds reached, range over each setting's "
-         "wirings (the flies' response rate with APL on 0.0915).", '',
+    L = [f"The {dict(apl16='APL16').get(panel, panel)} reads' operating point and the absolute scales the holds reached, range over each setting's "
+         "wirings" + (" (the flies' response rate with APL on 0.0915)." if panel == 'megamat' else
+                      " (the calyx's fit's two response counts).") , '',
          '| model | wirings | response rate, APL on | APL off | APL→bouton | APL→KC | KC–KC | somatic threshold (Hz) | '
          'PN normalization, additive | largest spike count, APL on / off |',
          '|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|']
     for v in variants():
-        x = r[(r.variant == v) & (r.panel == 'megamat')]
+        x = r[(r.variant == v) & (r.panel == panel)]
         if not len(x):
             continue
         add = x['pn_inhadd'] if 'pn_inhadd' in x and x['pn_inhadd'].notna().any() else None
@@ -549,8 +550,8 @@ def scales_table(d: dict, V: Values) -> List[str]:
                  f'{_rng(x.max_count_on, ".0f")} / {_rng(x.max_count_off, ".0f")} |')
         for col in ('rate_on', 'rate_off', 'wAPLPN_scale', 'wAPLKC_scale', 'wKCKC_scale', 'fixed_thr', 'max_count_on',
                     'max_count_off'):
-            V.add(v, 'reads', f'{col}_min', x[col].min(), condition='scales', half='all')
-            V.add(v, 'reads', f'{col}_max', x[col].max(), condition='scales', half='all')
+            V.add(v, 'reads', f'{col}_min', x[col].min(), panel=panel, condition='scales', half='all')
+            V.add(v, 'reads', f'{col}_max', x[col].max(), panel=panel, condition='scales', half='all')
     return L + ['']
 
 
@@ -741,6 +742,7 @@ def main(score_dir: Optional[Path] = None) -> Path:
              ('The resampled reading', shares_table), ('The read-once check by calyx', shortcut_table),
              ('The claw default', claw_default_table), ('The holds at the bound', holds_table),
              ('Realism: the bands', realism_table), ('Realism: the operating point and the scales', scales_table),
+             ('Realism: the scales on the APL16 input', lambda d_, V_: scales_table(d_, V_, 'apl16')),
              ("Where APL's inhibition is made", sites_table), ('The APL effect, held out', apl_effect_table),
              ('The megamat somata without aa', without_aa_table), ("The mixtures under E137's readings", e137_table),
              ('Step 0: the KC-KC matrices', matrix_table), ('The prediction and the outcome', prediction_table),
