@@ -1303,6 +1303,7 @@ Canonical experiment names for summary reports:
 | E146 | what could make the flies' step from the PN dendrites to the PN boutons |
 | E147 | the megamat stage error read on model flies with each ORN fly's own input |
 | E148 | the megamat fits' saved evaluations read on sharing and breadth and under other losses |
+| E149 | the megamat fits' picks under strength and sharing read where they were not fitted |
 
 ## Model-output archive (data/model_outputs/ in the shared directory)
 
