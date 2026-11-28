@@ -758,6 +758,7 @@ def part_views(cell: str, evals: Optional[Sequence[int]] = None) -> dict:
     lock = require_lock()
     elock = R.require_lock()
     t0 = time.time()
+    commits = {k: v for k, v in H.code_commits().items() if not isinstance(v, (dict, list))}   # the code that reads
     chunks = local_dir(f'views_chunks/{cell}')
     found, missing, read_here = [], [], []
     ctx = _in_views()
@@ -813,7 +814,7 @@ def part_views(cell: str, evals: Optional[Sequence[int]] = None) -> dict:
                 n_found=len(found), n_read_here=len(read_here), missing=missing, complete=not missing,
                 lock_sha256=lock.get('sha256'), e134_lock_sha256=elock.get('sha256'),
                 readings={st: list(readings_of_stage(st)) for st in LOSS_STAGES},
-                **{k: v for k, v in H.code_commits().items() if not isinstance(v, (dict, list))})
+                chunks_kept=len(found) - len(read_here) if cell != SETTINGS_CELL else None, **commits)
     if cell == SETTINGS_CELL:
         summ['found'] = found
     _write_json(views_dir() / f'{cell}_summary.json', summ)
@@ -1290,6 +1291,11 @@ def identities(cells: Optional[Sequence[str]] = None, lock: Optional[Mapping] = 
                              note=f'no views yet: --part views --cell {c} on the host that holds its stages'))
             continue
         summ = views_summary(c)
+        complete = views_complete(c)
+        if not complete:
+            rows.append(dict(cell=c, identity='views', value=np.nan, expected=np.nan, passed=None, needs_views=True,
+                             note=f"views incomplete: {len(summ.get('missing') or [])} evaluations missing on "
+                                  f"{summ.get('host')}; --part views --cell {c} on the host that holds them"))
         idr = identity_rescore(c)
         rows.append(dict(cell=c, identity=idr['identity'], value=idr['max_abs_diff'], expected=IDENTITY_TOL,
                          passed=idr['passed'], needs_views=True, note=json.dumps(dict(n_evals=idr['n_evals'],
@@ -1297,7 +1303,7 @@ def identities(cells: Optional[Sequence[str]] = None, lock: Optional[Mapping] = 
         have = sorted(int(x) for x in set(cell_views(c)['eval']))
         hv = [i for i in held if i in have]
         key = 'A1_held' if c == 'A1' else c
-        for rd in ('own', 'all'):
+        for rd in ('own', 'all') if complete else ():
             val = consistency_from_views(c, hv if c == 'A1' else [i for i in allv if i in have], rd)
             rows.append(dict(cell=c, identity=f'consistency {key} from the views ({rd} reading)', value=val,
                              expected=CONSISTENCY_IDENTITIES[key], needs_views=True,
@@ -1338,13 +1344,15 @@ def part_step0() -> dict:
         _write_json(pp, dict(prediction(), written=_now(), host=_host(), before_any_view=True))
     ids = identities(lock=lock)
     _write_csv(ids, 'identities.csv')
-    failed = sorted(set(ids.loc[(ids['kind'] != 'beside') & (ids['passed'] == False), 'cell']))  # noqa: E712
+    failed = sorted(set(ids.loc[(ids['kind'] == 'identity') & (ids['passed'] == False), 'cell']))  # noqa: E712
+    read_once_failed = sorted(set(ids.loc[(ids['kind'] == 'check') & (ids['passed'] == False), 'cell']))  # noqa: E712
     rec = dict(part='step0', probe_reproduced=bool(probe['reproduced'].all()),
                probe_not_reproduced=probe.loc[~probe['reproduced'], ['statistic', 'cell']].to_dict('records'),
                identities_checked=sorted(set(ids.loc[ids['kind'].isin(['identity', 'check']) & ids['needs_views'],
                                                      'cell'])),
                identities_waiting=sorted(set(ids.loc[ids['kind'] == 'waiting', 'cell'])),
-               cells_failed=failed, seconds=round(time.time() - t0, 1), host=_host(), time=_now(),
+               cells_failed=failed, read_once_failed=read_once_failed, seconds=round(time.time() - t0, 1),
+               host=_host(), time=_now(),
                lock_sha256=lock.get('sha256'))
     _write_json(results_dir() / 'step0.json', rec)
     provenance('step0', lock)
@@ -1907,10 +1915,9 @@ def part_claws() -> dict:
                                      else "E136's own", cell=cell, classed=name, change=cmp_.get('change'),
                                      se=cmp_.get('se'), spread=spread, worse_than_spread=cmp_.get('worse_than_spread'),
                                      improves=cmp_.get('improves')))
-        for k in CELLS:
-            if not have_views(k):
+        for k, ms in model_sets(settings=False).items():
+            if k not in CELLS:
                 continue
-            ms = model_sets([k], settings=False)[k]
             refs = claws_references(st)
             e = set_errors(ms, st, [s for _, s in refs], STRENGTH)
             for r, (ref, sub) in enumerate(refs):
@@ -2038,8 +2045,9 @@ def reclass_without_boutons() -> dict:
         e141 = json.loads((H.results_dir(E141) / 'classes.json').read_text())
         m141 = S2.megamat_rows(H.results_dir(E141) / 'score_megamat.csv', 'variant')
         for a, orig in e141['classes'].items():
-            if a not in m141:
-                rec['classes'][f'E141:{a}'] = dict(cls='reads missing', original_cls=orig.get('cls'))
+            if a not in m141:       # E141's arms whose reads stopped after their holds failed: no class as scored
+                rec['classes'][f'E141:{a}'] = dict(cls='no class' if orig.get('reasons') else 'reads missing',
+                                                   original_cls=orig.get('cls'), note='no megamat reads')
                 continue
             av = S2.with_stage({w: v for w, v in m141[a].items() if w in T_WIRINGS}, stages)
             r = S2.reclass(orig, av, f, spreads, stages, e141.get('control_fall'), drop)
@@ -2118,10 +2126,9 @@ def part_beside() -> dict:
     _write_csv(pd.DataFrame(rows), 'beside_settings.csv')
     # (2)
     reg = []
-    for k in CELLS:
-        if not have_views(k):
+    for k, ms in model_sets(settings=False).items():
+        if k not in CELLS:
             continue
-        ms = model_sets([k], settings=False)[k]
         ev = cell_evals(k).set_index('eval')
         idx = [int(nm[1:]) for nm in ms.members[0][1]]
         Z = np.column_stack([np.ones(len(idx))] + [np.log(ev.loc[idx, f].to_numpy(dtype=float))
@@ -2240,8 +2247,15 @@ def part_score() -> dict:
                claws=claws, no_boutons=dict(orders=orders, L4=no_b, L0=(nb.get('summary') or {}).get('L0')),
                outcomes=letters, outcome_text={k: OUTCOMES[k] for k in letters}, time=_now(), host=_host(),
                lock_sha256=lock.get('sha256'))
-    _write_json(results_dir() / 'classes.json', rec)
-    provenance('score', lock)
+    complete = {c: views_complete(c) for c in VIEW_CELLS}
+    rec['views_complete'] = complete
+    rec['complete'] = all(complete.values())
+    name = 'classes.json' if rec['complete'] else 'classes_partial.json'
+    if not rec['complete']:
+        rec['note'] = ('provisional: the views of ' + ', '.join(c for c, v in complete.items() if not v) + ' are not '
+                       'complete, so these classes and letters read the other cells only; classes.json waits for them')
+    _write_json(results_dir() / name, rec)
+    provenance('score', lock, written=name)
     return rec
 
 
