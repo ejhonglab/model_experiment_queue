@@ -60,14 +60,19 @@ def planted(monkeypatch, tmp_path):
         return _planted_sim(free=setting.endswith('free'))
     monkeypatch.setattr(E, 'simulate', sim)
 
-    def orn_of(fly, panel):
+    variants = []
+
+    def orn_of(fly, panel, variant=None):
         _, built = _out_and_built()
         o = built.orn.copy()
         o.attrs['fly'] = fly
+        variants.append(variant)
         return o
     monkeypatch.setattr(E, 'input_of', orn_of)
     monkeypatch.setattr(E, 'input_checks', lambda panel: {'panel': panel})
-    return types.SimpleNamespace(res=res, loc=loc, calls=calls)
+    checked = []
+    monkeypatch.setattr(E, 'variant_checks', lambda panel, variant: checked.append((panel, variant)) or {})
+    return types.SimpleNamespace(res=res, loc=loc, calls=calls, variants=variants, checked=checked)
 
 
 def test_lanes(monkeypatch):
@@ -180,6 +185,59 @@ def test_failed_read_releases_its_claim(planted, monkeypatch):
         E.read_one('family_megamat_f0_P3', 1, 'family', 'megamat', 'f0', 'P3', lambda: E.input_of('f0', 'megamat'),
                    'hal', planted.res, [planted.loc / 'r'], lock={})
     assert not (planted.res / 'claims' / 'family_megamat_f0_P3').exists()
+
+
+def test_step6a_list_and_settings():
+    """Step 6a (atlas's planned_points('6a')): 144 points of the family re-held on megamat, the T wirings first, within a
+    wiring the deviations as measured then permuted, fly by fly; no free reading; its settings are the family re-held
+    with their variants."""
+    s6 = E.planned('6a')
+    assert len(s6) == 144 and {p.step for p in s6} == {'6a'} and {p.panel for p in s6} == {'megamat'}
+    assert {p.wiring for p in s6[:72]} == set(M.T_WIRINGS) and {p.wiring for p in s6[72:]} == set(M.S_WIRINGS)
+    assert [p.setting for p in s6[:18]] == ['familymeas'] * 9 + ['familyperm'] * 9
+    assert E.planned('6a', reverse=True) == s6[::-1] and E.planned(1) == E.planned('1')
+    with pytest.raises(ValueError):
+        E.planned('6a', free=True)
+    assert E.split_setting('familymeas') == ('family', False) and E.split_setting('familyperm') == ('family', False)
+    assert E.setting_variant('familymeas') == M.VARIANT_MEASURED and E.setting_variant('familyperm') == M.VARIANT_PERMUTED
+    assert E.setting_variant('family') == M.DEVIATION
+    assert E.step_key('6a') == '6a' and E.step_key('2') == 2
+
+
+def test_step6a_reads_rows_and_inputs(planted, monkeypatch):
+    """A step-6a lane: each read's input is the fly's under its setting's variant, both variants are checked before any
+    read, the rows carry step '6a' and the variant, the runs are in step 6a's folders, and atlas's score readers take
+    them (points, runs, held, inputs by variant)."""
+    monkeypatch.setattr(E, 'require_identity', lambda: {})
+    s = E.part_reads('6a', 'hal', max_reads=3)
+    assert s['made_here'] == 3 and s['step'] == '6a' and s['planned'] == 144
+    assert sorted(planted.checked) == [('megamat', M.VARIANT_MEASURED), ('megamat', M.VARIANT_PERMUTED)]
+    E.part_reads('6a', 'hal-2', reverse=True, max_reads=2)
+    assert planted.variants == [M.VARIANT_MEASURED] * 3 + [M.VARIANT_PERMUTED] * 2
+    rows = M.reads_table()
+    assert len(rows) == 5 and set(M.READ_COLUMNS) <= set(rows.columns)
+    assert {str(x) for x in rows.step} == {'6a'}
+    assert dict(zip(rows.setting, rows.variant)) == {'familymeas': M.VARIANT_MEASURED,
+                                                     'familyperm': M.VARIANT_PERMUTED}
+    assert {r.setting for r in rows.itertuples() if r.lane == 'hal-2'} == {'familyperm'}
+    assert all((planted.loc / 'step6a' / r.setting / r.wiring / r.fly).is_dir() for r in rows.itertuples())
+    pts = M.available(M.points_from_rows(rows))
+    assert len(pts) == 5 and pts.held.all() and {str(x) for x in pts.step} == {'6a'}
+    for r in pts.itertuples():
+        assert M.load_point(r.tag, r.step) is not None
+    monkeypatch.setattr(M, 'input_fly', lambda f, panel='megamat', variant=M.DEVIATION, *a, **k:
+                        E.input_of(f, panel, variant))
+    assert M.check_inputs(pts) == []
+
+
+def test_cli_step6a(monkeypatch):
+    got = []
+    monkeypatch.setattr(E, 'part_reads', lambda *a, **k: got.append(a))
+    monkeypatch.setenv('OMP_NUM_THREADS', '1')
+    monkeypatch.setenv('OMP_THREAD_LIMIT', '1')
+    E.main(['--part', 'reads', '--step', '6a', '--lane', 'hal', '--reverse'])
+    E.main(['--part', 'reads', '--step', '1', '--lane', 'hal'])
+    assert [a[:2] for a in got] == [('6a', 'hal'), ('1', 'hal')] and got[0][3] is True
 
 
 def test_free_read_row(planted, monkeypatch):

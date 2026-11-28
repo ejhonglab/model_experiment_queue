@@ -38,9 +38,12 @@ Parts (CLI `--part`):
   megamat run; the wiring's fit and E136's A1 reads where asked). Records in results/.../identity/identity_<lane>.json;
   RuntimeError on any difference. The reads refuse to start until the family's megamat identity is exact on one wiring
   and no identity has failed (`require_identity`).
-- reads: one lane of a step's reads (`--step 1|2`, atlas's `planned_points`: step 1 the family on megamat, the nine
+- reads: one lane of a step's reads (`--step 1|2|6a`, atlas's `planned_points`: step 1 the family on megamat, the nine
   input flies on the eight wirings, the T wirings first, 72; step 2 on T, A1 on megamat, then A1 and the family on
-  APL16, 36 each), `--free` for the same points under the free reading.
+  APL16, 36 each; step 6a, beside, the family on megamat re-held as in step 1 with each fly's deviation as measured
+  ('familymeas') and permuted over the glomeruli ('familyperm'), the T wirings first, 144, each read's input atlas's
+  `input_fly(fly, 'megamat', SETTING_VARIANT[setting])`, checked first by `variant_checks`), `--free` for steps 1 and 2's
+  points under the free reading.
 
 Lanes and claims (E136's reads): a lane is '<host>' or '<host>-<n>' (`lane_name`), so that two lanes never write one
 table; each read is claimed by mkdir of results/.../claims/<tag>/ before it starts and skipped when claimed elsewhere or
@@ -118,9 +121,11 @@ def atlas():
     return M
 
 
-def input_of(fly: str, panel: str) -> pd.DataFrame:
-    """Input fly `fly`'s model input on `panel` (atlas's `input_fly`)."""
-    return atlas().input_fly(fly, panel)
+def input_of(fly: str, panel: str, variant: Optional[str] = None) -> pd.DataFrame:
+    """Input fly `fly`'s model input on `panel` (atlas's `input_fly`; `variant` its deviations' variant, e.g. step 6a's
+    'measured' or 'permuted', None for atlas's default, the reproducible deviation)."""
+    M = atlas()
+    return M.input_fly(fly, panel) if variant is None else M.input_fly(fly, panel, variant)
 
 
 def lab_of(panel: str) -> pd.DataFrame:
@@ -207,10 +212,20 @@ def claim(tag: str, lane: str, root: Path, reclaim: bool = False) -> bool:
 # the settings
 
 def split_setting(setting: str) -> Tuple[str, bool]:
-    """(the re-held setting, whether the reading is free) of a setting of atlas's SETTINGS."""
-    if setting not in atlas().SETTINGS:
-        raise ValueError(f'{setting=} not in {atlas().SETTINGS}')
-    return (setting[:-len('free')], True) if setting.endswith('free') else (setting, False)
+    """(the re-held setting, whether the reading is free) of a setting of atlas's SETTINGS (atlas's `setting_parts`:
+    step 6a's 'familymeas' and 'familyperm' are the family re-held)."""
+    base, free, _ = atlas().setting_parts(setting)
+    return base, bool(free)
+
+
+def setting_variant(setting: str) -> str:
+    """The variant of the input flies' deviations a setting reads (atlas's `setting_parts`, SETTING_VARIANT)."""
+    return atlas().setting_parts(setting)[2]
+
+
+def step_key(step) -> object:
+    """A step as atlas's points carry it (atlas's `step_key`): 1, 2 or '6a'."""
+    return atlas().step_key(step)
 
 
 def a1_z(lock: Mapping) -> Dict[str, float]:
@@ -411,7 +426,7 @@ def read_row(tag: str, step: int, setting: str, panel: str, fly: str, wiring: st
     else:
         thr_f, apl_f, b_thr, b_apl, n_sims, held_exact, held = 1.0, 1.0, False, False, 2, False, False
     rate = {c: float((out[c]['responses'].to_numpy(dtype=float) > 0.5).mean()) for c in ('on', 'off')}
-    vals = dict(tag=tag, step=int(step), setting=setting, panel=panel, fly=fly, wiring=wiring,
+    vals = dict(tag=tag, step=step_key(step), setting=setting, panel=panel, fly=fly, wiring=wiring,
                 **{k: float(p[k]) for k in M.PARAM_KEYS}, **{f'off_{k}': float(poff[k]) for k in M.PARAM_KEYS},
                 thr_factor=thr_f, apl_factor=apl_f, n_on=n_on, n_off=n_off, target_on=int(t_on), target_off=int(t_off),
                 frac_on_target=float(f_on), frac_off_target=float(f_off), at_bound_thr=b_thr, at_bound_apl=b_apl,
@@ -427,7 +442,8 @@ def read_row(tag: str, step: int, setting: str, panel: str, fly: str, wiring: st
     if not free and M.is_held(row) != held:
         raise RuntimeError(f"{tag}: the runner's held ({held}) is not atlas's is_held")
     own = own_params(base, panel, wiring)
-    extra = dict(reading='free' if free else 'held', held_exact=held_exact, hold_tol=HOLD_TOL, arm=sim['arm'])
+    extra = dict(reading='free' if free else 'held', variant=setting_variant(setting), held_exact=held_exact,
+                 hold_tol=HOLD_TOL, arm=sim['arm'])
     extra.update({f'z_{k}': float(v) for k, v in sim['z'].items()})
     extra.update({k: float(v) for k, v in sim['kws'].items() if k in ('pn_inhadd', 'pn_inhsc')})
     extra.update(start=sim['start'], start_fixed_thr=float(sim['p_start']['fixed_thr']),
@@ -475,7 +491,7 @@ def read_one(tag: str, step: int, setting: str, panel: str, fly: str, wiring: st
                                                                         'target_on', 'target_off', 'at_bound_thr',
                                                                         'at_bound_apl', 'n_sims', 'history')}
         info = dict(model=B.FAMILY, wiring=wiring, panel=panel, reading='free' if sim['free'] else 'read',
-                    experiment=EXPERIMENT, step=int(step), setting=setting, fly=fly, arm=sim['arm'], z=sim['z'],
+                    experiment=EXPERIMENT, step=step_key(step), setting=setting, fly=fly, arm=sim['arm'], z=sim['z'],
                     params=sim['params'], params_off=sim['params_off'], start=sim['start'], p_start=sim['p_start'],
                     targets=list(sim['targets']), hold=hold_rec, tag=tag, host=_host(), lane=lane, time=_now(),
                     input_sha256=frame_sha256(orn))
@@ -537,6 +553,30 @@ def input_checks(panel: str) -> dict:
                 mean_tol=INPUT_MEAN_TOL, kept_odors=[H.odor_abbrev(lab.columns[j]) for j in kept],
                 flies={f: dict(sha256=frame_sha256(x), n_entries_changed=int((x.to_numpy(dtype=float) != L).sum()))
                        for f, x in ins.items()})
+
+
+def variant_checks(panel: str, variant: str) -> dict:
+    """The input flies under another variant of their deviations (step 6a's 'measured' and 'permuted') before any read:
+    every fly's input has the lab input's glomeruli and odors and no NaN, and differs from the lab's (its mean over the
+    flies need not be the lab's). RuntimeError otherwise. Returns each fly's input sha256 and number of entries that
+    differ from the lab's."""
+    from experiments.E77_input_screen import frame_sha256
+    M = atlas()
+    lab = M.lab_input(panel)
+    L = lab.to_numpy(dtype=float)
+    out = {}
+    for f in M.input_flies(panel):
+        x = input_of(f, panel, variant)
+        if not (x.index.equals(lab.index) and x.columns.equals(lab.columns)):
+            raise RuntimeError(f"{panel} {variant} {f}: the input's glomeruli or odors are not the lab input's")
+        X = x.to_numpy(dtype=float)
+        if not np.isfinite(X).all():
+            raise RuntimeError(f'{panel} {variant} {f}: NaN or inf in the input')
+        n = int((X != L).sum())
+        if n == 0:
+            raise RuntimeError(f"{panel} {variant} {f}: the input is the lab's (no deviation)")
+        out[f] = dict(sha256=frame_sha256(x), n_entries_changed=n)
+    return dict(panel=panel, variant=variant, flies=out)
 
 
 def identity_tag(setting: str, panel: str, wiring: str) -> str:
@@ -674,13 +714,13 @@ def part_identity(lane: Optional[str] = None, wirings: Sequence[str] = IDENTITY_
 # ---------------------------------------------------------------------------
 # the reads
 
-def planned(step: int, free: bool = False, reverse: bool = False) -> list:
-    """atlas's `planned_points(step, free)` in a lane's order (`reverse`: from the other end)."""
-    pts = list(atlas().planned_points(step, free))
+def planned(step, free: bool = False, reverse: bool = False) -> list:
+    """atlas's `planned_points(step, free)` in a lane's order (`reverse`: from the other end); step 1, 2 or '6a'."""
+    pts = list(atlas().planned_points(step_key(step), free))
     return pts[::-1] if reverse else pts
 
 
-def part_reads(step: int, lane: Optional[str] = None, free: bool = False, reverse: bool = False,
+def part_reads(step, lane: Optional[str] = None, free: bool = False, reverse: bool = False,
                reclaim: bool = False, max_reads: Optional[int] = None, archive: bool = True) -> dict:
     """One lane of a step's reads (`planned`), each claimed, skipped when done or claimed elsewhere, its input atlas's
     `input_fly`, saved in atlas's `run_dirs` (local only without `archive`), its row in reads_<lane>.csv; after the
@@ -694,13 +734,17 @@ def part_reads(step: int, lane: Optional[str] = None, free: bool = False, revers
     pts = planned(step, free, reverse)
     for panel in sorted({pt.panel for pt in pts}):
         input_checks(panel)
+    for panel, variant in sorted({(pt.panel, setting_variant(pt.setting)) for pt in pts}):
+        if variant != atlas().DEVIATION:
+            variant_checks(panel, variant)
     root = M.results_dir()
     made, unheld, inexact = [], [], []
     for pt in pts:
         tag = M.point_tag(pt.setting, pt.panel, pt.fly, pt.wiring)
         dirs = M.run_dirs(pt.step, pt.setting, pt.wiring, pt.fly)
         row = read_one(tag, pt.step, pt.setting, pt.panel, pt.fly, pt.wiring,
-                       lambda f=pt.fly, p=pt.panel: input_of(f, p), lane, root, dirs if archive else dirs[:1],
+                       lambda f=pt.fly, p=pt.panel, v=setting_variant(pt.setting): input_of(f, p, v), lane, root,
+                       dirs if archive else dirs[:1],
                        reclaim=reclaim, done=set(M.reads_table().tag.astype(str)), lock=lock)
         gc.collect()
         if row is None:
@@ -714,7 +758,7 @@ def part_reads(step: int, lane: Optional[str] = None, free: bool = False, revers
             break
     tab = M.reads_table()
     want = {M.point_tag(p.setting, p.panel, p.fly, p.wiring) for p in pts}
-    summary = dict(step=int(step), free=bool(free), lane=lane, made_here=len(made), unheld_here=unheld,
+    summary = dict(step=step_key(step), free=bool(free), lane=lane, made_here=len(made), unheld_here=unheld,
                    not_exact_here=inexact, done_of_step=int(tab.tag.astype(str).isin(want).sum()), planned=len(pts))
     print(json.dumps(summary, indent=1), flush=True)
     return summary
@@ -723,7 +767,7 @@ def part_reads(step: int, lane: Optional[str] = None, free: bool = False, revers
 def main(argv: Optional[Sequence[str]] = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('--part', required=True, choices=('identity', 'reads'))
-    ap.add_argument('--step', type=int, choices=(1, 2), help='--part reads: the step')
+    ap.add_argument('--step', choices=('1', '2', '6a'), help="--part reads: the step (6a: step 6a's two variants)")
     ap.add_argument('--free', action='store_true', help="--part reads: the step's points under the free reading")
     ap.add_argument('--lane', help="'<host>' (default) or '<host>-<n>'")
     ap.add_argument('--reverse', action='store_true')
@@ -744,7 +788,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         print(json.dumps(part_identity(a.lane, a.wirings, a.settings, a.panels, a.reclaim), indent=1, default=str))
     else:
         if a.step is None:
-            raise SystemExit('--part reads needs --step 1 or 2')
+            raise SystemExit('--part reads needs --step 1, 2 or 6a')
         part_reads(a.step, a.lane, a.free, a.reverse, a.reclaim, a.max_reads, not a.no_archive)
 
 
