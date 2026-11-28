@@ -280,7 +280,7 @@ directory's notes/ and are linked from here.
 
 ## Resolved
 
-### E145's write-up gave the first fit's consistency between the halves as E136's pooled value (found 2026-11-27 20:16, viki's idle-host planner; confirmed by disco 20:20; resolved 2026-11-27 20:32, queue ca89afc)
+### E145's write-up gave the first fit's consistency between the halves as E136's pooled value (found 2026-11-27 20:16, viki's idle-host planner; confirmed by disco 20:20; resolved 2026-11-27 20:32, queue 4e98e0d)
 - **What.** analyses/E145_writeup_tables.py read A1's `consistency_rho` from E136's consistency file, which pools E136's five
   fits and its control fit (0.823 over 483 evaluations), where X's, F's and W's are each over their own fit's evaluations. A1's own 124
   evaluations give 0.357 (0.338 over the 120 with both rates held, E145's step 0).
@@ -289,7 +289,7 @@ directory's notes/ and are linked from here.
   halves' order, and {#stage-fit}'s appended line on the later fits (both fill A1's value from writeup_values.csv).
 - **Done.** disco's af8296a takes every cell's value from its own rescore (A1 0.357; X 0.786, F 0.802 and W 0.341 unchanged),
   regenerates writeup_values.csv, and corrects and resaves the note and its page, each passage marked as corrected.
-- **Done (Summary).** ca89afc: the Summary's {#stage-fit} line says the pooled value is pooled over all the fits, a new
+- **Done (Summary).** 4e98e0d: the Summary's {#stage-fit} line says the pooled value is pooled over all the fits, a new
   paragraph there gives the first fit's own 0.36 beside the later fits', and {#stage-fit-again} says two of the four fits
   order their evaluations alike and two do not (text from viki's planner, claude-fable-5-2, spawned 20:22). Summary
   rebuilt and saved.
