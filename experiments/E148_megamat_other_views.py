@@ -285,6 +285,17 @@ JUDGMENTS: Tuple[str, ...] = (
     "No view's reading is weighted by its reliability; no entry is dropped (validation2 and E138's readings are not "
     "used).",
 )
+# revisions of the lock after it was written, appended (each with its time and why); none changes a definition above
+REVISIONS: Tuple[dict, ...] = (dict(
+    time='2026-11-27 20:46',
+    what=("A cell enters designs 3 to 8 once its views hold every evaluation of its fit history; a pool once both cells do. "
+    "A set read by E136's own reading (a failed read-once check) is read on the subsets its views saved: E136's split at "
+    "the PN dendrites and boutons and the claws' and somata's three splits; its joint splits are those nine.",
+    "Outcome (c) reads every set and every view at the claws and somata (strength included); outcome (b) holds where a "
+    "calyx stage's sharing or breadth is decided, or at 0.8 at the median split, over every fit's held evaluations and "
+    "both pools but not over the nine settings at pn_inhadd 1000."),
+    why=("two readings the first lock left open, written when designs 3 to 8 were coded, before any of their statistics "
+         "was read; step 0 had read only the probe and the read-once check of F's evaluations 0, 1 and 116")),)
 HOLDS: Tuple[str, ...] = (
     'no simulation, no model run, no olfsysm change, nothing fitted, searched or chosen',
     'no measure, class or yardstick changed: strength by odor alone still chooses and gates',
@@ -483,6 +494,7 @@ def lock_contents() -> dict:
                         transfers_max_regret=TRANSFERS_MAX_REGRET),
         probe=PROBE, consistency_identities=CONSISTENCY_IDENTITIES, probe_tol=PROBE_TOL,
         classes=CLASSES, outcomes=OUTCOMES, prediction=PREDICTION, judgments=list(JUDGMENTS), holds=list(HOLDS),
+        revisions=list(REVISIONS),
         files={k: file_record(v) for k, v in lock_files().items()}))
 
 
@@ -492,10 +504,15 @@ def part_lock() -> dict:
     lock = lock_contents()
     if LOCK_COPY.exists() and any(views_dir().glob('*.parquet')):
         old = json.loads(LOCK_COPY.read_text())
-        strip = lambda d: {k: v for k, v in d.items() if k not in ('time', 'host', 'commits')}
+        strip = lambda d, also=(): {k: v for k, v in d.items() if k not in ('time', 'host', 'commits') + tuple(also)}
         if strip(old) == strip(lock):
             return old
-        raise RuntimeError('views exist and the lock would change: append a revision instead')
+        r_old, r_new = list(old.get('revisions') or []), list(lock.get('revisions') or [])
+        if not (strip(old, ('revisions',)) == strip(lock, ('revisions',)) and len(r_new) > len(r_old)
+                and r_new[:len(r_old)] == r_old):
+            raise RuntimeError('views exist and the lock would change: append a revision (REVISIONS) instead')
+        lock = dict(lock, time=old.get('time'), host=old.get('host'), commits=old.get('commits'),
+                    revised=_now(), revised_host=_host(), revised_commits=H.code_commits())
     txt = json.dumps(lock, indent=1) + '\n'
     LOCK_COPY.write_text(txt)
     lock_path().write_text(txt)
@@ -565,13 +582,22 @@ def cell_evals(cell: str) -> pd.DataFrame:
     return out
 
 
+# other checkouts' outputs/ folders where a cell's saved stages may be (`--outputs-root`; e.g. a scratch worktree reading
+# the stages its host's main checkout saved), searched after this checkout's outputs and before the archive
+EXTRA_OUTPUTS: List[Path] = []
+
+
 def _fit_dirs(cell: str) -> List[Path]:
-    """Where a cell's evaluations' stages are: this host's outputs, then the archive."""
+    """Where a cell's evaluations' stages are: this checkout's outputs, those of EXTRA_OUTPUTS, then the archive."""
     from experiments import E145_stage_fit_replication as E
     if cell == 'A1':
         from experiments import E145_score as S
-        return S._e136_dirs()['fit']
-    return [E.local_dir(cell, f'fit_{ARM}'), E.archive_dir(cell) / f'fit_{ARM}']
+        d = S._e136_dirs()['fit']
+        extra = [Path(r) / E136 / 'measure_strength' / f'fit_{ARM}' for r in EXTRA_OUTPUTS]
+    else:
+        d = [E.local_dir(cell, f'fit_{ARM}'), E.archive_dir(cell) / f'fit_{ARM}']
+        extra = [Path(r) / E145 / cell / f'fit_{ARM}' for r in EXTRA_OUTPUTS]
+    return d[:1] + [x for x in extra if x.is_dir()] + d[1:]
 
 
 def cell_runs(cell: str, i: int) -> Optional[Dict[str, object]]:
@@ -826,6 +852,11 @@ def cell_views(cell: str) -> pd.DataFrame:
 
 def have_views(cell: str) -> bool:
     return views_path(cell).exists()
+
+
+def views_complete(cell: str) -> bool:
+    """Whether a cell's views are written with every evaluation of its fit history (its summary's 'complete')."""
+    return have_views(cell) and bool(views_summary(cell).get('complete'))
 
 
 def model_rows(cell: str, stage: str, reading: str = 'all', names: Optional[Sequence[str]] = None,
@@ -1341,48 +1372,877 @@ def require_identities(cells: Sequence[str] = tuple(CELLS)) -> Dict[str, Dict[st
 
 
 # ---------------------------------------------------------------------------
-# designs 3 to 8 and the score
+# the model sets and their errors against any flies
+
+def read_once_ok(cell: str) -> bool:
+    """Whether a cell is read once (E143's read-once check passed in it, identities.csv); the saved settings are read
+    once (E143's own check passed on T, results/E143_megamat_fly_sampling/check.json)."""
+    if cell == SETTINGS_CELL:
+        return bool(_read_json(H.results_dir(E143) / 'check.json').get('passed'))
+    return require_identities([cell])[cell]['read_once']
+
+
+@dataclass(frozen=True)
+class ModelSet:
+    """A set of models whose errors are compared between halves of the flies.
+
+    Attributes:
+        name: 'A1', 'X', 'F', 'W', 'pool_S', 'pool_T', 'settings', 'settings_without_e135', 'inhadd1000',
+            'family_norm'.
+        members: per member (a cell of VIEW_CELLS, its model names: 'e<i>' or a setting's name).
+        read_once: whether every member is read once (else E136's own reading, on the subsets it saved).
+    """
+    name: str
+    members: Tuple[Tuple[str, Tuple[str, ...]], ...]
+    read_once: bool
+
+    @property
+    def labels(self) -> List[str]:
+        return [f'{c}:{n}' for c, ns in self.members for n in ns]
+
+
+def held_names(cell: str) -> List[str]:
+    """A cell's held evaluations whose views are saved, as 'e<i>'."""
+    ev = cell_evals(cell)
+    have = set(int(x) for x in set(cell_views(cell)['eval']))
+    return [f'e{int(i)}' for i, h in zip(ev['eval'], ev['held']) if h and int(i) in have]
+
+
+def model_sets(cells: Optional[Sequence[str]] = None, settings: bool = True) -> Dict[str, ModelSet]:
+    """The sets of design 4 whose views exist: each cell's held evaluations, the two pools (read once only if both
+    members are), the saved settings (role 'setting'), without E135's four, and E143's two calyx groups."""
+    from experiments import E143_megamat_fly_sampling as E143m
+    out: Dict[str, ModelSet] = {}
+    have = [c for c in (cells or CELLS) if views_complete(c)]
+    for c in have:
+        out[c] = ModelSet(c, ((c, tuple(held_names(c))),), read_once_ok(c))
+    for p, cs in POOLS.items():
+        if all(c in have for c in cs):
+            out[f'pool_{p}'] = ModelSet(f'pool_{p}', tuple((c, tuple(held_names(c))) for c in cs),
+                                        all(read_once_ok(c) for c in cs))
+    if settings and have_views(SETTINGS_CELL):
+        ro = read_once_ok(SETTINGS_CELL)
+        sets = {'settings': [s.name for s in E143m.SETTINGS if s.role == 'setting'],
+                'settings_without_e135': [s.name for s in E143m.SETTINGS if s.role == 'setting' and s.source != 'E135'],
+                **{g: list(v) for g, v in E143m.CALYX_GROUPS.items()}}
+        for k, ns in sets.items():
+            out[k] = ModelSet(k, ((SETTINGS_CELL, tuple(ns)),), ro)
+    return out
+
+
+_SIDES: Dict[tuple, object] = {}
+
+
+def _side(cell: str, stage: str, reading: str, kind: str):
+    """A cached side: an evaluation cell's 'common' rows, or the settings' each-wiring rows on T ('T') or on every
+    wiring ('each')."""
+    key = (cell, stage, reading, kind)
+    if key not in _SIDES:
+        if kind == 'common':
+            m = model_rows(cell, stage, reading, common=True, each=False)
+        elif kind == 'T':
+            m = model_rows(cell, stage, reading, common=False, each=True, wirings=T_WIRINGS)
+        else:
+            m = model_rows(cell, stage, reading, common=False, each=True)
+        _SIDES[key] = make_side(stage, m)
+    return _SIDES[key]
+
+
+def _readings_at(stage: str) -> Dict[Tuple[int, ...], str]:
+    return {v: k for k, v in readings_of_stage(stage).items() if k != 'all'}
+
+
+def set_errors(ms: ModelSet, stage: str, subsets: Sequence[Sequence[int]], views) -> np.ndarray:
+    """References x models: each model's error at a stage on `views` against each subset of the stage's flies (its
+    mean in all the flies' one-fly units); an evaluation's value its wirings' mean views', a setting's the mean over T
+    of each wiring's. Read once where the set is, else by E136's own reading on the subsets it saved (NaN for the
+    others)."""
+    from experiments import E143_megamat_fly_sampling as E143m
+    n = len(stage_flies(stage).flies)
+    subsets = [tuple(sorted(int(i) for i in s)) for s in subsets]
+    cols = []
+    for cell, names in ms.members:
+        kind = 'T' if cell == SETTINGS_CELL else 'common'
+        if ms.read_once or cell == SETTINGS_CELL and read_once_ok(cell):
+            sd = _side(cell, stage, 'all', kind)
+            e = view_errors(sd, E143m.half_weights(n, subsets), views)
+            cols.append(_by_name(e, sd, cell, names, kind))
+            continue
+        rd = _readings_at(stage)
+        block = np.full((len(subsets), len(names)), np.nan)
+        for k, s in enumerate(subsets):
+            if s == tuple(range(n)):
+                r = 'all'
+            elif s in rd:
+                r = rd[s]
+            else:
+                continue
+            sd = _side(cell, stage, r, kind)
+            block[k] = _by_name(view_errors(sd, E143m.half_weights(n, [s]), views), sd, cell, names, kind)[0]
+        cols.append(block)
+    return np.hstack(cols) if cols else np.zeros((len(subsets), 0))
+
+
+def _by_name(e: np.ndarray, sd, cell: str, names: Sequence[str], kind: str) -> np.ndarray:
+    """References x names from a side's errors: an evaluation's 'common' row, a setting's mean over T (NaN unless all
+    four are read)."""
+    from experiments import E143_megamat_fly_sampling as E143m
+    if kind == 'common':
+        idx = sd.rows.get_indexer([(f'{cell}:{n}', 'common') for n in names])
+        out = np.where(idx[None, :] >= 0, e[:, np.maximum(idx, 0)], np.nan)
+        return out
+    v = E143m.values_of(e, sd.rows, T_WIRINGS)
+    return np.column_stack([v[f'{cell}:{n}'].to_numpy() if f'{cell}:{n}' in v.columns else np.full(len(e), np.nan)
+                            for n in names])
+
+
+def stage_splits_of(stage: str) -> List[Tuple[Tuple[int, ...], Tuple[int, ...]]]:
+    """E143's splits of a stage's flies (half a, half b)."""
+    from experiments import E143_megamat_fly_sampling as E143m
+    return E143m.stage_splits(len(stage_flies(stage).flies))
+
+
+def e136_split_index(stage: str) -> int:
+    from experiments import E143_megamat_fly_sampling as E143m
+    n = len(stage_flies(stage).flies)
+    return E143m.split_index(n, E143m.e136_split(n))
+
+
+def decided(rho: Sequence[float]) -> bool:
+    """"Is decided" / "can be decided": DECIDED_MEDIAN or more at the median split and DECIDED_MIN or more on every
+    split (E143's tells-apart; splits without a value, NaN, left out)."""
+    r = np.asarray(rho, dtype=float)
+    r = r[np.isfinite(r)]
+    return bool(len(r) and np.median(r) >= DECIDED_MEDIAN and np.min(r) >= DECIDED_MIN)
+
+
+def family_spread(stage: str, views) -> float:
+    """A view's spread: the SD (ddof 1) over the family's eight wirings of its per-wiring error against all the
+    stage's flies (read once)."""
+    from experiments import E143_megamat_fly_sampling as E143m
+    sd = _side(SETTINGS_CELL, stage, 'all', 'each')
+    n = len(sd.flies)
+    e = view_errors(sd, E143m.half_weights(n, [tuple(range(n))]), views)[0]
+    vals = [e[sd.rows.get_loc(('settings:family', w))] for w in WIRINGS if ('settings:family', w) in sd.rows]
+    return float(np.std(vals, ddof=1)) if len(vals) > 1 else np.nan
+
+
+def stage_views(stage: str) -> Tuple[str, ...]:
+    return VIEWS + ((MATRIX,) if stage == 'pn_dendrite' else ())
+
+
+# ---------------------------------------------------------------------------
+# design 3: the room
+
+def fly_parts(stage: str) -> Dict[str, Tuple[np.ndarray, float, List[str]]]:
+    """The flies' saved parts of a megamat stage: per part, (flies x entries, all the flies' one-fly unit, the
+    entries), the flies in the population's order."""
+    ft = flies_table(stage)
+    names = list(dict.fromkeys(ft['fly'].astype(str)))
+    out = {}
+    for q, f in ft.groupby('part', sort=False):
+        entries = list(dict.fromkeys(f['entry'].astype(str)))
+        X = f.pivot(index='fly', columns='entry', values='value').reindex(index=names, columns=entries)
+        out[str(q)] = (X.to_numpy(dtype=float), float(f['unit'].iloc[0]), entries)
+    return out
+
+
+def _subset_mean(X: np.ndarray, idx: Sequence[int]) -> np.ndarray:
+    Y = X[list(idx)]
+    fin = np.isfinite(Y)
+    with np.errstate(invalid='ignore', divide='ignore'):
+        return np.where(fin.any(axis=0), np.where(fin, Y, 0.0).sum(axis=0) / fin.sum(axis=0), np.nan)
+
+
+def half_to_half(stage: str, a: Sequence[int], b: Sequence[int], views) -> float:
+    """One half's mean view as the prediction for the other: its error against the other half, in all the flies'
+    one-fly units, on `views` ('all': every view, four at the PN dendrites; symmetric in the halves)."""
+    from kcq import population_fit as P
+    fp = fly_parts(stage)
+    errs = {}
+    for v in (*P.VIEWS, P.NAMED_VIEW):
+        if views != ALL and v not in views:
+            continue
+        pe = []
+        for x in P.PARTS[v]:
+            q = f'{v}/{x}'
+            if q not in fp:
+                continue
+            X, unit, _ = fp[q]
+            d = _subset_mean(X, a) - _subset_mean(X, b)
+            ok = np.isfinite(d)
+            pe.append(np.sqrt(np.mean(d[ok] ** 2)) / unit if ok.any() else np.nan)
+        if pe:
+            errs[v] = float(np.sqrt(np.mean(np.square(pe))))
+    use = [errs[v] for v in P.VIEWS if v in errs]
+    if views == ALL and P.NAMED_VIEW in errs:
+        use.append(errs[P.NAMED_VIEW])
+    return float(np.sqrt(np.mean(np.square(use)))) if use else np.nan
+
+
+ROOM_MODELS: Tuple[Tuple[str, str], ...] = (('family', 'T'), ('family', 'S'), ('E136:A1', 'T'), ('E145_A1', 'T'),
+                                            ('E145_X', 'S'), ('E145_F', 'T'), ('E145_W', 'S'))
+
 
 def part_room() -> dict:
-    """Design 3: per stage and view, the family, A1 and each classed point against a half, beside half to half, on every
-    split."""
-    raise NotImplementedError
+    """Design 3: per stage and view, the family (on T and on S), A1 (E136's reads on T) and each classed point (E145's
+    cells on their read wirings) against each half of every split (read once; the mean over the wirings of each
+    wiring's error), beside half to half; room.csv and a summary per stage and view (medians over the splits and
+    E136's split)."""
+    from experiments import E143_megamat_fly_sampling as E143m
+    lock = require_lock()
+    rows = []
+    for st in LOSS_STAGES:
+        sp = stage_splits_of(st)
+        n = len(stage_flies(st).flies)
+        sd = _side(SETTINGS_CELL, st, 'all', 'each')
+        subsets = [a for a, _ in sp] + [b for _, b in sp] + [tuple(range(n))]
+        W = E143m.half_weights(n, subsets)
+        for v in (*stage_views(st), ALL):
+            vs = v if v == ALL else (v,)
+            e = view_errors(sd, W, vs)
+            hh = [half_to_half(st, a, b, vs) for a, b in sp]
+            for name, wh in ROOM_MODELS:
+                ws = S_WIRINGS if wh == 'S' else T_WIRINGS
+                vals = E143m.values_of(e, sd.rows, ws)
+                col = f'settings:{name}'
+                if col not in vals.columns or vals[col].isna().all():
+                    continue
+                x = vals[col].to_numpy()
+                for i, (a, b) in enumerate(sp):
+                    rows.append(dict(stage=st, view=v, model=name, wirings=wh, split=i, e136=i == e136_split_index(st),
+                                     against_a=float(x[i]), against_b=float(x[len(sp) + i]),
+                                     against_all=float(x[-1]), half_to_half=hh[i]))
+    df = pd.DataFrame(rows)
+    _write_csv(df, 'room.csv')
+    summ = (df.groupby(['stage', 'view', 'model', 'wirings'], sort=False)
+            .agg(median_a=('against_a', 'median'), median_b=('against_b', 'median'),
+                 against_all=('against_all', 'first'), median_half_to_half=('half_to_half', 'median'))
+            .reset_index())
+    e136 = df[df['e136']].set_index(['stage', 'view', 'model', 'wirings'])[['against_a', 'against_b', 'half_to_half']]
+    summ = summ.join(e136.add_prefix('e136_'), on=['stage', 'view', 'model', 'wirings'])
+    _write_csv(summ, 'room_summary.csv')
+    provenance('room', lock)
+    return dict(rows=len(df), summary=summ.to_dict('records'))
+
+
+# ---------------------------------------------------------------------------
+# design 4: which views the flies decide
+
+def sharing_split(ms: ModelSet, stage: str, subset: Sequence[int], part: str) -> pd.DataFrame:
+    """A sharing part's error of every model of a set against one subset of the flies split into level, spread and order
+    (E136's `strength_split` terms on the part's entries: with d the model's entries minus the subset's mean, |mean d|,
+    |sd_model - sd_flies| and sqrt(2 sd_model sd_flies (1 - r)), each over the part's one-fly unit), read once or by
+    the subset's own reading as `set_errors` reads it. One row per model."""
+    n = len(stage_flies(stage).flies)
+    s = tuple(sorted(int(i) for i in subset))
+    rows = []
+    for cell, names in ms.members:
+        kind = 'T' if cell == SETTINGS_CELL else 'common'
+        if ms.read_once or cell == SETTINGS_CELL:
+            r = 'all'
+        else:
+            r = 'all' if s == tuple(range(n)) else _readings_at(stage).get(s)
+        if r is None:
+            rows += [dict(model=f'{cell}:{nm}', level=np.nan, spread=np.nan, order=np.nan) for nm in names]
+            continue
+        sd = _side(cell, stage, r, kind)
+        X = sd.fly_parts[part]
+        fin = np.isfinite(X[list(s)])
+        with np.errstate(invalid='ignore'):
+            mean = np.where(fin.any(axis=0), np.nansum(X[list(s)], axis=0) / np.maximum(fin.sum(axis=0), 1), np.nan)
+        M = sd.model[part]
+        unit = sd.units[part]
+        terms = np.full((M.shape[0], 3), np.nan)
+        for i in range(M.shape[0]):
+            ok = np.isfinite(M[i]) & np.isfinite(mean)
+            if ok.sum() < 2:
+                continue
+            a, m = M[i, ok], mean[ok]
+            sa, sm = a.std(), m.std()
+            cross = 2.0 * sa * sm - 2.0 * float(np.mean((a - a.mean()) * (m - m.mean())))
+            terms[i] = [abs(float(np.mean(a - m))) / unit, abs(sa - sm) / unit, np.sqrt(max(cross, 0.0)) / unit]
+        df = pd.DataFrame(terms, columns=['level', 'spread', 'order'])
+        df['setting'] = [r_[0] for r_ in sd.rows]
+        df['wiring'] = [r_[1] for r_ in sd.rows]
+        for nm in names:
+            lab = f'{cell}:{nm}'
+            if kind == 'common':
+                x = df[(df.setting == lab) & (df.wiring == 'common')]
+            else:
+                x = df[(df.setting == lab) & df.wiring.isin(T_WIRINGS)]
+                x = x if len(x) == len(T_WIRINGS) else x.iloc[0:0]
+            rows.append(dict(model=lab, **({k: float(x[k].mean()) for k in ('level', 'spread', 'order')} if len(x)
+                                          else dict(level=np.nan, spread=np.nan, order=np.nan))))
+    return pd.DataFrame(rows)
 
 
 def part_views_decided() -> dict:
-    """Design 4: consistency per stage and view over each cell's evaluations, the two pooled sets, the saved settings and
-    their two groups, on every split; the sharing errors split into level, spread and order."""
-    raise NotImplementedError
+    """Design 4: consistency per stage and view over every model set (each cell's held evaluations, the two pools, the
+    saved settings, without E135's, and E143's two calyx groups) on every split of the stage (views_decided.csv), with
+    "is decided", "no reading" (the set's range against all the flies against NO_READING_SPREADS times the family's
+    spread) and E136's split's value (views_decided_summary.csv); the sharing parts' level, spread and order against
+    each half of E136's split with their consistency (sharing_split.csv)."""
+    lock = require_lock()
+    sets = model_sets()
+    rows, srows, shrows = [], [], []
+    for st in LOSS_STAGES:
+        sp = stage_splits_of(st)
+        n = len(stage_flies(st).flies)
+        e136i = e136_split_index(st)
+        subsets = [a for a, _ in sp] + [b for _, b in sp] + [tuple(range(n))]
+        for v in (*stage_views(st), ALL):
+            vs = v if v == ALL else (v,)
+            spread = family_spread(st, vs)
+            for k, ms in sets.items():
+                e = set_errors(ms, st, subsets, vs)
+                rho = [_rho(e[i], e[len(sp) + i]) for i in range(len(sp))]
+                for i, r in enumerate(rho):
+                    rows.append(dict(stage=st, view=v, set=k, split=i, e136=i == e136i, rho=r,
+                                     n_models=int(np.isfinite(e[i]).sum())))
+                allf = e[-1]
+                rng = float(np.nanmax(allf) - np.nanmin(allf)) if np.isfinite(allf).any() else np.nan
+                rr = np.asarray(rho, dtype=float)
+                srows.append(dict(stage=st, view=v, set=k, read_once=ms.read_once, n_models=len(ms.labels),
+                                  n_splits=int(np.isfinite(rr).sum()), of_splits=len(sp),
+                                  median=float(np.nanmedian(rr)) if np.isfinite(rr).any() else np.nan,
+                                  min=float(np.nanmin(rr)) if np.isfinite(rr).any() else np.nan,
+                                  e136=float(rr[e136i]), decided=decided(rr), range_all_flies=rng, spread=spread,
+                                  no_reading=bool(np.isfinite(rng) and rng < NO_READING_SPREADS * spread)))
+        for part in ('sharing/who', 'sharing/how_strongly'):
+            for k, ms in sets.items():
+                h = e136_halves(st)
+                ta, tb = sharing_split(ms, st, h['a'], part), sharing_split(ms, st, h['b'], part)
+                for term in ('level', 'spread', 'order'):
+                    shrows.append(dict(stage=st, part=part, set=k, term=term, rho=_rho(ta[term], tb[term]),
+                                       median_a=float(ta[term].median()), median_b=float(tb[term].median())))
+    df, summ, sh = pd.DataFrame(rows), pd.DataFrame(srows), pd.DataFrame(shrows)
+    _write_csv(df, 'views_decided.csv')
+    _write_csv(summ, 'views_decided_summary.csv')
+    _write_csv(sh, 'sharing_split.csv')
+    provenance('views_decided', lock, sets={k: dict(read_once=m.read_once, n=len(m.labels)) for k, m in sets.items()})
+    return dict(sets=sorted(sets), decided=summ[summ['decided']][['stage', 'view', 'set']].to_dict('records'))
+
+
+# ---------------------------------------------------------------------------
+# design 5: which loss the flies decide
+
+def joint_splits_for(read_once: bool) -> pd.DataFrame:
+    """The joint splits a set is read on: E143's 200 joint splits with E136's (read once), or, by E136's own reading,
+    E136's split at the PN dendrites and boutons with each of the claws' and somata's three splits (nine, E136's
+    among them). Columns: joint, <stage> (an index into the stage's splits), e136."""
+    from experiments import E143_megamat_fly_sampling as E143m
+    sizes = {st: len(stage_flies(st).flies) for st in LOSS_STAGES}
+    if read_once:
+        return E143m.joint_splits(sizes, N_JOINT, JOINT_SEED)
+    rows = []
+    e136 = {st: e136_split_index(st) for st in LOSS_STAGES}
+    for i in range(len(stage_splits_of('kc_claw'))):
+        for j in range(len(stage_splits_of('kc_soma'))):
+            r = dict(pn_dendrite=e136['pn_dendrite'], pn_bouton=e136['pn_bouton'], kc_claw=i, kc_soma=j)
+            rows.append(dict(joint=len(rows), **r, e136=(i, j) == (e136['kc_claw'], e136['kc_soma'])))
+    return pd.DataFrame(rows)
+
+
+def term_values(ms: ModelSet, js: pd.DataFrame) -> Dict[Tuple[str, object], Tuple[np.ndarray, np.ndarray]]:
+    """Per term (stage, views) of every loss, the joint splits x models errors against half a and half b of each
+    joint split's split of that stage."""
+    terms = {(s, v) for _, (_, t) in LOSSES.items() for s, v in t}
+    out = {}
+    for st, v in terms:
+        sp = stage_splits_of(st)
+        idx = js[st].to_numpy(dtype=int)
+        e = set_errors(ms, st, [a for a, _ in sp] + [b for _, b in sp], v)
+        out[(st, v)] = (e[idx], e[len(sp) + idx])
+    return out
+
+
+def loss_values(tv: Mapping, loss: str) -> Tuple[np.ndarray, np.ndarray]:
+    """A loss's joint splits x models values against half a and half b (the root mean square of its terms)."""
+    terms = LOSSES[loss][1]
+    return rms([tv[t][0] for t in terms]), rms([tv[t][1] for t in terms])
+
+
+def pick_and_regret(fit: np.ndarray, other: np.ndarray, start: int = 0) -> Tuple[int, float]:
+    """The pick (the lowest of `fit`) and its regret against `other`: (other[pick] - min other) / (other[start] - min
+    other)."""
+    p = int(np.nanargmin(fit))
+    lo = float(np.nanmin(other))
+    den = float(other[start] - lo)
+    return p, float((other[p] - lo) / den) if den > 0 else np.nan
+
+
+def holds_part_at(tv: Mapping, j: int, half: int, k: int, start: int, cl: Mapping) -> bool:
+    """Megamat's part of "holds" of model k against half `half` (0 a, 1 b) of joint split j: the megamat stage error on
+    strength falls from the start's by more than FALL_BAR, no stage's strength error rises by more than its spread, and
+    the claws' and somata's errors over all views not by more than theirs."""
+    sp, spa = cl['spreads'], cl['beside']['spreads_all_views']
+    l0 = rms([tv[(s, STRENGTH)][half][j] for s in LOSS_STAGES])
+    if not l0[start] - l0[k] > FALL_BAR:
+        return False
+    for s in LOSS_STAGES:
+        x = tv[(s, STRENGTH)][half][j]
+        if x[k] - x[start] > sp[s]:
+            return False
+    for s in CALYX_STAGES:
+        x = tv[(s, ALL)][half][j]
+        if x[k] - x[start] > spa[s]:
+            return False
+    return True
 
 
 def part_losses() -> dict:
-    """Design 5: L0 to L6 on E136's split and the 200 joint splits: consistency, pick, regret, megamat's part of "holds"
-    at the pick against the other half, and its four factors beside the strength pick's."""
-    raise NotImplementedError
+    """Design 5: L0 to L6 over each cell's held evaluations and the two pools, on the joint splits (`joint_splits_for`)
+    and E136's: per joint split the consistency (losses_joint.csv); per cell and loss the pick on its fit half, its regret
+    against the other half, megamat's part of "holds" at the pick against the other half, and its four factors, on
+    E136's split and over the joint splits (losses_picks.csv); the summary with "can be decided" and "transfers"
+    (losses_summary.csv)."""
+    lock = require_lock()
+    cl = json.loads((_e136_dir() / 'classes.json').read_text())
+    sets = {k: v for k, v in model_sets(settings=False).items()}
+    jrows, prows, srows = [], [], []
+    for k, ms in sets.items():
+        js = joint_splits_for(ms.read_once)
+        tv = term_values(ms, js)
+        drawn = ~js['e136'].to_numpy(dtype=bool) if ms.read_once else np.ones(len(js), dtype=bool)
+        e136j = int(np.flatnonzero(js['e136'].to_numpy(dtype=bool))[0])
+        for L in LOSSES:
+            la, lb = loss_values(tv, L)
+            rho = np.array([_rho(la[j], lb[j]) for j in range(len(js))])
+            for j in range(len(js)):
+                jrows.append(dict(set=k, loss=L, joint=int(js['joint'].iloc[j]), e136=bool(js['e136'].iloc[j]),
+                                  rho=float(rho[j])))
+            rec = dict(set=k, loss=L, read_once=ms.read_once, n_models=len(ms.labels), n_joint=int(drawn.sum()),
+                       median=float(np.nanmedian(rho[drawn])), min=float(np.nanmin(rho[drawn])),
+                       e136=float(rho[e136j]), decided=decided(rho[drawn]))
+            if k in CELLS:
+                c = get_cell(k)
+                fit_i, oth_i = (0, 1) if c.fit_half == 'a' else (1, 0)
+                names = ms.members[0][1]
+                if names[0] != 'e0':
+                    raise RuntimeError(f'{k}: evaluation 0 is not held or not saved')
+                ev = cell_evals(k).set_index('eval')
+                L_ = (la, lb)
+                regs, holds = [], []
+                for j in range(len(js)):
+                    p, rg = pick_and_regret(L_[fit_i][j], L_[oth_i][j])
+                    hp = holds_part_at(tv, j, oth_i, p, 0, cl)
+                    regs.append(rg)
+                    holds.append(hp)
+                    if j == e136j:
+                        i = int(names[p][1:])
+                        prows.append(dict(cell=k, loss=L, split='e136', pick=i, regret=rg, transfers=rg <= TRANSFERS_MAX_REGRET,
+                                          holds_part_other_half=hp, fit_loss=float(L_[fit_i][j][p]),
+                                          other_loss=float(L_[oth_i][j][p]), other_min=float(np.nanmin(L_[oth_i][j])),
+                                          start_other=float(L_[oth_i][j][0]),
+                                          **{f: float(ev.loc[i, f]) for f in ('aplpn', 'kckc', 'inhadd', 'pn_inhadd',
+                                                                              'inhsc', 'loss_sim')}))
+                regs, holds = np.asarray(regs), np.asarray(holds)
+                rec.update(pick_e136=prows[-1]['pick'], regret_e136=prows[-1]['regret'],
+                           transfers_e136=prows[-1]['transfers'], holds_part_e136=prows[-1]['holds_part_other_half'],
+                           regret_median=float(np.nanmedian(regs[drawn])),
+                           share_transfers=float(np.mean(regs[drawn] <= TRANSFERS_MAX_REGRET)),
+                           share_holds_part=float(np.mean(holds[drawn])))
+            srows.append(rec)
+    jdf, pdf, sdf = pd.DataFrame(jrows), pd.DataFrame(prows), pd.DataFrame(srows)
+    _write_csv(jdf, 'losses_joint.csv')
+    _write_csv(pdf, 'losses_picks.csv')
+    _write_csv(sdf, 'losses_summary.csv')
+    provenance('losses', lock, sets={k: dict(read_once=m.read_once, n=len(m.labels)) for k, m in sets.items()})
+    return dict(summary=sdf.to_dict('records'))
+
+
+# ---------------------------------------------------------------------------
+# design 6: the claws' cost
+
+CLASSED: Dict[str, Tuple[str, Tuple[str, ...]]] = {
+    'A1': ('E145_A1', T_WIRINGS), 'X': ('E145_X', S_WIRINGS), 'F': ('E145_F', T_WIRINGS), 'W': ('E145_W', S_WIRINGS)}
+
+
+def per_wiring_errors(stage: str, name: str, wirings: Sequence[str], subset: Sequence[int], views,
+                      reading: str = 'all') -> Dict[str, float]:
+    """A saved setting's per-wiring error at a stage against a subset of the flies (read once, or by `reading`)."""
+    from experiments import E143_megamat_fly_sampling as E143m
+    sd = _side(SETTINGS_CELL, stage, reading, 'each')
+    n = len(sd.flies)
+    e = view_errors(sd, E143m.half_weights(n, [list(subset)]), views)[0]
+    return {w: float(e[sd.rows.get_loc((f'settings:{name}', w))]) for w in wirings
+            if (f'settings:{name}', w) in sd.rows}
+
+
+def claws_references(stage: str) -> List[Tuple[str, Tuple[int, ...]]]:
+    """The references of design 6 at a stage: E136's halves, each half of every split, and each fly alone."""
+    n = len(stage_flies(stage).flies)
+    h = e136_halves(stage)
+    out = [('e136_a', h['a']), ('e136_b', h['b'])]
+    for i, (a, b) in enumerate(stage_splits_of(stage)):
+        out += [(f'split{i}_a', tuple(a)), (f'split{i}_b', tuple(b))]
+    out += [(f'fly{i}', (i,)) for i in range(n)]
+    return out
 
 
 def part_claws() -> dict:
-    """Design 6: the family, the four classed points and the evaluations at the claws against each half, each split and
-    each claw fly; the same at the somata; the odors on which the halves of the claw flies differ, as leads."""
-    raise NotImplementedError
+    """Design 6: at the claws and at the somata, each classed point against the family on its cell's read wirings
+    (E136's `compare` with the stage's strength spread as scored) against E136's halves (by E136's own reading as
+    scored, and read once beside), each half of every split and each fly alone (read once); every cell's held
+    evaluations' strength error changes from evaluation 0 against the same references (the share worse than the
+    spread); the odors on which the halves of the claw flies differ most (leads). claws.csv, claws_evals.csv,
+    claws_odor_leads.csv."""
+    from experiments import E136_stage_population_fit as F
+    lock = require_lock()
+    cl = json.loads((_e136_dir() / 'classes.json').read_text())
+    rows, erows = [], []
+    for st in CALYX_STAGES:
+        spread = float(cl['spreads'][st])
+        for ref, sub in claws_references(st):
+            readings = ['all']
+            if ref.startswith('e136_'):
+                readings.append(sub_name(sub))
+            for rd in readings:
+                for cell, (name, ws) in CLASSED.items():
+                    a = per_wiring_errors(st, name, ws, sub, STRENGTH, rd)
+                    f = per_wiring_errors(st, 'family', ws, sub, STRENGTH, rd)
+                    cmp_ = F.compare(a, f, spread, ws)
+                    rows.append(dict(stage=st, reference=ref, flies=sub_name(sub), reading='read once' if rd == 'all'
+                                     else "E136's own", cell=cell, classed=name, change=cmp_.get('change'),
+                                     se=cmp_.get('se'), spread=spread, worse_than_spread=cmp_.get('worse_than_spread'),
+                                     improves=cmp_.get('improves')))
+        for k in CELLS:
+            if not have_views(k):
+                continue
+            ms = model_sets([k], settings=False)[k]
+            refs = claws_references(st)
+            e = set_errors(ms, st, [s for _, s in refs], STRENGTH)
+            for r, (ref, sub) in enumerate(refs):
+                ch = e[r] - e[r][0]
+                erows.append(dict(stage=st, cell=k, reference=ref, flies=sub_name(sub), read_once=ms.read_once,
+                                  n=int(np.isfinite(ch).sum()), share_worse=float(np.nanmean(ch > spread))
+                                  if np.isfinite(ch).any() else np.nan,
+                                  median_change=float(np.nanmedian(ch)) if np.isfinite(ch).any() else np.nan))
+    # the odors on which the halves of the claw flies differ (leads): the strength parts' halves' means
+    fp = fly_parts('kc_claw')
+    lrows = []
+    for i, (a, b) in enumerate(stage_splits_of('kc_claw')):
+        for q in ('strength/rate', 'strength/mean'):
+            if q not in fp:
+                continue
+            X, unit, entries = fp[q]
+            d = (_subset_mean(X, a) - _subset_mean(X, b)) / unit
+            for rank, j in enumerate(np.argsort(-np.abs(np.nan_to_num(d)))[:5]):
+                lrows.append(dict(split=i, e136=i == e136_split_index('kc_claw'), half_a=sub_name(a),
+                                  half_b=sub_name(b), part=q, rank=rank + 1, odor=entries[j], a_minus_b=float(d[j])))
+    df, edf, ldf = pd.DataFrame(rows), pd.DataFrame(erows), pd.DataFrame(lrows)
+    _write_csv(df, 'claws.csv')
+    _write_csv(edf, 'claws_evals.csv')
+    _write_csv(ldf, 'claws_odor_leads.csv')
+    provenance('claws', lock)
+    return dict(claws=claws_class(df))
 
+
+def claws_class(df: pd.DataFrame) -> dict:
+    """"The claws' cost is the read half's" from claws.csv (the claws on strength; E136's halves by E136's own reading,
+    as scored), and "one fly's" or "two against two" (each claw fly alone, read once)."""
+    x = df[(df.stage == 'kc_claw')]
+    own = x[x.reading == "E136's own"]
+    per = {}
+    for c in CELLS:
+        y = own[own.cell == c].set_index('reference')['worse_than_spread']
+        per[c] = dict(a=bool(y.get('e136_a', False)), b=bool(y.get('e136_b', False)))
+    one_half = {c: (v['a'] != v['b']) for c, v in per.items()}
+    which = {c: ('a' if v['a'] else 'b') for c, v in per.items() if one_half[c]}
+    read_half = bool(all(one_half.values()) and len(set(which.values())) == 1)
+    flies = sorted({r for r in x.reference if r.startswith('fly')})
+    fly_sign = {f: all(bool(x[(x.cell == c) & (x.reference == f) & (x.reading == 'read once')]['worse_than_spread']
+                            .any()) for c in CELLS) for f in flies}
+    n_fly = sum(fly_sign.values())
+    kind = "one fly's" if read_half and n_fly == 1 else 'two against two' if read_half else None
+    return dict(per_cell=per, read_half=read_half, half=(next(iter(which.values())) if read_half else None),
+                fly_sign=fly_sign, kind=kind)
+
+
+# ---------------------------------------------------------------------------
+# design 7: without the boutons
 
 def part_no_boutons() -> dict:
-    """Design 7: the megamat stage error without the boutons over the saved settings on the 200 joint splits, with and
-    without E135's four arms; E141's and E145's classes recomputed with the boutons left out."""
-    raise NotImplementedError
+    """Design 7: the megamat stage error without the boutons (L4) over the saved settings on the 200 joint splits and
+    E136's, with and without E135's four arms, each setting's value the mean over T of each wiring's root mean square of
+    its stages' strength errors (E143's reading), with L0 beside (E143's own splits_joint_consistency.csv reproduced);
+    E141's and E145's classes recomputed with the boutons left out (E142's `reclass` and reading)."""
+    from experiments import E143_megamat_fly_sampling as E143m
+    lock = require_lock()
+    js = joint_splits_for(True)
+    names = [s.name for s in E143m.SETTINGS if s.role == 'setting']
+    wo = [s.name for s in E143m.SETTINGS if s.role == 'setting' and s.source != 'E135']
+    per_stage = {}
+    for st in LOSS_STAGES:
+        sp = stage_splits_of(st)
+        n = len(stage_flies(st).flies)
+        sd = _side(SETTINGS_CELL, st, 'all', 'T')
+        e = view_errors(sd, E143m.half_weights(n, [a for a, _ in sp] + [b for _, b in sp]), STRENGTH)
+        idx = js[st].to_numpy(dtype=int)
+        per_stage[st] = (pd.DataFrame(e[idx], columns=sd.rows), pd.DataFrame(e[len(sp) + idx], columns=sd.rows))
+    cols = None
+    for a, _ in per_stage.values():
+        cols = a.columns if cols is None else cols.intersection(a.columns, sort=False)
+    rows = []
+    for loss, stages in (('L4', [s for s in LOSS_STAGES if s != 'pn_bouton']), ('L0', list(LOSS_STAGES))):
+        ea = rms([per_stage[s][0][cols].to_numpy() for s in stages])
+        eb = rms([per_stage[s][1][cols].to_numpy() for s in stages])
+        va = E143m.values_of(ea, cols)
+        vb = E143m.values_of(eb, cols)
+        va.columns = [c.split(':', 1)[1] for c in va.columns]
+        vb.columns = [c.split(':', 1)[1] for c in vb.columns]
+        for j in range(len(js)):
+            rows.append(dict(loss=loss, joint=int(js['joint'].iloc[j]), e136=bool(js['e136'].iloc[j]),
+                             rho=E143m.consistency(va.loc[j, names], vb.loc[j, names]),
+                             rho_without_e135=E143m.consistency(va.loc[j, wo], vb.loc[j, wo])))
+    df = pd.DataFrame(rows)
+    _write_csv(df, 'no_boutons_joint.csv')
+    ref = pd.read_csv(H.results_dir(E143) / 'splits_joint_consistency.csv')
+    l0 = df[df.loss == 'L0'].reset_index(drop=True)
+    e143_diff = float(np.nanmax(np.abs(l0['rho'].to_numpy() - ref['rho'].to_numpy()))) if len(ref) == len(l0) \
+        else np.nan
+    summ = {}
+    for loss, g in df.groupby('loss', sort=False):
+        d = g[~g.e136]
+        summ[loss] = dict(median=float(d['rho'].median()), min=float(d['rho'].min()),
+                          median_without_e135=float(d['rho_without_e135'].median()),
+                          min_without_e135=float(d['rho_without_e135'].min()),
+                          e136=float(g.loc[g.e136, 'rho'].iloc[0]),
+                          e136_without_e135=float(g.loc[g.e136, 'rho_without_e135'].iloc[0]),
+                          orders=decided(d['rho']), orders_without_e135=decided(d['rho_without_e135']))
+    rec = dict(summary=summ, e143_l0_reproduced_max_abs_diff=e143_diff,
+               e143_l0_reproduced=bool(np.isfinite(e143_diff) and e143_diff <= 1e-9),
+               reclasses=reclass_without_boutons())
+    _write_json(results_dir() / 'no_boutons.json', rec)
+    provenance('no_boutons', lock)
+    return rec
 
+
+def reclass_without_boutons() -> dict:
+    """E141's and E145's classes recomputed with the megamat stage error over the three other stages (E142's `reclass`
+    with the boutons out of the stage error, the stage comparisons and the guard, the spreads from the unrefitted
+    family's eight wirings against E136's held-out half, as E142 read E136's and E139's), with the default reading's
+    re-read beside (which must give the classes as scored)."""
+    from experiments import E142_step0 as S2
+    three = [s for s in LOSS_STAGES if s != 'pn_bouton']
+    e136m = pd.read_csv(_e136_dir() / 'score_megamat.csv')
+    fam_rows = e136m[(e136m.half == 'held') & (e136m.arm == 'family') & e136m.wiring.isin(WIRINGS)]
+    fam = {str(r.wiring): {s: float(getattr(r, s)) for s in LOSS_STAGES} for r in fam_rows.itertuples()}
+    out = {}
+    for reading, stages, drop in (('without_boutons', three, ('pn_bouton',)), ('default', list(LOSS_STAGES), ())):
+        f = S2.with_stage(fam, stages)
+        spreads = dict(stage=float(np.std([v['stage'] for v in f.values()], ddof=1)),
+                       **{s: float(np.std([v[s] for v in f.values()], ddof=1)) for s in stages})
+        rec = dict(stages=stages, spreads=spreads, classes={})
+        e141 = json.loads((H.results_dir(E141) / 'classes.json').read_text())
+        m141 = S2.megamat_rows(H.results_dir(E141) / 'score_megamat.csv', 'variant')
+        for a, orig in e141['classes'].items():
+            if a not in m141:
+                rec['classes'][f'E141:{a}'] = dict(cls='reads missing', original_cls=orig.get('cls'))
+                continue
+            av = S2.with_stage({w: v for w, v in m141[a].items() if w in T_WIRINGS}, stages)
+            r = S2.reclass(orig, av, f, spreads, stages, e141.get('control_fall'), drop)
+            rec['classes'][f'E141:{a}'] = dict(cls=r['cls'], original_cls=r['original_cls'])
+        e145 = json.loads((H.results_dir(E145) / 'classes.json').read_text())
+        m145 = pd.read_csv(H.results_dir(E145) / 'score_megamat.csv')
+        for c, crec in e145['cells'].items():
+            orig = crec.get('cls') or {}
+            ws = list(crec.get('read_wirings') or [])
+            half = crec.get('read_half')
+            x = m145[(m145.cell == c) & (m145.half == half)]
+            vals = {}
+            for nm in ('family', crec.get('variant')):
+                y = x[(x.name == nm) & x.wiring.isin(ws)]
+                vals[nm] = {str(r.wiring): {s: float(getattr(r, s)) for s in LOSS_STAGES} for r in y.itertuples()}
+            if len(vals.get(crec.get('variant')) or {}) < len(ws) or len(vals['family']) < len(ws):
+                rec['classes'][f'E145:{c}'] = dict(cls='reads missing', original_cls=orig.get('cls'))
+                continue
+            av = S2.with_stage(vals[crec.get('variant')], stages)
+            fv = S2.with_stage(vals['family'], stages)
+            r = _reclass_on(S2, orig, av, fv, f, spreads, stages, e145.get('control_fall'), drop, ws)
+            rec['classes'][f'E145:{c}'] = dict(cls=r['cls'], original_cls=r['original_cls'])
+        out[reading] = rec
+    out['default_check'] = {k: dict(original=v['original_cls'], reread=v['cls'], same=v['original_cls'] == v['cls'])
+                            for k, v in out['default']['classes'].items()}
+    return out
+
+
+def _reclass_on(S2, orig: Mapping, av: Mapping, fv: Mapping, fam8: Mapping, spreads: Mapping, stages: Sequence[str],
+                control_fall, drop: Sequence[str], wirings: Sequence[str]) -> dict:
+    """E142's `reclass` on a cell's own read wirings (E136's T_WIRINGS set to them for the comparison)."""
+    from experiments import E136_stage_population_fit as F
+    old = F.T_WIRINGS
+    F.T_WIRINGS = tuple(wirings)
+    try:
+        return S2.reclass(orig, av, fv, spreads, stages, control_fall, drop)
+    finally:
+        F.T_WIRINGS = old
+
+
+# ---------------------------------------------------------------------------
+# design 8: beside, classing nothing
 
 def part_beside() -> dict:
-    """Design 8, classing nothing: megamat's sharing error at the somata beside the held-out panels' strength errors and
-    E139's price; each stage's views regressed on the four factors per cell; E145's classes with E147's spreads; E147's
-    saved populations' sharing and breadth."""
-    raise NotImplementedError
+    """Design 8, classing nothing: (1) megamat's sharing (and breadth) error at the somata against all the flies over
+    the saved settings, beside their held-out panels' strength errors (the class tables' comparisons, the mean over T)
+    and E139's price (beside_settings.csv); (2) each stage's views regressed on the four log factors over each cell's
+    held evaluations, against each half of E136's split (beside_regressions.csv); (3) E145's classes recomputed with
+    E147's spreads over model flies (beside_e147_spreads.csv); (4) the sharing and breadth of E147's saved populations
+    beside the reading at the lab's input (beside_e147_populations.csv)."""
+    from experiments import E143_megamat_fly_sampling as E143m
+    from experiments import E147_megamat_input_flies as E147m
+    lock = require_lock()
+    out = {}
+    # (1)
+    n = len(stage_flies('kc_soma').flies)
+    sd = _side(SETTINGS_CELL, 'kc_soma', 'all', 'T')
+    W = E143m.half_weights(n, [tuple(range(n))])
+    vals = {v: E143m.values_of(view_errors(sd, W, (v,)), sd.rows).iloc[0] for v in VIEWS}
+    tables = {E136: json.loads((_e136_dir() / 'classes.json').read_text()),
+              E139: json.loads((H.results_dir(E139) / 'classes.json').read_text()),
+              E141: json.loads((H.results_dir(E141) / 'classes.json').read_text())}
+    rows = []
+    for s in E143m.SETTINGS:
+        r = dict(setting=s.name, role=s.role, calyx=s.calyx,
+                 **{f'soma_{v}': float(vals[v].get(f'settings:{s.name}', np.nan)) for v in VIEWS})
+        rec = (tables.get({'E136': E136, 'E139': E139, 'E141': E141}.get(s.source, ''), {}).get('classes') or {}).get(s.arm)
+        if rec:
+            for k, c in (rec.get('panels') or {}).items():
+                r[f'panel_{k}'] = c.get('arm')
+                r[f'panel_{k}_change'] = c.get('change')
+            pr = rec.get('price_on_apl_effect') or {}
+            r['e139_price_value'] = pr.get('price_value')
+            r['e139_price'] = pr.get('price')
+        rows.append(r)
+    _write_csv(pd.DataFrame(rows), 'beside_settings.csv')
+    # (2)
+    reg = []
+    for k in CELLS:
+        if not have_views(k):
+            continue
+        ms = model_sets([k], settings=False)[k]
+        ev = cell_evals(k).set_index('eval')
+        idx = [int(nm[1:]) for nm in ms.members[0][1]]
+        Z = np.column_stack([np.ones(len(idx))] + [np.log(ev.loc[idx, f].to_numpy(dtype=float))
+                                                    for f in ('aplpn', 'kckc', 'inhadd', 'inhsc')])
+        for st in LOSS_STAGES:
+            h = e136_halves(st)
+            for v in stage_views(st):
+                e = set_errors(ms, st, [h['a'], h['b']], (v,))
+                for hi, half in enumerate('ab'):
+                    y = e[hi]
+                    ok = np.isfinite(y)
+                    if ok.sum() < 6:
+                        continue
+                    beta, *_ = np.linalg.lstsq(Z[ok], y[ok], rcond=None)
+                    res = y[ok] - Z[ok] @ beta
+                    r2 = 1.0 - float(res @ res) / float(((y[ok] - y[ok].mean()) ** 2).sum())
+                    reg.append(dict(cell=k, stage=st, view=v, half=half, n=int(ok.sum()), r2=r2,
+                                    **{f'b_{f}': float(b) for f, b in zip(('const', 'aplpn', 'kckc', 'inhadd', 'inhsc'),
+                                                                         beta)}))
+    _write_csv(pd.DataFrame(reg), 'beside_regressions.csv')
+    # (3)
+    e147 = json.loads((H.results_dir(E147) / 'classes.json').read_text())
+    spm = e147.get('spreads_model_flies_megamat') or {}
+    e145 = json.loads((H.results_dir(E145) / 'classes.json').read_text())
+    tab = {E145: {'classes': {c: v['cls'] for c, v in e145['cells'].items() if v.get('cls')}}}
+    try:
+        cw = E147m.classes_with_spreads(spm.get('strength') or {}, spm.get('guard') or {}, tables=tab)
+        _write_csv(cw, 'beside_e147_spreads.csv')
+        out['e147_spreads'] = cw.to_dict('records')
+    except Exception as e:      # a description only: recorded, the other items go on
+        out['e147_spreads'] = f'not recomputed: {type(e).__name__}: {e}'
+    # (4)
+    pp = H.results_dir(E147) / 'score_populations.csv'
+    if pp.exists():
+        p = pd.read_csv(pp)
+        keep = [c for c in p.columns if c in ('population', 'reading', 'stage', 'n_model_flies') or
+                any(c.endswith(x) for x in ('view_strength', 'view_sharing', 'view_breadth', 'view_matrix'))]
+        _write_csv(p[keep], 'beside_e147_populations.csv')
+        out['e147_populations'] = int(len(p))
+    provenance('beside', lock, e147_classes_sha256=_sha256(H.results_dir(E147) / 'classes.json'),
+               e147_populations_sha256=_sha256(pp) if pp.exists() else None)
+    return out
 
+
+# ---------------------------------------------------------------------------
+# the score
 
 def part_score() -> dict:
-    """The classes and outcome letters (classes.json)."""
-    raise NotImplementedError
+    """The classes and outcome letters (classes.json) from the parts' tables: per cell whether its identities passed
+    and how it is read; "megamat reads the calyx beside strength"; whether a loss with sharing (L1, L2, L3) "can be
+    decided" and whether its picks transfer; "the claws' cost is the read half's" ("one fly's" or "two against two");
+    "without the boutons the megamat stage error orders the settings"; the outcome letters."""
+    lock = require_lock()
+    ids = require_identities()
+    summ = pd.read_csv(results_dir() / 'views_decided_summary.csv')
+    ls = pd.read_csv(results_dir() / 'losses_summary.csv')
+    claws = claws_class(pd.read_csv(results_dir() / 'claws.csv'))
+    nb = _read_json(results_dir() / 'no_boutons.json')
+    ok_cells = [c for c in CELLS if ids[c]['identities']]
+    sets_needed = [*ok_cells, 'pool_S', 'pool_T', 'inhadd1000']
+    reads = []
+    for st in CALYX_STAGES:
+        for v in ('sharing', 'breadth'):
+            x = summ[(summ.stage == st) & (summ.view == v)].set_index('set')
+            have = [s for s in sets_needed if s in x.index]
+            if len(have) == len(sets_needed) and all(str(x.loc[s, 'decided']) == 'True' for s in sets_needed):
+                reads.append(f'{st}/{v}')
+    over_fits = []
+    for st in CALYX_STAGES:
+        for v in ('sharing', 'breadth'):
+            x = summ[(summ.stage == st) & (summ.view == v)].set_index('set')
+            fs = [*ok_cells, 'pool_S', 'pool_T']
+            if all(s in x.index and str(x.loc[s, 'decided']) == 'True' for s in fs):
+                over_fits.append(f'{st}/{v}')
+    any_calyx_decided = bool((summ.stage.isin(CALYX_STAGES) & summ.view.isin(VIEWS)
+                              & (summ['decided'].astype(str) == 'True')).any())
+    fit_sets = [*ok_cells, 'pool_S', 'pool_T']
+    over_fits_median = []
+    for st in CALYX_STAGES:
+        for v in ('sharing', 'breadth'):
+            x = summ[(summ.stage == st) & (summ.view == v)].set_index('set')
+            if all(s in x.index and float(x.loc[s, 'median']) >= DECIDED_MEDIAN for s in fit_sets):
+                over_fits_median.append(f'{st}/{v}')
+    loss_dec = {}
+    for L in LOSSES:
+        x = ls[ls.loss == L].set_index('set')
+        need = [*ok_cells, 'pool_S', 'pool_T']
+        loss_dec[L] = dict(decided=bool(all(s in x.index and str(x.loc[s, 'decided']) == 'True' for s in need)),
+                           transfers={c: bool(str(x.loc[c, 'transfers_e136']) == 'True') for c in ok_cells
+                                      if c in x.index},
+                           regret_e136={c: float(x.loc[c, 'regret_e136']) for c in ok_cells if c in x.index})
+    sharing_losses = [L for L in ('L1', 'L2', 'L3') if loss_dec[L]['decided']]
+    transfers = [L for L in sharing_losses if all(loss_dec[L]['transfers'].values())]
+    no_b = (nb.get('summary') or {}).get('L4', {})
+    orders = bool(no_b.get('orders_without_e135'))
+    failed = [c for c in CELLS if not ids[c]['identities']]
+    letters = []
+    if reads and sharing_losses and transfers:
+        letters.append('a')
+    elif (over_fits or over_fits_median) and not reads:
+        letters.append('b')
+    if not any_calyx_decided:
+        letters.append('c')
+    if claws['read_half']:
+        letters.append('d')
+    if orders:
+        letters.append('e')
+    if failed or not all(ids[c]['read_once'] for c in CELLS):
+        letters.append('f')
+    rec = dict(cells={c: dict(ids[c], read_by="read once" if ids[c]['read_once'] else
+                              "E136's own reading on fewer splits") for c in CELLS},
+               no_class=failed, reads_calyx=dict(holds=bool(reads), stage_views=reads,
+                                                 decided_over_the_fits=over_fits,
+                                                 median_over_the_fits=over_fits_median),
+               losses=loss_dec, loss_with_sharing_decided=sharing_losses, picks_transfer=transfers,
+               claws=claws, no_boutons=dict(orders=orders, L4=no_b, L0=(nb.get('summary') or {}).get('L0')),
+               outcomes=letters, outcome_text={k: OUTCOMES[k] for k in letters}, time=_now(), host=_host(),
+               lock_sha256=lock.get('sha256'))
+    _write_json(results_dir() / 'classes.json', rec)
+    provenance('score', lock)
+    return rec
 
 
 PARTS: Tuple[str, ...] = ('lock', 'views', 'step0', 'room', 'views_decided', 'losses', 'claws', 'no_boutons', 'beside',
@@ -1394,7 +2254,10 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     ap.add_argument('--part', required=True, choices=PARTS)
     ap.add_argument('--cell', choices=VIEW_CELLS, help='--part views: the cell whose views to read')
     ap.add_argument('--evals', nargs='+', type=int, help='--part views: only these evaluations')
+    ap.add_argument('--outputs-root', nargs='+', default=[],
+                    help="--part views: other checkouts' outputs/ folders to find the cell's saved stages in")
     a = ap.parse_args(argv)
+    EXTRA_OUTPUTS[:] = [Path(x) for x in a.outputs_root]
     if a.part == 'lock':
         rec = part_lock()
         print(json.dumps({k: rec[k] for k in ('experiment', 'time', 'host')}, default=str))
