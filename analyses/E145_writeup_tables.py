@@ -160,14 +160,28 @@ def _start_loss(h: pd.DataFrame) -> Optional[float]:
     return float(x.loss_sim.iloc[0]) if len(x) else None
 
 
+def own_consistency(rescore: pd.DataFrame, col: str = 'stage_error', measure: str = 'strength') -> Optional[float]:
+    """A fit's own consistency between the halves: the Spearman ρ over its evaluations between `col` against the fit
+    half and against the held-out half (E136's `consistency`, on this fit's rescore alone). E136's consistency file
+    pools every arm's evaluations (483 for its five arms), so A1's own value is read from A1's rescore, not from it."""
+    from scipy import stats
+    r = rescore[rescore.measure == measure] if len(rescore) and 'measure' in rescore else rescore
+    if not len(r) or col not in r:
+        return None
+    a = r[r.half == 'fit'].set_index('eval')[col]
+    b = r[r.half == 'held'].set_index('eval')[col]
+    idx = a.index.intersection(b.index)
+    return float(stats.spearmanr(a.loc[idx], b.loc[idx])[0]) if len(idx) > 2 else None
+
+
 def fits_table(d: dict, V: W.Values) -> List[str]:
     """Per cell, the fit: evaluations, start and best loss (on the searched wirings against the fit half), the best
     point's factors, any bound, and the consistency of the strength stage error between the halves over the
     evaluations (rho; E136's yardstick 0.8)."""
     L = ['Each cell\'s fit (E136\'s A1 in its search mode: 140 evaluations with one restart; the loss is the megamat stage '
          'error on strength on the searched wirings against the fit half, lower is better). "Consistency" is ρ over the '
-         'evaluations between their megamat stage errors against the fit half and against the read half (E136\'s '
-         'yardstick 0.8).', '',
+         "fit's own evaluations between their megamat stage errors against the fit half and against the read half "
+         "(E136's yardstick 0.8; E136's own 0.823 pools its five arms' 483 evaluations).", '',
          '| cell | evaluations | start | best (evaluation) | APL→bouton | KC–KC | pn_inhadd | gain on pn_inhsc | '
          'at a bound | consistency ρ |', '|---|---:|---:|---:|---:|---:|---:|---:|---|---:|']
     for c in CELLS:
@@ -177,11 +191,7 @@ def fits_table(d: dict, V: W.Values) -> List[str]:
             continue
         bz = f.get('best_z') or {}
         vals = {k: factor_value(k, bz[k]) for k in FACTORS if k in bz}
-        cons = x['cons']
-        rho = None
-        if len(cons) and 'statistic' in cons:
-            y = cons[(cons.statistic == 'stage_error') & (cons.get('measure', 'strength') == 'strength')]
-            rho = float(y.rho.iloc[0]) if len(y) else None
+        rho = own_consistency(x['rescore'])
         best = None
         h = x['hist']
         if len(h) and f.get('best_eval') is not None:

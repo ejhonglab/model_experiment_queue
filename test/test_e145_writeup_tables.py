@@ -47,7 +47,9 @@ def _d():
     empty = dict(fit={}, hist=pd.DataFrame(), det=pd.DataFrame(), cons=pd.DataFrame(), rescore=pd.DataFrame(),
                  reads=pd.DataFrame())
     cells = {c: dict(empty) for c in T.CELLS}
-    cells['F'] = dict(empty, fit=fit, hist=hist, cons=cons)
+    resc = pd.DataFrame(dict(eval=[0, 1, 2, 116] * 2, measure='strength', half=['fit'] * 4 + ['held'] * 4,
+                             stage_error=[1.04, 0.95, 0.92, 0.905, 0.975, 0.90, 0.96, 0.894]))   # ranks 4321 / 4231: rho 0.8
+    cells['F'] = dict(empty, fit=fit, hist=hist, cons=cons, rescore=resc)
     shares = pd.DataFrame([dict(cell='F', share_scored=0.588), dict(cell='X', share_scored=1.0)])
     e143 = dict(derived=dict(fall_repeats=dict(share_scored=0.931), outcome_d=dict(share_scored=0.995)),
                 shortcut_check=dict(tol=0.02))
@@ -72,14 +74,15 @@ def test_fits_and_returns_tables():
     V = T.W.Values()
     rows = [r for r in T.fits_table(d, V) if r.startswith('| F,')]
     assert len(rows) == 1
-    assert '| 126 | 1.040 | 0.905 (116) | ×0.427 | ×2.530 | 1633 | ×0.710 | none | 0.802 |' in rows[0]
+    assert '| 126 | 1.040 | 0.905 (116) | ×0.427 | ×2.530 | 1633 | ×0.710 | none | 0.800 |' in rows[0]
     ret = [r for r in T.returns_table(d, V) if r.startswith('| F,')]
     assert len(ret) == 4
     assert '| APL→bouton | +0.0070 | no | ×1.000 | no |' in ret[0]          # undetermined: back to the start
     assert '| KC–KC | +0.0139 | yes | ×2.530 | yes |' in ret[1]
     assert ret[3].endswith('| not read |')
     v = V.frame().set_index(['arm', 'statistic'])['value']
-    assert v[('F', 'consistency_rho')] == 0.802 and v[('F', 'classed_aplpn')] == 1.0 and v[('F', 'repeats_kckc')] == 1
+    assert np.isclose(v[('F', 'consistency_rho')], 0.8) and v[('F', 'classed_aplpn')] == 1.0
+    assert v[('F', 'repeats_kckc')] == 1
 
 
 def test_classes_and_experiment_tables():
