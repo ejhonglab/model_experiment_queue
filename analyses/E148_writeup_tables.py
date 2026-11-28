@@ -312,9 +312,9 @@ def decided_table(d: dict, V: W.Values) -> List[str]:
     L = ['Consistency (ρ over a set\'s models between their errors against one half of a stage\'s flies and against the '
          'other) per stage and view, on every split of the stage: median / minimum. **Bold**: "is decided" (0.8 or more '
          'at the median, 0.5 or more on every split); "nr": "no reading" (the set\'s errors against all the flies range '
-         'over less than twice the view\'s spread over the family\'s eight wirings). Every cell is read by E136\'s own '
-         'reading (its read-once check failed), so its PN stages are read on E136\'s split alone and its claws and '
-         'somata on their three splits; the settings are read once, on every split.', '',
+         'over less than twice the view\'s spread over the family\'s eight wirings).', '',
+         'Every cell is read by E136\'s own reading (its read-once check failed), so its PN stages are read on E136\'s '
+         'split alone and its claws and somata on their three splits; the settings are read once, on every split.', '',
          '| stage | view | ' + ' | '.join(SET_NAMES[k] for k in SETS) + ' |', '|---|---|' + '---:|' * len(SETS)]
     for st in STAGES:
         for v in _views_of(st) + ['all']:
