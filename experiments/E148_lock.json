@@ -880,6 +880,16 @@
   "no held-out panel enters a fit; validation2's saved scores are read beside only, nothing chosen from E138's readings of it",
   "Pratyush's hemibrain only; Remy's processed data without the bouton fly 2022-10-21 fly02 and her older megamat flies (E134's lock)"
  ],
+ "revisions": [
+  {
+   "time": "2026-11-27 20:46",
+   "what": [
+    "A cell enters designs 3 to 8 once its views hold every evaluation of its fit history; a pool once both cells do. A set read by E136's own reading (a failed read-once check) is read on the subsets its views saved: E136's split at the PN dendrites and boutons and the claws' and somata's three splits; its joint splits are those nine.",
+    "Outcome (c) reads every set and every view at the claws and somata (strength included); outcome (b) holds where a calyx stage's sharing or breadth is decided, or at 0.8 at the median split, over every fit's held evaluations and both pools but not over the nine settings at pn_inhadd 1000."
+   ],
+   "why": "two readings the first lock left open, written when designs 3 to 8 were coded, before any of their statistics was read; step 0 had read only the probe and the read-once check of F's evaluations 0, 1 and 116"
+  }
+ ],
  "files": {
   "e134_lock": {
    "path": "<repo>/experiments/E134_lock.json",
@@ -1046,5 +1056,17 @@
    "bytes": 274,
    "sha256": "531b570b7ccf5beb26ccde398c4654a8db1ed91a05ce0a7bad047c19167df006"
   }
+ },
+ "revised": "2026-11-27 20:46",
+ "revised_host": "disco",
+ "revised_commits": {
+  "queue_commit": "b449ce8e517256a24b38ef5ae398f37079b816ea",
+  "queue_dirty": false,
+  "pyolfsysm_commit": "b1e89d7d119bbbb4888f31de4d94938dbc4bd60a",
+  "pyolfsysm_dirty": false,
+  "al_analysis_commit": "d891fe786ac5a103ef1ccb40bf108b3b5e16078e",
+  "al_analysis_dirty": false,
+  "hong2p_commit": "484da09afe90ce4dd37e8b9039b1881136b78b68",
+  "hong2p_dirty": false
  }
 }
