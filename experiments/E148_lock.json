@@ -6,7 +6,7 @@
  "host": "disco",
  "time": "2026-11-27 20:36",
  "commits": {
-  "queue_commit": "3a010098ad96798dd629a42cb6b2dd9b2ddde545",
+  "queue_commit": "51b758c86ad87e678891c80ffbbb5c4a111903cf",
   "queue_dirty": false,
   "pyolfsysm_commit": "b1e89d7d119bbbb4888f31de4d94938dbc4bd60a",
   "pyolfsysm_dirty": false,
