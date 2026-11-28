@@ -1,0 +1,1050 @@
+{
+ "experiment": "E148_megamat_other_views",
+ "step": "lock",
+ "script": "experiments/E148_megamat_other_views.py",
+ "planner": "a Fable subagent, claude-fable-5-2, spawned from viki 2026-11-27 19:55",
+ "host": "disco",
+ "time": "2026-11-27 20:36",
+ "commits": {
+  "queue_commit": "3a010098ad96798dd629a42cb6b2dd9b2ddde545",
+  "queue_dirty": false,
+  "pyolfsysm_commit": "b1e89d7d119bbbb4888f31de4d94938dbc4bd60a",
+  "pyolfsysm_dirty": false,
+  "al_analysis_commit": "d891fe786ac5a103ef1ccb40bf108b3b5e16078e",
+  "al_analysis_dirty": false,
+  "hong2p_commit": "484da09afe90ce4dd37e8b9039b1881136b78b68",
+  "hong2p_dirty": false
+ },
+ "entry": "experiment_priorities.md item E148 (proposed and moved by viki 2026-11-27 20:16)",
+ "cells": {
+  "A1": {
+   "source": "E136_stage_population_fit",
+   "searched": "S",
+   "wirings": [
+    "real",
+    "P1",
+    "P2",
+    "M1"
+   ],
+   "fit_half": "a",
+   "other_half": "b",
+   "n_evals": 124
+  },
+  "X": {
+   "source": "E145_stage_fit_replication",
+   "searched": "T",
+   "wirings": [
+    "P3",
+    "P4",
+    "M2",
+    "M3"
+   ],
+   "fit_half": "b",
+   "other_half": "a",
+   "n_evals": 139
+  },
+  "F": {
+   "source": "E145_stage_fit_replication",
+   "searched": "S",
+   "wirings": [
+    "real",
+    "P1",
+    "P2",
+    "M1"
+   ],
+   "fit_half": "b",
+   "other_half": "a",
+   "n_evals": 126
+  },
+  "W": {
+   "source": "E145_stage_fit_replication",
+   "searched": "T",
+   "wirings": [
+    "P3",
+    "P4",
+    "M2",
+    "M3"
+   ],
+   "fit_half": "a",
+   "other_half": "b",
+   "n_evals": 139
+  }
+ },
+ "halves": {
+  "a": "E136's fit half: the first part of hal's split_halves(n, 1, seed 0) of each stage's flies",
+  "b": "E136's held-out half: the rest"
+ },
+ "pools": {
+  "S": [
+   "A1",
+   "F"
+  ],
+  "T": [
+   "X",
+   "W"
+  ]
+ },
+ "evaluations": {
+  "value": "the error of the searched wirings' mean views (row 'common'), each wiring's beside",
+  "held": "both rates held on every searched wiring (the fit history's hold_ok_<wiring>); an evaluation not held is left out and counted",
+  "start": "evaluation 0 (the family at z = 0)"
+ },
+ "settings": {
+  "list": [
+   {
+    "name": "family",
+    "source": "E134",
+    "arm": "family",
+    "label": "the family held (E134's megamat_held runs; E136's reads and E90's part B on the held-out inputs)",
+    "role": "setting",
+    "calyx": "family_norm"
+   },
+   {
+    "name": "E136:A0",
+    "source": "E136",
+    "arm": "A0",
+    "label": "A0, the family refitted",
+    "role": "setting",
+    "calyx": "family_norm"
+   },
+   {
+    "name": "E136:A1",
+    "source": "E136",
+    "arm": "A1",
+    "label": "A1, the antennal lobe's normalization searched",
+    "role": "setting",
+    "calyx": "inhadd1000"
+   },
+   {
+    "name": "E136:A2",
+    "source": "E136",
+    "arm": "A2",
+    "label": "A2, APL's inhibition of the claws as a gain",
+    "role": "setting",
+    "calyx": "family_norm"
+   },
+   {
+    "name": "E136:A3",
+    "source": "E136",
+    "arm": "A3",
+    "label": "A3, the per-claw threshold searched",
+    "role": "setting",
+    "calyx": "family_norm"
+   },
+   {
+    "name": "E136:A4",
+    "source": "E136",
+    "arm": "A4",
+    "label": "A4, without the inhibition among KCs",
+    "role": "setting",
+    "calyx": "family_norm"
+   },
+   {
+    "name": "E139:F_inhadd100",
+    "source": "E139",
+    "arm": "F_inhadd100",
+    "label": "F, the family's calyx factors, at pn_inhadd 100",
+    "role": "setting",
+    "calyx": ""
+   },
+   {
+    "name": "E139:F_inhadd314",
+    "source": "E139",
+    "arm": "F_inhadd314",
+    "label": "F at pn_inhadd 314",
+    "role": "setting",
+    "calyx": ""
+   },
+   {
+    "name": "E139:F_inhadd1000",
+    "source": "E139",
+    "arm": "F_inhadd1000",
+    "label": "F at pn_inhadd 1000",
+    "role": "setting",
+    "calyx": "inhadd1000"
+   },
+   {
+    "name": "E139:F_inhadd3141",
+    "source": "E139",
+    "arm": "F_inhadd3141",
+    "label": "F at pn_inhadd 3141",
+    "role": "setting",
+    "calyx": ""
+   },
+   {
+    "name": "E139:B_inhadd314",
+    "source": "E139",
+    "arm": "B_inhadd314",
+    "label": "B, APL->bouton x0.155, at pn_inhadd 314",
+    "role": "setting",
+    "calyx": ""
+   },
+   {
+    "name": "E139:B_inhadd1000",
+    "source": "E139",
+    "arm": "B_inhadd1000",
+    "label": "B at pn_inhadd 1000",
+    "role": "setting",
+    "calyx": "inhadd1000"
+   },
+   {
+    "name": "E139:K_inhadd1000",
+    "source": "E139",
+    "arm": "K_inhadd1000",
+    "label": "K, KC-KC x3.24, at pn_inhadd 1000",
+    "role": "setting",
+    "calyx": "inhadd1000"
+   },
+   {
+    "name": "E139:A0_inhadd314",
+    "source": "E139",
+    "arm": "A0_inhadd314",
+    "label": "E139's refit, A0 at pn_inhadd 314",
+    "role": "setting",
+    "calyx": ""
+   },
+   {
+    "name": "E141:D1.8_inhadd1000",
+    "source": "E141",
+    "arm": "D1.8_inhadd1000",
+    "label": "D1.8, the matrix at x1.8",
+    "role": "setting",
+    "calyx": "inhadd1000"
+   },
+   {
+    "name": "E141:D5.8_inhadd1000",
+    "source": "E141",
+    "arm": "D5.8_inhadd1000",
+    "label": "D5.8, the matrix at x5.83",
+    "role": "setting",
+    "calyx": "inhadd1000"
+   },
+   {
+    "name": "E141:N_inhadd1000",
+    "source": "E141",
+    "arm": "N_inhadd1000",
+    "label": "N, the rise with APL on only",
+    "role": "setting",
+    "calyx": "inhadd1000"
+   },
+   {
+    "name": "E141:G_inhadd1000",
+    "source": "E141",
+    "arm": "G_inhadd1000",
+    "label": "G, APL's inhibition of the claws as a gain",
+    "role": "setting",
+    "calyx": "inhadd1000"
+   },
+   {
+    "name": "E141:S_inhadd1000",
+    "source": "E141",
+    "arm": "S_inhadd1000",
+    "label": "the shuffled matrix (within type pairs)",
+    "role": "setting",
+    "calyx": "inhadd1000"
+   },
+   {
+    "name": "E135:R1",
+    "source": "E135",
+    "arm": "R1",
+    "label": "E135's R1, the PN stage's global parameters fitted",
+    "role": "setting",
+    "calyx": ""
+   },
+   {
+    "name": "E135:rung",
+    "source": "E135",
+    "arm": "rung",
+    "label": "E135's R3, the highest kept rung",
+    "role": "setting",
+    "calyx": ""
+   },
+   {
+    "name": "E135:imposed",
+    "source": "E135",
+    "arm": "imposed",
+    "label": "E135's recorded dendrites imposed",
+    "role": "setting",
+    "calyx": ""
+   },
+   {
+    "name": "E135:imposed_dff",
+    "source": "E135",
+    "arm": "imposed_dff",
+    "label": "E135's recorded dendrites imposed, table in dF/F",
+    "role": "setting",
+    "calyx": ""
+   },
+   {
+    "name": "E135:rung_glom_perm",
+    "source": "E135",
+    "arm": "rung_glom_perm",
+    "label": "E135's R3, glomeruli permuted",
+    "role": "yardstick",
+    "calyx": ""
+   },
+   {
+    "name": "E135:imposed_glom_perm",
+    "source": "E135",
+    "arm": "imposed_glom_perm",
+    "label": "E135's imposed, glomeruli permuted",
+    "role": "yardstick",
+    "calyx": ""
+   },
+   {
+    "name": "E135:imposed_odor_perm",
+    "source": "E135",
+    "arm": "imposed_odor_perm",
+    "label": "E135's imposed, odors permuted",
+    "role": "yardstick",
+    "calyx": ""
+   },
+   {
+    "name": "E135:imposed_glom_perm_dff",
+    "source": "E135",
+    "arm": "imposed_glom_perm_dff",
+    "label": "E135's imposed in dF/F, glomeruli permuted",
+    "role": "yardstick",
+    "calyx": ""
+   },
+   {
+    "name": "E135:imposed_odor_perm_dff",
+    "source": "E135",
+    "arm": "imposed_odor_perm_dff",
+    "label": "E135's imposed in dF/F, odors permuted",
+    "role": "yardstick",
+    "calyx": ""
+   }
+  ],
+  "read_on": [
+   "P3",
+   "P4",
+   "M2",
+   "M3"
+  ],
+  "value": "the mean over T of each wiring's error (E143)",
+  "groups": {
+   "inhadd1000": [
+    "E136:A1",
+    "E139:F_inhadd1000",
+    "E139:B_inhadd1000",
+    "E139:K_inhadd1000",
+    "E141:D1.8_inhadd1000",
+    "E141:D5.8_inhadd1000",
+    "E141:N_inhadd1000",
+    "E141:G_inhadd1000",
+    "E141:S_inhadd1000"
+   ],
+   "family_norm": [
+    "family",
+    "E136:A0",
+    "E136:A2",
+    "E136:A3",
+    "E136:A4"
+   ]
+  },
+  "without_e135": [
+   "family",
+   "E136:A0",
+   "E136:A1",
+   "E136:A2",
+   "E136:A3",
+   "E136:A4",
+   "E139:F_inhadd100",
+   "E139:F_inhadd314",
+   "E139:F_inhadd1000",
+   "E139:F_inhadd3141",
+   "E139:B_inhadd314",
+   "E139:B_inhadd1000",
+   "E139:K_inhadd1000",
+   "E139:A0_inhadd314",
+   "E141:D1.8_inhadd1000",
+   "E141:D5.8_inhadd1000",
+   "E141:N_inhadd1000",
+   "E141:G_inhadd1000",
+   "E141:S_inhadd1000"
+  ],
+  "beside": {
+   "family": "the unrefitted family on all eight wirings (E134's held megamat runs)",
+   "cell_variants": [
+    "E145_A1",
+    "E145_X",
+    "E145_F",
+    "E145_W"
+   ],
+   "cell_variants_rule": "each fit's best evaluation on its searched wirings, its reads elsewhere (E145_score.cell_loader)"
+  }
+ },
+ "views": {
+  "views": [
+   "strength",
+   "sharing",
+   "breadth"
+  ],
+  "matrix": "the PN dendrites' fourth view (E134's lock)",
+  "parts": "hal's kcq/population_fit.py ALL_PARTS"
+ },
+ "reading": {
+  "default": "E134's default readings (kcq.stage_readings DEFAULT_READINGS), the curve, noise and criterion of all the stage's flies, seed index the wiring's position in E136's WIRINGS (E143's read_runs); a subset of flies changes only the reference, in all the stage's flies' one-fly units",
+  "beside": "E136's own reading (the half's flies set the curve, noise and criterion) on E136's split at every stage and on every pair of the claws' and somata's four flies",
+  "check_tol": 0.02,
+  "identity_tol": 1e-09
+ },
+ "splits": {
+  "stage": "E143's stage_splits (35, 10, 3, 3)",
+  "joint": {
+   "n": 200,
+   "seed": 0,
+   "rule": "E143's joint_splits, E136's own split beside"
+  },
+  "single_fly": [
+   "kc_claw",
+   "kc_soma"
+  ]
+ },
+ "losses": {
+  "L0": {
+   "description": "strength at the four stages, the adopted measure and the fits' loss",
+   "terms": [
+    [
+     "pn_dendrite",
+     [
+      "strength"
+     ]
+    ],
+    [
+     "pn_bouton",
+     [
+      "strength"
+     ]
+    ],
+    [
+     "kc_claw",
+     [
+      "strength"
+     ]
+    ],
+    [
+     "kc_soma",
+     [
+      "strength"
+     ]
+    ]
+   ]
+  },
+  "L1": {
+   "description": "strength and sharing at the four stages, E134's two-view error",
+   "terms": [
+    [
+     "pn_dendrite",
+     [
+      "strength",
+      "sharing"
+     ]
+    ],
+    [
+     "pn_bouton",
+     [
+      "strength",
+      "sharing"
+     ]
+    ],
+    [
+     "kc_claw",
+     [
+      "strength",
+      "sharing"
+     ]
+    ],
+    [
+     "kc_soma",
+     [
+      "strength",
+      "sharing"
+     ]
+    ]
+   ]
+  },
+  "L2": {
+   "description": "all three views at the four stages (E136's measure 'all': the PN dendrites on four views with the matrix)",
+   "terms": [
+    [
+     "pn_dendrite",
+     "all"
+    ],
+    [
+     "pn_bouton",
+     "all"
+    ],
+    [
+     "kc_claw",
+     "all"
+    ],
+    [
+     "kc_soma",
+     "all"
+    ]
+   ]
+  },
+  "L3": {
+   "description": "L0 with the claws' and somata's errors over all views, the classes' guard made a part of the loss",
+   "terms": [
+    [
+     "pn_dendrite",
+     [
+      "strength"
+     ]
+    ],
+    [
+     "pn_bouton",
+     [
+      "strength"
+     ]
+    ],
+    [
+     "kc_claw",
+     [
+      "strength"
+     ]
+    ],
+    [
+     "kc_soma",
+     [
+      "strength"
+     ]
+    ],
+    [
+     "kc_claw",
+     "all"
+    ],
+    [
+     "kc_soma",
+     "all"
+    ]
+   ]
+  },
+  "L4": {
+   "description": "L0 without the boutons",
+   "terms": [
+    [
+     "pn_dendrite",
+     [
+      "strength"
+     ]
+    ],
+    [
+     "kc_claw",
+     [
+      "strength"
+     ]
+    ],
+    [
+     "kc_soma",
+     [
+      "strength"
+     ]
+    ]
+   ]
+  },
+  "L5": {
+   "description": "strength at the PN dendrites and boutons",
+   "terms": [
+    [
+     "pn_dendrite",
+     [
+      "strength"
+     ]
+    ],
+    [
+     "pn_bouton",
+     [
+      "strength"
+     ]
+    ]
+   ]
+  },
+  "L6": {
+   "description": "strength at the claws and somata",
+   "terms": [
+    [
+     "kc_claw",
+     [
+      "strength"
+     ]
+    ],
+    [
+     "kc_soma",
+     [
+      "strength"
+     ]
+    ]
+   ]
+  }
+ },
+ "pick": "the held evaluation with the lowest loss against the fit half",
+ "regret": "against the other half under the same loss: (the pick's loss - that half's lowest) / (evaluation 0's loss - that half's lowest), over the held evaluations",
+ "holds_part": {
+  "rule": "a fall of the megamat stage error on strength from evaluation 0 by more than the control fit's fall, no stage's strength error up by more than its spread, the claws' and somata's errors over all views not up by more than theirs; on the 'common' reading against the half",
+  "bar": 0.04,
+  "control_fall_beside": 0.04029272444686488,
+  "spreads": {
+   "stage": 0.02009420132970331,
+   "downstream": 0.02346348073695513,
+   "pn_dendrite": 0.044949170589268055,
+   "pn_bouton": 0.01522125744029484,
+   "kc_claw": 0.016687626204099477,
+   "kc_soma": 0.05716554682314392,
+   "validation2/validation2/on": 0.03834033497983796,
+   "mixtures/cmix/on": 0.02715752732647803,
+   "apl16/apl16/on": 0.05135184917498621,
+   "apl16/apl16/off": 0.09016680704889314,
+   "mixtures/kmix/on": 0.11659674501484249
+  },
+  "spreads_all_views": {
+   "stage": 0.04444504914542724,
+   "pn_dendrite": 0.11590361753536273,
+   "pn_bouton": 0.03766295525721317,
+   "kc_claw": 0.013728071702020709,
+   "kc_soma": 0.05236908852386968,
+   "validation2/validation2/on": 0.06794125646177118,
+   "mixtures/cmix/on": 0.2035012546754002,
+   "apl16/apl16/on": 0.03105875284554215,
+   "apl16/apl16/off": 0.028597182894246585,
+   "mixtures/kmix/on": 0.12559947899128185
+  }
+ },
+ "thresholds": {
+  "decided_median": 0.8,
+  "decided_min": 0.5,
+  "no_reading_spreads": 2.0,
+  "transfers_max_regret": 0.25
+ },
+ "probe": {
+  "consistency_L0": {
+   "A1": 0.34,
+   "X": 0.79,
+   "F": 0.8,
+   "W": 0.34
+  },
+  "consistency_L1": {
+   "A1": 0.82,
+   "X": 0.95,
+   "F": 0.94,
+   "W": 0.95
+  },
+  "consistency_L2": {
+   "A1": 0.7,
+   "X": 0.95,
+   "F": 0.72,
+   "W": 0.94
+  },
+  "soma_strength_sharing_breadth": {
+   "A1": [
+    0.28,
+    0.97,
+    0.95
+   ],
+   "X": [
+    0.5,
+    0.99,
+    0.95
+   ],
+   "F": [
+    0.79,
+    0.97,
+    0.91
+   ],
+   "W": [
+    -0.04,
+    0.99,
+    0.98
+   ]
+  },
+  "claw_strength_sharing_breadth": {
+   "A1": [
+    -0.02,
+    0.54,
+    -0.37
+   ],
+   "X": [
+    0.42,
+    0.33,
+    -0.09
+   ],
+   "F": [
+    0.32,
+    0.08,
+    -0.17
+   ],
+   "W": [
+    -0.32,
+    0.48,
+    -0.49
+   ]
+  },
+  "soma_range_strength_sharing": {
+   "A1": [
+    0.17,
+    0.53
+   ],
+   "X": [
+    0.29,
+    0.47
+   ],
+   "F": [
+    0.36,
+    0.6
+   ],
+   "W": [
+    0.18,
+    0.57
+   ]
+  },
+  "holds_part_half_a": {
+   "A1": [
+    5,
+    111
+   ],
+   "X": [
+    1,
+    116
+   ],
+   "F": [
+    0,
+    106
+   ],
+   "W": [
+    9,
+    123
+   ]
+  },
+  "holds_part_half_b": {
+   "A1": [
+    102,
+    112
+   ],
+   "X": [
+    121,
+    127
+   ],
+   "F": [
+    102,
+    112
+   ],
+   "W": [
+    19,
+    126
+   ]
+  },
+  "pick_L0_factors": {
+   "A1": [
+    0.155,
+    3.24,
+    32
+   ],
+   "X": [
+    0.175,
+    7.3,
+    68
+   ],
+   "F": [
+    0.43,
+    2.53,
+    52
+   ],
+   "W": [
+    0.082,
+    2.65,
+    35
+   ]
+  },
+  "pick_L1_factors": {
+   "A1": [
+    0.23,
+    3.4,
+    43
+   ],
+   "X": [
+    0.73,
+    1.6,
+    72
+   ],
+   "F": [
+    0.61,
+    2.4,
+    72
+   ],
+   "W": [
+    0.32,
+    2.4,
+    42
+   ]
+  },
+  "regret_L0_L1": {
+   "A1": [
+    0.15,
+    0.04
+   ],
+   "X": [
+    0.12,
+    0.04
+   ],
+   "F": [
+    0.07,
+    0.0
+   ],
+   "W": [
+    0.2,
+    0.11
+   ]
+  },
+  "pooled_L0": {
+   "S": 0.52,
+   "T": -0.02
+  },
+  "pooled_L1": {
+   "S": 0.97,
+   "T": 0.97
+  },
+  "pooled_L2": {
+   "S": 0.91,
+   "T": 0.97
+  },
+  "claws_worse_among_lowering": {
+   "a": [
+    429,
+    456
+   ],
+   "b": [
+    7,
+    477
+   ]
+  },
+  "w_somata_all_views_fail_half_b": [
+   101,
+   126
+  ]
+ },
+ "consistency_identities": {
+  "X": 0.786,
+  "F": 0.802,
+  "W": 0.341,
+  "A1_held": 0.338,
+  "A1_all": 0.357
+ },
+ "probe_tol": 0.005,
+ "classes": {
+  "decided": "a view \"is decided\" at a stage, over a set of models: its consistency is 0.8 or more at the median split and 0.5 or more on every split (E143's yardstick); it has \"no reading\" if the models' errors range over less than 2 times the view's spread over the family's eight wirings",
+  "reads_calyx": "\"megamat reads the calyx beside strength\": sharing or breadth is decided at the claws or the somata over every cell's evaluations, over both pooled sets and over the nine settings at pn_inhadd 1000 (the same stage and view on every set)",
+  "loss_decided": "a loss \"can be decided\": 0.8 or more at the median joint split and 0.5 or more on every joint split, in all four cells and on both pooled sets",
+  "transfers": "a pick \"transfers\": its regret is 0.25 or less",
+  "claws_read_half": "\"the claws' cost is the read half's\": in all four cells the classed point's claws on strength are worse than the spread against one half of E136's split and not against the other, the same half in each; \"one fly's\" if one claw fly alone gives that sign (in all four cells, and no other claw fly alone does), \"two against two\" otherwise",
+  "no_boutons_orders": "\"without the boutons the megamat stage error orders the settings\": E143's yardstick on the 200 joint splits, over E143's settings without E135's four arms",
+  "no_class": "no class for a cell whose identities fail"
+ },
+ "outcomes": {
+  "a": "Megamat reads the calyx beside strength, a loss with sharing can be decided, and its picks transfer (about 2 in 5): to Tom and Yang under both open decisions, with where that loss's picks put the calyx.",
+  "b": "Decided over the fits' evaluations, but not among the settings that differ only in the calyx, or not on every split (about 2 in 5): E143's reading stands for the other views too.",
+  "c": "No view at the claws or the somata is decided on every split (about 1 in 6): megamat's calyx stages decide nothing under any reading.",
+  "d": "The claws' cost is the read half's (about 9 in 10, beside the others): the classes stand as scored; how the claws enter a class goes to Tom and Yang.",
+  "e": "Without the boutons the megamat stage error still orders the settings (about 4 in 5, beside the others).",
+  "f": "An identity or a read-once check fails in a cell (about 1 in 5, beside the others): that cell is read by E136's own reading on fewer splits."
+ },
+ "prediction": {
+  "reads_calyx_over_every_fit_on_all_three_splits": "about 3 in 4",
+  "reads_calyx_over_the_nine_settings_too": "about 1 in 2",
+  "a_loss_with_sharing_can_be_decided": "about 3 in 5",
+  "claws_cost_is_the_read_half": "about 9 in 10",
+  "claws_cost_is_one_fly": "about 1 in 3",
+  "without_boutons_orders_the_settings": "about 4 in 5",
+  "source": "the planner's chances (the entry's), written before any view is read"
+ },
+ "judgments": [
+  "An evaluation's value at a stage is the error of its four searched wirings' mean views (hal's wirings_as_flies, row 'common'), as the fits' loss and E136's rescore read it; the planner's probe reproduces on that reading (checked in step 0). Each wiring's value is kept beside. The settings are read as E143 reads them: the mean over T of each wiring's error.",
+  "The probe counted every evaluation (A1's 124, F's 126); the lock's definitions leave out an evaluation whose rates were not held on every searched wiring and count it (A1: 4, F: 2), so step 0 reproduces the probe on every evaluation and every later part reads the held ones.",
+  "L2 and 'over all views' at the PN dendrites read four views with the matrix (E134's lock, E136's measure 'all', error_with_matrix); the claws and somata have three. The probe's L2 consistencies reproduce on that reading.",
+  "A loss's term is a stage's population error over the term's views (the root mean square of the views' errors); a loss is the root mean square of its terms, so L0, L1 and L2 are E136's measures 'strength', 'strength_sharing' and 'all'.",
+  "A pick is among the held evaluations; its regret's start is evaluation 0 (the family at z = 0 on the searched wirings) and the other half's lowest is over the held evaluations.",
+  "Megamat's part of \"holds\" reads changes from evaluation 0 on the 'common' reading against the half, with E136's spreads as scored (classes.json 'spreads' for strength, beside.spreads_all_views for all views) and 0.040 as the bar (the entry's \"the control fit's 0.040\", E147's CONTROL_FALL; the control fit's fall is 0.0403, beside), as the probe reads it: with 0.0403 A1's evaluation 9 (a fall of 0.04026 against half b) would not count. The probe's 429 claws worse of 456 against half a reproduces with the claws' spread rounded to 0.017 (W's evaluation 113 at a change of 0.01686); the lock reads the spread as scored (0.01669), 430.",
+  "The read-once check in a cell is E143's: on E136's split, against each half, the read-once megamat stage error on strength at the cell's evaluation 0 and at its pick (the fit's best evaluation) within CHECK_TOL of E136's own reading of the same runs; the largest difference over every evaluation, per stage and view, is given beside.",
+  "'Every split' of a view's consistency at a stage is that stage's splits (E143's stage_splits: 35, 10, 3, 3); a loss's consistency reads E143's 200 joint splits, which decide, with E136's split beside (as E143's tells-apart).",
+  "A view's spread is the SD over the family's eight wirings of its per-wiring error on that view against all the stage's flies (read once); a set's range is the largest minus the smallest of its models' errors on that view against all the stage's flies.",
+  "\"Megamat reads the calyx beside strength\" needs one stage and view (claws or somata, sharing or breadth) decided on every set it names: each of the four cells' held evaluations, both pooled sets and the nine settings at pn_inhadd 1000.",
+  "The classed points' claws (design 6, the claws' class) are E136's per-wiring comparison (`compare`) of the cell's classed point with the family on the cell's four read wirings, against each half of E136's split, with E136's kc_claw spread on strength; a single claw fly as the reference likewise. \"One fly's\": one claw fly alone gives the sign in all four cells and no other claw fly alone does.",
+  "Without the boutons (L4) the settings are E143's settings without E135's four arms (E135 set their PN stages from the dendrite flies); with them beside.",
+  "No view's reading is weighted by its reliability; no entry is dropped (validation2 and E138's readings are not used)."
+ ],
+ "holds": [
+  "no simulation, no model run, no olfsysm change, nothing fitted, searched or chosen",
+  "no measure, class or yardstick changed: strength by odor alone still chooses and gates",
+  "no held-out panel enters a fit; validation2's saved scores are read beside only, nothing chosen from E138's readings of it",
+  "Pratyush's hemibrain only; Remy's processed data without the bouton fly 2022-10-21 fly02 and her older megamat flies (E134's lock)"
+ ],
+ "files": {
+  "e134_lock": {
+   "path": "<repo>/experiments/E134_lock.json",
+   "bytes": 116395,
+   "sha256": "30015d97ea916ae42ad5c8e85535604fc9ee431b04ad27e260c71fca8636f92c"
+  },
+  "e136_classes": {
+   "path": "<shared>/results/E136_stage_population_fit/measure_strength/classes.json",
+   "bytes": 61705,
+   "sha256": "89202b44f72263a9033b88913a50927fa3e67c03d892c80bcd0f1a2adf418b88"
+  },
+  "e136_consistency_strength": {
+   "path": "<shared>/results/E136_stage_population_fit/measure_strength/consistency_strength.csv",
+   "bytes": 295,
+   "sha256": "6d70a85aa02351859b96042ad9fd533408385998e86f4c73ca3eda0a67258a24"
+  },
+  "e145_classes": {
+   "path": "<shared>/results/E145_stage_fit_replication/classes.json",
+   "bytes": 61317,
+   "sha256": "dca875db398cde642b5b53955d815720772f1b2122de35a9ef9db3d9b664e038"
+  },
+  "e145_step0": {
+   "path": "<shared>/results/E145_stage_fit_replication/step0.json",
+   "bytes": 10768,
+   "sha256": "a233c9ac2148c8aa24e53a3220f28e54bdc783da59d1dfe9cd175d3414bcfc47"
+  },
+  "e143_lock": {
+   "path": "<shared>/results/E143_megamat_fly_sampling/lock.json",
+   "bytes": 70608,
+   "sha256": "0837a09a88e4faf738d4ca921b4262f39e2b918bbe817bc49649ea6962493a1c"
+  },
+  "e143_splits_consistency": {
+   "path": "<shared>/results/E143_megamat_fly_sampling/splits_consistency.csv",
+   "bytes": 2942,
+   "sha256": "488443bb5887bc74598180d1c24d01b0512919822e212c004d8f783dbd654a3f"
+  },
+  "e143_splits_joint_consistency": {
+   "path": "<shared>/results/E143_megamat_fly_sampling/splits_joint_consistency.csv",
+   "bytes": 9450,
+   "sha256": "ed278047b0f964afee3069b61379a980a2bcb62cbb38e817f4c6589bbf5368a9"
+  },
+  "e143_calyx_consistency": {
+   "path": "<shared>/results/E143_megamat_fly_sampling/calyx_consistency.csv",
+   "bytes": 1384,
+   "sha256": "aa94da0f3496a1eecbb4747a3fb4979d5529bcb4b610ea33be6c1c5fa8e138f9"
+  },
+  "e143_classes": {
+   "path": "<shared>/results/E143_megamat_fly_sampling/classes.json",
+   "bytes": 3024,
+   "sha256": "00416a8cf377f441324bb21981701ebf78febaabac16bf779b23ccb718ce2b9a"
+  },
+  "e139_classes": {
+   "path": "<shared>/results/E139_normalization_ladder/classes.json",
+   "bytes": 131402,
+   "sha256": "e0eb4f9ceaefe535fe802691bbef833ec2af6036694777c2f1bfaa0f2d3d76d0"
+  },
+  "e141_classes": {
+   "path": "<shared>/results/E141_kckc_rise_forms/classes.json",
+   "bytes": 133505,
+   "sha256": "f6553de06662353af2be58bc7536060fbc2639c1ddb5d4a40d4ff0c035d4b7fa"
+  },
+  "A1_fit": {
+   "path": "<shared>/results/E136_stage_population_fit/measure_strength/fit_A1.json",
+   "bytes": 24036,
+   "sha256": "772090b1224b211a8bd6def362b085dee90490fb70592f065734a6c51367bb9e"
+  },
+  "A1_history": {
+   "path": "<shared>/results/E136_stage_population_fit/measure_strength/fit_history_A1.csv",
+   "bytes": 267185,
+   "sha256": "13ccb50c20166cb6b00bd2a64f43c2521c5d77db6517ee3e43645170a8d60eaa"
+  },
+  "A1_rescore": {
+   "path": "<shared>/results/E136_stage_population_fit/measure_strength/rescore_A1.csv",
+   "bytes": 785750,
+   "sha256": "cf36e1169c7502b3c9a88dc309052e938ff9925ba2eed014bfa5f31412d867ec"
+  },
+  "X_fit": {
+   "path": "<shared>/results/E145_stage_fit_replication/X/fit_A1.json",
+   "bytes": 22492,
+   "sha256": "6ec2c181a80898fadf03063a191d4b0caf74415499fe61c8082733aa8b597807"
+  },
+  "X_history": {
+   "path": "<shared>/results/E145_stage_fit_replication/X/fit_history_A1.csv",
+   "bytes": 299758,
+   "sha256": "0c54683c7e0baa873148ecf9c92639b16ca98fffa189effb53c6b7afab17c6f1"
+  },
+  "X_rescore": {
+   "path": "<shared>/results/E145_stage_fit_replication/X/rescore_A1.csv",
+   "bytes": 881007,
+   "sha256": "e81f79ba589aa66ceaa228e1e463f2bc026b3e6ca2200a24cea6636062f35e65"
+  },
+  "X_consistency_strength": {
+   "path": "<shared>/results/E145_stage_fit_replication/X/consistency_strength.csv",
+   "bytes": 299,
+   "sha256": "127af6db04756b3448a7913b386f1920ceea1c0b9827fdd4c1f52ea8d4ffffec"
+  },
+  "X_consistency_strength_sharing": {
+   "path": "<shared>/results/E145_stage_fit_replication/X/consistency_strength_sharing.csv",
+   "bytes": 334,
+   "sha256": "7cd0767015d83247d6224600627f2c52b22365ff53fef084b1b25e30618023fd"
+  },
+  "X_consistency_all": {
+   "path": "<shared>/results/E145_stage_fit_replication/X/consistency_all.csv",
+   "bytes": 270,
+   "sha256": "91616b5b8fcaf8bd3a9acf39f6774e901b59f1c91c1377e1ac5e2a2731f9c4e8"
+  },
+  "F_fit": {
+   "path": "<shared>/results/E145_stage_fit_replication/F/fit_A1.json",
+   "bytes": 22324,
+   "sha256": "daca3f600efedad45b8c6a0c28170f15e845a41f97f6b75b5fa5a2dc610145ec"
+  },
+  "F_history": {
+   "path": "<shared>/results/E145_stage_fit_replication/F/fit_history_A1.csv",
+   "bytes": 272312,
+   "sha256": "9b89c85a2f1630906b75241bdb657e0729fe6251f3a2af1dcda355c4a69575e3"
+  },
+  "F_rescore": {
+   "path": "<shared>/results/E145_stage_fit_replication/F/rescore_A1.csv",
+   "bytes": 798956,
+   "sha256": "c995725714369aa8022170fe6e5d4ca148017ba31baf8a9487471957d27a18c3"
+  },
+  "F_consistency_strength": {
+   "path": "<shared>/results/E145_stage_fit_replication/F/consistency_strength.csv",
+   "bytes": 294,
+   "sha256": "4ac6787a22925b4fcb30c503c70d76688b30760f33c3ae926355a430d5d3d9ce"
+  },
+  "F_consistency_strength_sharing": {
+   "path": "<shared>/results/E145_stage_fit_replication/F/consistency_strength_sharing.csv",
+   "bytes": 334,
+   "sha256": "2d66ee8e5cf4123ef869092118c094602117f2db6219ba5d457770ebc74a6228"
+  },
+  "F_consistency_all": {
+   "path": "<shared>/results/E145_stage_fit_replication/F/consistency_all.csv",
+   "bytes": 271,
+   "sha256": "31ec00ce14eb3bea211961f2af3679c35d82aef5191a6ab476dfc94585655b71"
+  },
+  "W_fit": {
+   "path": "<shared>/results/E145_stage_fit_replication/W/fit_A1.json",
+   "bytes": 22486,
+   "sha256": "2486786c805f57a0f33ba5e8aa765356e1bfcd3c77bd0cf93cf23495fb48f16b"
+  },
+  "W_history": {
+   "path": "<shared>/results/E145_stage_fit_replication/W/fit_history_A1.csv",
+   "bytes": 299734,
+   "sha256": "a71fd5487b2e0973f5264b5c03cc62eddc9769264a06f5657b07abb6506b173c"
+  },
+  "W_rescore": {
+   "path": "<shared>/results/E145_stage_fit_replication/W/rescore_A1.csv",
+   "bytes": 880463,
+   "sha256": "85e10444c1f5a941b3d1b25c0a8eb4141c847d95a88758fe7b0d768eb0e0991e"
+  },
+  "W_consistency_strength": {
+   "path": "<shared>/results/E145_stage_fit_replication/W/consistency_strength.csv",
+   "bytes": 296,
+   "sha256": "2ce1a89e510e493cf1c24a078937c5042ab5b9b31a68106bce4623c5cc9c47e6"
+  },
+  "W_consistency_strength_sharing": {
+   "path": "<shared>/results/E145_stage_fit_replication/W/consistency_strength_sharing.csv",
+   "bytes": 333,
+   "sha256": "ac2efbbb531332013527be063c89e366b3a004b195e0f468860aa40b4f578c2d"
+  },
+  "W_consistency_all": {
+   "path": "<shared>/results/E145_stage_fit_replication/W/consistency_all.csv",
+   "bytes": 274,
+   "sha256": "531b570b7ccf5beb26ccde398c4654a8db1ed91a05ce0a7bad047c19167df006"
+  }
+ }
+}
