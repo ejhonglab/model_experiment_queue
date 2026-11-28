@@ -21,6 +21,7 @@ import json
 import os
 import time
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
@@ -348,6 +349,130 @@ def part_score(cells: Sequence[str] = ('A1',) + E.FIT_CELLS) -> dict:
                   **{k: v for k, v in H.code_commits().items() if not isinstance(v, (dict, list))}))
     return dict(cells={k: r['cls'].get('cls') for k, r in recs.items()}, experiment=classes['experiment'],
                 check_e136=check)
+
+
+# ---------------------------------------------------------------------------
+# the four-factor control's fall (design item 7: beside E136's two-factor 0.040; it gates nothing, and the classes do
+# not wait for it)
+
+# the name the control's reads are registered under with E136 (E136 refuses its own CONTROL_A1, 'A1_perm')
+CONTROL_VARIANT = f'E145_{E.CONTROL_CELL}_{E.TAG_ARMS[E.CONTROL]}'
+
+
+def control_loader(cell: str = E.CONTROL_CELL):
+    """The loader of the four-factor control's reads for E136's `register_variant`: its megamat read on a wiring
+    (E145's tag '<cell>_A1perm_megamat_<wiring>', from the cell's read folders); None if absent. Made outside any E136
+    cell (the folders are E145's)."""
+    from kcq import stage_readings as R
+    dirs = E.read_dirs(cell)
+
+    def load(pt, claw_after: bool = False):
+        if pt.panel != 'megamat':
+            return None
+        try:
+            return R.load_step3_run(E.point_tag(E.Point(cell, 'megamat', pt.wiring, E.CONTROL)), dirs=dirs)
+        except FileNotFoundError:
+            return None
+    return load
+
+
+def fall_from_scores(fam: Mapping[str, float], ctl: Mapping[str, float], stages: Sequence[str],
+                     wirings: Sequence[str]) -> dict:
+    """The control's fall from E136's `score_megamat` dicts of the family and the control under the permutations, as
+    E136's score reads its own control's: the mean over `wirings` of the family's 'stage_error_perm_<w>' minus the
+    control's ('fall'), each wiring's ('per_wiring'), the same on the wirings' mean views ('fall_common', from
+    'stage_error_perm'), and per stage on the wirings' mean views ('per_stage', from '<stage>_error_perm'); the values
+    themselves beside ('family' and 'control'), and against the recorded labels ('recorded': the family's
+    'stage_error' and '<stage>_error' minus the control's, which the control was not fitted to)."""
+    per_w = {w: float(fam[f'stage_error_perm_{w}'] - ctl[f'stage_error_perm_{w}']) for w in wirings}
+    return dict(
+        fall=float(np.mean(list(per_w.values()))), per_wiring=per_w,
+        fall_common=float(fam['stage_error_perm'] - ctl['stage_error_perm']),
+        per_stage={st: float(fam[f'{st}_error_perm'] - ctl[f'{st}_error_perm']) for st in stages},
+        family=dict(stage_error_perm={w: float(fam[f'stage_error_perm_{w}']) for w in wirings},
+                    stage_error_perm_common=float(fam['stage_error_perm']),
+                    **{f'{st}_error_perm': float(fam[f'{st}_error_perm']) for st in stages}),
+        control=dict(stage_error_perm={w: float(ctl[f'stage_error_perm_{w}']) for w in wirings},
+                     stage_error_perm_common=float(ctl['stage_error_perm']),
+                     **{f'{st}_error_perm': float(ctl[f'{st}_error_perm']) for st in stages}),
+        recorded=dict(fall=float(np.mean([fam[f'stage_error_{w}'] - ctl[f'stage_error_{w}'] for w in wirings])),
+                      fall_common=float(fam['stage_error'] - ctl['stage_error']),
+                      per_stage={st: float(fam[f'{st}_error'] - ctl[f'{st}_error']) for st in stages}))
+
+
+def control_factors(fit: Mapping) -> dict:
+    """The control's best point: its four factors (APL→bouton, KC–KC, the additive term and the gain on pn_inhsc, as
+    multiples of the family's; pn_inhadd absolute) and the coordinates at a bound."""
+    from experiments.E3_drive_dependent_gain import PN_INHADD_DEFAULT
+    z = fit.get('best_z') or {}
+    f = {k: float(np.exp(v)) for k, v in z.items()}
+    if 'inhadd' in f:
+        f['pn_inhadd'] = float(PN_INHADD_DEFAULT * f['inhadd'])
+    return dict(best_eval=fit.get('best_eval'), z=dict(z), factors=f, at_bound=list(fit.get('at_bound') or []),
+                n_evals=fit.get('n_evals'), budget=fit.get('budget'))
+
+
+def part_control_fall() -> dict:
+    """The four-factor control's fall where cell X is read (the entry's design item 7, beside E136's two-factor fall):
+    inside E145's `e136_cell` of the control's cell, E136's `score_megamat` of the unrefitted family and of the control's
+    reads (registered as CONTROL_VARIANT, `control_loader`) on the cell's read wirings against its read half under
+    E136's permutations of the odor labels, and the fall as E136's score reads its own control's (`fall_from_scores`);
+    with the control's best evaluation and factors, the permutations, E136's fall and each cell's fall beside, and
+    provenance. Writes results/E145_stage_fit_replication/control.json only (no score file, no classes.json)."""
+    from data_prep import stage_population_data as D
+    t0 = time.time()
+    lock = E.require_lock()
+    cell = E.CONTROL_CELL
+    c = E.get_cell(cell)
+    fit = E.fit_record(cell, E.CONTROL)
+    if not fit:
+        raise RuntimeError(f"the control's fit in cell {cell} has not ended (no fit_{E.CONTROL}.json)")
+    cl = E._read_json(E.out_dir() / 'classes.json')
+    stages = tuple(((cl.get('cells') or {}).get(cell) or {}).get('stages') or E136_STAGES())
+    loader = control_loader(cell)
+    with E.e136_cell(cell) as F:
+        if CONTROL_VARIANT in F.VARIANT_LOADERS:
+            raise RuntimeError(f'{CONTROL_VARIANT} is already registered with E136')
+        F.register_variant(CONTROL_VARIANT, loader)
+        try:
+            ws = tuple(F.T_WIRINGS)
+            fp = F.score_megamat(F.FAMILY, stages, 'held', ws, perms=True)
+            cp = F.score_megamat(CONTROL_VARIANT, stages, 'held', ws, perms=True)
+            perms = F.permutations(list(D.panel_odors(F.PANEL)))
+            n_perms, perm_seed = int(F.N_PERMS), int(F.PERM_SEED)
+            halves = {st: F.split_names(fl)['held'] for st, fl in F.all_flies(stages).items()}
+        finally:
+            F.VARIANT_LOADERS.pop(CONTROL_VARIANT, None)
+    if fp is None or cp is None:
+        missing = [w for w in ws if loader(SimpleNamespace(panel='megamat', wiring=w)) is None]
+        raise FileNotFoundError(f"the control's reads are missing on {missing}" if missing else 'a family run is missing')
+    res = fall_from_scores(fp, cp, stages, ws)
+    e136_fall = float(lock['yardsticks']['control_fall'])
+    cells = {k: (v.get('cls') or {}).get('fall') for k, v in (cl.get('cells') or {}).items()}
+    reads = E.reads_table(cell)
+    reads = reads[reads['tag'].isin([E.point_tag(p) for p in E.control_points()])] if len(reads) else reads
+    rec = dict(
+        part='control_fall', cell=cell, label=c.label, arm=E.CONTROL, registered_as=CONTROL_VARIANT,
+        read_wirings=list(ws), read_half=c.read_half, read_half_flies=halves, stages=list(stages),
+        reading="E136's score_megamat inside E145's e136_cell: the wirings' errors under each permutation, their mean "
+                "over the permutations; the fall is the mean over the read wirings of the family's minus the control's, "
+                "as E136's part_score reads its own control's",
+        **res, fit=control_factors(fit), permutations=dict(n=n_perms, seed=perm_seed, maps=perms),
+        e136_control_fall=e136_fall, beside_e136=float(res['fall'] - e136_fall),
+        cells_fall=cells, cells_exceed={k: (bool(v > res['fall']) if v is not None else None) for k, v in cells.items()},
+        reads=reads[[x for x in ('tag', 'wiring', 'host', 'lane', 'time', 'queue_commit', 'rate_on', 'rate_off')
+                     if x in reads]].to_dict('records') if len(reads) else [],
+        gates_nothing=True, seconds=round(time.time() - t0, 1), host=E._host(), time=E._now(),
+        lock_written=lock.get('written'),
+        **{k: v for k, v in H.code_commits().items() if not isinstance(v, (dict, list))})
+    E._write_json(E.out_dir() / 'control.json', rec)
+    return {k: rec[k] for k in ('fall', 'fall_common', 'per_stage', 'per_wiring', 'e136_control_fall', 'cells_fall',
+                                'cells_exceed')} | dict(fit=rec['fit'])
+
+
+def E136_STAGES() -> Tuple[str, ...]:
+    from experiments import E136_stage_population_fit as F0
+    return tuple(F0.LOSS_STAGES)
 
 
 # ---------------------------------------------------------------------------

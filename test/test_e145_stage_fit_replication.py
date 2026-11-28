@@ -231,3 +231,52 @@ def test_write_variants_on_a_planted_archive(tmp_path, monkeypatch):
     (arch / 'X' / 'fit_A1' / 'A1_e115_P3b_run.json').write_text(json.dumps(dict(runs[0][2], tag='A1_e115_P3')))
     with pytest.raises(ValueError):
         E.write_variants(arch)
+
+
+def test_control_fall_from_planted_scores():
+    """The four-factor control's fall as E136's score reads its own: the mean over the read wirings of the family's
+    permuted stage error minus the control's, per wiring, on the wirings' mean views and per stage."""
+    import numpy as np
+    from experiments import E145_score as S
+    ws = E.CELLS['X'].read_wirings()
+    stages = F.LOSS_STAGES
+    fam = dict(stage_error_perm=1.10, stage_error=1.00, **{f'stage_error_perm_{w}': 1.1 + 0.01 * i for i, w in
+                                                         enumerate(ws)},
+               **{f'stage_error_{w}': 1.0 for w in ws}, **{f'{s}_error_perm': 1.2 for s in stages},
+               **{f'{s}_error': 1.0 for s in stages})
+    ctl = dict(stage_error_perm=1.07, stage_error=1.20, **{f'stage_error_perm_{w}': 1.08 for w in ws},
+               **{f'stage_error_{w}': 1.2 for w in ws}, **{f'{s}_error_perm': 1.15 for s in stages},
+               **{f'{s}_error': 1.3 for s in stages})
+    r = S.fall_from_scores(fam, ctl, stages, ws)
+    want = [1.1 + 0.01 * i - 1.08 for i in range(len(ws))]
+    assert np.isclose(r['fall'], np.mean(want)) and np.isclose(r['per_wiring'][ws[3]], want[3])
+    assert np.isclose(r['fall_common'], 0.03) and all(np.isclose(v, 0.05) for v in r['per_stage'].values())
+    assert np.isclose(r['recorded']['fall'], -0.2) and np.isclose(r['recorded']['per_stage']['kc_soma'], -0.3)
+    assert set(r['per_stage']) == set(stages) and list(r['per_wiring']) == list(ws)
+
+
+def test_control_loader_and_factors(monkeypatch):
+    import numpy as np
+    from experiments import E145_score as S
+    from kcq import stage_readings as R
+    assert S.CONTROL_VARIANT == 'E145_X_A1perm'
+    assert S.CONTROL_VARIANT not in (*F.ARMS, *F.CONTROLS, F.FAMILY)
+    seen = []
+
+    def fake(tag, dirs=None, settled=True):
+        seen.append(tag)
+        if tag.endswith('_P2'):
+            raise FileNotFoundError(tag)
+        return tag
+    monkeypatch.setattr(R, 'load_step3_run', fake)
+    load = S.control_loader('X')
+    assert load(SimpleNamespace(panel='megamat', wiring='real')) == 'X_A1perm_megamat_real'
+    assert load(SimpleNamespace(panel='megamat', wiring='P2')) is None
+    assert load(SimpleNamespace(panel='apl16', wiring='real')) is None and seen == ['X_A1perm_megamat_real',
+                                                                                    'X_A1perm_megamat_P2']
+    fit = dict(best_eval=71, n_evals=80, budget=80, at_bound=['aplpn low', 'inhadd low', 'inhsc high'],
+               best_z=dict(aplpn=float(np.log(1 / 30)), kckc=float(np.log(2.22)), inhadd=float(np.log(0.1)),
+                           inhsc=float(np.log(3.0))))
+    f = S.control_factors(fit)
+    assert f['best_eval'] == 71 and f['at_bound'] == fit['at_bound']
+    assert np.isclose(f['factors']['kckc'], 2.22) and np.isclose(f['factors']['pn_inhadd'], 3.14088, rtol=1e-4)

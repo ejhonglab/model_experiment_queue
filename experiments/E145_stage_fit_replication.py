@@ -44,6 +44,8 @@ Design (the entry's):
 - E143's resampled reading per cell (`--part resampled`, experiments/E145_score.py, after the score): each cell's class
   and the experiment's classes and outcomes over E143's 1,000 resamples, with E143's read-once check on each cell's read
   half; E136's own cell gives A1's class back on 0.535 of the resamples, as E143 read it.
+- the control's fall (`--part control_fall`, experiments/E145_score.py, after the control's reads): its fall where cell
+  X is read, against the permuted read half, beside E136's two-factor 0.040 (control.json; it gates nothing);
 - variants (`--part variants`): variants.csv for the model-output archive's params.csv (one row per archived run).
 
 Outputs: <shared>/results/E145_stage_fit_replication/ (E145_lock.json, step0.json, step0_*.csv, prediction.json, and per
@@ -739,6 +741,14 @@ def part_resampled() -> dict:
     return S.part_resampled()
 
 
+def part_control_fall() -> dict:
+    """Beside, gating nothing: the four-factor control's fall where its cell is read, against the permuted read half,
+    beside E136's two-factor fall (results/E145_stage_fit_replication/control.json); experiments/E145_score.py's
+    `part_control_fall` (after the control's reads)."""
+    from experiments import E145_score as S
+    return S.part_control_fall()
+
+
 def control_points() -> List[Point]:
     """The control's reads: megamat on its cell's four read wirings (against the permuted read half, in the score)."""
     return [Point(CONTROL_CELL, 'megamat', w, CONTROL) for w in get_cell(CONTROL_CELL).read_wirings()]
@@ -867,7 +877,7 @@ def write_variants(arch: Optional[Path] = None) -> pd.DataFrame:
 def main(argv: Optional[Sequence[str]] = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('--part', required=True, choices=('lock', 'step0', 'fit', 'read', 'score', 'resampled', 'control',
-                                                       'archive', 'rescore', 'variants'))
+                                                       'control_fall', 'archive', 'rescore', 'variants'))
     ap.add_argument('--cell', nargs='+', default=list(FIT_CELLS), choices=FIT_CELLS)
     ap.add_argument('--lane', default='1')
     ap.add_argument('--reverse', action='store_true')
@@ -892,6 +902,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         print(json.dumps(part_resampled(), indent=1, default=str))
     elif a.part == 'control':
         print(json.dumps(part_control(a.lane, a.reclaim), indent=1, default=str))
+    elif a.part == 'control_fall':
+        print(json.dumps(part_control_fall(), indent=1, default=str))
     elif a.part == 'variants':
         print(f'variants.csv: {len(write_variants())} runs', flush=True)
     elif a.part in ('archive', 'rescore'):
