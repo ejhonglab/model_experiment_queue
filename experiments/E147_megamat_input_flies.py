@@ -39,13 +39,19 @@ reading, each model fly at its wiring's held parameters with the input fly's inp
 'apl16', input fly f0 ... f8, wiring one of E136's WIRINGS. Step 1: 'family' on megamat, the nine input flies on all
 eight wirings, the T wirings first (72). Step 2, on T: 'A1' on megamat (36), then 'A1' and 'family' on APL16 (36 each).
 The free reading ('familyfree', 'A1free', one run per model fly of steps 1 and 2) is beside, classing nothing, and is
-the runner's too.
+the runner's too. Step '6a' (the lock's revision STEP6A_REVISION; beside, classing nothing): the family on megamat
+re-held as in step 1 with the input flies' deviations as measured ('familymeas', E85's 'measured') and their
+reproducible deviations permuted over the glomeruli ('familyperm', E85's 'permuted'), T first and within a wiring
+'familymeas' then 'familyperm' (144); `setting_parts` and SETTING_VARIANT give the runner each setting's re-held setting
+and its input's variant (`input_fly(fly, 'megamat', SETTING_VARIANT[setting])`), and its runs go to
+`run_dirs('6a', ...)` (folder step6a).
 
 What hal's runner writes, which `--part score` reads:
 - each read's run in E134's step-3 layout (`kcq.stage_readings.save_step3_run`, every stage saved, the units' metadata,
   the input as `<tag>_orn.parquet`) under `run_dir(step, setting, wiring, fly)` =
-  outputs/E147_megamat_input_flies/step<step>/<setting>/<wiring>/<fly>/ (local; `run_dirs` also gives the archive's
-  data/model_outputs/E147_megamat_input_flies/... equivalent); a read whose `<tag>_run.json` is there is done;
+  outputs/E147_megamat_input_flies/step<step>/<setting>/<wiring>/<fly>/ (local, step1, step2 or step6a; `run_dirs` also
+  gives the archive's data/model_outputs/E147_megamat_input_flies/... equivalent); a read whose `<tag>_run.json` is
+  there is done;
 - its row in results/E147_megamat_input_flies/reads_<lane>.csv (any name reads_*.csv; the last row per tag counts,
   `reads_table`), with the columns of READ_COLUMNS: tag, step, setting, panel, fly, wiring; the held parameters
   (PARAM_KEYS, absolute, and off_<key> of the APL-off run); thr_factor, apl_factor (against the point the hold started
@@ -70,11 +76,16 @@ Parts (CLI `--part`):
   at the APL16 somata as E134 and E136 score a run (seed index the wiring's; the planner's probe, E134's archive
   scoring at seed 0, beside in step0_probe.csv), every class of E136, E139 and E141 recomputed with the
   APL16 spreads over model flies, and prediction.json (a prediction per megamat stage, timestamped, before any run);
-- step1, step2: hal's (experiments/E147_reads.py --part reads --step 1|2); here they only say so;
+- lock6a (atlas): the lock's step-6a revision appended to the committed lock before any step-6a read
+  (`part_lock_step6a`); commit both copies;
+- step1, step2, step6a: hal's (experiments/E147_reads.py --part reads --step 1|2|6a); here they only say so;
 - score (atlas, no simulation; run once hal's reads are in): the classes per megamat stage, for the megamat stage error
   and at the APL16 somata; A1's megamat fall and its APL16 changes model fly by model fly against the family on the
   same wiring and input fly; the megamat spreads over model flies and every class of E136, E139 and E141 recomputed
-  with them, as a description; the realism bands per model fly and per population; the beside items the reads allow.
+  with them, as a description; the realism bands per model fly and per population; the beside items the reads allow;
+  where step-6a reads exist, its two populations beside the reproducible deviations' on the same wirings and the
+  lock's three readings per stage (`score_step6a`: score_step6a_*.csv, classes.json 'step6a', a section of tables.md),
+  gating nothing; without them nothing of step 6a is written.
 
 Outputs: <shared>/results/E147_megamat_input_flies/ (compact): lock.json, step0_*.csv, classes_step0.json,
 prediction.json, score_*.csv, classes.json, tables.md, provenance_<part>.json; hal's reads_<lane>.csv,
@@ -91,6 +102,7 @@ bouton fly 2022-10-21 fly02 and without her older megamat flies (E134's lock).
 
 Usage (from the repository root):
     ./venv/bin/python -u experiments/E147_megamat_input_flies.py --part lock     # then commit experiments/E147_lock.json
+    ./venv/bin/python -u experiments/E147_megamat_input_flies.py --part lock6a   # step 6a's revision; commit it likewise
     OMP_NUM_THREADS=2 OMP_THREAD_LIMIT=2 nice -n 10 ./venv/bin/python -u experiments/E147_megamat_input_flies.py --part step0
     OMP_NUM_THREADS=2 OMP_THREAD_LIMIT=2 nice -n 10 ./venv/bin/python -u experiments/E147_megamat_input_flies.py --part score
 """
@@ -122,13 +134,24 @@ T_WIRINGS: Tuple[str, ...] = ('P3', 'P4', 'M2', 'M3')
 WIRINGS: Tuple[str, ...] = S_WIRINGS + T_WIRINGS
 LOSS_STAGES: Tuple[str, ...] = ('pn_dendrite', 'pn_bouton', 'kc_claw', 'kc_soma')
 PANELS: Tuple[str, ...] = ('megamat', 'apl16')
-SETTINGS: Tuple[str, ...] = ('family', 'A1', 'familyfree', 'A1free')
-HELD_SETTINGS: Tuple[str, ...] = ('family', 'A1')
 N_INPUT_FLIES = 9
 FLY_LABELS: Tuple[str, ...] = tuple(f'f{i}' for i in range(N_INPUT_FLIES))
 # the APL16 odors whose ORN recordings are other flies': they keep the lab's input in every model fly
 APL16_KEPT_AT_LAB: Tuple[str, ...] = ('paa', 'euc', '-aPine', 'B-myr')
 DEVIATION = 'repro'
+# step 6a's two inputs (E85's 'measured' and 'permuted', on megamat's 17 odors; `megamat_deviations`)
+VARIANT_MEASURED = 'measured'
+VARIANT_PERMUTED = 'permuted'
+DEVIATION_VARIANTS: Tuple[str, ...] = (DEVIATION, VARIANT_MEASURED, VARIANT_PERMUTED, 'zero')
+STEP6A = '6a'
+STEP6A_SETTINGS: Tuple[str, ...] = ('familymeas', 'familyperm')
+SETTINGS: Tuple[str, ...] = ('family', 'A1', 'familyfree', 'A1free', *STEP6A_SETTINGS)
+HELD_SETTINGS: Tuple[str, ...] = ('family', 'A1')
+# per setting: the setting whose parameters and hold it reads, whether nothing is re-held, and its input flies' variant
+SETTING_BASE: Dict[str, str] = {'family': 'family', 'A1': 'A1', 'familyfree': 'family', 'A1free': 'A1',
+                                'familymeas': 'family', 'familyperm': 'family'}
+SETTING_VARIANT: Dict[str, str] = {'family': DEVIATION, 'A1': DEVIATION, 'familyfree': DEVIATION, 'A1free': DEVIATION,
+                                   'familymeas': VARIANT_MEASURED, 'familyperm': VARIANT_PERMUTED}
 PARAM_KEYS: Tuple[str, ...] = ('fixed_thr', 'wAPLKC_scale', 'wKCAPL_scale', 'wAPLPN_scale', 'wPNAPL_scale', 'wKCKC_scale')
 READ_COLUMNS: Tuple[str, ...] = (
     'tag', 'step', 'setting', 'panel', 'fly', 'wiring', *PARAM_KEYS, *(f'off_{k}' for k in PARAM_KEYS), 'thr_factor',
@@ -441,25 +464,37 @@ def reliabilities(F: Optional[dict] = None) -> np.ndarray:
 
 
 def megamat_deviations(variant: str = DEVIATION, F: Optional[dict] = None) -> np.ndarray:
-    """flies x megamat's 17 odors (`orn_flies()['odors']` order) x 36 glomeruli deviations: 'repro' r_g (`reliabilities`)
-    times the fly's trial mean minus the mean over the flies that have the entry, 0 where the fly did not measure it;
-    'zero' all 0. The sum over the flies of every entry is 0."""
+    """flies x megamat's 17 odors (`orn_flies()['odors']` order) x 36 glomeruli deviations, 0 where the fly did not
+    measure an entry, with a sum over the flies of 0 for every entry:
+    - 'repro' (DEVIATION): r_g (`reliabilities`) times the fly's trial mean minus the mean over the flies that have the
+      entry;
+    - 'measured' (VARIANT_MEASURED, E85's 'measured'): the trial mean minus that mean, with no reliability factor;
+    - 'permuted' (VARIANT_PERMUTED, E85's 'permuted'): 'repro' permuted over each fly's measured glomeruli within each
+      odor and re-centred per entry over the flies that have it (E85's `permute_deviations`, seeded by the fly's
+      index, and `recenter`), the odors in this order, so that on the 12 shared odors the draws are not E85's;
+    - 'zero': all 0."""
     from experiments import E85_orn_fly_population as E85m
     F = orn_flies() if F is None else F
     if variant == 'zero':
         return np.zeros(F['x'].shape[:3])
-    if variant != 'repro':
+    if variant not in (DEVIATION, VARIANT_MEASURED, VARIANT_PERMUTED):
         raise ValueError(f'{variant=}')
     import warnings
     with warnings.catch_warnings():
         warnings.simplefilter('ignore', RuntimeWarning)
         st = E85m.trial_stats(F['x'])
-    return reliabilities(F)[None, None, :] * st['D']
+    if variant == VARIANT_MEASURED:
+        return st['D']
+    d = reliabilities(F)[None, None, :] * st['D']
+    if variant == VARIANT_PERMUTED:
+        return E85m.recenter(E85m.permute_deviations(d, st['measured']), st['measured'])
+    return d
 
 
 def deviations(panel: str, variant: str = DEVIATION, F: Optional[dict] = None) -> np.ndarray:
     """flies x odors x glomeruli deviations to add to `lab_input(panel)` (its odor and glomerulus order; 0 where a fly
-    did not measure an entry, and on the APL16 odors of APL16_KEPT_AT_LAB); `variant` 'repro' (DEVIATION) or 'zero'."""
+    did not measure an entry, and on the APL16 odors of APL16_KEPT_AT_LAB); `variant` one of DEVIATION_VARIANTS
+    (`megamat_deviations`)."""
     F = orn_flies() if F is None else F
     dev = megamat_deviations(variant, F)
     lab = lab_input(panel)
@@ -477,9 +512,10 @@ def deviations(panel: str, variant: str = DEVIATION, F: Optional[dict] = None) -
 
 def input_fly(fly: str, panel: str = 'megamat', variant: str = DEVIATION, F: Optional[dict] = None) -> pd.DataFrame:
     """Input fly `fly`'s model input on `panel` ('megamat' or 'apl16'): `lab_input(panel)` (same index, columns and
-    dtypes) plus the fly's reproducible deviation where measured, the lab's value elsewhere; on APL16 paa, euc, -aPine
-    and B-myr at the lab's input. `fly` is a label (f0 ... f8) or an E134 key. Pass it to E134's `build_family(...,
-    orn=...)` and E77's `hold_rates` in place of the panel's input."""
+    dtypes) plus the fly's deviation of `variant` (the reproducible one by default; a setting's is
+    SETTING_VARIANT[setting]) where measured, the lab's value elsewhere; on APL16 paa, euc, -aPine and B-myr at the
+    lab's input. `fly` is a label (f0 ... f8) or an E134 key. Pass it to E134's `build_family(..., orn=...)` and E77's
+    `hold_rates` in place of the panel's input."""
     f = FLY_LABELS.index(fly_label(fly)) if F is None else F['labels'].index(fly)
     lab = lab_input(panel)
     dev = deviations(panel, variant, F)[f]
@@ -524,16 +560,44 @@ def parse_tag(tag: str) -> Tuple[str, str, str, str]:
     return setting, panel, fly, wiring
 
 
-def planned_points(step: int, free: bool = False) -> List[Point]:
+def step_key(step) -> object:
+    """A step as the points carry it: STEP6A ('6a') for '6a' or 'step6a', else the int (1, 2; from 1, '1', ...)."""
+    if str(step) in (STEP6A, f'step{STEP6A}'):
+        return STEP6A
+    return int(step)
+
+
+def step_folder(step) -> str:
+    """A step's folder name: 'step1', 'step2', 'step6a'."""
+    return f'step{step_key(step)}'
+
+
+def setting_parts(setting: str) -> Tuple[str, bool, str]:
+    """(the re-held setting whose parameters and hold the reads use, whether the reading is free, the input flies'
+    variant to pass to `input_fly`) of a setting of SETTINGS: 'familymeas' is ('family', False, 'measured'),
+    'familyperm' ('family', False, 'permuted'), 'A1free' ('A1', True, 'repro')."""
+    if setting not in SETTINGS:
+        raise ValueError(f'{setting=} not in {SETTINGS}')
+    return SETTING_BASE[setting], setting.endswith('free'), SETTING_VARIANT[setting]
+
+
+def planned_points(step, free: bool = False) -> List[Point]:
     """The reads of a step in the order a forward lane takes them: step 1 'family' on megamat, the T wirings first,
     then S, fly by fly within a wiring (72); step 2 on T 'A1' on megamat (36), then 'A1' on APL16 (36), then 'family'
-    on APL16 (36). `free`: the same points under the free reading ('familyfree', 'A1free')."""
+    on APL16 (36); step '6a' (STEP6A) on megamat the T wirings first, then S, within a wiring 'familymeas' (the
+    deviations as measured) then 'familyperm' (permuted), fly by fly (144; Point.step '6a'). `free`: the same points
+    under the free reading ('familyfree', 'A1free'; none for step 6a)."""
     fl = list(FLY_LABELS)
+    step = step_key(step)
     if step == 1:
         pts = [Point(1, 'family', 'megamat', f, w) for w in T_WIRINGS + S_WIRINGS for f in fl]
     elif step == 2:
         pts = [Point(2, s, p, f, w) for s, p in (('A1', 'megamat'), ('A1', 'apl16'), ('family', 'apl16'))
                for w in T_WIRINGS for f in fl]
+    elif step == STEP6A:
+        if free:
+            raise ValueError('step 6a has no free reading')
+        pts = [Point(STEP6A, s, 'megamat', f, w) for w in T_WIRINGS + S_WIRINGS for s in STEP6A_SETTINGS for f in fl]
     else:
         raise ValueError(f'{step=}')
     if free:
@@ -541,22 +605,25 @@ def planned_points(step: int, free: bool = False) -> List[Point]:
     return pts
 
 
-def step_of(setting: str, panel: str) -> int:
-    """The step a point belongs to: 1 for the family on megamat, 2 otherwise (the free reading as its held twin)."""
+def step_of(setting: str, panel: str) -> object:
+    """The step a point belongs to: '6a' for STEP6A_SETTINGS, 1 for the family on megamat, 2 otherwise (the free
+    reading as its held twin)."""
+    if setting in STEP6A_SETTINGS:
+        return STEP6A
     base = setting[:-4] if setting.endswith('free') else setting
     return 1 if (base, panel) == ('family', 'megamat') else 2
 
 
-def run_dir(step: int, setting: str, wiring: str, fly: str) -> Path:
+def run_dir(step, setting: str, wiring: str, fly: str) -> Path:
     """Where a read's run is saved locally: outputs/E147_megamat_input_flies/step<step>/<setting>/<wiring>/<fly>/
-    (created)."""
-    return local_dir(f'step{int(step)}/{setting}/{wiring}/{fly}')
+    (`step_folder`: step1, step2, step6a; created)."""
+    return local_dir(f'{step_folder(step)}/{setting}/{wiring}/{fly}')
 
 
-def run_dirs(step: int, setting: str, wiring: str, fly: str) -> List[Path]:
+def run_dirs(step, setting: str, wiring: str, fly: str) -> List[Path]:
     """`run_dir` and its archive twin (data/model_outputs/E147_megamat_input_flies/step<step>/<setting>/<wiring>/
     <fly>/), in that order, for `kcq.stage_readings.save_step3_run` and `load_step3_run`."""
-    return [run_dir(step, setting, wiring, fly), archive_dir() / f'step{int(step)}' / setting / wiring / fly]
+    return [run_dir(step, setting, wiring, fly), archive_dir() / step_folder(step) / setting / wiring / fly]
 
 
 def reads_table() -> pd.DataFrame:
@@ -944,6 +1011,125 @@ def lock_files() -> Dict[str, Path]:
     return files
 
 
+REVISION_UNHELD = dict(
+    time='2026-11-27 09:45', what="'unheld' read with E136's hold tolerance (HOLD_TOL, 0.5 % of each target) in place "
+    "of exact counts", why="step 0's first run (09:39) found that E77's hold_rates, which E85's runs and E136's reads "
+    "use, misses a target by one or two counts on 12 of E85's 72 'repro' runs (at most 0.1 % of ~1900 APL-on and ~4100 "
+    "APL-off responses), as a bisection on discrete counts can; the entry's 'unheld' means a hold that failed, not a "
+    "count step. No step 1 or 2 read existed. The first lock is commit 2a58895")
+STEP6A_REVISION = dict(
+    time='2026-11-27 20:37', what="step 6a added (the lock's 'step6a', points.step6a and settings 'familymeas' / "
+    "'familyperm'): the family on megamat re-held as in step 1 with the nine input flies' deviations as measured (E85's "
+    "'measured') and their reproducible deviations permuted over the glomeruli (E85's 'permuted'), 144 reads, T first; "
+    "per stage and for the megamat stage error the readings \"the structure's\", \"the variance's\" and \"(e) stands at "
+    "the upper bound\", beside, classing nothing", why="the planner's word on design item 6 (viki 2026-11-27 20:16; "
+    "planned by a Fable subagent, claude-fable-5-2, spawned from viki 2026-11-27 19:55): the score's outcomes (c) and "
+    "(e) (20:07) lack E85's two controls on megamat. No step-6a read existed (the runner's option was not written). "
+    "Steps 0 to 2, their points, tags, settings, classes and rules are unchanged")
+REVISIONS: Tuple[dict, ...] = (REVISION_UNHELD, STEP6A_REVISION)
+
+STEP6A_LOCK = dict(
+    step=STEP6A, folder=f'step{STEP6A}',
+    planned_by="the planner's word on design item 6 (viki 2026-11-27 20:16; a Fable subagent, claude-fable-5-2, "
+               "spawned from viki 2026-11-27 19:55)",
+    settings={s: dict(base=SETTING_BASE[s], variant=SETTING_VARIANT[s], free=False) for s in STEP6A_SETTINGS},
+    reads="the family on megamat (E136's FAMILY at each wiring's held megamat point), both response rates re-held as in "
+          "step 1 (E134's held targets), the breadth the lab input's, the wiring's seed for pooling and noise; the "
+          "input `input_fly(fly, 'megamat', SETTING_VARIANT[setting])`; every stage saved as in step 1 under "
+          "run_dirs('6a', setting, wiring, fly) (folder step6a); the row's step '6a' and, where the runner writes one, "
+          "its 'variant' column the setting's variant (the score checks it with the input's hash)",
+    variants={
+        VARIANT_MEASURED: "E85's 'measured' on megamat's 17 odors: each fly's trial mean minus the mean over the flies "
+                          "that have the entry, 0 where unmeasured, no reliability factor (on the 12 shared odors E85's "
+                          "exactly); the upper bound on the deviations' size",
+        VARIANT_PERMUTED: "E85's 'permuted' on megamat's 17 odors: the reproducible deviation (`reliabilities` times "
+                          "the above) permuted over each fly's measured glomeruli within each odor by E85's "
+                          "`permute_deviations` (numpy default_rng seeded by the fly's index 0 ... 8, the odors in "
+                          "megamat's order, `orn_flies()['odors']`, so that the draws on the 12 shared odors are not "
+                          "E85's) and re-centred per entry over the flies that have it by E85's `recenter`; the "
+                          "deviations without their glomerulus structure"},
+    order="the T wirings first (P3, P4, M2, M3), then S (real, P1, P2, M1); within a wiring 'familymeas' then "
+          "'familyperm', fly by fly f0 ... f8 (144 reads: 36 and 36 on T, then 36 and 36 on S)",
+    n_points=144,
+    readings=dict(
+        population="per megamat stage (strength by odor) and for the megamat stage error, against all the stage's "
+                   "flies (E136's held-out half beside), each of M's and P's populations by step 1's rule: its "
+                   "population's error against the error of the wirings' mean view at the lab's input on the same "
+                   "wirings (E134's held megamat runs), 'a fair stand-in' if the difference is within the spread as "
+                   "scored (the lock's spreads_as_scored: 'stage' and each stage's), else 'moves it nearer' or 'moves "
+                   "it further' by its sign; the reproducible deviations' population (R: step 1's held family reads) "
+                   "on the same wirings beside",
+        wiring_sets="read on T once a variant's 36 T reads are saved and on all eight once its 72 are (both "
+                    "variants for the readings); a population on other wirings is reported with no reading",
+        structure="\"the structure's\": at a stage where R moves it nearer, P is a fair stand-in",
+        variance="\"the variance's\": at a stage where R moves it nearer, P moves it nearer too",
+        neither="at a stage where R moves it nearer and P moves it further, neither; where R is a fair stand-in or moves "
+                "it further, neither is read (M's and P's classes are given)",
+        e_upper_bound="\"(e) stands at the upper bound\": at a stage where R's model flies vary too little (step 1's "
+                      "reading: a model fly against the others, the mean over the model flies, under 0.75), it stands "
+                      "if under M a model fly against the others (the same mean over M's model flies, on the same "
+                      "wirings) stays under 0.75 (FLIES_LOW), and does not stand otherwise",
+        unheld="step 1's: unheld model flies left out and counted; no reading for a population with more than a ninth "
+               "of its model flies unheld"),
+    gates="nothing: a description beside the classes; no class as scored, no reading of the stage table and no "
+          "yardstick changes; which reading is a stage's under 'like for like' stays with Tom and Yang; no fit, search "
+          "or weighting",
+)
+
+
+STEP6A_SETTING_TEXT: Dict[str, str] = {
+    'familymeas': "step 6a: the family on megamat re-held as 'family' (step 1), the input flies' deviations as measured "
+                  "(E85's 'measured')",
+    'familyperm': "step 6a: the family on megamat re-held as 'family' (step 1), the input flies' reproducible "
+                  "deviations permuted over the glomeruli (E85's 'permuted')"}
+
+
+def step6a_lock_points() -> List[str]:
+    """Step 6a's tags in `planned_points('6a')` order (the lock's points.step6a)."""
+    return [point_tag(p.setting, p.panel, p.fly, p.wiring) for p in planned_points(STEP6A)]
+
+
+def step6a_started() -> List[str]:
+    """What of step 6a exists already: its tags among the reads' rows and the claims, and its run folders (local and
+    the archive's) holding a saved run."""
+    tags = set(step6a_lock_points())
+    found = sorted(tags & set(reads_table().tag.astype(str)))
+    claims = results_dir() / 'claims'
+    if claims.exists():
+        found += sorted(f'claim {d.name}' for d in claims.iterdir() if d.name in tags)
+    for root in (local_dir(), archive_dir()):
+        d = Path(root) / step_folder(STEP6A)
+        if d.exists() and any(d.rglob('*_run.json')):
+            found.append(str(d))
+    return found
+
+
+def part_lock_step6a() -> dict:
+    """The lock's step-6a revision (STEP6A_REVISION), before any step-6a read: the committed lock (LOCK_COPY) with
+    points.step6a, settings 'familymeas' and 'familyperm', 'step6a' (STEP6A_LOCK) and the revision added, everything
+    else as committed; written to LOCK_COPY and results/.../lock.json (commit the copy before any step-6a read).
+    PermissionError if a step-6a read, claim or run exists; a lock that has the revision already is left as it is."""
+    lock = json.loads(LOCK_COPY.read_text())
+    if any(r.get('time') == STEP6A_REVISION['time'] for r in lock.get('revisions', [])):
+        print(f'{LOCK_COPY.name} has the step-6a revision already', flush=True)
+        return lock
+    if [dict(r) for r in lock.get('revisions', [])] != [dict(REVISION_UNHELD)]:
+        raise RuntimeError(f"{LOCK_COPY.name}: its revisions are not this module's REVISIONS before step 6a")
+    found = step6a_started()
+    if found:
+        raise PermissionError(f'step 6a has begun ({found[:5]}): its lock revision comes before any read')
+    lock['points']['step6a'] = step6a_lock_points()
+    lock['settings'].update(STEP6A_SETTING_TEXT)
+    lock['step6a'] = json.loads(json.dumps(STEP6A_LOCK))
+    lock['revisions'].append(dict(STEP6A_REVISION))
+    txt = json.dumps(lock, indent=1, default=float) + '\n'
+    LOCK_COPY.write_text(txt)
+    lock_path().write_text(txt)
+    print(f'wrote {LOCK_COPY} and {lock_path()} (revision {STEP6A_REVISION["time"]}); commit '
+          f'{LOCK_COPY.relative_to(H.HERE)} before any step-6a read', flush=True)
+    return lock
+
+
 def lock_contents() -> dict:
     """The lock's contents (`part_lock`)."""
     import socket
@@ -983,11 +1169,13 @@ def lock_contents() -> dict:
                              "targets on megamat, the wiring's own fit's counts on APL16)",
                       A1="E136's A1 at its classed point (measure_strength/fit_A1.json classed_z)",
                       A1_classed_z=a1.get('classed_z') or a1.get('best_z'),
-                      free="'familyfree' / 'A1free': each model fly at its wiring's held parameters, nothing re-held"),
+                      free="'familyfree' / 'A1free': each model fly at its wiring's held parameters, nothing re-held",
+                      **STEP6A_SETTING_TEXT),
         points=dict(tag='<setting>_<panel>_<inputfly>_<wiring>',
                     step1=[point_tag(p.setting, p.panel, p.fly, p.wiring) for p in planned_points(1)],
                     step2=[point_tag(p.setting, p.panel, p.fly, p.wiring) for p in planned_points(2)],
-                    order='T wirings first (step 1: T then S; step 2 on T only), fly by fly within a wiring'),
+                    order='T wirings first (step 1: T then S; step 2 on T only), fly by fly within a wiring',
+                    step6a=step6a_lock_points()),
         reading=dict(readings="kcq.stage_readings DEFAULT_READINGS (E134's lock)", measure=MEASURE,
                      stages=list(LOSS_STAGES), flies='all the stage\'s flies (E134); E136\'s held-out half beside '
                      '(E136 Flies("held"), HALF_SEED 0)', half_seed=0),
@@ -999,12 +1187,8 @@ def lock_contents() -> dict:
             a1_fall=dict(se_multiple=IMPROVE_SE, control_fall=CONTROL_FALL),
             a1_apl16='no class: the share of input flies on which A1 is worse than the spread as scored',
             unheld_max_share=UNHELD_MAX_SHARE, hold_tol=HOLD_TOL),
-        revisions=[dict(time='2026-11-27 09:45', what="'unheld' read with E136's hold tolerance (HOLD_TOL, 0.5 % of each "
-                        "target) in place of exact counts", why="step 0's first run (09:39) found that E77's hold_rates, "
-                        "which E85's runs and E136's reads use, misses a target by one or two counts on 12 of E85's 72 "
-                        "'repro' runs (at most 0.1 % of ~1900 APL-on and ~4100 APL-off responses), as a bisection on "
-                        "discrete counts can; the entry's 'unheld' means a hold that failed, not a count step. No step 1 or "
-                        "2 read existed. The first lock is commit 2a58895")],
+        revisions=[dict(r) for r in REVISIONS],
+        step6a=STEP6A_LOCK,
         spreads_as_scored=json.loads((H.results_dir(E136) / E136_MEASURE_DIR / 'classes.json').read_text())['spreads'],
         e134_identity=E134_IDENTITY, identity_tol=IDENTITY_TOL, e85_groups=E85_GROUPS,
         choices=list(CHOICES),
@@ -1833,7 +2017,7 @@ def a1_lab_runs(panel: str) -> Dict[str, Tuple[str, str, object]]:
 INPUT_ATOL = 1e-9  # Hz: a saved input within this of `input_fly` is the same input (the hash is bitwise)
 
 
-def saved_input(tag: str, step: int, setting: str, wiring: str, fly: str) -> Optional[pd.DataFrame]:
+def saved_input(tag: str, step, setting: str, wiring: str, fly: str) -> Optional[pd.DataFrame]:
     """A read's saved ORN input (`<tag>_orn.parquet` in `run_dirs`), or None."""
     for d in run_dirs(step, setting, wiring, fly):
         f = Path(d) / f'{tag}_orn.parquet'
@@ -1843,28 +2027,36 @@ def saved_input(tag: str, step: int, setting: str, wiring: str, fly: str) -> Opt
 
 
 def check_inputs_detail(pts: pd.DataFrame) -> Tuple[List[str], Dict[str, float]]:
-    """The reads whose input is not `input_fly` of their fly and panel, and the largest difference of the others.
+    """The reads whose input is not `input_fly` of their fly, panel and setting's variant (SETTING_VARIANT), and the
+    largest difference of the others.
 
     A row whose input_sha256 equals the sha256 of `input_fly` passes. The hash is of the floats' bytes, so the same
     input built on another host can differ in its last bits (E85's map is a least-squares fit, whose rounding follows
     the host's BLAS): such a row is compared value by value with its saved `<tag>_orn.parquet` (by position: the saved
     frame keeps the glomeruli and odors in `input_fly`'s order, its columns flattened to the odor names). It passes
     when every entry is within INPUT_ATOL. A row with no hash match and no saved input, or a difference beyond
-    INPUT_ATOL, is bad.
+    INPUT_ATOL, is bad; so is a row whose 'variant' column (the runner's, where it writes one) is not its setting's.
 
     Returns:
         (bad tags, {'n_bitwise', 'n_within_atol', 'max_abs_diff'}).
     """
     from experiments.E77_input_screen import frame_sha256
-    frames = {(f, pn): input_fly(f, pn) for f in FLY_LABELS for pn in PANELS}
-    want = {k: frame_sha256(v) for k, v in frames.items()}
+    frames: Dict[tuple, pd.DataFrame] = {}
+    want: Dict[tuple, str] = {}
     bad, n_bit, n_tol, worst = [], 0, 0, 0.0
     for r in pts.to_dict('records'):
-        key = (r['fly'], r['panel'])
+        variant = SETTING_VARIANT.get(r['setting'], DEVIATION)
+        if isinstance(r.get('variant'), str) and r['variant'] != variant:
+            bad.append(r['tag'])
+            continue
+        key = (r['fly'], r['panel'], variant)
+        if key not in frames:
+            frames[key] = input_fly(r['fly'], r['panel'], variant)
+            want[key] = frame_sha256(frames[key])
         if r.get('input_sha256') == want[key]:
             n_bit += 1
             continue
-        x = saved_input(r['tag'], int(r['step']), r['setting'], r['wiring'], r['fly'])
+        x = saved_input(r['tag'], r['step'], r['setting'], r['wiring'], r['fly'])
         w = frames[key]
         if x is None or x.shape != w.shape or [str(i) for i in x.index] != [str(i) for i in w.index]:
             bad.append(r['tag'])
@@ -1906,7 +2098,14 @@ def part_score(rows: Optional[pd.DataFrame] = None) -> dict:
                                   groups={g: int(n) for g, n in pts.group.value_counts().items()})
     poprows, flyrows, mega_vals = [], [], {}
     # megamat
-    lab_fam = None
+    lab_cache: Dict[str, dict] = {}
+
+    def lab_fam() -> dict:
+        if 'fam' not in lab_cache:
+            lab_cache['fam'] = read_sides_multi(e134_held_runs(), LOSS_STAGES, 'megamat', READINGS, ('on',))
+        return lab_cache['fam']
+
+    repro_sides: Dict[str, Dict[str, Side]] = {}
     for group in ('family/megamat', 'A1/megamat', 'familyfree/megamat', 'A1free/megamat'):
         g = pts[pts.group == group]
         if g.empty:
@@ -1918,9 +2117,10 @@ def part_score(rows: Optional[pd.DataFrame] = None) -> dict:
         sides = read_sides_multi(runs, LOSS_STAGES, 'megamat', READINGS, ('on',))
         base = setting[:-4] if setting.endswith('free') else setting
         ws = sorted(set(use.wiring), key=WIRINGS.index)
+        if group == 'family/megamat':
+            repro_sides = {reading_name(h): {k[0]: v for k, v in sides[h].items()} for h in READINGS}
         if base == 'family':
-            lab_fam = lab_fam or read_sides_multi(e134_held_runs(), LOSS_STAGES, 'megamat', READINGS, ('on',))
-            lab = {h: {k: v.subset([w in ws for w in v.wiring]) for k, v in lab_fam[h].items()} for h in READINGS}
+            lab = {h: {k: v.subset([w in ws for w in v.wiring]) for k, v in lab_fam()[h].items()} for h in READINGS}
         else:
             lab = read_sides_multi(a1_lab_runs('megamat'), LOSS_STAGES, 'megamat', READINGS, ('on',))
         for h in READINGS:
@@ -1953,6 +2153,14 @@ def part_score(rows: Optional[pd.DataFrame] = None) -> dict:
     for k, fname in (('odor_entries', 'score_odor_entries.csv'), ('without_aa', 'score_without_aa.csv')):
         if k in res:
             _write_csv(res.pop(k), fname)
+    # step 6a: the deviations as measured and permuted, beside (nothing without its reads)
+    s6 = score_step6a(pts, info, spreads, repro_sides, lab_fam, pts[pts.group == 'family/megamat'])
+    if s6 is not None:
+        _write_csv(s6['populations'], 'score_step6a_populations.csv')
+        _write_csv(s6['readings_table'], 'score_step6a_readings.csv')
+        if len(s6['model_flies']):
+            _write_csv(s6['model_flies'], 'score_step6a_model_flies.csv')
+        print(f"score: step 6a read ({s6['n_reads']}; {time.time() - t0:.0f} s)", flush=True)
     # A1's fall, model fly by model fly
     a1 = {}
     for rd in ('held', 'all'):
@@ -2037,8 +2245,10 @@ def part_score(rows: Optional[pd.DataFrame] = None) -> dict:
     for rd, v in a1.items():
         classes['a1_fall'][rd] = dict(stands=v['stage'].get('stands'), fall=v['stage'].get('fall'), se=v['stage'].get('se'))
     classes['outcomes'] = outcomes(classes, pop)
+    if s6 is not None:
+        classes['step6a'] = s6['classes']
     _write_json(results_dir() / 'classes.json', dict(classes, **{k: v for k, v in res.items() if k not in classes}))
-    write_tables_score(pop, groups, a1, a1_apl, recomputed, classes)
+    write_tables_score(pop, groups, a1, a1_apl, recomputed, classes, s6)
     provenance('score', lock, seconds=round(time.time() - t0, 1), n_reads=int(len(pts)),
                reads=sorted(pts.tag), inputs={k: v['sha256'] for k, v in lock['files'].items()})
     print(f'score done in {time.time() - t0:.0f} s', flush=True)
@@ -2131,10 +2341,209 @@ def outcomes(classes: Mapping, pop: pd.DataFrame) -> dict:
     return out
 
 
+# ---------------------------------------------------------------------------
+# step 6a: the deviations as measured and permuted, beside (the lock's revision STEP6A_REVISION)
+
+STEP6A_SETS: Tuple[Tuple[str, Tuple[str, ...]], ...] = (('T', T_WIRINGS), ('all', WIRINGS))
+STEP6A_POPULATIONS: Dict[str, str] = {DEVIATION: 'family/megamat', VARIANT_MEASURED: 'familymeas/megamat',
+                                      VARIANT_PERMUTED: 'familyperm/megamat'}
+STEP6A_DESCRIPTION = (
+    f"step 6a, beside, classing nothing (the lock's revision of {STEP6A_REVISION['time']}): the family on megamat "
+    "re-held as in step 1, the nine input flies with the deviations as measured (M, 'familymeas') and the reproducible ones "
+    "permuted over the glomeruli (P, 'familyperm'); each population read as step 1's ('a fair stand-in' against the "
+    "wirings' mean view at the lab's input on the same wirings, the spread as scored), beside the reproducible "
+    "deviations' population (R, step 1's family reads) on the same wirings; read on T once both variants' 36 T reads "
+    "are in and on all eight once their 72 are. The readings gate nothing: no class as scored, no reading of the stage "
+    "table and no yardstick changes")
+
+
+def step6a_sets(g: pd.DataFrame, setting: str) -> List[Tuple[str, Tuple[str, ...]]]:
+    """The wiring sets a step-6a population is read on: ('T', T_WIRINGS) once every one of its 36 T points is saved,
+    ('all', WIRINGS) once its 72 are; ('partial', the wirings with a saved read) when neither, read with no reading."""
+    have = set(g.tag.astype(str))
+    out = [(name, ws) for name, ws in STEP6A_SETS
+           if all(point_tag(setting, 'megamat', f, w) in have for w in ws for f in FLY_LABELS)]
+    if not out:
+        ws = tuple(w for w in WIRINGS if w in set(g.wiring))
+        if ws:
+            out.append(('partial', ws))
+    return out
+
+
+def subset_sides(sides: Mapping[str, Side], wirings: Sequence[str]) -> Dict[str, Side]:
+    """Each stage's Side restricted to the model flies on `wirings`."""
+    return {st: sd.subset([w in wirings for w in sd.wiring]) for st, sd in sides.items()}
+
+
+def _num(x) -> Optional[float]:
+    try:
+        v = float(x)
+    except (TypeError, ValueError):
+        return None
+    return v if np.isfinite(v) else None
+
+
+def step6a_reading(r: Optional[Mapping], m: Optional[Mapping], p: Optional[Mapping]) -> dict:
+    """The lock's three step-6a readings at one stage (or the megamat stage error), from the `population_rows` rows,
+    all the flies, of the reproducible deviations' population (R, step 1's family reads), the deviations as measured
+    (M) and permuted (P), all on the same wirings (None where a population is not read):
+    - 'structure_or_variance': where R moves the stage nearer, "the structure's" if P is a fair stand-in, "the
+      variance's" if P moves it nearer too, 'neither: P moves it further' otherwise; 'not read' where R is a fair
+      stand-in or moves it further; 'no reading' where R or P has no class;
+    - 'e_applies': whether R's model flies vary too little there (a model fly against the others under FLIES_LOW);
+      'e_at_upper_bound': where it applies, whether under M a model fly against the others (the mean over M's model
+      flies) stays under FLIES_LOW; None where it does not apply or M has no class.
+    Each population's class, its model flies' class and its values beside."""
+    def get(x, k, default='no class'):
+        return (x or {}).get(k, default)
+
+    rc, mc, pc = get(r, 'stand_in'), get(m, 'stand_in'), get(p, 'stand_in')
+    if rc == 'no class' or pc == 'no class':
+        sv = 'no reading'
+    elif rc != 'moves it nearer':
+        sv = 'not read'
+    elif pc == 'a fair stand-in':
+        sv = "the structure's"
+    elif pc == 'moves it nearer':
+        sv = "the variance's"
+    else:
+        sv = 'neither: P moves it further'
+    e_applies = get(r, 'model_flies') == 'vary too little'
+    m_oth = _num(get(m, 'against_others_mean', None))
+    e = None if not e_applies or get(m, 'model_flies') == 'no class' or m_oth is None else bool(m_oth < FLIES_LOW)
+    out = dict(structure_or_variance=sv, e_applies=bool(e_applies), e_at_upper_bound=e,
+               spread_as_scored=_num(get(r or m or p, 'spread_as_scored', None)))
+    for name, x in (('repro', r), ('measured', m), ('permuted', p)):
+        out[f'{name}_stand_in'] = get(x, 'stand_in')
+        out[f'{name}_model_flies'] = get(x, 'model_flies')
+        for k in ('population_error', 'lab_common', 'population_minus_lab', 'against_others_mean', 'term_input_fly',
+                  'term_wiring', 'n_model_flies', 'n_unheld'):
+            out[f'{name}_{k}'] = _num(get(x, k, None))
+    return out
+
+
+def score_step6a(pts: pd.DataFrame, info: dict, spreads: Mapping[str, float], repro: Mapping[str, Mapping[str, Side]],
+                 lab_fam, repro_pts: pd.DataFrame) -> Optional[dict]:
+    """Step 6a's two populations beside the reproducible deviations' (no simulation): None without a step-6a read.
+
+    Args:
+        pts: the score's points (`available`, `fill_counts`).
+        info: `_loader`'s record of the runs' rates and counts.
+        spreads: the spreads as scored (the lock's).
+        repro: step 1's held family reads on megamat, {reading name: {stage: Side}} (empty without them).
+        lab_fam: a function giving E134's held megamat runs read as `read_sides_multi` gives them, {half: {key: Side}}.
+        repro_pts: step 1's family points on megamat (for their unheld and missing counts per wiring set).
+
+    Returns:
+        dict(populations: `population_rows` of R, M and P per wiring set (`step6a_sets`) and reading, with 'setting',
+        'variant' and 'wirings_set'; model_flies: each M and P model fly's `megamat_values`; readings_table: per
+        complete wiring set ('T', 'all') and stage, `step6a_reading` (all the flies) and beside it on E136's held-out
+        half ('reading' 'held'); classes: what classes.json keeps under 'step6a'; n_reads, n_unheld per setting).
+    """
+    six = pts[pts.setting.isin(STEP6A_SETTINGS)]
+    if six.empty:
+        return None
+    lab = lab_fam()
+    poprows, flyrows, wsets = [], [], []
+    n_reads, n_unheld = {}, {}
+    for setting in STEP6A_SETTINGS:
+        group, variant = f'{setting}/megamat', SETTING_VARIANT[setting]
+        g = six[six.setting == setting]
+        n_reads[setting], n_unheld[setting] = int(len(g)), int((~g.held.astype(bool)).sum())
+        if g.empty:
+            continue
+        use = g[g.held.astype(bool)]
+        runs = {r.tag: (r.wiring, r.fly, _loader(r.tag, r.step, info)) for r in use.itertuples()}
+        sides = read_sides_multi(runs, LOSS_STAGES, 'megamat', READINGS, ('on',)) if runs else {}
+        for h in READINGS:
+            sd = {k[0]: v for k, v in (sides.get(h) or {}).items()}
+            if not sd:
+                continue
+            for k, v in megamat_values(sd).items():
+                for (w, f), x in v.items():
+                    flyrows.append(dict(population=group, variant=variant, reading=reading_name(h), quantity=k,
+                                        wiring=w, fly=f, value=float(x)))
+        for wset, ws in step6a_sets(g, setting):
+            if (wset, ws) not in wsets:
+                wsets.append((wset, ws))
+            gs = g[g.wiring.isin(ws)]
+            nu = int((~gs.held.astype(bool)).sum())
+            for h in READINGS:
+                sd = subset_sides({k[0]: v for k, v in (sides.get(h) or {}).items()}, ws)
+                if not sd or any(len(v) == 0 for v in sd.values()):
+                    continue
+                lb = subset_sides({k[0]: v for k, v in lab[h].items()}, ws)
+                rows = population_rows(group, sd, lb, spreads, reading_name(h), nu, len(ws) * N_INPUT_FLIES - len(gs),
+                                       classed=wset != 'partial')
+                poprows += [dict(r, setting=setting, variant=variant, wirings_set=wset) for r in rows]
+    for wset, ws in wsets:
+        rp = repro_pts[repro_pts.wiring.isin(ws)]
+        nu = int((~rp.held.astype(bool)).sum()) if len(rp) else 0
+        for h in READINGS:
+            sd = subset_sides(repro.get(reading_name(h)) or {}, ws)
+            if not sd or any(len(v) == 0 for v in sd.values()):
+                continue
+            lb = subset_sides({k[0]: v for k, v in lab[h].items()}, ws)
+            rows = population_rows(STEP6A_POPULATIONS[DEVIATION], sd, lb, spreads, reading_name(h), nu,
+                                   len(ws) * N_INPUT_FLIES - len(rp))
+            poprows += [dict(r, setting='family', variant=DEVIATION, wirings_set=wset) for r in rows]
+    pop = pd.DataFrame(poprows)
+    readings, rrows = {}, []
+    for wset, _ in wsets:
+        if wset == 'partial' or wset in readings or pop.empty:
+            continue
+        for rd in ('all', 'held'):
+            a = pop[(pop.wirings_set == wset) & (pop.reading == rd)]
+            by = {v: a[a.variant == v].set_index('stage') for v in STEP6A_POPULATIONS}
+            stages = [s for s in (*LOSS_STAGES, 'megamat_stage_error') if any(s in b.index for b in by.values())]
+            for st in stages:
+                x = step6a_reading(*(by[v].loc[st].to_dict() if st in by[v].index else None for v in STEP6A_POPULATIONS))
+                rrows.append(dict(wirings_set=wset, reading=rd, stage=st, **x))
+                if rd == 'all':
+                    readings.setdefault(wset, {})[st] = x
+    pops = {}
+    if len(pop):
+        for r in pop[pop.reading == 'all'].to_dict('records'):
+            pops.setdefault(r['population'], {}).setdefault(r['wirings_set'], {})[r['stage']] = dict(
+                stand_in=r['stand_in'], input_fly_term=r['input_fly_term'], model_flies=r['model_flies'],
+                population_error=_num(r['population_error']), lab_common=_num(r['lab_common']),
+                against_others_mean=_num(r['against_others_mean']), n_model_flies=int(r['n_model_flies']),
+                n_unheld=int(r['n_unheld']), n_missing=int(r['n_missing']))
+    classes = dict(description=STEP6A_DESCRIPTION, revision=STEP6A_REVISION['time'], gates=False,
+                   settings={s: dict(base=SETTING_BASE[s], variant=SETTING_VARIANT[s]) for s in STEP6A_SETTINGS},
+                   n_reads=n_reads, n_unheld=n_unheld, readings=readings, populations=pops)
+    return dict(populations=pop, model_flies=pd.DataFrame(flyrows), readings_table=pd.DataFrame(rrows),
+                classes=classes, n_reads=int(len(six)), n_unheld=n_unheld)
+
+
+def step6a_tables(s6: Mapping) -> List[str]:
+    """tables.md's step-6a section: the populations (all the flies) and the readings per wiring set and stage."""
+    lines = ['## Step 6a: the deviations as measured (M) and permuted (P), beside the reproducible ones (R); classing '
+             'nothing', '', STEP6A_DESCRIPTION + '.', '']
+    pop = s6['populations']
+    if len(pop):
+        cols = ['wirings_set', 'population', 'stage', 'n_model_flies', 'n_unheld', 'n_missing', 'population_error',
+                'lab_common', 'spread_as_scored', 'stand_in', 'mean_model_fly', 'term_input_fly', 'term_wiring',
+                'input_fly_term', 'against_others_mean', 'model_flies']
+        lines += ['### Populations (all the flies)', '', _md(pop[pop.reading == 'all'][cols]), '']
+    rt = s6['readings_table']
+    if len(rt):
+        cols = ['wirings_set', 'reading', 'stage', 'repro_stand_in', 'measured_stand_in', 'permuted_stand_in',
+                'structure_or_variance', 'repro_against_others_mean', 'measured_against_others_mean', 'e_applies',
+                'e_at_upper_bound']
+        lines += ['### The readings (the lock\'s revision; a description)', '',
+                  "\"The structure's\": P a fair stand-in where R moves the stage nearer; \"the variance's\": P moves it "
+                  "nearer too; \"(e) stands at the upper bound\": under M a model fly against the others stays under "
+                  f"{FLIES_LOW}.", '', _md(rt[cols]), '']
+    else:
+        lines += ['No reading yet: neither variant has its 36 T reads (or all 72) saved.', '']
+    return lines
+
+
 def write_tables_score(pop: pd.DataFrame, groups: pd.DataFrame, a1: Mapping, a1_apl: Mapping, recomputed: Mapping,
-                       classes: Mapping) -> None:
-    """tables.md: the score's tables (populations, A1's fall, the APL16 somata, the recomputed classes) above step 0's
-    (tables_step0.md)."""
+                       classes: Mapping, step6a: Optional[Mapping] = None) -> None:
+    """tables.md: the score's tables (populations, A1's fall, the APL16 somata, the recomputed classes, step 6a's
+    populations and readings where its reads exist) above step 0's (tables_step0.md)."""
     lines = ["# E147: the megamat stage error read on model flies with each ORN fly's own input", '',
              f'Generated by {SCRIPT} at {H.code_commits()["queue_commit"][:7]} ({_now()}) from {classes["n_reads"]} '
              f'reads. Strength by odor in one-fly units, lower is better.', '']
@@ -2170,6 +2579,8 @@ def write_tables_score(pop: pd.DataFrame, groups: pd.DataFrame, a1: Mapping, a1_
             lines.append(f"- {k}: " + ('; '.join(f"{x['table']} {x['arm']}: {x['cls_scored']} -> {x['cls_new']}" for x in v)
                                       if v else 'no class changes'))
         lines.append('')
+    if step6a is not None:
+        lines += step6a_tables(step6a)
     lines += ['## Outcomes (a description)', '', '```', json.dumps(classes.get('outcomes'), indent=1, default=_json_default),
               '```', '']
     st0 = results_dir() / 'tables_step0.md'
@@ -2180,11 +2591,12 @@ def write_tables_score(pop: pd.DataFrame, groups: pd.DataFrame, a1: Mapping, a1_
 
 def main(argv: Optional[Sequence[str]] = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
-    ap.add_argument('--part', required=True, choices=('lock', 'step0', 'step1', 'step2', 'score'))
+    ap.add_argument('--part', required=True, choices=('lock', 'lock6a', 'step0', 'step1', 'step2', 'step6a', 'score'))
     a = ap.parse_args(argv)
-    if a.part in ('step1', 'step2'):
-        raise SystemExit(f'{a.part} is the runner\'s: ./venv/bin/python -u {RUNNER} --part reads --step {a.part[-1]}')
-    {'lock': part_lock, 'step0': part_step0, 'score': part_score}[a.part]()
+    if a.part in ('step1', 'step2', 'step6a'):
+        raise SystemExit(f"{a.part} is the runner's: ./venv/bin/python -u {RUNNER} --part reads --step "
+                         f"{a.part[len('step'):]}")
+    {'lock': part_lock, 'lock6a': part_lock_step6a, 'step0': part_step0, 'score': part_score}[a.part]()
 
 
 if __name__ == '__main__':

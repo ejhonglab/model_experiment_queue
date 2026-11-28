@@ -297,3 +297,218 @@ def test_check_inputs_passes_a_bitwise_differing_input_within_tolerance(tmp_path
     assert sorted(bad) == ['family_megamat_f3_M2', 'family_megamat_f3_M3']
     assert info['n_bitwise'] == 1 and info['n_within_atol'] == 1
     assert 0 < info['max_abs_diff'] <= M.INPUT_ATOL
+
+
+def planted_flies_with_a_gap(seed=3):
+    """`planted_long` with one glomerulus missing in one fly on one odor (2023-04-26 fly 2, eb, the lab input's first
+    glomerulus) beside the aa missing in fly f0."""
+    df = planted_long(seed)
+    g0 = str(M.lab_input('megamat').index[0])
+    gap = (df.date == '2023-04-26') & (df.fly_num == 2) & (df.odor1 == 'eb @ -3') & (df.roi == g0)
+    return M.orn_flies(df[~gap].reset_index(drop=True)), g0
+
+
+def test_measured_and_permuted_deviations_on_planted_values():
+    from experiments import E85_orn_fly_population as E85
+    F, g0 = planted_flies_with_a_gap()
+    x = F['x']
+    m = np.nanmean(x, axis=3)
+    measured = np.isfinite(m)
+    fa, ja, jb, k0 = 0, F['odors'].index('aa'), F['odors'].index('eb'), F['gloms'].index(g0)
+    assert not measured[fa, ja].any() and not measured[2, jb, k0] and measured[2, jb].sum() == len(F['gloms']) - 1
+    repro = M.megamat_deviations('repro', F)
+    meas = M.megamat_deviations(M.VARIANT_MEASURED, F)
+    perm = M.megamat_deviations(M.VARIANT_PERMUTED, F)
+    for d in (repro, meas, perm):
+        assert np.allclose(d.sum(axis=0), 0.0, atol=1e-9)               # the mean over the flies is the lab's input
+        assert (d[~measured] == 0.0).all()
+    # as measured: the trial mean minus the mean over the flies with the entry, no reliability factor
+    mu = np.nanmean(m, axis=0)
+    assert np.allclose(meas[measured], (m - mu[None])[measured])
+    r = M.reliabilities(F)
+    assert np.allclose(repro, r[None, None, :] * meas)
+    # permuted: E85's rule (each fly's reproducible values permuted over its measured glomeruli within each odor, the
+    # generator seeded by the fly's index), then re-centred per entry over the flies that have it
+    Q = E85.permute_deviations(repro, measured)
+    for f in range(x.shape[0]):
+        for j in range(x.shape[1]):
+            idx = measured[f, j]
+            assert np.allclose(np.sort(Q[f, j, idx]), np.sort(repro[f, j, idx]))
+            assert (Q[f, j, ~idx] == 0.0).all()
+    shift = np.where(measured, Q - perm, np.nan)                          # the re-centring, one value per entry
+    with np.errstate(invalid='ignore'):
+        assert np.nanmax(np.nanmax(shift, axis=0) - np.nanmin(shift, axis=0)) < 1e-9
+    assert np.allclose(perm, E85.recenter(Q, measured))
+    assert not np.allclose(perm, repro)
+    assert np.array_equal(perm, M.megamat_deviations(M.VARIANT_PERMUTED, F))   # seeded: the same draws every time
+    # each input fly's input of either variant averages to the lab's input
+    lab = M.lab_input('megamat').to_numpy(dtype=float)
+    for v in (M.VARIANT_MEASURED, M.VARIANT_PERMUTED):
+        ins = [M.input_fly(f, 'megamat', v, F=F).to_numpy(dtype=float) for f in F['labels']]
+        assert np.allclose(np.mean(ins, axis=0), lab, atol=1e-9)
+    with pytest.raises(ValueError):
+        M.megamat_deviations('gainfree', F)
+
+
+def test_step6a_points_tags_and_folders(tmp_path, monkeypatch):
+    monkeypatch.setitem(M.DIRS, 'local', tmp_path / 'local')
+    monkeypatch.setitem(M.DIRS, 'archive', tmp_path / 'archive')
+    pts = M.planned_points('6a')
+    assert len(pts) == 144 and {p.step for p in pts} == {M.STEP6A} and {p.panel for p in pts} == {'megamat'}
+    assert {p.wiring for p in pts[:72]} == set(M.T_WIRINGS) and {p.wiring for p in pts[72:]} == set(M.S_WIRINGS)
+    assert [(p.setting, p.fly, p.wiring) for p in pts[:18]] == \
+        [(s, f, 'P3') for s in M.STEP6A_SETTINGS for f in M.FLY_LABELS]
+    assert [p.wiring for p in pts[::18]] == list(M.T_WIRINGS + M.S_WIRINGS)
+    for s in M.STEP6A_SETTINGS:
+        assert sum(p.setting == s for p in pts[:72]) == 36 and sum(p.setting == s for p in pts[72:]) == 36
+    tags = [M.point_tag(p.setting, p.panel, p.fly, p.wiring) for p in pts]
+    old = {M.point_tag(p.setting, p.panel, p.fly, p.wiring) for p in M.planned_points(1) + M.planned_points(2)}
+    assert len(set(tags)) == 144 and not set(tags) & old
+    assert tags == M.step6a_lock_points()
+    assert M.parse_tag('familyperm_megamat_f8_M1') == ('familyperm', 'megamat', 'f8', 'M1')
+    assert M.step_of('familymeas', 'megamat') == '6a' and M.step_of('family', 'megamat') == 1
+    assert M.step_key('6a') == '6a' and M.step_key('1') == 1 and M.step_key(2) == 2
+    assert M.planned_points('1') == M.planned_points(1)
+    with pytest.raises(ValueError):
+        M.planned_points('6a', free=True)
+    assert M.setting_parts('familymeas') == ('family', False, M.VARIANT_MEASURED)
+    assert M.setting_parts('familyperm') == ('family', False, M.VARIANT_PERMUTED)
+    assert M.setting_parts('family') == ('family', False, 'repro') and M.setting_parts('A1free') == ('A1', True, 'repro')
+    assert set(M.SETTING_VARIANT) == set(M.SETTINGS) == set(M.SETTING_BASE)
+    assert M.HELD_SETTINGS == ('family', 'A1')
+    d = M.run_dirs('6a', 'familymeas', 'P3', 'f0')
+    assert d[0] == tmp_path / 'local' / 'step6a' / 'familymeas' / 'P3' / 'f0'
+    assert d[1] == tmp_path / 'archive' / 'step6a' / 'familymeas' / 'P3' / 'f0'
+    assert M.run_dirs(1, 'family', 'P3', 'f0')[1] == tmp_path / 'archive' / 'step1' / 'family' / 'P3' / 'f0'
+    rows = pd.DataFrame([dict(tag='familymeas_megamat_f0_P3', n_on=1, target_on=1, n_off=2, target_off=2),
+                         dict(tag='family_megamat_f0_P3', n_on=1, target_on=1, n_off=2, target_off=2)])
+    p = M.points_from_rows(rows)
+    assert list(p.step) == ['6a', 1] and list(p.group) == ['familymeas/megamat', 'family/megamat']
+    assert list(p.held) == [True, True]
+
+
+def test_the_lock_names_step6a():
+    """The committed lock carries the step-6a revision after the first one, the 144 tags and the step-6a block as this
+    module has them, and step 1 and 2's points as before."""
+    import json
+    lock = json.loads(M.LOCK_COPY.read_text())
+    assert [r['time'] for r in lock['revisions']] == [r['time'] for r in M.REVISIONS]
+    assert lock['revisions'] == [dict(r) for r in M.REVISIONS]
+    assert lock['points']['step6a'] == M.step6a_lock_points()
+    assert lock['step6a'] == json.loads(json.dumps(M.STEP6A_LOCK))
+    assert lock['points']['step1'] == [M.point_tag(p.setting, p.panel, p.fly, p.wiring) for p in M.planned_points(1)]
+    assert lock['points']['step2'] == [M.point_tag(p.setting, p.panel, p.fly, p.wiring) for p in M.planned_points(2)]
+    assert all(lock['settings'][s] == M.STEP6A_SETTING_TEXT[s] for s in M.STEP6A_SETTINGS)
+
+
+def test_step6a_readings_on_planted_rows():
+    def row(stand_in, against=0.5, model_flies=None):
+        return dict(stand_in=stand_in, against_others_mean=against, population_error=0.9, lab_common=0.95,
+                    spread_as_scored=0.02, model_flies=model_flies or M.flies_class(against))
+
+    near, fair, far = 'moves it nearer', 'a fair stand-in', 'moves it further'
+    R = row(near)
+    assert M.step6a_reading(R, row(near), row(fair))['structure_or_variance'] == "the structure's"
+    assert M.step6a_reading(R, row(near), row(near))['structure_or_variance'] == "the variance's"
+    assert M.step6a_reading(R, row(near), row(far))['structure_or_variance'].startswith('neither')
+    assert M.step6a_reading(row(fair), row(near), row(near))['structure_or_variance'] == 'not read'
+    assert M.step6a_reading(row(far), row(near), row(fair))['structure_or_variance'] == 'not read'
+    assert M.step6a_reading(R, row(near), row('no class'))['structure_or_variance'] == 'no reading'
+    assert M.step6a_reading(R, row(near), None)['structure_or_variance'] == 'no reading'
+    # (e) at the upper bound: under M a model fly against the others stays under 0.75 where R's vary too little
+    x = M.step6a_reading(row(near, 0.45), row(near, 0.70), row(fair))
+    assert x['e_applies'] and x['e_at_upper_bound'] is True
+    x = M.step6a_reading(row(near, 0.45), row(near, 0.86), row(fair))
+    assert x['e_applies'] and x['e_at_upper_bound'] is False
+    x = M.step6a_reading(row(near, 0.95), row(near, 0.70), row(fair))
+    assert not x['e_applies'] and x['e_at_upper_bound'] is None
+    x = M.step6a_reading(row(near, 0.45), row('no class', 0.70, 'no class'), row(fair))
+    assert x['e_applies'] and x['e_at_upper_bound'] is None
+    assert x['repro_against_others_mean'] == 0.45 and x['measured_stand_in'] == 'no class'
+
+
+def test_check_inputs_reads_the_settings_variant(tmp_path, monkeypatch):
+    """A step-6a row passes on the hash of its setting's variant's input, is bad on another variant's, and is bad when
+    its 'variant' column is not its setting's."""
+    from experiments.E77_input_screen import frame_sha256
+    monkeypatch.setitem(M.DIRS, 'local', tmp_path / 'local')
+    monkeypatch.setitem(M.DIRS, 'archive', tmp_path / 'archive')
+    sha = {v: frame_sha256(M.input_fly('f2', 'megamat', v)) for v in ('repro', 'measured', 'permuted')}
+    assert len(set(sha.values())) == 3
+    rows = [dict(tag='familymeas_megamat_f2_P3', setting='familymeas', input_sha256=sha['measured'], variant='measured'),
+            dict(tag='familyperm_megamat_f2_P3', setting='familyperm', input_sha256=sha['permuted'], variant=np.nan),
+            dict(tag='familymeas_megamat_f2_P4', setting='familymeas', input_sha256=sha['repro']),
+            dict(tag='familyperm_megamat_f2_P4', setting='familyperm', input_sha256=sha['permuted'], variant='measured'),
+            dict(tag='family_megamat_f2_P3', setting='family', input_sha256=sha['repro'])]
+    rows = pd.DataFrame([dict(r, step=M.step_of(r['setting'], 'megamat'), panel='megamat', fly='f2',
+                              wiring=r['tag'].split('_')[-1]) for r in rows])
+    bad, info = M.check_inputs_detail(rows)
+    assert sorted(bad) == ['familymeas_megamat_f2_P4', 'familyperm_megamat_f2_P4'] and info['n_bitwise'] == 3
+
+
+def test_score_with_and_without_step6a_reads(tmp_path, monkeypatch):
+    """The score on planted reads (every read the lab input's saved run of its wiring, as in
+    `test_score_on_planted_reads`) without step-6a reads writes nothing of step 6a; with them (f0 and f1 of both
+    variants on T, read as T's set) it writes step 6a's populations and readings and leaves every class of steps 1 and
+    2 as it was."""
+    import json
+    import shutil
+    from experiments import E134_population_baseline as B
+    shutil.copy(M.LOCK_COPY, tmp_path / M.LOCK_NAME)
+    monkeypatch.setitem(M.DIRS, 'results', tmp_path)
+    monkeypatch.setitem(M.DIRS, 'local', tmp_path / 'local')
+    monkeypatch.setitem(M.DIRS, 'archive', tmp_path / 'archive')
+    cache = {}
+
+    def load(tag, step=None):
+        setting, panel, fly, w = M.parse_tag(tag)
+        if (panel, w) not in cache:
+            cache[(panel, w)] = (B.load_run(B.tag_of(B.Point('megamat', 'held', w))) if panel == 'megamat'
+                                 else M.lab_apl16_runs([w])[f'lab_apl16_{w}'][2])
+        return cache[(panel, w)]
+
+    monkeypatch.setattr(M, 'load_point', load)
+    monkeypatch.setattr(M, 'available', lambda pts: pts)
+    monkeypatch.setattr(M, 'step6a_sets', lambda g, setting: [('T', M.T_WIRINGS)])
+    held = dict(n_on=100, target_on=100, n_off=200, target_off=200, at_bound_thr=False, at_bound_apl=False)
+    rows = []
+    for f in ('f0', 'f1'):
+        rows += [dict(tag=M.point_tag('family', 'megamat', f, w)) for w in M.WIRINGS]
+        rows += [dict(tag=M.point_tag('A1', 'megamat', f, w)) for w in M.T_WIRINGS]
+    rows = pd.DataFrame([dict(r, **held) for r in rows])
+    cl0 = M.part_score(rows)
+    before = json.loads((tmp_path / 'classes.json').read_text())
+    assert 'step6a' not in cl0 and 'step6a' not in before
+    assert not list(tmp_path.glob('score_step6a*')) and 'Step 6a' not in (tmp_path / 'tables.md').read_text()
+    six = [dict(tag=M.point_tag(s, 'megamat', f, w), variant=M.SETTING_VARIANT[s], **held)
+           for s in M.STEP6A_SETTINGS for f in ('f0', 'f1') for w in M.T_WIRINGS]
+    six[0] = dict(six[0], n_on=50)                       # one unheld model fly of 'familymeas', left out and counted
+    cl = M.part_score(pd.concat([rows, pd.DataFrame(six)], ignore_index=True))
+    after = json.loads((tmp_path / 'classes.json').read_text())
+    for k in ('megamat', 'apl16', 'a1_fall', 'a1_apl16', 'recomputed_changed', 'outcomes', 'spreads_model_flies_megamat'):
+        assert after[k] == before[k], k
+    assert after['step6a'] == json.loads(json.dumps(cl['step6a'], default=M._json_default))
+    pop = pd.read_csv(tmp_path / 'score_step6a_populations.csv')
+    a = pop[(pop.reading == 'all') & (pop.wirings_set == 'T')]
+    assert set(a.population) == set(M.STEP6A_POPULATIONS.values())
+    for name, g in a.groupby('population'):
+        assert (g.wirings == ' '.join(M.T_WIRINGS)).all() and len(g) == 5
+        if name != 'familymeas/megamat':                                   # M lacks one of P3's two model flies
+            assert np.allclose(g.population_error, g.lab_common, atol=1e-12)    # every read its wiring's lab run
+    m_, r_, p_ = (a[a.population == STEP] for STEP in ('familymeas/megamat', 'family/megamat', 'familyperm/megamat'))
+    # one unheld of 8 is more than a ninth: M is read with no class, its unheld left out and counted
+    assert (m_.n_unheld == 1).all() and (m_.n_model_flies == 7).all() and (m_.stand_in == 'no class').all()
+    assert (r_.n_model_flies == 8).all() and (r_.stand_in == 'a fair stand-in').all()
+    assert (p_.n_unheld == 0).all() and (p_.stand_in == 'a fair stand-in').all()
+    rd = after['step6a']['readings']['T']
+    assert set(rd) == {*M.LOSS_STAGES, 'megamat_stage_error'}
+    for st, x in rd.items():
+        assert x['structure_or_variance'] == 'not read'                     # R is a fair stand-in everywhere here
+        assert x['e_applies'] == (x['repro_model_flies'] == 'vary too little')
+        assert x['e_at_upper_bound'] is None and x['measured_stand_in'] == 'no class'
+    assert after['step6a']['gates'] is False and after['step6a']['n_unheld'] == {'familymeas': 1, 'familyperm': 0}
+    rt = pd.read_csv(tmp_path / 'score_step6a_readings.csv')
+    assert set(rt.reading) == {'all', 'held'} and len(rt) == 2 * 5
+    assert 'Step 6a' in (tmp_path / 'tables.md').read_text()
+    mf = pd.read_csv(tmp_path / 'score_step6a_model_flies.csv')
+    assert set(mf.population) == {'familymeas/megamat', 'familyperm/megamat'}
