@@ -1166,8 +1166,12 @@ def identity_rescore(cell: str) -> dict:
         for col, v in r._asdict().items():
             if col in ('eval', 'measure', 'half_ab') or col not in ref.index:
                 continue
-            diffs.append((abs(float(v) - float(ref[col])), r.eval, r.measure, r.half_ab, col))
-    worst = max(diffs) if diffs else (np.nan, None, None, None, None)
+            x, y = float(v), float(ref[col])
+            if np.isnan(x) and np.isnan(y):         # a view the measure does not read, in neither table
+                continue
+            d = abs(x - y) if np.isfinite(x) and np.isfinite(y) else np.inf    # one side missing is a failure
+            diffs.append((d, r.eval, r.measure, r.half_ab, col))
+    worst = max(diffs, key=lambda t: t[0]) if diffs else (np.nan, None, None, None, None)
     return dict(cell=cell, identity='rescore reproduced from the views (E136\'s own reading)', n_evals=len(have),
                 n_values=len(diffs), max_abs_diff=float(worst[0]), worst=list(worst[1:]),
                 passed=bool(diffs) and float(worst[0]) <= IDENTITY_TOL)

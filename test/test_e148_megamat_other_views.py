@@ -195,3 +195,37 @@ def test_probe_reproduced_from_rescore_tables():
     bad = t[~t['reproduced']]
     assert list(zip(bad['statistic'], bad['cell'])) == [('claws_worse_among_lowering', 'a')]
     assert bad['note'].iloc[0].startswith('429 ')
+
+
+ARCHIVED_F = Path('/mnt/tensor/Tom/claude_kc_remapping/data/model_outputs/E145_stage_fit_replication/F/fit_A1/'
+                  'A1_e116_real_run.json')
+
+
+@pytest.mark.skipif(not ARCHIVED_F.exists(), reason="F's archived best evaluation is not on hand")
+def test_read_views_reproduces_the_rescore_row(tmp_path, monkeypatch):
+    """F's best evaluation (archived) read by `read_views` and scored by E136's own reading on E136's split reproduces
+    its rows of E145's rescore table on every measure (to IDENTITY_TOL)."""
+    monkeypatch.setitem(M.DIRS, 'results', tmp_path / 'results')
+    monkeypatch.setitem(M.DIRS, 'local', tmp_path / 'local')
+    for name in ('_VIEWS', '_SIDES'):
+        monkeypatch.setattr(M, name, {})
+    runs = M.cell_runs('F', 116)
+    assert runs is not None and sorted(runs) == sorted(M.S_WIRINGS)
+    df = M.read_views(runs, 'e116')
+    df.insert(0, 'cell', 'F')
+    df.insert(2, 'eval', 116)
+    M._VIEWS['F'] = df
+    got = M.rescore_from_views('F', [116])
+    rs = M.rescore_table('F')
+    for r in got.itertuples(index=False):
+        ref = rs[(rs['eval'] == 116) & (rs['measure'] == r.measure) & (rs['half_ab'] == r.half_ab)].iloc[0]
+        n = 0
+        for col, v in r._asdict().items():
+            if col in ref.index and col not in ('eval', 'measure', 'half_ab'):
+                x, y = float(v), float(ref[col])
+                if np.isnan(x) and np.isnan(y):
+                    continue
+                assert abs(x - y) <= M.IDENTITY_TOL, (r.measure, r.half_ab, col)
+                n += 1
+        assert n >= 25
+    assert M.identity_rescore('F')['passed']
