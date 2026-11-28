@@ -465,17 +465,17 @@ def classes_table(d: dict, V: W.Values) -> List[str]:
 
 
 def panels_table(d: dict, V: W.Values) -> List[str]:
-    """Each cell's change of each held-out panel's KC somata strength error from the family (mean over the eight
-    wirings, all flies), with the spreads; the kiwi mixtures beside."""
+    """Each cell's change of each held-out panel's KC somata strength error from the family (mean over the cell's four
+    read wirings, all flies, as the class compares them), with the spreads; the kiwi mixtures beside."""
     rc = recs(d)
     keys = PANEL_KEYS + BESIDE_KEYS
     any_rec = next((r['cls'] for r in rc.values() if (r.get('cls') or {}).get('panels')), None)
     if any_rec is None:
         return []
     get = lambda r, k: (r.get('panels') or {}).get(k) or (r.get('panels_beside') or {}).get(k)
-    L = ["Each cell's change of the held-out panels' KC somata strength error from the family (mean over the eight "
-         'wirings, all flies; lower is better), with the family\'s spread over its eight wirings. The kiwi mixtures are '
-         'beside and gate nothing.', '',
+    L = ["Each cell's change of the held-out panels' KC somata strength error from the family (mean over the cell's "
+         'four read wirings, all flies, as the class compares them; lower is better), with the family\'s spread over '
+         'its eight wirings. The kiwi mixtures are beside and gate nothing.', '',
          '| cell | ' + ' | '.join(PANEL_NAMES.get(k, k) + (' (beside)' if k in BESIDE_KEYS else '') for k in keys) + ' |',
          '|---|' + '---:|' * len(keys),
          '| the spread | ' + ' | '.join(_f((get(any_rec, k) or {}).get('spread')) for k in keys) + ' |']
