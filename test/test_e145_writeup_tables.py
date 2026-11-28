@@ -105,3 +105,36 @@ def test_shortcut_table():
     V = T.W.Values()
     rows = [r for r in T.shortcut_table(d, V) if r.startswith('| F,')]
     assert rows == ['| F, the other flies: S, half b | 0.0427 | 0.0427 | 1 of 2 |']
+
+
+def test_kckc_table_and_class_without_bound():
+    import numpy as np
+    hi = float(np.log(7.3))
+    rng = np.random.default_rng(0)
+    n = 40
+    z = dict(aplpn=rng.normal(-1.7, 0.1, n), kckc=np.r_[np.full(3, hi), rng.uniform(0.0, 1.9, n - 3)],
+             inhadd=rng.normal(4.2, 0.05, n), inhsc=rng.normal(-1.0, 0.05, n))
+    loss = 0.90 - 0.008 * z['kckc'] + rng.normal(0, 0.001, n)
+    loss[0] = 1.03
+    hist = pd.DataFrame(dict(eval=np.arange(n), loss_sim=loss, **{f'z_{k}': v for k, v in z.items()}))
+    hist.loc[0, 'z_kckc'] = 0.0
+    resc = pd.concat([pd.DataFrame(dict(eval=np.arange(n), measure='strength', half=h, stage_error=loss,
+                                        kc_claw_error=c + 0.05 * hist.z_kckc)) for h, c in (('fit', 0.97), ('held', 0.79))])
+    d = _d()
+    d['cells']['X'] = dict(d['cells']['X'], hist=hist, rescore=resc, fit=dict(best_eval=int(np.argmin(loss))))
+    d['classes']['cells']['X']['cls'].update(stage_worse=['kc_claw'], improves=False)
+    d['classes']['cells']['X']['cls']['megamat']['improves'] = True
+    V = T.W.Values()
+    rows = T.kckc_table(d, V)
+    assert any('Evaluations at the KC–KC bound (×7.3): 2 of 40' in r for r in rows)   # eval 0 moved off it
+    sl = T.local_slope(hist, 0.05)
+    assert sl['n'] == n - 1 and abs(sl['slope'] + 0.008) < 0.002                       # all but the start
+    assert any(r.startswith('| at ×7.3 (the bound) | 2 |') for r in rows)
+    assert rows[-2] == "- X's class with the bound rule left out: one stage at another's cost."
+    assert T.kckc_bin(7.3, 7.3).startswith('at ×7.3') and T.kckc_bin(6.0, 7.3) == '×5.83 to ×7.3'
+    assert T.kckc_bin(1.0, 7.3) == 'below ×1.8' and T.kckc_bin(1.8, 7.3) == '×1.8 to ×3.24'
+    rec = dict(cls=dict(megamat=dict(improves=True), reasons=['at a bound: kckc high'], improves=True, panel_worse=[],
+                        panel_missing=[]))
+    assert T.class_without_bound(rec) == 'holds'
+    rec['cls']['reasons'].append('leaves a realism band on P3')
+    assert T.class_without_bound(rec) == 'no class'

@@ -262,6 +262,110 @@ def rescore_table(d: dict, V: W.Values) -> List[str]:
     return L + ['']
 
 
+KCKC_BINS = ((0.0, 1.8, 'below ×1.8'), (1.8, 3.24, '×1.8 to ×3.24'), (3.24, 5.83, '×3.24 to ×5.83'),
+             (5.83, 7.3, '×5.83 to ×7.3'), (7.3, np.inf, 'at ×7.3 (the bound)'))
+SLOPE_WINDOWS = (0.005, 0.01, 0.02)
+
+
+def kckc_bin(k: float, top: float) -> str:
+    """The KCKC_BINS label of a KC–KC factor `k`, the last for one at the bound `top`."""
+    if np.isclose(k, top, rtol=1e-9, atol=0):
+        return KCKC_BINS[-1][2]
+    return next(lab for a, b, lab in KCKC_BINS[:-1] if a <= k < b or (b == KCKC_BINS[-2][1] and k >= a))
+
+
+def class_without_bound(rec: Mapping) -> Optional[str]:
+    """A cell's class with the bound rule left out, from its scored record (E136's `classify`'s order on the record's
+    fields: other reasons, then holds, megamat only, improves with panels unread, one stage at another's cost, strength
+    at another view's cost, does not improve); None if the record has no megamat comparison."""
+    r = rec.get('cls') or {}
+    m = r.get('megamat') or {}
+    if not m:
+        return None
+    if [x for x in (r.get('reasons') or []) if not x.startswith('at a bound')]:
+        return 'no class'
+    imp, pw, pm = r.get('improves'), r.get('panel_worse') or [], r.get('panel_missing') or []
+    if imp and not pw and not pm:
+        return 'holds'
+    if imp and pw:
+        return 'megamat only'
+    if imp:
+        return 'improves (held-out panels not all read)'
+    if m.get('improves') and r.get('stage_worse'):
+        return "one stage at another's cost"
+    if m.get('improves') and r.get('guard_worse'):
+        return "strength at another view's cost"
+    return 'does not improve'
+
+
+def local_slope(h: pd.DataFrame, window: float, coord: str = 'z_kckc') -> dict:
+    """The fit half's loss regressed on the four searched coordinates (least squares, with an intercept) over the
+    evaluations whose loss is within `window` of the best: the number of evaluations, the coefficient on `coord` (the
+    loss's change per e-fold of the factor) and its standard error."""
+    cols = [f'z_{k}' for k in FACTORS]
+    x = h[h.loss_sim <= h.loss_sim.min() + window]
+    A = np.column_stack([np.ones(len(x)), x[cols].to_numpy(float)])
+    y = x.loss_sim.to_numpy(float)
+    if len(y) <= A.shape[1]:
+        return dict(n=len(y), slope=np.nan, se=np.nan)
+    beta = np.linalg.lstsq(A, y, rcond=None)[0]
+    s2 = float(((y - A @ beta) ** 2).sum() / (len(y) - A.shape[1]))
+    se = float(np.sqrt(s2 * np.linalg.pinv(A.T @ A)[1 + cols.index(coord), 1 + cols.index(coord)]))
+    return dict(n=int(len(y)), slope=float(beta[1 + cols.index(coord)]), se=se)
+
+
+def kckc_table(d: dict, V: W.Values, cell: str = 'X') -> List[str]:
+    """A cell along KC–KC (for X, whose fit ends at the KC–KC bound; outcome (f)): the evaluations at the bound; the
+    fit half's local slope on the KC–KC coordinate near the best, over three windows, with the gain a doubling of the
+    factor would buy beside the 0.010 rule; the evaluations binned by the KC–KC factor, with the best fit-half loss and
+    the claws' error from the start against each half (the rescore, on the searched wirings); and the cell's class
+    with the bound rule left out."""
+    x = d['cells'][cell]
+    h, r = x['hist'], x['rescore']
+    if not len(h):
+        return []
+    lo, hi = F0.BOUNDS['kckc']
+    at = h[np.isclose(h.z_kckc, hi, atol=1e-9, rtol=0)]
+    f = x['fit']
+    L = [f"Cell {cell} along KC–KC (a description; the bound rule gives {cell} no class). The fit's loss is on its "
+         'searched wirings against its fit half; the rescore reads the same evaluations against its read half.', '',
+         f"- Evaluations at the KC–KC bound (×{np.exp(hi):.1f}): {len(at)} of {len(h)} "
+         f"({', '.join(str(int(e)) for e in at['eval'])}); the best evaluation ({f.get('best_eval')}) is "
+         f"{'' if f.get('best_eval') in set(at['eval']) else 'not '}one of them.", '']
+    V.add(cell, 'fit', 'n_at_kckc_bound', len(at), half=E.get_cell(cell).fit_half)
+    L += ['The fit half\'s loss near the best, regressed on the four coordinates: its change per e-fold of KC–KC, and '
+          'what a doubling of the factor would buy (the slope × ln 2; a factor is determined at 0.010).', '',
+          '| evaluations within … of the best | evaluations | change per e-fold of KC–KC | a doubling buys |',
+          '|---:|---:|---:|---:|']
+    for w in SLOPE_WINDOWS:
+        s = local_slope(h, w)
+        L.append(f"| {w:.3f} | {s['n']} | {_f(s['slope'], '+.4f')} ± {_f(s['se'], '.4f')} | "
+                 f"{_f(-s['slope'] * np.log(2), '.4f')} |")
+        V.add(cell, 'fit', f'kckc_slope_w{w:g}', s['slope'], half=E.get_cell(cell).fit_half)
+        V.add(cell, 'fit', f'kckc_slope_se_w{w:g}', s['se'], half=E.get_cell(cell).fit_half)
+    rs = r[r.get('measure', 'strength') == 'strength'] if len(r) and 'measure' in r else r
+    if len(rs):
+        p = rs.pivot_table(index='eval', columns='half', values='kc_claw_error')
+        start = p.loc[0] if 0 in p.index else None
+        k = np.exp(h.set_index('eval').z_kckc)
+        L += ['', "The evaluations by the KC–KC factor: the best fit-half loss, and the claws' strength error from the "
+              "start's (evaluation 0) against each half, mean (and the lowest against the read half).", '',
+              '| KC–KC factor | evaluations | best loss, fit half | claws, fit half: mean change | claws, read half: mean '
+              'change (lowest) |', '|---|---:|---:|---:|---:|']
+        bins = k.map(lambda v: kckc_bin(v, float(np.exp(hi))))
+        for _, _, lab in KCKC_BINS:
+            ev = [e for e in bins.index[bins == lab] if e in p.index]
+            if not ev or start is None:
+                continue
+            cf, ch = p.loc[ev, 'fit'] - start['fit'], p.loc[ev, 'held'] - start['held']
+            L.append(f"| {lab} | {len(ev)} | {_f(h.set_index('eval').loc[ev, 'loss_sim'].min())} | {_f(cf.mean(), '+.3f')} | "
+                     f"{_f(ch.mean(), '+.3f')} ({_f(ch.min(), '+.3f')}) |")
+            V.add(cell, 'kc_claw', f'change_mean_{lab.split(" (")[0]}', ch.mean(), half='read')
+    wb = class_without_bound((recs(d).get(cell) or {}))
+    L += ['', f"- {cell}'s class with the bound rule left out: {wb or '–'}."]
+    return L + ['']
+
+
 # ---------------------------------------------------------------------------
 # the score
 
@@ -707,7 +811,7 @@ def main(score_dir: Optional[Path] = None) -> Path:
             f"{prov.get('time')}; E143's resampled reading at queue {str(prov_r.get('queue_commit'))[:7]}, "
             f"{prov_r.get('time')}); written by analyses/E145_writeup_tables.py.", '']
     parts = [('The cells', cells_table), ('The fits', fits_table), ('The returns and the classed points', returns_table),
-             ('The rescore', rescore_table), ('The stage table', stage_table), ('The megamat stages', changes_table),
+             ('The rescore', rescore_table), ('X along KC–KC', kckc_table), ('The stage table', stage_table), ('The megamat stages', changes_table),
              ('The classes', classes_table), ('The held-out panels', panels_table),
              ("The experiment's classes and outcomes", experiment_table),
              ('Each point on its own searched wirings', own_wirings_table),
