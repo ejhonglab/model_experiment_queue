@@ -271,3 +271,29 @@ def test_score_on_planted_reads(tmp_path, monkeypatch):
     assert np.isclose(g.loc[('family/apl16', 'on'), 'strength_population'],
                       g.loc[('family/apl16', 'on'), 'strength_lab_common'])
     assert (tmp_path / 'classes.json').exists() and (tmp_path / 'tables.md').exists()
+
+
+def test_check_inputs_passes_a_bitwise_differing_input_within_tolerance(tmp_path, monkeypatch):
+    """A row whose hash differs from `input_fly`'s (the same input built on another host) passes when its saved input
+    is within INPUT_ATOL of `input_fly`, and is bad beyond it or with no saved input."""
+    from experiments.E77_input_screen import frame_sha256
+    monkeypatch.setitem(M.DIRS, 'local', tmp_path / 'local')
+    monkeypatch.setitem(M.DIRS, 'archive', tmp_path / 'archive')
+    w = M.input_fly('f3', 'megamat')
+    rows = []
+    for tag, wiring, eps, save in (('family_megamat_f3_P3', 'P3', 0.0, False), ('family_megamat_f3_P4', 'P4', 1e-13, True),
+                                   ('family_megamat_f3_M2', 'M2', 1e-6, True), ('family_megamat_f3_M3', 'M3', 1e-13, False)):
+        x = w + eps
+        sha = frame_sha256(w) if eps == 0.0 else frame_sha256(x) + 'x'
+        if save:
+            d = M.run_dirs(1, 'family', wiring, 'f3')[0]
+            d.mkdir(parents=True, exist_ok=True)
+            y = x.copy()
+            y.columns = [c[-1] if isinstance(c, tuple) else c for c in y.columns]
+            y.to_parquet(d / f'{tag}_orn.parquet')
+        rows.append(dict(tag=tag, step=1, setting='family', panel='megamat', fly='f3', wiring=wiring, input_sha256=sha))
+    bad, info = M.check_inputs_detail(pd.DataFrame(rows))
+    assert sorted(M.check_inputs(pd.DataFrame(rows))) == sorted(bad)
+    assert sorted(bad) == ['family_megamat_f3_M2', 'family_megamat_f3_M3']
+    assert info['n_bitwise'] == 1 and info['n_within_atol'] == 1
+    assert 0 < info['max_abs_diff'] <= M.INPUT_ATOL

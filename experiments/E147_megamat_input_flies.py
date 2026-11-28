@@ -1830,15 +1830,58 @@ def a1_lab_runs(panel: str) -> Dict[str, Tuple[str, str, object]]:
     return out
 
 
-def check_inputs(pts: pd.DataFrame) -> List[str]:
-    """Tags whose row's input_sha256 is not the sha256 of `input_fly` of its fly and panel (or that have none)."""
+INPUT_ATOL = 1e-9  # Hz: a saved input within this of `input_fly` is the same input (the hash is bitwise)
+
+
+def saved_input(tag: str, step: int, setting: str, wiring: str, fly: str) -> Optional[pd.DataFrame]:
+    """A read's saved ORN input (`<tag>_orn.parquet` in `run_dirs`), or None."""
+    for d in run_dirs(step, setting, wiring, fly):
+        f = Path(d) / f'{tag}_orn.parquet'
+        if f.exists():
+            return pd.read_parquet(f)
+    return None
+
+
+def check_inputs_detail(pts: pd.DataFrame) -> Tuple[List[str], Dict[str, float]]:
+    """The reads whose input is not `input_fly` of their fly and panel, and the largest difference of the others.
+
+    A row whose input_sha256 equals the sha256 of `input_fly` passes. The hash is of the floats' bytes, so the same
+    input built on another host can differ in its last bits (E85's map is a least-squares fit, whose rounding follows
+    the host's BLAS): such a row is compared value by value with its saved `<tag>_orn.parquet` (by position: the saved
+    frame keeps the glomeruli and odors in `input_fly`'s order, its columns flattened to the odor names). It passes
+    when every entry is within INPUT_ATOL. A row with no hash match and no saved input, or a difference beyond
+    INPUT_ATOL, is bad.
+
+    Returns:
+        (bad tags, {'n_bitwise', 'n_within_atol', 'max_abs_diff'}).
+    """
     from experiments.E77_input_screen import frame_sha256
-    want = {(f, pn): frame_sha256(input_fly(f, pn)) for f in FLY_LABELS for pn in PANELS}
-    bad = []
+    frames = {(f, pn): input_fly(f, pn) for f in FLY_LABELS for pn in PANELS}
+    want = {k: frame_sha256(v) for k, v in frames.items()}
+    bad, n_bit, n_tol, worst = [], 0, 0, 0.0
     for r in pts.to_dict('records'):
-        if r.get('input_sha256') != want[(r['fly'], r['panel'])]:
+        key = (r['fly'], r['panel'])
+        if r.get('input_sha256') == want[key]:
+            n_bit += 1
+            continue
+        x = saved_input(r['tag'], int(r['step']), r['setting'], r['wiring'], r['fly'])
+        w = frames[key]
+        if x is None or x.shape != w.shape or [str(i) for i in x.index] != [str(i) for i in w.index]:
             bad.append(r['tag'])
-    return bad
+            continue
+        diff = float(np.max(np.abs(x.to_numpy(dtype=float) - w.to_numpy(dtype=float))))
+        if not np.isfinite(diff) or diff > INPUT_ATOL:
+            bad.append(r['tag'])
+        else:
+            n_tol += 1
+            worst = max(worst, diff)
+    return bad, dict(n_bitwise=n_bit, n_within_atol=n_tol, max_abs_diff=worst)
+
+
+def check_inputs(pts: pd.DataFrame) -> List[str]:
+    """The tags of `check_inputs_detail`'s bad reads: those whose input is neither `input_fly`'s bitwise (by hash) nor
+    within INPUT_ATOL of it (by their saved input)."""
+    return check_inputs_detail(pts)[0]
 
 
 def part_score(rows: Optional[pd.DataFrame] = None) -> dict:
@@ -1857,9 +1900,9 @@ def part_score(rows: Optional[pd.DataFrame] = None) -> dict:
     if pts.empty:
         print('score: no reads yet', flush=True)
         return {}
-    bad_inputs = check_inputs(pts)
+    bad_inputs, input_check = check_inputs_detail(pts)
     info: Dict[str, dict] = {}
-    res: Dict[str, object] = dict(time=_now(), n_reads=int(len(pts)), bad_input_sha256=bad_inputs,
+    res: Dict[str, object] = dict(time=_now(), n_reads=int(len(pts)), bad_inputs=bad_inputs, input_check=input_check,
                                   groups={g: int(n) for g, n in pts.group.value_counts().items()})
     poprows, flyrows, mega_vals = [], [], {}
     # megamat
@@ -1982,7 +2025,7 @@ def part_score(rows: Optional[pd.DataFrame] = None) -> dict:
         res['spreads_model_flies_megamat'] = dict(strength=mst, guard=mgd)
     # the classes
     classes = dict(time=_now(), n_reads=int(len(pts)), megamat={}, apl16={}, a1_fall={}, a1_apl16=a1_apl,
-                   recomputed_changed=recomputed, bad_input_sha256=bad_inputs)
+                   recomputed_changed=recomputed, bad_inputs=bad_inputs, input_check=input_check)
     if len(pop):
         for r in pop[pop.reading == 'all'].itertuples():
             classes['megamat'].setdefault(r.population, {})[r.stage] = dict(
