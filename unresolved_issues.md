@@ -8,19 +8,6 @@ directory's notes/ and are linked from here.
 
 ## Open
 
-### E145's write-up gave the first fit's consistency between the halves as E136's pooled value (found 2026-11-27 20:16, viki's idle-host planner; confirmed by disco 20:20)
-- **What.** analyses/E145_writeup_tables.py read A1's `consistency_rho` from E136's consistency file, which pools all five of
-  E136's arms (0.823 over 483 evaluations), where X's, F's and W's are each over their own fit's evaluations. A1's own 124
-  evaluations give 0.357 (0.338 over the 120 with both rates held, E145's step 0).
-- **What it affects.** E145's note and page (In brief and the fits table: "all three new fits less consistent than A1"), E145's
-  writeup_values.csv, and the Summary: {#stage-fit-again}'s fits table and its sentence "near the first fit's ..." on the two
-  halves' order, and {#stage-fit}'s appended line on the later fits (both fill A1's value from writeup_values.csv).
-- **Done.** disco's af8296a takes every cell's value from its own rescore (A1 0.357; X 0.786, F 0.802 and W 0.341 unchanged),
-  regenerates writeup_values.csv, and corrects and resaves the note and its page, each passage marked as corrected.
-- **What remains.** The Summary's sentence in {#stage-fit-again} no longer reads right with 0.36 (X's 0.79 and F's 0.80 are not
-  near it, and W is like A1): its new text comes from a planning subagent (viki's, 2026-11-27 20:2x), then the Summary is
-  rebuilt and saved. Move this entry to Resolved with that commit.
-
 ### E134's mixture rows read the flies under a fixed stimulus order (found 2026-11-24 22:53, viki's held-out-panels planner)
 - **What.** Remy's kiwi / control mixture sessions present their stimuli in a fixed order: solvent, the five components,
   then the mixture at -2, -1 and 0, three consecutive presentations each (her olfactometer configs,
@@ -292,6 +279,20 @@ directory's notes/ and are linked from here.
   These two tables and the structure targets' are still typed.
 
 ## Resolved
+
+### E145's write-up gave the first fit's consistency between the halves as E136's pooled value (found 2026-11-27 20:16, viki's idle-host planner; confirmed by disco 20:20; resolved 2026-11-27 20:32, queue ca89afc)
+- **What.** analyses/E145_writeup_tables.py read A1's `consistency_rho` from E136's consistency file, which pools E136's five
+  fits and its control fit (0.823 over 483 evaluations), where X's, F's and W's are each over their own fit's evaluations. A1's own 124
+  evaluations give 0.357 (0.338 over the 120 with both rates held, E145's step 0).
+- **What it affects.** E145's note and page (In brief and the fits table: "all three new fits less consistent than A1"), E145's
+  writeup_values.csv, and the Summary: {#stage-fit-again}'s fits table and its sentence "near the first fit's ..." on the two
+  halves' order, and {#stage-fit}'s appended line on the later fits (both fill A1's value from writeup_values.csv).
+- **Done.** disco's af8296a takes every cell's value from its own rescore (A1 0.357; X 0.786, F 0.802 and W 0.341 unchanged),
+  regenerates writeup_values.csv, and corrects and resaves the note and its page, each passage marked as corrected.
+- **Done (Summary).** ca89afc: the Summary's {#stage-fit} line says the pooled value is pooled over all the fits, a new
+  paragraph there gives the first fit's own 0.36 beside the later fits', and {#stage-fit-again} says two of the four fits
+  order their evaluations alike and two do not (text from viki's planner, claude-fable-5-2, spawned 20:22). Summary
+  rebuilt and saved.
 
 ### E141's write-ups said the shuffled KC–KC matrix keeps the matrix's unevenness (found 2026-11-26 12:34, viki's Summary planner)
 - **What.** E141's note (E141_kckc_rise_forms.md), its page and the Summary's section {#kckc-rise} read the failure of S
