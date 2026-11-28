@@ -276,6 +276,38 @@ def test_e144_settings_from_their_calyx_familys_own_value(results):
     assert not _pt(pts, "the male CNS's left calyx: the family", 'stage_error')['drawn']
 
 
+def test_e145_cells_on_their_read_wirings_and_halves(results):
+    S_W = list(S.S_WIRINGS)
+    cell = lambda c, ws, half, ch, cls, reasons=(): dict(
+        cell=c, label=f'cell {c}', variant=f'E145_{c}', read_wirings=ws, read_half=half,
+        cls=dict(_class_rec(ch, cls=cls), reasons=list(reasons)))
+    cl = dict(control_fall=0.04,
+              cells={'A1': cell('A1', list(S.T_WIRINGS), 'b', -0.115, 'holds'),
+                     'X': cell('X', S_W, 'a', -0.09, 'no class', ['at a bound: kckc high']),
+                     'F': cell('F', list(S.T_WIRINGS), 'a', -0.05, "one stage at another's cost"),
+                     'W': cell('W', S_W, 'b', -0.11, "strength at another view's cost",
+                               ['a hold fails: E145_W_megamat_real'])})
+    # the APL effect is read on each cell's own read wirings: X on S (+0.02 there, +0.5 on T, not read)
+    apl = _apl({'family': 0.06, 'E145_X': lambda w: 0.08 if w in S_W else 0.56, 'E145_F': 0.07})
+    _write(results / 'E145_stage_fit_replication', {'classes.json': cl, 'score_apl16.csv': apl})
+    pts = S.e145_points()
+    x = _pt(pts, 'X: cell X', 'stage_error')
+    assert x['drawn'] and not x['filled'] and x['value'] == pytest.approx(0.9 - 0.09)
+    assert x['why'] == 'no class: at a bound: kckc high' and x['reading'].startswith('the read wirings (S)')
+    xp = json.loads(x['popup'])
+    assert xp['control_fall'] == pytest.approx(0.04) and xp['bar'] == pytest.approx(-0.02)
+    assert _pt(pts, 'X: cell X', 'apl_loss')['value'] == pytest.approx(0.06 + 0.02)
+    f = _pt(pts, 'F: cell F', 'kc_soma')
+    assert f['drawn'] and not f['filled'] and f['why'].startswith("one stage at another's cost: not a hold")
+    assert 'held-out half (a)' in f['reading'] and '(T)' in f['reading']
+    assert _pt(pts, 'F: cell F', 'apl_pattern')['value'] == pytest.approx(0.05 + 0.01)
+    # a hold that fails: no point; cell A1 is E136's arm
+    w = [p for p in pts if p['variant'] == 'W: cell W']
+    assert w and not any(p['drawn'] for p in w) and w[0]['why'].startswith(S.NOT_HELD)
+    assert not _pt(pts, 'A1 (beside)', 'stage_error')['drawn']
+    assert all(not p['filled'] for p in pts)
+
+
 def test_only_a_hold_fills():
     assert S._class_hollow('holds') is None
     for cls in ('megamat only', "one stage at another's cost", "strength at another view's cost", 'does not improve'):

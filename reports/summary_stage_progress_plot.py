@@ -46,7 +46,11 @@ The experiments read (`ADAPTERS`; one function each, from the experiment's own c
 - E144, A1 and its parts on the male CNS's two calyces: the settings read on a calyx's four wirings, each against its
   calyx's own family on the same wirings (classes.json, score_apl16.csv), drawn from that family's value against all
   the flies (score_megamat.csv, score_panels.csv) plus that change, all hollow (a variant on another brain's wiring);
-  the settings read on one wiring (all of H's, F, Dabs) and those without a class (L's D5.8) without a point.
+  the settings read on one wiring (all of H's, F, Dabs) and those without a class (L's D5.8) without a point;
+- E145, the stage fit made again in three other cells of wirings by halves of the flies: X, F and W, each read on its
+  four read wirings against its read half (classes.json's cells; the APL effect from score_apl16.csv), all hollow by
+  their classes (X none, at KC–KC's bound; F one stage at another's cost; W strength at another view's cost); its
+  cell A1 beside is E136's arm. E145's four-factor control is a yardstick, with no point.
 A variant at fixed scales that carries a fitted arm's parameters (E139's B and K, E141's arms, E142's arms, E144's
 settings: A1's APL→bouton ×0.155 or KC–KC rise, fitted on S against the fit half) is read as a fitted one, where those
 were not fitted: on wirings outside S and, at the megamat stages, against the held-out half; each experiment's own
@@ -701,9 +705,53 @@ def e144_points() -> List[dict]:
     return out
 
 
+S_WIRINGS = tuple(w for w in WIRINGS if w not in T_WIRINGS)
+E145_CELLS = ('X', 'F', 'W')
+
+
+def e145_points() -> List[dict]:
+    """E145's three new cells, each A1's form fitted on one set of four wirings against one half of the flies and read
+    on the other four against the other half (classes.json's `cells`, E136's form): drawn at the level plus its change
+    from the unrefitted family where it is read (the megamat stages against its read half, the held-out panels against
+    all their flies, the APL effect on its read wirings from score_apl16.csv), with the control fit's fall beside. Every
+    cell is hollow by its class (rule 3: X has none, at KC–KC's bound; F one stage at another's cost; W strength at
+    another view's cost); no point outside the realism bands or with a hold that fails. Cell A1 is E136's arm, drawn
+    under E136."""
+    d = RESULTS / 'E145_stage_fit_replication'
+    cl = json.loads((d / 'classes.json').read_text())
+    apl = pd.read_csv(d / 'score_apl16.csv') if (d / 'score_apl16.csv').exists() else pd.DataFrame()
+    lv, cf = levels(), cl.get('control_fall')
+    out = []
+    for c in E145_CELLS:
+        cell = cl.get('cells', {}).get(c)
+        if not cell:
+            continue
+        r, label = cell.get('cls') or {}, f"{c}: {cell.get('label', c)}"
+        ws = list(cell.get('read_wirings') or [])
+        if len(ws) < MIN_WIRINGS:
+            out.append(_undrawn('E145', label, f'read on {len(ws)} wiring{"s" if len(ws) != 1 else ""}'))
+            continue
+        cls, reasons = r.get('cls'), r.get('reasons') or []
+        if _hold_fails(reasons):
+            out.append(_undrawn('E145', label, NOT_HELD + ': ' + '; '.join(_hold_fails(reasons))))
+            continue
+        flags = _flags(apl, cell.get('variant', f'E145_{c}'))
+        drawn, why = (False, 'outside the realism bands: ' + flags[0]) if flags else (True, '')
+        name = 'T' if set(ws) == set(T_WIRINGS) else 'S' if set(ws) == set(S_WIRINGS) else f'{len(ws)} wirings'
+        where = f"the read wirings ({name}) against the held-out half ({cell.get('read_half')})"
+        comps = {**_class_comps(r, where, f"the read wirings ({name}) against all the panel's flies"),
+                 **_apl_comps(apl, cell.get('variant', f'E145_{c}'), 'family', ws, f'the read wirings ({name})')}
+        hw = _class_hollow(cls, reasons)
+        out += _emit('E145', label, comps, lv, drawn, why, {'*': hw} if hw else None, cls,
+                     r.get('control_fall') if r.get('control_fall') is not None else cf)
+    if (cl.get('cells') or {}).get('A1'):
+        out.append(_undrawn('E145', 'A1 (beside)', "E136's arm, drawn under E136"))
+    return out
+
+
 ADAPTERS: Dict[str, Callable[[], List[dict]]] = {'E134': e134_points, 'E135': e135_points, 'E136': e136_points,
                                                  'E139': e139_points, 'E141': e141_points, 'E142': e142_points,
-                                                 'E144': e144_points}
+                                                 'E144': e144_points, 'E145': e145_points}
 # the canonical names (CLAUDE.md), for an experiment not yet in the index as completed
 CANONICAL = {'E134': 'the models as populations at every recorded stage',
              'E135': 'the antennal lobe held to the recorded PN dendrites',
@@ -714,7 +762,8 @@ CANONICAL = {'E134': 'the models as populations at every recorded stage',
              'E142': 'the step from the PN dendrites to the PN boutons by itself, with the recorded dendrites under '
                      "the stage fit's calyx",
              'E144': "the weaker antennal-lobe normalization and the rise of the inhibition among KCs on the male "
-                     "CNS's two calyces"}
+                     "CNS's two calyces",
+             'E145': 'the fit of all megamat stages made again on the other wirings and the other halves of the flies'}
 
 
 def floors() -> Dict[str, float]:
